@@ -1,7 +1,8 @@
 This package contains the VISA implementation. To get started.
 
-- First, load the data in a mysql database into a schema ctbt3mos
-  by running the commands in ctbt3mos.sql
+- First, load the data in a mysql database:
+  copy all the csv files into the database directory
+  change to the database directory and then run ctbt3mos.sql from mysql
 
 - Next, train the priors by calling "python learn.py"
 
@@ -45,8 +46,8 @@ netvisa/
     EventLocationPrior.txt
 
     ttime/
-      IASPEI.P
-      IASPEI.S
+      iaspei91.P
+      iaspei91.S
       ...
 
   setup.py
