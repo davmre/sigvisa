@@ -483,35 +483,32 @@ fields terminated by ', ' optionally enclosed by '"' ignore 1 lines;
 /* change the location of the data from /archive/ops/ to /var/ctbt_data/ */
 update idcx_wfdisc set dir = concat('/var/ctbt_data/', substr(dir,14));
 
-/* build a dimenstion table for sites which have detected a P phase */
-create table static_site_p (
- id        int not null auto_increment,
- sta       varchar(6),
- cnt       int,
+create table static_siteid (
+  id      int,
+  sta     varchar(6),
 
- primary  key (id),
- unique   key (sta))
-engine=myisam;
+  lat         double,
+  lon         double,
+  elev        double,
+  staname     varchar(50),
+  statype     varchar(4),
 
-insert ignore into static_site_p(sta, cnt) select lass.sta, count(*) p_cnt from leb_assoc lass, idcx_arrival iarr where substr(lass.phase,1,1)='P' and iarr.delaz>0 and iarr.delslo>0 and iarr.snr>0 and iarr.iphase in ('P', 'Pn', 'PKP') and lass.arid = iarr.arid and iarr.time between (select start_time from dataset where label='training') and (select end_time from dataset where label='training') group by lass.sta;
+  primary key (id),
+  unique  key(sta))
+engine = myisam;
 
-/* build a dimension table for all the phase names */
-create table static_phase (
- id        int not null auto_increment,
- phase     varchar(20),
+load data local infile 'static_siteid.csv' into table static_siteid fields 
+terminated by ',' optionally enclosed by '"' ignore 1 lines;
 
- primary  key (id),
- unique   key (phase));
+create table static_phaseid (
+  id      int,
+  phase   varchar(20),
+  primary key (id),
+  unique  key (phase))
+engine = myisam;
 
-insert ignore into static_phase (phase)
-select distinct iphase from idcx_arrival;
-
-insert ignore into static_phase (phase)
-select distinct iphase from leb_arrival;
-
-insert ignore into static_phase (phase)
-select distinct phase from leb_assoc;
-
+load data local infile 'static_phaseid.csv' into table static_phaseid fields 
+terminated by ',' optionally enclosed by '"' ignore 1 lines;
 
 /* create a user for querying the data and give him privileges */
 create user ctbt@localhost;
