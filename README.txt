@@ -22,6 +22,7 @@ netvisa/
   database/
     ctbt3mos.sql
     visa.sql
+    dataset.py
       
   priors/
 
@@ -40,7 +41,7 @@ netvisa/
     earth.py
     makemovie.py
 
-  config/
+  parameters/
 
     NumEventPrior.txt
     EventLocationPrior.txt
