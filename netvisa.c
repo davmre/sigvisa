@@ -53,7 +53,7 @@ static PyTypeObject py_net_model = {
 
 static PyMethodDef netvisaMethods[] = {
   {"score_world", py_score_world, METH_VARARGS,
-   "score_world(net_model, events) -> log probability\n"},
+   "score_world(net_model, events, verbose) -> log probability\n"},
   {NULL, NULL}
 };
 
@@ -78,8 +78,10 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   double start_time;
   double end_time;
   const char * numevent_fname;
+  const char * evloc_fname;
 
-  if (!PyArg_ParseTuple(args, "dds", &start_time, &end_time, &numevent_fname))
+  if (!PyArg_ParseTuple(args, "ddss", &start_time, &end_time, &numevent_fname,
+                        &evloc_fname))
     return -1;
   
   if (end_time <= start_time)
@@ -92,12 +94,48 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   NumEventPrior_Init_Params(&self->num_event_prior, 2, numevent_fname,
                             end_time - start_time);
   
+  EventLocationPrior_Init_Params(&self->event_location_prior, 1, evloc_fname);
+
   return 0;
 }
 
 static void py_net_model_dealloc(NetModel_t * self)
 {
+  EventLocationPrior_UnInit(&self->event_location_prior);
   self->ob_type->tp_free((PyObject*)self);
+}
+
+static void alloc_events(PyArrayObject * p_events_arrobj, int * p_numevents,
+                         Event_t ** p_p_events)
+{
+  int numevents;
+  Event_t * p_events;
+  int i;
+  
+  numevents = p_events_arrobj->dimensions[0];
+
+  p_events = (Event_t *)calloc(numevents, sizeof(*p_events));
+
+  for(i=0; i<numevents; i++)
+  {
+    Event_t * p_event;
+    
+    p_event = p_events + i;
+    
+    p_event->evlon = ARRAY2(p_events_arrobj, i, EV_LON_COL);
+    p_event->evlat = ARRAY2(p_events_arrobj, i, EV_LAT_COL);
+    p_event->evdepth = ARRAY2(p_events_arrobj, i, EV_DEPTH_COL);
+    p_event->evtime = ARRAY2(p_events_arrobj, i, EV_TIME_COL);
+    p_event->evmag = ARRAY2(p_events_arrobj, i, EV_MB_COL);
+  }
+  
+  *p_numevents = numevents;
+  *p_p_events = p_events;
+}
+
+static void free_events(Event_t * p_events)
+{
+  free(p_events);
 }
 
 static PyObject * py_score_world(PyObject * self, PyObject * args)
@@ -105,10 +143,14 @@ static PyObject * py_score_world(PyObject * self, PyObject * args)
   /* input arguments */
   NetModel_t * p_netmodel;
   PyArrayObject * p_events_arrobj;
+  int verbose;
+ 
+  int numevents;
+  Event_t * p_events;
   double score;
   
-  if (!PyArg_ParseTuple(args, "O!O!", &py_net_model, &p_netmodel,
-                        &PyArray_Type, &p_events_arrobj)
+  if (!PyArg_ParseTuple(args, "O!O!i", &py_net_model, &p_netmodel,
+                        &PyArray_Type, &p_events_arrobj, &verbose)
       || (NULL == p_netmodel) || (NULL == p_events_arrobj))
     return NULL;
 
@@ -121,7 +163,11 @@ static PyObject * py_score_world(PyObject * self, PyObject * args)
     return NULL;
   }
 
-  score = score_world(p_netmodel, p_events_arrobj->dimensions[0]);
+  alloc_events(p_events_arrobj, &numevents, &p_events);
+  
+  score = score_world(p_netmodel, numevents, p_events, verbose);
+  
+  free_events(p_events);
   
   return Py_BuildValue("d", score);
 }
