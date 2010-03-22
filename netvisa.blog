@@ -1,0 +1,8 @@
+type Event;
+random R3Vector EventLocation(Event);
+
+#Event ~ NumEventPrior["parameters/NumEventPrior.txt", 3600.0]; // one hour
+
+EventLocation(e) ~ EventLocationPrior["parameters/EventLocationPrior.txt"];
+
+

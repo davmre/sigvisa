@@ -4,12 +4,12 @@ This package contains the VISA implementation. To get started.
   copy all the csv files into the database directory
   change to the database directory and then run ctbt3mos.sql from mysql
 
-- Next, train the priors by calling "python learn.py"
+- Next, compile the sources by calling "python setup.py build_ext --inplace"
 
-- Now, compile the sources by calling "python setup.py build_ext --inplace"
+- Now, train the priors by calling "python learn.py"
 
 - Finally, to do inference and store the results into the database
-  call "python netvisa.py"
+  call "python infer.py"
 
 Directory Layout
 ================
@@ -17,20 +17,24 @@ Directory Layout
 netvisa/
 
   README.txt
-  netvisa.blog
+  netvisa.blog                      -- describes the model in the BLOG language
+  learn.py                          -- learn the parameters
+  infer.py                          -- infer the events given the detections
+  score.py                          -- score the events and detections
+  setup.py                          -- compile C files and the python wrapper
+  netvisa.c                         -- python wrapper
 
   database/
-    ctbt3mos.sql
-    visa.sql
-    dataset.py
-      
+    ctbt3mos.sql                    -- schema of the data
+    visa.sql                        -- schema for storing the results
+    dataset.py                      -- load the dataset
+
   priors/
 
-    NumEventPrior.c (.h)
-    NumEventPrior.py
-    EventLocationPrior.c (.h)
-    EventLocationPrior.py
-
+    NumEventPrior.{py, c, h}        -- Number of events
+    EventLocationPrior.{py, c, h}   -- Location of events
+    score.{c, h}                    -- Compute the log probability of a world
+ 
   utils/
     geog.c
     rkvector.c
@@ -43,23 +47,14 @@ netvisa/
 
   parameters/
 
-    NumEventPrior.txt
-    EventLocationPrior.txt
+    NumEventPrior.txt             (learnt)
+    EventLocationPrior.txt        (learnt)
 
     ttime/
       iaspei91.P
       iaspei91.S
       ...
 
-  setup.py
-
-  data.py
-
-  learn.py
-
-  netvisa.py
-
-  netvisa.c
 
   
   
