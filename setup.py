@@ -2,7 +2,8 @@ from distutils.core import setup, Extension
 import numpy as np
 import os
 
-priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c', 'score.c']
+priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
+                  'EventMagPrior.c', 'score.c']
 
 netvisa_module = Extension('netvisa',
                            sources = [os.path.join("priors", f)

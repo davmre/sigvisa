@@ -7,7 +7,9 @@ import db
 EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL, EV_MB_COL, EV_NUM_COLS \
             = range(5+1)
 
-def read_events(label, time_range = None):
+MIN_MAGNITUDE = 2.0
+
+def read_events(label, evtype = "leb", time_range = None):
   # connect to the database
   dbconn = db.connect()
   cursor = dbconn.cursor()
@@ -23,12 +25,14 @@ def read_events(label, time_range = None):
   else:
     start_time, end_time = time_range
   
-  cursor.execute("select lon, lat, depth, time, mb from leb_origin "
+  cursor.execute("select lon, lat, depth, time, mb from %s_origin "
                  "where time between "
-                 "(select start_time from dataset where label=%s) and "
-                 "(select end_time from dataset where label=%s)",
-                 (label, label))
-  leb_events = np.array(cursor.fetchall())
+                 "(select start_time from dataset where label='%s') and "
+                 "(select end_time from dataset where label='%s')"
+                 % (evtype, label, label))
+  events = np.array(cursor.fetchall())
 
+  # change -999 mb to MIN MAG
+  events[:, EV_MB_COL][events[:, EV_MB_COL] == -999] = MIN_MAGNITUDE
 
-  return start_time, end_time, leb_events
+  return start_time, end_time, events
