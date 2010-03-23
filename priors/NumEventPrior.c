@@ -21,7 +21,11 @@ void NumEventPrior_Init_Params(NumEventPrior_t * dist, int nparams,
     exit(1);
   }
 
-  fscanf(fp, "%lg", &rate);
+  if (1 != fscanf(fp, "%lg\n", &rate))
+  {
+    fprintf(stderr, "error reading rate from %s\n", filename);
+    exit(1);
+  }
   
   fclose(fp);
 

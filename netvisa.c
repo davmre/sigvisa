@@ -79,9 +79,10 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   double end_time;
   const char * numevent_fname;
   const char * evloc_fname;
+  const char * evmag_fname;
 
-  if (!PyArg_ParseTuple(args, "ddss", &start_time, &end_time, &numevent_fname,
-                        &evloc_fname))
+  if (!PyArg_ParseTuple(args, "ddsss", &start_time, &end_time, &numevent_fname,
+                        &evloc_fname, &evmag_fname))
     return -1;
   
   if (end_time <= start_time)
@@ -95,7 +96,9 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
                             end_time - start_time);
   
   EventLocationPrior_Init_Params(&self->event_location_prior, 1, evloc_fname);
-
+  
+  EventMagPrior_Init_Params(&self->event_mag_prior, 1, evmag_fname);
+  
   return 0;
 }
 

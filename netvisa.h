@@ -3,6 +3,7 @@
 
 #include "priors/NumEventPrior.h"
 #include "priors/EventLocationPrior.h"
+#include "priors/EventMagPrior.h"
 
 typedef struct NetModel_t
 {
@@ -10,6 +11,7 @@ typedef struct NetModel_t
 
   NumEventPrior_t num_event_prior;
   EventLocationPrior_t event_location_prior;
+  EventMagPrior_t event_mag_prior;
   
 } NetModel_t;
 

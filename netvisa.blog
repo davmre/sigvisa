@@ -1,8 +1,49 @@
-type Event;
-random R3Vector EventLocation(Event);
+type Event; type Station; type Detection; type Phase;
 
-#Event ~ NumEventPrior["parameters/NumEventPrior.txt", 3600.0]; // one hour
+nonrandom Real StartTime;
+nonrandom Real EndTime;
+nonrandom R3Vector StationLocation(Station);
+nonrandom Boolean StationUp(Station, Real);
+nonrandom Real IASPEITravelTime(R3Vector, R3Vector, Phase);
+
+random R3Vector EventLocation(Event);
+random Real EventTime(Event);
+random Real EventMag(Event);
+random Boolean IsDetected(Event, Station, Phase);
+
+origin Event Source(Detection);
+origin Station Destination(Detection);
+origin Phase TruePhase(Detection);
+
+#Event ~ NumEventPrior["parameters/NumEventPrior.txt", EndTime - StartTime];
 
 EventLocation(e) ~ EventLocationPrior["parameters/EventLocationPrior.txt"];
+
+EventTime(e) ~ Uniform[StartTime, EndTime];
+
+EventMag(e) ~ EventMagPrior["parameters/EventMagPrior.txt"];
+
+IsDetected(e, s, p)
+{
+  if StationUp(s, EventTime(e) + IASPEITravelTime(EventLocation(e), 
+                                                  StationLocation(s), p)) then
+    ~ EventDetectionPrior["parameters/EventDetectionPrior.txt"]
+                         (EventMag(e), 
+                          IASPEITravelTime(EventLocation(e), 
+                                           StationLocation(s), p))
+  else
+    = false
+};
+
+#Detection(Source = e, Destination = s, TruePhase = p)
+{
+  if IsDetected(e, s, p) then
+    = 1
+  else
+    = 0
+};
+
+guaranteed Station Station[117];
+guaranteed Phase Phase[14];
 
 

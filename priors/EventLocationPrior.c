@@ -23,8 +23,17 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist, int nparams,
     exit(1);
   }
 
-  fscanf(fp, "%lg\n", &discount);
-  fscanf(fp, "%lg %lg\n", &dist->lonstep, &dist->zstep);  
+  if (1 != fscanf(fp, "%lg\n", &discount))
+  {
+    fprintf(stderr, "error reading discount from %s\n", filename);
+    exit(1);
+  }
+  
+  if (2 != fscanf(fp, "%lg %lg\n", &dist->lonstep, &dist->zstep))
+  {
+    fprintf(stderr, "error reading lonstep and zstep from %s\n", filename);
+    exit(1);
+  }
 
   dist->numlon = (int) (360.0 / dist->lonstep);
   dist->numlat = (int) (2.0 / dist->zstep);
