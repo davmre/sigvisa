@@ -1,10 +1,16 @@
 type Event; type Station; type Detection; type Phase;
 
+nonrandom R3Vector StationLocation(Station);
+
 nonrandom Real StartTime;
 nonrandom Real EndTime;
-nonrandom R3Vector StationLocation(Station);
-nonrandom Boolean StationUp(Station, Real);
-nonrandom Real IASPEITravelTime(R3Vector, R3Vector, Phase);
+nonradnom Boolean StationIsUp(Station, Real);
+
+nonrandom Boolean EarthModel_InRange(R3Vector, Phase, Station);
+nonrandom Real EarthModel_ArrivalTime(R3Vector, Real, Phase, Station);
+nonrandom Real EarthModel_ArrivalAzimuth(R3Vector, Phase, Station);
+nonrandom Real EarthModel_ArrivalSlowness(R3Vector, Phase, Station);
+nonrandom Boolean EarthModel_TimeDefPhase(Phase);
 
 random R3Vector EventLocation(Event);
 random Real EventTime(Event);
@@ -25,12 +31,12 @@ EventMag(e) ~ EventMagPrior["parameters/EventMagPrior.txt"];
 
 IsDetected(e, s, p)
 {
-  if StationUp(s, EventTime(e) + IASPEITravelTime(EventLocation(e), 
-                                                  StationLocation(s), p)) then
+  if EarthModel_InRange(EventLocation(e), p, s)
+  & EarthModel_ArrivalTime(EventLocation(e), EventTime(e),p, s) < EndTime
+  & StationIsUp(s, EarthModel_ArrivalTime(EventLocation(e), EventTime(e),p, s))
+  then
     ~ EventDetectionPrior["parameters/EventDetectionPrior.txt"]
-                         (EventMag(e), 
-                          IASPEITravelTime(EventLocation(e), 
-                                           StationLocation(s), p))
+                         (s, p, EventMag(e), EventLocation(e))
   else
     = false
 };
@@ -44,6 +50,4 @@ IsDetected(e, s, p)
 };
 
 guaranteed Station Station[117];
-guaranteed Phase Phase[14];
-
-
+guaranteed Phase Phase[17];

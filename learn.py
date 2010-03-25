@@ -5,10 +5,28 @@ from database.dataset import *
 import priors.NumEventPrior
 import priors.EventLocationPrior
 import priors.EventMagPrior
+import priors.EventDetectionPrior
+
+import netvisa
+
+def load_model(param_dirname, start_time, end_time, detections, site_up,
+               sites, phasenames, phasetimedef):
+  
+  model = netvisa.NetModel(start_time, end_time, detections,
+                           os.path.join(param_dirname, "NumEventPrior.txt"),
+                           os.path.join(param_dirname,
+                                        "EventLocationPrior.txt"),
+                           os.path.join(param_dirname, "EventMagPrior.txt"),
+                           os.path.join(param_dirname,
+                                        "EventDetectionPrior.txt")
+                           )
+  
+  return model
 
 def main(param_dirname):
-  start_time, end_time, leb_events = read_events("training", "leb")
-  
+  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+         sel3_evlist, site_up, sites, phasenames, phasetimedef = read_data()
+
   priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
                              start_time, end_time, leb_events)
   
@@ -20,7 +38,19 @@ def main(param_dirname):
                                           "EventMagPrior.txt"),
                              leb_events)
 
-
+  priors.EventDetectionPrior.learn(os.path.join(param_dirname,
+                                                "EventDetectionPrior.txt"),
+                                   detections, leb_events, leb_evlist,
+                                   site_up, sites, phasenames)
 if __name__ == "__main__":
-  main("parameters")
+  try:
+    main("parameters")
+  except SystemExit:
+    raise
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    pdb.post_mortem(sys.exc_traceback)
+    raise
+  
   
