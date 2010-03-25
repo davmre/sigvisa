@@ -484,15 +484,13 @@ fields terminated by ', ' optionally enclosed by '"' ignore 1 lines;
 update idcx_wfdisc set dir = concat('/var/ctbt_data/', substr(dir,14));
 
 create table static_siteid (
-  id      int,
-  sta     varchar(6),
-
+  id          int,
+  sta         varchar(6),
   lat         double,
   lon         double,
   elev        double,
   staname     varchar(50),
-  statype     varchar(4),
-
+  statype     char(2),
   primary key (id),
   unique  key(sta))
 engine = myisam;
@@ -503,12 +501,18 @@ terminated by ',' optionally enclosed by '"' ignore 1 lines;
 create table static_phaseid (
   id      int,
   phase   varchar(20),
+  timedef varchar(1),
+
   primary key (id),
   unique  key (phase))
 engine = myisam;
 
 load data local infile 'static_phaseid.csv' into table static_phaseid fields 
 terminated by ',' optionally enclosed by '"' ignore 1 lines;
+
+/* NetVISA uses only the arrivals which have a valid azimuth and slowness */
+create or replace view idcx_arrival_net as 
+select * from idcx_arrival idcx where delaz > 0 and delslo > 0;
 
 /* create a user for querying the data and give him privileges */
 create user ctbt@localhost;

@@ -1,6 +1,9 @@
 This package contains the VISA implementation. To get started.
 
-- First, load the data in a mysql database:
+- rpy2, R, and numpy are required. To test rpy2 and R
+  issue: python -m utils.LogisticModel
+
+- Load the data in a mysql database:
   copy all the csv files into the database directory
   change to the database directory and then run ctbt3mos.sql from mysql
 
@@ -33,13 +36,12 @@ netvisa/
 
     NumEventPrior.{py, c, h}        -- Number of events
     EventLocationPrior.{py, c, h}   -- Location of events
+    EventDetectionPrior.{py, c, h}  -- Detection of a phase at a site
+    EarthModel.{c, h}               -- Travel time and distances for all phases
     score.{c, h}                    -- Compute the log probability of a world
- 
+
   utils/
-    geog.c
-    rkvector.c
-    interp.c
-    counter.py
+    LogisticModel.py
 
   visualize/
     earth.py
@@ -49,7 +51,8 @@ netvisa/
 
     NumEventPrior.txt             (learnt)
     EventLocationPrior.txt        (learnt)
-
+    EventDetectionPrior.txt       (learnt)
+       
     ttime/
       iaspei91.P
       iaspei91.S
