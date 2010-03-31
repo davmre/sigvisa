@@ -9,10 +9,14 @@ import priors.EventDetectionPrior
 
 import netvisa
 
-def load_model(param_dirname, start_time, end_time, detections, site_up,
-               sites, phasenames, phasetimedef):
+def load_earth(param_dirname, sites, phasenames, phasetimedef):
+  model = netvisa.EarthModel(sites, phasenames, phasetimedef,
+                             os.path.join(param_dirname, "ttime", "iasp91."))
+  return model
+
+def load_netvisa(param_dirname, start_time, end_time, detections, site_up):
   
-  model = netvisa.NetModel(start_time, end_time, detections,
+  model = netvisa.NetModel(start_time, end_time, detections, site_up,
                            os.path.join(param_dirname, "NumEventPrior.txt"),
                            os.path.join(param_dirname,
                                         "EventLocationPrior.txt"),
@@ -27,6 +31,8 @@ def main(param_dirname):
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef = read_data()
 
+  earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
+  
   priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
                              start_time, end_time, leb_events)
   
@@ -40,6 +46,7 @@ def main(param_dirname):
 
   priors.EventDetectionPrior.learn(os.path.join(param_dirname,
                                                 "EventDetectionPrior.txt"),
+                                   earthmodel,
                                    detections, leb_events, leb_evlist,
                                    site_up, sites, phasenames)
 if __name__ == "__main__":

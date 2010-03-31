@@ -130,7 +130,7 @@ def read_phases(cursor):
   phasenames = np.array(cursor.fetchall())[:,0]
   
   cursor.execute("select timedef='d' from static_phaseid order by id")
-  phasetimedef = np.array(cursor.fetchall())[:,0]
+  phasetimedef = np.array(cursor.fetchall())[:,0].astype(bool)
 
   return phasenames, phasetimedef
 
