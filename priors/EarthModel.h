@@ -1,16 +1,13 @@
-typedef struct Site_t
-{
-  double sitelon;
-  double sitelat;
-  double siteelev;
-  int    siteisarr;
-
-  double start_time;
-  int * up_time;
-} Site_t;
-
 typedef struct EarthPhaseModel_t
 {
+  int numdepth;
+  int numdist;
+  
+  double * p_depths;
+  double * p_dists;
+  
+  double * p_samples;                        /* numdepth x numdist */
+  
   double mindist;
   double maxdist;
   
@@ -18,17 +15,28 @@ typedef struct EarthPhaseModel_t
 
 typedef struct EarthModel_t
 {
-  EarthPhaseModel_t * phasemodel;
+  PyObject_HEAD
+
+  int numsites;
+  struct Site_t * p_sites;
+
+  int numphases;
+
+  char ** p_phasenames;
+  int * p_phase_time_def;
+
+  EarthPhaseModel_t * p_phases;
+  
 } EarthModel_t;
 
-void EarthModel_Init(EarthModel_t * p_earth, char * dirname,
-                     int numphases, char * phasenames, int * timdefphase,
-                     int numsites, Site_t * sites);
+int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args);
 
-void EarthModel_UnInit(EarthModel_t * p_earth);
+void py_EarthModel_UnInit(EarthModel_t * p_earth);
 
-int EarthModel_InRange(EarthModel_t * p_earth, double * evloc, int phaseid,
-                       int siteid);
+PyObject * py_EarthModel_InRange(EarthModel_t * p_earth, PyObject * args);
+
+int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
+                       double depth, int phaseid, int siteid);
 
 double EarthModel_ArrivalTime(EarthModel_t * p_earth, double * evloc,
                               double evtime, int phaseid, int siteid);

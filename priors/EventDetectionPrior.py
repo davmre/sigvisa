@@ -4,34 +4,7 @@ import math
 from utils.LogisticModel import LogisticModel
 from database.dataset import *
 
-def learn_phase(detections, leb_events, leb_evlist,
-                site_up, sites, phasenames, phaseid):
-  
-  # initialize feature vectors
-  siteid_feat = [[] for _ in range(len(sites))]
-  output = []
-
-  for evnum, event in enumerate(leb_events):
-    # compute the list of sites where the phase was detected for this event
-    det_site = np.zeros(len(sites), int)
-    for detnum in leb_evlist[evnum]:
-      det = detections[detnum]
-      if det[DET_PHASE_COL] == phaseid:
-        det_site[det[DET_SITE_COL]] = 1
-    
-    for snum in range(len(sites)):
-      # TODO: check if the site is up
-      # TODO: check if the phase is in range
-      output.append(det_site[snum])
-      for i in range(len(sites)):
-        siteid_feat[i].append(int(i == snum))
-
-  model = LogisticModel("y", ["site%d" % i for i in range(len(sites))],
-                        siteid_feat, output)
-
-  return model
-
-def learn_site(detections, leb_events, leb_evlist,
+def learn_site(earthmodel, detections, leb_events, leb_evlist,
                site_up, sites, phasenames, siteid):
   
   # initialize feature vectors
@@ -48,19 +21,40 @@ def learn_site(detections, leb_events, leb_evlist,
     
     for pnum in range(len(phasenames)):
       # TODO: check if the site is up
-      # TODO: check if the phase is in range
-      output.append(det_phase[pnum])
-      # construct the features one per phase
-      for i in range(len(phasenames)):
-        phaseid_feat[i].append(int(i == pnum))
+      # check if the phase is in range
+      if earthmodel.InRange(event[EV_LON_COL], event[EV_LAT_COL],
+                            event[EV_DEPTH_COL], pnum, siteid):
+        output.append(det_phase[pnum])
+        # construct the features one per phase
+        for i in range(len(phasenames)):
+          phaseid_feat[i].append(int(i == pnum))
 
-  # add one fake detection with all features on just to prevent
-  # underflow for any feature value
-  phaseid_feat2 = [x + [1] for x in phaseid_feat]
-  output2 = output + [1]
+  print "%d event-phases detected" % sum(output)
+  
+  # copy the original dataset
+  phaseid_feat2 = [[x for x in y] for y in phaseid_feat]
+  output2 = [x for x in output]
+
+  # add one fake detection
+  output2.append(1)
+  for i in range(len(phasenames)):
+    phaseid_feat2[i].append(1)
+
+  # and one fake mis-detection
+  output2.append(0)
+  for i in range(len(phasenames)):
+    phaseid_feat2[i].append(1)
+      
+  # train the model
   model = LogisticModel("y", ["phase%d" % i for i in range(len(phasenames))],
                         phaseid_feat2, output2)
 
+  # replace any NaN with 0 TODO: needs further investigation
+  for i in range(len(model.coeffs)):
+    if np.isnan(model.coeffs[i]):
+      model.coeffs[i] = 0.0
+
+  # score the model on the original dataset just for a sanity check
   sumlogprob = 0.
   cnt = 0
   for o, f in zip(output, zip(*phaseid_feat)):
@@ -75,6 +69,7 @@ def learn_site(detections, leb_events, leb_evlist,
   sumlogprob = 0.
   cnt = 0
   for o, f in zip(output, zip(*phaseid_feat)):
+    # look for P phase which is the phaseid 0
     if not f[0]:
       continue
     cnt += 1
@@ -83,11 +78,11 @@ def learn_site(detections, leb_events, leb_evlist,
       sumlogprob += math.log(p)
     else:
       sumlogprob += math.log(1-p)
-  print "Avg. log like P phase:", sumlogprob / len(output)
+  print "Avg. log like P phase:", sumlogprob / cnt
 
   return model
 
-def learn(param_fname, detections, leb_events, leb_evlist,
+def learn(param_fname, earthmodel, detections, leb_events, leb_evlist,
           site_up, sites, phasenames):
 
   fp = open(param_fname, "w")
@@ -95,8 +90,8 @@ def learn(param_fname, detections, leb_events, leb_evlist,
   print >>fp, "%d %d" % (len(sites), len(phasenames))
   
   for siteid in range(len(sites)):
-    model = learn_site(detections, leb_events, leb_evlist, site_up, sites,
-                       phasenames, siteid)
+    model = learn_site(earthmodel, detections, leb_events, leb_evlist, site_up,
+                       sites, phasenames, siteid)
     for x in model.coeffs:
       print >>fp, x,
     print >>fp

@@ -1,4 +1,5 @@
-This package contains the VISA implementation. To get started.
+This package contains the NET-VISA implementation. Network Vertically
+Integrated Seismological Analysis.
 
 - rpy2, R, and numpy are required. To test rpy2 and R
   issue: python -m utils.LogisticModel

@@ -2,8 +2,8 @@
 
 #include "../netvisa.h"
 
-double score_world(NetModel_t * p_netmodel, int numevents, Event_t * p_events,
-                   int verbose)
+double score_world(EarthModel_t * p_earth, NetModel_t * p_netmodel,
+                   int numevents, Event_t * p_events, int verbose)
 {
   double score;
   double numsc;
@@ -56,14 +56,18 @@ double score_world(NetModel_t * p_netmodel, int numevents, Event_t * p_events,
       for (phaseid=0; phaseid<numphases; phaseid++)
       {
         /* TODO: check if the phase is in range */
-        detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
-                                             p_event->p_detids[siteid 
-                                                               * numphases 
-                                                               + phaseid]==-1?
-                                             BLOG_FALSE : BLOG_TRUE,
-                                             4, siteid, phaseid,
-                                             p_event->evmag, location);
-        detcnt += 1;
+        if (EarthModel_InRange(p_earth, p_event->evlon, p_event->evlat,
+                               p_event->evdepth, phaseid, siteid))
+        {
+          detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
+                                               p_event->p_detids[siteid 
+                                                                 * numphases 
+                                                                 +phaseid]==-1?
+                                               BLOG_FALSE : BLOG_TRUE,
+                                               4, siteid, phaseid,
+                                               p_event->evmag, location);
+          detcnt += 1;
+        }
       }
     }
   }

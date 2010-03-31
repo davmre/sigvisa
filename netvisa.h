@@ -1,26 +1,11 @@
 #include <Python.h>
+/* we don't want _import_array defined in all files except the main
+ * module of netvisa */
+#if !defined NETVISA_MAIN_MODULE
+  #define NO_IMPORT_ARRAY
+#endif
+#define PY_ARRAY_UNIQUE_SYMBOL PyArray_API
 #include "numpy/arrayobject.h"
-
-#include "priors/NumEventPrior.h"
-#include "priors/EventLocationPrior.h"
-#include "priors/EventMagPrior.h"
-#include "priors/EventDetectionPrior.h"
-#include "priors/EarthModel.h"
-
-typedef struct NetModel_t
-{
-  PyObject_HEAD
-
-  int numdetections;
-  struct Detection_t * p_detections;
-  
-  NumEventPrior_t num_event_prior;
-  EventLocationPrior_t event_location_prior;
-  EventMagPrior_t event_mag_prior;
-  EventDetectionPrior_t event_det_prior;
-  EarthModel_t earth_model;
-  
-} NetModel_t;
 
 typedef struct Event_t
 {
@@ -34,6 +19,14 @@ typedef struct Event_t
   int * p_detids;                            /* detection numbers or -1 */
   
 } Event_t;
+
+typedef struct Site_t
+{
+  double sitelon;
+  double sitelat;
+  double siteelev;
+  int    siteisarr;
+} Site_t;
 
 typedef struct Detection_t
 {
@@ -50,6 +43,32 @@ typedef struct Detection_t
   double amp_det;
   double per_det;
 } Detection_t;
+
+
+#include "priors/NumEventPrior.h"
+#include "priors/EventLocationPrior.h"
+#include "priors/EventMagPrior.h"
+#include "priors/EventDetectionPrior.h"
+#include "priors/EarthModel.h"
+
+typedef struct NetModel_t
+{
+  PyObject_HEAD
+
+  int numdetections;
+  struct Detection_t * p_detections;
+
+  int numsites;
+  int numtime;       /* number of quantized time slots in p_site_up */
+  
+  int * p_site_up;                           /* numsites x numtime */
+  
+  NumEventPrior_t num_event_prior;
+  EventLocationPrior_t event_location_prior;
+  EventMagPrior_t event_mag_prior;
+  EventDetectionPrior_t event_det_prior;
+
+} NetModel_t;
 
 #include "priors/score.h"
 
@@ -69,6 +88,13 @@ typedef struct Detection_t
 #define EV_MB_COL    4
 #define EV_ORID_COL  5
 #define EV_NUM_COLS  6
+
+/* site array columns */
+#define SITE_LON_COL      0
+#define SITE_LAT_COL      1 
+#define SITE_ELEV_COL     2
+#define SITE_ISARR_COL    3        /* is the site an array station? */
+#define SITE_NUM_COLS     4
 
 /* detections array columns */
 #define DET_SITE_COL    0
@@ -92,6 +118,9 @@ typedef struct Detection_t
 #define ARRAY2(arr,i,j) (*((double *)PyArray_GETPTR2(arr,i,j)))
 #define ARRAY1(arr,i) (*((double *)PyArray_GETPTR1(arr,i)))
 
+#define BOOLARRAY2(arr,i,j) (*((npy_bool *)PyArray_GETPTR2(arr,i,j)))
+#define BOOLARRAY1(arr,i) (*((npy_bool *)PyArray_GETPTR1(arr,i)))
+
 #define MIN_MAGNITUDE   ((double) 2.0)
 #define MAX_MAGNITUDE   ((double) 8.0)
 
@@ -99,3 +128,5 @@ typedef struct Detection_t
 #define MAX_DEPTH       ((double) 700.0)
 
 
+#define UPTIME_QUANT     3600                /* 1 hour */
+#define PHASENAME_MAXLEN 6
