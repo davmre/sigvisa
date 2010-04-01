@@ -75,6 +75,7 @@ def read_detections(cursor, start_time, end_time):
                  "ph.id-1, iarr.amp, iarr.per from idcx_arrival_net iarr, "
                  "static_siteid site, static_phaseid ph where "
                  "iarr.sta=site.sta and iarr.iphase=ph.phase and "
+                 "ph.timedef='d' and "
                  "iarr.time between %s and %s order by iarr.time, iarr.arid",
                  (start_time, end_time))
   
@@ -90,6 +91,7 @@ def read_detections(cursor, start_time, end_time):
 def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype):
   cursor.execute("select lass.orid, lass.arid, ph.id-1 from %s_assoc lass, "
                  "%s_origin lori, static_phaseid ph where "
+                 "ph.timedef='d' and "
                  "lass.orid=lori.orid and lass.phase=ph.phase and lori.time "
                  "between %s and %s" % (evtype, evtype, start_time, end_time))
   
@@ -126,10 +128,13 @@ def read_sites(cursor):
   return np.array(cursor.fetchall())
 
 def read_phases(cursor):
-  cursor.execute("select phase from static_phaseid order by id")
+  cursor.execute("select phase from static_phaseid where timedef='d' "
+                 "order by id")
   phasenames = np.array(cursor.fetchall())[:,0]
-  
-  cursor.execute("select timedef='d' from static_phaseid order by id")
+
+  # silly but we might remove the timedef='d' later on
+  cursor.execute("select timedef='d' from static_phaseid where timedef='d' "
+                 "order by id")
   phasetimedef = np.array(cursor.fetchall())[:,0].astype(bool)
 
   return phasenames, phasetimedef

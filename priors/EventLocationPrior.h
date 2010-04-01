@@ -8,12 +8,10 @@ typedef struct EventLocationPrior_t
   double * p_bucketprob;
 } EventLocationPrior_t;
 
-void EventLocationPrior_Init_Params(EventLocationPrior_t * dist, int nparams,
+void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
                                     const char * filename);
 
-#define EventLocationPrior_Init_Args while(0)
-
 double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
-                                  const double * location, int nargs);
+                                  double lon, double lat, double depth);
 
 void EventLocationPrior_UnInit(EventLocationPrior_t * dist);

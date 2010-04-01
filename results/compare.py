@@ -1,0 +1,41 @@
+from database.dataset import EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_MB_COL,\
+     EV_TIME_COL
+
+from utils.geog import dist_deg
+
+import mwmatching
+
+DELTA_TIME = 50                         # in seconds
+DELTA_DIST = 5                          # in degrees
+
+
+def find_matching(gold_events, guess_events):
+  """
+  We want a max cardinality min cost matching.
+  Returns a list of pairs of gold,guess indices
+  """
+  edges = []
+  for goldnum, gold in enumerate(gold_events):
+    for guessnum, guess in enumerate(guess_events):
+      if ((abs(gold[EV_TIME_COL] - guess[EV_TIME_COL]) <= DELTA_TIME)
+          and (dist_deg(gold[:2], guess[:2]) <= DELTA_DIST)):
+        edges.append((goldnum, len(gold_events)+guessnum,
+                      -dist_deg(gold[:2], guess[:2])))
+  
+  mat = mwmatching.maxWeightMatching(edges, maxcardinality=True)
+  indices = []
+  for i in range(len(gold_events)):
+    if i < len(mat) and mat[i] >= 0:
+      assert(mat[i] >= len(gold_events))
+      indices.append((i, mat[i] - len(gold_events)))
+  
+  return indices
+
+def find_true_false_guess(gold_events, guess_events):
+  mat = find_matching(gold_events, guess_events)
+  true = [j for (i,j) in mat]
+  true_set = set(true)
+  false = [i for i in range(len(guess_events)) if i not in true_set]
+
+  return true, false, mat
+

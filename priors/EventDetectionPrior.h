@@ -2,19 +2,18 @@ typedef struct EventDetectionPrior_t
 {
   int numsites;
   int numphases;
-  double * p_site_mag;
-  double * p_site_phases;
-  double * p_site_bias;
+  double * p_coeff_mag;
+  double * p_coeff_dist;
+  double * p_coeff_phases;
+  double * p_coeff_bias;
 } EventDetectionPrior_t;
 
-void EventDetectionPrior_Init_Params(EventDetectionPrior_t * dist, int nparams,
+void EventDetectionPrior_Init_Params(EventDetectionPrior_t * dist,
                                      const char * filename);
 
-#define EventDetectionPrior_Init_Args while(0)
-
-double EventDetectionPrior_LogProb(const EventDetectionPrior_t * dist,
-                                   int is_detected, int nargs,
-                                   int siteid, int phaseid, double evmag,
-                                   double * evloc);
+double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
+                                   int is_detected,
+                                   double evdepth, double evmag, double dist,
+                                   int siteid, int phaseid);
 
 void EventDetectionPrior_UnInit(EventDetectionPrior_t * dist);

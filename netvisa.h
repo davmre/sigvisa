@@ -55,6 +55,9 @@ typedef struct NetModel_t
 {
   PyObject_HEAD
 
+  double start_time;
+  double end_time;
+  
   int numdetections;
   struct Detection_t * p_detections;
 
@@ -62,6 +65,8 @@ typedef struct NetModel_t
   int numtime;       /* number of quantized time slots in p_site_up */
   
   int * p_site_up;                           /* numsites x numtime */
+
+  EarthModel_t * p_earth;
   
   NumEventPrior_t num_event_prior;
   EventLocationPrior_t event_location_prior;
@@ -70,10 +75,14 @@ typedef struct NetModel_t
 
 } NetModel_t;
 
-#include "priors/score.h"
+#define UPTIME_QUANT     3600                /* 1 hour */
 
-#define BLOG_TRUE  0
-#define BLOG_FALSE 1
+#define NetModel_IsSiteUp(p_netmodel, siteid, arrtime)\
+  ((arrtime >= (p_netmodel)->start_time) && (arrtime < (p_netmodel)->end_time)\
+   && (p_netmodel)->p_site_up[(siteid) * (p_netmodel)->numtime\
+   + ((int) (((arrtime) - (p_netmodel)->start_time) / UPTIME_QUANT))])
+
+#include "priors/score.h"
 
 #define PI                 ((double) 3.1415926535897931)
 
@@ -128,5 +137,4 @@ typedef struct NetModel_t
 #define MAX_DEPTH       ((double) 700.0)
 
 
-#define UPTIME_QUANT     3600                /* 1 hour */
 #define PHASENAME_MAXLEN 6

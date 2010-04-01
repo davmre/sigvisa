@@ -15,7 +15,7 @@ typedef struct EarthPhaseModel_t
   
 } EarthPhaseModel_t;
 
-#define EarthPhaseModel_Sample(p_phase, depthi, disti) \
+#define EarthPhaseModel_GetSample(p_phase, depthi, disti) \
 ((p_phase)->p_samples[(depthi) * (p_phase)->numdist + (disti)])
 
 typedef struct EarthModel_t
@@ -34,6 +34,11 @@ typedef struct EarthModel_t
   
 } EarthModel_t;
 
+#define EarthModel_IsTimeDefPhase(p_earth, phaseid)\
+ ((p_earth)->p_phase_time_def[(phaseid)])
+
+#define EarthModel_NumPhases(p_earth) ((p_earth)->numphases)
+
 int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args);
 
 void py_EarthModel_UnInit(EarthModel_t * p_earth);
@@ -42,6 +47,9 @@ PyObject * py_EarthModel_InRange(EarthModel_t * p_earth, PyObject * args);
 
 int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
                        double depth, int phaseid, int siteid);
+
+double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
+                        int siteid);
 
 PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args);
 
@@ -58,8 +66,15 @@ double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
                                  double lat, int siteid, double *p_esaz,
                                  double *p_seaz);
 
-double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double * evloc,
+PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth, 
+                                         PyObject * args);
+
+double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
+                                  double lat, double depth,
                                   int phaseid, int siteid);
 
-int EarthModel_TimeDefPhase(EarthModel_t * p_earth, int phaseid);
+PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth, 
+                                        PyObject * args);
 
+PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth, 
+                                   PyObject * args);
