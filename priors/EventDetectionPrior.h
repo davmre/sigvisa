@@ -2,6 +2,7 @@ typedef struct EventDetectionPrior_t
 {
   int numsites;
   int numphases;
+  double * p_site_mag;
   double * p_site_phases;
   double * p_site_bias;
 } EventDetectionPrior_t;

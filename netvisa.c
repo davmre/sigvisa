@@ -55,6 +55,19 @@ static PyMethodDef EarthModel_methods[] = {
      "Inquire whether an event is within range of a site for a given phase\n"
      "InRange(lon, lat, depth, phaseid, siteid) -> True / False"
     },
+    {"Delta", (PyCFunction)py_EarthModel_Delta, METH_VARARGS,
+     "Compute the distance between an event location and a site\n"
+     "Delta(lon, lat, siteid) -> distance in degrees"
+    },
+    {"ArrivalTime", (PyCFunction)py_EarthModel_ArrivalTime, METH_VARARGS,
+     "Compute the arrival time of an event at a site\n"
+     "ArrivalTime(evlon, evlat, evdepth, evtime, phaseid, siteid) -> arrtime"
+    },
+    {"ArrivalAzimuth", (PyCFunction)py_EarthModel_ArrivalAzimuth,
+     METH_VARARGS,
+     "Compute the arrival azimuth of an event at a site\n"
+     "ArrivalAzimuth(evlon, evlat, siteid) -> (esaz, seaz)",
+    },
     {NULL}  /* Sentinel */
 };
 

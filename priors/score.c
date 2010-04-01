@@ -55,7 +55,7 @@ double score_world(EarthModel_t * p_earth, NetModel_t * p_netmodel,
       /* TODO: check if the site is up */
       for (phaseid=0; phaseid<numphases; phaseid++)
       {
-        /* TODO: check if the phase is in range */
+        /* check if the phase is in range */
         if (EarthModel_InRange(p_earth, p_event->evlon, p_event->evlat,
                                p_event->evdepth, phaseid, siteid))
         {

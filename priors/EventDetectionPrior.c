@@ -28,6 +28,9 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
     exit(1);
   }
 
+  prior->p_site_mag = (double *)malloc(sizeof(*prior->p_site_mag)
+                                        * prior->numsites);
+
   prior->p_site_phases = (double *)malloc(sizeof(*prior->p_site_phases)
                                           * prior->numsites 
                                           * prior->numphases);
@@ -37,6 +40,11 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
   
   for (siteid = 0; siteid < prior->numsites; siteid ++)
   {
+    if (1 != fscanf(fp, "%lg ", &prior->p_site_mag[siteid]))
+    {
+      fprintf(stderr, "error reading mag-coeff for siteid %d in file %s\n",
+              siteid, filename);
+    }
     for (phaseid = 0; phaseid < prior->numphases; phaseid ++)
     {
       if (1 != fscanf(fp, "%lg ",&prior->p_site_phases[siteid 
@@ -63,25 +71,24 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
                                    double * evloc)
 {
   double logodds;
-  double logprob;
   
   assert(nargs == 4);
 
-  logodds = prior->p_site_phases[siteid * prior->numphases + phaseid]
+  logodds = prior->p_site_mag[siteid] * evmag
+    + prior->p_site_phases[siteid * prior->numphases + phaseid]
     + prior->p_site_bias[siteid];
   
   if (BLOG_TRUE == is_detected)
-    logprob = - log(1 + exp(-logodds));
+    return - log(1 + exp(-logodds));
   else if (BLOG_FALSE == is_detected)
-    logprob = - log(1 + exp(logodds));
+    return - log(1 + exp(logodds));
   else
-    assert(0);             /* is_detected is neither true nor false */
-  
-  return logprob;
+    assert(0);             /* is_detected is neither true nor false */  
 }
 
 void EventDetectionPrior_UnInit(EventDetectionPrior_t * prior)
 {
+  free(prior->p_site_mag);
   free(prior->p_site_phases);
   free(prior->p_site_bias);
 }
