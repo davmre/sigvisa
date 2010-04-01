@@ -10,8 +10,13 @@ typedef struct EarthPhaseModel_t
   
   double mindist;
   double maxdist;
+
+  double surf_vel;                           /* surface velocity */
   
 } EarthPhaseModel_t;
+
+#define EarthPhaseModel_Sample(p_phase, depthi, disti) \
+((p_phase)->p_samples[(depthi) * (p_phase)->numdist + (disti)])
 
 typedef struct EarthModel_t
 {
@@ -38,11 +43,20 @@ PyObject * py_EarthModel_InRange(EarthModel_t * p_earth, PyObject * args);
 int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
                        double depth, int phaseid, int siteid);
 
-double EarthModel_ArrivalTime(EarthModel_t * p_earth, double * evloc,
-                              double evtime, int phaseid, int siteid);
+PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args);
 
-double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double * evloc,
-                                 int phaseid, int siteid);
+PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args);
+
+double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
+                              double depth, double evtime, 
+                              int phaseid, int siteid);
+
+PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, 
+                                        PyObject * args);
+
+double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
+                                 double lat, int siteid, double *p_esaz,
+                                 double *p_seaz);
 
 double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double * evloc,
                                   int phaseid, int siteid);

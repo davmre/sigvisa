@@ -29,7 +29,7 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up):
 
 def main(param_dirname):
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef = read_data()
+         sel3_evlist, site_up, sites, phasenames, phasetimedef = read_data(hours=100)
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
   
