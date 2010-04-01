@@ -5,15 +5,13 @@
 
 #include "../netvisa.h"
 
-void EventLocationPrior_Init_Params(EventLocationPrior_t * dist, int nparams,
+void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
                                     const char * filename)
 {
   FILE * fp;
   double discount;
   int lonidx;
   int latidx;
-  
-  assert(nparams == 1);
   
   fp = fopen(filename, "r");
 
@@ -72,28 +70,16 @@ void EventLocationPrior_UnInit(EventLocationPrior_t * dist)
 
 
 double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
-                                  const double * location, int nargs)
+                                  double lon, double lat, double depth)
 {
-  double lon;
-  double lat;
-  double depth;
-  
   int lonidx;
   int latidx;
   
-  assert(nargs==0);
-
-  if (location[0] == 180)
+  if (lon == 180)
     lon = -180;
-  else
-    lon = location[0];
   
-  if (location[1] == 90)
+  if (lat == 90)
     lat = 89;
-  else
-    lat = location[1];
-  
-  depth = location[2];
 
   /* the event location better be valid */
   if ((lon < -180) || (lon > 180) || (lat < -90) || (lat > 90) 

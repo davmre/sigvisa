@@ -38,11 +38,18 @@ netvisa/
     NumEventPrior.{py, c, h}        -- Number of events
     EventLocationPrior.{py, c, h}   -- Location of events
     EventDetectionPrior.{py, c, h}  -- Detection of a phase at a site
+    NumFalseDetPrior.{py, c, h}     -- Number of false detections at each site
+    ArrivalTimePrior.{py, c, h}     -- Arrival Time at a site
     EarthModel.{c, h}               -- Travel time and distances for all phases
     score.{c, h}                    -- Compute the log probability of a world
 
   utils/
     LogisticModel.py
+    geog.py                         -- simple geographical distances etc.
+
+  results/
+    mwmatching.py                  -- max weighted matching
+    compare.py                     -- compare the answer to the (assumed) truth
 
   visualize/
     earth.py
@@ -53,10 +60,12 @@ netvisa/
     NumEventPrior.txt             (learnt)
     EventLocationPrior.txt        (learnt)
     EventDetectionPrior.txt       (learnt)
-       
+    NumFalseDetPrior.txt          (learnt)
+    ArrivelTimePrior.txt          (learnt)
+    
     ttime/
-      iaspei91.P
-      iaspei91.S
+      iasp91.P
+      iasp91.S
       ...
 
 

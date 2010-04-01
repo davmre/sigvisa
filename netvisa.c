@@ -6,7 +6,18 @@
 
 static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
-static PyObject * py_score_world(PyObject * self, PyObject * args);
+static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
+
+static PyMethodDef NetModel_methods[] = {
+  {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
+   "score_world(events, ev_detlist, verbose) "
+   "-> log probability\n"},
+  {"score_event", (PyCFunction)py_score_event, METH_VARARGS,
+   "score_event(event, detlist) "
+   "-> log probability\n"},
+  {NULL}  /* Sentinel */
+};
 
 static PyTypeObject py_net_model = {
     PyObject_HEAD_INIT(NULL)
@@ -30,14 +41,14 @@ static PyTypeObject py_net_model = {
     0,                                       /*tp_setattro*/
     0,                                       /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT,                      /*tp_flags*/
-    "Network Model",                         /* tp_doc */
+    "Network Processing Model",              /* tp_doc */
     0,                                       /* tp_traverse */
     0,                                       /* tp_clear */
     0,                                       /* tp_richcompare */
     0,                                       /* tp_weaklistoffset */
     0,                                       /* tp_iter */
     0,                                       /* tp_iternext */
-    0,                                       /* tp_methods */
+    NetModel_methods,                        /* tp_methods */
     0,                                       /* tp_members */
     0,                                       /* tp_getset */
     0,                                       /* tp_base */
@@ -67,6 +78,19 @@ static PyMethodDef EarthModel_methods[] = {
      METH_VARARGS,
      "Compute the arrival azimuth of an event at a site\n"
      "ArrivalAzimuth(evlon, evlat, siteid) -> (esaz, seaz)",
+    },
+    {"ArrivalSlowness", (PyCFunction)py_EarthModel_ArrivalSlowness,
+     METH_VARARGS,
+     "Compute the arrival slowness of an event at a site\n"
+     "ArrivalSlowness(evlon, evlat, evdepth, int phaseid, siteid) -> slowness"
+    },
+    {"IsTimeDefPhase", (PyCFunction)py_EarthModel_IsTimeDefPhase,
+     METH_VARARGS,
+     "Determine whether a phaseid is time-defining or not\n"
+     "IsTimeDefPhase(phaseid) -> True or False",
+    },
+    {"NumPhases", (PyCFunction)py_EarthModel_NumPhases,
+     METH_VARARGS, "NumPhases() -> number of phases",
     },
     {NULL}  /* Sentinel */
 };
@@ -114,9 +138,11 @@ static PyTypeObject py_EarthModel = {
 };
 
 static PyMethodDef netvisaMethods[] = {
+/*
   {"score_world", py_score_world, METH_VARARGS,
-   "score_world(earth_model, net_model, events, evlist, verbose) "
+   "score_world(net_model, events, evlist, verbose) "
    "-> log probability\n"},
+*/
   {NULL, NULL}
 };
 
@@ -212,6 +238,7 @@ static void free_site_up(int nsites, int ntime, int * p_site_up)
 
 static int py_net_model_init(NetModel_t *self, PyObject *args)
 {
+  EarthModel_t * p_earth;
   double start_time;
   double end_time;
   PyArrayObject * detectionsobj;
@@ -221,7 +248,8 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   const char * evmag_fname;
   const char * evdet_fname;
   
-  if (!PyArg_ParseTuple(args, "ddO!O!ssss", &start_time, &end_time, 
+  if (!PyArg_ParseTuple(args, "O!ddO!O!ssss", &py_EarthModel, &p_earth,
+                        &start_time, &end_time, 
                         &PyArray_Type, &detectionsobj,
                         &PyArray_Type, &siteupobj,
                         &numevent_fname, &evloc_fname, &evmag_fname, 
@@ -253,7 +281,11 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
     return -1;
   }
 
+  self->start_time = start_time;
+  self->end_time = end_time;
 
+  self->p_earth = p_earth;
+  Py_INCREF((PyObject *)self->p_earth);
 
   alloc_detections(detectionsobj, &self->numdetections, &self->p_detections);
 
@@ -262,17 +294,20 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   NumEventPrior_Init_Params(&self->num_event_prior, 2, numevent_fname,
                             end_time - start_time);
   
-  EventLocationPrior_Init_Params(&self->event_location_prior, 1, evloc_fname);
+  EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
   
   EventMagPrior_Init_Params(&self->event_mag_prior, 1, evmag_fname);
 
-  EventDetectionPrior_Init_Params(&self->event_det_prior, 1, evdet_fname);
+  EventDetectionPrior_Init_Params(&self->event_det_prior, evdet_fname);
   
   return 0;
 }
 
 static void py_net_model_dealloc(NetModel_t * self)
 {
+  Py_INCREF((PyObject *)self->p_earth);
+  self->p_earth = NULL;
+  
   free_detections(self->numdetections, self->p_detections);
   self->p_detections = NULL;
 
@@ -281,6 +316,53 @@ static void py_net_model_dealloc(NetModel_t * self)
   
   EventLocationPrior_UnInit(&self->event_location_prior);
   self->ob_type->tp_free((PyObject*)self);
+}
+
+static void convert_event_detections(Event_t * p_event, int numsites,
+                                     int numphases, int numdetections,
+                                     Detection_t * p_detections,
+                                     PyObject * phasedet_list)
+{
+  Py_ssize_t j;
+
+  p_event->p_detids = (int *)malloc(numsites * numphases *
+                                    sizeof(*p_event->p_detids));
+
+  /* initialize all detections to -1, i.e. no detection */
+  for (j=0; j<numsites * numphases; j++)
+    p_event->p_detids[j] = -1;
+
+
+  assert(phasedet_list);
+  assert(PyList_Check(phasedet_list));
+    
+  for (j = 0; j < PyList_GET_SIZE(phasedet_list); j ++)
+  {
+    PyObject * phasedet_tuple;
+    PyObject * phaseobj;
+    PyObject * detobj;
+    long phaseid;
+    long detid;
+    int siteid;
+      
+    phasedet_tuple = PyList_GetItem(phasedet_list, j);
+    assert(phasedet_tuple);
+    assert(PyTuple_Check(phasedet_tuple));
+
+    phaseobj = PyTuple_GetItem(phasedet_tuple, 0);
+    assert(phaseobj && PyInt_Check(phaseobj));
+      
+    detobj = PyTuple_GetItem(phasedet_tuple, 1);
+    assert(detobj && PyInt_Check(detobj));
+      
+    phaseid = PyInt_AS_LONG(phaseobj);
+    detid = PyInt_AS_LONG(detobj);
+
+    assert((detid >= 0) && (detid < numdetections));
+    siteid = p_detections[detid].site_det;
+
+    p_event->p_detids[siteid * numphases + phaseid] = detid;
+  }
 }
 
 static void convert_eventobj(PyArrayObject * p_events_arrobj, 
@@ -297,15 +379,12 @@ static void convert_eventobj(PyArrayObject * p_events_arrobj,
   assert(PyList_Check(p_evlist_obj));
   
   numevents = p_events_arrobj->dimensions[0];
-  printf("%d events to be allocated\n", numevents);
 
   p_events = (Event_t *)calloc(numevents, sizeof(*p_events));
 
   for(i=0; i<numevents; i++)
   {
     Event_t * p_event;
-    Py_ssize_t j;
-    PyObject * phasedet_list;
     
     p_event = p_events + i;
     
@@ -315,46 +394,9 @@ static void convert_eventobj(PyArrayObject * p_events_arrobj,
     p_event->evtime = ARRAY2(p_events_arrobj, i, EV_TIME_COL);
     p_event->evmag = ARRAY2(p_events_arrobj, i, EV_MB_COL);
 
-    p_event->p_detids = (int *)malloc(numsites * numphases *
-                                      sizeof(*p_event->p_detids));
-
-    /* initialize all detections to -1, i.e. no detection */
-    for (j=0; j<numsites * numphases; j++)
-      p_event->p_detids[j] = -1;
-
-    /* get the detections for this event */
-    phasedet_list = PyList_GetItem(p_evlist_obj, i);
-
-    assert(phasedet_list);
-    assert(PyList_Check(phasedet_list));
-    
-    for (j = 0; j < PyList_GET_SIZE(phasedet_list); j ++)
-    {
-      PyObject * phasedet_tuple;
-      PyObject * phaseobj;
-      PyObject * detobj;
-      long phaseid;
-      long detid;
-      int siteid;
-      
-      phasedet_tuple = PyList_GetItem(phasedet_list, j);
-      assert(phasedet_tuple);
-      assert(PyTuple_Check(phasedet_tuple));
-
-      phaseobj = PyTuple_GetItem(phasedet_tuple, 0);
-      assert(phaseobj && PyInt_Check(phaseobj));
-      
-      detobj = PyTuple_GetItem(phasedet_tuple, 1);
-      assert(detobj && PyInt_Check(detobj));
-      
-      phaseid = PyInt_AS_LONG(phaseobj);
-      detid = PyInt_AS_LONG(detobj);
-
-      assert((detid >= 0) && (detid < numdetections));
-      siteid = p_detections[detid].site_det;
-
-      p_event->p_detids[siteid * numphases + phaseid] = detid;
-    }
+    convert_event_detections(p_event, numsites, numphases,
+                             numdetections, p_detections,
+                             PyList_GetItem(p_evlist_obj, i));
   }
   
   *p_numevents = numevents;
@@ -370,11 +412,9 @@ static void free_events(int numevents, Event_t * p_events)
   free(p_events);
 }
 
-static PyObject * py_score_world(PyObject * self, PyObject * args)
+static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args)
 {
   /* input arguments */
-  EarthModel_t * p_earth;
-  NetModel_t * p_netmodel;
   PyArrayObject * p_events_arrobj;
   PyObject * p_evlist_obj;
   int verbose;
@@ -383,11 +423,10 @@ static PyObject * py_score_world(PyObject * self, PyObject * args)
   Event_t * p_events;
   double score;
   
-  if (!PyArg_ParseTuple(args, "O!O!O!O!i", &py_EarthModel, &p_earth,
-                        &py_net_model, &p_netmodel,
+  if (!PyArg_ParseTuple(args, "O!O!i",
                         &PyArray_Type, &p_events_arrobj, 
                         &PyList_Type, &p_evlist_obj, &verbose)
-      || !p_earth || !p_netmodel || !p_events_arrobj || !p_evlist_obj)
+      || !p_events_arrobj || !p_evlist_obj)
     return NULL;
 
   if ((2 != p_events_arrobj->nd) || (NPY_DOUBLE 
@@ -405,9 +444,57 @@ static PyObject * py_score_world(PyObject * self, PyObject * args)
                    p_netmodel->numdetections, p_netmodel->p_detections,
                    &numevents, &p_events);
   
-  score = score_world(p_earth, p_netmodel, numevents, p_events, verbose);
+  score = score_world(p_netmodel, numevents, p_events, verbose);
   
   free_events(numevents, p_events);
+  
+  return Py_BuildValue("d", score);
+}
+
+static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  PyArrayObject * p_event_arrobj;
+  PyObject * p_detlist_obj;
+ 
+  Event_t * p_event;
+  double locsc, magsc, detsc;
+  double score;
+  int detcnt;
+  
+  if (!PyArg_ParseTuple(args, "O!O!",
+                        &PyArray_Type, &p_event_arrobj, 
+                        &PyList_Type, &p_detlist_obj)
+      || !p_event_arrobj || !p_detlist_obj)
+    return NULL;
+
+  if ((1 != p_event_arrobj->nd) || (NPY_DOUBLE 
+                                     != p_event_arrobj->descr->type_num)
+      || (EV_NUM_COLS != p_event_arrobj->dimensions[0]))
+  {
+    PyErr_SetString(PyExc_ValueError,
+                    "score_event: wrong shape or type of event array");
+    return NULL;
+  }
+
+  p_event = (Event_t *)calloc(1, sizeof(*p_event));
+  p_event->evlon = ARRAY1(p_event_arrobj, EV_LON_COL);
+  p_event->evlat = ARRAY1(p_event_arrobj, EV_LAT_COL);
+  p_event->evdepth = ARRAY1(p_event_arrobj, EV_DEPTH_COL);
+  p_event->evtime = ARRAY1(p_event_arrobj, EV_TIME_COL);
+  p_event->evmag = ARRAY1(p_event_arrobj, EV_MB_COL);
+
+  convert_event_detections(p_event, 
+                           p_netmodel->event_det_prior.numsites,
+                           p_netmodel->event_det_prior.numphases,
+                           p_netmodel->numdetections, p_netmodel->p_detections,
+                           p_detlist_obj);
+
+  locsc = magsc = detsc = 0;
+  score_event(p_netmodel, p_event, &locsc, &magsc, &detsc, &detcnt);
+  score = locsc + magsc + detsc;
+
+  free_events(1, p_event);
   
   return Py_BuildValue("d", score);
 }

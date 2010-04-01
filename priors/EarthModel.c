@@ -500,12 +500,23 @@ static void dist_azimuth(double alon1, double alat1, double alon2,
     *baz += 360.0;
 }
 
+double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
+                        int siteid)
+{
+  double delta, esaz, seaz;
+  Site_t * p_site;
+  p_site = p_earth->p_sites + siteid;
+  
+  dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
+               &delta, &esaz, &seaz);
+
+  return delta;
+}
+
 PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args)
 {
   double lon, lat;
   int siteid;
-  Site_t * p_site;
-  double delta, esaz, seaz;
   
   if (!PyArg_ParseTuple(args, "ddi", &lon, &lat, &siteid))
     return NULL;
@@ -515,30 +526,29 @@ PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args)
     PyErr_SetString(PyExc_ValueError, "EarthModel: invalide siteid");
     return NULL;
   }
-  
-  p_site = p_earth->p_sites + siteid;
-  
-  dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
-               &delta, &esaz, &seaz);
 
-  return Py_BuildValue("d", delta);
+  return Py_BuildValue("d", EarthModel_Delta(p_earth, lon, lat, siteid));
 }
 
-static double travel_time(EarthPhaseModel_t * p_phase, double depth, double
-                          distance)
+static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
+                        distance, double * p_trvtime, double * p_slow)
 {
   int depthi, disti, depthi2, disti2;
   double val11, val12, val21, val22;
   double mdist11, mdist12, mdist21, mdist22;
   double d_depth, d_dist;
+  double slo_val1, slo_val2;
+  double slo_mdist1, slo_mdist2;
 
+  /* check that the depth and distance are within the bounds for this phase */
   if ((depth < p_phase->p_depths[0]) 
-      || (depth > p_phase->p_depths[p_phase->numdepth-1]))
-    return -1;
-
-  if ((distance < p_phase->p_dists[0]) 
+      || (depth > p_phase->p_depths[p_phase->numdepth-1])
+      || (distance < p_phase->p_dists[0]) 
       || (distance > p_phase->p_dists[p_phase->numdist-1]))
-    return -1;
+  {
+    *p_trvtime = *p_slow = -1;
+    return;
+  }
   
   for (depthi = 0; (depthi < p_phase->numdepth) 
          && (depth >= p_phase->p_depths[depthi]); depthi++)
@@ -565,19 +575,25 @@ static double travel_time(EarthPhaseModel_t * p_phase, double depth, double
     disti = p_phase->numdist-2;
     disti2 = p_phase->numdist-1;
   }
-  
-  val11 = EarthPhaseModel_Sample(p_phase, depthi, disti);
-  val12 = EarthPhaseModel_Sample(p_phase, depthi, disti2);
-  val21 = EarthPhaseModel_Sample(p_phase, depthi2, disti);
-  val22 = EarthPhaseModel_Sample(p_phase, depthi2, disti2);
+  /* the four points are as follows :
+   *    1,1   1,2
+   *    2,1   2,2
+   */
+  val11 = EarthPhaseModel_GetSample(p_phase, depthi, disti);
+  val12 = EarthPhaseModel_GetSample(p_phase, depthi, disti2);
+  val21 = EarthPhaseModel_GetSample(p_phase, depthi2, disti);
+  val22 = EarthPhaseModel_GetSample(p_phase, depthi2, disti2);
 
   if ((val11 < 0) || (val12 < 0) || (val21 < 0) || (val22 < 0))
-    return -1;
+  {
+    *p_trvtime = *p_slow = -1;
+    return;
+  }
 
   d_depth = p_phase->p_depths[depthi2] - p_phase->p_depths[depthi];
   d_dist = p_phase->p_dists[disti2] - p_phase->p_dists[disti];
   
-  /* compute the scaled mahattan distance to the four corners */
+  /* compute the scaled manhattan distance to the four corners */
   mdist11 = (depth - p_phase->p_depths[depthi]) / d_depth 
     + (distance - p_phase->p_dists[disti]) / d_dist;
 
@@ -590,33 +606,71 @@ static double travel_time(EarthPhaseModel_t * p_phase, double depth, double
   mdist22 = (p_phase->p_depths[depthi2] - depth) / d_depth
     + (p_phase->p_dists[disti2] - distance) / d_dist;
 
+  /* compute the travel time */
   if (!mdist11)
-    return val11;
-  
-  if (!mdist12)
-    return val12;
-  
-  if (!mdist21)
-    return val21;
-  
-  if (!mdist22)
-    return val22;
-  
-  assert((mdist11 > 0) && (mdist12 > 0) && (mdist21 > 0) && (mdist22 > 0));
+    *p_trvtime = val11;
 
-  /* for debugging*/
-  if (fabs(distance - 137.1301) < 1e-3)
+  else if (!mdist12)
+    *p_trvtime = val12;
+
+  else if (!mdist21)
+    *p_trvtime = val21;
+
+  else if (!mdist22)
+    *p_trvtime = val22;
+  
+  else
   {
-    printf("depth %lf distance %lf\n", depth, distance);
-    printf("val11 %lf val12 %lf\nval21 %lf val22 %lf\n", val11, val12, val21,
-           val22);
-    printf("mdist11 %lf mdist12 %lf mdist21 %lf mdist22 %lf\n",
-           mdist11, mdist12, mdist21, mdist22);
-  }
-  /**/
+    assert((mdist11 > 0) && (mdist12 > 0) && (mdist21 > 0) && (mdist22 > 0));
 
-  return (val11 / mdist11 + val12 / mdist12 + val21 / mdist21 
-          + val22 / mdist22) / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
+    /* for debugging*
+    if (fabs(distance - 137.1301) < 1e-3)
+    {
+      printf("depth %lf distance %lf\n", depth, distance);
+      printf("val11 %lf val12 %lf\nval21 %lf val22 %lf\n", val11, val12, val21,
+             val22);
+      printf("mdist11 %lf mdist12 %lf mdist21 %lf mdist22 %lf\n",
+             mdist11, mdist12, mdist21, mdist22);
+    }
+    **/
+
+    *p_trvtime = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21 
+                  + val22 / mdist22)
+      / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
+  }
+
+  slo_val1 = (val12 - val11) / d_dist;
+  slo_val2 = (val22 - val21) / d_dist;
+  slo_mdist1 = depth - p_phase->p_depths[depthi];
+  slo_mdist2 = p_phase->p_depths[depthi2] - depth;
+
+  /* compute the slowness */
+  if (!slo_mdist1)
+    *p_slow = slo_val1;
+
+  else if (!slo_mdist2)
+    *p_slow = slo_val2;
+
+  else
+  {
+    assert((slo_mdist1 > 0) && (slo_mdist2 > 0));
+
+    /* for debugging*
+    if (fabs(distance - 80.653904) < 1e-3)
+    {
+      printf("depth %lf distance %lf\n", depth, distance);
+      printf("val11 %lf val12 %lf\nval21 %lf val22 %lf\n", val11, val12, val21,
+             val22);
+      printf("mdist11 %lf mdist12 %lf mdist21 %lf mdist22 %lf\n",
+             mdist11, mdist12, mdist21, mdist22);
+      printf("val1 %lf val2 %lf\nmdist1 %lf mdist2 %lf\n",
+             slo_val1, slo_val2, slo_mdist1, slo_mdist2);
+    }
+    **/
+    
+    *p_slow = (slo_val1 / slo_mdist1 + slo_val2 / slo_mdist2) 
+      / (1 / slo_mdist1 + 1 / slo_mdist2);
+  }
 }
 
 static double ellipticity_corr (double delta, double esaz, double ecolat,
@@ -817,7 +871,7 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
                               double depth, double evtime, 
                               int phaseid, int siteid)
 {
-  double trvtime;
+  double trvtime, slow;
   Site_t * p_site;
   EarthPhaseModel_t * p_phase;
   double delta, esaz, seaz;
@@ -830,7 +884,7 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
                &seaz);
   
-  trvtime = travel_time(p_phase, depth, delta);
+  travel_time(p_phase, depth, delta, &trvtime, &slow);
   
   if (trvtime < 0)
     return -1;
@@ -884,15 +938,81 @@ double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
   return 0;
 }
 
-
-double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double * evloc,
-                               int phaseid, int siteid)
+double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
+                                  double lat, double depth,
+                                  int phaseid, int siteid)
 {
-  return 0;
+  double trvtime, slow;
+  Site_t * p_site;
+  EarthPhaseModel_t * p_phase;
+  double delta, esaz, seaz;
+
+  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases));
+  
+  p_site = p_earth->p_sites + siteid;
+  p_phase = p_earth->p_phases + phaseid;
+  
+  dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
+               &seaz);
+  
+  travel_time(p_phase, depth, delta, &trvtime, &slow);
+
+  return slow;
 }
 
-
-int EarthModel_TimeDefPhase(EarthModel_t * p_earth, int phaseid)
+PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth, 
+                                         PyObject * args)
 {
-  return 0;
+  double lon, lat, depth;
+  int phaseid, siteid;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &lon, &lat, &depth, 
+                        &phaseid, &siteid))
+    return NULL;
+
+  if ((phaseid < 0) || (phaseid > p_earth->numphases) || (siteid < 0) ||
+      (siteid > p_earth->numsites))
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid or siteid"
+      );
+    return NULL;
+  }
+
+  if (!p_earth->p_phase_time_def[phaseid])
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: phaseid is not time-def");
+    return NULL;
+  }
+
+  return Py_BuildValue("d", EarthModel_ArrivalSlowness(p_earth, lon, lat,
+                                                       depth, phaseid,siteid));
+}
+
+PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth, 
+                                        PyObject * args)
+{
+  int phaseid;
+  
+  if (!PyArg_ParseTuple(args, "i", &phaseid))
+    return NULL;
+
+  if ((phaseid < 0) || (phaseid > p_earth->numphases))
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid");
+    return NULL;
+  }
+
+  if(EarthModel_IsTimeDefPhase(p_earth, phaseid))
+    Py_RETURN_TRUE;
+  else
+    Py_RETURN_FALSE;
+}
+
+PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth, 
+                                   PyObject * args)
+{
+  if (!PyArg_ParseTuple(args, ""))
+    return NULL;
+
+  return Py_BuildValue("i", EarthModel_NumPhases(p_earth));
 }

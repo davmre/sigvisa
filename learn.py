@@ -1,4 +1,5 @@
 import os
+from optparse import OptionParser
 
 from database.dataset import *
 
@@ -6,6 +7,8 @@ import priors.NumEventPrior
 import priors.EventLocationPrior
 import priors.EventMagPrior
 import priors.EventDetectionPrior
+import priors.NumFalseDetPrior
+import priors.ArrivalTimePrior
 
 import netvisa
 
@@ -14,9 +17,13 @@ def load_earth(param_dirname, sites, phasenames, phasetimedef):
                              os.path.join(param_dirname, "ttime", "iasp91."))
   return model
 
-def load_netvisa(param_dirname, start_time, end_time, detections, site_up):
-  
-  model = netvisa.NetModel(start_time, end_time, detections, site_up,
+def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
+                 sites, phasenames, phasetimedef):
+
+  earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
+    
+  model = netvisa.NetModel(earthmodel,
+                           start_time, end_time, detections, site_up,
                            os.path.join(param_dirname, "NumEventPrior.txt"),
                            os.path.join(param_dirname,
                                         "EventLocationPrior.txt"),
@@ -28,8 +35,23 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up):
   return model
 
 def main(param_dirname):
+  parser = OptionParser()
+  parser.add_option("-q", "--quick", dest="quick", default=False,
+                    action = "store_true",
+                    help = "quick training on 100 hours only (False)")
+  parser.add_option("-n", "--nodet", dest="nodet", default=False,
+                    action = "store_true",
+                    help = "no detection prior training (False)")
+  (options, args) = parser.parse_args()
+
+  if options.quick:
+    hours = 100
+  else:
+    hours = None
+  
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef = read_data(hours=100)
+         sel3_evlist, site_up, sites, phasenames, phasetimedef \
+         = read_data(hours=hours)
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
   
@@ -44,11 +66,25 @@ def main(param_dirname):
                                           "EventMagPrior.txt"),
                              leb_events)
 
-  priors.EventDetectionPrior.learn(os.path.join(param_dirname,
-                                                "EventDetectionPrior.txt"),
-                                   earthmodel,
-                                   detections, leb_events, leb_evlist,
-                                   site_up, sites, phasenames)
+  if not options.nodet:
+    priors.EventDetectionPrior.learn(os.path.join(param_dirname,
+                                                  "EventDetectionPrior.txt"),
+                                     earthmodel, start_time, end_time,
+                                     detections, leb_events, leb_evlist,
+                                     site_up, sites, phasenames, phasetimedef)
+
+  priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
+                                             "NumFalseDetPrior.txt"),
+                                earthmodel, start_time, end_time,
+                                detections, leb_events, leb_evlist,
+                                site_up)
+
+  priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
+                                             "ArrivalTimePrior.txt"),
+                                earthmodel, start_time, end_time,
+                                detections, leb_events, leb_evlist,
+                                site_up)
+  
 if __name__ == "__main__":
   try:
     main("parameters")
