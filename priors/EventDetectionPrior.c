@@ -45,11 +45,13 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
     {
       fprintf(stderr, "error reading mag-coeff for siteid %d in file %s\n",
               siteid, filename);
+      exit(1);
     }
     if (1 != fscanf(fp, "%lg ", &prior->p_coeff_dist[siteid]))
     {
       fprintf(stderr, "error reading dist-coeff for siteid %d in file %s\n",
               siteid, filename);
+      exit(1);
     }
     for (phaseid = 0; phaseid < prior->numphases; phaseid ++)
     {
@@ -59,12 +61,14 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
       {
         fprintf(stderr, "error reading phaseid %d for siteid %d in file %s\n",
                 phaseid, siteid, filename);
+        exit(1);
       }
     }
     if (1 != fscanf(fp, "%lg\n", &prior->p_coeff_bias[siteid]))
     {
       fprintf(stderr, "error reading bias for siteid %d in file %s\n",
               siteid, filename);
+      exit(1);
     }
   }
   

@@ -39,6 +39,8 @@ typedef struct EarthModel_t
 
 #define EarthModel_NumPhases(p_earth) ((p_earth)->numphases)
 
+#define EarthModel_NumSites(p_earth) ((p_earth)->numsites)
+
 int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args);
 
 void py_EarthModel_UnInit(EarthModel_t * p_earth);
@@ -78,3 +80,6 @@ PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth,
 
 PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth, 
                                    PyObject * args);
+
+PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth, 
+                                  PyObject * args);

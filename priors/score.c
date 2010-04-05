@@ -3,20 +3,25 @@
 
 #include "../netvisa.h"
 
-void score_event(NetModel_t * p_netmodel,
-                 Event_t * p_event, double * p_locsc, double * p_magsc,
-                 double * p_detsc, int * p_detcnt)
+void score_event(NetModel_t * p_netmodel, Event_t * p_event, 
+                 double * p_numsc, double * p_locsc, double * p_magsc,
+                 double * p_detsc, double * p_dettimesc,
+                 int * p_poss_detcnt, int * p_detcnt)
 {
   EarthModel_t * p_earth;
+  Detection_t * p_detections;
   int numphases;
   int numsites;
   int siteid;
   int phaseid;
 
   p_earth = p_netmodel->p_earth;
+  p_detections = p_netmodel->p_detections;
   
   numsites = p_netmodel->event_det_prior.numsites;
   numphases = p_netmodel->event_det_prior.numphases;
+
+  *p_numsc += NumEventPrior_LogTimeRate(&p_netmodel->num_event_prior);
     
   *p_locsc += EventLocationPrior_LogProb(&p_netmodel->event_location_prior,
                                          p_event->evlon, p_event->evlat,
@@ -41,20 +46,47 @@ void score_event(NetModel_t * p_netmodel,
     for (phaseid=0; phaseid<numphases; phaseid++)
     {
       /* check if the site is in the shadow zone for the event */
-      if (EarthModel_IsTimeDefPhase(p_earth, phaseid) &&
-          (EarthModel_ArrivalTime(p_earth, p_event->evlon,
-                                  p_event->evlat, p_event->evdepth,
-                                  p_event->evtime, phaseid, siteid) < 0))
-        continue;
+      if (EarthModel_IsTimeDefPhase(p_earth, phaseid))
+      {
+        double pred_arrtime;
+        int detnum;
         
-      *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
-                                              p_event->p_detids[siteid 
-                                                                * numphases 
-                                                                +phaseid]==-1?
-                                              0 : 1,
-                                              p_event->evdepth, p_event->evmag,
-                                              distance, siteid, phaseid);      
-      *p_detcnt += 1;
+        pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+                                              p_event->evlat, p_event->evdepth,
+                                              p_event->evtime, phaseid,
+                                              siteid);
+
+        if (pred_arrtime < 0)
+          continue;
+        
+        detnum = p_event->p_detids[siteid * numphases + phaseid];
+        
+        *p_poss_detcnt += 1;
+        
+        *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
+                                                detnum == -1? 0 : 1,
+                                                p_event->evdepth, 
+                                                p_event->evmag,
+                                                distance, siteid, phaseid);
+
+        if (detnum != -1)
+        {
+          Detection_t * det;
+
+          *p_detcnt += 1;
+
+          det = p_detections + detnum;
+          
+          *p_dettimesc += ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
+                                                   det->time_det, pred_arrtime,
+                                                   det->deltim_det, siteid,
+                                                   phaseid);
+
+          *p_dettimesc -= NumFalseDet_LogTimeRate(&p_netmodel
+                                                  ->num_falsedet_prior,
+                                                  siteid);
+        }
+      }
     }
   }
 }
@@ -67,43 +99,44 @@ double score_world(NetModel_t * p_netmodel,
   double magsc;
   double locsc;
   double detsc;
+  double dettimesc;
+  int poss_detcnt;
   int detcnt;
   
   int i;
 
-  score = 0;
-  
-  /* score the number of events */
-  numsc = NumEventPrior_LogProb(&p_netmodel->num_event_prior, numevents, 0);
-  
   if (verbose)
   {
     printf ("%d events:\n", numevents);
-    printf ("# events: score %lf\n", numsc);
   }
   
-  score += numsc;
-
-  detsc = locsc = magsc = 0;
-  detcnt = 0;
+  numsc = locsc = magsc = detsc = dettimesc = 0;
+  poss_detcnt = detcnt = 0;
   
   for (i=0; i<numevents; i++)
   {
-    score_event(p_netmodel, p_events + i, &locsc, &magsc, &detsc,
-                &detcnt);
+    score_event(p_netmodel, p_events + i, &numsc, &locsc, &magsc, &detsc,
+                & dettimesc, &poss_detcnt, &detcnt);
   }
   
   if (verbose)
   {
+    printf("Event #,Time: score %lf, avg %lf\n", numsc, numsc/numevents);
     printf("Event Location: score %lf, avg %lf\n", locsc, locsc/numevents);
     printf("Event Mag: score %lf, avg %lf\n", magsc, magsc/numevents);
-    printf("Event Det: score %lf, avg %lf\n", detsc, detsc/detcnt);
+    printf("Event Det: score %lf, avg-event %lf avg-det %lf\n", detsc, 
+           detsc/numevents, detsc/poss_detcnt);
+    printf("Det Time: score %lf, avg-event %lf avg-det %lf\n", dettimesc, 
+           dettimesc/numevents, dettimesc/detcnt);
+    printf("Avg. # Detections: Possible %lf, Actual %lf\n", 
+           ((double) poss_detcnt) / ((double) numevents),
+           ((double) detcnt) / ((double) numevents));
   }
   
-  score += locsc + magsc + detsc;
+  score = numsc + locsc + magsc + detsc + dettimesc;
 
   if (verbose)
-    printf("Total: %lf\n", score);
+    printf("Total: %lf Avg. %lf\n", score, score/numevents);
   
   return score;
 }
