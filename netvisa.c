@@ -92,6 +92,9 @@ static PyMethodDef EarthModel_methods[] = {
     {"NumPhases", (PyCFunction)py_EarthModel_NumPhases,
      METH_VARARGS, "NumPhases() -> number of phases",
     },
+    {"NumSites", (PyCFunction)py_EarthModel_NumSites,
+     METH_VARARGS, "NumSites() -> number of sites",
+    },
     {NULL}  /* Sentinel */
 };
 
@@ -247,13 +250,15 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   const char * evloc_fname;
   const char * evmag_fname;
   const char * evdet_fname;
+  const char * arrtime_fname;
+  const char * numfalse_fname;
   
-  if (!PyArg_ParseTuple(args, "O!ddO!O!ssss", &py_EarthModel, &p_earth,
+  if (!PyArg_ParseTuple(args, "O!ddO!O!ssssss", &py_EarthModel, &p_earth,
                         &start_time, &end_time, 
                         &PyArray_Type, &detectionsobj,
                         &PyArray_Type, &siteupobj,
                         &numevent_fname, &evloc_fname, &evmag_fname, 
-                        &evdet_fname)
+                        &evdet_fname, &arrtime_fname, &numfalse_fname)
       || !detectionsobj || !siteupobj)
     return -1;
   
@@ -291,14 +296,17 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
 
   alloc_site_up(siteupobj, &self->numsites, &self->numtime, &self->p_site_up);
   
-  NumEventPrior_Init_Params(&self->num_event_prior, 2, numevent_fname,
-                            end_time - start_time);
+  NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
   
   EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
   
   EventMagPrior_Init_Params(&self->event_mag_prior, 1, evmag_fname);
 
   EventDetectionPrior_Init_Params(&self->event_det_prior, evdet_fname);
+
+  ArrivalTimePrior_Init_Params(&self->arr_time_prior, arrtime_fname);
+  
+  NumFalseDetPrior_Init_Params(&self->num_falsedet_prior, numfalse_fname);
   
   return 0;
 }
@@ -315,6 +323,9 @@ static void py_net_model_dealloc(NetModel_t * self)
   self->p_site_up = NULL;
   
   EventLocationPrior_UnInit(&self->event_location_prior);
+
+  ArrivalTimePrior_UnInit(&self->arr_time_prior);
+  
   self->ob_type->tp_free((PyObject*)self);
 }
 
@@ -458,16 +469,16 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
   PyObject * p_detlist_obj;
  
   Event_t * p_event;
-  double locsc, magsc, detsc;
+  double numsc, locsc, magsc, detsc, dettimesc;
   double score;
-  int detcnt;
+  int possdetcnt, detcnt;
   
   if (!PyArg_ParseTuple(args, "O!O!",
                         &PyArray_Type, &p_event_arrobj, 
                         &PyList_Type, &p_detlist_obj)
       || !p_event_arrobj || !p_detlist_obj)
     return NULL;
-
+  
   if ((1 != p_event_arrobj->nd) || (NPY_DOUBLE 
                                      != p_event_arrobj->descr->type_num)
       || (EV_NUM_COLS != p_event_arrobj->dimensions[0]))
@@ -476,24 +487,27 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
                     "score_event: wrong shape or type of event array");
     return NULL;
   }
-
+  
   p_event = (Event_t *)calloc(1, sizeof(*p_event));
   p_event->evlon = ARRAY1(p_event_arrobj, EV_LON_COL);
   p_event->evlat = ARRAY1(p_event_arrobj, EV_LAT_COL);
   p_event->evdepth = ARRAY1(p_event_arrobj, EV_DEPTH_COL);
   p_event->evtime = ARRAY1(p_event_arrobj, EV_TIME_COL);
   p_event->evmag = ARRAY1(p_event_arrobj, EV_MB_COL);
-
+  
   convert_event_detections(p_event, 
                            p_netmodel->event_det_prior.numsites,
                            p_netmodel->event_det_prior.numphases,
                            p_netmodel->numdetections, p_netmodel->p_detections,
                            p_detlist_obj);
-
-  locsc = magsc = detsc = 0;
-  score_event(p_netmodel, p_event, &locsc, &magsc, &detsc, &detcnt);
-  score = locsc + magsc + detsc;
-
+  
+  numsc = locsc = magsc = detsc = dettimesc = 0;
+  possdetcnt = detcnt = 0;
+  
+  score_event(p_netmodel, p_event, &numsc, &locsc, &magsc, &detsc, &dettimesc, 
+              &possdetcnt, &detcnt);
+  score = numsc + locsc + magsc + detsc + dettimesc;
+  
   free_events(1, p_event);
   
   return Py_BuildValue("d", score);

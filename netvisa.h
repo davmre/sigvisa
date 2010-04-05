@@ -49,7 +49,11 @@ typedef struct Detection_t
 #include "priors/EventLocationPrior.h"
 #include "priors/EventMagPrior.h"
 #include "priors/EventDetectionPrior.h"
+#include "priors/ArrivalTimePrior.h"
+#include "priors/NumFalseDetPrior.h"
 #include "priors/EarthModel.h"
+#include "priors/Laplace.h"
+#include "priors/Poisson.h"
 
 typedef struct NetModel_t
 {
@@ -72,7 +76,9 @@ typedef struct NetModel_t
   EventLocationPrior_t event_location_prior;
   EventMagPrior_t event_mag_prior;
   EventDetectionPrior_t event_det_prior;
-
+  ArrivalTimePrior_t arr_time_prior;
+  NumFalseDetPrior_t num_falsedet_prior;
+  
 } NetModel_t;
 
 #define UPTIME_QUANT     3600                /* 1 hour */

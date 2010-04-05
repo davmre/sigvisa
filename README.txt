@@ -2,7 +2,8 @@ This package contains the NET-VISA implementation. Network Vertically
 Integrated Seismological Analysis.
 
 - rpy2, R, and numpy are required. To test rpy2 and R
-  issue: python -m utils.LogisticModel
+  run: python -m utils.LogisticModel
+  Also, matplotlib and Basemap are required for the visualization
 
 - Load the data in a mysql database:
   copy all the csv files into the database directory

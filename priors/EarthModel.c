@@ -1016,3 +1016,12 @@ PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth,
 
   return Py_BuildValue("i", EarthModel_NumPhases(p_earth));
 }
+
+PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth, 
+                                  PyObject * args)
+{
+  if (!PyArg_ParseTuple(args, ""))
+    return NULL;
+
+  return Py_BuildValue("i", EarthModel_NumSites(p_earth));
+}

@@ -4,8 +4,8 @@ import os
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
-                  'EarthModel.c',
-                  'score.c']
+                  'EarthModel.c', 'ArrivalTimePrior.c', 'NumFalseDetPrior.c',
+                  'Poisson.c', 'score.c']
 
 netvisa_module = Extension('netvisa',
                            sources = [os.path.join("priors", f)

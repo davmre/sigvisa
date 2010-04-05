@@ -29,7 +29,11 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                                         "EventLocationPrior.txt"),
                            os.path.join(param_dirname, "EventMagPrior.txt"),
                            os.path.join(param_dirname,
-                                        "EventDetectionPrior.txt")
+                                        "EventDetectionPrior.txt"),
+                           os.path.join(param_dirname,
+                                        "ArrivalTimePrior.txt"),
+                           os.path.join(param_dirname,
+                                        "NumFalseDetPrior.txt")
                            )
   
   return model
@@ -38,7 +42,7 @@ def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-q", "--quick", dest="quick", default=False,
                     action = "store_true",
-                    help = "quick training on 100 hours only (False)")
+                    help = "quick training on a subset of data (False)")
   parser.add_option("-n", "--nodet", dest="nodet", default=False,
                     action = "store_true",
                     help = "no detection prior training (False)")
@@ -73,17 +77,16 @@ def main(param_dirname):
                                      detections, leb_events, leb_evlist,
                                      site_up, sites, phasenames, phasetimedef)
 
+  priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
+                                             "ArrivalTimePrior.txt"),
+                                earthmodel, detections, leb_events, leb_evlist)
+
   priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
                                              "NumFalseDetPrior.txt"),
                                 earthmodel, start_time, end_time,
                                 detections, leb_events, leb_evlist,
                                 site_up)
 
-  priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
-                                             "ArrivalTimePrior.txt"),
-                                earthmodel, start_time, end_time,
-                                detections, leb_events, leb_evlist,
-                                site_up)
   
 if __name__ == "__main__":
   try:

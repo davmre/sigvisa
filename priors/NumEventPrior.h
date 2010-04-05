@@ -1,14 +1,12 @@
 typedef struct NumEventPrior_t
 {
   double num_event_rate;
+  double log_num_event_rate;
 } NumEventPrior_t;
 
+#define NumEventPrior_LogTimeRate(prior) ((prior)->log_num_event_rate)
 
-void NumEventPrior_Init_Params(NumEventPrior_t * prior, int nparams, 
-                               const char * filename, double time_interval);
+void NumEventPrior_Init_Params(NumEventPrior_t * prior, const char * filename);
 
-#define NumEventPrior_Init_Args while(0)
-
-double NumEventPrior_LogProb(const NumEventPrior_t * dist, int val, int nargs);
-
-
+double NumEventPrior_LogProb(const NumEventPrior_t * dist, int val,
+                             double time_interval);
