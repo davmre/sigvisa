@@ -1,9 +1,11 @@
 # python imports
 import numpy as np
 from time import strftime, gmtime
+import os
 
 # local imports
 import db
+from az_slow_corr import load_az_slow_corr
 
 # events
 EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL, EV_MB_COL, EV_ORID_COL,\
@@ -80,11 +82,22 @@ def read_detections(cursor, start_time, end_time):
                  (start_time, end_time))
   
   detections = np.array(cursor.fetchall())
+
+  cursor.execute("select sta from static_siteid site order by id")
+  sitenames = np.array(cursor.fetchall())[:,0]
+  corr_dict = load_az_slow_corr(os.path.join('parameters', 'sasc'))
+  print len(corr_dict), "SASC corrections loaded"
   
   arid2num = {}
   
   for det in detections:
     arid2num[det[DET_ARID_COL]] = len(arid2num)
+
+    # apply SASC correction
+    (det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
+     det[DET_DELSLO_COL]) = corr_dict[sitenames[DET_SITE_COL]].correct(
+      det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
+      det[DET_DELSLO_COL])
   
   return detections, arid2num
 
