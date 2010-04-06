@@ -1,0 +1,122 @@
+#
+# Slowness-azimuth station correction table
+#
+# ARCES, 20000106 17:03:50
+#
+# time period: 1996-01-01 - 1999-12-16
+# 14032 input slowness-azimuth readings
+# 342 bins populated with observations
+# 9857 readings contributed to the corrections
+# provisional default corrections:  sx: 0.557 , sy: 0.142
+# azimuthal variance of default corrections: 61.318
+# no global trend has been detected
+# overall sdev of slowness residuals: 1.415
+# overall sdev of  azimuth residuals: 16.899
+# uncorrected bins, slowness residual sdev: 2.292
+# uncorrected bins,  azimuth residual sdev: 32.403
+# corrected bins, slowness residual sdev: 0.625
+# corrected bins,  azimuth residual sdev: 8.358
+#
+# The corrections are determined for the bins on a circular grid
+# defined by the slowness and azimuth intervals: [Slo,Shi),[Alo,Ahi).
+# Grid definition file: /home/jinwang/NewSASC/grid/SASC.new.grid
+#
+# Only those corrections (i.e. median of observed slowness-azimuth residuals
+# in a bin) are listed where the criteria for corrections were satisfied:
+#    ( number of observations >= 10 && 
+#      slowness residual std error <= 1.00 &&
+#      azimuth residual std error <= 15.00 )
+#
+# A global trend is detected if at least 7.0% of bins are populated with
+# observations and the azimuthal variance of corrections is less than 33.0.
+# If a global trend exists in the corrections, a default correction
+# is given for all detections. Further fine-tuning bin corrections are 
+# applied to the detections in the bins defined in this file. 
+# In the lack of global trend the default corrections are set to zero and
+# the default modeling error calculated only from the unbinned observations.
+#
+# Structure of the slowness-azimuth correction (SASC) table:
+#    comment lines begin with '#'
+#    line 1: Contains default slowness vector corrections (sx,sy) and the
+#            slowness modeling error (azimuth modeling error is derived)
+#       column 1: default slowness correction, x-component
+#       column 2: default slowness correction, y-component
+#       column 3: default slowness modeling error (sec/deg)
+#    line 2: number of bins with correction (ncor)
+#            (if only defaults are given the rest of this file remains empty)
+#    line 3 - line ncor+2: bin corrections and modeling errors
+#       column 1: bottom of slowness interval
+#       column 2: top of slowness interval
+#       column 3: bottom of azimuth interval
+#       column 4: top of azimuth interval
+#       column 5: slowness correction
+#       column 6: azimuth correction
+#       column 7: slowness modeling error
+#       column 8: azimuth modeling error
+#
+# Default slowness vector corrections (sx,sy) and slowness modeling error:
+   0.000    0.000    2.292
+# Number of user-specified SASC bins:
+61
+# User-specified bin definitions, S-A corrections and S-A modeling errors:
+   0.000    2.000    0.000   60.000   -0.568   -3.472    0.384   13.825
+   0.000    2.000   60.000  120.000   -0.360   29.694    0.472   14.007
+   2.000    4.000    0.000   30.000    0.235  -10.316    0.783   13.853
+   2.000    4.000   30.000   60.000    0.384    7.126    0.945   11.926
+   4.000    6.000   60.000   75.000    0.529   -5.165    0.842   10.695
+   4.000    6.000   75.000   90.000    0.714    2.277    0.626    9.352
+   4.000    6.000   90.000  105.000    0.158   -4.129    0.849   12.526
+   4.000    6.000  285.000  300.000   -0.127   -6.437    0.616    8.818
+   6.000    8.000    0.000   10.000    0.029    3.749    0.960   13.125
+   6.000    8.000   10.000   20.000    0.399    3.599    0.658    9.924
+   6.000    8.000   20.000   30.000    0.400    5.751    0.551    9.522
+   6.000    8.000   30.000   40.000    0.406   -3.839    0.569    9.642
+   6.000    8.000   40.000   50.000    0.500   -0.862    0.832    7.380
+   6.000    8.000   50.000   60.000    1.100   -1.157    0.769    8.780
+   6.000    8.000   60.000   70.000    1.707    4.489    0.724    8.823
+   6.000    8.000   70.000   80.000    1.677    0.381    0.527    6.500
+   6.000    8.000   80.000   90.000    1.593    4.726    0.614    7.471
+   6.000    8.000   90.000  100.000    0.508   -8.947    0.992    8.179
+   6.000    8.000  100.000  110.000   -0.150   -4.875    0.761    6.308
+   6.000    8.000  110.000  120.000   -0.521   -5.857    0.474    3.652
+   6.000    8.000  120.000  130.000   -0.452    1.037    0.434    5.168
+   6.000    8.000  130.000  140.000   -0.367    0.827    0.577    6.238
+   6.000    8.000  140.000  150.000   -0.429    1.122    0.585    4.559
+   6.000    8.000  150.000  160.000   -0.728    5.495    0.847    7.752
+   6.000    8.000  160.000  170.000   -1.266   -4.088    0.531    5.179
+   6.000    8.000  170.000  180.000   -0.828    0.365    0.789    8.711
+   6.000    8.000  180.000  190.000   -1.067   -2.413    0.597    5.845
+   6.000    8.000  190.000  200.000   -1.460   -4.208    0.597    5.876
+   6.000    8.000  240.000  250.000    0.116   -8.846    0.934    7.941
+   6.000    8.000  250.000  260.000   -0.418   -3.292    0.795    4.982
+   6.000    8.000  270.000  280.000   -0.494    3.598    0.939   12.719
+   8.000   10.000   22.500   30.000    1.370    3.451    0.599    8.608
+   8.000   10.000   30.000   37.500    1.514    2.499    0.468    6.656
+   8.000   10.000   37.500   45.000    1.593    5.261    0.579    7.848
+   8.000   10.000   45.000   52.500    1.912   -0.885    0.668    7.440
+   8.000   10.000   52.500   60.000    2.185    0.151    0.809    6.696
+   8.000   10.000   60.000   67.500    2.543    5.539    0.664    6.785
+   8.000   10.000   67.500   75.000    2.711   10.525    0.828    8.626
+   8.000   10.000   97.500  105.000    0.518   -7.227    0.497    3.921
+   8.000   10.000  105.000  112.500    0.326   -6.235    0.394    2.956
+   8.000   10.000  112.500  120.000    0.353   -3.132    0.317    2.490
+   8.000   10.000  120.000  127.500    0.369    1.757    0.371    3.295
+   8.000   10.000  127.500  135.000    0.371    5.011    0.255    4.409
+   8.000   10.000  135.000  142.500    0.557   -0.166    0.512    4.508
+   8.000   10.000  142.500  150.000    0.462    2.492    0.488    3.457
+   8.000   10.000  150.000  157.500    0.571    6.542    0.442    3.847
+   8.000   10.000  157.500  165.000    0.181   -1.038    0.550    8.969
+   8.000   10.000  165.000  172.500    0.016   -2.389    0.556    6.551
+   8.000   10.000  172.500  180.000    0.246   -2.878    0.375    2.796
+   8.000   10.000  180.000  187.500    0.220   -0.163    0.449    3.511
+   8.000   10.000  187.500  195.000    0.590    2.909    0.461    3.776
+   8.000   10.000  225.000  232.500    0.823   -4.022    0.813    3.321
+   8.000   10.000  247.500  255.000    0.210   -5.527    0.514    3.098
+  10.000   12.000   12.000   18.000   -0.569    3.986    0.939    2.641
+  10.000   12.000   42.000   48.000    3.999   -6.791    0.582   12.696
+  10.000   12.000  144.000  150.000    1.699    0.925    0.575    4.704
+  10.000   12.000  180.000  186.000    1.873    0.161    0.361    2.472
+  10.000   12.000  186.000  192.000    1.741    1.913    0.367    2.250
+  10.000   12.000  192.000  198.000    1.547    5.913    0.874    5.309
+  10.000   12.000  318.000  324.000   -2.351   10.851    0.384    3.839
+  12.000   14.000  185.000  190.000    1.159   -9.300    0.899    2.714

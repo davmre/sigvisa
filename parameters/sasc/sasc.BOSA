@@ -1,0 +1,80 @@
+#
+# Slowness-azimuth station correction table
+#
+# BOSA, 20000105 21:46:24
+#
+# time period: 1996-01-01 - 1999-12-16
+# 3884 input slowness-azimuth readings
+# 310 bins populated with observations
+# 766 readings contributed to the corrections
+# provisional default corrections:  sx: 0.119 , sy: -0.118
+# azimuthal variance of default corrections: 75.094
+# no global trend has been detected
+# overall sdev of slowness residuals: 1.883
+# overall sdev of  azimuth residuals: 28.692
+# uncorrected bins, slowness residual sdev: 2.127
+# uncorrected bins,  azimuth residual sdev: 32.691
+# corrected bins, slowness residual sdev: 0.712
+# corrected bins,  azimuth residual sdev: 10.104
+#
+# The corrections are determined for the bins on a circular grid
+# defined by the slowness and azimuth intervals: [Slo,Shi),[Alo,Ahi).
+# Grid definition file: /home/jinwang/NewSASC/grid/SASC.new.grid
+#
+# Only those corrections (i.e. median of observed slowness-azimuth residuals
+# in a bin) are listed where the criteria for corrections were satisfied:
+#    ( number of observations >= 10 && 
+#      slowness residual std error <= 1.00 &&
+#      azimuth residual std error <= 15.00 )
+#
+# A global trend is detected if at least 7.0% of bins are populated with
+# observations and the azimuthal variance of corrections is less than 33.0.
+# If a global trend exists in the corrections, a default correction
+# is given for all detections. Further fine-tuning bin corrections are 
+# applied to the detections in the bins defined in this file. 
+# In the lack of global trend the default corrections are set to zero and
+# the default modeling error calculated only from the unbinned observations.
+#
+# Structure of the slowness-azimuth correction (SASC) table:
+#    comment lines begin with '#'
+#    line 1: Contains default slowness vector corrections (sx,sy) and the
+#            slowness modeling error (azimuth modeling error is derived)
+#       column 1: default slowness correction, x-component
+#       column 2: default slowness correction, y-component
+#       column 3: default slowness modeling error (sec/deg)
+#    line 2: number of bins with correction (ncor)
+#            (if only defaults are given the rest of this file remains empty)
+#    line 3 - line ncor+2: bin corrections and modeling errors
+#       column 1: bottom of slowness interval
+#       column 2: top of slowness interval
+#       column 3: bottom of azimuth interval
+#       column 4: top of azimuth interval
+#       column 5: slowness correction
+#       column 6: azimuth correction
+#       column 7: slowness modeling error
+#       column 8: azimuth modeling error
+#
+# Default slowness vector corrections (sx,sy) and slowness modeling error:
+   0.000    0.000    2.127
+# Number of user-specified SASC bins:
+19
+# User-specified bin definitions, S-A corrections and S-A modeling errors:
+   2.000    4.000    0.000   30.000    0.013   -8.738    0.814   13.668
+   4.000    6.000  225.000  240.000   -0.374   -5.930    0.713   11.179
+   4.000    6.000  240.000  255.000   -0.397    2.906    0.692   11.489
+   4.000    6.000  255.000  270.000   -0.397   10.975    0.610   11.115
+   6.000    8.000    0.000   10.000    0.558    4.079    0.441    6.278
+   6.000    8.000   10.000   20.000    0.878    3.964    0.760    9.916
+   6.000    8.000   20.000   30.000    0.597   -2.130    0.593   11.567
+   6.000    8.000   30.000   40.000    0.795    1.534    0.807    5.373
+   6.000    8.000  200.000  210.000   -0.220   -8.314    0.645    5.972
+   6.000    8.000  210.000  220.000   -0.387   -0.997    0.888    9.624
+   6.000    8.000  240.000  250.000    1.109    2.232    0.592    6.625
+   6.000    8.000  250.000  260.000    1.783    5.201    0.879    7.461
+   6.000    8.000  300.000  310.000   -0.093    9.920    0.638   14.398
+   6.000    8.000  350.000  360.000    0.483   -4.489    0.813    7.396
+   8.000   10.000   30.000   37.500    2.342   -0.094    0.937   13.651
+   8.000   10.000   45.000   52.500    1.776   14.245    0.899   10.139
+   8.000   10.000  195.000  202.500    0.534  -13.782    0.725   13.546
+   8.000   10.000  202.500  210.000    0.490   -8.035    0.512    2.947
+   8.000   10.000  292.500  300.000    0.494    4.007    0.778    3.853

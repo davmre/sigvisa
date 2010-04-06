@@ -1,0 +1,44 @@
+# @(#)sasc.DLIAR		1.2 11/20/98
+#
+# Slowness-azimuth station correction (SASC) table
+#
+# DLIAR, 98/11/20
+#
+# Infrasound station
+#
+# As of October 1997, we do not apply a systematic correction
+# based on direction of propagation. We will use this table
+# apply modeling errors, but no systematic bias.
+#
+# The value of the slowness modeling error is derived such that 
+# the value of the azimuth modeling error will be 0 degrees
+# for a slowness of 292 sec./deg.
+#     sin(delaz) = delslo/slow
+#     delslo = 292 * sin(0 degrees) = 0.0
+# 
+# Structure of slowness/azimuth station correction (SASC) table:
+#
+#   Line 1: Contains default slowness vector corrections (sx,sy) and the
+#           slowness modeling error (azimuth modeling error is derived)
+#       column 1: Default x-slowness vector correction for station (sec/deg)
+#       column 2: Default y-slowness vector correction for station (sec/deg)
+#       column 3: Default slowness modeling error for station (sec/deg)
+#
+#   Line 2: Number of user-specified bins with corrections
+#	(if only defaults are desired the rest of this file may remain empty)
+#
+#   Line 3 thru (number of bins + 2): SASC user-specified bins
+#	column 1: Lower slowness bound of user-specified bin (sec/deg)
+#	column 2: Upper slowness bound of user-specified bin (sec/deg)
+#	column 3: Lower azimuth bound of user-specified bin (deg)
+#	column 4: Upper azimuth bound of user-specified bin (deg)
+#	column 5: Slowness correction within user-specified bin (sec/deg)
+#	column 6: Azimuth correction within user-specified bin (deg)
+#	column 7: Slowness modeling error within user-specified bin (sec/deg)
+#	column 8: Azimuth modeling error within user-specified bin (deg)
+#
+# Default slowness vector corrections (sx,sy) and slowness modeling error:
+   0.0   0.0   0.0
+# Number of user-specified SASC bins:
+   0
+# User-specified slowness/azimuth bin definitions:

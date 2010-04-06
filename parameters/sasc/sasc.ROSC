@@ -1,0 +1,62 @@
+#
+# Slowness-azimuth station correction table
+#
+# ROSC, 20000106 01:03:30
+#
+# time period: 1996-01-01 - 1999-12-16
+# 55 input slowness-azimuth readings
+# 45 bins populated with observations
+# 0 readings contributed to the corrections
+# provisional default corrections:  sx: 2.669 , sy: -2.879
+# azimuthal variance of default corrections: 49.692
+# no global trend has been detected
+# overall sdev of slowness residuals: 6.830
+# overall sdev of  azimuth residuals: 72.489
+# uncorrected bins, slowness residual sdev: 6.830
+# uncorrected bins,  azimuth residual sdev: 72.489
+# corrected bins, slowness residual sdev: 0.000
+# corrected bins,  azimuth residual sdev: 0.000
+#
+# The corrections are determined for the bins on a circular grid
+# defined by the slowness and azimuth intervals: [Slo,Shi),[Alo,Ahi).
+# Grid definition file: /home/jinwang/NewSASC/grid/SASC.new.grid
+#
+# Only those corrections (i.e. median of observed slowness-azimuth residuals
+# in a bin) are listed where the criteria for corrections were satisfied:
+#    ( number of observations >= 10 && 
+#      slowness residual std error <= 1.00 &&
+#      azimuth residual std error <= 15.00 )
+#
+# A global trend is detected if at least 7.0% of bins are populated with
+# observations and the azimuthal variance of corrections is less than 33.0.
+# If a global trend exists in the corrections, a default correction
+# is given for all detections. Further fine-tuning bin corrections are 
+# applied to the detections in the bins defined in this file.
+# In the lack of global trend the default corrections are set to zero and
+# the default modeling error calculated only from the unbinned observations.
+#
+# Structure of the slowness-azimuth correction (SASC) table:
+#    comment lines begin with '#'
+#    line 1: Contains default slowness vector corrections (sx,sy) and the
+#            slowness modeling error (azimuth modeling error is derived)
+#       column 1: default slowness correction, x-component
+#       column 2: default slowness correction, y-component
+#       column 3: default slowness modeling error (sec/deg)
+#    line 2: number of bins with correction (ncor)
+#            (if only defaults are given the rest of this file remains empty)
+#    line 3 - line ncor+2: bin corrections and modeling errors
+#       column 1: bottom of slowness interval
+#       column 2: top of slowness interval
+#       column 3: bottom of azimuth interval
+#       column 4: top of azimuth interval
+#       column 5: slowness correction
+#       column 6: azimuth correction
+#       column 7: slowness modeling error
+#       column 8: azimuth modeling error
+#
+# If total observations of the station is less than 100, or the data are very
+# scattering (overall sdev of slowness residuals > 5.0 s/deg), default slowness 
+# corrections are used.
+#
+# Default slowness vector corrections (sx,sy) and slowness modeling error:
+   0.000    0.000    2.500

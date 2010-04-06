@@ -1,0 +1,94 @@
+#
+# Slowness-azimuth station correction table
+#
+# DBIC, 20000105 21:56:06
+#
+# time period: 1996-01-01 - 1999-12-16
+# 6444 input slowness-azimuth readings
+# 265 bins populated with observations
+# 1979 readings contributed to the corrections
+# provisional default corrections:  sx: 0.477 , sy: -0.184
+# azimuthal variance of default corrections: 67.766
+# no global trend has been detected
+# overall sdev of slowness residuals: 1.394
+# overall sdev of  azimuth residuals: 24.365
+# uncorrected bins, slowness residual sdev: 1.580
+# uncorrected bins,  azimuth residual sdev: 29.956
+# corrected bins, slowness residual sdev: 0.696
+# corrected bins,  azimuth residual sdev: 9.400
+#
+# The corrections are determined for the bins on a circular grid
+# defined by the slowness and azimuth intervals: [Slo,Shi),[Alo,Ahi).
+# Grid definition file: /home/jinwang/NewSASC/grid/SASC.new.grid
+#
+# Only those corrections (i.e. median of observed slowness-azimuth residuals
+# in a bin) are listed where the criteria for corrections were satisfied:
+#    ( number of observations >= 10 && 
+#      slowness residual std error <= 1.00 &&
+#      azimuth residual std error <= 15.00 )
+#
+# A global trend is detected if at least 7.0% of bins are populated with
+# observations and the azimuthal variance of corrections is less than 33.0.
+# If a global trend exists in the corrections, a default correction
+# is given for all detections. Further fine-tuning bin corrections are 
+# applied to the detections in the bins defined in this file.
+# In the lack of global trend the default corrections are set to zero and
+# the default modeling error calculated only from the unbinned observations.
+#
+# Structure of the slowness-azimuth correction (SASC) table:
+#    comment lines begin with '#'
+#    line 1: Contains global slowness vector AFFINE transformation and the
+#            slowness modeling error (azimuth modeling error is derived)
+#       column 1: global slowness correction, x-component
+#       column 2: global slowness correction, y-component
+#       column 3: default slowness modeling error (sec/deg)
+#       columns 4-7 are global rotation coefficients if the station has 
+#           orientation error. They are derived from a seperate program and 
+#           they are optional.
+#    line 2: number of bins with correction (ncor)
+#            (if only defaults are given the rest of this file remains empty)
+#    line 3 - line ncor+2: bin corrections and modeling errors
+#       column 1: bottom of slowness interval
+#       column 2: top of slowness interval
+#       column 3: bottom of azimuth interval
+#       column 4: top of azimuth interval
+#       column 5: slowness correction
+#       column 6: azimuth correction
+#       column 7: slowness modeling error
+#       column 8: azimuth modeling error
+#
+# def_sx_corr def_sy_corr def_mdl_err  a11 a12 a21 a22 
+# True_azi = Obs_azi + 19 (degrees)
+  0.0000   0.0000   1.5800   0.9455   0.3256  -0.3256   0.9455 
+# Number of user-specified SASC bins:
+29
+# User-specified bin definitions, S-A corrections and S-A modeling errors: 
+   4.000    6.000  195.000  210.000   -0.471  -10.097    0.792   14.575
+   4.000    6.000  210.000  225.000   -0.578   -4.455    0.498    7.236
+   4.000    6.000  225.000  240.000   -0.709   -1.664    0.581   10.013
+   4.000    6.000  240.000  255.000   -0.750    2.358    0.662   13.636
+   4.000    6.000  255.000  270.000   -0.671    5.667    0.633   14.675
+   4.000    6.000  270.000  285.000   -0.586   11.357    0.826   12.796
+   6.000    8.000    0.000   10.000   -0.318   -2.855    0.817    9.320
+   6.000    8.000   10.000   20.000   -0.433   -6.047    0.858    9.137
+   6.000    8.000   20.000   30.000    0.271   -3.787    0.885    7.884
+   6.000    8.000   30.000   40.000    0.330   -1.916    0.747    6.332
+   6.000    8.000  160.000  170.000    0.457   -7.076    0.956   10.496
+   6.000    8.000  170.000  180.000    0.421    0.066    0.623    4.439
+   6.000    8.000  200.000  210.000    0.582  -11.691    0.708    9.983
+   6.000    8.000  210.000  220.000    0.455   -4.860    0.615    7.527
+   6.000    8.000  230.000  240.000    0.651    3.256    0.870   11.932
+   6.000    8.000  240.000  250.000    0.828    3.321    0.770   14.610
+   6.000    8.000  260.000  270.000   -0.030    5.469    0.827    7.074
+   6.000    8.000  270.000  280.000    0.107    9.446    0.800   12.539
+   8.000   10.000    0.000    7.500    0.615   -6.455    0.682    7.471
+   8.000   10.000    7.500   15.000    0.585   -2.537    0.773    7.549
+   8.000   10.000   15.000   22.500    0.486    0.160    0.662    3.662
+   8.000   10.000   22.500   30.000    0.522    0.934    0.795    6.963
+   8.000   10.000   30.000   37.500    1.361    8.774    0.779    9.615
+   8.000   10.000   37.500   45.000    1.436    5.089    0.847    7.002
+   8.000   10.000  240.000  247.500    0.812    4.002    0.713    6.697
+   8.000   10.000  255.000  262.500    0.921    3.169    0.897    8.004
+   8.000   10.000  352.500  360.000    1.292  -10.737    0.771   11.063
+  10.000   12.000  240.000  246.000    0.886    5.072    0.919    5.172
+  12.000   14.000  230.000  235.000   -0.634   10.181    0.626    2.102
