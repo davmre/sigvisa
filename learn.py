@@ -9,6 +9,8 @@ import priors.EventMagPrior
 import priors.EventDetectionPrior
 import priors.NumFalseDetPrior
 import priors.ArrivalTimePrior
+import priors.ArrivalAzimuthPrior
+import priors.ArrivalSlownessPrior
 
 import netvisa
 
@@ -33,7 +35,11 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                            os.path.join(param_dirname,
                                         "ArrivalTimePrior.txt"),
                            os.path.join(param_dirname,
-                                        "NumFalseDetPrior.txt")
+                                        "NumFalseDetPrior.txt"),
+                           os.path.join(param_dirname,
+                                        "ArrivalAzimuthPrior.txt"),
+                           os.path.join(param_dirname,
+                                        "ArrivalSlownessPrior.txt")
                            )
   
   return model
@@ -77,16 +83,25 @@ def main(param_dirname):
                                      detections, leb_events, leb_evlist,
                                      site_up, sites, phasenames, phasetimedef)
 
-  priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
-                                             "ArrivalTimePrior.txt"),
-                                earthmodel, detections, leb_events, leb_evlist)
-
   priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
                                              "NumFalseDetPrior.txt"),
                                 earthmodel, start_time, end_time,
                                 detections, leb_events, leb_evlist,
                                 site_up)
 
+  priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
+                                             "ArrivalTimePrior.txt"),
+                                earthmodel, detections, leb_events, leb_evlist)
+
+  priors.ArrivalAzimuthPrior.learn(os.path.join(param_dirname,
+                                                "ArrivalAzimuthPrior.txt"),
+                                   earthmodel, detections, leb_events,
+                                   leb_evlist)
+  
+  priors.ArrivalSlownessPrior.learn(os.path.join(param_dirname,
+                                                 "ArrivalSlownessPrior.txt"),
+                                    earthmodel, detections, leb_events,
+                                    leb_evlist)
   
 if __name__ == "__main__":
   try:

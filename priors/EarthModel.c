@@ -905,7 +905,6 @@ PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth,
 {
   double lon, lat;
   int siteid;
-  double esaz, seaz;
   
   if (!PyArg_ParseTuple(args, "ddi", &lon, &lat, &siteid))
     return NULL;
@@ -916,26 +915,26 @@ PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth,
     return NULL;
   }
 
-  EarthModel_ArrivalAzimuth(p_earth, lon, lat, siteid, &esaz, &seaz);
-  
-  return Py_BuildValue("dd", esaz, seaz);
+  return Py_BuildValue("d", EarthModel_ArrivalAzimuth(p_earth, lon, lat,
+                                                      siteid));
 }
 
 double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
-                                 double lat, int siteid, double *p_esaz,
-                                 double *p_seaz)
+                                 double lat, int siteid)
 {
   Site_t * p_site;
   double delta;
+  double esaz;
+  double seaz;
   
   assert((siteid >= 0) && (siteid < p_earth->numsites));
 
   p_site = p_earth->p_sites + siteid;
 
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
-               &delta, p_esaz, p_seaz);
+               &delta, &esaz, &seaz);
   
-  return 0;
+  return seaz;
 }
 
 double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
@@ -1025,3 +1024,29 @@ PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth,
 
   return Py_BuildValue("i", EarthModel_NumSites(p_earth));
 }
+
+PyObject * py_EarthModel_DiffAzimuth(EarthModel_t * p_earth, 
+                                     PyObject * args)
+{
+  double azi1, azi2;
+  
+  if (!PyArg_ParseTuple(args, "dd", &azi1, &azi2))
+    return NULL;
+
+  return Py_BuildValue("d", EarthModel_DiffAzimuth(azi1, azi2));
+}
+
+double EarthModel_DiffAzimuth(double azi1, double azi2)
+{
+  double diff;
+  
+  diff = azi2 - azi1;
+  
+  if (diff > 180)
+    return diff - 360;
+  else if (diff <= -180)
+    return diff + 360;
+  else
+    return diff;
+}
+
