@@ -1,11 +1,18 @@
 import os, sys
 import numpy as np
+from optparse import OptionParser
 
 from database.dataset import *
 import netvisa, learn
 from results.compare import *
 
 def main(param_dirname):
+  parser = OptionParser()
+  parser.add_option("-x", "--text", dest="gui", default=True,
+                    action = "store_false",
+                    help = "text only output (False)")
+  (options, args) = parser.parse_args()
+  
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation")
@@ -33,11 +40,8 @@ def main(param_dirname):
   print "TRUE SEL3"
   netmodel.score_world(sel3_events[true_sel3_idx,:],
                        [sel3_evlist[i] for i in true_sel3_idx], 1)
-  true_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
-               for i in true_sel3_idx]
 
-  idx = true_sel3_idx[0]
-
+  #idx = true_sel3_idx[0]
   #print "Testing on one event:"
   #netmodel.score_world(sel3_events[[idx],:], [sel3_evlist[idx]], 1)
   #print "Score_Event:", netmodel.score_event(sel3_events[idx],
@@ -47,25 +51,62 @@ def main(param_dirname):
   netmodel.score_world(sel3_events[false_sel3_idx,:],
                        [sel3_evlist[i] for i in false_sel3_idx], 1)
 
-  false_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
-                for i in false_sel3_idx]
-  
-  import matplotlib.pyplot as plt
+  if options.gui:
+    leb_scores = [netmodel.score_event(leb_events[i], leb_evlist[i])
+                  for i in range(len(leb_events))]
 
-  bins = range(-100,200,5)
-  plt.figure()
-  plt.title("SEL3 event scores")
-  plt.hist(true_sel3, bins, facecolor = "blue", label = "true events",
-           alpha = .5)
-  plt.hist(false_sel3, bins, facecolor = "red", label = "false events",
-           alpha = .5)
-  plt.legend(loc="upper right")
-  plt.xlim(-100,200)
-  plt.ylim(0,100)
-  plt.xlabel("score")
-  plt.ylabel("number of events")
+    true_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+                 for i in true_sel3_idx]
+    
+    false_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+                  for i in false_sel3_idx]
 
-  plt.show()
+
+    # compute the ROC curve
+    x_pts, y_pts = [], []
+    for sep in range(-100, 200, 2):
+      y = float(len(filter(lambda x: x>sep, true_sel3))) / len(true_sel3)
+      x = float(len(filter(lambda x: x>sep, false_sel3))) / len(false_sel3)
+      
+      x_pts.append(x)
+      y_pts.append(y)
+
+    import matplotlib.pyplot as plt
+
+    plt.figure()
+    plt.title("ROC curve for true SEL3 events")
+    plt.plot(x_pts, y_pts)
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.xlabel("false events")
+    plt.ylabel("true events")
+    plt.grid(True)
+
+    bins = range(-100,200,5)
+    
+    plt.figure()
+    plt.title("SEL3 event scores")
+    plt.hist(true_sel3, bins, facecolor = "blue", label = "true events",
+             alpha = .5)
+    plt.hist(false_sel3, bins, facecolor = "red", label = "false events",
+             alpha = .5)
+    plt.legend(loc="upper right")
+    plt.xlim(-100,200)
+    plt.ylim(0,150)
+    plt.xlabel("score")
+    plt.ylabel("number of events")
+    
+    plt.figure()
+    plt.title("LEB event scores")
+    plt.hist(leb_scores, bins, facecolor = "blue", label = "true events",
+             alpha = .5)
+    #plt.legend(loc="upper right")
+    plt.xlim(-100,200)
+    plt.ylim(0,150)
+    plt.xlabel("score")
+    plt.ylabel("number of events")
+    
+    plt.show()
 
 if __name__ == "__main__":
   main("parameters")

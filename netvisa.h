@@ -51,6 +51,8 @@ typedef struct Detection_t
 #include "priors/EventDetectionPrior.h"
 #include "priors/ArrivalTimePrior.h"
 #include "priors/NumFalseDetPrior.h"
+#include "priors/ArrivalAzimuthPrior.h"
+#include "priors/ArrivalSlownessPrior.h"
 #include "priors/EarthModel.h"
 #include "priors/Laplace.h"
 #include "priors/Poisson.h"
@@ -78,6 +80,8 @@ typedef struct NetModel_t
   EventDetectionPrior_t event_det_prior;
   ArrivalTimePrior_t arr_time_prior;
   NumFalseDetPrior_t num_falsedet_prior;
+  ArrivalAzimuthPrior_t arr_az_prior;
+  ArrivalSlownessPrior_t arr_slo_prior;
   
 } NetModel_t;
 
@@ -142,5 +146,14 @@ typedef struct NetModel_t
 #define MIN_DEPTH       ((double) 0.0)
 #define MAX_DEPTH       ((double) 700.0)
 
+#define MIN_SLOWNESS    ((double) 0.0)
+#define MAX_SLOWNESS    ((double) 400.0)
+
+#define LOGPROB_UNIFORM_SLOWNESS (- log(MAX_SLOWNESS - MIN_SLOWNESS))
+
+#define MIN_AZIMUTH     ((double) -180)
+#define MAX_AZIMUTH     ((double) +180)
+
+#define LOGPROB_UNIFORM_AZIMUTH (- log(MAX_AZIMUTH - MIN_AZIMUTH))
 
 #define PHASENAME_MAXLEN 6

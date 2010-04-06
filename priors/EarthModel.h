@@ -65,8 +65,7 @@ PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth,
                                         PyObject * args);
 
 double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
-                                 double lat, int siteid, double *p_esaz,
-                                 double *p_seaz);
+                                 double lat, int siteid);
 
 PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth, 
                                          PyObject * args);
@@ -83,3 +82,8 @@ PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth,
 
 PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth, 
                                   PyObject * args);
+
+PyObject * py_EarthModel_DiffAzimuth(EarthModel_t * p_earth, 
+                                     PyObject * args);
+
+double EarthModel_DiffAzimuth(double azi1, double azi2);
