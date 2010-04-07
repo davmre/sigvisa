@@ -34,20 +34,16 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
 
   for (siteid=0; siteid<numsites; siteid++)
   {
-    double distance;
-    
-    /* check if the site is up */
-    if (!NetModel_IsSiteUp(p_netmodel, siteid, p_event->evtime)
-        || !NetModel_IsSiteUp(p_netmodel, siteid,
-                              p_event->evtime + UPTIME_QUANT))
-      continue;
+    double distance, pred_az;
     
     distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
                                 siteid);
+    pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
+                                        p_event->evlat, siteid);
     
     for (phaseid=0; phaseid<numtimedefphases; phaseid++)
     {
-      double pred_arrtime, pred_slow, pred_az;
+      double pred_arrtime;
       int detnum;
 
       assert(EarthModel_IsTimeDefPhase(p_earth, phaseid));
@@ -56,19 +52,15 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
                                             p_event->evlat, p_event->evdepth,
                                             p_event->evtime, phaseid,
                                             siteid);
-        
+      
       /* check if the site is in the shadow zone for the event - phase */
       if (pred_arrtime < 0)
         continue;
-        
-      pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
-                                          p_event->evlat, siteid);
 
-      pred_slow = EarthModel_ArrivalSlowness(p_earth, p_event->evlon,
-                                             p_event->evlat,
-                                             p_event->evdepth, phaseid,
-                                             siteid);
-
+      /* check if the site is up */
+      if (!NetModel_IsSiteUp(p_netmodel, siteid, pred_arrtime))
+        continue;
+      
       detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
         
       *p_poss_detcnt += 1;
@@ -78,9 +70,9 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
                                               p_event->evdepth, 
                                               p_event->evmag,
                                               distance, siteid, phaseid);
-
       if (detnum != -1)
       {
+        double pred_slow;
         Detection_t * det;
 
         *p_detcnt += 1;
@@ -95,6 +87,11 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
         *p_dettimesc -= NumFalseDet_LogTimeRate(&p_netmodel
                                                 ->num_falsedet_prior,
                                                 siteid);
+
+        pred_slow = EarthModel_ArrivalSlowness(p_earth, p_event->evlon,
+                                               p_event->evlat,
+                                               p_event->evdepth, phaseid,
+                                               siteid);
 
         *p_detslosc += ArrivalSlownessPrior_LogProb(&p_netmodel
                                                     ->arr_slo_prior,

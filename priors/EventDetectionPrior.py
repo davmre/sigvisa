@@ -20,34 +20,29 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
       if det[DET_SITE_COL] == siteid:
         det_phase[true_phaseid] = 1
 
-    # check if the site was up at the time of the event and 1 hour later
-    if event[EV_TIME_COL] < start_time \
-       or event[EV_TIME_COL] + UPTIME_QUANT > end_time \
-       or not site_up[siteid,
-                      int((event[EV_TIME_COL] - start_time) / UPTIME_QUANT)]\
-       or not site_up[siteid,
-                      int((event[EV_TIME_COL] + UPTIME_QUANT - start_time)
-                          / UPTIME_QUANT)]:
-      continue
-
     dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
     
     # we assume that only time-defining phases are detected
     for pnum in range(numtimedefphases):
-      # check if the site is in the shadow zone of this phase
       arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
                                        event[EV_DEPTH_COL],
                                        event[EV_TIME_COL], pnum, siteid)
+      # check if the site is in the shadow zone of this phase
       if arrtime < 0:
+        continue
+      
+      # check if the site was up at the expected arrival time
+      if arrtime < start_time or arrtime >= end_time \
+         or not site_up[siteid, int((arrtime - start_time) / UPTIME_QUANT)]:
         continue
       
       output.append(det_phase[pnum])
       mag_feat.append(event[EV_MB_COL])
       dist_feat.append(dist)
-      # construct the features one per phase
+      # construct the features, one per phase
       for i in range(numtimedefphases):
         phaseid_feat[i].append(int(i == pnum))
-
+    
   print "%d event-phases detected out of %d" % (sum(output), len(output))
   
   # copy the original dataset

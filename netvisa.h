@@ -87,14 +87,15 @@ typedef struct NetModel_t
   
 } NetModel_t;
 
+#include "priors/score.h"
+#include "infer/infer.h"
+
 #define UPTIME_QUANT     3600                /* 1 hour */
 
 #define NetModel_IsSiteUp(p_netmodel, siteid, arrtime)\
   ((arrtime >= (p_netmodel)->start_time) && (arrtime < (p_netmodel)->end_time)\
    && (p_netmodel)->p_site_up[(siteid) * (p_netmodel)->numtime\
-   + ((int) (((arrtime) - (p_netmodel)->start_time) / UPTIME_QUANT))])
-
-#include "priors/score.h"
+   + ((int) floor(((arrtime) - (p_netmodel)->start_time) / UPTIME_QUANT))])
 
 #define PI                 ((double) 3.1415926535897931)
 

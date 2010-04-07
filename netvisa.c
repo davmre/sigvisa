@@ -8,6 +8,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
@@ -16,6 +17,8 @@ static PyMethodDef NetModel_methods[] = {
   {"score_event", (PyCFunction)py_score_event, METH_VARARGS,
    "score_event(event, detlist) "
    "-> log probability\n"},
+  {"infer", (PyCFunction)py_infer, METH_VARARGS,
+   "infer(samples per second) -> events, ev_detlist"},
   {NULL}  /* Sentinel */
 };
 
@@ -103,6 +106,9 @@ static PyMethodDef EarthModel_methods[] = {
      "Compute the angular difference between azi1 and azi2\n"
      " + ve implies azi2 is clockwise from azi1"
      "DiffAzimuth(azi1, azi2) -> azi2 - azi1",
+    },
+    {"PhaseName", (PyCFunction)py_EarthModel_PhaseName,
+     METH_VARARGS, "PhaseName(phaseid) -> name of phase",
     },
     {NULL}  /* Sentinel */
 };
@@ -291,7 +297,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   }
 
   if ((2 != siteupobj->nd) || (NPY_BOOL != siteupobj->descr->type_num)
-      || (((int)floor((end_time - start_time) / UPTIME_QUANT))
+      || (((int)ceil((end_time - start_time) / UPTIME_QUANT))
           != siteupobj->dimensions[1]))
   {
     PyErr_SetString(PyExc_ValueError, "net_model_init: incorrect shape or type"
@@ -534,4 +540,18 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
   free_events(1, p_event);
   
   return Py_BuildValue("d", score);
+}
+
+static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
+{
+  int numsamples;
+  
+  if (!PyArg_ParseTuple(args, "i", &numsamples))
+    return NULL;
+
+  infer(p_netmodel, numsamples);
+  
+  Py_IncRef(Py_None);
+  
+  return Py_None;
 }
