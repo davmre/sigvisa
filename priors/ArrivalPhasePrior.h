@@ -1,12 +1,13 @@
 typedef struct ArrivalPhasePrior_t
 {
+  int numtimedefphases;
   int numphases;
   
-  double * phase2phase;              /* numphases x numphases array */
-  double * logphase2phase;           /* numphases x numphases array */
+  double * phase2phase;              /* numtimedefphases x numphases array */
+  double * logphase2phase;           /* numtimedefphases x numphases array */
   
-  double * falsephase;
-  double * logfalsephase;
+  double * falsephase;                       /* size = numphase */
+  double * logfalsephase;                    /* size = numphase */
 
 } ArrivalPhasePrior_t;
 

@@ -92,6 +92,9 @@ static PyMethodDef EarthModel_methods[] = {
     {"NumPhases", (PyCFunction)py_EarthModel_NumPhases,
      METH_VARARGS, "NumPhases() -> number of phases",
     },
+    {"NumTimeDefPhases", (PyCFunction)py_EarthModel_NumTimeDefPhases,
+     METH_VARARGS, "NumTimeDefPhases() -> number of time-defining phases",
+    },
     {"NumSites", (PyCFunction)py_EarthModel_NumSites,
      METH_VARARGS, "NumSites() -> number of sites",
     },
@@ -141,7 +144,7 @@ static PyTypeObject py_EarthModel = {
     0,                                       /* tp_descr_get */
     0,                                       /* tp_descr_set */
     0,                                       /* tp_dictoffset */
-    (initproc)py_EarthModel_Init,             /* tp_init */
+    (initproc)py_EarthModel_Init,            /* tp_init */
     0,                                       /* tp_alloc */
     0,                                       /* tp_new */
 };
@@ -329,8 +332,11 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
 
 static void py_net_model_dealloc(NetModel_t * self)
 {
-  Py_INCREF((PyObject *)self->p_earth);
-  self->p_earth = NULL;
+  if (self->p_earth)
+  {
+    Py_DECREF((PyObject *)self->p_earth);
+    self->p_earth = NULL;
+  }
   
   free_detections(self->numdetections, self->p_detections);
   self->p_detections = NULL;
@@ -354,17 +360,17 @@ static void py_net_model_dealloc(NetModel_t * self)
 }
 
 static void convert_event_detections(Event_t * p_event, int numsites,
-                                     int numphases, int numdetections,
+                                     int numtimedefphases, int numdetections,
                                      Detection_t * p_detections,
                                      PyObject * phasedet_list)
 {
   Py_ssize_t j;
 
-  p_event->p_detids = (int *)malloc(numsites * numphases *
+  p_event->p_detids = (int *)malloc(numsites * numtimedefphases *
                                     sizeof(*p_event->p_detids));
 
   /* initialize all detections to -1, i.e. no detection */
-  for (j=0; j<numsites * numphases; j++)
+  for (j=0; j<numsites * numtimedefphases; j++)
     p_event->p_detids[j] = -1;
 
 
@@ -396,13 +402,13 @@ static void convert_event_detections(Event_t * p_event, int numsites,
     assert((detid >= 0) && (detid < numdetections));
     siteid = p_detections[detid].site_det;
 
-    p_event->p_detids[siteid * numphases + phaseid] = detid;
+    p_event->p_detids[siteid * numtimedefphases + phaseid] = detid;
   }
 }
 
 static void convert_eventobj(PyArrayObject * p_events_arrobj, 
                              PyObject * p_evlist_obj,
-                             int numsites, int numphases,
+                             int numsites, int numtimedefphases,
                              int numdetections,
                              Detection_t * p_detections,
                              int * p_numevents, Event_t ** p_p_events)
@@ -429,7 +435,7 @@ static void convert_eventobj(PyArrayObject * p_events_arrobj,
     p_event->evtime = ARRAY2(p_events_arrobj, i, EV_TIME_COL);
     p_event->evmag = ARRAY2(p_events_arrobj, i, EV_MB_COL);
 
-    convert_event_detections(p_event, numsites, numphases,
+    convert_event_detections(p_event, numsites, numtimedefphases,
                              numdetections, p_detections,
                              PyList_GetItem(p_evlist_obj, i));
   }
@@ -473,9 +479,9 @@ static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args)
     return NULL;
   }
 
-  convert_eventobj(p_events_arrobj, p_evlist_obj, 
-                   p_netmodel->event_det_prior.numsites,
-                   p_netmodel->event_det_prior.numphases,
+  convert_eventobj(p_events_arrobj, p_evlist_obj,
+                   EarthModel_NumSites(p_netmodel->p_earth),
+                   EarthModel_NumTimeDefPhases(p_netmodel->p_earth),
                    p_netmodel->numdetections, p_netmodel->p_detections,
                    &numevents, &p_events);
   
@@ -520,8 +526,8 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
   p_event->evmag = ARRAY1(p_event_arrobj, EV_MB_COL);
   
   convert_event_detections(p_event, 
-                           p_netmodel->event_det_prior.numsites,
-                           p_netmodel->event_det_prior.numphases,
+                           EarthModel_NumSites(p_netmodel->p_earth),
+                           EarthModel_NumTimeDefPhases(p_netmodel->p_earth),
                            p_netmodel->numdetections, p_netmodel->p_detections,
                            p_detlist_obj);
   

@@ -20,18 +20,21 @@ void ArrivalPhasePrior_Init_Params(ArrivalPhasePrior_t * prior,
     exit(1);
   }
 
-  if (1 != fscanf(fp, "%d\n", &prior->numphases))
+  if (2 != fscanf(fp, "%d %d\n", &prior->numtimedefphases, &prior->numphases))
   {
     fprintf(stderr, "error reading num phases from %s\n", filename);
     exit(1);
   }
 
-  prior->phase2phase = (double *)calloc(prior->numphases * prior->numphases,
+  prior->phase2phase = (double *)calloc(prior->numtimedefphases 
+                                        * prior->numphases,
                                         sizeof(*prior->phase2phase));
-  prior->logphase2phase = (double *)calloc(prior->numphases * prior->numphases,
+  
+  prior->logphase2phase = (double *)calloc(prior->numtimedefphases 
+                                           * prior->numphases,
                                            sizeof(*prior->logphase2phase));
   
-  for (true_phaseid=0; true_phaseid < prior->numphases; true_phaseid++)
+  for (true_phaseid=0; true_phaseid < prior->numtimedefphases; true_phaseid++)
   {
     for (arr_phaseid=0; arr_phaseid < prior->numphases; arr_phaseid++)
     {
@@ -87,7 +90,7 @@ double ArrivalPhasePrior_LogProb(const ArrivalPhasePrior_t * prior,
                                  int arr_phaseid, int true_phaseid)
 {
   assert((arr_phaseid < prior->numphases) 
-         && (true_phaseid < prior->numphases));
+         && (true_phaseid < prior->numtimedefphases));
   
   return prior->logphase2phase[true_phaseid * prior->numphases + arr_phaseid];
 }

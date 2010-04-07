@@ -25,6 +25,8 @@ typedef struct EarthModel_t
   int numsites;
   struct Site_t * p_sites;
 
+  int numtimedefphases;
+  
   int numphases;
 
   char ** p_phasenames;
@@ -38,6 +40,8 @@ typedef struct EarthModel_t
  ((p_earth)->p_phase_time_def[(phaseid)])
 
 #define EarthModel_NumPhases(p_earth) ((p_earth)->numphases)
+
+#define EarthModel_NumTimeDefPhases(p_earth) ((p_earth)->numtimedefphases)
 
 #define EarthModel_NumSites(p_earth) ((p_earth)->numsites)
 
@@ -76,6 +80,9 @@ double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
 
 PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth, 
                                         PyObject * args);
+
+PyObject * py_EarthModel_NumTimeDefPhases(EarthModel_t * p_earth, 
+                                          PyObject * args);
 
 PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth, 
                                    PyObject * args);

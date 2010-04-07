@@ -280,6 +280,15 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
   
   p_earth->p_phases = (EarthPhaseModel_t *)calloc(p_earth->numphases, 
                                                   sizeof(*p_earth->p_phases));
+
+  /* calculate the number of time-defining phases, assuming that the
+   * time-defining phases precede the non-time-defining ones */
+  for (i=0; i<p_earth->numphases; i++)
+  {
+    if(!p_earth->p_phase_time_def[i])
+      break;
+  }
+  p_earth->numtimedefphases = i;
   
   for (i=0; i<p_earth->numphases; i++)
   {
@@ -405,34 +414,14 @@ static double simple_distance_deg(double lon1, double lat1, double lon2,
 int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
                        double depth, int phaseid, int siteid)
 {
-  EarthPhaseModel_t * p_phase;
-  Site_t * p_site;
-  double dist;
-  
   assert((phaseid < p_earth->numphases) && (siteid < p_earth->numsites));
   
-  /* non-time-defining phases are always feasible */
-  /* TODO: are tx Px and Sx phases always feasible? */
-  if (!p_earth->p_phase_time_def[phaseid])
-    return 1;
-
-  p_phase = p_earth->p_phases + phaseid;
-
-  /* check the depth */
-  if ((depth < p_phase->p_depths[0]) 
-      || (depth > p_phase->p_depths[p_phase->numdepth-1]))
+  /* non-time-defining phases are never in-range */
+  if (!p_earth->p_phase_time_def[phaseid] 
+      || (EarthModel_ArrivalTime(p_earth, lon, lat, depth, 0, phaseid, siteid)
+          < 0))
     return 0;
 
-  /* compute distance to site */
-  p_site = p_earth->p_sites + siteid;
-  dist = simple_distance_deg(lon, lat, p_site->sitelon, p_site->sitelat);
-
-  /* check the distance */
-  if ((dist < p_phase->p_dists[0]) 
-      || (dist > p_phase->p_dists[p_phase->numdist-1]))
-    return 0;
-
-  /* TODO: check for holes in the travel time tables */
   return 1;
 }
 
@@ -876,7 +865,8 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
   EarthPhaseModel_t * p_phase;
   double delta, esaz, seaz;
 
-  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases));
+  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases)
+         && p_earth->p_phase_time_def[phaseid]);
   
   p_site = p_earth->p_sites + siteid;
   p_phase = p_earth->p_phases + phaseid;
@@ -946,7 +936,8 @@ double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
   EarthPhaseModel_t * p_phase;
   double delta, esaz, seaz;
 
-  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases));
+  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases)
+         && p_earth->p_phase_time_def[phaseid]);
   
   p_site = p_earth->p_sites + siteid;
   p_phase = p_earth->p_phases + phaseid;
@@ -1014,6 +1005,15 @@ PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth,
     return NULL;
 
   return Py_BuildValue("i", EarthModel_NumPhases(p_earth));
+}
+
+PyObject * py_EarthModel_NumTimeDefPhases(EarthModel_t * p_earth, 
+                                   PyObject * args)
+{
+  if (!PyArg_ParseTuple(args, ""))
+    return NULL;
+
+  return Py_BuildValue("i", EarthModel_NumTimeDefPhases(p_earth));
 }
 
 PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth, 

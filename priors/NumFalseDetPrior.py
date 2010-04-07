@@ -13,18 +13,11 @@ def learn(param_filename, earthmodel, start_time, end_time,
           detections, leb_events, leb_evlist,
           site_up):
 
-  # assume all detections are false
-  false_det = [1 for _ in detections]
-  for ph_det_list in leb_evlist:
-    for ph, detid in ph_det_list:
-      false_det[detid] = 0
-
   # add one smoothing, add one false detection for each site
   site_falsecnt = [1 for _ in range(len(site_up))]
 
-  for detid, isfalse in enumerate(false_det):
-    if isfalse:
-      site_falsecnt[int(detections[detid, DET_SITE_COL])] += 1
+  for detnum in get_false_detnums(leb_evlist, detections):
+    site_falsecnt[int(detections[detnum, DET_SITE_COL])] += 1
   
   fp = open(param_filename, "w")
 
