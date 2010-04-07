@@ -6,6 +6,7 @@ priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
                   'EarthModel.c', 'ArrivalTimePrior.c', 'NumFalseDetPrior.c',
                   'ArrivalAzimuthPrior.c', 'ArrivalSlownessPrior.c',
+                  'ArrivalPhasePrior.c',
                   'Poisson.c', 'score.c']
 
 netvisa_module = Extension('netvisa',

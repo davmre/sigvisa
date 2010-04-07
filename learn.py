@@ -11,6 +11,7 @@ import priors.NumFalseDetPrior
 import priors.ArrivalTimePrior
 import priors.ArrivalAzimuthPrior
 import priors.ArrivalSlownessPrior
+import priors.ArrivalPhasePrior
 
 import netvisa
 
@@ -39,7 +40,9 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                            os.path.join(param_dirname,
                                         "ArrivalAzimuthPrior.txt"),
                            os.path.join(param_dirname,
-                                        "ArrivalSlownessPrior.txt")
+                                        "ArrivalSlownessPrior.txt"),
+                           os.path.join(param_dirname,
+                                        "ArrivalPhasePrior.txt")
                            )
   
   return model
@@ -52,6 +55,12 @@ def main(param_dirname):
   parser.add_option("-n", "--nodet", dest="nodet", default=False,
                     action = "store_true",
                     help = "no detection prior training (False)")
+  parser.add_option("-x", "--text", dest="gui", default=True,
+                    action = "store_false",
+                    help = "text only output (False)")
+  parser.add_option("-s", "--silent", dest="verbose", default=True,
+                    action = "store_false",
+                    help = "silent, i.e. no output (False)")
   (options, args) = parser.parse_args()
 
   if options.quick:
@@ -102,6 +111,11 @@ def main(param_dirname):
                                                  "ArrivalSlownessPrior.txt"),
                                     earthmodel, detections, leb_events,
                                     leb_evlist)
+
+  priors.ArrivalPhasePrior.learn(os.path.join(param_dirname,
+                                              "ArrivalPhasePrior.txt"),
+                                 options, earthmodel, detections, leb_events,
+                                 leb_evlist)
   
 if __name__ == "__main__":
   try:
