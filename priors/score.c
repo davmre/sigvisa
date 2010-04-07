@@ -7,6 +7,7 @@ void score_event(NetModel_t * p_netmodel, Event_t * p_event,
                  double * p_numsc, double * p_locsc, double * p_magsc,
                  double * p_detsc, double * p_dettimesc,
                  double * p_detazsc, double * p_detslosc,
+                 double * p_detphasesc,
                  int * p_poss_detcnt, int * p_detcnt)
 {
   EarthModel_t * p_earth;
@@ -110,6 +111,14 @@ void score_event(NetModel_t * p_netmodel, Event_t * p_event,
                                                     siteid, phaseid);
           *p_detazsc -= LOGPROB_UNIFORM_AZIMUTH;
 
+          *p_detphasesc += ArrivalPhasePrior_LogProb(&p_netmodel
+                                                     ->arr_phase_prior,
+                                                     det->phase_det,
+                                                     phaseid);
+          
+          *p_detphasesc -= FalseArrivalPhasePrior_LogProb(&p_netmodel
+                                                          ->arr_phase_prior,
+                                                          det->phase_det);
         }
       }
     }
@@ -127,6 +136,7 @@ double score_world(NetModel_t * p_netmodel,
   double dettimesc;
   double detazsc;
   double detslosc;
+  double detphasesc;
   
   int poss_detcnt;
   int detcnt;
@@ -138,13 +148,15 @@ double score_world(NetModel_t * p_netmodel,
     printf ("%d events:\n", numevents);
   }
   
-  numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 0;
+  numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 
+    detphasesc = 0;
   poss_detcnt = detcnt = 0;
   
   for (i=0; i<numevents; i++)
   {
     score_event(p_netmodel, p_events + i, &numsc, &locsc, &magsc, &detsc,
-                & dettimesc, &detazsc, &detslosc, &poss_detcnt, &detcnt);
+                & dettimesc, &detazsc, &detslosc, &detphasesc,
+                &poss_detcnt, &detcnt);
   }
   
   if (verbose)
@@ -160,13 +172,16 @@ double score_world(NetModel_t * p_netmodel,
            detazsc/numevents, detazsc/detcnt);
     printf("Det Slowness: score %lf, avg-event %lf avg-det %lf\n", detslosc, 
            detslosc/numevents, detslosc/detcnt);
+    printf("Det Phase: score %lf, avg-event %lf avg-det %lf\n", detphasesc, 
+           detphasesc/numevents, detphasesc/detcnt);
     printf("Avg. # Detections: Possible %lf, Actual %lf\n", 
            ((double) poss_detcnt) / ((double) numevents),
            ((double) detcnt) / ((double) numevents));
   }
   
-  score = numsc + locsc + magsc + detsc + dettimesc + detslosc + detazsc;
-
+  score = numsc + locsc + magsc + detsc + dettimesc + detslosc + detazsc +
+    detphasesc;
+  
   if (verbose)
     printf("Total: %lf Avg. %lf\n", score, score/numevents);
   

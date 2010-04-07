@@ -260,14 +260,15 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   const char * numfalse_fname;
   const char * arraz_fname;
   const char * arrslo_fname;
+  const char * arrphase_fname;
   
-  if (!PyArg_ParseTuple(args, "O!ddO!O!ssssssss", &py_EarthModel, &p_earth,
+  if (!PyArg_ParseTuple(args, "O!ddO!O!sssssssss", &py_EarthModel, &p_earth,
                         &start_time, &end_time, 
                         &PyArray_Type, &detectionsobj,
                         &PyArray_Type, &siteupobj,
                         &numevent_fname, &evloc_fname, &evmag_fname, 
                         &evdet_fname, &arrtime_fname, &numfalse_fname,
-                        &arraz_fname, &arrslo_fname)
+                        &arraz_fname, &arrslo_fname, &arrphase_fname)
       || !detectionsobj || !siteupobj)
     return -1;
   
@@ -320,7 +321,9 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   ArrivalAzimuthPrior_Init_Params(&self->arr_az_prior, arraz_fname);
 
   ArrivalSlownessPrior_Init_Params(&self->arr_slo_prior, arrslo_fname);
- 
+
+  ArrivalPhasePrior_Init_Params(&self->arr_phase_prior, arrphase_fname);
+  
   return 0;
 }
 
@@ -338,6 +341,14 @@ static void py_net_model_dealloc(NetModel_t * self)
   EventLocationPrior_UnInit(&self->event_location_prior);
 
   ArrivalTimePrior_UnInit(&self->arr_time_prior);
+
+  NumFalseDetPrior_UnInit(&self->num_falsedet_prior);
+
+  ArrivalAzimuthPrior_UnInit(&self->arr_az_prior);
+
+  ArrivalSlownessPrior_UnInit(&self->arr_slo_prior);
+
+  ArrivalPhasePrior_UnInit(&self->arr_phase_prior);
   
   self->ob_type->tp_free((PyObject*)self);
 }
@@ -482,7 +493,7 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
   PyObject * p_detlist_obj;
  
   Event_t * p_event;
-  double numsc, locsc, magsc, detsc, dettimesc, detazsc, detslosc;
+  double numsc, locsc, magsc, detsc, dettimesc, detazsc, detslosc, detphasesc;
   double score;
   int possdetcnt, detcnt;
   
@@ -518,10 +529,11 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
   possdetcnt = detcnt = 0;
   
   score_event(p_netmodel, p_event, &numsc, &locsc, &magsc, &detsc, &dettimesc, 
-              &detazsc, &detslosc,
+              &detazsc, &detslosc, &detphasesc,
               &possdetcnt, &detcnt);
   
-  score = numsc + locsc + magsc + detsc + dettimesc + detazsc + detslosc;
+  score = numsc + locsc + magsc + detsc + dettimesc + detazsc + detslosc
+    + detphasesc;
   
   free_events(1, p_event);
   
