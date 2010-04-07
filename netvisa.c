@@ -499,9 +499,7 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
   PyObject * p_detlist_obj;
  
   Event_t * p_event;
-  double numsc, locsc, magsc, detsc, dettimesc, detazsc, detslosc, detphasesc;
   double score;
-  int possdetcnt, detcnt;
   
   if (!PyArg_ParseTuple(args, "O!O!",
                         &PyArray_Type, &p_event_arrobj, 
@@ -531,15 +529,7 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
                            p_netmodel->numdetections, p_netmodel->p_detections,
                            p_detlist_obj);
   
-  numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 0;
-  possdetcnt = detcnt = 0;
-  
-  score_event(p_netmodel, p_event, &numsc, &locsc, &magsc, &detsc, &dettimesc, 
-              &detazsc, &detslosc, &detphasesc,
-              &possdetcnt, &detcnt);
-  
-  score = numsc + locsc + magsc + detsc + dettimesc + detazsc + detslosc
-    + detphasesc;
+  score = score_event(p_netmodel, p_event);
   
   free_events(1, p_event);
   

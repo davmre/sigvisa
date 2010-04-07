@@ -3,7 +3,7 @@
 
 #include "../netvisa.h"
 
-void score_event(NetModel_t * p_netmodel, Event_t * p_event, 
+static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event, 
                  double * p_numsc, double * p_locsc, double * p_magsc,
                  double * p_detsc, double * p_dettimesc,
                  double * p_detazsc, double * p_detslosc,
@@ -124,6 +124,26 @@ void score_event(NetModel_t * p_netmodel, Event_t * p_event,
   }
 }
 
+double score_event(NetModel_t * p_netmodel, Event_t * p_event)
+{
+  double numsc, locsc, magsc, detsc, dettimesc, detazsc, detslosc, detphasesc;
+  double score;
+  int possdetcnt, detcnt;
+
+  numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 
+    detphasesc = 0;
+  possdetcnt = detcnt = 0;
+  
+  score_event_int(p_netmodel, p_event, &numsc, &locsc, &magsc, &detsc, 
+                  &dettimesc, &detazsc, &detslosc, &detphasesc,
+                  &possdetcnt, &detcnt);
+  
+  score = numsc + locsc + magsc + detsc + dettimesc + detazsc + detslosc
+    + detphasesc;
+
+  return score;
+}
+
 double score_world(NetModel_t * p_netmodel,
                    int numevents, Event_t * p_events, int verbose)
 {
@@ -153,9 +173,9 @@ double score_world(NetModel_t * p_netmodel,
   
   for (i=0; i<numevents; i++)
   {
-    score_event(p_netmodel, p_events + i, &numsc, &locsc, &magsc, &detsc,
-                & dettimesc, &detazsc, &detslosc, &detphasesc,
-                &poss_detcnt, &detcnt);
+    score_event_int(p_netmodel, p_events + i, &numsc, &locsc, &magsc, &detsc,
+                    &dettimesc, &detazsc, &detslosc, &detphasesc,
+                    &poss_detcnt, &detcnt);
   }
   
   if (verbose)
