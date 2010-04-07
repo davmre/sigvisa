@@ -5,17 +5,16 @@ from utils.LogisticModel import LogisticModel
 from database.dataset import *
 
 def learn_site(earthmodel, start_time, end_time, detections, leb_events,
-               leb_evlist, site_up, sites, phasenames, phasetimedef, siteid):
-  
+               leb_evlist, site_up, numtimedefphases, siteid):
   # initialize feature vectors
   mag_feat = []
   dist_feat = []
-  phaseid_feat = [[] for _ in range(len(phasenames))]
+  phaseid_feat = [[] for _ in range(numtimedefphases)]
   output = []
 
   for evnum, event in enumerate(leb_events):
     # compute the list of phases detected for this event at this site
-    det_phase = np.zeros(len(phasenames), int)
+    det_phase = np.zeros(numtimedefphases, int)
     for true_phaseid, detnum in leb_evlist[evnum]:
       det = detections[detnum]
       if det[DET_SITE_COL] == siteid:
@@ -33,20 +32,20 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
 
     dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
     
-    for pnum in range(len(phasenames)):
+    # we assume that only time-defining phases are detected
+    for pnum in range(numtimedefphases):
       # check if the site is in the shadow zone of this phase
-      if phasetimedef[pnum]:
-        arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
-                                         event[EV_DEPTH_COL],
-                                         event[EV_TIME_COL], pnum, siteid)
-        if arrtime < 0:
-          continue
-        
+      arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
+                                       event[EV_DEPTH_COL],
+                                       event[EV_TIME_COL], pnum, siteid)
+      if arrtime < 0:
+        continue
+      
       output.append(det_phase[pnum])
       mag_feat.append(event[EV_MB_COL])
       dist_feat.append(dist)
       # construct the features one per phase
-      for i in range(len(phasenames)):
+      for i in range(numtimedefphases):
         phaseid_feat[i].append(int(i == pnum))
 
   print "%d event-phases detected out of %d" % (sum(output), len(output))
@@ -62,13 +61,13 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
   output2.extend([int(random.random() > .5) for _ in range(NUM_FAKE)])
   mag_feat2.extend([random.randrange(3,6) for _ in range(NUM_FAKE)])
   dist_feat2.extend([random.randrange(0, 180) for _ in range(NUM_FAKE)])
-  for i in range(len(phasenames)):
+  for i in range(numtimedefphases):
     phaseid_feat2[i].extend([int(random.random() > .5) \
                              for _ in range(NUM_FAKE)])
 
   # train the model
   model = LogisticModel("y", ["mag", "dist"] +
-                        ["phase%d" % i for i in range(len(phasenames))],
+                        ["phase%d" % i for i in range(numtimedefphases)],
                         [mag_feat2, dist_feat2] + phaseid_feat2, output2)
   
   
@@ -92,8 +91,8 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
   sumlogprob = 0.
   cnt = 0
   for o, f in zip(output, zip(*([mag_feat, dist_feat] + phaseid_feat))):
-    # look for P phase which is the phaseid 0
-    if not f[1]:
+    # look for P phase which is the first phase feature
+    if not f[2]:
       continue
     cnt += 1
     p = model[f]
@@ -110,14 +109,18 @@ def learn(param_fname, earthmodel, start_time, end_time,
           detections, leb_events, leb_evlist,
           site_up, sites, phasenames, phasetimedef):
 
+  # assume that the time-defining phases precede the non-time-defining ones
+  numtimedefphases = earthmodel.NumTimeDefPhases()
+  
   fp = open(param_fname, "w")
-
-  print >>fp, "%d %d" % (len(sites), len(phasenames))
+  
+  print >>fp, "%d %d" % (len(sites), numtimedefphases)
   
   for siteid in range(len(sites)):
     model = learn_site(earthmodel, start_time, end_time,
                        detections, leb_events, leb_evlist, site_up,
-                       sites, phasenames, phasetimedef, siteid)
+                       numtimedefphases, siteid)
+    
     for x in model.coeffs:
       print >>fp, x,
     print >>fp

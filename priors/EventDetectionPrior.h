@@ -1,7 +1,7 @@
 typedef struct EventDetectionPrior_t
 {
   int numsites;
-  int numphases;
+  int numtimedefphases;
   double * p_coeff_mag;
   double * p_coeff_dist;
   double * p_coeff_phases;

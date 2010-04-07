@@ -20,7 +20,7 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
     exit(1);
   }
 
-  if (2 != fscanf(fp, "%d %d\n", &prior->numsites, &prior->numphases))
+  if (2 != fscanf(fp, "%d %d\n", &prior->numsites, &prior->numtimedefphases))
   {
     fprintf(stderr, "error reading num sites and phases from %s\n", filename);
     exit(1);
@@ -34,7 +34,7 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
 
   prior->p_coeff_phases = (double *)malloc(sizeof(*prior->p_coeff_phases)
                                           * prior->numsites 
-                                          * prior->numphases);
+                                          * prior->numtimedefphases);
 
   prior->p_coeff_bias = (double *)malloc(sizeof(*prior->p_coeff_bias)
                                         * prior->numsites);
@@ -53,11 +53,12 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
               siteid, filename);
       exit(1);
     }
-    for (phaseid = 0; phaseid < prior->numphases; phaseid ++)
+    for (phaseid = 0; phaseid < prior->numtimedefphases; phaseid ++)
     {
       if (1 != fscanf(fp, "%lg ",&prior->p_coeff_phases[siteid 
-                                                       * prior->numphases
-                                                       + phaseid]))
+                                                        * prior
+                                                        ->numtimedefphases
+                                                        + phaseid]))
       {
         fprintf(stderr, "error reading phaseid %d for siteid %d in file %s\n",
                 phaseid, siteid, filename);
@@ -82,10 +83,12 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
 {
   double logodds;
   double logprob;
+
+  assert(phaseid < prior->numtimedefphases);
   
   logodds = prior->p_coeff_mag[siteid] * evmag
     + prior->p_coeff_dist[siteid] * dist
-    + prior->p_coeff_phases[siteid * prior->numphases + phaseid]
+    + prior->p_coeff_phases[siteid * prior->numtimedefphases + phaseid]
     + prior->p_coeff_bias[siteid];
 
   if (is_detected)

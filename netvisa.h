@@ -15,7 +15,7 @@ typedef struct Event_t
   double evtime;
   double evmag;
 
-  /* array of numsites x numphases */
+  /* array of numsites x numtimedefphases */
   int * p_detids;                            /* detection numbers or -1 */
   
 } Event_t;
