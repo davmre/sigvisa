@@ -1050,3 +1050,21 @@ double EarthModel_DiffAzimuth(double azi1, double azi2)
     return diff;
 }
 
+PyObject * py_EarthModel_PhaseName(EarthModel_t * p_earth, 
+                                   PyObject * args)
+{
+  int phaseid;
+  
+  if (!PyArg_ParseTuple(args, "i", &phaseid))
+    return NULL;
+
+  if ((phaseid < 0) || (phaseid >= p_earth->numphases))
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: illegal phaseid");
+    
+    return NULL;
+  }
+
+  return Py_BuildValue("s", p_earth->p_phasenames[phaseid]);
+}
+

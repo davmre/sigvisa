@@ -1,6 +1,7 @@
 # python imports
 import numpy as np
 from time import strftime, gmtime
+from math import ceil
 import os
 
 # local imports
@@ -120,7 +121,8 @@ def read_uptime(cursor, start_time, end_time):
   cursor.execute("select count(*) from static_siteid")
   numsites, = cursor.fetchone()
   
-  uptime = np.zeros((numsites, int((end_time - start_time) / UPTIME_QUANT)),
+  uptime = np.zeros((numsites,
+                     int(ceil((end_time - start_time) / UPTIME_QUANT))),
                     bool)
   
   cursor.execute("select site.id-1, truncate((arr.time-%s)/3600, 0), count(*) "

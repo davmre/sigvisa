@@ -9,10 +9,14 @@ priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'ArrivalPhasePrior.c',
                   'Poisson.c', 'score.c']
 
+infer_sources = ['infer.c']
+
 netvisa_module = Extension('netvisa',
-                           sources = [os.path.join("priors", f)
-                                      for f in priors_sources]
-                           + ["netvisa.c"]
+                           sources = ([os.path.join("priors", f)
+                                       for f in priors_sources]
+                                      + [os.path.join("infer", f)
+                                         for f in infer_sources]
+                                      + ["netvisa.c"])
                            )
 setup (name = 'netvisa',
        version = '1.0',

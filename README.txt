@@ -13,8 +13,10 @@ Integrated Seismological Analysis.
 
 - Now, train the priors by calling "python learn.py"
 
+- To test your model run "python score.py"
+
 - Finally, to do inference and store the results into the database
-  call "python infer.py"
+  call "python infer.py" (Not yet implemented)
 
 Directory Layout
 ================
@@ -42,13 +44,18 @@ netvisa/
     NumFalseDetPrior.{py, c, h}     -- Number of false detections at each site
     ArrivalTimePrior.{py, c, h}     -- Arrival Time at a site
     ArrivalAzimuthPrior.{py, c, h}  -- Arrival Azimuth at a site
-    ArrivalSlownessPrior.{py, c, h}  -- Arrival Slowness at a site
+    ArrivalSlownessPrior.{py, c, h} -- Arrival Slowness at a site
+    ArrivalPhasePrior.{py, c, h}    -- Arrival Phase at a site
     EarthModel.{c, h}               -- Travel time and distances for all phases
     score.{c, h}                    -- Compute the log probability of a world
 
   utils/
     LogisticModel.py
     geog.py                         -- simple geographical distances etc.
+
+  infer/
+    infer.h
+    infer.c
 
   results/
     mwmatching.py                  -- max weighted matching
