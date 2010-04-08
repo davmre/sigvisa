@@ -3,6 +3,126 @@
 
 #include "../netvisa.h"
 
+/* returns 0 if the event - phase is impossible to be detected at the
+ * site, 1 otherwise */
+static int score_event_site_phase_int(NetModel_t * p_netmodel,
+                                      const Event_t * p_event,
+                                      int siteid, int phaseid,
+                                      double distance, double pred_az,
+                                      int * p_detcnt,
+                                      double * p_detsc, 
+                                      double * p_dettimesc,
+                                      double * p_detslosc,
+                                      double * p_detazsc,
+                                      double * p_detphasesc)
+{
+  EarthModel_t * p_earth;
+  double pred_arrtime;
+  int detnum;
+  int numtimedefphases;
+
+  p_earth = p_netmodel->p_earth;
+  
+  assert(EarthModel_IsTimeDefPhase(p_earth, phaseid));
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+  pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+                                        p_event->evlat, p_event->evdepth,
+                                        p_event->evtime, phaseid,
+                                        siteid);
+
+  /* check if the site is in the shadow zone for the event - phase */
+  if (pred_arrtime < 0)
+    return 0;
+
+  /* check if the site is up */
+  if (!NetModel_IsSiteUp(p_netmodel, siteid, pred_arrtime))
+    return 0;
+  
+  detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
+        
+  *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
+                                          detnum == -1? 0 : 1,
+                                          p_event->evdepth,
+                                          p_event->evmag,
+                                          distance, siteid, phaseid);
+  if (detnum != -1)
+  {
+    double pred_slow;
+    Detection_t * det;
+
+    *p_detcnt += 1;
+
+    det = p_netmodel->p_detections + detnum;
+          
+    *p_dettimesc += ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
+                                             det->time_det, pred_arrtime,
+                                             det->deltim_det, siteid,
+                                             phaseid);
+
+    *p_dettimesc -= NumFalseDet_LogTimeRate(&p_netmodel
+                                            ->num_falsedet_prior,
+                                            siteid);
+
+    pred_slow = EarthModel_ArrivalSlowness(p_earth, p_event->evlon,
+                                           p_event->evlat,
+                                           p_event->evdepth, phaseid,
+                                           siteid);
+
+    *p_detslosc += ArrivalSlownessPrior_LogProb(&p_netmodel
+                                                ->arr_slo_prior,
+                                                det->slo_det, 
+                                                pred_slow,
+                                                det->delslo_det,
+                                                siteid, phaseid);
+    *p_detslosc -= LOGPROB_UNIFORM_SLOWNESS;
+
+    *p_detazsc += ArrivalAzimuthPrior_LogProb(&p_netmodel->arr_az_prior,
+                                              det->azi_det, 
+                                              pred_az,
+                                              det->delaz_det,
+                                              siteid, phaseid);
+    *p_detazsc -= LOGPROB_UNIFORM_AZIMUTH;
+
+    *p_detphasesc += ArrivalPhasePrior_LogProb(&p_netmodel
+                                               ->arr_phase_prior,
+                                               det->phase_det,
+                                               phaseid);
+          
+    *p_detphasesc -= FalseArrivalPhasePrior_LogProb(&p_netmodel
+                                                    ->arr_phase_prior,
+                                                    det->phase_det);
+  }
+
+  return 1;
+}
+
+double score_event_site_phase(NetModel_t * p_netmodel,
+                              const Event_t * p_event,
+                              int siteid, int phaseid,
+                              double distance, double pred_az)
+{
+  int      poss;
+  int      detcnt;
+  double   detsc;
+  double   dettimesc;
+  double   detslosc;
+  double   detazsc;
+  double   detphasesc;
+
+  detcnt = 0;
+  detsc = dettimesc = detslosc = detazsc = detphasesc = 0;
+  
+  poss = score_event_site_phase_int(p_netmodel, p_event, siteid, phaseid,
+                                    distance, pred_az, &detcnt, &detsc,
+                                    &dettimesc, &detslosc, &detazsc,
+                                    &detphasesc);
+  
+  
+  return detsc + dettimesc + detslosc + detazsc + detphasesc;
+}
+
+
 static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event, 
                  double * p_numsc, double * p_locsc, double * p_magsc,
                  double * p_detsc, double * p_dettimesc,
@@ -43,80 +163,13 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
     
     for (phaseid=0; phaseid<numtimedefphases; phaseid++)
     {
-      double pred_arrtime;
-      int detnum;
-
-      assert(EarthModel_IsTimeDefPhase(p_earth, phaseid));
-
-      pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
-                                            p_event->evlat, p_event->evdepth,
-                                            p_event->evtime, phaseid,
-                                            siteid);
-      
-      /* check if the site is in the shadow zone for the event - phase */
-      if (pred_arrtime < 0)
-        continue;
-
-      /* check if the site is up */
-      if (!NetModel_IsSiteUp(p_netmodel, siteid, pred_arrtime))
-        continue;
-      
-      detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
-        
-      *p_poss_detcnt += 1;
-        
-      *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
-                                              detnum == -1? 0 : 1,
-                                              p_event->evdepth, 
-                                              p_event->evmag,
-                                              distance, siteid, phaseid);
-      if (detnum != -1)
-      {
-        double pred_slow;
-        Detection_t * det;
-
-        *p_detcnt += 1;
-
-        det = p_detections + detnum;
-          
-        *p_dettimesc += ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
-                                                 det->time_det, pred_arrtime,
-                                                 det->deltim_det, siteid,
-                                                 phaseid);
-
-        *p_dettimesc -= NumFalseDet_LogTimeRate(&p_netmodel
-                                                ->num_falsedet_prior,
-                                                siteid);
-
-        pred_slow = EarthModel_ArrivalSlowness(p_earth, p_event->evlon,
-                                               p_event->evlat,
-                                               p_event->evdepth, phaseid,
-                                               siteid);
-
-        *p_detslosc += ArrivalSlownessPrior_LogProb(&p_netmodel
-                                                    ->arr_slo_prior,
-                                                    det->slo_det, 
-                                                    pred_slow,
-                                                    det->delslo_det,
-                                                    siteid, phaseid);
-        *p_detslosc -= LOGPROB_UNIFORM_SLOWNESS;
-
-        *p_detazsc += ArrivalAzimuthPrior_LogProb(&p_netmodel->arr_az_prior,
-                                                  det->azi_det, 
-                                                  pred_az,
-                                                  det->delaz_det,
-                                                  siteid, phaseid);
-        *p_detazsc -= LOGPROB_UNIFORM_AZIMUTH;
-
-        *p_detphasesc += ArrivalPhasePrior_LogProb(&p_netmodel
-                                                   ->arr_phase_prior,
-                                                   det->phase_det,
-                                                   phaseid);
-          
-        *p_detphasesc -= FalseArrivalPhasePrior_LogProb(&p_netmodel
-                                                        ->arr_phase_prior,
-                                                        det->phase_det);
-      }
+      *p_poss_detcnt += score_event_site_phase_int(p_netmodel, p_event,
+                                                   siteid, phaseid,
+                                                   distance, pred_az,
+                                                   p_detcnt,
+                                                   p_detsc, p_dettimesc,
+                                                   p_detslosc, p_detazsc,
+                                                   p_detphasesc);   
     }
   }
 }

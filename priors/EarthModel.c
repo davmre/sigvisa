@@ -6,10 +6,6 @@
 
 /* CONSTANTS */
 
-#define PI                     ((double) 3.1415926535897931)
-#define DEG2RAD                ((double) (PI / 180))
-#define RAD2DEG                ((double) (180 / PI))
-#define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
 #define	SQRT3_OVER2	       ((double) 0.866025404)
 
 #define MAX_LINE               1000      /* for reading ttime files */
@@ -1068,3 +1064,11 @@ PyObject * py_EarthModel_PhaseName(EarthModel_t * p_earth,
   return Py_BuildValue("s", p_earth->p_phasenames[phaseid]);
 }
 
+PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth, 
+                                       PyObject * args)
+{
+  if (!PyArg_ParseTuple(args, ""))
+    return NULL;
+
+  return Py_BuildValue("d", MAX_TRAVEL_TIME);
+}

@@ -9,6 +9,7 @@ static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
@@ -110,6 +111,9 @@ static PyMethodDef EarthModel_methods[] = {
     {"PhaseName", (PyCFunction)py_EarthModel_PhaseName,
      METH_VARARGS, "PhaseName(phaseid) -> name of phase",
     },
+    {"MaxTravelTime", (PyCFunction)py_EarthModel_MaxTravelTime,
+     METH_VARARGS, "MaxTravelTime() -> time",
+    },
     {NULL}  /* Sentinel */
 };
 
@@ -156,11 +160,8 @@ static PyTypeObject py_EarthModel = {
 };
 
 static PyMethodDef netvisaMethods[] = {
-/*
-  {"score_world", py_score_world, METH_VARARGS,
-   "score_world(net_model, events, evlist, verbose) "
-   "-> log probability\n"},
-*/
+  {"srand", py_srand, METH_VARARGS,
+    "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
 };
 
@@ -549,9 +550,19 @@ static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   if (!PyArg_ParseTuple(args, "i", &numsamples))
     return NULL;
 
-  infer(p_netmodel, numsamples);
+  return infer(p_netmodel, numsamples);
+}
+
+static PyObject * py_srand(PyObject * self, PyObject * args)
+{
+  int seed;
   
-  Py_IncRef(Py_None);
+  if (!PyArg_ParseTuple(args, "i", &seed))
+    return NULL;
+  
+  srand(seed);
+
+  Py_INCREF(Py_None);
   
   return Py_None;
 }

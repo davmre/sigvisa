@@ -17,7 +17,9 @@ typedef struct Event_t
 
   /* array of numsites x numtimedefphases */
   int * p_detids;                            /* detection numbers or -1 */
-  
+
+  int orid;
+  double evscore;
 } Event_t;
 
 typedef struct Site_t
@@ -160,3 +162,19 @@ typedef struct NetModel_t
 #define LOGPROB_UNIFORM_AZIMUTH (- log(MAX_AZIMUTH - MIN_AZIMUTH))
 
 #define PHASENAME_MAXLEN 6
+
+/* maximum time taken by any phase */
+#define MAX_TRAVEL_TIME ((double) 2000.0)
+
+#define MIN(a,b) ((a) <= (b) ? (a) : (b))
+#define MAX(a,b) ((a) >= (b) ? (a) : (b))
+
+/* RAND_DOUBLE -> random number between 0 and 1 (exclusive) */
+#define RAND_DOUBLE ( ((double) rand() + 1.0) / ((double) RAND_MAX + 2.0) )
+/* RAND_UNIFORM(a,b) -> random value between a and b */
+#define RAND_UNIFORM(a,b) (((double) (a)) + ((double) ((b)-(a))) * RAND_DOUBLE)
+
+#define PI                     ((double) 3.1415926535897931)
+#define DEG2RAD                ((double) (PI / 180))
+#define RAD2DEG                ((double) (180 / PI))
+#define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
