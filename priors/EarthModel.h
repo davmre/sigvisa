@@ -97,3 +97,7 @@ double EarthModel_DiffAzimuth(double azi1, double azi2);
 
 PyObject * py_EarthModel_PhaseName(EarthModel_t * p_earth, 
                                    PyObject * args);
+
+PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth, 
+                                       PyObject * args);
+
