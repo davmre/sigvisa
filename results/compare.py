@@ -1,7 +1,9 @@
+import numpy as np
+
 from database.dataset import EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_MB_COL,\
      EV_TIME_COL
 
-from utils.geog import dist_deg
+from utils.geog import dist_deg, dist_km
 
 import mwmatching
 
@@ -39,3 +41,32 @@ def find_true_false_guess(gold_events, guess_events):
 
   return true, false, mat
 
+def f1_and_error(gold_events, guess_events):
+  indices = find_matching(gold_events, guess_events)
+  # compute precision
+  if len(guess_events):
+    p = 100. * float(len(indices)) / len(guess_events)
+  else:
+    p = 100.
+  # compute recall
+  if len(gold_events):
+    r = 100. * float(len(indices)) / len(gold_events)
+  else:
+    r = 100.
+  # compute f1
+  if p==0 or r==0:
+    f = 0.
+  else:
+    f = 2 * p * r / (p + r)
+  # compute avg error
+  if len(indices):
+    errs = np.array([dist_km((gold_events[i,EV_LON_COL],
+                              gold_events[i,EV_LAT_COL]),
+                                  (guess_events[j, EV_LON_COL],
+                                   guess_events[j, EV_LAT_COL]))
+                     for (i,j) in indices])
+    err = (np.average(errs), np.std(errs))
+  else:
+    err = (0.,0.)
+
+  return f, p, r, err

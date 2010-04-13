@@ -27,6 +27,7 @@
 #define EARTH_PHASE_tx      14
 #define EARTH_PHASE_Sx      15
 #define EARTH_PHASE_Px      16
+#define EARTH_PHASE_N       17
 
 #define EARTH_SURF_P_VEL    5.8              /* surface velocity of P waves */
 #define EARTH_SURF_S_VEL    (EARTH_SURF_P_VEL / 1.73)
@@ -1072,3 +1073,146 @@ PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth,
 
   return Py_BuildValue("d", MAX_TRAVEL_TIME);
 }
+
+/* returns distance or -1 if not invertible */
+static double invert_slowness(const EarthPhaseModel_t * p_phase, double depth,
+                              double slow)
+{
+  int depthi;
+  int disti;
+  
+  /* check that the depth is within the bounds for this phase */
+  if ((depth < p_phase->p_depths[0])
+      || (depth > p_phase->p_depths[p_phase->numdepth-1]))
+    return -1;
+
+  for (depthi = 0; (depthi < p_phase->numdepth) 
+         && (depth >= p_phase->p_depths[depthi]); depthi++)
+    ;
+  depthi --;
+  
+  for (disti = 0; (disti+1) < p_phase->numdist; disti++)
+  {
+    double curr_slow;
+    
+    curr_slow = (EarthPhaseModel_GetSample(p_phase, depthi, disti+1)
+                 - EarthPhaseModel_GetSample(p_phase, depthi, disti))
+      / (p_phase->p_dists[disti+1] - p_phase->p_dists[disti]);
+    
+    if (slow > curr_slow)
+      break;
+  }
+
+  return p_phase->p_dists[disti];
+}
+
+/* delta,azi is geocentric; lon,lat are all geographic */
+/* From idc ->libgeog -> lat_lon.c */
+static void invert_dist_azimuth(double alon1, double alat1, double delta, 
+                                double azi, double *alon2, double *alat2)
+{
+  double alat, alon, a, b, c, coslat, dlon;
+  double geoc_co_lat, geog_co_lat;
+  double  r123, r13, r13sq, sinlat, x1, x2, x3;
+  double  atan2(), cos(), sin();
+  
+  /*
+   * Convert a geographical location to geocentric cartesian 
+   * coordinates, assuming a spherical Earth.
+   */
+  alat = 90.0 - delta;
+  alon = 180.0 - azi;
+  r13  = cos(DEG2RAD*alat);
+
+  /*
+   * x1:  Axis 1 intersects equator at  0 deg longitude  
+   * x2:  Axis 2 intersects equator at 90 deg longitude  
+   * x3:  Axis 3 intersects north pole
+   */
+
+  x1 = r13*sin(DEG2RAD*alon);
+  x2 = sin(DEG2RAD*alat);
+  x3 = r13*cos(DEG2RAD*alon);
+
+  geog_co_lat = (90.0-alat1)*DEG2RAD;          /* radians */
+  geoc_co_lat = GEOCENTRIC_COLAT(geog_co_lat);    /* radians */
+
+  /*
+   * Rotate in cartesian coordinates.  The cartesian coordinate system 
+   * is most easily described in geocentric terms.  The origin is at 
+   * the Earth's center.  Rotation by alat1 degrees southward, about 
+   * the 1-axis.
+   */
+
+  sinlat = sin(geoc_co_lat);
+  coslat = cos(geoc_co_lat);
+  b      = x2;
+  c      = x3;
+  x2     = b*coslat - c*sinlat;
+  x3     = b*sinlat + c*coslat;
+
+  /*
+   * Finally, convert geocentric cartesian coordinates back to 
+   * a geographical location.
+   */
+ 
+  r13sq  = x3*x3 + x1*x1;
+  r13    = sqrt(r13sq);
+  r123   = sqrt(r13sq + x2*x2);
+  dlon   = RAD2DEG*atan2(x1, x3);
+  a      = 90.0*DEG2RAD - atan2(x2, r13);
+  *alat2 = GEOGRAPHIC_LAT(a);
+  *alon2 = alon1 + dlon;
+  if (fabs(*alat2) > 90.0)
+    *alat2 = SIGN((180.0-fabs(*alat2)), *alat2);
+  if (fabs(*alon2) > 180.0)
+    *alon2 = SIGN((360.0-fabs(*alon2)), *alon2);
+}
+
+/* if possible to invert, returns 0 and stores the lon, lat, depth, time
+ * fields, else it returns -1 */
+int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
+                     Event_t * p_event)
+{
+  double dist;
+  int phaseid;
+  const EarthPhaseModel_t * p_phase;
+  const Site_t * p_site;
+  double arrtime;  
+  
+  /* inverting the P phase leads to the most number of events */
+  phaseid = EARTH_PHASE_P;
+
+  p_phase = p_earth->p_phases + phaseid;
+  
+  /* we want to fix the depth at zero otherwise invert_slowness can produce
+   * unexpected results */
+  p_event->evdepth = 0;
+  
+  dist = invert_slowness(p_phase, p_event->evdepth, p_det->slo_det);
+  
+  /* we don't want to propose an event smack on top of a station! */
+  if (dist < 1e-3)
+    return -1;
+
+  p_site = p_earth->p_sites + p_det->site_det;
+  
+  invert_dist_azimuth(p_site->sitelon, p_site->sitelat, dist,
+                      p_det->azi_det,
+                      &p_event->evlon, &p_event->evlat);
+
+  arrtime = EarthModel_ArrivalTime((EarthModel_t *)p_earth, 
+                                   p_event->evlon, p_event->evlat,
+                                   p_event->evdepth, 0 /* evtime */,
+                                   phaseid, p_det->site_det);
+  
+  if (arrtime < 0)
+    return -1;
+  
+  p_event->evtime = p_det->time_det - arrtime;
+  
+  p_event->evmag = RAND_UNIFORM(MIN_MAGNITUDE, MAX_MAGNITUDE);
+  
+  return 0;
+}
+

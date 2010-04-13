@@ -8,6 +8,7 @@ Integrated Seismological Analysis.
 - Load the data in a mysql database:
   copy all the csv files into the database directory
   change to the database directory and then run ctbt3mos.sql from mysql
+  Also, run netvisa.sql to load the tables to store results
 
 - Next, compile the sources by calling "python setup.py build_ext --inplace"
 
@@ -16,7 +17,7 @@ Integrated Seismological Analysis.
 - To test your model run "python score.py"
 
 - Finally, to do inference and store the results into the database
-  call "python infer.py" (Not yet implemented)
+  call "python infer.py -r 1" (to do inference on 1 hour)
 
 Directory Layout
 ================
@@ -33,7 +34,7 @@ netvisa/
 
   database/
     ctbt3mos.sql                    -- schema of the data
-    visa.sql                        -- schema for storing the results
+    netvisa.sql                     -- schema for storing the results
     dataset.py                      -- load the dataset
 
   priors/
