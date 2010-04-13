@@ -10,25 +10,6 @@
 
 #define MAX_LINE               1000      /* for reading ttime files */
 
-#define EARTH_PHASE_P       0
-#define EARTH_PHASE_Pn      1
-#define EARTH_PHASE_PKP     2
-#define EARTH_PHASE_Sn      3
-#define EARTH_PHASE_S       4
-#define EARTH_PHASE_PKPbc   5
-#define EARTH_PHASE_PcP     6
-#define EARTH_PHASE_pP      7
-#define EARTH_PHASE_Lg      8
-#define EARTH_PHASE_PKPab   9
-#define EARTH_PHASE_ScP     10
-#define EARTH_PHASE_PKKPbc  11
-#define EARTH_PHASE_Pg      12
-#define EARTH_PHASE_Rg      13
-#define EARTH_PHASE_tx      14
-#define EARTH_PHASE_Sx      15
-#define EARTH_PHASE_Px      16
-#define EARTH_PHASE_N       17
-
 #define EARTH_SURF_P_VEL    5.8              /* surface velocity of P waves */
 #define EARTH_SURF_S_VEL    (EARTH_SURF_P_VEL / 1.73)
 

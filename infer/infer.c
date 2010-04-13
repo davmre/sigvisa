@@ -370,6 +370,10 @@ static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
     
     p_detection = p_netmodel->p_detections + detnum;
 
+    /* tx phases are causing a lot of confusion */
+    if (EARTH_PHASE_tx == p_detection->phase_det)
+      continue;
+
     for (evnum = p_world->low_evnum; evnum < p_world->high_evnum; evnum++)
     {
       Event_t * p_event;
@@ -390,6 +394,10 @@ static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
         int old_detnum;
         double score;
         int replace;
+
+        /* pP phases have too much variance, they are not helping ! */
+        if (EARTH_PHASE_pP == phaseid)
+          continue;
         
         old_detnum = p_event->p_detids[p_detection->site_det * numtimedefphases
                                        + phaseid];
