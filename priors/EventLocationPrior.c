@@ -61,11 +61,36 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
   }
 
   fclose(fp);
+
+  dist->p_lonprob = (double *)calloc(dist->numlon, sizeof(*dist->p_lonprob));
+  dist->p_latprob = (double *)calloc(dist->numlon * dist->numlat,
+                                     sizeof(*dist->p_latprob));
+
+  for (lonidx = 0; lonidx < dist->numlon; lonidx ++)
+  {
+    dist->p_lonprob[lonidx] = 0;
+    
+    for (latidx = 0; latidx < dist->numlat; latidx ++)
+    {
+      dist->p_lonprob[lonidx] += dist->p_bucketprob[lonidx * dist->numlat 
+                                                    + latidx];
+      
+    }
+
+    for (latidx = 0; latidx < dist->numlat; latidx ++)
+    {
+      dist->p_latprob[lonidx * dist->numlat + latidx] 
+        = dist->p_bucketprob[lonidx * dist->numlat + latidx]
+        / dist->p_lonprob[lonidx];
+    }
+  }
 }
 
 void EventLocationPrior_UnInit(EventLocationPrior_t * dist)
 {
   free(dist->p_bucketprob);
+  free(dist->p_lonprob);
+  free(dist->p_latprob);
 }
 
 
@@ -92,10 +117,48 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
   }
   
 
-  lonidx = (int) ((lon - (-180)) / dist->lonstep);
-  latidx = (int) ((LAT2Z(lat) - (-1)) / dist->zstep);
+  lonidx = (int) floor((lon - (-180)) / dist->lonstep);
+  latidx = (int) floor((LAT2Z(lat) - (-1)) / dist->zstep);
 
   return log(dist->p_bucketprob[lonidx * dist->numlat + latidx])\
     - log(MAX_DEPTH-MIN_DEPTH);
+}
+
+static int sample_vec(int veclen, double * p_probvec)
+{
+  int i;
+  double tgt;
+  double cum;
+  
+  tgt = RAND_DOUBLE;
+  
+  cum = 0.0;
+  for (i=0; (i<veclen); i++)
+  {
+    cum += p_probvec[i];
+
+    if (cum >= tgt)
+      break;
+  }
+  
+  assert(i < veclen);
+  
+  return i;
+}
+
+void EventLocationPrior_Sample(const EventLocationPrior_t * dist,
+                               double * p_lon, double * p_lat, 
+                               double * p_depth)
+{
+  int lonidx;
+  int latidx;
+  
+  lonidx = sample_vec(dist->numlon, dist->p_lonprob);
+  *p_lon = -180 + (lonidx + RAND_DOUBLE) * dist->lonstep;
+
+  latidx = sample_vec(dist->numlat, dist->p_latprob + lonidx * dist->numlat);
+  *p_lat = RAD2DEG * asin(-1 + (latidx + RAND_DOUBLE) * dist->zstep);
+
+  *p_depth = RAND_UNIFORM(MIN_DEPTH, MAX_DEPTH);
 }
 

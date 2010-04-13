@@ -8,6 +8,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
@@ -20,6 +21,8 @@ static PyMethodDef NetModel_methods[] = {
    "-> log probability\n"},
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
    "infer(samples per second) -> events, ev_detlist"},
+  {"invert_det", (PyCFunction)py_invert_det, METH_VARARGS,
+   "invert_det(detnum) -> (lon, lat, depth, time) or None"},
   {NULL}  /* Sentinel */
 };
 
@@ -126,7 +129,7 @@ static PyTypeObject py_EarthModel = {
     (destructor)py_EarthModel_UnInit,        /*tp_dealloc*/
     0,                                       /*tp_print*/
     0,                                       /*tp_getattr*/
-    0,                                       /*tp_setattr*/
+    0,                                       /*tp_set<attr*/
     0,                                       /*tp_compare*/
     0,                                       /*tp_repr*/
     0,                                       /*tp_as_number*/
@@ -188,7 +191,7 @@ void initnetvisa()
   PyModule_AddObject(m, "EarthModel", (PyObject *)&py_EarthModel);
 }
 
-static void alloc_detections(PyArrayObject * detectionsobj, 
+static void alloc_detections(PyArrayObject * detectionsobj,
                              int * p_ndetections,
                              Detection_t ** p_p_detections)
 {
@@ -551,6 +554,34 @@ static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
     return NULL;
 
   return infer(p_netmodel, numsamples);
+}
+
+static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args)
+{
+  int detnum;
+  int status;
+  Event_t event;
+
+  if (!PyArg_ParseTuple(args, "i", &detnum))
+    return NULL;
+
+  if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, "invert_det: illegal detnum");
+    return NULL;
+  }
+
+  status = invert_detection(p_netmodel->p_earth, p_netmodel->p_detections +
+                            detnum, &event);
+  
+  if (status == 0)
+    return Py_BuildValue("dddd", event.evlon, event.evlat,
+                         event.evdepth, event.evtime);
+  else
+  {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }
 }
 
 static PyObject * py_srand(PyObject * self, PyObject * args)
