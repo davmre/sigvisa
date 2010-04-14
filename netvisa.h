@@ -166,6 +166,11 @@ typedef struct NetModel_t
 /* maximum time taken by any phase */
 #define MAX_TRAVEL_TIME ((double) 2000.0)
 
+/* max time residual should not be needed in a proper model but due to
+ * unexplained extremely high variance in some of the travel time residual
+ * we need to put this in place for now */
+#define MAX_TIME_RESIDUAL ((double) 6.0)
+
 #define MIN(a,b) ((a) <= (b) ? (a) : (b))
 #define MAX(a,b) ((a) >= (b) ? (a) : (b))
 

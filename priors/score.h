@@ -5,7 +5,8 @@ double score_world(NetModel_t * p_netmodel,
 
 double score_event(NetModel_t * p_netmodel, Event_t * p_event);
 
-double score_event_site_phase(NetModel_t * p_netmodel,
-                              const Event_t * p_event,
-                              int siteid, int phaseid,
-                              double distance, double pred_az);
+int score_event_site_phase(NetModel_t * p_netmodel,
+                           const Event_t * p_event,
+                           int siteid, int phaseid,
+                           double distance, double pred_az,
+                           double * p_score);

@@ -42,6 +42,37 @@ def dist_km(loc1, loc2):
   
   return np.radians(dist_deg(loc1, loc2)) * AVG_EARTH_RADIUS_KM
 
+def degdiff(angle1, angle2):
+  """
+  The difference of two angles given in degrees. The answer is an angle from
+  -180 to 180. Positive angles imply angle2 is clockwise from angle1 and -ve
+  angles imply counter-clockwise.
+  
+  >>> int(degdiff(40, 30))
+  -10
+  >>> int(degdiff(30, 40))
+  10
+  >>> int(degdiff(361, 40))
+  39
+  >>> int(degdiff(40, 361))
+  -39
+  >>> degdiff(40,250)
+  -150
+  >>> degdiff(40,200)
+  160
+  >>> degdiff(40, 219)
+  179
+  >>> degdiff(40, 220)
+  180
+  >>> degdiff(40, 221)
+  -179
+  """
+  # bring the angle into the 0 to 360 range
+  delta = ((angle2 - angle1) + 360) % 360
+  # angles above 180 need to be shifted down by 360 degrees so that 181 is -179
+  # 200 is -160 etc.
+  return delta - (delta > 180) * 360
+
 def _test():
   import doctest
   doctest.testmod()

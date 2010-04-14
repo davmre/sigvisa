@@ -4,7 +4,10 @@
 #include "../netvisa.h"
 
 /* returns 0 if the event - phase is impossible to be detected at the
- * site, 1 otherwise */
+ * site, 1 otherwise 
+ * if detected returns log probability of detection given event 
+ *                     - log probability noise 
+ * else returns log probability of mis-detection given event */
 static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                       const Event_t * p_event,
                                       int siteid, int phaseid,
@@ -41,19 +44,15 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
   
   detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
         
-  *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
-                                          detnum == -1? 0 : 1,
-                                          p_event->evdepth,
-                                          p_event->evmag,
-                                          distance, siteid, phaseid);
   if (detnum != -1)
   {
     double pred_slow;
     Detection_t * det;
 
+    det = p_netmodel->p_detections + detnum;
+
     *p_detcnt += 1;
 
-    det = p_netmodel->p_detections + detnum;
           
     *p_dettimesc += ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
                                              det->time_det, pred_arrtime,
@@ -94,13 +93,21 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                     det->phase_det);
   }
 
+  *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
+                                          detnum == -1? 0 : 1,
+                                          p_event->evdepth,
+                                          p_event->evmag,
+                                          distance, siteid, phaseid);
+
   return 1;
 }
 
-double score_event_site_phase(NetModel_t * p_netmodel,
-                              const Event_t * p_event,
-                              int siteid, int phaseid,
-                              double distance, double pred_az)
+/* returns 0 if the event can't be detected at the site */
+int score_event_site_phase(NetModel_t * p_netmodel,
+                           const Event_t * p_event,
+                           int siteid, int phaseid,
+                           double distance, double pred_az,
+                           double * p_score)
 {
   int      poss;
   int      detcnt;
@@ -117,9 +124,10 @@ double score_event_site_phase(NetModel_t * p_netmodel,
                                     distance, pred_az, &detcnt, &detsc,
                                     &dettimesc, &detslosc, &detazsc,
                                     &detphasesc);
-  
-  
-  return detsc + dettimesc + detslosc + detazsc + detphasesc;
+
+  *p_score = detsc + dettimesc + detslosc + detazsc + detphasesc;
+
+  return poss;
 }
 
 

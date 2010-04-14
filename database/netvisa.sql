@@ -46,10 +46,61 @@ create table visa_assoc (
  phase    varchar(20),
  arid     int,
  score    double,
+ timeres  double,
+ azres    double,
+ slores   double,
+ 
  index (runid, orid, arid)
 ) engine = myisam;
+
+
+/* some utility functions */
+delimiter |
+
+create function dist_deg(lon1 double, lat1 double, lon2 double, lat2 double)
+returns double deterministic
+begin
+declare dist double;
+set dist = degrees(acos(sin(radians(lat1)) * sin(radians(lat2))
+                   + cos(radians(lat1)) * cos(radians(lat2))
+                     * cos(radians(lon2 - lon1))));
+return dist;
+end|
+
+create function dist_km(lon1 double, lat1 double, lon2 double, lat2 double)
+returns double deterministic
+begin
+declare dist double;
+set dist = 6371.0 * (acos(sin(radians(lat1)) * sin(radians(lat2))
+                     + cos(radians(lat1)) * cos(radians(lat2))
+                     * cos(radians(lon2 - lon1))));
+return dist;
+end|
+
+create function degdiff(from_angle double, to_angle double)
+returns double deterministic
+begin
+  declare angle double;
+  set angle = ((to_angle - from_angle) + 360) % 360;
+  if angle > 180 then set angle = angle - 360;
+  end if;
+  return angle;
+end|
+
+delimiter ;
+
+create or replace view visa_vs_leb as select run.runid runid, leb.orid
+leb, vo.orid visa, round(vo.score) score, round(dist_km(leb.lon,
+leb.lat, vo.lon, vo.lat)) err_km, round(leb.lon) lon, round(leb.lat)
+lat, round(leb.time) time, round(leb.mb,1) mb from visa_run run join
+leb_origin leb on leb.time between run.data_start and run.data_end
+left join visa_origin vo on dist_deg(leb.lon, leb.lat, vo.lon, vo.lat)
+<= 5 and abs(vo.time-leb.time)<=50 and vo.runid=run.runid;
+
 
 grant select,insert,update on visa_run to ctbt@localhost;
 grant select,insert on visa_origin to ctbt@localhost;
 grant select,insert on visa_assoc to ctbt@localhost;
+grant select on visa_vs_leb to ctbt@localhost;
+grant execute on ctbt3mos.* to ctbt@localhost;
 

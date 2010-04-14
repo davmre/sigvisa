@@ -8,6 +8,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
@@ -17,8 +18,9 @@ static PyMethodDef NetModel_methods[] = {
    "score_world(events, ev_detlist, verbose) "
    "-> log probability\n"},
   {"score_event", (PyCFunction)py_score_event, METH_VARARGS,
-   "score_event(event, detlist) "
-   "-> log probability\n"},
+   "score_event(event, detlist) -> log probability ratio"},
+  {"score_event_det", (PyCFunction)py_score_event_det, METH_VARARGS,
+   "score_event_det(event, phaseid, detnum) -> log probability ratio\n"},
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
    "infer(samples per second) -> events, ev_detlist"},
   {"invert_det", (PyCFunction)py_invert_det, METH_VARARGS,
@@ -84,7 +86,7 @@ static PyMethodDef EarthModel_methods[] = {
     {"ArrivalAzimuth", (PyCFunction)py_EarthModel_ArrivalAzimuth,
      METH_VARARGS,
      "Compute the arrival azimuth of an event at a site\n"
-     "ArrivalAzimuth(evlon, evlat, siteid) -> (esaz, seaz)",
+     "ArrivalAzimuth(evlon, evlat, siteid) -> seaz",
     },
     {"ArrivalSlowness", (PyCFunction)py_EarthModel_ArrivalSlowness,
      METH_VARARGS,
@@ -544,6 +546,88 @@ static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)
   free_events(1, p_event);
   
   return Py_BuildValue("d", score);
+}
+
+static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  PyArrayObject * p_event_arrobj;
+  int phaseid;
+  int detnum;
+  EarthModel_t * p_earth;
+  int numsites;
+  int numtimedefphases;
+  Detection_t * p_det;
+ 
+  Event_t * p_event;
+  double distance, pred_az;
+  int poss;
+  double score;
+
+  
+  if (!PyArg_ParseTuple(args, "O!ii", &PyArray_Type, &p_event_arrobj, 
+                        &phaseid, &detnum)
+      || !p_event_arrobj)
+    return NULL;
+  
+  if ((1 != p_event_arrobj->nd) || (NPY_DOUBLE 
+                                     != p_event_arrobj->descr->type_num)
+      || (EV_NUM_COLS != p_event_arrobj->dimensions[0]))
+  {
+    PyErr_SetString(PyExc_ValueError,
+                    "score_event_det: wrong shape or type of event array");
+    return NULL;
+  }
+  
+  p_earth = p_netmodel->p_earth;
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+  numsites = EarthModel_NumSites(p_earth);
+  
+  if ((phaseid < 0) || (phaseid >= numtimedefphases))
+  {
+    PyErr_SetString(PyExc_ValueError, "score_event_det: invalid phaseid");
+    return NULL;
+  }
+
+  if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, "score_event_det: invalid detnum");
+    return NULL;
+  }
+
+  p_event = (Event_t *)calloc(1, sizeof(*p_event));
+  p_event->evlon = ARRAY1(p_event_arrobj, EV_LON_COL);
+  p_event->evlat = ARRAY1(p_event_arrobj, EV_LAT_COL);
+  p_event->evdepth = ARRAY1(p_event_arrobj, EV_DEPTH_COL);
+  p_event->evtime = ARRAY1(p_event_arrobj, EV_TIME_COL);
+  p_event->evmag = ARRAY1(p_event_arrobj, EV_MB_COL);
+
+  p_event->p_detids = (int *)malloc(numsites * numtimedefphases *
+                                    sizeof(*p_event->p_detids));
+
+  p_det = p_netmodel->p_detections + detnum;
+  
+  p_event->p_detids[p_det->site_det * numtimedefphases + phaseid] = detnum;
+  
+  distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
+                              p_det->site_det);
+
+  pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
+                                      p_event->evlat, p_det->site_det);
+
+  poss = score_event_site_phase(p_netmodel, p_event, p_det->site_det, phaseid,
+                                distance, pred_az, &score);
+  
+  free_events(1, p_event);
+  
+  if (poss)
+    return Py_BuildValue("d", score);
+  /* if the detections is not possible then return None */
+  else
+  {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }
 }
 
 static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
