@@ -6,8 +6,37 @@ from database.dataset import *
 import database.db
 import netvisa, learn
 from results.compare import *
-from utils.geog import dist_km
+from utils.geog import dist_km, degdiff
 
+def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections):
+  inv_evs = []
+  inv_detnums = []
+  inv_arids = []
+  for detnum in range(len(detections)):
+    ev = netmodel.invert_det(detnum)
+    if ev is not None:
+      inv_evs.append(ev)
+      inv_detnums.append(detnum)
+      inv_arids.append(detections[detnum, DET_ARID_COL])
+
+  for evnum in range(len(leb_events)):
+    leb_event = leb_events[evnum]
+    leb_detlist = leb_evlist[evnum]
+    print "%d: %.1f E %.1f N %.0f km %.0f s %.1f mb" % (
+      leb_event[EV_ORID_COL], leb_event[EV_LON_COL], leb_event[EV_LAT_COL],
+      leb_event[EV_DEPTH_COL], leb_event[EV_TIME_COL], leb_event[EV_MB_COL]),
+    
+    print "INV:",
+    for invnum, (evlon, evlat, evdepth, evtime) in enumerate(inv_evs):
+      detnum = inv_detnums[invnum]
+      if abs(leb_event[EV_TIME_COL] - evtime) < 50 \
+         and dist_deg((evlon, evlat),
+                      (leb_event[EV_LON_COL], leb_event[EV_LAT_COL])) < 5:
+        print "(%d, %s)" % (detnum,
+                            earthmodel.PhaseName(int(detections[detnum,
+                                                         DET_PHASE_COL]))),
+    print
+  
 def print_events(netmodel, earthmodel, leb_events, leb_evlist):
   print "=" * 60
   score = 0
@@ -69,9 +98,12 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
-  #print "===="
-  #print "LEB:"
-  #print "===="
+  if options.verbose:
+    print "===="
+    print "LEB:"
+    print "===="
+    analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections)
+  
   #print_events(netmodel, earthmodel, leb_events, leb_evlist)
   #netmodel.score_world(leb_events, leb_evlist, 1)
 
@@ -113,10 +145,36 @@ def main(param_dirname):
                     event[EV_MB_COL], evscore))
     
     for phaseid, detnum in detlist:
-      cursor.execute("insert into visa_assoc(runid, orid, phase, arid) "
-                     "values (%s, %s, %s, %s)",
-                     (runid, event[EV_ORID_COL], earthmodel.PhaseName(phaseid),
-                      detections[detnum, DET_ARID_COL]))
+      arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
+                                       event[EV_DEPTH_COL], event[EV_TIME_COL],
+                                       phaseid,
+                                       int(detections[detnum, DET_SITE_COL]))
+      if arrtime < 0:
+        print "Warning: visa orid %d impossible at site %d with phase %d"\
+              % (event[EV_ORID_COL], int(detections[detnum, DET_SITE_COL]),
+                 phaseid)
+        continue
+
+      timeres = detections[detnum, DET_TIME_COL] - arrtime
+      
+      seaz = earthmodel.ArrivalAzimuth(event[EV_LON_COL], event[EV_LAT_COL],
+                                       int(detections[detnum, DET_SITE_COL]))
+      azres = degdiff(seaz, detections[detnum, DET_AZI_COL])
+
+      arrslo = earthmodel.ArrivalSlowness(event[EV_LON_COL], event[EV_LAT_COL],
+                                          event[EV_DEPTH_COL], phaseid,
+                                       int(detections[detnum, DET_SITE_COL]))
+      
+      slores = detections[detnum, DET_SLO_COL] - arrslo
+      
+      cursor.execute("insert into visa_assoc(runid, orid, phase, arid, score, "
+                     "timeres, azres, slores) "
+                     "values (%s, %s, %s, %s, %s, %s, %s, %s)",
+                     (runid, event[EV_ORID_COL],
+                      earthmodel.PhaseName(phaseid),
+                      detections[detnum, DET_ARID_COL],
+                      netmodel.score_event_det(event, phaseid, detnum),
+                      timeres, azres, slores))
   
   # store the results
   f, p, r, err = f1_and_error(leb_events, events)
