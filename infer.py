@@ -184,8 +184,8 @@ def main(param_dirname):
                  "where runid=%s",
                  (f, p, r, err[0], err[1], world_score, runid))
 
-  msg = ("F1=%.2f, Prec=%.2f, Recall=%.2f, Avg Error = %.2f+-%.2f"
-         % (f, p, r, err[0], err[1]))
+  msg = ("Runid=%d F1=%.2f, Prec=%.2f, Recall=%.2f, Avg Error = %.2f+-%.2f"
+         % (runid, f, p, r, err[0], err[1]))
   
 
   if options.verbose:      
