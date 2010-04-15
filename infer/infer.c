@@ -58,6 +58,7 @@ typedef struct World_t
   */
 
   int inv_detnum;           /* detection number to be inverted next */
+  int inv_detnum_wrap;          /* wrap around inverting detections */
   int drop_evnum;                /* event number to be dropped next */
   
   double world_score;
@@ -85,6 +86,31 @@ static void free_event(Event_t * p_event)
 {
   free(p_event->p_detids);
   free(p_event);
+}
+
+void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
+                const Event_t * p_src_event)
+{
+  int * p_tgt_detids;
+  int numsites;
+  int numtimedefphases;
+  
+  numsites = EarthModel_NumSites(p_netmodel->p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
+ 
+  /* save the detids pointer */
+  p_tgt_detids = p_tgt_event->p_detids;
+  
+  /* copy the event */
+  *p_tgt_event = *p_src_event;
+
+  /* restore the detids pointer */
+  p_tgt_event->p_detids = p_tgt_detids;
+  
+  /* copy the detids */
+  memcpy(p_tgt_event->p_detids, p_src_event->p_detids,
+         numsites * numtimedefphases * sizeof(*p_src_event->p_detids));
+
 }
 
 static void insert_event(NetModel_t * p_netmodel,
@@ -211,9 +237,13 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
   /* invert a detection */
   do {
     
-    if ((p_world->inv_detnum < p_world->low_detnum)
-        || (p_world->inv_detnum >= p_world->high_detnum))
+    if (p_world->inv_detnum < p_world->low_detnum)
       p_world->inv_detnum = p_world->low_detnum;
+    else if (p_world->inv_detnum >= p_world->high_detnum)
+    {
+      p_world->inv_detnum = p_world->low_detnum;
+      p_world->inv_detnum_wrap = 1;
+    }
     
     status = invert_detection(p_netmodel->p_earth, 
                               p_netmodel->p_detections + p_world->inv_detnum,
@@ -250,7 +280,19 @@ static void change_events(NetModel_t * p_netmodel, World_t * p_world)
   for (evnum = p_world->low_evnum; evnum < p_world->high_evnum; evnum ++)
   {
     Event_t * p_event;
+    Event_t best_event;
     Event_t new_event;
+
+    int lon_step;
+    double diff_lon;
+    int lat_step;
+    double diff_lat;
+    int time_step;
+    double diff_time;
+    int depth_step;
+    double diff_depth;
+    int mag_step;
+    double diff_mag;
     
     p_event = p_world->pp_events[evnum];
     
@@ -258,61 +300,89 @@ static void change_events(NetModel_t * p_netmodel, World_t * p_world)
       continue;
     
     /* make a copy of the event */
+    best_event = *p_event;
+
+    /* try all possible events in a ball around the event */
     new_event = *p_event;
 
-    /* modify the copy */
+    diff_lon = RAND_UNIFORM(-2, 2);
+    diff_lat = RAND_UNIFORM(-2, 2);
+    diff_depth = RAND_UNIFORM(-100, 100);
+    diff_time = RAND_UNIFORM(-5, 5);
+    diff_mag = RAND_UNIFORM(-.5, .5);
 
-    /* longitude  from  -180 to 179.9999 with wrap around */
-    new_event.evlon = RAND_UNIFORM(new_event.evlon - 2, new_event.evlon + 2);
-    if (new_event.evlon < -180)
-      new_event.evlon += 360;
-    else if (new_event.evlon >= 180)
-      new_event.evlon -= 360;
+#define STEP_MIN  1
+#define STEP_MAX  2
+#define STEP_PLUS 1
 
-    /* latitude from -90 to 90 with reflection */
-    new_event.evlat = RAND_UNIFORM(new_event.evlat - 2, new_event.evlat + 2);
-    if (new_event.evlat < -90)
-      new_event.evlat = -180 - new_event.evlat;
-    else if (new_event.evlat > 90)
-      new_event.evlat = 180 - new_event.evlat;
+    for (lon_step = STEP_MIN; lon_step < STEP_MAX; lon_step += STEP_PLUS)
+    {
+      /* longitude  from  -180 to 179.9999 with wrap around */
+      new_event.evlon = p_event->evlon + diff_lon * lon_step;
+      if (new_event.evlon < -180)
+        new_event.evlon += 360;
+      else if (new_event.evlon >= 180)
+        new_event.evlon -= 360;
 
-    /* latitude from MIN_DEPTH to MAX_DEPTH with reflection */
-    new_event.evdepth = RAND_UNIFORM(new_event.evdepth - 100, 
-                                     new_event.evdepth + 100);
-    if (new_event.evdepth < MIN_DEPTH)
-      new_event.evdepth = 2 * MIN_DEPTH - new_event.evdepth;
-    else if (new_event.evdepth > MAX_DEPTH)
-      new_event.evdepth = 2 * MAX_DEPTH - new_event.evdepth;
+      for (lat_step = STEP_MIN; lat_step < STEP_MAX; lat_step += STEP_PLUS)
+      {
+        /* latitude from -90 to 90 with reflection */
+        new_event.evlat = p_event->evlat + diff_lat * lat_step;
+        if (new_event.evlat < -90)
+          new_event.evlat = -180 - new_event.evlat;
+        else if (new_event.evlat > 90)
+          new_event.evlat = 180 - new_event.evlat;
 
-    /* event time from low_evtime to high_evtime with reflection */
-    new_event.evtime = RAND_UNIFORM(new_event.evtime - 5, 
-                                    new_event.evtime + 5);
-    if (new_event.evtime < p_world->low_evtime)
-      new_event.evtime = 2 * p_world->low_evtime - new_event.evtime;
-    else if (new_event.evtime > p_world->high_evtime)
-      new_event.evtime = 2 * p_world->high_evtime - new_event.evtime;
+        for (depth_step = STEP_MIN; depth_step < STEP_MAX;
+             depth_step += STEP_PLUS)
+        {
+          /* depth from MIN_DEPTH to MAX_DEPTH with reflection */
+          new_event.evdepth = p_event->evdepth + diff_depth * depth_step;
+          if (new_event.evdepth < MIN_DEPTH)
+            new_event.evdepth = 2 * MIN_DEPTH - new_event.evdepth;
+          else if (new_event.evdepth > MAX_DEPTH)
+            new_event.evdepth = 2 * MAX_DEPTH - new_event.evdepth;
 
-    /* magnitude from MIN_MAGNITUDE to MAX_MAGNITUDE with reflection */
-    new_event.evmag = RAND_UNIFORM(new_event.evmag - .5, 
-                                   new_event.evmag + .5);
-    if (new_event.evmag < MIN_MAGNITUDE)
-      new_event.evmag = 2 * MIN_MAGNITUDE - new_event.evmag;
-    else if (new_event.evmag > MAX_MAGNITUDE)
-      new_event.evmag = 2 * MAX_MAGNITUDE - new_event.evmag;
+          for (time_step = STEP_MIN; time_step < STEP_MAX;
+               time_step += STEP_PLUS)
+          {
+            /* event time from low_evtime to high_evtime with reflection */
+            new_event.evtime = p_event->evtime + diff_time * time_step;
+            if (new_event.evtime < p_world->low_evtime)
+              new_event.evtime = 2 * p_world->low_evtime - new_event.evtime;
+            else if (new_event.evtime > p_world->high_evtime)
+              new_event.evtime = 2 * p_world->high_evtime - new_event.evtime;
 
+            for (mag_step = STEP_MIN; mag_step < STEP_MAX;
+                 mag_step += STEP_PLUS)
+            {
+              /* magnitude: MIN_MAGNITUDE - MAX_MAGNITUDE with reflection */
+              new_event.evmag = p_event->evmag + diff_mag * mag_step;
+              if (new_event.evmag < MIN_MAGNITUDE)
+                new_event.evmag = 2 * MIN_MAGNITUDE - new_event.evmag;
+              else if (new_event.evmag > MAX_MAGNITUDE)
+                new_event.evmag = 2 * MAX_MAGNITUDE - new_event.evmag;
+              
+              new_event.evscore = score_event(p_netmodel, &new_event);
 
-    new_event.evscore = score_event(p_netmodel, &new_event);
+              if (new_event.evscore > best_event.evscore)
+                best_event = new_event;
+            }
+          }
+        }
+      }
+    }
     
-    if (new_event.evscore > p_event->evscore)
+    if (best_event.evscore > p_event->evscore)
     {
       int curr_evnum;
       
       /*
       printf("change_events: orid %d score %.1f -> %.1f\n", p_event->orid,
-             p_event->evscore, new_event.evscore);
+             p_event->evscore, best_event.evscore);
       */
-      p_world->world_score += new_event.evscore - p_event->evscore;
-      *p_event = new_event;
+      p_world->world_score += best_event.evscore - p_event->evscore;
+      *p_event = best_event;
 
       /* we might need to move this event around to keep the list of
        * events sorted by time */
@@ -467,6 +537,74 @@ static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
   }
 }
 
+static Event_t ** save_world(NetModel_t * p_netmodel, const World_t * p_world,
+                             int * p_numsavedevents)
+{
+  Event_t ** pp_saved_events;
+  int numsavedevents;
+  int i;
+  
+  numsavedevents = p_world->high_evnum - p_world->low_evnum;
+  
+  assert(numsavedevents >= 0);
+  
+  if (!numsavedevents)
+  {
+    *p_numsavedevents = 0;
+    return NULL;
+  }
+  
+  pp_saved_events = (Event_t **)calloc(numsavedevents,
+                                       sizeof(*pp_saved_events));
+
+  for (i=0; i<numsavedevents; i++)
+  {
+    pp_saved_events[i] = alloc_event(p_netmodel);
+    copy_event(p_netmodel, pp_saved_events[i],
+               p_world->pp_events[p_world->low_evnum + i]);
+  }
+  
+  *p_numsavedevents = numsavedevents;
+  return pp_saved_events;
+}
+
+static void restore_world(NetModel_t * p_netmodel, 
+                          World_t * p_world, Event_t ** pp_saved_events,
+                          int numsavedevents)
+{
+  int i;
+
+  assert((numsavedevents == p_world->high_evnum - p_world->low_evnum));
+  
+  for (i=0; i<numsavedevents; i++)
+  {
+    p_world->world_score += pp_saved_events[i]->evscore 
+      - p_world->pp_events[p_world->low_evnum + i]->evscore;
+    
+    copy_event(p_netmodel, p_world->pp_events[p_world->low_evnum + i],
+               pp_saved_events[i]);
+  }
+}
+
+static void free_saved_events(NetModel_t * p_netmodel, 
+                              World_t * p_world, Event_t ** pp_saved_events,
+                              int numsavedevents)
+{
+  int i;
+
+  if (!pp_saved_events)
+  {
+    assert(!numsavedevents);
+    return;
+  }
+
+  for (i=0; i<numsavedevents; i++)
+  {
+    free_event(pp_saved_events[i]);
+  }
+
+  free(pp_saved_events);
+}
 
 PyObject * infer(NetModel_t * p_netmodel, int numsamples)
 {
@@ -538,7 +676,8 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
 
     t1 = time(NULL);
     
-    for (i=0; i<(numsamples * INFER_WINDOW_STEP); i++)
+    i = 0;
+    do
     {
       /* birth move */
       if (RAND_DOUBLE < .5)
@@ -546,6 +685,10 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
         int j;
         double old_score;
         Event_t * p_new_event;
+        Event_t ** pp_saved_events;
+        int numsavedevents;
+        
+        pp_saved_events = save_world(p_netmodel, p_world, &numsavedevents);
         
         old_score = p_world->world_score;
         
@@ -565,20 +708,34 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
         {
           delete_event(p_world, p_new_event);
           free_event(p_new_event);
+
+          restore_world(p_netmodel, p_world, pp_saved_events,
+                        numsavedevents);
+
+          assert(fabs(p_world->world_score - old_score) < 1e-6);
         }
 #ifdef DEBUG
         else
         {
-          printf("birth + %.0f: ", p_world->world_score - old_score);
+          printf("birth+%.0f->%.0f: ", p_world->world_score - old_score,
+                 p_world->world_score);
           print_event(p_new_event);
         }
 #endif /* DEBUG */
+
+        free_saved_events(p_netmodel, p_world, pp_saved_events,
+                          numsavedevents);
+
       }
       /* death move */
       else
       {
         double old_score;
         Event_t * p_old_event;
+        Event_t ** pp_saved_events;
+        int numsavedevents;
+        
+        pp_saved_events = save_world(p_netmodel, p_world, &numsavedevents);
 
         old_score = p_world->world_score;
         
@@ -600,23 +757,39 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
           if (p_world->world_score < old_score)
           {
             insert_event(p_netmodel, p_world, p_old_event);
+
+            restore_world(p_netmodel, p_world, pp_saved_events,
+                          numsavedevents);
+
+            assert(fabs(p_world->world_score - old_score) < 1e-6);
           }
           /* otherwise, get rid of the event permanently */
           else
           {
 #ifdef DEBUG
-            printf("death + %.0f: ", p_world->world_score - old_score);
+            printf("death+%.0f->%.0f: ", p_world->world_score - old_score,
+                   p_world->world_score);
             print_event(p_old_event);
 #endif /*DEBUG*/
             free_event(p_old_event);
           }
+
+          free_saved_events(p_netmodel, p_world, pp_saved_events,
+                            numsavedevents);
         }
       }
 
       change_detections(p_netmodel, p_world);
 
       change_events(p_netmodel, p_world);
-    }
+
+      if (p_world->inv_detnum_wrap)
+      {
+        p_world->inv_detnum_wrap = 0;
+        i ++;
+      }
+      
+    } while (i < numsamples);
 
     printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela=%ds score=%.1f\n",
            p_world->low_evnum, p_world->high_evnum,
