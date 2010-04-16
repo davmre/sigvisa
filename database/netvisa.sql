@@ -97,6 +97,15 @@ leb_origin leb on leb.time between run.data_start and run.data_end
 left join visa_origin vo on dist_deg(leb.lon, leb.lat, vo.lon, vo.lat)
 <= 5 and abs(vo.time-leb.time)<=50 and vo.runid=run.runid;
 
+create or replace view sel3_vs_leb as select run.runid runid, leb.orid
+leb, sel3.orid sel3, round(dist_km(leb.lon, leb.lat, sel3.lon,
+sel3.lat)) err_km, round(leb.lon) lon, round(leb.lat) lat,
+round(leb.time) time, round(leb.mb,1) mb from visa_run run join
+leb_origin leb on leb.time between run.data_start and run.data_end
+left join sel3_origin sel3 on dist_deg(leb.lon, leb.lat, sel3.lon,
+sel3.lat) <= 5 and abs(sel3.time-leb.time)<=50 and sel3.time between
+run.data_start and run.data_end;
+
 
 grant select,insert,update on visa_run to ctbt@localhost;
 grant select,insert on visa_origin to ctbt@localhost;
