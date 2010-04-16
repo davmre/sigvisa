@@ -16,8 +16,11 @@ Integrated Seismological Analysis.
 
 - To test your model run "python score.py"
 
-- Finally, to do inference and store the results into the database
+- To do inference and store the results into the database
   call "python infer.py -r 1" (to do inference on 1 hour)
+
+- To analyze the results of a run:
+  python analyze.py   (with an opitional run-identifier e.g. -i 23)
 
 Directory Layout
 ================
@@ -31,6 +34,7 @@ netvisa/
   score.py                          -- score the events and detections
   setup.py                          -- compile C files and the python wrapper
   netvisa.c                         -- python wrapper
+  analyze.py                        -- analyze the output of a run
 
   database/
     ctbt3mos.sql                    -- schema of the data

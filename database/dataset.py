@@ -56,10 +56,16 @@ def read_timerange(cursor, label, hours, skip):
 
   return stime, etime
   
-def read_events(cursor, start_time, end_time, evtype):
-  cursor.execute("select lon, lat, depth, time, mb, orid from %s_origin "
-                 "where time between %d and %d"
-                 % (evtype, start_time, end_time))
+def read_events(cursor, start_time, end_time, evtype, runid=None):
+  if runid is None:
+    cursor.execute("select lon, lat, depth, time, mb, orid from %s_origin "
+                   "where time between %d and %d"
+                   % (evtype, start_time, end_time))
+  else:
+    cursor.execute("select lon, lat, depth, time, mb, orid from %s_origin "
+                   "where runid=%s and time between %d and %d"
+                   % (evtype, runid, start_time, end_time))
+    
   events = np.array(cursor.fetchall())
 
   # change -999 mb to MIN MAG
