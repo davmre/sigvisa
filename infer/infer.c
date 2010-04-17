@@ -10,6 +10,7 @@
 #define INFER_WINDOW_STEP  300
 
 #define DEBUG
+/*#define DEBUG2*/
 
 typedef struct World_t
 {
@@ -149,7 +150,7 @@ static void insert_event(NetModel_t * p_netmodel,
 #ifdef DEBUG
 static void print_event(const Event_t * p_event)
 {
-  printf("%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.0f orid %d\n",
+  printf("%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d\n",
          p_event->evlon, p_event->evlat, p_event->evdepth,
          p_event->evtime, p_event->evmag, p_event->evscore,
          p_event->orid);
@@ -376,11 +377,12 @@ static void change_events(NetModel_t * p_netmodel, World_t * p_world)
     if (best_event.evscore > p_event->evscore)
     {
       int curr_evnum;
-      
-      /*
+
+#ifdef DEBUG2
       printf("change_events: orid %d score %.1f -> %.1f\n", p_event->orid,
              p_event->evscore, best_event.evscore);
-      */
+#endif
+      
       p_world->world_score += best_event.evscore - p_event->evscore;
       *p_event = best_event;
 
@@ -419,124 +421,161 @@ static void change_events(NetModel_t * p_netmodel, World_t * p_world)
 }
 
 /* greedily find the best event-phase for a detection */
-static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
+static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
+  int detnum)
 {
   EarthModel_t * p_earth;
-  int detnum;
   int numtimedefphases;
+  Detection_t * p_detection;
+  int evnum;
+  int best_evnum;
+  int best_phaseid;
+  double best_score;
+  double best_score_delta;
+  
+  int replaced_detnum;
+  
+  p_detection = p_netmodel->p_detections + detnum;
+    
+  /* tx phases are causing a lot of confusion */
+  if (EARTH_PHASE_tx == p_detection->phase_det)
+    return;
 
   p_earth = p_netmodel->p_earth;
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-  
-  for (detnum = p_world->low_detnum; detnum < p_world->high_detnum; detnum ++)
+    
+  best_evnum = best_phaseid = -1;
+  best_score = best_score_delta = 0;
+    
+  for (evnum = p_world->low_evnum; evnum < p_world->high_evnum; evnum++)
   {
-    Detection_t * p_detection;
-    int evnum;
-    int best_evnum;
-    int best_phaseid;
-    double best_score;
+    Event_t * p_event;
+    int phaseid;
+    double distance, pred_az;
     
-    best_evnum = best_phaseid = -1;
-    best_score = 0;
-    
-    p_detection = p_netmodel->p_detections + detnum;
+    p_event = p_world->pp_events[evnum];
 
-    /* tx phases are causing a lot of confusion */
-    if (EARTH_PHASE_tx == p_detection->phase_det)
-      continue;
-
-    for (evnum = p_world->low_evnum; evnum < p_world->high_evnum; evnum++)
+    distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
+                                p_detection->site_det);
+      
+    pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
+                                        p_event->evlat,
+                                        p_detection->site_det);
+      
+    for (phaseid=0; phaseid < numtimedefphases; phaseid ++)
     {
-      Event_t * p_event;
-      int phaseid;
-      double distance, pred_az;
-    
-      p_event = p_world->pp_events[evnum];
+      int old_detnum;
+      double score;
+      double not_det_prob;
+      double score_delta;
+      int poss;
 
-      distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
-                                  p_detection->site_det);
+      /* pP phases have too much variance, they are not helping ! */
+      if (EARTH_PHASE_pP == phaseid)
+        continue;
+
+      old_detnum = p_event->p_detids[p_detection->site_det * numtimedefphases
+                                     + phaseid];
+
+      /* change the detection of this phase and measure the score */
+      p_event->p_detids[p_detection->site_det * numtimedefphases + phaseid]
+        = detnum;
+
+      poss = score_event_site_phase(p_netmodel, p_event,
+                                    p_detection->site_det, phaseid,
+                                    distance, pred_az, &score);
+
+      /* now, compute the probability that this phase was not detected
+       * at this site */
+      p_event->p_detids[p_detection->site_det * numtimedefphases + phaseid]
+        = -1;
+
+      poss = score_event_site_phase(p_netmodel, p_event,
+                                    p_detection->site_det, phaseid,
+                                    distance, pred_az, &not_det_prob);
       
-      pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
-                                          p_event->evlat,
-                                          p_detection->site_det);
-      
-      for (phaseid=0; phaseid < numtimedefphases; phaseid ++)
+      score -= not_det_prob;
+
+      /* if we have come across the current event/phase of the detection
+       * then we need to change the event phase to noise for now */
+      if (old_detnum == detnum)
       {
-        int old_detnum;
-        double score;
+        p_event->evscore -= score;
+        p_world->world_score -= score;
+
+        score_delta = score;
+      }
+      
+      else if (old_detnum == -1)
+      {
+        score_delta = score;
+      }
+      
+      /* if this phase was already detected at the site then we will have
+       * to consider the cost of replacing it */
+      else
+      {
         double old_score;
-        int poss;
-        int replace;
-
-        /* pP phases have too much variance, they are not helping ! */
-        if (EARTH_PHASE_pP == phaseid)
-          continue;
-
-        old_detnum = p_event->p_detids[p_detection->site_det * numtimedefphases
-                                       + phaseid];
-
-        /* if this detection was already associated with an event-phase then
-         * clear it out */
-        if (old_detnum == detnum)
-        {
-          replace = 1;
-          old_detnum = -1;
-        }
-        else
-          replace = 0;
-
-        p_event->p_detids[p_detection->site_det * numtimedefphases + phaseid]
-          = detnum;
-
-        poss = score_event_site_phase(p_netmodel, p_event,
-                                      p_detection->site_det, phaseid,
-                                      distance, pred_az, &score);
-
-        /* restore old association */
+        
         p_event->p_detids[p_detection->site_det * numtimedefphases + phaseid]
           = old_detnum;
 
         poss = score_event_site_phase(p_netmodel, p_event,
                                       p_detection->site_det, phaseid,
                                       distance, pred_az, &old_score);
+        old_score -= not_det_prob;
         
-        score -= old_score;
-     
-        if (replace)
-        {
-          p_event->evscore -= score;
-          p_world->world_score -= score;
-        }
+        score_delta = score - old_score;
+      }
         
-        if (score > best_score)
-        {
-          best_evnum = evnum;
-          best_phaseid = phaseid;
-          best_score = score;
-        }
+      if ((score_delta > 0) && (score > best_score))
+      {
+        best_evnum = evnum;
+        best_phaseid = phaseid;
+        best_score = score;
+        best_score_delta = score_delta;
       }
     }
+  }
 
-    if (best_score > 0)
-    {
-      Event_t * p_event;
+  replaced_detnum = -1;
+  
+  if (best_score > 0)
+  {
+    Event_t * p_event;
       
-      p_event = p_world->pp_events[best_evnum];
+    p_event = p_world->pp_events[best_evnum];
 
-#ifdef NEVER
-      if (2 == detnum)
-      printf("change_detections: orid %d score %f -> %f\n", p_event->orid,
-             p_event->evscore, p_event->evscore + best_score);
+#ifdef DEBUG2
+    printf("change_detections %d: orid %d site %d phase %d score %f -> %f\n",
+           detnum, p_event->orid, p_detection->site_det, best_phaseid,
+           p_event->evscore, p_event->evscore + best_score_delta);
 #endif
-      
-      p_event->p_detids[p_detection->site_det * numtimedefphases 
-                        + best_phaseid] = detnum;
-      p_event->evscore += best_score;
-      p_world->world_score += best_score;
-    }
+    
+    replaced_detnum = p_event->p_detids[p_detection->site_det *numtimedefphases
+                                        + best_phaseid];
+    
+    p_event->p_detids[p_detection->site_det * numtimedefphases 
+                      + best_phaseid] = detnum;
+    p_event->evscore += best_score_delta;
+    p_world->world_score += best_score_delta;
+  }
+
+  if (replaced_detnum != -1)
+    change_one_detection(p_netmodel, p_world, replaced_detnum);
+}
+
+static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
+{
+  int detnum;
+  
+  for (detnum = p_world->low_detnum; detnum < p_world->high_detnum; detnum ++)
+  {
+    change_one_detection(p_netmodel, p_world, detnum);
   }
 }
 
+#ifdef SAVE_RESTORE
 static Event_t ** save_world(NetModel_t * p_netmodel, const World_t * p_world,
                              int * p_numsavedevents)
 {
@@ -605,6 +644,8 @@ static void free_saved_events(NetModel_t * p_netmodel,
 
   free(pp_saved_events);
 }
+
+#endif /* SAVE_RESTORE */
 
 PyObject * infer(NetModel_t * p_netmodel, int numsamples)
 {
@@ -679,109 +720,70 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
     i = 0;
     do
     {
+      int j;
+      int numdel;
+      double old_score;
+      Event_t * p_new_event;
+
+      old_score = p_world->world_score;
+      
       /* birth move */
-      if (RAND_DOUBLE < .5)
-      {
-        int j;
-        double old_score;
-        Event_t * p_new_event;
-        Event_t ** pp_saved_events;
-        int numsavedevents;
-        
-        pp_saved_events = save_world(p_netmodel, p_world, &numsavedevents);
-        
-        old_score = p_world->world_score;
-        
-        /* add an event */
-        p_new_event = add_event(p_netmodel, p_world);
-        
-        /* change the rest of the world to try and use this event */
-        for (j=0; j<2; j++)
-        {
-          change_detections(p_netmodel, p_world);
-          
-          change_events(p_netmodel, p_world);
-        }
-
-        /* if the new event didn't help then get rid of it */
-        if (p_world->world_score < old_score)
-        {
-          delete_event(p_world, p_new_event);
-          free_event(p_new_event);
-
-          restore_world(p_netmodel, p_world, pp_saved_events,
-                        numsavedevents);
-
-          assert(fabs(p_world->world_score - old_score) < 1e-6);
-        }
-#ifdef DEBUG
-        else
-        {
-          printf("birth+%.0f->%.0f: ", p_world->world_score - old_score,
-                 p_world->world_score);
-          print_event(p_new_event);
-        }
-#endif /* DEBUG */
-
-        free_saved_events(p_netmodel, p_world, pp_saved_events,
-                          numsavedevents);
-
-      }
-      /* death move */
-      else
-      {
-        double old_score;
-        Event_t * p_old_event;
-        Event_t ** pp_saved_events;
-        int numsavedevents;
-        
-        pp_saved_events = save_world(p_netmodel, p_world, &numsavedevents);
-
-        old_score = p_world->world_score;
-        
-        /* try to drop an event */
-        p_old_event = drop_event(p_netmodel, p_world);
-        
-        if (p_old_event)
-        {
-          int j;
-          /* change the rest of the world to adjust to one fewer event */
-          for (j=0; j<2; j++)
-          {
-            change_detections(p_netmodel, p_world);
-            
-            change_events(p_netmodel, p_world);
-          }
-
-          /* if dropping the event didn't help then add it back */
-          if (p_world->world_score < old_score)
-          {
-            insert_event(p_netmodel, p_world, p_old_event);
-
-            restore_world(p_netmodel, p_world, pp_saved_events,
-                          numsavedevents);
-
-            assert(fabs(p_world->world_score - old_score) < 1e-6);
-          }
-          /* otherwise, get rid of the event permanently */
-          else
-          {
-#ifdef DEBUG
-            printf("death+%.0f->%.0f: ", p_world->world_score - old_score,
-                   p_world->world_score);
-            print_event(p_old_event);
-#endif /*DEBUG*/
-            free_event(p_old_event);
-          }
-
-          free_saved_events(p_netmodel, p_world, pp_saved_events,
-                            numsavedevents);
-        }
-      }
+      p_new_event = add_event(p_netmodel, p_world);
 
       change_detections(p_netmodel, p_world);
 
+      if (p_world->world_score < old_score)
+      {
+        delete_event(p_world, p_new_event);
+        free_event(p_new_event);
+        change_detections(p_netmodel, p_world);
+      }
+      else
+      {
+        printf("birth+%.1f->%.1f: ", p_world->world_score - old_score,
+          p_world->world_score);
+        print_event(p_new_event);
+      }
+
+      if (p_world->world_score < (old_score - 1e-6))
+      {
+        printf("after birth: world score has gone down by %.3f -> %.3f\n", 
+               old_score - p_world->world_score, p_world->world_score);
+      }
+      
+      old_score = p_world->world_score;
+      
+      numdel = 0;
+      for (j=p_world->low_evnum; j<p_world->high_evnum; j++)
+      {
+        Event_t * p_old_event;
+        
+        p_old_event = p_world->pp_events[j];
+        
+        if (p_old_event->evscore < 0)
+        {
+          printf("death: ");
+          print_event(p_old_event);
+          delete_event(p_world, p_old_event);
+          free_event(p_old_event);
+          numdel ++;
+        }
+      }
+
+      if (numdel > 0)
+      {
+        change_detections(p_netmodel, p_world);
+      }
+      
+      if (p_world->world_score < (old_score - 1e-6))
+      {
+        printf("after death: world score has gone down by %.3f -> %.3f\n", 
+               old_score - p_world->world_score, p_world->world_score);
+      }
+      
       change_events(p_netmodel, p_world);
+
+      change_detections(p_netmodel, p_world);
 
       if (p_world->inv_detnum_wrap)
       {
