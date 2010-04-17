@@ -4,7 +4,7 @@ import numpy as np
 from optparse import OptionParser
 
 from database.dataset import *
-from results.compare import f1_and_error
+from results.compare import *
 from utils.geog import degdiff, dist_deg
 import database.db
 
@@ -48,11 +48,15 @@ def main():
                     type="int",
                     help = "the run-identifier to analyze (last runid)")
 
+  parser.add_option("-v", "--verbose", dest="verbose", default=False,
+                    action = "store_true",
+                    help = "verbose output (False)")
+
   (options, args) = parser.parse_args()
 
-  analyze_runid(options.runid)
+  analyze_runid(options.runid, options.verbose)
 
-def analyze_runid(runid):
+def analyze_runid(runid, verbose):
   cursor = database.db.connect().cursor()
 
   if runid is None:
@@ -96,7 +100,7 @@ def analyze_runid(runid):
   sel3_buckets = split_by_azgap(sel3_azgaps)
   visa_buckets = split_by_azgap(visa_azgaps)
 
-  print "-" * 74
+  print "=" * 74
   print "  AZIM. GAP | #ev |          SEL3             |          VISA"
   print "            |     |  F1     P     R   err  sd |   F1    P     R "\
         "  err  sd"
@@ -114,6 +118,28 @@ def analyze_runid(runid):
              sel3_err[0], sel3_err[1],
              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
     
+    if verbose:
+      unmat_idx = find_unmatched(
+        leb_events[leb_buckets[i], :], visa_events[visa_buckets[i], :])
+
+      if len(unmat_idx):
+        print "Unmatched:",
+        for idx in unmat_idx:
+          print leb_events[leb_buckets[i][idx], EV_ORID_COL],
+        print
+      
+    
+  print "-" * 74
+  sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
+  
+  visa_f, visa_p, visa_r, visa_err = f1_and_error(leb_events, visa_events)
+  
+  print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
+         "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
+         % (len(leb_events), sel3_f, sel3_p, sel3_r,
+            sel3_err[0], sel3_err[1],
+            visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
+  print "=" * 74
     
   
 if __name__ == "__main__":
