@@ -64,6 +64,7 @@ typedef struct World_t
   
   double world_score;
   int ev_orid_sequence;
+  int verbose;
 } World_t;
 
 static Event_t * alloc_event(NetModel_t * p_netmodel)
@@ -184,6 +185,7 @@ static void delete_event(World_t * p_world, Event_t * p_event)
   p_world->low_evnum = MIN(p_world->low_evnum, p_world->high_evnum);
 }
 
+#ifdef SAVE_RESTORE
 static Event_t * drop_event(NetModel_t * p_netmodel, World_t * p_world)
 {
   if (p_world->drop_evnum < p_world->low_evnum)
@@ -211,6 +213,7 @@ static Event_t * drop_event(NetModel_t * p_netmodel, World_t * p_world)
     return NULL;
   }
 }
+#endif
 
 static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
 {
@@ -273,10 +276,31 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
   return p_event;
 }
 
-/* greedily find the location for each event */
-static void change_events(NetModel_t * p_netmodel, World_t * p_world)
+/* greedily find the location for each event
+ * numchoices = 1 => pick only one new location of each event
+ *            > 1 => pick from numchoices ^ 5 locations
+ */
+static void change_events(NetModel_t * p_netmodel, World_t * p_world,
+                          int numchoices)
 {
+  int STEP_MIN, STEP_MAX, STEP_PLUS;
+  
   int evnum;
+  
+  if (1 == numchoices)
+  {
+    STEP_MIN = 1;
+    STEP_MAX = 2;
+    STEP_PLUS = 1;
+  }
+  else
+  {
+    assert(numchoices > 1);
+    
+    STEP_MIN = - (numchoices/2);
+    STEP_MAX = numchoices - (numchoices/2);
+    STEP_PLUS = 1;
+  }
   
   for (evnum = p_world->low_evnum; evnum < p_world->high_evnum; evnum ++)
   {
@@ -311,10 +335,6 @@ static void change_events(NetModel_t * p_netmodel, World_t * p_world)
     diff_depth = RAND_UNIFORM(-100, 100);
     diff_time = RAND_UNIFORM(-5, 5);
     diff_mag = RAND_UNIFORM(-.5, .5);
-
-#define STEP_MIN  1
-#define STEP_MAX  2
-#define STEP_PLUS 1
 
     for (lon_step = STEP_MIN; lon_step < STEP_MAX; lon_step += STEP_PLUS)
     {
@@ -568,11 +588,20 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
 static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
 {
   int detnum;
+  double old_score;
   
-  for (detnum = p_world->low_detnum; detnum < p_world->high_detnum; detnum ++)
+  /* keep changing the detections till something converges */
+  do 
   {
-    change_one_detection(p_netmodel, p_world, detnum);
-  }
+    old_score = p_world->world_score;
+    
+    for (detnum = p_world->low_detnum; detnum < p_world->high_detnum;
+         detnum ++)
+    {
+      change_one_detection(p_netmodel, p_world, detnum);
+    }
+
+  } while (fabs(old_score - p_world->world_score) > 1e-4);
 }
 
 #ifdef SAVE_RESTORE
@@ -647,7 +676,7 @@ static void free_saved_events(NetModel_t * p_netmodel,
 
 #endif /* SAVE_RESTORE */
 
-PyObject * infer(NetModel_t * p_netmodel, int numsamples)
+PyObject * infer(NetModel_t * p_netmodel, int numsamples, int verbose)
 {
   int i;
   World_t * p_world;
@@ -665,6 +694,7 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
   p_world->maxevents = p_netmodel->numdetections;
   p_world->pp_events = (Event_t **) calloc(p_world->maxevents,
                                            sizeof(*p_world->pp_events));
+  p_world->verbose = verbose;
   
   p_world->low_evnum = 0;
   p_world->high_evnum = 0;
@@ -738,7 +768,7 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
         free_event(p_new_event);
         change_detections(p_netmodel, p_world);
       }
-      else
+      else if (p_world->verbose)
       {
         printf("birth+%.1f->%.1f: ", p_world->world_score - old_score,
           p_world->world_score);
@@ -762,8 +792,11 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
         
         if (p_old_event->evscore < 0)
         {
-          printf("death: ");
-          print_event(p_old_event);
+          if (p_world->verbose)
+          {
+            printf("death: ");
+            print_event(p_old_event);
+          }
           delete_event(p_world, p_old_event);
           free_event(p_old_event);
           numdel ++;
@@ -781,7 +814,7 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
                old_score - p_world->world_score, p_world->world_score);
       }
       
-      change_events(p_netmodel, p_world);
+      change_events(p_netmodel, p_world, 1);
 
       change_detections(p_netmodel, p_world);
 
@@ -793,11 +826,21 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
       
     } while (i < numsamples);
 
-    printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela=%ds score=%.1f\n",
-           p_world->low_evnum, p_world->high_evnum,
-           p_world->low_evtime, p_world->high_evtime,
-           p_world->low_detnum, p_world->high_detnum, (int)(time(NULL)-t1),
-           p_world->world_score);
+/*
+    change_events(p_netmodel, p_world, 2);
+    
+    change_detections(p_netmodel, p_world);
+*/
+    t1 -= time(NULL);
+    
+    if (p_world->verbose)
+    {
+      printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela=%ds score=%.1f\n",
+             p_world->low_evnum, p_world->high_evnum,
+             p_world->low_evtime, p_world->high_evtime,
+             p_world->low_detnum, p_world->high_detnum, (int) t1,
+             p_world->world_score);
+    }
     
 
     /* move the window forward */
@@ -805,7 +848,8 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
     
   } while (p_world->high_evtime < p_netmodel->end_time);
 
-  printf("World Score %.1f\n", p_world->world_score);
+  if (p_world->verbose)
+    printf("World Score %.1f\n", p_world->world_score);
   
   /* now create an array of the events */
   dims[0] = p_world->high_evnum;
@@ -832,8 +876,11 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples)
     ARRAY2(eventsobj, i, EV_MB_COL) = p_event->evmag;
     ARRAY2(eventsobj, i, EV_ORID_COL) = (double) p_event->orid;
 
-    printf("orid %d - score %.1f computed score %.1f\n", p_event->orid, 
-           p_event->evscore, score_event(p_netmodel, p_event));
+    if (p_world->verbose)
+    {
+      printf("orid %d - score %.1f computed score %.1f\n", p_event->orid, 
+             p_event->evscore, score_event(p_netmodel, p_event));
+    }
     
     detlistobj = PyList_New(0);
     
