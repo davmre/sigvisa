@@ -14,7 +14,7 @@ def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
   inv_detnums = []
   inv_arids = []
   for detnum in range(len(detections)):
-    ev = netmodel.invert_det(detnum)
+    ev = netmodel.invert_det(detnum,0)
     if ev is not None:
       inv_evs.append(ev)
       inv_detnums.append(detnum)

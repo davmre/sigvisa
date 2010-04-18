@@ -1153,7 +1153,7 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
 /* if possible to invert, returns 0 and stores the lon, lat, depth, time
  * fields, else it returns -1 */
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
-                     Event_t * p_event)
+                     Event_t * p_event, int perturb)
 {
   double dist;
   int phaseid;
@@ -1182,6 +1182,24 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
                       p_det->azi_det,
                       &p_event->evlon, &p_event->evlat);
 
+  /* now, perturb the event location */
+  if (perturb)
+  {
+    p_event->evlon += Gaussian_sample(0, 1);
+
+    p_event->evlat += Gaussian_sample(0, 1);
+  
+    if (p_event->evlon < -180)
+      p_event->evlon += 360;
+    else if (p_event->evlon >= 180)
+      p_event->evlon -= 360;
+  
+    if (p_event->evlat < -90)
+      p_event->evlat = -180 - p_event->evlat;
+    else if (p_event->evlat > 90)
+      p_event->evlat = 180 - p_event->evlat;
+  }
+  
   arrtime = EarthModel_ArrivalTime((EarthModel_t *)p_earth, 
                                    p_event->evlon, p_event->evlat,
                                    p_event->evdepth, 0 /* evtime */,
@@ -1191,6 +1209,12 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
     return -1;
   
   p_event->evtime = p_det->time_det - arrtime;
+  
+  /* perturb the arrival time as well */
+  if (perturb)
+  {
+    p_event->evtime += Gaussian_sample(0, 5);
+  }
   
   /* low magnitude to ensure better odds of acceptance */
   p_event->evmag = MIN_MAGNITUDE;

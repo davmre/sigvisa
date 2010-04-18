@@ -48,7 +48,7 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
 
     print "%d: tres %.1f azres %.1f sres %.1f" % (detid, tres, azres, sres)
     
-    inv = netmodel.invert_det(detid)
+    inv = netmodel.invert_det(detid, 0)
     if inv is None:
       print None
     else:
@@ -56,15 +56,26 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
 
 def main(param_dirname):
   parser = OptionParser()
+  parser.add_option("-n", "--numsamples", dest="numsamples", default=1,
+                    type="int",
+                    help = "number of perturbations to inverted event (1)")
   parser.add_option("-r", "--hours", dest="hours", default=None,
                     type="float",
                     help = "inference on HOURS worth of data (all)")
   parser.add_option("-k", "--skip", dest="skip", default=0,
                     type="float",
                     help = "skip the first HOURS of data (0)")
+  parser.add_option("-s", "--seed", dest="seed", default=123456789,
+                    type="int",
+                    help = "random number generator seed (123456789)")
+  parser.add_option("-v", "--verbose", dest="verbose", default=False,
+                    action = "store_true",
+                    help = "verbose output (False)")
 
   (options, args) = parser.parse_args()
 
+  netvisa.srand(options.seed)
+  
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation", hours=options.hours, skip=options.skip)
@@ -75,7 +86,7 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
-  inv_events = [netmodel.invert_det(detnum)
+  inv_events = [netmodel.invert_det(detnum, 0)
                 for detnum in range(len(detections))]
 
   low_detnum = 0
@@ -115,49 +126,28 @@ def main(param_dirname):
 
       # compute the score
       event = leb_event.copy()
-      event[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv_ev
       event[EV_MB_COL] = MIN_MAGNITUDE
 
-      inv_lon, inv_lat, inv_dep, inv_time = inv_ev
-      
       score = 0
-      for evlon in (inv_lon, inv_lon - 3, inv_lon + 3):
-        if evlon < -180:
-          evlon += 360
-        elif evlon >= 180:
-          evlon -= 360
+      repeat = 0
+      for repeat in range(options.numsamples):
+        inv_ev = netmodel.invert_det(detnum, 1) # perturb the invert
         
-        for evlat in (inv_lat, inv_lat - 3, inv_lat + 3):
-          
-          if evlat < -90:
-            evlat = -180 - evlat
-          elif evlat > 90:
-            evlat = 180 - evlat
-          
-          arrtime = earthmodel.ArrivalTime(evlon, evlat, 0, 0, 0,
-                                        int(detections[detnum, DET_SITE_COL]))
-          
-          if arrtime < 0:
-            continue
-          
-          evtime = detections[detnum, DET_TIME_COL] - arrtime
-
-          for evtime in (evtime, evtime - 15, evtime + 15):
-            event[[EV_LON_COL, EV_LAT_COL, EV_TIME_COL]] = (evlon, evlat,
-                                                            evtime)
-          
-            score = netmodel.score_event(event, leb_detlist)
-
-            if score > 0:
-              break
-          
-          if score > 0:
-            break
+        if inv_ev is None:
+          continue
+        
+        event[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv_ev
+        
+        score = netmodel.score_event(event, leb_detlist)
+        
         if score > 0:
           break
         
       if score > 0:
         num_inv_pos += 1
+        if options.verbose:
+          print "LEB ORID %d detnum %d score %.1f  on %d th try" \
+                % (leb_event[EV_ORID_COL], detnum, score, repeat)
 
     if num_inv_mat > 0:
       err_matched_leb += (err_inv_mat / num_inv_mat)

@@ -122,5 +122,5 @@ PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth,
                                        PyObject * args);
 
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
-                     Event_t * p_event);
+                     Event_t * p_event, int perturb);
 

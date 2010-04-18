@@ -24,7 +24,7 @@ static PyMethodDef NetModel_methods[] = {
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
    "infer(samples per window, verbose) -> events, ev_detlist"},
   {"invert_det", (PyCFunction)py_invert_det, METH_VARARGS,
-   "invert_det(detnum) -> (lon, lat, depth, time) or None"},
+   "invert_det(detnum, perturb?) -> (lon, lat, depth, time) or None"},
   {NULL}  /* Sentinel */
 };
 
@@ -644,10 +644,11 @@ static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args)
 {
   int detnum;
+  int perturb;
   int status;
   Event_t event;
 
-  if (!PyArg_ParseTuple(args, "i", &detnum))
+  if (!PyArg_ParseTuple(args, "ii", &detnum, &perturb))
     return NULL;
 
   if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
@@ -657,7 +658,7 @@ static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args)
   }
 
   status = invert_detection(p_netmodel->p_earth, p_netmodel->p_detections +
-                            detnum, &event);
+                            detnum, &event, perturb);
   
   if (status == 0)
     return Py_BuildValue("dddd", event.evlon, event.evlat,

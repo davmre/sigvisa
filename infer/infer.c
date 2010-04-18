@@ -251,7 +251,7 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
     
     status = invert_detection(p_netmodel->p_earth, 
                               p_netmodel->p_detections + p_world->inv_detnum,
-                              p_event);
+                              p_event, 1);
     
     p_world->inv_detnum ++;
     
