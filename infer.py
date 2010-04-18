@@ -126,7 +126,7 @@ def main(param_dirname):
   print "===="
   print "NET runid %d" % runid
   print "===="  
-  events, ev_detlist = netmodel.infer(options.numsamples)
+  events, ev_detlist = netmodel.infer(options.numsamples, options.verbose)
   #print_events(netmodel, earthmodel, events, ev_detlist)
 
   # store the events and associations
