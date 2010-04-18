@@ -7,7 +7,7 @@
 #include "../netvisa.h"
 
 #define INFER_WINDOW_SIZE 1800
-#define INFER_WINDOW_STEP  300
+#define INFER_WINDOW_STEP  1800
 
 #define DEBUG
 /*#define DEBUG2*/
