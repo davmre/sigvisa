@@ -8,7 +8,8 @@ import netvisa, learn
 from results.compare import *
 from utils.geog import dist_km, degdiff
 
-def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections):
+def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
+                sel3_events, sel3_evlist):
   inv_evs = []
   inv_detnums = []
   inv_arids = []
@@ -19,12 +20,13 @@ def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections):
       inv_detnums.append(detnum)
       inv_arids.append(detections[detnum, DET_ARID_COL])
 
+  leb_to_sel3 = dict(find_matching(leb_events, sel3_events))
+  
   for evnum in range(len(leb_events)):
     leb_event = leb_events[evnum]
     leb_detlist = leb_evlist[evnum]
-    print "%d: %.1f E %.1f N %.0f km %.0f s %.1f mb" % (
-      leb_event[EV_ORID_COL], leb_event[EV_LON_COL], leb_event[EV_LAT_COL],
-      leb_event[EV_DEPTH_COL], leb_event[EV_TIME_COL], leb_event[EV_MB_COL]),
+    
+    print_event(netmodel, earthmodel, leb_event, leb_detlist, "LEB")
     
     print "INV:",
     for invnum, (evlon, evlat, evdepth, evtime) in enumerate(inv_evs):
@@ -32,24 +34,42 @@ def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections):
       if abs(leb_event[EV_TIME_COL] - evtime) < 50 \
          and dist_deg((evlon, evlat),
                       (leb_event[EV_LON_COL], leb_event[EV_LAT_COL])) < 5:
-        print "(%d, %s)" % (detnum,
+        print "(%d, %s," % (detnum,
                             earthmodel.PhaseName(int(detections[detnum,
                                                          DET_PHASE_COL]))),
+        # compute the score of the inverted event
+        event = leb_event.copy()
+        event[EV_LON_COL] = evlon
+        event[EV_LAT_COL] = evlat
+        event[EV_DEPTH_COL] = evdepth
+        event[EV_TIME_COL] = evtime
+        event[EV_MB_COL] = MIN_MAGNITUDE
+        print "%.1f)" % netmodel.score_event(event, leb_detlist),
+        #print_event(netmodel, earthmodel, event, leb_detlist, "INV")
+        #netmodel.score_world(np.array([event]), [leb_detlist], 1)
+        #netmodel.score_world(np.array([event]), [[(0,detnum)]], 1)
+        
+    print
+    
+    if evnum in leb_to_sel3:
+      sel3_evnum = leb_to_sel3[evnum]
+      print_event(netmodel, earthmodel, sel3_events[sel3_evnum],
+                  sel3_evlist[sel3_evnum], "SEL3")
     print
   
-def print_events(netmodel, earthmodel, leb_events, leb_evlist):
+def print_events(netmodel, earthmodel, leb_events, leb_evlist, label):
   print "=" * 60
   score = 0
   for evnum in range(len(leb_events)):
     score += print_event(netmodel, earthmodel, leb_events[evnum],
-                         leb_evlist[evnum])
+                         leb_evlist[evnum], label)
     print "-" * 60
   print "Total: %.1f" % score
   print "=" * 60
   
-def print_event(netmodel, earthmodel, event, event_detlist):
-  print ("Event: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f orid %d"
-         % (event[ EV_LON_COL], event[ EV_LAT_COL],
+def print_event(netmodel, earthmodel, event, event_detlist, label):
+  print ("%s: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f orid %d"
+         % (label, event[ EV_LON_COL], event[ EV_LAT_COL],
             event[ EV_DEPTH_COL], event[ EV_MB_COL],
             event[ EV_TIME_COL], event[ EV_ORID_COL]))
   print "Detections:",
@@ -102,15 +122,16 @@ def main(param_dirname):
     print "===="
     print "LEB:"
     print "===="
-    analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections)
+    analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
+                sel3_events, sel3_evlist)
   
-  #print_events(netmodel, earthmodel, leb_events, leb_evlist)
+  #print_events(netmodel, earthmodel, leb_events, leb_evlist, "LEB")
   #netmodel.score_world(leb_events, leb_evlist, 1)
 
   #print "===="
   #print "SEL3:"
   #print "===="
-  #print_events(netmodel, earthmodel, sel3_events, sel3_evlist)
+  #print_events(netmodel, earthmodel, sel3_events, sel3_evlist, "SEL3")
   #netmodel.score_world(sel3_events, sel3_evlist, 1)
 
   # create a runid
@@ -127,7 +148,7 @@ def main(param_dirname):
   print "NET runid %d" % runid
   print "===="  
   events, ev_detlist = netmodel.infer(options.numsamples, options.verbose)
-  #print_events(netmodel, earthmodel, events, ev_detlist)
+  #print_events(netmodel, earthmodel, events, ev_detlist, "VISA")
 
   # store the events and associations
   cursor = database.db.connect().cursor()
@@ -198,11 +219,12 @@ def main(param_dirname):
     for lebevnum, evnum in mat_idx:
       print "/--"
       print_event(netmodel, earthmodel, leb_events[lebevnum],
-                  leb_evlist[lebevnum])
+                  leb_evlist[lebevnum], "LEB")
       print "~~ %.1f km ~~>" % dist_km(leb_events[lebevnum,
                                                   [EV_LON_COL, EV_LAT_COL]],
                                        events[evnum, [EV_LON_COL, EV_LAT_COL]])
-      print_event(netmodel, earthmodel, events[evnum], ev_detlist[evnum])
+      print_event(netmodel, earthmodel, events[evnum], ev_detlist[evnum],
+                  "VISA")
       print "\--"
       unmat_idx.remove(lebevnum)
     if len(unmat_idx):
@@ -210,13 +232,14 @@ def main(param_dirname):
     for lebevnum in unmat_idx:
       print "--"
       print_event(netmodel, earthmodel, leb_events[lebevnum],
-                  leb_evlist[lebevnum])
+                  leb_evlist[lebevnum], "LEB")
       print "--"
     if len(false_idx):
       print "Spurious:"
     for evnum in false_idx:
       print "~~"
-      print_event(netmodel, earthmodel, events[evnum], ev_detlist[evnum])
+      print_event(netmodel, earthmodel, events[evnum], ev_detlist[evnum],
+                  "VISA")
       print "~~"
       
   print(msg)

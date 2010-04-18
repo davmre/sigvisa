@@ -475,6 +475,11 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
     
     p_event = p_world->pp_events[evnum];
 
+    /* if the event couldn't possibly have caused the detection then
+     * don't bother with it */
+    if (fabs(p_event->evtime - p_detection->time_det) > MAX_TRAVEL_TIME)
+      continue;
+    
     distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
                                 p_detection->site_det);
       
