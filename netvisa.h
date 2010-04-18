@@ -59,6 +59,7 @@ typedef struct Detection_t
 #include "priors/EarthModel.h"
 #include "priors/Laplace.h"
 #include "priors/Poisson.h"
+#include "priors/Gaussian.h"
 
 typedef struct NetModel_t
 {
