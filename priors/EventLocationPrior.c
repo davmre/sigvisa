@@ -110,7 +110,8 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
   if ((lon < -180) || (lon > 180) || (lat < -90) || (lat > 90) 
       || (depth < MIN_DEPTH) || (depth > MAX_DEPTH))
   {
-    printf("lon %lf lat %lf depth %lf\n", lon, lat, depth);
+    printf("Error: invalid location -- lon %lf lat %lf depth %lf\n",
+           lon, lat, depth);
     exit(1);
     
     return -HUGE_VAL;
