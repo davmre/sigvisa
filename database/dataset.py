@@ -27,6 +27,8 @@ MIN_MAGNITUDE = 2.0
 
 UPTIME_QUANT = 3600                     # 1 hour
 
+MAX_TRAVEL_TIME = 2000.0
+
 def read_timerange(cursor, label, hours, skip):
   # determine the start and end time for the specified label
   cursor.execute("select start_time, end_time from dataset where label=%s",
@@ -59,11 +61,11 @@ def read_timerange(cursor, label, hours, skip):
 def read_events(cursor, start_time, end_time, evtype, runid=None):
   if runid is None:
     cursor.execute("select lon, lat, depth, time, mb, orid from %s_origin "
-                   "where time between %d and %d"
+                   "where time between %d and %d order by time"
                    % (evtype, start_time, end_time))
   else:
     cursor.execute("select lon, lat, depth, time, mb, orid from %s_origin "
-                   "where runid=%s and time between %d and %d"
+                   "where runid=%s and time between %d and %d order by time"
                    % (evtype, runid, start_time, end_time))
     
   events = np.array(cursor.fetchall())

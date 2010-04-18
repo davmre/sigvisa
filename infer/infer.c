@@ -831,7 +831,7 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples, int verbose)
     
     change_detections(p_netmodel, p_world);
 */
-    t1 -= time(NULL);
+    t1 = time(NULL) - t1;
     
     if (p_world->verbose)
     {
