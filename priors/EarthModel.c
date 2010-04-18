@@ -1192,7 +1192,8 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
   
   p_event->evtime = p_det->time_det - arrtime;
   
-  p_event->evmag = RAND_UNIFORM(MIN_MAGNITUDE, MAX_MAGNITUDE);
+  /* low magnitude to ensure better odds of acceptance */
+  p_event->evmag = MIN_MAGNITUDE;
   
   return 0;
 }
