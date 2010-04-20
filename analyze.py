@@ -9,7 +9,63 @@ from utils.geog import degdiff, dist_deg
 import database.db
 
 AZGAP_RANGES = [(0, 90), (90, 180), (180, 270), (270, 360)]
+DETCNT_RANGES = [(-1, 0), (0, 1), (1,2), (2, 3), (3,4), (4, 100)]
+MAG_RANGES = [(0,2), (2,3), (3,4), (4,9)]
 
+def split_by_attr(attr_ranges, attr_vals):
+  ev_buckets = [[] for _ in attr_ranges]
+  for evnum, val in enumerate(attr_vals):
+    for bucnum, (vallo, valhi) in enumerate(attr_ranges):
+      if val > vallo and val <= valhi:
+        ev_buckets[bucnum].append(evnum)
+  return ev_buckets
+
+def analyze_by_attr(attr_name, attr_ranges, leb_attrvals, leb_events,
+                    sel3_events, visa_events, verbose):
+  # for each SEL3 and VISA event find the attribute of the corresponding
+  # LEB event
+  sel3_attrvals = [leb_attrvals[x] for x in find_nearest(leb_events,
+                                                         sel3_events)]
+  visa_attrvals = [leb_attrvals[x] for x in find_nearest(leb_events,
+                                                         visa_events)]
+
+  # put the LEB, SEL3, and VISA events into buckets based on the LEB attribute
+  leb_buckets = split_by_attr(attr_ranges, leb_attrvals)
+  sel3_buckets = split_by_attr(attr_ranges, sel3_attrvals)
+  visa_buckets = split_by_attr(attr_ranges, visa_attrvals)
+
+
+  print "-" * 74
+  print " %10s | #ev |          SEL3             |          VISA"\
+        % attr_name
+  print "    < _ <=  |     |  F1     P     R   err  sd |   F1    P     R "\
+        "  err  sd"
+  print "-" * 74
+  
+  for i, (vallo, valhi) in enumerate(attr_ranges):
+    sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(
+      leb_events[leb_buckets[i],:], sel3_events[sel3_buckets[i], :])
+
+    visa_f, visa_p, visa_r, visa_err = f1_and_error(
+      leb_events[leb_buckets[i],:], visa_events[visa_buckets[i], :])
+    
+    print (" %3d -- %3d | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
+          "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
+          % (vallo, valhi, len(leb_buckets[i]), sel3_f, sel3_p, sel3_r,
+             sel3_err[0], sel3_err[1],
+             visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
+    
+    if verbose:
+      unmat_idx = find_unmatched(
+        leb_events[leb_buckets[i], :], visa_events[visa_buckets[i], :])
+
+      if len(unmat_idx):
+        print "Unmatched:",
+        for idx in unmat_idx:
+          print int(leb_events[leb_buckets[i][idx], EV_ORID_COL]),
+        print
+      
+    
 def azimuth_gap(esazlist):
   if len(esazlist) < 2:
     return 360.
@@ -34,14 +90,6 @@ def find_nearest(leb_events, events):
     nearest.append(minevnum)
   return nearest
 
-def split_by_azgap(azgaps):
-  ev_buckets = [[] for _ in AZGAP_RANGES]
-  for evnum, azgap in enumerate(azgaps):
-    for bucnum, (azlo, azhi) in enumerate(AZGAP_RANGES):
-      if azgap > azlo and azgap <= azhi:
-        ev_buckets[bucnum].append(evnum)
-  return ev_buckets
-                                                   
 def main():
   parser = OptionParser()
   parser.add_option("-i", "--runid", dest="runid", default=None,
@@ -52,25 +100,31 @@ def main():
                     action = "store_true",
                     help = "verbose output (False)")
 
+  parser.add_option("-d", "--detcnt", dest="detcnt", default=False,
+                    action = "store_true",
+                    help = "analyze by number of detections (False)")
+  
+  parser.add_option("-a", "--az", dest="azgap", default=False,
+                    action = "store_true",
+                    help = "analyze by azimuth gap (False)")
+
   (options, args) = parser.parse_args()
 
-  analyze_runid(options.runid, options.verbose)
-
-def analyze_runid(runid, verbose):
   cursor = database.db.connect().cursor()
 
-  if runid is None:
+  if options.runid is None:
     cursor.execute("select max(runid) from visa_run")
     runid, = cursor.fetchone()
   
-  print "Analyzing RUNID %d:" % runid,
+  print "RUNID %d:" % options.runid,
 
-  cursor.execute("select data_start, data_end from visa_run where runid=%s",
-                 runid)
-  data_start, data_end = cursor.fetchone()
+  cursor.execute("select run_start, run_end, data_start, data_end "
+                 "from visa_run where runid=%s", options.runid)
+  run_start, run_end, data_start, data_end = cursor.fetchone()
 
-  print "%.1f -- %.1f  (%.1f hrs)," % (data_start, data_end,
-                                        (data_end-data_start) / 3600.),
+  print "%.1f - %.1f (%.1f hrs), runtime %s" \
+        % (data_start, data_end, (data_end-data_start) / 3600.,
+           str(run_end - run_start))
 
   leb_events, leb_orid2num = read_events(cursor, data_start, data_end, "leb")
 
@@ -78,62 +132,39 @@ def analyze_runid(runid, verbose):
                                            "sel3")
   
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,
-                                           "visa", runid)
+                                           "visa", options.runid)
 
-  print "%d leb events" % len(leb_events)
+  analyze_by_attr("mb", MAG_RANGES, leb_events[:, EV_MB_COL],
+                  leb_events, sel3_events, visa_events, options.verbose)
 
-  # compute the azimuth gaps for each leb event
-  leb_azgaps = [None for _ in leb_events]
-  for (leb_orid, leb_evnum) in leb_orid2num.iteritems():
-    cursor.execute("select esaz from leb_assoc join leb_arrival "
-                   "using(arid,sta) where orid=%s and "
-                   "timedef='d' and time between %s and %s",
-                   (leb_orid, data_start, data_end))
-    esazlist = [x for (x,) in cursor.fetchall()]
-    leb_azgaps[leb_evnum] = azimuth_gap(esazlist)
-  
-  sel3_azgaps = [leb_azgaps[x] for x in find_nearest(leb_events, sel3_events)]
-  visa_azgaps = [leb_azgaps[x] for x in find_nearest(leb_events, visa_events)]
+  if options.detcnt:
+    detections, arid2num = read_detections(cursor, data_start, data_end)
+    leb_evlist = read_assoc(cursor, data_start, data_end, leb_orid2num,
+                            arid2num, "leb")
+    analyze_by_attr("# Det", DETCNT_RANGES,
+                    [len(leb_evlist[i]) for i in range(len(leb_events))],
+                    leb_events, sel3_events, visa_events, options.verbose)
 
-  # divide the events by azimuth gap
-  leb_buckets = split_by_azgap(leb_azgaps)
-  sel3_buckets = split_by_azgap(sel3_azgaps)
-  visa_buckets = split_by_azgap(visa_azgaps)
+  if options.azgap:
+    # compute the azimuth gaps for each leb event
+    leb_azgaps = [None for _ in leb_events]
+    for (leb_orid, leb_evnum) in leb_orid2num.iteritems():
+      cursor.execute("select esaz from leb_assoc join leb_arrival "
+                     "using(arid,sta) where orid=%s and "
+                     "timedef='d' and time between %s and %s",
+                     (leb_orid, data_start, data_end))
+      esazlist = [x for (x,) in cursor.fetchall()]
+      leb_azgaps[leb_evnum] = azimuth_gap(esazlist)
 
-  print "=" * 74
-  print "  AZIM. GAP | #ev |          SEL3             |          VISA"
-  print "            |     |  F1     P     R   err  sd |   F1    P     R "\
-        "  err  sd"
-  print "-" * 74
-  for i, (azlo, azhi) in enumerate(AZGAP_RANGES):
-    sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(
-      leb_events[leb_buckets[i],:], sel3_events[sel3_buckets[i], :])
+    analyze_by_attr("AZIM. GAP", AZGAP_RANGES, leb_azgaps,
+                    leb_events, sel3_events, visa_events, options.verbose)
 
-    visa_f, visa_p, visa_r, visa_err = f1_and_error(
-      leb_events[leb_buckets[i],:], visa_events[visa_buckets[i], :])
-    
-    print (" %3d -- %3d | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
-          "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
-          % (azlo, azhi, len(leb_buckets[i]), sel3_f, sel3_p, sel3_r,
-             sel3_err[0], sel3_err[1],
-             visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
-    
-    if verbose:
-      unmat_idx = find_unmatched(
-        leb_events[leb_buckets[i], :], visa_events[visa_buckets[i], :])
-
-      if len(unmat_idx):
-        print "Unmatched:",
-        for idx in unmat_idx:
-          print leb_events[leb_buckets[i][idx], EV_ORID_COL],
-        print
-      
-    
-  print "-" * 74
+  # finally, compute the overall scores
   sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
   
   visa_f, visa_p, visa_r, visa_err = f1_and_error(leb_events, visa_events)
   
+  print "=" * 74
   print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
          "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
          % (len(leb_events), sel3_f, sel3_p, sel3_r,

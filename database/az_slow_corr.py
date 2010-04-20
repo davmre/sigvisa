@@ -1,7 +1,7 @@
 import os
 from math import sin, cos, asin, atan2, degrees, radians, hypot, sqrt
 
-SASC_WARNINGS = 0
+SASC_WARNINGS = 1
 
 class AzSlowCorr:
   def __init__(self, filename):
