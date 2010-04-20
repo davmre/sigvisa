@@ -94,7 +94,7 @@ def read_detections(cursor, start_time, end_time):
   cursor.execute("select sta from static_siteid site order by id")
   sitenames = np.array(cursor.fetchall())[:,0]
   corr_dict = load_az_slow_corr(os.path.join('parameters', 'sasc'))
-  print len(corr_dict), "SASC corrections loaded"
+  #print len(corr_dict), "SASC corrections loaded"
   
   arid2num = {}
   

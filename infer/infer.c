@@ -7,7 +7,7 @@
 #include "../netvisa.h"
 
 #define INFER_WINDOW_SIZE 1800
-#define INFER_WINDOW_STEP  1800
+#define INFER_WINDOW_STEP  900
 
 #define DEBUG
 /*#define DEBUG2*/
@@ -230,33 +230,38 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
   */
 
   /* sample the event from the prior */
-  /*
-  EventLocationPrior_Sample(&p_netmodel->event_location_prior, &p_event->evlon,
-                            &p_event->evlat, &p_event->evdepth);
+  if (RAND_DOUBLE < .5)
+  {
+    EventLocationPrior_Sample(&p_netmodel->event_location_prior, 
+                              &p_event->evlon,
+                              &p_event->evlat, &p_event->evdepth);
   
-  p_event->evtime = RAND_UNIFORM(p_world->low_evtime, p_world->high_evtime);
-  p_event->evmag = RAND_UNIFORM(MIN_MAGNITUDE, MAX_MAGNITUDE);
-  */
-
-  /* invert a detection */
-  do {
+    p_event->evtime = RAND_UNIFORM(p_world->low_evtime, p_world->high_evtime);
+    p_event->evmag = MIN_MAGNITUDE;
+  }
+  else 
+  {
+    /* invert a detection */
+    do {
     
-    if (p_world->inv_detnum < p_world->low_detnum)
-      p_world->inv_detnum = p_world->low_detnum;
-    else if (p_world->inv_detnum >= p_world->high_detnum)
-    {
-      p_world->inv_detnum = p_world->low_detnum;
-      p_world->inv_detnum_wrap = 1;
-    }
+      if (p_world->inv_detnum < p_world->low_detnum)
+        p_world->inv_detnum = p_world->low_detnum;
+      
+      else if (p_world->inv_detnum >= p_world->high_detnum)
+      {
+        p_world->inv_detnum = p_world->low_detnum;
+        p_world->inv_detnum_wrap = 1;
+      }
     
-    status = invert_detection(p_netmodel->p_earth, 
-                              p_netmodel->p_detections + p_world->inv_detnum,
-                              p_event, 1);
+      status = invert_detection(p_netmodel->p_earth, 
+                                p_netmodel->p_detections + p_world->inv_detnum,
+                                p_event, 1);
     
-    p_world->inv_detnum ++;
-    
-  } while ((status != 0) || (p_event->evtime < p_world->low_evtime)
-           || (p_event->evtime > p_world->high_evtime));
+      p_world->inv_detnum ++;
+      
+    } while ((status != 0) || (p_event->evtime < p_world->low_evtime)
+             || (p_event->evtime > p_world->high_evtime));
+  }
   
   p_event->orid = p_world->ev_orid_sequence ++;
  
