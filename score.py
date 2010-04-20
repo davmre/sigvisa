@@ -11,6 +11,9 @@ def main(param_dirname):
   parser.add_option("-x", "--text", dest="gui", default=True,
                     action = "store_false",
                     help = "text only output (False)")
+  parser.add_option("-w", "--writefile", dest="writefile", default=None,
+                    type="str",
+                    help = "file to write the sel3 scores output to")
   (options, args) = parser.parse_args()
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
@@ -51,6 +54,17 @@ def main(param_dirname):
   netmodel.score_world(sel3_events[false_sel3_idx,:],
                        [sel3_evlist[i] for i in false_sel3_idx], 1)
 
+  if options.writefile is not None:
+    fp = open(options.writefile, "w")
+    for evnum, event in enumerate(sel3_events):
+      print >>fp, int(event[EV_ORID_COL]),
+      if evnum in true_sel3_idx:
+        print >>fp, 1,
+      else:
+        print >>fp, 0,
+      print >>fp, netmodel.score_event(event, sel3_evlist[evnum])
+    fp.close()
+    
   if options.gui:
     leb_scores = [netmodel.score_event(leb_events[i], leb_evlist[i])
                   for i in range(len(leb_events))]
