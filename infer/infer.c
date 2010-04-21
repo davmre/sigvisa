@@ -61,10 +61,15 @@ typedef struct World_t
   int inv_detnum;           /* detection number to be inverted next */
   int inv_detnum_wrap;          /* wrap around inverting detections */
   int drop_evnum;                /* event number to be dropped next */
+  int write_evnum;               /* event number to be written next */
   
   double world_score;
   int ev_orid_sequence;
+
+  /* static entries */
+  int runid;
   int verbose;
+  PyObject * write_events_cb;
 } World_t;
 
 static Event_t * alloc_event(NetModel_t * p_netmodel)
@@ -686,7 +691,109 @@ static void free_saved_events(NetModel_t * p_netmodel,
 
 #endif /* SAVE_RESTORE */
 
-PyObject * infer(NetModel_t * p_netmodel, int numsamples, int verbose)
+static void write_events(NetModel_t * p_netmodel, World_t * p_world)
+{
+  PyObject * retval;
+  double maxtime;
+  PyObject * eventsobj;
+  npy_intp dims[2];
+  PyObject * evdetlistobj;
+  int i;
+  
+  if (p_world->high_evtime < p_netmodel->end_time)
+    maxtime = MAX(p_world->low_evtime - MAX_TRAVEL_TIME,
+                  p_netmodel->start_time);
+  else
+    maxtime = p_world->high_evtime;
+  
+  /* count the number of events */
+  dims[0] = 0;
+  for (i=p_world->write_evnum;
+       (i<p_world->high_evnum) && p_world->pp_events[i]->evtime < maxtime;
+       i++)
+    dims[0] ++;
+
+  /* now create an array of the events */
+  dims[1] = EV_NUM_COLS;
+  eventsobj = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+  
+  /* and a list of event detections */
+  evdetlistobj = PyList_New(0);
+  
+  for (i=0; i<dims[0]; i++)
+  {
+    PyObject * detlistobj;
+    Event_t * p_event;
+    int numsites;
+    int numtimedefphases;
+    int siteid;
+    int phaseid;
+
+    p_event = p_world->pp_events[p_world->write_evnum + i];
+
+    if (p_world->verbose)
+    {
+      printf("Write: ");
+      print_event(p_event);
+    }
+    
+    ARRAY2(eventsobj, i, EV_LON_COL) = p_event->evlon;
+    ARRAY2(eventsobj, i, EV_LAT_COL) = p_event->evlat;
+    ARRAY2(eventsobj, i, EV_DEPTH_COL) = p_event->evdepth;
+    ARRAY2(eventsobj, i, EV_TIME_COL) = p_event->evtime;
+    ARRAY2(eventsobj, i, EV_MB_COL) = p_event->evmag;
+    ARRAY2(eventsobj, i, EV_ORID_COL) = (double) p_event->orid;
+
+    detlistobj = PyList_New(0);
+    
+    /* copy over the (phaseid, detnum) of the event */
+    numsites = EarthModel_NumSites(p_netmodel->p_earth);
+    numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
+    for (siteid = 0; siteid < numsites; siteid ++)
+    {
+      for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
+      {
+        int detnum;
+        
+        detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
+
+        if (detnum != -1)
+        {
+          PyObject * phase_det_obj;
+          
+          phase_det_obj = Py_BuildValue("(ii)", phaseid, detnum);
+          
+          PyList_Append(detlistobj, phase_det_obj);
+          /* List Append increments the refcount so we need to
+           * decrement our ref */
+          Py_DECREF(phase_det_obj);
+        }
+      }
+    }
+
+    PyList_Append(evdetlistobj, detlistobj);
+    /* List Append increments the refcount so we need to decrement our ref */
+    Py_DECREF(detlistobj);
+  }
+  
+  retval = PyObject_CallFunction(p_world->write_events_cb, "OOOOid", 
+                                 p_netmodel, p_netmodel->p_earth, 
+                                 eventsobj, evdetlistobj,
+                                 p_world->runid, maxtime);
+
+  p_world->write_evnum += dims[0];
+  
+  Py_DECREF(eventsobj);
+  Py_DECREF(evdetlistobj);
+  
+  if (!retval)
+    printf("Warning: can't write objects\n");
+  else
+    Py_DECREF(retval);
+}
+
+PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
+                 int verbose, PyObject * write_events_cb)
 {
   int i;
   World_t * p_world;
@@ -704,7 +811,9 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples, int verbose)
   p_world->maxevents = p_netmodel->numdetections;
   p_world->pp_events = (Event_t **) calloc(p_world->maxevents,
                                            sizeof(*p_world->pp_events));
+  p_world->runid = runid;
   p_world->verbose = verbose;
+  p_world->write_events_cb = write_events_cb;
   
   p_world->low_evnum = 0;
   p_world->high_evnum = 0;
@@ -754,11 +863,9 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples, int verbose)
         break;
     }
 
-
     t1 = time(NULL);
     
-    i = 0;
-    do
+    for (i=0; i<numsamples; i++)
     {
       int j;
       int numdel;
@@ -827,14 +934,7 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples, int verbose)
       change_events(p_netmodel, p_world, 1);
 
       change_detections(p_netmodel, p_world);
-
-      if (p_world->inv_detnum_wrap)
-      {
-        p_world->inv_detnum_wrap = 0;
-        i ++;
-      }
-      
-    } while (i < numsamples);
+    };
 
 /*
     change_events(p_netmodel, p_world, 2);
@@ -855,8 +955,12 @@ PyObject * infer(NetModel_t * p_netmodel, int numsamples, int verbose)
 
     /* move the window forward */
     p_world->low_evtime += INFER_WINDOW_STEP;
+
+    /* write out any inferred events */
+    write_events(p_netmodel, p_world);
     
   } while (p_world->high_evtime < p_netmodel->end_time);
+
 
   if (p_world->verbose)
     printf("World Score %.1f\n", p_world->world_score);
