@@ -24,7 +24,7 @@ static PyMethodDef NetModel_methods[] = {
   {"score_event_det", (PyCFunction)py_score_event_det, METH_VARARGS,
    "score_event_det(event, phaseid, detnum) -> log probability ratio\n"},
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
-   "infer(samples per window, verbose) -> events, ev_detlist"},
+   "infer(runid, numsamples, verbose, write_cb) -> events, ev_detlist"},
   {"invert_det", (PyCFunction)py_invert_det, METH_VARARGS,
    "invert_det(detnum, perturb?) -> (lon, lat, depth, time) or None"},
   {"location_logprob", (PyCFunction)py_location_logprob, METH_VARARGS,
@@ -638,13 +638,16 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
 
 static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
 {
+  int runid;
   int numsamples;
   int verbose;
+  PyObject * write_cb;
   
-  if (!PyArg_ParseTuple(args, "ii", &numsamples, &verbose))
+  if (!PyArg_ParseTuple(args, "iiiO", &runid, &numsamples, &verbose,
+                        &write_cb))
     return NULL;
 
-  return infer(p_netmodel, numsamples, verbose);
+  return infer(p_netmodel, runid, numsamples, verbose, write_cb);
 }
 
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args)

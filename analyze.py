@@ -9,7 +9,8 @@ from utils.geog import degdiff, dist_deg
 import database.db
 
 AZGAP_RANGES = [(0, 90), (90, 180), (180, 270), (270, 360)]
-DETCNT_RANGES = [(-1, 0), (0, 1), (1,2), (2, 3), (3,4), (4, 100)]
+DETCNT_RANGES = [(2, 3), (3,4), (4,5), (5,6), (6, 100)]
+TPHASE_RANGES = [(-1, 0), (0, 100)]
 MAG_RANGES = [(0,2), (2,3), (3,4), (4,9)]
 
 def split_by_attr(attr_ranges, attr_vals):
@@ -102,7 +103,11 @@ def main():
 
   parser.add_option("-d", "--detcnt", dest="detcnt", default=False,
                     action = "store_true",
-                    help = "analyze by number of detections (False)")
+                    help = "analyze by number of timedef detections (False)")
+  
+  parser.add_option("-t", "--tphase", dest="tphase", default=False,
+                    action = "store_true",
+                    help = "analyze by number of T phases (False)")
   
   parser.add_option("-a", "--az", dest="azgap", default=False,
                     action = "store_true",
@@ -122,6 +127,10 @@ def main():
                  "from visa_run where runid=%s", options.runid)
   run_start, run_end, data_start, data_end = cursor.fetchone()
 
+  if data_end is None:
+    print "NO RESULTS"
+    return
+  
   print "%.1f - %.1f (%.1f hrs), runtime %s" \
         % (data_start, data_end, (data_end-data_start) / 3600.,
            str(run_end - run_start))
@@ -134,15 +143,29 @@ def main():
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,
                                            "visa", options.runid)
 
-  analyze_by_attr("mb", MAG_RANGES, leb_events[:, EV_MB_COL],
+  analyze_by_attr("mb", MAG_RANGES, [ev[EV_MB_COL] for ev in leb_events],
                   leb_events, sel3_events, visa_events, options.verbose)
 
   if options.detcnt:
-    detections, arid2num = read_detections(cursor, data_start, data_end)
-    leb_evlist = read_assoc(cursor, data_start, data_end, leb_orid2num,
-                            arid2num, "leb")
-    analyze_by_attr("# Det", DETCNT_RANGES,
-                    [len(leb_evlist[i]) for i in range(len(leb_events))],
+    detcnts = []
+    for leb_event in leb_events:
+      cursor.execute("select count(*) from leb_assoc "
+                     "where orid=%s and timedef='d'",
+                     (int(leb_event[EV_ORID_COL]),))
+      detcnts.append(cursor.fetchone()[0])
+      
+    analyze_by_attr("# Det", DETCNT_RANGES, detcnts,
+                    leb_events, sel3_events, visa_events, options.verbose)
+
+  if options.tphase:
+    tcnts = []
+    for leb_event in leb_events:
+      cursor.execute("select count(*) from leb_assoc "
+                     "where orid=%s and phase='T'",
+                     (int(leb_event[EV_ORID_COL]),))
+      tcnts.append(cursor.fetchone()[0])
+    
+    analyze_by_attr("T Phases", TPHASE_RANGES, tcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
   if options.azgap:

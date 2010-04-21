@@ -29,6 +29,8 @@ UPTIME_QUANT = 3600                     # 1 hour
 
 MAX_TRAVEL_TIME = 2000.0
 
+MAX_DEPTH = 700.0
+
 def read_timerange(cursor, label, hours, skip):
   # determine the start and end time for the specified label
   cursor.execute("select start_time, end_time from dataset where label=%s",
@@ -71,7 +73,8 @@ def read_events(cursor, start_time, end_time, evtype, runid=None):
   events = np.array(cursor.fetchall())
 
   # change -999 mb to MIN MAG
-  events[:, EV_MB_COL][events[:, EV_MB_COL] == -999] = MIN_MAGNITUDE
+  if len(events):
+    events[:, EV_MB_COL][events[:, EV_MB_COL] == -999] = MIN_MAGNITUDE
 
   orid2num = {}
   
