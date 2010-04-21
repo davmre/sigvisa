@@ -10,6 +10,8 @@ static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
+static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
@@ -25,6 +27,10 @@ static PyMethodDef NetModel_methods[] = {
    "infer(samples per window, verbose) -> events, ev_detlist"},
   {"invert_det", (PyCFunction)py_invert_det, METH_VARARGS,
    "invert_det(detnum, perturb?) -> (lon, lat, depth, time) or None"},
+  {"location_logprob", (PyCFunction)py_location_logprob, METH_VARARGS,
+   "location_logprob(lon, lat, depth) -> probability"},
+  {"location_sample", (PyCFunction)py_location_sample, METH_NOARGS,
+   "location_sample() -> (lon, lat, depth)"},
   {NULL}  /* Sentinel */
 };
 
@@ -668,6 +674,33 @@ static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args)
     Py_INCREF(Py_None);
     return Py_None;
   }
+}
+
+static PyObject * py_location_logprob(NetModel_t * p_netmodel, PyObject * args)
+{
+  double lon;
+  double lat;
+  double depth;
+  
+  if (!PyArg_ParseTuple(args, "ddd", &lon, &lat, &depth))
+    return NULL;
+
+
+  return Py_BuildValue("d", EventLocationPrior_LogProb(&p_netmodel
+                                                       ->event_location_prior,
+                                                       lon, lat, depth));
+}
+
+static PyObject * py_location_sample(NetModel_t * p_netmodel)
+{
+  double lon;
+  double lat;
+  double depth;
+  
+  EventLocationPrior_Sample(&p_netmodel->event_location_prior,
+                            &lon, &lat, &depth);
+  
+  return Py_BuildValue("ddd", lon, lat, depth);
 }
 
 static PyObject * py_srand(PyObject * self, PyObject * args)
