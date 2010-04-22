@@ -12,7 +12,6 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
-static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
@@ -637,22 +636,6 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
   }
 }
 
-static PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
-{
-  int runid;
-  int numsamples;
-  int window;
-  int step;
-  int verbose;
-  PyObject * write_cb;
-  
-  if (!PyArg_ParseTuple(args, "iiiiiO", &runid, &numsamples, &window, &step,
-                        &verbose, &write_cb))
-    return NULL;
-
-  return infer(p_netmodel, runid, numsamples, window, step, verbose, write_cb);
-}
-
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args)
 {
   int detnum;
@@ -721,4 +704,78 @@ static PyObject * py_srand(PyObject * self, PyObject * args)
   Py_INCREF(Py_None);
   
   return Py_None;
+}
+
+void convert_events_to_pyobj(const EarthModel_t * p_earth,
+                             const Event_t ** pp_events, int numevents,
+                             PyObject ** pp_eventsobj,
+                             PyObject ** pp_evdetlistobj)
+{
+  PyObject * p_eventsobj;
+  PyObject * p_evdetlistobj;
+  npy_intp dims[2];
+  int i;
+  
+  /* create an array of events */
+  dims[0] = numevents;
+  dims[1] = EV_NUM_COLS;
+  p_eventsobj = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+
+  /* and a list of event detections */
+  p_evdetlistobj = PyList_New(0);
+
+  for (i=0; i<numevents; i++)
+  {
+    PyObject * p_detlistobj;
+    const Event_t * p_event;
+    int numsites;
+    int numtimedefphases;
+    int siteid;
+    int phaseid;
+
+    p_event = pp_events[i];
+
+    /* store the current event in its row */
+    ARRAY2(p_eventsobj, i, EV_LON_COL) = p_event->evlon;
+    ARRAY2(p_eventsobj, i, EV_LAT_COL) = p_event->evlat;
+    ARRAY2(p_eventsobj, i, EV_DEPTH_COL) = p_event->evdepth;
+    ARRAY2(p_eventsobj, i, EV_TIME_COL) = p_event->evtime;
+    ARRAY2(p_eventsobj, i, EV_MB_COL) = p_event->evmag;
+    ARRAY2(p_eventsobj, i, EV_ORID_COL) = (double) p_event->orid;
+
+    p_detlistobj = PyList_New(0);
+    
+    /* copy over the (phaseid, detnum) of the event */
+    numsites = EarthModel_NumSites(p_earth);
+    numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+    
+    for (siteid = 0; siteid < numsites; siteid ++)
+    {
+      for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
+      {
+        int detnum;
+        
+        detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
+
+        if (detnum != -1)
+        {
+          PyObject * p_phase_det_obj;
+          
+          p_phase_det_obj = Py_BuildValue("(ii)", phaseid, detnum);
+          
+          PyList_Append(p_detlistobj, p_phase_det_obj);
+          /* List Append increments the refcount so we need to
+           * decrement our ref */
+          Py_DECREF(p_phase_det_obj);
+        }
+      }
+    }
+
+    PyList_Append(p_evdetlistobj, p_detlistobj);
+    /* List Append increments the refcount so we need to decrement our ref */
+    Py_DECREF(p_detlistobj);
+  }
+
+  *pp_eventsobj = p_eventsobj;
+  *pp_evdetlistobj = p_evdetlistobj;
 }

@@ -184,3 +184,8 @@ typedef struct NetModel_t
 #define DEG2RAD                ((double) (PI / 180))
 #define RAD2DEG                ((double) (180 / PI))
 #define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
+
+void convert_events_to_pyobj(const EarthModel_t * p_earth,
+                             const Event_t ** pp_events, int numevents,
+                             PyObject ** pp_eventsobj,
+                             PyObject ** pp_evdetlistobj);

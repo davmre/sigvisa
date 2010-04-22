@@ -699,9 +699,9 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
   PyObject * retval;
   double maxtime;
   PyObject * eventsobj;
-  npy_intp dims[2];
   PyObject * evdetlistobj;
   int i;
+  int numevents;
   
   if (p_world->high_evtime < p_netmodel->end_time)
     maxtime = MAX(p_world->low_evtime - MAX_TRAVEL_TIME,
@@ -710,73 +710,28 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
     maxtime = p_world->high_evtime;
   
   /* count the number of events */
-  dims[0] = 0;
+  numevents = 0;
   for (i=p_world->write_evnum;
        (i<p_world->high_evnum) && p_world->pp_events[i]->evtime < maxtime;
        i++)
-    dims[0] ++;
+    numevents ++;
 
-  /* now create an array of the events */
-  dims[1] = EV_NUM_COLS;
-  eventsobj = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
-  
-  /* and a list of event detections */
-  evdetlistobj = PyList_New(0);
-  
-  for (i=0; i<dims[0]; i++)
+  convert_events_to_pyobj(p_netmodel->p_earth, 
+                          (const Event_t **) (p_world->pp_events 
+                                              + p_world->write_evnum),
+                          numevents, &eventsobj, &evdetlistobj);
+
+  if (p_world->verbose)
   {
-    PyObject * detlistobj;
-    Event_t * p_event;
-    int numsites;
-    int numtimedefphases;
-    int siteid;
-    int phaseid;
-
-    p_event = p_world->pp_events[p_world->write_evnum + i];
-
-    if (p_world->verbose)
+    for (i=0; i<numevents; i++)
     {
+      Event_t * p_event;
+      
+      p_event = p_world->pp_events[p_world->write_evnum + i];
+      
       printf("Write: ");
       print_event(p_event);
     }
-    
-    ARRAY2(eventsobj, i, EV_LON_COL) = p_event->evlon;
-    ARRAY2(eventsobj, i, EV_LAT_COL) = p_event->evlat;
-    ARRAY2(eventsobj, i, EV_DEPTH_COL) = p_event->evdepth;
-    ARRAY2(eventsobj, i, EV_TIME_COL) = p_event->evtime;
-    ARRAY2(eventsobj, i, EV_MB_COL) = p_event->evmag;
-    ARRAY2(eventsobj, i, EV_ORID_COL) = (double) p_event->orid;
-
-    detlistobj = PyList_New(0);
-    
-    /* copy over the (phaseid, detnum) of the event */
-    numsites = EarthModel_NumSites(p_netmodel->p_earth);
-    numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
-    for (siteid = 0; siteid < numsites; siteid ++)
-    {
-      for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
-      {
-        int detnum;
-        
-        detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
-
-        if (detnum != -1)
-        {
-          PyObject * phase_det_obj;
-          
-          phase_det_obj = Py_BuildValue("(ii)", phaseid, detnum);
-          
-          PyList_Append(detlistobj, phase_det_obj);
-          /* List Append increments the refcount so we need to
-           * decrement our ref */
-          Py_DECREF(phase_det_obj);
-        }
-      }
-    }
-
-    PyList_Append(evdetlistobj, detlistobj);
-    /* List Append increments the refcount so we need to decrement our ref */
-    Py_DECREF(detlistobj);
   }
   
   retval = PyObject_CallFunction(p_world->write_events_cb, "OOOOid", 
@@ -784,7 +739,7 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
                                  eventsobj, evdetlistobj,
                                  p_world->runid, maxtime);
 
-  p_world->write_evnum += dims[0];
+  p_world->write_evnum += numevents;
   
   Py_DECREF(eventsobj);
   Py_DECREF(evdetlistobj);
@@ -795,32 +750,42 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
     Py_DECREF(retval);
 }
 
-PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
-                 int window, int step, int verbose, PyObject * write_events_cb)
+static World_t * alloc_world(NetModel_t * p_netmodel)
 {
-  int i;
   World_t * p_world;
-  PyObject * retobj;
-  PyObject * eventsobj;
-  npy_intp dims[2];
-  PyObject * evdetlistobj;
-  time_t t1;
-
-  t1 = time(NULL);
-
-  /* initialize world */
+  
   /* assume that we can't have more events then detections */
   p_world = (World_t *) calloc(1, sizeof(*p_world));
   p_world->maxevents = p_netmodel->numdetections;
   p_world->pp_events = (Event_t **) calloc(p_world->maxevents,
                                            sizeof(*p_world->pp_events));
-  p_world->runid = runid;
-  p_world->numsamples = numsamples;
-  p_world->window = window;
-  p_world->step = step;
-  p_world->verbose = verbose;
-  p_world->write_events_cb = write_events_cb;
+
+  return p_world;
+}
+
+static void free_world(World_t * p_world)
+{
+  int i;
   
+  for (i=0; i<p_world->high_evnum; i++)
+  {
+    Event_t * p_event;
+    
+    p_event = p_world->pp_events[i];
+
+    free_event(p_event);
+  }
+
+  free(p_world->pp_events);
+  free(p_world);
+}
+
+static void infer(NetModel_t * p_netmodel, World_t * p_world)
+{
+  int i;
+  time_t t1;
+
+  /* initialize the window */
   p_world->low_evnum = 0;
   p_world->high_evnum = 0;
   p_world->low_evtime = p_netmodel->start_time;
@@ -877,7 +842,7 @@ PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
 
     t1 = time(NULL);
     
-    for (i=0; i<numsamples; i++)
+    for (i=0; i<p_world->numsamples; i++)
     {
       int j;
       int numdel;
@@ -975,72 +940,55 @@ PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
 
 
   if (p_world->verbose)
-    printf("World Score %.1f\n", p_world->world_score);
-  
-  /* now create an array of the events */
-  dims[0] = p_world->high_evnum;
-  dims[1] = EV_NUM_COLS;
-  eventsobj = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
-  
-  /* and a list of event detections */
-  evdetlistobj = PyList_New(0);
-  
-  for (i=0; i<p_world->high_evnum; i++)
   {
-    PyObject * detlistobj;
-    Event_t * p_event;
-    p_event = p_world->pp_events[i];
-    int numsites;
-    int numtimedefphases;
-    int siteid;
-    int phaseid;
-
-    ARRAY2(eventsobj, i, EV_LON_COL) = p_event->evlon;
-    ARRAY2(eventsobj, i, EV_LAT_COL) = p_event->evlat;
-    ARRAY2(eventsobj, i, EV_DEPTH_COL) = p_event->evdepth;
-    ARRAY2(eventsobj, i, EV_TIME_COL) = p_event->evtime;
-    ARRAY2(eventsobj, i, EV_MB_COL) = p_event->evmag;
-    ARRAY2(eventsobj, i, EV_ORID_COL) = (double) p_event->orid;
-
-    if (p_world->verbose)
+    for (i=0; i<p_world->high_evnum; i++)
     {
+      Event_t * p_event;
+    
+      p_event = p_world->pp_events[i];
+
       printf("orid %d - score %.1f computed score %.1f\n", p_event->orid, 
              p_event->evscore, score_event(p_netmodel, p_event));
     }
-    
-    detlistobj = PyList_New(0);
-    
-    /* copy over the (phaseid, detnum) of the event */
-    numsites = EarthModel_NumSites(p_netmodel->p_earth);
-    numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
-    for (siteid = 0; siteid < numsites; siteid ++)
-    {
-      for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
-      {
-        int detnum;
-        
-        detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
-
-        if (detnum != -1)
-        {
-          PyObject * phase_det_obj;
-          
-          phase_det_obj = Py_BuildValue("(ii)", phaseid, detnum);
-          
-          PyList_Append(detlistobj, phase_det_obj);
-          /* List Append increments the refcount so we need to
-           * decrement our ref */
-          Py_DECREF(phase_det_obj);
-        }
-      }
-    }
-
-    PyList_Append(evdetlistobj, detlistobj);
-    /* List Append increments the refcount so we need to decrement our ref */
-    Py_DECREF(detlistobj);
-
-    free_event(p_event);
+    printf("World Score %.1f\n", p_world->world_score);
   }
+}
+
+PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
+{
+  World_t * p_world;
+  int runid;
+  int numsamples;
+  int window;
+  int step;
+  int verbose;
+  PyObject * write_events_cb;
+
+  PyObject * retobj;
+  PyObject * eventsobj;
+  PyObject * evdetlistobj;
+  
+  if (!PyArg_ParseTuple(args, "iiiiiO", &runid, &numsamples, &window, &step,
+                        &verbose, &write_events_cb))
+    return NULL;
+
+  /* allocate the world and initialize the user arguments */
+  p_world = alloc_world(p_netmodel);
+  p_world->runid = runid;
+  p_world->numsamples = numsamples;
+  p_world->window = window;
+  p_world->step = step;
+  p_world->verbose = verbose;
+  p_world->write_events_cb = write_events_cb;
+  
+  infer(p_netmodel, p_world);
+
+  /* convert the world to python structures */
+  convert_events_to_pyobj(p_netmodel->p_earth,
+                          (const Event_t **)p_world->pp_events,
+                          p_world->high_evnum, &eventsobj, &evdetlistobj);
+  
+  free_world(p_world);
 
   retobj = Py_BuildValue("(OO)", eventsobj, evdetlistobj);
 
@@ -1048,8 +996,5 @@ PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
   Py_DECREF(eventsobj);
   Py_DECREF(evdetlistobj);
   
-  free(p_world->pp_events);
-  free(p_world);
-  
-  return retobj;
+  return retobj;  
 }

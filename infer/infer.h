@@ -1,3 +1,1 @@
-PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
-                 int window, int step, int verbose, 
-                 PyObject * write_events_cb);
+PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
