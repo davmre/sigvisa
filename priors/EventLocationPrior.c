@@ -121,8 +121,10 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
   lonidx = (int) floor((lon - (-180)) / dist->lonstep);
   latidx = (int) floor((LAT2Z(lat) - (-1)) / dist->zstep);
 
+  /* the probability density at any point in the bucket is uniform within the
+   * bucket so we divide the bucket probability by the area of the bucket */
   return log(dist->p_bucketprob[lonidx * dist->numlat + latidx])\
-    - log(MAX_DEPTH-MIN_DEPTH);
+    - log(dist->lonstep) - log(dist->zstep) - log(MAX_DEPTH-MIN_DEPTH);
 }
 
 static int sample_vec(int veclen, double * p_probvec)

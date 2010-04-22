@@ -128,8 +128,9 @@ def main():
   print "RUNID %d:" % options.runid,
 
   cursor.execute("select run_start, run_end, data_start, data_end, descrip, "
-                 "numsamples from visa_run where runid=%s", options.runid)
-  run_start, run_end, data_start, data_end, descrip, numsamples\
+                 "numsamples, window, step from visa_run where runid=%s",
+                 options.runid)
+  run_start, run_end, data_start, data_end, descrip, numsamples, window, step\
              = cursor.fetchone()
 
   if data_end is None:
@@ -143,7 +144,7 @@ def main():
         % (data_start, data_end, (data_end-data_start) / 3600.,
            str(run_end - run_start))
   
-  print "D='%s' N=%d" % (descrip, numsamples)
+  print "D='%s' N=%d W=%s S=%s" % (descrip, numsamples, str(window), str(step))
   
   leb_events, leb_orid2num = read_events(cursor, data_start, data_end, "leb")
 
