@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, time
 import numpy as np
 from optparse import OptionParser
 
@@ -142,7 +142,13 @@ def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-n", "--numsamples", dest="numsamples", default=1000,
                     type="int",
-                    help = "number of samples per 30 minute window (1000)")
+                    help = "number of samples per window step (1000)")
+  parser.add_option("-w", "--window", dest="window", default=1800,
+                    type="int",
+                    help = "window size in seconds (1800)")
+  parser.add_option("-t", "--step", dest="step", default=900,
+                    type="int",
+                    help = "window step-size in seconds (900)")
   parser.add_option("-r", "--hours", dest="hours", default=None,
                     type="float",
                     help = "inference on HOURS worth of data (all)")
@@ -162,6 +168,9 @@ def main(param_dirname):
                     help = "description of the run ('')")
   (options, args) = parser.parse_args()
 
+  if options.seed == 0:
+    options.seed = int(time.time())
+  
   netvisa.srand(options.seed)
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
@@ -192,11 +201,11 @@ def main(param_dirname):
 
   # create a runid
   cursor = database.db.connect().cursor()
-  cursor.execute ("insert into visa_run(run_start, numsamples, seed, "
-                  "data_start, score, descrip) values "
-                  "(now(), %s, %s, %s, 0, %s)",
-                  (options.numsamples, options.seed, start_time,
-                   options.descrip))
+  cursor.execute ("insert into visa_run(run_start, numsamples, window, step, "
+                  "seed, data_start, score, descrip) values "
+                  "(now(), %s, %s, %s, %s, %s, 0, %s)",
+                  (options.numsamples, options.window, options.step,
+                   options.seed, start_time, options.descrip))
   cursor.execute("select max(runid) from visa_run")
   runid, = cursor.fetchone()
 
@@ -204,6 +213,7 @@ def main(param_dirname):
   print "NET runid %d" % runid
   print "===="  
   events, ev_detlist = netmodel.infer(runid, options.numsamples,
+                                      options.window, options.step,
                                       options.verbose,
                                       lambda a,b,c,d,e,f:
                                       write_events(a,b,c,d,e,f,detections))
