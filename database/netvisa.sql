@@ -8,6 +8,8 @@ create table visa_run (
  run_end         datetime,
 
  numsamples      int,
+ window          int,
+ step            int,
  seed            int,
  data_start      double,
  data_end        double,

@@ -130,8 +130,15 @@ def main(param_dirname):
 
       score = 0
       repeat = 0
-      for repeat in range(options.numsamples):
-        inv_ev = netmodel.invert_det(detnum, 1) # perturb the invert
+      for repeat in range(options.numsamples+1):
+        # try not perturbing once
+        if repeat == 0:
+          perturb = 0
+        # other times perturb the invert
+        else:
+          perturb = 1
+          
+        inv_ev = netmodel.invert_det(detnum, perturb)
         
         if inv_ev is None:
           continue

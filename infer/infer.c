@@ -6,9 +6,6 @@
 
 #include "../netvisa.h"
 
-#define INFER_WINDOW_SIZE 1800
-#define INFER_WINDOW_STEP  900
-
 #define DEBUG
 /*#define DEBUG2*/
 
@@ -68,6 +65,9 @@ typedef struct World_t
 
   /* static entries */
   int runid;
+  int numsamples;
+  int window;
+  int step;
   int verbose;
   PyObject * write_events_cb;
 } World_t;
@@ -240,7 +240,7 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
     EventLocationPrior_Sample(&p_netmodel->event_location_prior, 
                               &p_event->evlon,
                               &p_event->evlat, &p_event->evdepth);
-  
+    
     p_event->evtime = RAND_UNIFORM(p_world->low_evtime, p_world->high_evtime);
     p_event->evmag = MIN_MAGNITUDE;
   }
@@ -255,12 +255,15 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
       else if (p_world->inv_detnum >= p_world->high_detnum)
       {
         p_world->inv_detnum = p_world->low_detnum;
-        p_world->inv_detnum_wrap = 1;
+        p_world->inv_detnum_wrap = 1;        /* we have wrapped around */
       }
     
+      /* initially, until we have inverted all the detections once we
+       * will not perturb the inverts */
       status = invert_detection(p_netmodel->p_earth, 
                                 p_netmodel->p_detections + p_world->inv_detnum,
-                                p_event, 1);
+                                p_event,
+                                p_world->inv_detnum_wrap /* perturb */);
     
       p_world->inv_detnum ++;
       
@@ -793,7 +796,7 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
 }
 
 PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
-                 int verbose, PyObject * write_events_cb)
+                 int window, int step, int verbose, PyObject * write_events_cb)
 {
   int i;
   World_t * p_world;
@@ -812,6 +815,9 @@ PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
   p_world->pp_events = (Event_t **) calloc(p_world->maxevents,
                                            sizeof(*p_world->pp_events));
   p_world->runid = runid;
+  p_world->numsamples = numsamples;
+  p_world->window = window;
+  p_world->step = step;
   p_world->verbose = verbose;
   p_world->write_events_cb = write_events_cb;
   
@@ -825,7 +831,7 @@ PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
   do 
   {
     /* initialize high_evtime */
-    p_world->high_evtime = MIN(p_world->low_evtime + INFER_WINDOW_SIZE,
+    p_world->high_evtime = MIN(p_world->low_evtime + p_world->window,
                                p_netmodel->end_time);
 
     /* initialize low_evnum */
@@ -862,6 +868,12 @@ PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
       if (p_det->time_det >= (p_world->high_evtime + MAX_TRAVEL_TIME))
         break;
     }
+
+    /* keep track of whether or not we have wrapped around inverting
+     * detections this will trigger further inverts to perturb around
+     * the inverted location */
+    p_world->inv_detnum = 0;
+    p_world->inv_detnum_wrap = 0;
 
     t1 = time(NULL);
     
@@ -954,7 +966,7 @@ PyObject * infer(NetModel_t * p_netmodel, int runid, int numsamples,
     
 
     /* move the window forward */
-    p_world->low_evtime += INFER_WINDOW_STEP;
+    p_world->low_evtime += p_world->step;
 
     /* write out any inferred events */
     write_events(p_netmodel, p_world);

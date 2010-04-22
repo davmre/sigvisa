@@ -97,6 +97,10 @@ def main():
                     type="int",
                     help = "the run-identifier to analyze (last runid)")
 
+  parser.add_option("-m", "--maxtime", dest="maxtime", default=None,
+                    type="float",
+                    help = "Maximum time to analyze for")
+  
   parser.add_option("-v", "--verbose", dest="verbose", default=False,
                     action = "store_true",
                     help = "verbose output (False)")
@@ -123,18 +127,24 @@ def main():
   
   print "RUNID %d:" % options.runid,
 
-  cursor.execute("select run_start, run_end, data_start, data_end "
-                 "from visa_run where runid=%s", options.runid)
-  run_start, run_end, data_start, data_end = cursor.fetchone()
+  cursor.execute("select run_start, run_end, data_start, data_end, descrip, "
+                 "numsamples from visa_run where runid=%s", options.runid)
+  run_start, run_end, data_start, data_end, descrip, numsamples\
+             = cursor.fetchone()
 
   if data_end is None:
     print "NO RESULTS"
     return
+
+  if options.maxtime is not None:
+    data_end = options.maxtime
   
   print "%.1f - %.1f (%.1f hrs), runtime %s" \
         % (data_start, data_end, (data_end-data_start) / 3600.,
            str(run_end - run_start))
-
+  
+  print "D='%s' N=%d" % (descrip, numsamples)
+  
   leb_events, leb_orid2num = read_events(cursor, data_start, data_end, "leb")
 
   sel3_events, sel3_orid2num = read_events(cursor, data_start, data_end,
