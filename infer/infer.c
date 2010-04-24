@@ -72,54 +72,6 @@ typedef struct World_t
   PyObject * write_events_cb;
 } World_t;
 
-static Event_t * alloc_event(NetModel_t * p_netmodel)
-{
-  Event_t * p_event;
-  int numsites;
-  int numtimedefphases;
-  
-  p_event = (Event_t *) calloc(1, sizeof(*p_event));
-  
-  numsites = EarthModel_NumSites(p_netmodel->p_earth);
-  numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
- 
-  p_event->p_detids = (int *)malloc(numsites * numtimedefphases *
-                                    sizeof(*p_event->p_detids));
-
-  return p_event;
-}
-
-static void free_event(Event_t * p_event)
-{
-  free(p_event->p_detids);
-  free(p_event);
-}
-
-void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
-                const Event_t * p_src_event)
-{
-  int * p_tgt_detids;
-  int numsites;
-  int numtimedefphases;
-  
-  numsites = EarthModel_NumSites(p_netmodel->p_earth);
-  numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
- 
-  /* save the detids pointer */
-  p_tgt_detids = p_tgt_event->p_detids;
-  
-  /* copy the event */
-  *p_tgt_event = *p_src_event;
-
-  /* restore the detids pointer */
-  p_tgt_event->p_detids = p_tgt_detids;
-  
-  /* copy the detids */
-  memcpy(p_tgt_event->p_detids, p_src_event->p_detids,
-         numsites * numtimedefphases * sizeof(*p_src_event->p_detids));
-
-}
-
 static void insert_event(NetModel_t * p_netmodel,
                          World_t * p_world, Event_t * p_event)
 {

@@ -92,6 +92,7 @@ typedef struct NetModel_t
 
 #include "priors/score.h"
 #include "infer/infer.h"
+#include "infer/propose.h"
 
 #define UPTIME_QUANT     3600                /* 1 hour */
 
@@ -184,6 +185,11 @@ typedef struct NetModel_t
 #define DEG2RAD                ((double) (PI / 180))
 #define RAD2DEG                ((double) (180 / PI))
 #define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
+
+Event_t * alloc_event(NetModel_t * p_netmodel);
+void free_event(Event_t * p_event);
+void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
+                const Event_t * p_src_event);
 
 void convert_events_to_pyobj(const EarthModel_t * p_earth,
                              const Event_t ** pp_events, int numevents,
