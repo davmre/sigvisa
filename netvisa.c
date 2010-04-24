@@ -25,6 +25,9 @@ static PyMethodDef NetModel_methods[] = {
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
    "infer(runid, numsamples, window, step, verbose, write_cb)\n"
    "      -> events, ev_detlist"},
+  {"propose", (PyCFunction)py_propose, METH_VARARGS,
+   "propose(time_low, time_high, det_low, det_high, degree_step, time_step)\n"
+   " -> events, ev_detlist"},
   {"invert_det", (PyCFunction)py_invert_det, METH_VARARGS,
    "invert_det(detnum, perturb?) -> (lon, lat, depth, time) or None"},
   {"location_logprob", (PyCFunction)py_location_logprob, METH_VARARGS,
@@ -778,4 +781,52 @@ void convert_events_to_pyobj(const EarthModel_t * p_earth,
 
   *pp_eventsobj = p_eventsobj;
   *pp_evdetlistobj = p_evdetlistobj;
+}
+
+Event_t * alloc_event(NetModel_t * p_netmodel)
+{
+  Event_t * p_event;
+  int numsites;
+  int numtimedefphases;
+  
+  p_event = (Event_t *) calloc(1, sizeof(*p_event));
+  
+  numsites = EarthModel_NumSites(p_netmodel->p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
+ 
+  p_event->p_detids = (int *)malloc(numsites * numtimedefphases *
+                                    sizeof(*p_event->p_detids));
+
+  return p_event;
+}
+
+void free_event(Event_t * p_event)
+{
+  free(p_event->p_detids);
+  free(p_event);
+}
+
+void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
+                const Event_t * p_src_event)
+{
+  int * p_tgt_detids;
+  int numsites;
+  int numtimedefphases;
+  
+  numsites = EarthModel_NumSites(p_netmodel->p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
+ 
+  /* save the detids pointer */
+  p_tgt_detids = p_tgt_event->p_detids;
+  
+  /* copy the event */
+  *p_tgt_event = *p_src_event;
+
+  /* restore the detids pointer */
+  p_tgt_event->p_detids = p_tgt_detids;
+  
+  /* copy the detids */
+  memcpy(p_tgt_event->p_detids, p_src_event->p_detids,
+         numsites * numtimedefphases * sizeof(*p_src_event->p_detids));
+
 }
