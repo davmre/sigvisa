@@ -6,7 +6,7 @@ priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
                   'EarthModel.c', 'ArrivalTimePrior.c', 'NumFalseDetPrior.c',
                   'ArrivalAzimuthPrior.c', 'ArrivalSlownessPrior.c',
-                  'ArrivalPhasePrior.c',
+                  'ArrivalPhasePrior.c', 'ArrivalSNRPrior.c',
                   'Poisson.c', 'score.c', 'Gaussian.c']
 
 infer_sources = ['infer.c', 'propose.c']

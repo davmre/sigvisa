@@ -510,9 +510,9 @@ engine = myisam;
 load data local infile 'static_phaseid.csv' into table static_phaseid fields 
 terminated by ',' optionally enclosed by '"' ignore 1 lines;
 
-/* NetVISA uses only the arrivals which have a valid azimuth and slowness */
+/* NetVISA uses only the arrivals which have a valid azimuth, slowness, snr */
 create or replace view idcx_arrival_net as 
-select * from idcx_arrival idcx where delaz > 0 and delslo > 0;
+select * from idcx_arrival idcx where delaz > 0 and delslo > 0 and snr > 0;
 
 /* create a user for querying the data and give him privileges */
 create user ctbt@localhost;
