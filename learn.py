@@ -12,6 +12,7 @@ import priors.ArrivalTimePrior
 import priors.ArrivalAzimuthPrior
 import priors.ArrivalSlownessPrior
 import priors.ArrivalPhasePrior
+import priors.ArrivalSNR
 
 import netvisa
 
@@ -42,7 +43,9 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                            os.path.join(param_dirname,
                                         "ArrivalSlownessPrior.txt"),
                            os.path.join(param_dirname,
-                                        "ArrivalPhasePrior.txt")
+                                        "ArrivalPhasePrior.txt"),
+                           os.path.join(param_dirname,
+                                        "ArrivalSNR.txt")
                            )
   
   return model
@@ -116,6 +119,11 @@ def main(param_dirname):
                                               "ArrivalPhasePrior.txt"),
                                  options, earthmodel, detections, leb_events,
                                  leb_evlist)
+
+  priors.ArrivalSNR.learn(os.path.join(param_dirname,
+                                       "ArrivalSNR.txt"),
+                          options, earthmodel, detections, leb_events,
+                          leb_evlist)
   
 if __name__ == "__main__":
   try:
