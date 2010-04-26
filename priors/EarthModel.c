@@ -368,8 +368,8 @@ PyObject * py_EarthModel_InRange(EarthModel_t * p_earth, PyObject * args)
     Py_RETURN_FALSE;
 }
 
-static double simple_distance_deg(double lon1, double lat1, double lon2,
-                                  double lat2)
+double simple_distance_deg(double lon1, double lat1, double lon2,
+                           double lat2)
 {
   double tmp;
   double dist;

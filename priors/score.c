@@ -3,6 +3,17 @@
 
 #include "../netvisa.h"
 
+/*
+  returns log( exp(logval1) + exp(logval2) )
+*/
+static inline double log_add_exp(double logval1, double logval2)
+{
+  if (logval1 >= logval2)
+    return logval1 + log(1 + exp(logval2 - logval1));
+  else
+    return logval2 + log(1 + exp(logval1 - logval2));
+}
+
 /* returns 0 if the event - phase is impossible to be detected at the
  * site, 1 otherwise 
  * if detected returns log probability of detection given event 
@@ -281,3 +292,63 @@ double score_world(NetModel_t * p_netmodel,
   
   return score;
 }
+
+double prob_event(NetModel_t * p_netmodel, Event_t * p_event)
+{
+  Event_t curr_event;
+  double logprob;
+  double step_z;
+
+  /* make a copy of the event to work with */
+  curr_event = *p_event;
+
+  #define STEP_LON 1
+  #define STEP_TIME 1
+  #define STEP_DEPTH 350
+  #define STEP_MAG 1
+
+  step_z = (2.0 / (180.0 / STEP_LON));
+
+  logprob = -INFINITY;
+  
+  for (curr_event.evlon = -180; curr_event.evlon < 180;
+       curr_event.evlon += STEP_LON)
+  {
+    double z;
+    
+    for (z = -1; z < 1; z += step_z)
+    {
+      curr_event.evlat = RAD2DEG * asin(z);
+      
+      if (simple_distance_deg(curr_event.evlon, curr_event.evlat,
+                              p_event->evlon, p_event->evlat) > DELTA_DIST)
+        continue;
+      
+      for (curr_event.evdepth = MIN_DEPTH; curr_event.evdepth < MAX_DEPTH;
+           curr_event.evdepth += STEP_DEPTH)
+      {
+        for (curr_event.evtime = p_event->evtime - DELTA_TIME;
+             curr_event.evtime < (p_event->evtime + DELTA_TIME);
+             curr_event.evtime += STEP_TIME)
+        {
+          for (curr_event.evmag = MIN_MAGNITUDE;
+               curr_event.evmag < MAX_MAGNITUDE;
+               curr_event.evmag += STEP_MAG)
+          {
+            double score;
+            
+            score = score_event(p_netmodel, &curr_event);
+            
+            logprob = log_add_exp(logprob, score);
+          }
+        }
+      }
+    }
+  }
+
+  logprob += log(STEP_LON) + log(step_z) + log (STEP_DEPTH) + log(STEP_TIME)\
+    + log(STEP_MAG);
+  
+  return logprob;
+}
+
