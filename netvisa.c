@@ -8,6 +8,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
@@ -22,6 +23,8 @@ static PyMethodDef NetModel_methods[] = {
    "score_event(event, detlist) -> log probability ratio"},
   {"score_event_det", (PyCFunction)py_score_event_det, METH_VARARGS,
    "score_event_det(event, phaseid, detnum) -> log probability ratio\n"},
+  {"prob_event", (PyCFunction)py_prob_event, METH_VARARGS,
+   "prob_event(event, detlist) -> log probability ratio"},
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
    "infer(runid, numsamples, window, step, verbose, write_cb)\n"
    "      -> events, ev_detlist"},
@@ -643,6 +646,50 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
     Py_INCREF(Py_None);
     return Py_None;
   }
+}
+
+static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  PyArrayObject * p_event_arrobj;
+  PyObject * p_detlist_obj;
+ 
+  Event_t * p_event;
+  double prob;
+  
+  if (!PyArg_ParseTuple(args, "O!O!",
+                        &PyArray_Type, &p_event_arrobj, 
+                        &PyList_Type, &p_detlist_obj)
+      || !p_event_arrobj || !p_detlist_obj)
+    return NULL;
+  
+  if ((1 != p_event_arrobj->nd) || (NPY_DOUBLE 
+                                     != p_event_arrobj->descr->type_num)
+      || (EV_NUM_COLS != p_event_arrobj->dimensions[0]))
+  {
+    PyErr_SetString(PyExc_ValueError,
+                    "prob_event: wrong shape or type of event array");
+    return NULL;
+  }
+  
+  p_event = (Event_t *)calloc(1, sizeof(*p_event));
+  p_event->evlon = ARRAY1(p_event_arrobj, EV_LON_COL);
+  p_event->evlat = ARRAY1(p_event_arrobj, EV_LAT_COL);
+  p_event->evdepth = ARRAY1(p_event_arrobj, EV_DEPTH_COL);
+  p_event->evtime = ARRAY1(p_event_arrobj, EV_TIME_COL);
+  p_event->evmag = ARRAY1(p_event_arrobj, EV_MB_COL);
+  
+  convert_event_detections(p_event, 
+                           EarthModel_NumSites(p_netmodel->p_earth),
+                           EarthModel_NumTimeDefPhases(p_netmodel->p_earth),
+                           p_netmodel->numdetections, p_netmodel->p_detections,
+                           p_detlist_obj);
+  
+  prob = prob_event(p_netmodel, p_event);
+  
+  free_events(1, p_event);
+  
+  return Py_BuildValue("d", prob);
 }
 
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args)

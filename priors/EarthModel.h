@@ -77,6 +77,9 @@ int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
 double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
                         int siteid);
 
+double simple_distance_deg(double lon1, double lat1, double lon2,
+                           double lat2);
+
 PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args);
 
 PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args);

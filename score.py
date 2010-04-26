@@ -11,15 +11,21 @@ def main(param_dirname):
   parser.add_option("-x", "--text", dest="gui", default=True,
                     action = "store_false",
                     help = "text only output (False)")
+  
+  parser.add_option("-p", "--prob", dest="prob", default=False,
+                    action = "store_true",
+                    help = "write probabilities instead of densities (False)")
+  
   parser.add_option("-w", "--writefile", dest="writefile", default=None,
                     type="str",
                     help = "file to write the sel3 scores output to")
+  
   (options, args) = parser.parse_args()
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation")
-
+  
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
@@ -27,33 +33,33 @@ def main(param_dirname):
   
   print "LEB:"
   netmodel.score_world(leb_events, leb_evlist, 1)
-
+  
   print "SEL3:"
   netmodel.score_world(sel3_events, sel3_evlist, 1)
-
+  
   # separate the SEL3 events into true and false events
   true_sel3_idx, false_sel3_idx, mat_idx = find_true_false_guess(leb_events,
                                                                  sel3_events)
-
+  
   #lebi, sel3i = mat_idx[0]
   #print "Sample LEB, SEL3 matched event:"
   #print leb_events[lebi], leb_evlist[lebi]
   #print sel3_events[sel3i], sel3_evlist[sel3i]
-
+  
   print "TRUE SEL3"
   netmodel.score_world(sel3_events[true_sel3_idx,:],
                        [sel3_evlist[i] for i in true_sel3_idx], 1)
-
+  
   #idx = true_sel3_idx[0]
   #print "Testing on one event:"
   #netmodel.score_world(sel3_events[[idx],:], [sel3_evlist[idx]], 1)
   #print "Score_Event:", netmodel.score_event(sel3_events[idx],
   #                                           sel3_evlist[idx])
-
+  
   print "FALSE SEL3"
   netmodel.score_world(sel3_events[false_sel3_idx,:],
                        [sel3_evlist[i] for i in false_sel3_idx], 1)
-
+  
   if options.writefile is not None:
     fp = open(options.writefile, "w")
     for evnum, event in enumerate(sel3_events):
@@ -62,7 +68,12 @@ def main(param_dirname):
         print >>fp, 1,
       else:
         print >>fp, 0,
-      print >>fp, netmodel.score_event(event, sel3_evlist[evnum])
+      
+      if options.prob:
+        print >>fp, netmodel.prob_event(event, sel3_evlist[evnum])
+      else:
+        print >>fp, netmodel.score_event(event, sel3_evlist[evnum])
+      
     fp.close()
     
   if options.gui:

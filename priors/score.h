@@ -10,3 +10,5 @@ int score_event_site_phase(NetModel_t * p_netmodel,
                            int siteid, int phaseid,
                            double distance, double pred_az,
                            double * p_score);
+
+double prob_event(NetModel_t * p_netmodel, Event_t * p_event);

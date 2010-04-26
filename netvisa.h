@@ -189,6 +189,11 @@ typedef struct NetModel_t
 #define RAD2DEG                ((double) (180 / PI))
 #define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
 
+/* DELTA_TIME and DELTA_DIST are used in evaluating the answer */
+#define DELTA_TIME 50                        /* in seconds */
+#define DELTA_DIST 5                         /* in degrees */
+
+
 Event_t * alloc_event(NetModel_t * p_netmodel);
 void free_event(Event_t * p_event);
 void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
