@@ -152,6 +152,28 @@ int score_event_site_phase(NetModel_t * p_netmodel,
   return poss;
 }
 
+int score_event_site_phase_simple(NetModel_t * p_netmodel,
+                                  const Event_t * p_event, int siteid,
+                                  int phaseid, double * p_score)
+{
+  EarthModel_t * p_earth;
+  double distance, pred_az;
+  int poss;
+
+  p_earth = p_netmodel->p_earth;
+
+  distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
+                              siteid);
+
+  pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
+                                      p_event->evlat, siteid);
+  
+  poss = score_event_site_phase(p_netmodel, p_event, siteid, phaseid,
+                                distance, pred_az, p_score);
+
+  return poss;
+}
+
 
 static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event, 
                  double * p_numsc, double * p_locsc, double * p_magsc,

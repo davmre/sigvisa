@@ -30,9 +30,9 @@ for (timeidx = 0; timeidx < numtime; timeidx ++)\
 
 #define END_TIME_LOOP } do {} while(0)
 
-static int propose(NetModel_t * p_netmodel, Event_t **pp_events,
-                   double time_low, double time_high, int det_low,
-                   int det_high, double degree_step, double time_step)
+int propose(NetModel_t * p_netmodel, Event_t **pp_events,
+            double time_low, double time_high, int det_low,
+            int det_high, double degree_step, double time_step)
 {
   EarthModel_t * p_earth;
   int numsites;
@@ -46,6 +46,8 @@ static int propose(NetModel_t * p_netmodel, Event_t **pp_events,
   double * p_bucket_score;               /* numlon x numlat x numtime */
 
   double * p_site_ttime;                     /* numsites */
+  double * p_site_score;                     /* numsites */
+  int * p_skip_det;                          /* numdetections */
   
   int lonidx, latidx, timeidx;
   double lon, lat, time;
@@ -66,120 +68,206 @@ static int propose(NetModel_t * p_netmodel, Event_t **pp_events,
   numtime = (int) ceil((time_high - time_low) / time_step);
   z_step = 2.0 / numlat;
   
-  p_bucket_score = (double *)calloc(numlon * numlat * numtime,
-                                    sizeof(*p_bucket_score));
+  p_bucket_score = (double *)malloc(numlon * numlat * numtime
+                                    * sizeof(*p_bucket_score));
 
   if (!p_bucket_score)
+  {
+    printf("can't allocate %d x %d x %d x %d bytes\n", numlon, numlat,
+           numtime, sizeof(*p_bucket_score));
     return -1;
+  }
 
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
   p_site_ttime = (double *) calloc(numsites, sizeof(*p_site_ttime));
+
+  p_site_score = (double *) calloc(numsites, sizeof(*p_site_score));
+
+  p_skip_det = (int *) calloc(p_netmodel->numdetections, sizeof(*p_skip_det));
   
-  /* compute the score of each bucket */
-  BEGIN_LON_LOOP;
-  BEGIN_LAT_LOOP;
-  
-  /* compute the distance and azimuth and travel time to each site */
-  for (sitenum = 0; sitenum < numsites; sitenum ++)
-  {
-    p_site_ttime[sitenum] = EarthModel_ArrivalTime(p_earth, lon,
-                                                   lat, 0, 0,
-                                                   EARTH_PHASE_P, sitenum);
-  }
-      
+
+  /* we skip all the non P detections */
+
   for (detnum = 0; detnum < p_netmodel->numdetections; detnum ++)
   {
     Detection_t * p_det;
     
     p_det = p_netmodel->p_detections + detnum;
   
-    if (p_det->phase_det != EARTH_PHASE_P)
-      continue;
-    
-    /* if the event can be detected at this site */
-    if (p_site_ttime[p_det->site_det] > 0)
-    {
-      time = p_det->time_det - p_site_ttime[p_det->site_det];
-      timeidx = (int) ((time-time_low) / time_step);
+    if (EARTH_PHASE_P == p_det->phase_det)
+      p_skip_det[detnum] = 0;
 
-      /* debug leb orid 5288222
-      if ((lon > -16) && (lon < -10) && (lat > -16) && (lat < -6))
-        printf("detnum %d: lon %.1f lat %.1f time %.1f (%d, %d, %d)\n",
-               detnum, lon, lat, time, lonidx, latidx, timeidx);
-      */
-      /*
-      printf("detnum %d site %d iphase %d: lon %.1f lat %.1f time %.1f (%d, "
-      "%d, %d)\n",
-      detnum, p_det->site_det, p_det->phase_det, lon, lat, time, lonidx, 
-      latidx, timeidx);
-      */
-      
-      if ((timeidx >= 0) && (timeidx < numtime))
-      {
-        BUCKET(lonidx, latidx, timeidx) += 1;
-        
-        if ((timeidx+1) < numtime)
-          BUCKET(lonidx, latidx, timeidx+1) += .5;
-        
-        if ((timeidx-1) >= 0)
-          BUCKET(lonidx, latidx, timeidx-1) += .5;
-      }
-    }
+    else
+      p_skip_det[detnum] = 1;
   }
-
-  END_LAT_LOOP;
-  END_LON_LOOP;
 
   numevents = 0;
 
-  best_score = best_lon = best_lat = best_time = 0;
-  
-  BEGIN_LON_LOOP;  
-  BEGIN_LAT_LOOP;
-  BEGIN_TIME_LOOP;
-  
-  score = BUCKET(lonidx, latidx, timeidx);
-  
-  if (score > best_score)
+  do
   {
+    
+    /* 
+     * First, we will compute the number of detections which hit each bucket 
+     */
+
+    memset(p_bucket_score, 0, numlon * numlat * numtime
+           * sizeof(*p_bucket_score));
+    
+    BEGIN_LON_LOOP;
+    BEGIN_LAT_LOOP;
+  
+    /* compute the distance and azimuth and travel time to each site */
+    for (sitenum = 0; sitenum < numsites; sitenum ++)
+    {
+      p_site_ttime[sitenum] = EarthModel_ArrivalTime(p_earth, lon,
+                                                     lat, 0, 0,
+                                                     EARTH_PHASE_P, sitenum);
+    }
+      
+    for (detnum = 0; detnum < p_netmodel->numdetections; detnum ++)
+    {
+      Detection_t * p_det;
+    
+      if (p_skip_det[detnum])
+        continue;
+    
+      p_det = p_netmodel->p_detections + detnum;
+  
+      /* if the event can be detected at this site */
+      if (p_site_ttime[p_det->site_det] > 0)
+      {
+        time = p_det->time_det - p_site_ttime[p_det->site_det];
+        timeidx = (int) ((time-time_low) / time_step);
+
+        if ((timeidx >= 0) && (timeidx < numtime))
+        {
+          BUCKET(lonidx, latidx, timeidx) += 1;
+        
+          if ((timeidx+1) < numtime)
+            BUCKET(lonidx, latidx, timeidx+1) += .5;
+        
+          if ((timeidx-1) >= 0)
+            BUCKET(lonidx, latidx, timeidx-1) += .5;
+        }
+      }
+    }
+
+    END_LAT_LOOP;
+    END_LON_LOOP;
+
     /*
-    printf("current best %.1f: lon %.1f lat %.1f time %.1f (%d, %d, %d)\n",
-           score, lon, lat, time, lonidx, latidx, timeidx);
+     * Second, we will find the best bucket and construct an event from it
+     */
+
+    best_score = best_lon = best_lat = best_time = 0;
+  
+    BEGIN_LON_LOOP;  
+    BEGIN_LAT_LOOP;
+    BEGIN_TIME_LOOP;
+  
+    score = BUCKET(lonidx, latidx, timeidx);
+  
+    if (score > best_score)
+    {
+      /*
+        printf("current best %.1f: lon %.1f lat %.1f time %.1f (%d, %d, %d)\n",
+        score, lon, lat, time, lonidx, latidx, timeidx);
+      */
+      best_score = score;
+      best_lon = lon;
+      best_lat = lat;
+      best_time = time;
+
+    }
+  
+    END_TIME_LOOP;
+    END_LAT_LOOP;
+    END_LON_LOOP;
+  
+    if (best_score > 6)
+    {
+      int i;
+      int j;
+    
+      p_event = alloc_event(p_netmodel);
+    
+      p_event->evlon = best_lon;
+      p_event->evlat = best_lat;
+      p_event->evdepth = 0;
+      p_event->evtime = best_time;
+      p_event->evmag = MIN_MAGNITUDE;
+
+      for (i=0; i<numsites; i++)
+        for (j=0; j<numtimedefphases; j++)
+          p_event->p_detids[i * numtimedefphases + j] = -1;
+    
+      pp_events[numevents++] = p_event;
+    }
+    else
+      break;
+
+    /*
+    printf("best event lon %.1f lat %.1f time %.1f bucket %.1f\n",
+           p_event->evlon, p_event->evlat, p_event->evtime, best_score);
     */
-    best_score = score;
-    best_lon = lon;
-    best_lat = lat;
-    best_time = time;
+    
+    /* 
+     * Third, we will identify the best detections which associate with this
+     * event at each site
+     */
 
-  }
-  
-  END_TIME_LOOP;
-  END_LAT_LOOP;
-  END_LON_LOOP;
-  
-  if (best_score > 0)
-  {
-    int i;
-    int j;
+    for (detnum = 0; detnum < p_netmodel->numdetections; detnum ++)
+    {
+      Detection_t * p_det;
+      int poss;
+      double detscore;
+      int old_detnum;
     
-    p_event = alloc_event(p_netmodel);
+      if (p_skip_det[detnum])
+        continue;
     
-    p_event->evlon = best_lon;
-    p_event->evlat = best_lat;
-    p_event->evdepth = 0;
-    p_event->evtime = best_time;
-    p_event->evmag = MIN_MAGNITUDE;
+      p_det = p_netmodel->p_detections + detnum;
+  
+      /* save the old detnum */
+      old_detnum = p_event->p_detids[p_det->site_det * numtimedefphases 
+                                     + EARTH_PHASE_P];
 
-    for (i=0; i<numsites; i++)
-      for (j=0; j<numtimedefphases; j++)
-        p_event->p_detids[i * numtimedefphases + j] = -1;
+      p_event->p_detids[p_det->site_det * numtimedefphases + EARTH_PHASE_P]
+        = detnum;
     
-    pp_events[numevents++] = p_event;
-  }
+      poss = score_event_site_phase_simple(p_netmodel, p_event, 
+                                           p_det->site_det, 
+                                           EARTH_PHASE_P, &detscore);
+
+      if ((1 == poss) && (detscore > 0) 
+          && ((-1 == old_detnum) ||(detscore > p_site_score[p_det->site_det])))
+      {
+        p_site_score[p_det->site_det] = detscore;
+      }
+      else
+        /* restore the old detnum */
+        p_event->p_detids[p_det->site_det * numtimedefphases + EARTH_PHASE_P] 
+          = old_detnum;
+    }
+
+    /*
+     * Fourth, we will skip these best detections in future iterations
+     */
+    for (sitenum = 0; sitenum < numsites; sitenum ++)
+    {
+      detnum = p_event->p_detids[sitenum * numtimedefphases + EARTH_PHASE_P];
+
+      if (detnum != -1)
+        p_skip_det[detnum] = 1;
+    }
+
+  } while (1);
   
   free(p_site_ttime);
+  free(p_site_score);
+  free(p_skip_det);
   
   return numevents;
 }

@@ -10,7 +10,7 @@ import netvisa, learn
 from utils.geog import dist_deg
 from infer import print_events
 
-def print_event(earthmodel, detections, event, event_detlist):
+def print_event(netmodel, earthmodel, detections, event, event_detlist):
   print ("%d: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f"
          % (event[ EV_ORID_COL], event[ EV_LON_COL], event[ EV_LAT_COL],
             event[ EV_DEPTH_COL], event[ EV_MB_COL],
@@ -20,8 +20,8 @@ def print_event(earthmodel, detections, event, event_detlist):
   detlist.sort()
   for phaseid, detid in detlist:
     print "(%s, %d, %s)" % (earthmodel.PhaseName(phaseid), detid,
-                       earthmodel.PhaseName(detections[detid, DET_PHASE_COL])),
-  print
+                  earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL]))),
+  print "\nEv Score:", netmodel.score_event(event, event_detlist)
   
 def main(param_dirname):
   parser = OptionParser()
@@ -53,6 +53,10 @@ def main(param_dirname):
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation", hours=options.hours, skip=options.skip)
 
+  if (end_time - MAX_TRAVEL_TIME - options.degree_step) <= start_time:
+    print "Error: too short an interval"
+    sys.exit(1)
+    
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
@@ -67,25 +71,31 @@ def main(param_dirname):
                                               options.time_step)
   t2 = time.time()
 
-  print_events(netmodel, earthmodel, leb_events, leb_evlist, "LEB")
-  
   print "%.1f seconds to propose %d event" % (t2-t1, len(prop_events))
 
   print_events(netmodel, earthmodel, prop_events, prop_evlist, "PROP")
   
   for leb_evnum, leb_event in enumerate(leb_events):
-
-    for prop_event in prop_events:
+    
+    # we can only predict events for which we have all the detections
+    if leb_event[EV_TIME_COL] > (end_time - MAX_TRAVEL_TIME):
+      continue
+    
+    print_event(netmodel, earthmodel, detections, leb_event,
+                leb_evlist[leb_evnum])
+    
+    for prop_evnum, prop_event in enumerate(prop_events):
       
       if (dist_deg(leb_event[[EV_LON_COL, EV_LAT_COL]],
                    prop_event[[EV_LON_COL, EV_LAT_COL]]) < 5
           and abs(leb_event[EV_TIME_COL] - prop_event[EV_TIME_COL]) < 50):
-        print "MATCH"
-        print_event(earthmodel, detections, leb_event, leb_evlist[leb_evnum])
-    
+        print "--> MATCH"
+        print_event(netmodel, earthmodel, detections, prop_event,
+                    prop_evlist[prop_evnum])
+        break
+      
     else:
-      print "MISS"
-      print_event(earthmodel, detections, leb_event, leb_evlist[leb_evnum])
+      print "--> MISS"
   
 if __name__ == "__main__":
   main("parameters")
