@@ -83,6 +83,9 @@ static void insert_event(NetModel_t * p_netmodel,
   numsites = EarthModel_NumSites(p_netmodel->p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
 
+  /* assign an origin-id to the event */
+  p_event->orid = p_world->ev_orid_sequence ++; 
+
   /* initialize all detections to -1, i.e. no detection */
   for (j=0; j<numsites * numtimedefphases; j++)
     p_event->p_detids[j] = -1; 
@@ -172,6 +175,47 @@ static Event_t * drop_event(NetModel_t * p_netmodel, World_t * p_world)
 }
 #endif
 
+static void add_initial_events(NetModel_t * p_netmodel, World_t * p_world)
+{
+  Event_t * pp_events[1000];     /* assume at most 1000 events init */
+  int numevents;
+  int i;
+  time_t t1;
+  
+  t1 = time(NULL);
+  
+  numevents = propose(p_netmodel, pp_events,
+                      p_world->low_evtime, p_world->high_evtime,
+                      p_world->low_detnum, p_world->high_detnum,
+                      2.0, 5.0);
+
+  t1 = time(NULL) - t1;
+  
+  assert(numevents < 1000);
+
+  if (p_world->verbose)
+  {
+    printf("initial window: %d events ela %ds\n", numevents, (int) t1);
+
+    for (i=0; i<numevents; i++)
+    {
+      Event_t * p_event;
+      
+      p_event = pp_events[i];
+      
+      p_event->evscore = score_event(p_netmodel, p_event);
+
+      printf("init: ");
+      print_event(p_event);
+    }
+  }
+
+  for (i=0; i<numevents; i++)
+    insert_event(p_netmodel, p_world, pp_events[i]);
+
+}
+
+
 static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
 {
   int status;
@@ -223,8 +267,6 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
              || (p_event->evtime > p_world->high_evtime));
   }
   
-  p_event->orid = p_world->ev_orid_sequence ++;
- 
   insert_event(p_netmodel, p_world, p_event);
 
   /*
@@ -786,6 +828,12 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
         break;
     }
 
+    /* add an initial set of events in the new window */
+    add_initial_events(p_netmodel, p_world);
+    
+    /* change the detections to use these new events */
+    change_detections(p_netmodel, p_world);
+
     /* keep track of whether or not we have wrapped around inverting
      * detections this will trigger further inverts to perturb around
      * the inverted location */
@@ -874,7 +922,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     
     if (p_world->verbose)
     {
-      printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela=%ds score=%.1f\n",
+      printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela %ds score=%.1f\n",
              p_world->low_evnum, p_world->high_evnum,
              p_world->low_evtime, p_world->high_evtime,
              p_world->low_detnum, p_world->high_detnum, (int) t1,
