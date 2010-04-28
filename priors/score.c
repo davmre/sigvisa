@@ -325,9 +325,9 @@ double prob_event(NetModel_t * p_netmodel, Event_t * p_event)
   curr_event = *p_event;
 
   #define STEP_LON 1
-  #define STEP_TIME 1
+  #define STEP_TIME 5
   #define STEP_DEPTH 350
-  #define STEP_MAG 1
+  #define STEP_MAG 2
 
   step_z = (2.0 / (180.0 / STEP_LON));
 
