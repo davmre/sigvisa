@@ -9,6 +9,48 @@
 #define DEBUG
 /*#define DEBUG2*/
 
+#define FIXUP_EVLON(p_event)                    \
+  do {                                          \
+    if ((p_event)->evlon < -180)                \
+      (p_event)->evlon += 360;                  \
+    else if ((p_event)->evlon >= 180)           \
+      (p_event)->evlon -= 360;                  \
+  }  while (0)
+
+/* TODO: if latitude exceeds the poles then we should change the longitude
+ * to walk across the pole */
+#define FIXUP_EVLAT(p_event)                            \
+  do {                                                  \
+    if ((p_event)->evlat < -90)                         \
+      (p_event)->evlat = -180 - (p_event)->evlat;       \
+    else if ((p_event)->evlat > 90)                     \
+      (p_event)->evlat = 180 - (p_event)->evlat;        \
+  } while(0)
+
+#define FIXUP_EVDEPTH(p_event)                                          \
+  do {                                                                  \
+    if ((p_event)->evdepth < MIN_DEPTH)                                 \
+      (p_event)->evdepth = 2 * MIN_DEPTH - (p_event)->evdepth;          \
+    else if ((p_event)->evdepth > MAX_DEPTH)                            \
+      (p_event)->evdepth = 2 * MAX_DEPTH - (p_event)->evdepth;          \
+  } while(0)
+
+#define FIXUP_EVTIME(p_world, p_event)                                  \
+  do {                                                                  \
+    if ((p_event)->evtime < (p_world)->low_evtime)                      \
+      (p_event)->evtime = 2 * (p_world)->low_evtime - (p_event)->evtime; \
+    else if ((p_event)->evtime > (p_world)->high_evtime)                \
+      (p_event)->evtime = 2 * (p_world)->high_evtime - (p_event)->evtime; \
+  } while(0)
+
+#define FIXUP_EVMAG(p_event)                                          \
+  do {                                                                  \
+    if ((p_event)->evmag < MIN_MAGNITUDE)                               \
+      (p_event)->evmag = 2 * MIN_MAGNITUDE - (p_event)->evmag;          \
+    else if ((p_event)->evmag > MAX_MAGNITUDE)                          \
+      (p_event)->evmag = 2 * MAX_MAGNITUDE - (p_event)->evmag;          \
+  } while(0)
+
 typedef struct World_t
 {
   /* the inferred events, events be store in ascending order of time */
@@ -287,8 +329,8 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
  * numchoices = 1 => pick only one new location of each event
  *            > 1 => pick from numchoices ^ 5 locations
  */
-static void change_events(NetModel_t * p_netmodel, World_t * p_world,
-                          int numchoices)
+static void change_events_alldim(NetModel_t * p_netmodel, World_t * p_world,
+                                 int numchoices)
 {
   int STEP_MIN, STEP_MAX, STEP_PLUS;
   
@@ -446,6 +488,153 @@ static void change_events(NetModel_t * p_netmodel, World_t * p_world,
     }
   }
 }
+
+void resort_event(World_t * p_world, int curr_evnum)
+{
+  while(1)
+  {
+    /* check the event left of the current */
+    if (((curr_evnum-1)>=0) && 
+        (p_world->pp_events[curr_evnum-1]->evtime 
+         > p_world->pp_events[curr_evnum]->evtime))
+    {
+      Event_t * temp;
+      /* swap with the event to the left */
+      temp = p_world->pp_events[curr_evnum-1];
+      p_world->pp_events[curr_evnum-1] = p_world->pp_events[curr_evnum];
+      p_world->pp_events[curr_evnum] = temp;
+          
+      curr_evnum --;
+    }
+    else if (((curr_evnum+1) < p_world->high_evnum) && 
+             (p_world->pp_events[curr_evnum+1]->evtime 
+              < p_world->pp_events[curr_evnum]->evtime))
+    {
+      Event_t * temp;
+      temp = p_world->pp_events[curr_evnum+1];
+      p_world->pp_events[curr_evnum+1] = p_world->pp_events[curr_evnum];
+      p_world->pp_events[curr_evnum] = temp;
+          
+      curr_evnum ++;
+    }
+    else
+      break;
+  }
+}
+
+
+static void change_events(NetModel_t * p_netmodel, World_t * p_world,
+                          int numchoices)
+{
+  int evnum;
+  for (evnum = p_world->low_evnum; evnum < p_world->high_evnum; evnum ++)
+  {
+    Event_t * p_event;
+    Event_t curr_event;
+    Event_t best_event;
+    int choice;
+    
+    p_event = p_world->pp_events[evnum];
+    
+    if (p_event->evtime < p_world->low_evtime)
+      continue;
+
+    /* the existing event is initially the best event */
+    best_event = *p_event;
+
+#define UPDATE_BEST                                                 \
+    do {                                                            \
+      curr_event.evscore = score_event(p_netmodel, &curr_event);    \
+      if (curr_event.evscore > best_event.evscore)                  \
+        best_event = curr_event;                                    \
+    } while (0)
+
+    /* first try to change all the dimensions simultaneously */
+    curr_event = best_event;
+    for (choice = 0; choice < numchoices; choice ++)
+    {
+      curr_event.evlon = p_event->evlon + RAND_UNIFORM(-2, 2);
+      FIXUP_EVLON(&curr_event);
+      curr_event.evlat = p_event->evlat + RAND_UNIFORM(-2, 2);
+      FIXUP_EVLAT(&curr_event);
+      curr_event.evdepth = p_event->evdepth + RAND_UNIFORM(-100, 100);
+      FIXUP_EVDEPTH(&curr_event);
+      curr_event.evtime = p_event->evtime + RAND_UNIFORM(-5, 5);
+      FIXUP_EVTIME(p_world, &curr_event);
+      curr_event.evmag = p_event->evmag + RAND_UNIFORM(-2, 2);
+      FIXUP_EVMAG(&curr_event);
+      
+      UPDATE_BEST;
+    }
+    
+    
+    /* find the best longitude */
+    curr_event = best_event;
+    
+    for (choice = 0; choice < numchoices; choice ++)
+    {
+      curr_event.evlon = p_event->evlon + RAND_UNIFORM(-2, 2);
+      FIXUP_EVLON(&curr_event);
+      UPDATE_BEST;
+    }
+
+    /* find the best latitude */
+    curr_event = best_event;
+
+    for (choice = 0; choice < numchoices; choice ++)
+    {
+      curr_event.evlat = p_event->evlat + RAND_UNIFORM(-2, 2);
+      FIXUP_EVLAT(&curr_event);
+      UPDATE_BEST;
+    }
+
+    /* find the best depth */
+    curr_event = best_event;
+
+    for (choice = 0; choice < numchoices; choice ++)
+    {
+      curr_event.evdepth = p_event->evdepth + RAND_UNIFORM(-100, 100);
+      FIXUP_EVDEPTH(&curr_event);
+      UPDATE_BEST;
+    }
+
+    /* find the best time */
+    curr_event = best_event;
+
+    for (choice = 0; choice < numchoices; choice ++)
+    {
+      curr_event.evtime = p_event->evtime + RAND_UNIFORM(-5, 5);
+      FIXUP_EVTIME(p_world, &curr_event);
+      UPDATE_BEST;
+    }
+
+    /* find the best magnitude */
+    curr_event = best_event;
+
+    for (choice = 0; choice < numchoices; choice ++)
+    {
+      curr_event.evmag = p_event->evmag + RAND_UNIFORM(-2, 2);
+      FIXUP_EVMAG(&curr_event);
+      UPDATE_BEST;
+    }
+
+    /* set the event to the best so far */
+    if (best_event.evscore > p_event->evscore)
+    {
+
+#ifdef DEBUG2
+      printf("change_events: orid %d score %.1f -> %.1f\n", p_event->orid,
+             p_event->evscore, best_event.evscore);
+#endif
+      
+      p_world->world_score += best_event.evscore - p_event->evscore;
+      *p_event = best_event;
+
+      resort_event(p_world, evnum);
+    }
+  }
+}
+
 
 /* greedily find the best event-phase for a detection */
 static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
@@ -908,7 +1097,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
                old_score - p_world->world_score, p_world->world_score);
       }
       
-      change_events(p_netmodel, p_world, 1);
+      change_events(p_netmodel, p_world, 10);
 
       change_detections(p_netmodel, p_world);
     };

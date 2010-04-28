@@ -59,6 +59,8 @@ int propose(NetModel_t * p_netmodel, Event_t **pp_events,
   double best_lon, best_lat, best_time, best_score;
 
   int numevents;
+  int event_numdet;
+  
   Event_t * p_event;
   
   p_earth = p_netmodel->p_earth;
@@ -74,7 +76,7 @@ int propose(NetModel_t * p_netmodel, Event_t **pp_events,
   if (!p_bucket_score)
   {
     printf("can't allocate %d x %d x %d x %d bytes\n", numlon, numlat,
-           numtime, sizeof(*p_bucket_score));
+           numtime, (int)sizeof(*p_bucket_score));
     return -1;
   }
 
@@ -87,10 +89,15 @@ int propose(NetModel_t * p_netmodel, Event_t **pp_events,
 
   p_skip_det = (int *) calloc(p_netmodel->numdetections, sizeof(*p_skip_det));
   
-
+  if (!p_skip_det)
+  {
+    free(p_bucket_score);
+    return -1;
+  }
+  
   /* we skip all the non P detections */
 
-  for (detnum = 0; detnum < p_netmodel->numdetections; detnum ++)
+  for (detnum = det_low; detnum < det_high; detnum ++)
   {
     Detection_t * p_det;
     
@@ -126,7 +133,7 @@ int propose(NetModel_t * p_netmodel, Event_t **pp_events,
                                                      EARTH_PHASE_P, sitenum);
     }
       
-    for (detnum = 0; detnum < p_netmodel->numdetections; detnum ++)
+    for (detnum = det_low; detnum < det_high; detnum ++)
     {
       Detection_t * p_det;
     
@@ -218,7 +225,7 @@ int propose(NetModel_t * p_netmodel, Event_t **pp_events,
      * event at each site
      */
 
-    for (detnum = 0; detnum < p_netmodel->numdetections; detnum ++)
+    for (detnum = det_low; detnum < det_high; detnum ++)
     {
       Detection_t * p_det;
       int poss;
@@ -255,19 +262,23 @@ int propose(NetModel_t * p_netmodel, Event_t **pp_events,
     /*
      * Fourth, we will skip these best detections in future iterations
      */
+    event_numdet = 0;
     for (sitenum = 0; sitenum < numsites; sitenum ++)
     {
       detnum = p_event->p_detids[sitenum * numtimedefphases + EARTH_PHASE_P];
 
       if (detnum != -1)
+      {
         p_skip_det[detnum] = 1;
+        event_numdet ++;
+      }
     }
-
-  } while (1);
+  } while (event_numdet >= 3);
   
   free(p_site_ttime);
   free(p_site_score);
   free(p_skip_det);
+  free(p_bucket_score);
   
   return numevents;
 }

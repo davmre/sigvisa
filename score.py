@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, time
 import numpy as np
 from optparse import OptionParser
 
@@ -70,7 +70,18 @@ def main(param_dirname):
         print >>fp, 0,
       
       if options.prob:
-        print >>fp, netmodel.prob_event(event, sel3_evlist[evnum])
+        t1 = time.time()
+        prob = netmodel.prob_event(event, sel3_evlist[evnum])
+        print >>fp, prob
+        t2 = time.time()
+        print "%.1f sec" % (t2 - t1),
+        print int(event[EV_ORID_COL]),
+        if evnum in true_sel3_idx:
+          print 1,
+        else:
+          print 0,
+        print prob
+        
       else:
         print >>fp, netmodel.score_event(event, sel3_evlist[evnum])
       
