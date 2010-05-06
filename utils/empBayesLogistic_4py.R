@@ -7,13 +7,13 @@
 ### Paul Kidwell 4-23-2010
 
 
-FitLogistic<-function(infile,outfile){
+FitLogistic<-function(infile, outfile, pwd, ossep){
 
-   pwd<-system("pwd",intern=TRUE)
-   source(paste(pwd,"/utils/Rpgms/dataread.R",sep=""))
-   source(paste(pwd,"/utils/Rpgms/dfconversion.R",sep=""))
-   source(paste(pwd,"/utils/Rpgms/logistic.R",sep=""))
-   source(paste(pwd,"/utils/Rpgms/wire3d.R",sep=""))
+   # pwd<-system("pwd",intern=TRUE)
+   source(paste(pwd,"utils", "Rpgms", "dataread.R", sep=ossep))
+   source(paste(pwd,"utils", "Rpgms", "dfconversion.R", sep=ossep))
+   source(paste(pwd,"utils", "Rpgms", "logistic.R", sep=ossep))
+   source(paste(pwd,"utils", "Rpgms", "wire3d.R", sep=ossep))
    
 
    
@@ -21,8 +21,9 @@ FitLogistic<-function(infile,outfile){
 
    ## Select variables and create constants and output vectors
 
+   ## we want the phasenames output in the original order
+   phasenames<-colnames(read.table(file=infile, header=TRUE))[-seq(1,5)]
    remove_cols<-c(1,seq(6,20))
-   phasenames<-unique(dets$phase)
    sites<-unique(dets$site)
    log_coef<-coefDF(length(sites)*length(phasenames))
 
@@ -64,7 +65,8 @@ FitLogistic<-function(infile,outfile){
  
     }
 
-    write.csv(log_coef,file=outfile,row.names=FALSE)
+    write(c(length(phasenames), length(sites)), outfile)
+    write.csv(log_coef,file=outfile,row.names=FALSE, append=TRUE)
     return()
 }
 

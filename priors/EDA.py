@@ -64,9 +64,9 @@ def learn(param_dirname,earthmodel, start_time, end_time,
           detections, leb_events, leb_evlist,
           site_up, sites, phasenames, phasetimedef):
 
-  param_fname=os.path.join("utils/EventDetectionTEMP.txt")
-  param_fout=os.path.join(param_dirname,"EventDetectionAnalysis.csv")
-  param_rfile=os.path.join("utils/empBayesLogistic_4py.R")
+  param_fname = "utils/EventDetectionTEMP.txt"
+  param_fout = param_dirname + "/EventDetectionPrior.txt"
+  param_rfile = "utils/empBayesLogistic_4py.R"
 
   fp = open(param_fname, "w")
 
@@ -97,8 +97,9 @@ def learn(param_dirname,earthmodel, start_time, end_time,
   #use R script to read in file and build phase-site specific logistic regression
  ### R CMD BATCH empBayesLogistic_4py.R param_fname param_fout
   
-  robjects.r("".join(["source('",param_rfile,"')"]))
-  robjects.r.FitLogistic(param_fname,outfile=param_fout);
-  os.system("".join(["rm ",param_fname]))
+  robjects.r("source('" + param_rfile + "')")
+  robjects.r.FitLogistic(param_fname,outfile=param_fout,
+                         pwd = os.path.curdir, ossep=os.path.sep);
+  os.system("rm " + param_fname)
 
 

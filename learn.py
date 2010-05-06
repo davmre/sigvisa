@@ -93,7 +93,7 @@ def main(param_dirname):
                                                   "EventDetectionPrior.txt"),
                                      earthmodel, start_time, end_time,
                                      detections, leb_events, leb_evlist,
-                                     site_up, sites, phasenames, phasetimedef)
+                                     site_up)
 
   priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
                                              "NumFalseDetPrior.txt"),

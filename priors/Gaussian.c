@@ -2,6 +2,11 @@
 
 #include "../netvisa.h"
 
+double Gaussian_prob(double val, double m, double s)
+{
+  return exp(- (val - m) * (val - m) / (2.0 * s * s)) / sqrt(2.0 * PI * s * s);
+}
+
 double Gaussian_sample(double m, double s)
 /* ========================================================================
  * Returns a normal (Gaussian) distributed real number.
