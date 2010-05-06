@@ -13,6 +13,7 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
+static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
@@ -37,6 +38,9 @@ static PyMethodDef NetModel_methods[] = {
    "location_logprob(lon, lat, depth) -> probability"},
   {"location_sample", (PyCFunction)py_location_sample, METH_NOARGS,
    "location_sample() -> (lon, lat, depth)"},
+  {"detection_logprob", (PyCFunction)py_detection_logprob, METH_VARARGS,
+   "detection_logprob(isdet, evdepth, evmag, dist, siteid, phaseid)"
+   " -> log probability"},
   {NULL}  /* Sentinel */
 };
 
@@ -746,6 +750,27 @@ static PyObject * py_location_sample(NetModel_t * p_netmodel)
                             &lon, &lat, &depth);
   
   return Py_BuildValue("ddd", lon, lat, depth);
+}
+
+static PyObject * py_detection_logprob(NetModel_t * p_netmodel,
+                                       PyObject * args)
+{
+  int isdet;
+  double evdepth;
+  double evmag;
+  double dist;
+  int siteid;
+  int phaseid;
+  
+  if (!PyArg_ParseTuple(args, "idddii", &isdet, &evdepth, &evmag, &dist,
+                        &siteid, &phaseid))
+    return NULL;
+
+  return Py_BuildValue("d",
+                       EventDetectionPrior_LogProb(&p_netmodel
+                                                   ->event_det_prior,
+                                                   isdet, evdepth, evmag,
+                                                   dist, siteid, phaseid));
 }
 
 static PyObject * py_srand(PyObject * self, PyObject * args)

@@ -5,12 +5,15 @@
 
 #include "../netvisa.h"
 
+#define SKIP_TO_CHAR(fp, ch) while(fgetc(fp) != (ch))
+
 void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior, 
                                      const char * filename)
 {
   FILE * fp;
   int siteid;
   int phaseid;
+  int i;
   
   fp = fopen(filename, "r");
   
@@ -20,56 +23,49 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
     exit(1);
   }
 
-  if (2 != fscanf(fp, "%d %d\n", &prior->numsites, &prior->numtimedefphases))
+  if (2 != fscanf(fp, "%d %d\n", &prior->numtimedefphases, &prior->numsites))
   {
     fprintf(stderr, "error reading num sites and phases from %s\n", filename);
     exit(1);
   }
 
-  prior->p_coeff_mag = (double *)malloc(sizeof(*prior->p_coeff_mag)
-                                        * prior->numsites);
-
-  prior->p_coeff_dist = (double *)malloc(sizeof(*prior->p_coeff_dist)
-                                         * prior->numsites);
-
-  prior->p_coeff_phases = (double *)malloc(sizeof(*prior->p_coeff_phases)
-                                          * prior->numsites 
-                                          * prior->numtimedefphases);
-
-  prior->p_coeff_bias = (double *)malloc(sizeof(*prior->p_coeff_bias)
-                                        * prior->numsites);
+  /* skip a line */
+  SKIP_TO_CHAR(fp, '\n');
   
-  for (siteid = 0; siteid < prior->numsites; siteid ++)
+  prior->p_coeffs = (double *)malloc(sizeof(*prior->p_coeffs)
+                                     * prior->numsites
+                                     * prior->numtimedefphases
+                                     * NUM_EDA_COEFFS);
+
+  for (phaseid = 0; phaseid < prior->numtimedefphases; phaseid ++)
   {
-    if (1 != fscanf(fp, "%lg ", &prior->p_coeff_mag[siteid]))
+    for (siteid = 0; siteid < prior->numsites; siteid ++)
     {
-      fprintf(stderr, "error reading mag-coeff for siteid %d in file %s\n",
-              siteid, filename);
-      exit(1);
-    }
-    if (1 != fscanf(fp, "%lg ", &prior->p_coeff_dist[siteid]))
-    {
-      fprintf(stderr, "error reading dist-coeff for siteid %d in file %s\n",
-              siteid, filename);
-      exit(1);
-    }
-    for (phaseid = 0; phaseid < prior->numtimedefphases; phaseid ++)
-    {
-      if (1 != fscanf(fp, "%lg ",&prior->p_coeff_phases[siteid 
-                                                        * prior
-                                                        ->numtimedefphases
-                                                        + phaseid]))
+      char * fmt;
+      double coeff;
+      
+      /* skip the phase name */
+      SKIP_TO_CHAR(fp, ',');
+      /* skip the site id */
+      SKIP_TO_CHAR(fp, ',');
+
+      for (i=0; i<NUM_EDA_COEFFS; i++)
       {
-        fprintf(stderr, "error reading phaseid %d for siteid %d in file %s\n",
-                phaseid, siteid, filename);
-        exit(1);
+        if ((NUM_EDA_COEFFS-1) == i)
+          fmt = "%lg\n";
+        else
+          fmt = "%lg,";
+        
+        if (1 != fscanf(fp, fmt, &coeff))
+        {
+          fprintf(stderr, "error reading coeff %d for phaseid %d siteid %d in "
+                  "file %s\n", i, phaseid, siteid, filename);
+          exit(1);
+        }
+
+        prior->p_coeffs[(siteid * prior->numtimedefphases + phaseid)
+                        * NUM_EDA_COEFFS + i] = coeff;
       }
-    }
-    if (1 != fscanf(fp, "%lg\n", &prior->p_coeff_bias[siteid]))
-    {
-      fprintf(stderr, "error reading bias for siteid %d in file %s\n",
-              siteid, filename);
-      exit(1);
     }
   }
   
@@ -83,14 +79,29 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
 {
   double logodds;
   double logprob;
+  double * p_coeffs;
 
-  assert(phaseid < prior->numtimedefphases);
+  assert((phaseid < prior->numtimedefphases) && (siteid < prior->numsites));
   
-  logodds = prior->p_coeff_mag[siteid] * evmag
-    + prior->p_coeff_dist[siteid] * dist
-    + prior->p_coeff_phases[siteid * prior->numtimedefphases + phaseid]
-    + prior->p_coeff_bias[siteid];
+  p_coeffs = prior->p_coeffs 
+    + (siteid * prior->numtimedefphases + phaseid) * NUM_EDA_COEFFS;
 
+  logodds = p_coeffs[EDA_COEFF_INTERCEPT]
+    + p_coeffs[EDA_COEFF_MAG] * evmag
+    + p_coeffs[EDA_COEFF_DEPTH] * evdepth
+    + p_coeffs[EDA_COEFF_DIST] * dist
+    + p_coeffs[EDA_COEFF_DIST0] * Gaussian_prob(dist, 0, 5)
+    + p_coeffs[EDA_COEFF_DIST35] * Gaussian_prob(dist, 35, 20)
+    + p_coeffs[EDA_COEFF_DIST40] * Gaussian_prob(dist, 40, 20)
+    + p_coeffs[EDA_COEFF_DIST12520] * Gaussian_prob(dist, 125, 20)
+    + p_coeffs[EDA_COEFF_DIST12540] * Gaussian_prob(dist, 125, 40)
+    + p_coeffs[EDA_COEFF_DIST145] * Gaussian_prob(dist, 145, 10)
+    + p_coeffs[EDA_COEFF_DIST170] * Gaussian_prob(dist, 170, 20)
+    + p_coeffs[EDA_COEFF_DIST175] * Gaussian_prob(dist, 175, 30)
+    + p_coeffs[EDA_COEFF_MAG6] * Gaussian_prob(evmag, 6, 5.5)
+    + p_coeffs[EDA_COEFF_MAG68] * Gaussian_prob(evmag, 6, 8)
+    + p_coeffs[EDA_COEFF_MD] * (7 - evmag) * dist;
+  
   if (is_detected)
     logprob = - log(1 + exp(-logodds));
   else
@@ -109,8 +120,6 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
 
 void EventDetectionPrior_UnInit(EventDetectionPrior_t * prior)
 {
-  free(prior->p_coeff_mag);
-  free(prior->p_coeff_phases);
-  free(prior->p_coeff_bias);
+  free(prior->p_coeffs);
 }
 

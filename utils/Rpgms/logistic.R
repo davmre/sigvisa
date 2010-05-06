@@ -159,7 +159,7 @@ heatPredSurf<-function(main_label,betas){
 
 coefDF<-function(n){
     vars<-c("phase","site","(Intercept)","mag","dep","dist","dist0","dist35","dist40",
-        "dist12520","dist12540","dist145","dist147","dist170","dist175",
+        "dist12520","dist12540","dist145","dist170","dist175",
         "mag6","mag68","md")
     x<-data.frame(matrix(0,n,length(vars)))
     colnames(x)<-vars
