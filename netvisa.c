@@ -135,6 +135,9 @@ static PyMethodDef EarthModel_methods[] = {
     {"MaxTravelTime", (PyCFunction)py_EarthModel_MaxTravelTime,
      METH_VARARGS, "MaxTravelTime() -> time",
     },
+    {"PhaseRange", (PyCFunction)py_EarthModel_PhaseRange,
+     METH_VARARGS, "PhaseRange(phaseid) -> (min distance, max distance)",
+    },
     {NULL}  /* Sentinel */
 };
 

@@ -28,9 +28,6 @@ typedef struct EarthPhaseModel_t
   
   double * p_samples;                        /* numdepth x numdist */
   
-  double mindist;
-  double maxdist;
-
   double surf_vel;                           /* surface velocity */
   
 } EarthPhaseModel_t;
@@ -127,3 +124,4 @@ PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth,
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
                      Event_t * p_event, int perturb);
 
+PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args);

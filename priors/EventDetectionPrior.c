@@ -103,13 +103,23 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
     + p_coeffs[EDA_COEFF_MD] * (7 - evmag) * dist;
   
   if (is_detected)
-    logprob = - log(1 + exp(-logodds));
+  {
+    if (logodds < -40)
+      logprob = logodds;
+    else
+      logprob = - log(1 + exp(-logodds));
+  }
   else
-    logprob = - log(1 + exp(logodds));
+  {
+    if (logodds > 40)
+      logprob = -logodds;
+    else
+      logprob = - log(1 + exp(logodds));
+  }
 
   if (!isfinite(logprob))
   {
-    printf("depth %.1lf mag dist %.1lf %.1lf siteid %d phaseid %d "
+    printf("depth %lg mag %lg dist %lg siteid %d phaseid %d "
            "isdet %d logodds %lg\n", 
            evdepth, evmag, dist, siteid, phaseid, is_detected,logodds);
     exit(1);

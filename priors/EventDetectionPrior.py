@@ -4,16 +4,22 @@ import math, random
 from utils.LogisticModel import LogisticModel
 from database.dataset import *
 
+def gtf(val, m, s):
+  return math.exp(- float(val - m) ** 2 / (2.0 * s ** 2)) \
+         / math.sqrt(2.0 * math.pi * s ** 2)
+
 def learn_phase_site(true_data, fake_data):
   output, mag_feat, depth_feat, dist_feat = [], [], [], []
+  dist0_feat = []
   for (isdet, mag, depth, dist) in true_data + fake_data:
     output.append(isdet)
     mag_feat.append(mag)
     depth_feat.append(depth)
     dist_feat.append(dist)
+    dist0_feat.append(gtf(dist, 0, 5))
     
-  model = LogisticModel("y", ["mag", "depth", "dist"],
-                        [mag_feat, depth_feat, dist_feat], output)
+  model = LogisticModel("y", ["mag", "depth", "dist", "dist0"],
+                        [mag_feat, depth_feat, dist_feat, dist0_feat], output)
 
   for i in range(len(model.coeffs)):
     if np.isnan(model.coeffs[i]):
@@ -24,7 +30,7 @@ def learn_phase_site(true_data, fake_data):
   cnt = 0
   for (isdet, mag, depth, dist) in true_data:
     cnt += 1
-    p = model[(mag, depth, dist)]
+    p = model[(mag, depth, dist, gtf(dist, 0, 5))]
     if isdet:
       sumlogprob += math.log(p)
     else:
@@ -46,10 +52,10 @@ def learn(param_fname, earthmodel, start_time, end_time,
   fp = open(param_fname, "w")
   
   print >>fp, "%d %d" % (numtimedefphases, numsites)
-  print >>fp, "Phase, Siteid, (Intercept), mag, depth, dist, ..."
+  print >>fp, "Phase, Siteid, (Intercept), mag, depth, dist, dist0, ..."
 
   # construct a dataset for each phase
-  phase_data = dict((i,[]) for i in range(numtimedefphases))  
+  phase_data = dict((i,[]) for i in range(numtimedefphases))
   for evnum, event in enumerate(leb_events):
     det_phase_site = set((phaseid, detections[detnum, DET_SITE_COL])\
                          for phaseid, detnum in leb_evlist[evnum])
@@ -76,15 +82,23 @@ def learn(param_fname, earthmodel, start_time, end_time,
 
 
   # learn for each phase, site
-  NUM_FAKE_EMPIRICAL = 30
-  NUM_FAKE_UNIFORM = 20
+  NUM_FAKE_EMPIRICAL = 50
   for phaseid in range(numtimedefphases):
     true_data = phase_data[phaseid]
-    fake_data = [(isdet, mag, dep, dist) for (snum, isdet, mag, dep, dist) \
-                 in random.sample(true_data, NUM_FAKE_EMPIRICAL)]\
-                 + [(int(random.random() < .5), random.randrange(3,6),
-                     random.randrange(0,700), random.randrange(0,180)) \
-                    for _ in xrange(NUM_FAKE_UNIFORM)]
+    # create some perturbed true data
+    fake_data = []
+    for (snum, isdet, mag, dep, dist) in random.sample(true_data,
+                                                       NUM_FAKE_EMPIRICAL):
+      # perturb some misdetections
+      if not(isdet) and random.random() < .25:
+        isdet = 1
+      # perturb the magnitude depth and distance as well
+      mag += random.random()/10.0
+      dep += random.random()
+      dist += random.random()
+      
+      fake_data.append((isdet, mag, dep, dist))
+
     
     for siteid in range(numsites):
       print "[%s]: (%d):" % (earthmodel.PhaseName(phaseid), siteid),
@@ -97,10 +111,10 @@ def learn(param_fname, earthmodel, start_time, end_time,
       buf = "%s,%d,%s," % (earthmodel.PhaseName(phaseid), siteid,
                            str(coeffs[-1]))
 
-      for i in range(3):
+      for i in range(4):
         buf += "%s," % (str(coeffs[i]),)
 
-      buf += ",".join(["0" for _ in range(11)])
+      buf += ",".join(["0" for _ in range(10)])
 
       print >>fp, buf
       

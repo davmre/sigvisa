@@ -69,37 +69,38 @@ def visualize_detection(earthmodel, netmodel, start_time, end_time,
                                     event[EV_DEPTH_COL], dist))
 
   SITEID = 6
-  plot_phaseid = 0
-
-  plt.figure()
-  plt.title("Detection probability at ASAR for P phase of surface event")
-  
-  # now, bucket the phase data for the P phase at ASAR
-  occ = np.ones(18, int)
-  det = np.zeros(18, int)
-  for siteid, isdet, evmag, evdepth, dist in phase_data[plot_phaseid]:
-    if siteid == SITEID and evmag >=3 and evmag <= 4 and evdepth<=50:
-      distidx = int(dist/10)
-      occ[distidx] += 1
-      if isdet:
+  for plot_phaseid in range(numtimedefphases):
+    plt.figure()
+    plt.title("Detection probability at ASAR for %s phase, surface event"
+              % earthmodel.PhaseName(plot_phaseid))
+    
+    # now, bucket the phase data for the P phase at ASAR
+    occ = np.ones(18, int)
+    det = np.zeros(18, int)
+    for siteid, isdet, evmag, evdepth, dist in phase_data[plot_phaseid]:
+      if siteid == SITEID and evmag >=3 and evmag <= 4 and evdepth<=50:
+        distidx = int(dist/10)
         occ[distidx] += 1
-  prob = det.astype(float) / occ.astype(float)
-  x_bucket_pts = range(0, 180, 10)
-
-  plt.bar(left=x_bucket_pts, height=prob, width=10, alpha=.5,
-          label="data 3-4 mb")
-
-  x_pts = range(0,181)  
-  y_pts = [math.exp(netmodel.detection_logprob(1, 0, 3.5, x, SITEID,
-                                               plot_phaseid)) \
-           for x in x_pts]
-  plt.plot(x_pts, y_pts, label="model 3.5 mb")
-
-  plt.xlim(0,180)
-  plt.ylim(0, 1)
-  plt.xlabel("Distance (deg)")
-  plt.ylabel("Probability")
-  plt.legend(loc="upper right")
+        if isdet:
+          det[distidx] += 1
+    prob = det.astype(float) / occ.astype(float)
+    x_bucket_pts = range(0, 180, 10)
+    
+    plt.bar(left=x_bucket_pts, height=prob, width=10, alpha=.5,
+            label="data 3-4 mb")
+    
+    mindist, maxdist = earthmodel.PhaseRange(plot_phaseid)
+    x_pts = range(int(mindist), int(maxdist)+1)
+    y_pts = [math.exp(netmodel.detection_logprob(1, 0, 3.5, x, SITEID,
+                                                 plot_phaseid)) \
+             for x in x_pts]
+    plt.plot(x_pts, y_pts, label="model 3.5 mb")
+    
+    plt.xlim(0,180)
+    plt.ylim(0, 1)
+    plt.xlabel("Distance (deg)")
+    plt.ylabel("Probability")
+    plt.legend(loc="upper right")
 
   
 if __name__ == "__main__":
