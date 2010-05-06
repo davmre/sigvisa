@@ -1222,3 +1222,23 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
   return 0;
 }
 
+PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args)
+{
+  int phaseid;
+  EarthPhaseModel_t * p_phase;
+  
+  if (!PyArg_ParseTuple(args, "i", &phaseid))
+    return NULL;
+
+  if ((phaseid < 0) || (phaseid >= p_earth->numphases))
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid");
+    return NULL;
+  }
+
+  p_phase = p_earth->p_phases + phaseid;
+
+  return Py_BuildValue("dd", p_phase->p_dists[0],
+                       p_phase->p_dists[p_phase->numdist-1]);
+}
+
