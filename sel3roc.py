@@ -8,6 +8,9 @@
 import sys
 import matplotlib.pyplot as plt
 
+curr_color = 0
+colors=["red", "blue", "orange", "yellow", "brown", "purple"]
+
 def draw_roc(label, fname):
   scores = []
   total_true, total_false = 0, 0
@@ -41,8 +44,10 @@ def draw_roc(label, fname):
     if cnt % 30 == 0 or cnt == len(scores)-1:
       y_pts.append(float(num_true) / total_true)
       x_pts.append(float(num_false) / total_false)
-  
-  plt.plot(x_pts, y_pts, label=label)
+
+  global curr_color
+  plt.plot(x_pts, y_pts, label=label, color=colors[curr_color])
+  curr_color += 1
 
 def main():
   if (len(sys.argv)-1) % 2 != 0 or sys.argv < 3:

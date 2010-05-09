@@ -13,6 +13,9 @@ def main(param_dirname):
   parser.add_option("-t", "--train", dest="train", default=False,
                     action = "store_true",
                     help = "visualize training data (False)")
+  parser.add_option("-w", "--write", dest="write", default=None,
+                    help = "location to write figures to",
+                    metavar="DIRNAME")
   (options, args) = parser.parse_args()
 
   if options.train:
@@ -31,12 +34,12 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
-  visualize_detection(earthmodel, netmodel, start_time, end_time,
+  visualize_detection(options, earthmodel, netmodel, start_time, end_time,
                       detections, leb_events, leb_evlist, site_up)
 
   plt.show()
   
-def visualize_detection(earthmodel, netmodel, start_time, end_time,
+def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
                         detections, leb_events, leb_evlist, site_up):
   
   numtimedefphases = earthmodel.NumTimeDefPhases()
@@ -101,7 +104,11 @@ def visualize_detection(earthmodel, netmodel, start_time, end_time,
     plt.xlabel("Distance (deg)")
     plt.ylabel("Probability")
     plt.legend(loc="upper right")
-
+    if options.write is not None:
+      pathname = os.path.join(options.write, "detprob_%s.png"
+                              % earthmodel.PhaseName(plot_phaseid))
+      print "saving fig to %s" % pathname
+      plt.savefig(pathname)
   
 if __name__ == "__main__":
   main("parameters")
