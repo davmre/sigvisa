@@ -325,6 +325,38 @@ static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
   return p_event;
 }
 
+static void add_invert_events(NetModel_t * p_netmodel, World_t * p_world)
+{
+  int detnum;
+  
+  for (detnum = p_world->low_detnum; detnum < p_world->high_detnum; detnum++)
+  {
+    int status;
+    Event_t * p_event;
+  
+    p_event = alloc_event(p_netmodel);
+  
+    status = invert_detection(p_netmodel->p_earth, 
+                              p_netmodel->p_detections + detnum,
+                              p_event,
+                              0 /* don't perturb */);
+    if ((0 == status) && (p_event->evtime > p_world->low_evtime)
+        && (p_event->evtime < p_world->high_evtime))
+    {
+      insert_event(p_netmodel, p_world, p_event);
+      if (p_world->verbose)
+      {
+        printf("INV: ");
+        print_event(p_event);
+      }
+    }
+
+    else
+      free_event(p_event);
+  }
+
+}
+
 /* greedily find the location for each event
  * numchoices = 1 => pick only one new location of each event
  *            > 1 => pick from numchoices ^ 5 locations
@@ -1020,6 +1052,8 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     /* add an initial set of events in the new window */
     add_initial_events(p_netmodel, p_world);
     
+    add_invert_events(p_netmodel, p_world);
+    
     /* change the detections to use these new events */
     change_detections(p_netmodel, p_world);
 
@@ -1030,12 +1064,13 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     p_world->inv_detnum_wrap = 0;
 
     t1 = time(NULL);
-    
+
     for (i=0; i<p_world->numsamples; i++)
     {
       int j;
       int numdel;
       double old_score;
+#ifdef NEVER
       Event_t * p_new_event;
 
       old_score = p_world->world_score;
@@ -1064,6 +1099,8 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
                old_score - p_world->world_score, p_world->world_score);
       }
       
+#endif /* NEVER */
+
       old_score = p_world->world_score;
       
       numdel = 0;
@@ -1101,6 +1138,39 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
 
       change_detections(p_netmodel, p_world);
     };
+
+#ifdef NEVER
+    /* now for one round try to delete each event and see if that improves
+     * the world score */
+    for (i=p_world->low_evnum; i<p_world->high_evnum; i++)
+    {
+      Event_t * p_old_event;
+      double old_score;
+      
+      old_score = p_world->world_score;
+      
+      p_old_event = p_world->pp_events[i];
+
+      delete_event(p_world, p_old_event);
+      
+      change_detections(p_netmodel, p_world);
+      
+      if (p_world->world_score < old_score)
+      {
+        insert_event(p_netmodel, p_world, p_old_event);
+        change_detections(p_netmodel, p_world);
+      }
+      else
+      {
+        if (p_world->verbose)
+        {
+          printf("kill: ");
+          print_event(p_old_event);
+        }
+        free_event(p_old_event);
+      }
+    }
+#endif
 
 /*
     change_events(p_netmodel, p_world, 2);
