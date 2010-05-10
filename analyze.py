@@ -105,6 +105,10 @@ def main():
                     action = "store_true",
                     help = "verbose output (False)")
 
+  parser.add_option("-g", "--mag", dest="mag", default=False,
+                    action = "store_true",
+                    help = "analyze by magnitude (False)")
+  
   parser.add_option("-d", "--detcnt", dest="detcnt", default=False,
                     action = "store_true",
                     help = "analyze by number of timedef detections (False)")
@@ -154,8 +158,9 @@ def main():
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,
                                            "visa", options.runid)
 
-  analyze_by_attr("mb", MAG_RANGES, [ev[EV_MB_COL] for ev in leb_events],
-                  leb_events, sel3_events, visa_events, options.verbose)
+  if options.mag:
+    analyze_by_attr("mb", MAG_RANGES, [ev[EV_MB_COL] for ev in leb_events],
+                    leb_events, sel3_events, visa_events, options.verbose)
 
   if options.detcnt:
     detcnts = []

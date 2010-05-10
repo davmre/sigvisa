@@ -131,6 +131,9 @@ def main(param_dirname):
     plt.ylim(0,150)
     plt.xlabel("score")
     plt.ylabel("number of events")
+
+    print "%.1f %% False-SEL3 events had +ve score" \
+          % (100.0 * sum(s > 0 for s in false_sel3) / len(false_sel3))
     
     plt.figure()
     plt.title("LEB event scores")
@@ -141,7 +144,9 @@ def main(param_dirname):
     plt.ylim(0,150)
     plt.xlabel("score")
     plt.ylabel("number of events")
-    
+
+    print "%.1f %% LEB events had +ve score" \
+          % (100.0 * sum(s > 0 for s in leb_scores) / len(leb_scores))
     plt.show()
 
 if __name__ == "__main__":
