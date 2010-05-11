@@ -198,6 +198,7 @@ Event_t * alloc_event(NetModel_t * p_netmodel);
 void free_event(Event_t * p_event);
 void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event);
+void print_event(const Event_t * p_event);
 
 void convert_events_to_pyobj(const EarthModel_t * p_earth,
                              const Event_t ** pp_events, int numevents,

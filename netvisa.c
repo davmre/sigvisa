@@ -911,3 +911,12 @@ void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
          numsites * numtimedefphases * sizeof(*p_src_event->p_detids));
 
 }
+
+void print_event(const Event_t * p_event)
+{
+  printf("%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d\n",
+         p_event->evlon, p_event->evlat, p_event->evdepth,
+         p_event->evtime, p_event->evmag, p_event->evscore,
+         p_event->orid);
+}
+

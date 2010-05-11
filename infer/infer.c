@@ -150,16 +150,6 @@ static void insert_event(NetModel_t * p_netmodel,
   assert(p_world->high_evnum < p_world->maxevents);
 }
 
-#ifdef DEBUG
-static void print_event(const Event_t * p_event)
-{
-  printf("%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d\n",
-         p_event->evlon, p_event->evlat, p_event->evdepth,
-         p_event->evtime, p_event->evmag, p_event->evscore,
-         p_event->orid);
-}
-#endif /* DEBUG */
-
 static void delete_event(World_t * p_world, Event_t * p_event)
 {
   int evnum;

@@ -37,6 +37,9 @@ def main(param_dirname):
   parser.add_option("-k", "--skip", dest="skip", default=0,
                     type="float",
                     help = "skip the first HOURS of data (0)")
+  parser.add_option("-w", "--window", dest="window", default=300,
+                    type="float",
+                    help = "window size in seconds (300)")
   parser.add_option("-s", "--seed", dest="seed", default=123456789,
                     type="int",
                     help = "random number generator seed (123456789)")
@@ -65,20 +68,20 @@ def main(param_dirname):
 
   t1 = time.time()
   prop_events, prop_evlist = netmodel.propose(start_time,
-                                              end_time - MAX_TRAVEL_TIME,
+                                              start_time + options.window,
                                               0, len(detections),
                                               options.degree_step,
                                               options.time_step)
   t2 = time.time()
 
-  print "%.1f seconds to propose %d event" % (t2-t1, len(prop_events))
+  print "%.1f seconds to propose %d event(s)" % (t2-t1, len(prop_events))
 
   print_events(netmodel, earthmodel, prop_events, prop_evlist, "PROP")
   
   for leb_evnum, leb_event in enumerate(leb_events):
     
     # we can only predict events for which we have all the detections
-    if leb_event[EV_TIME_COL] > (end_time - MAX_TRAVEL_TIME):
+    if leb_event[EV_TIME_COL] > (start_time + options.window):
       continue
     
     print_event(netmodel, earthmodel, detections, leb_event,
