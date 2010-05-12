@@ -7,6 +7,8 @@
 
 #define SKIP_TO_CHAR(fp, ch) while(fgetc(fp) != (ch))
 
+#define MUL_IFNZ(a,b) ((a) ? (a) * (b) : 0)
+
 void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior, 
                                      const char * filename)
 {
@@ -87,20 +89,20 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
     + (siteid * prior->numtimedefphases + phaseid) * NUM_EDA_COEFFS;
 
   logodds = p_coeffs[EDA_COEFF_INTERCEPT]
-    + p_coeffs[EDA_COEFF_MAG] * evmag
-    + p_coeffs[EDA_COEFF_DEPTH] * evdepth
-    + p_coeffs[EDA_COEFF_DIST] * dist
-    + p_coeffs[EDA_COEFF_DIST0] * Gaussian_prob(dist, 0, 5)
-    + p_coeffs[EDA_COEFF_DIST35] * Gaussian_prob(dist, 35, 20)
-    + p_coeffs[EDA_COEFF_DIST40] * Gaussian_prob(dist, 40, 20)
-    + p_coeffs[EDA_COEFF_DIST12520] * Gaussian_prob(dist, 125, 20)
-    + p_coeffs[EDA_COEFF_DIST12540] * Gaussian_prob(dist, 125, 40)
-    + p_coeffs[EDA_COEFF_DIST145] * Gaussian_prob(dist, 145, 10)
-    + p_coeffs[EDA_COEFF_DIST170] * Gaussian_prob(dist, 170, 20)
-    + p_coeffs[EDA_COEFF_DIST175] * Gaussian_prob(dist, 175, 30)
-    + p_coeffs[EDA_COEFF_MAG6] * Gaussian_prob(evmag, 6, 5.5)
-    + p_coeffs[EDA_COEFF_MAG68] * Gaussian_prob(evmag, 6, 8)
-    + p_coeffs[EDA_COEFF_MD] * (7 - evmag) * dist;
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_MAG], evmag)
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DEPTH], evdepth)
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST], dist)
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST0], Gaussian_prob(dist, 0, 5))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST35],  Gaussian_prob(dist, 35, 20))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST40], Gaussian_prob(dist, 40, 20))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST12520], Gaussian_prob(dist, 125, 20))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST12540], Gaussian_prob(dist, 125, 40))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST145], Gaussian_prob(dist, 145, 10))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST170], Gaussian_prob(dist, 170, 20))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST175], Gaussian_prob(dist, 175, 30))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_MAG6], Gaussian_prob(evmag, 6, 5.5))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_MAG68], Gaussian_prob(evmag, 6, 8))
+    + MUL_IFNZ(p_coeffs[EDA_COEFF_MD], (7 - evmag) * dist);
   
   if (is_detected)
   {
