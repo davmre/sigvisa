@@ -207,7 +207,8 @@ static Event_t * drop_event(NetModel_t * p_netmodel, World_t * p_world)
 }
 #endif
 
-static void add_initial_events(NetModel_t * p_netmodel, World_t * p_world)
+static void add_propose_hough_events(NetModel_t * p_netmodel,
+                                     World_t * p_world)
 {
   Event_t * pp_events[1000];     /* assume at most 1000 events init */
   int numevents;
@@ -216,10 +217,10 @@ static void add_initial_events(NetModel_t * p_netmodel, World_t * p_world)
   
   t1 = time(NULL);
   
-  numevents = propose(p_netmodel, pp_events,
-                      p_world->low_evtime, p_world->high_evtime,
-                      p_world->low_detnum, p_world->high_detnum,
-                      2.0, 5.0);
+  numevents = propose_hough(p_netmodel, pp_events,
+                            p_world->low_evtime, p_world->high_evtime,
+                            p_world->low_detnum, p_world->high_detnum,
+                            2.0, 5.0);
 
   t1 = time(NULL) - t1;
   
@@ -237,7 +238,12 @@ static void add_initial_events(NetModel_t * p_netmodel, World_t * p_world)
       
       p_event->evscore = score_event(p_netmodel, p_event);
 
-      printf("init: ");
+      /* we are populating the orid here just for debugging the
+       * proposed event and the score, insert_event below will populate the
+       * real orid and clear out any detections */
+      p_event->orid = p_world->ev_orid_sequence + i;
+
+      printf("init+hough: ");
       print_event(p_event);
     }
   }
@@ -247,6 +253,50 @@ static void add_initial_events(NetModel_t * p_netmodel, World_t * p_world)
 
 }
 
+/* add events using the propose_invert proposer */
+static void add_propose_invert_events(NetModel_t * p_netmodel,
+                                      World_t * p_world)
+{
+  Event_t * pp_events[1000];     /* assume at most 1000 events init */
+  int numevents;
+  int i;
+  time_t t1;
+  
+  t1 = time(NULL);
+  
+  numevents = propose_invert(p_netmodel, pp_events,
+                             p_world->low_evtime, p_world->high_evtime,
+                             p_world->low_detnum, p_world->high_detnum,
+                             5.0, 5.0);
+
+  t1 = time(NULL) - t1;
+  
+  assert(numevents < 1000);
+
+  if (p_world->verbose)
+  {
+    printf("initial window: %d events ela %ds\n", numevents, (int) t1);
+
+    for (i=0; i<numevents; i++)
+    {
+      Event_t * p_event;
+      
+      p_event = pp_events[i];
+      
+      /* we are populating the orid here just for debugging the
+       * proposed event and the score, insert_event below will populate the
+       * real orid and clear out any detections */
+      p_event->orid = p_world->ev_orid_sequence + i;
+
+      printf("init+inv: ");
+      print_event(p_event);
+    }
+  }
+
+  for (i=0; i<numevents; i++)
+    insert_event(p_netmodel, p_world, pp_events[i]);
+
+}
 
 static Event_t * add_event(NetModel_t * p_netmodel, World_t * p_world)
 {
@@ -345,6 +395,37 @@ static void add_invert_events(NetModel_t * p_netmodel, World_t * p_world)
       free_event(p_event);
   }
 
+}
+
+/* returns the number of events with -ve scores that were removed from
+ * the world */
+static int remove_negative_events(World_t * p_world)
+{
+  int numdel;
+  int j;
+  
+  numdel = 0;
+  
+  for (j=p_world->low_evnum; j<p_world->high_evnum; j++)
+  {
+    Event_t * p_old_event;
+        
+    p_old_event = p_world->pp_events[j];
+        
+    if (p_old_event->evscore < 0)
+    {
+      if (p_world->verbose)
+      {
+        printf("death: ");
+        print_event(p_old_event);
+      }
+      delete_event(p_world, p_old_event);
+      free_event(p_old_event);
+      numdel ++;
+    }
+  }
+
+  return numdel;
 }
 
 /* greedily find the location for each event
@@ -1039,11 +1120,15 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
         break;
     }
 
+#ifdef NEVER
     /* add an initial set of events in the new window */
-    add_initial_events(p_netmodel, p_world);
+     add_propose_hough_events(p_netmodel, p_world);
     
     add_invert_events(p_netmodel, p_world);
-    
+#endif
+
+    add_propose_invert_events(p_netmodel, p_world);
+
     /* change the detections to use these new events */
     change_detections(p_netmodel, p_world);
 
@@ -1057,7 +1142,6 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
 
     for (i=0; i<p_world->numsamples; i++)
     {
-      int j;
       int numdel;
       double old_score;
 #ifdef NEVER
@@ -1093,26 +1177,9 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
 
       old_score = p_world->world_score;
       
-      numdel = 0;
-      for (j=p_world->low_evnum; j<p_world->high_evnum; j++)
-      {
-        Event_t * p_old_event;
-        
-        p_old_event = p_world->pp_events[j];
-        
-        if (p_old_event->evscore < 0)
-        {
-          if (p_world->verbose)
-          {
-            printf("death: ");
-            print_event(p_old_event);
-          }
-          delete_event(p_world, p_old_event);
-          free_event(p_old_event);
-          numdel ++;
-        }
-      }
-
+      /* remove some obvious events */
+      numdel = remove_negative_events(p_world);
+      
       if (numdel > 0)
       {
         change_detections(p_netmodel, p_world);
@@ -1161,7 +1228,9 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       }
     }
 #endif
-
+    
+    remove_negative_events(p_world);
+    
 /*
     change_events(p_netmodel, p_world, 2);
     

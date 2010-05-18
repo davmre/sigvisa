@@ -19,15 +19,27 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
   detlist = [x for x in event_detlist]
   detlist.sort()
   for phaseid, detid in detlist:
-    print "(%s, %d, %s)" % (earthmodel.PhaseName(phaseid), detid,
-                  earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL]))),
+    inv = netmodel.invert_det(detid, 0)
+    if inv is None:
+      inv_ev = None
+      inv_score = None
+    else:
+      inv_ev = event.copy()
+      inv_ev[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv
+      inv_ev[EV_MB_COL] = 3.0
+      inv_score = netmodel.score_event(inv_ev, event_detlist)
+    
+    print "(%s, %d, %s, %.1f)" \
+          % (earthmodel.PhaseName(phaseid), detid,
+             earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL])),
+             netmodel.score_event_det(event, phaseid, detid)),
   print "\nEv Score:", netmodel.score_event(event, event_detlist)
   
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-d", "--degree_step", dest="degree_step", default=2.0,
+  parser.add_option("-d", "--degree_step", dest="degree_step", default=5.0,
                     type="float",
-                    help = "degree step (2)")
+                    help = "degree step (5)")
   parser.add_option("-t", "--time_step", dest="time_step", default=5.0,
                     type="float",
                     help = "time step (5)")
@@ -86,19 +98,26 @@ def main(param_dirname):
     
     print_event(netmodel, earthmodel, detections, leb_event,
                 leb_evlist[leb_evnum])
-    
+
+    best_score, best_prop_event, best_prop_evnum = None, None, None
     for prop_evnum, prop_event in enumerate(prop_events):
       
       if (dist_deg(leb_event[[EV_LON_COL, EV_LAT_COL]],
                    prop_event[[EV_LON_COL, EV_LAT_COL]]) < 5
           and abs(leb_event[EV_TIME_COL] - prop_event[EV_TIME_COL]) < 50):
-        print "--> MATCH"
-        print_event(netmodel, earthmodel, detections, prop_event,
-                    prop_evlist[prop_evnum])
-        break
-      
+        score = dist_deg(leb_event[[EV_LON_COL, EV_LAT_COL]],
+                         prop_event[[EV_LON_COL, EV_LAT_COL]])/5.0\
+                + abs(leb_event[EV_TIME_COL] - prop_event[EV_TIME_COL])/50.0
+        if best_score is None or score < best_score:
+          best_score, best_prop_event, best_prop_evnum\
+                      = score, prop_event, prop_evnum
+
+    if best_score is not None:
+      print "--> BEST MATCH"
+      print_event(netmodel, earthmodel, detections, best_prop_event,
+                  prop_evlist[best_prop_evnum])
     else:
-      print "--> MISS"
+      print "--> MISS\n -"
   
 if __name__ == "__main__":
   main("parameters")

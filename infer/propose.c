@@ -30,9 +30,31 @@ for (timeidx = 0; timeidx < numtime; timeidx ++)\
 
 #define END_TIME_LOOP } do {} while(0)
 
-int propose(NetModel_t * p_netmodel, Event_t **pp_events,
-            double time_low, double time_high, int det_low,
-            int det_high, double degree_step, double time_step)
+
+/* COPIED FROM INFER.C */
+#define FIXUP_EVLON(p_event)                    \
+  do {                                          \
+    if ((p_event)->evlon < -180)                \
+      (p_event)->evlon += 360;                  \
+    else if ((p_event)->evlon >= 180)           \
+      (p_event)->evlon -= 360;                  \
+  }  while (0)
+
+/* TODO: if latitude exceeds the poles then we should change the longitude
+ * to walk across the pole */
+#define FIXUP_EVLAT(p_event)                            \
+  do {                                                  \
+    if ((p_event)->evlat < -90)                         \
+      (p_event)->evlat = -180 - (p_event)->evlat;       \
+    else if ((p_event)->evlat > 90)                     \
+      (p_event)->evlat = 180 - (p_event)->evlat;        \
+  } while(0)
+
+
+/* Hough transform-based method for proposing events */
+int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
+                  double time_low, double time_high, int det_low,
+                  int det_high, double degree_step, double time_step)
 {
   EarthModel_t * p_earth;
   int numsites;
@@ -472,6 +494,233 @@ int propose2(NetModel_t * p_netmodel, Event_t **pp_events,
   return numevents;
 }
 
+/* propose events by inverting detections and keeping the best
+ * inverted detections */
+int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
+                   double time_low, double time_high, int det_low,
+                   int det_high, double degree_step, double time_step)
+{
+  EarthModel_t * p_earth;
+  int numsites;
+  int numtimedefphases;
+  
+  int numlon;
+  int numlat;
+  int numtime;
+  double z_step;
+
+  int lonidx, latidx;
+  double lon, lat;
+
+  int detnum;
+
+  int numevents;
+
+  Event_t * p_best_event;
+  Event_t * p_event;
+  int * p_event_best_detids;                 /* numsites * numtimedefphases */
+  double * p_event_best_score;               /* numsites * numtimedefphases */
+  int * p_skip_det;                          /* numdetections */
+  
+  p_earth = p_netmodel->p_earth;
+  
+  numlon = (int) ceil(360.0 / degree_step);
+  numlat = numlon /2;
+  numtime = (int) ceil((time_high - time_low) / time_step);
+  z_step = 2.0 / numlat;
+  
+  numsites = EarthModel_NumSites(p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+  p_event_best_detids = (int *) malloc(numsites * numtimedefphases 
+                                       * sizeof (*p_event_best_score));
+  p_event_best_score = (double *) malloc(numsites * numtimedefphases 
+                                         * sizeof (*p_event_best_score));
+  
+  p_skip_det = (int *) calloc(p_netmodel->numdetections, sizeof(*p_skip_det));
+  
+  if (!p_skip_det || !p_event_best_score || !p_event_best_detids)
+  {
+    return -1;
+  }
+
+  p_event = alloc_event(p_netmodel);
+  
+  numevents = 0;
+
+  do
+  {
+    int i;
+    int siteid;
+    int phase;
+    int inv_detnum;
+
+    p_best_event = alloc_event(p_netmodel);
+    p_best_event->evscore = 0;
+    
+    for (inv_detnum = det_low; inv_detnum < det_high; inv_detnum ++)
+    {
+      Detection_t * p_inv_det;
+      int inv_status;
+      
+      p_inv_det = p_netmodel->p_detections + inv_detnum;
+      
+      inv_status = invert_detection(p_earth, p_inv_det, p_event,
+                                    0 /* don't perturb */);
+      if ((0 != inv_status) || (p_event->evtime < time_low)
+          || (p_event->evtime > time_high))
+      {
+        continue;
+      }
+      p_event->evmag = 3.0;
+      /* save the longitude and latitude */
+      lon = p_event->evlon;
+      lat = p_event->evlat;
+
+      for (lonidx=-1; lonidx<2; lonidx++)
+      {
+        p_event->evlon = lon + lonidx * degree_step;
+        FIXUP_EVLON(p_event);
+        
+        for (latidx=-1; latidx<2; latidx ++)
+        {
+          double trvtime;
+          p_event->evlat = lat + latidx * degree_step;
+          FIXUP_EVLAT(p_event);
+          
+          trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+                                           p_event->evlat, p_event->evdepth, 0,
+                                           EARTH_PHASE_P, p_inv_det->site_det);
+          if (trvtime < 0)
+            continue;
+          
+          p_event->evtime = p_inv_det->time_det - trvtime;
+
+          if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
+          {
+            continue;
+          }
+          
+          /* find the best set of available detections for this event */
+          for (i=0; i < numsites * numtimedefphases; i++)
+          {
+            p_event_best_detids[i] = -1;
+            p_event_best_score[i] = 0;
+          }
+
+          /* for each detection find the best phase at the event */
+          for (detnum = det_low; detnum < det_high; detnum ++)
+          {
+            Detection_t * p_det;
+            int best_phase;
+            double best_phase_score;
+    
+            if (p_skip_det[detnum])
+              continue;
+    
+            p_det = p_netmodel->p_detections + detnum;
+            siteid = p_det->site_det;
+  
+            best_phase = -1;
+            best_phase_score = 0;
+
+            for (phase=0; phase < numtimedefphases; phase++)
+            {
+              double distance, pred_az;
+              int poss;
+              double detscore;
+              
+              distance = EarthModel_Delta(p_earth, p_event->evlon,
+                                          p_event->evlat, siteid);
+
+              pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
+                                                  p_event->evlat, siteid);
+  
+              p_event->p_detids[siteid * numtimedefphases + phase] = detnum;
+
+              poss = score_event_site_phase(p_netmodel, p_event, siteid, phase,
+                                            distance, pred_az, &detscore);
+
+              if (poss && (detscore > 0)
+                  && ((-1 == best_phase) || (detscore > best_phase_score)))
+              {
+                best_phase = phase;
+                best_phase_score = detscore;
+              }
+            }
+
+            if ((-1 != best_phase) 
+                && ((-1 == p_event_best_detids[siteid * numtimedefphases 
+                                               + best_phase])
+                    || (best_phase_score 
+                        > p_event_best_score[siteid * numtimedefphases 
+                                             + best_phase])))
+            {
+              p_event_best_detids[siteid * numtimedefphases + best_phase] 
+                = detnum;
+              p_event_best_score[siteid * numtimedefphases + best_phase] 
+                = best_phase_score;
+            }
+          }
+  
+          /* score the best such event */
+          for (i=0; i < numsites * numtimedefphases; i++)
+          {
+            p_event->p_detids[i] = p_event_best_detids[i];
+          }
+          p_event->evscore = score_event(p_netmodel, p_event);
+    
+          if (p_event->evscore > p_best_event->evscore)
+          {
+            copy_event(p_netmodel, p_best_event, p_event);
+
+#ifdef NEVER
+            printf("CURR BEST: ");
+            print_event(p_best_event);
+#endif
+          }
+        }
+      }
+    }
+    /* finished inverting all detections and trying events in a ball around
+     * them now let's see if we got something good */
+    
+    if (0 == p_best_event->evscore)
+    {
+      free_event(p_best_event);
+      free_event(p_event);
+      break;
+    }
+    
+    /*
+     * we will identify the detections used by the best event and make them
+     * off-limits for future events
+     */
+    for (siteid = 0; siteid < numsites; siteid ++)
+    {
+      for (phase = 0; phase < numtimedefphases; phase ++)
+      {
+        detnum = p_best_event->p_detids[siteid * numtimedefphases + phase];
+
+        if (detnum != -1)
+        {
+          p_skip_det[detnum] = 1;
+        }
+      }
+    }
+    
+    /* add the best event to the list of events */
+    pp_events[numevents ++] = p_best_event;
+    
+  } while (1);
+
+  free(p_event_best_detids);
+  free(p_event_best_score);
+  free(p_skip_det);
+  
+  return numevents;
+}
+
 PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
 {
   double time_low;
@@ -495,8 +744,8 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
   pp_events = (Event_t **) calloc(p_netmodel->numdetections,
                                   sizeof(*pp_events));
   
-  numevents = propose2(p_netmodel, pp_events, time_low, time_high, det_low,
-                      det_high, degree_step, time_step);
+  numevents = propose_invert(p_netmodel, pp_events, time_low, time_high, 
+                             det_low, det_high, degree_step, time_step);
 
   if (numevents < 0)
   {

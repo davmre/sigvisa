@@ -43,7 +43,7 @@ def draw_roc(label, fname):
     
     if cnt % 30 == 0 or cnt == len(scores)-1:
       y_pts.append(float(num_true) / total_true)
-      x_pts.append(float(num_false) / total_false)
+      x_pts.append(float(num_false) / (cnt+1.0))
 
   global curr_color
   plt.plot(x_pts, y_pts, label=label, color=colors[curr_color])
