@@ -9,7 +9,7 @@ from utils.geog import degdiff, dist_deg
 import database.db
 
 AZGAP_RANGES = [(0, 90), (90, 180), (180, 270), (270, 360)]
-DETCNT_RANGES = [(2, 3), (3,4), (4,5), (5,6), (6, 100)]
+DETCNT_RANGES = [(0, 2), (2, 3), (3,4), (4,5), (5,6), (6, 100)]
 TPHASE_RANGES = [(-1, 0), (0, 100)]
 MAG_RANGES = [(0,2), (2,3), (3,4), (4,9)]
 
@@ -91,6 +91,73 @@ def find_nearest(leb_events, events):
     nearest.append(minevnum)
   return nearest
 
+def gui(leb_events, sel3_events, events, runid):
+  #
+  # draw and the leb, sel3 and predicted events
+  #
+  
+  # ignore warnings from matplotlib in python 2.4
+  import warnings
+  warnings.simplefilter("ignore",DeprecationWarning)
+  from utils.draw_earth import draw_events, draw_earth
+  bmap = draw_earth("LEB(yellow), SEL3(red) and Net-VISA(blue)")
+  draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+              marker="o", ms=10, mfc="none", mec="red", mew=1)
+  draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
+              marker="s", ms=10, mfc="none", mec="blue", mew=1)
+  draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+              marker="*", ms=10, mfc="yellow")
+
+  #
+  # draw an ROC curve
+  #
+  cursor = database.db.connect().cursor()
+  cursor.execute("select orid, score from visa_origin where runid=%s",
+                 (runid,))
+  evscores = dict(cursor.fetchall())
+
+  import matplotlib.pyplot as plt
+  plt.figure()
+  plt.title("ROC curve for VISA events")
+  
+  sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
+  
+  plt.plot([(sel3_p/100.0)], [(sel3_r/100.0)], label="SEL3",
+           marker='o', ms=10, mec="red",
+           linestyle="none", mfc="none")
+
+  true_idx, false_idx, mat = find_true_false_guess(leb_events, events)
+  true_set = set(true_idx)
+  istrue_and_scores = [(evscores[events[i, EV_ORID_COL]], int(i in true_idx))
+                       for i in range(len(events))]
+
+  istrue_and_scores.sort(reverse = True)
+
+  # compute the ROC curve
+  x_pts, y_pts = [], []
+  num_true = 0
+  
+  for cnt, (score, istrue) in enumerate(istrue_and_scores):
+    num_true += istrue
+    
+    if cnt % 30 == 0 or cnt == len(istrue_and_scores)-1:
+      y_pts.append(float(num_true) / len(leb_events))
+      x_pts.append(float(num_true) / (cnt+1.0))
+
+  plt.plot(x_pts, y_pts, label="NetVISA", color="blue")
+  
+  
+  plt.xlim(0, 1)
+  plt.ylim(0, 1)
+  plt.xlabel("precision")
+  plt.ylabel("recall")
+  plt.legend(loc = "lower left")
+  plt.grid(True)
+  
+  
+  
+  plt.show()
+  
 def main():
   parser = OptionParser()
   parser.add_option("-i", "--runid", dest="runid", default=None,
@@ -105,7 +172,7 @@ def main():
                     action = "store_true",
                     help = "verbose output (False)")
 
-  parser.add_option("-g", "--mag", dest="mag", default=False,
+  parser.add_option("-b", "--mag", dest="mag", default=False,
                     action = "store_true",
                     help = "analyze by magnitude (False)")
   
@@ -121,13 +188,17 @@ def main():
                     action = "store_true",
                     help = "analyze by azimuth gap (False)")
 
+  parser.add_option("-g", "--gui", dest="gui", default=False,
+                    action = "store_true",
+                    help = "graphically display run (False)")
+
   (options, args) = parser.parse_args()
 
   cursor = database.db.connect().cursor()
 
   if options.runid is None:
     cursor.execute("select max(runid) from visa_run")
-    runid, = cursor.fetchone()
+    options.runid, = cursor.fetchone()
   
   print "RUNID %d:" % options.runid,
 
@@ -165,8 +236,8 @@ def main():
   if options.detcnt:
     detcnts = []
     for leb_event in leb_events:
-      cursor.execute("select count(*) from leb_assoc "
-                     "where orid=%s and timedef='d'",
+      cursor.execute("select count(*) from leb_assoc join idcx_arrival_net "
+                     "using (arid) where orid=%s and timedef='d'",
                      (int(leb_event[EV_ORID_COL]),))
       detcnts.append(cursor.fetchone()[0])
       
@@ -210,8 +281,10 @@ def main():
             sel3_err[0], sel3_err[1],
             visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
   print "=" * 74
-    
-  
+
+  if options.gui:
+    gui(leb_events, sel3_events, visa_events, options.runid)
+
 if __name__ == "__main__":
   main()
 
