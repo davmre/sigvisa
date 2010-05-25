@@ -91,6 +91,37 @@ unix_timestamp() + sec - truncate(sec,0));
 
 alter table hon_hdf add index(time);
 
+/* table for ISC data */
+create table isc_events (
+ eventid     int not null,
+ region      varchar(100) not null,
+ author      varchar(10) not null,
+ lon         double not null,
+ lat         double not null,
+ depth       double not null,
+ time        double not null,
+ mb          double not null,
+ ndef        int,
+ nsta        int,
+ gap         int,
+
+ primary key (eventid, author),
+ index (time),
+ index (author, time)
+) engine = myisam;
+
+load data local infile '200903.csv' into table isc_events fields 
+terminated by ',' optionally enclosed by '"' ignore 1 lines;
+
+load data local infile '200904.csv' into table isc_events fields 
+terminated by ',' optionally enclosed by '"' ignore 1 lines;
+
+load data local infile '200905.csv' into table isc_events fields 
+terminated by ',' optionally enclosed by '"' ignore 1 lines;
+
+load data local infile '200906.csv' into table isc_events fields 
+terminated by ',' optionally enclosed by '"' ignore 1 lines;
+
 /* leb_arrival */
 
 create table leb_arrival (
