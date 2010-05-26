@@ -83,6 +83,21 @@ def read_events(cursor, start_time, end_time, evtype, runid=None):
   
   return events, orid2num
 
+def read_isc_events(cursor, start_time, end_time, author):
+  cursor.execute("select lon, lat, depth, time, mb, eventid from isc_events "
+                 "where author='%s' and time between %d and %d order by time"
+                 % (author, start_time, end_time))
+    
+  events = np.array(cursor.fetchall())
+
+  # change -999 mb to MIN MAG and -999 depth to 0
+  if len(events):
+    events[:, EV_MB_COL][events[:, EV_MB_COL] == -999] = MIN_MAGNITUDE
+    events[:, EV_DEPTH_COL][events[:, EV_DEPTH_COL] == -999] = 0
+  
+  return events
+
+
 def read_detections(cursor, start_time, end_time):
   cursor.execute("select site.id-1, iarr.arid, iarr.time, iarr.deltim, "
                  "iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, "

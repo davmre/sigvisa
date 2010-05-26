@@ -8,11 +8,60 @@ from results.compare import *
 from utils.geog import degdiff, dist_deg
 import database.db
 
+# ignore warnings from matplotlib in python 2.4
+import warnings
+warnings.simplefilter("ignore",DeprecationWarning)
+import matplotlib.pyplot as plt
+from utils.draw_earth import draw_events, draw_earth
+
 AZGAP_RANGES = [(0, 90), (90, 180), (180, 270), (270, 360)]
 DETCNT_RANGES = [(0, 2), (2, 3), (3,4), (4,5), (5,6), (6, 100)]
 TPHASE_RANGES = [(-1, 0), (0, 100)]
 MAG_RANGES = [(0,2), (2,3), (3,4), (4,9)]
 
+JAPAN_LON_1, JAPAN_LON_2 = 130, 145
+JAPAN_LAT_1, JAPAN_LAT_2 = 30, 45
+
+US_LON_1, US_LON_2 = -125, -70
+US_LAT_1, US_LAT_2 = 25, 50
+
+def read_sel3_svm_scores():
+  evscores = {}
+  for line in open(os.path.join("output",
+                               "preds_linsvm_nimLabels_1_valNimarLabels.txt")):
+    evid, istrue, score = line.rstrip().split()
+    evscores[int(evid)] = float(score)
+  return evscores
+
+def compute_roc_curve(gold_events, guess_events, guess_ev_scores, freq=30):
+  
+  true_idx, false_idx, mat = find_true_false_guess(gold_events, guess_events)
+  true_set = set(true_idx)
+  istrue_and_scores = [(guess_ev_scores[guess_events[i, EV_ORID_COL]],
+                        int(i in true_idx))
+                       for i in range(len(guess_events))]
+
+  istrue_and_scores.sort(reverse = True)
+
+  # compute the ROC curve
+  x_pts, y_pts = [], []
+  num_true = 0
+  
+  for cnt, (score, istrue) in enumerate(istrue_and_scores):
+    num_true += istrue
+    
+    if cnt % freq == 0 or cnt == len(istrue_and_scores)-1:
+      y_pts.append(float(num_true) / len(gold_events))
+      x_pts.append(float(num_true) / (cnt+1.0))
+  
+  return x_pts, y_pts
+  
+def filter_by_lonlat(events, lon_1, lon_2, lat_1, lat_2):
+  return events[(events[:,EV_LON_COL] > lon_1)
+                & (events[:,EV_LON_COL] < lon_2)
+                & (events[:,EV_LAT_COL] > lat_1)
+                & (events[:,EV_LAT_COL] < lat_2), :]
+  
 def split_by_attr(attr_ranges, attr_vals):
   ev_buckets = [[] for _ in attr_ranges]
   for evnum, val in enumerate(attr_vals):
@@ -96,10 +145,6 @@ def gui(leb_events, sel3_events, events, runid):
   # draw and the leb, sel3 and predicted events
   #
   
-  # ignore warnings from matplotlib in python 2.4
-  import warnings
-  warnings.simplefilter("ignore",DeprecationWarning)
-  from utils.draw_earth import draw_events, draw_earth
   bmap = draw_earth("LEB(yellow), SEL3(red) and Net-VISA(blue)")
   draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
               marker="o", ms=10, mfc="none", mec="red", mew=1)
@@ -107,6 +152,7 @@ def gui(leb_events, sel3_events, events, runid):
               marker="s", ms=10, mfc="none", mec="blue", mew=1)
   draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
               marker="*", ms=10, mfc="yellow")
+
 
   #
   # draw an ROC curve
@@ -116,45 +162,30 @@ def gui(leb_events, sel3_events, events, runid):
                  (runid,))
   evscores = dict(cursor.fetchall())
 
-  import matplotlib.pyplot as plt
   plt.figure()
-  plt.title("ROC curve for VISA events")
+  plt.title("ROC curve with LEB as ground truth over the whole earth")
   
   sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
   
   plt.plot([(sel3_p/100.0)], [(sel3_r/100.0)], label="SEL3",
            marker='o', ms=10, mec="red",
            linestyle="none", mfc="none")
-
-  true_idx, false_idx, mat = find_true_false_guess(leb_events, events)
-  true_set = set(true_idx)
-  istrue_and_scores = [(evscores[events[i, EV_ORID_COL]], int(i in true_idx))
-                       for i in range(len(events))]
-
-  istrue_and_scores.sort(reverse = True)
-
-  # compute the ROC curve
-  x_pts, y_pts = [], []
-  num_true = 0
   
-  for cnt, (score, istrue) in enumerate(istrue_and_scores):
-    num_true += istrue
-    
-    if cnt % 30 == 0 or cnt == len(istrue_and_scores)-1:
-      y_pts.append(float(num_true) / len(leb_events))
-      x_pts.append(float(num_true) / (cnt+1.0))
-
+  x_pts, y_pts = compute_roc_curve(leb_events, sel3_events,
+                                   read_sel3_svm_scores())
+  
+  plt.plot(x_pts, y_pts, label="SEL3+SVM", color="red")
+  
+  x_pts, y_pts = compute_roc_curve(leb_events, events, evscores)
+  
   plt.plot(x_pts, y_pts, label="NetVISA", color="blue")
-  
   
   plt.xlim(0, 1)
   plt.ylim(0, 1)
   plt.xlabel("precision")
   plt.ylabel("recall")
-  plt.legend(loc = "lower left")
+  plt.legend(loc = "upper right")
   plt.grid(True)
-  
-  
   
   plt.show()
 
@@ -220,6 +251,15 @@ def main():
                     action = "store_true",
                     help = "suppress duplicates (False)")
 
+  parser.add_option("-n", "--NEIC", dest="neic", default=False,
+                    action = "store_true",
+                    help = "compare with NEIC events (False)")
+
+  parser.add_option("-j", "--JMA", dest="jma", default=False,
+                    action = "store_true",
+                    help = "compare with JMA events (False)")
+
+
   (options, args) = parser.parse_args()
 
   cursor = database.db.connect().cursor()
@@ -257,6 +297,16 @@ def main():
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,
                                            "visa", options.runid)
 
+  if options.neic:
+    neic_events = read_isc_events(cursor, data_start, data_end, "NEIC")
+  else:
+    neic_events = None
+
+  if options.jma:
+    jma_events = read_isc_events(cursor, data_start, data_end, "JMA")
+  else:
+    jma_events = None
+    
   if options.suppress:
     visa_events, visa_orid2num = suppress_duplicates(visa_events)
 
@@ -300,6 +350,9 @@ def main():
     analyze_by_attr("AZIM. GAP", AZGAP_RANGES, leb_azgaps,
                     leb_events, sel3_events, visa_events, options.verbose)
 
+  print "=" * 74
+  print "            |     |  F1     P     R   err  sd |   F1    P     R "
+
   # finally, compute the overall scores
   sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
   
@@ -313,6 +366,104 @@ def main():
             visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
   print "=" * 74
 
+
+  if options.neic:
+    neic_us_events = filter_by_lonlat(neic_events, US_LON_1, US_LON_2,
+                                      US_LAT_1, US_LAT_2)
+    leb_us_events = filter_by_lonlat(leb_events, US_LON_1, US_LON_2,
+                                      US_LAT_1, US_LAT_2)
+    sel3_us_events = filter_by_lonlat(sel3_events, US_LON_1, US_LON_2,
+                                      US_LAT_1, US_LAT_2)
+    visa_us_events = filter_by_lonlat(visa_events, US_LON_1, US_LON_2,
+                                      US_LAT_1, US_LAT_2)
+    
+    leb_f, leb_p, leb_r, leb_err = f1_and_error(neic_us_events, leb_us_events)
+    
+    visa_f, visa_p, visa_r, visa_err = f1_and_error(neic_us_events,
+                                                    visa_us_events)
+
+    print "NEIC (US):         |          LEB              |          VISA"
+    print "=" * 74
+    print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
+           "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
+           % (len(neic_us_events), leb_f, leb_p, leb_r,
+              leb_err[0], leb_err[1],
+              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
+    print "=" * 74
+
+    if options.gui is not None:
+      bmap = draw_earth("NEIC(orange), LEB(yellow), and Net-VISA(blue)",
+                        projection="mill",
+                        resolution="l",
+                        llcrnrlon = US_LON_1, urcrnrlon = US_LON_2,
+                        llcrnrlat = US_LAT_1, urcrnrlat = US_LAT_2)
+      draw_events(bmap, leb_us_events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="o", ms=10, mfc="none", mec="yellow", mew=1)
+      draw_events(bmap, visa_us_events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="s", ms=10, mfc="none", mec="blue", mew=1)
+      draw_events(bmap, neic_us_events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="*", ms=10, mfc="orange")
+
+      cursor = database.db.connect().cursor()
+      cursor.execute("select orid, score from visa_origin where runid=%s",
+                     (options.runid,))
+      evscores = dict(cursor.fetchall())
+    
+      plt.figure()
+      plt.title("ROC curve with NEIC as ground truth over the Continental US")
+    
+      sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(neic_us_events,
+                                                      sel3_us_events)
+      
+      plt.plot([(sel3_p/100.0)], [(sel3_r/100.0)], label="SEL3",
+               marker='o', ms=10, mec="red",
+               linestyle="none", mfc="none")
+
+      plt.plot([(leb_p/100.0)], [(leb_r/100.0)], label="LEB",
+               marker='o', ms=10, mec="yellow",
+               linestyle="none", mfc="none")
+
+      x_pts, y_pts = compute_roc_curve(neic_us_events, visa_us_events,
+                                       evscores, freq=1)
+      
+      plt.plot(x_pts, y_pts, label="NetVISA", color="blue")
+      
+      plt.xlim(0, 1)
+      plt.ylim(0, 1)
+      plt.xlabel("precision")
+      plt.ylabel("recall")
+      plt.legend(loc = "upper right")
+      plt.grid(True)
+
+      
+
+  if options.jma:
+    leb_f, leb_p, leb_r, leb_err = f1_and_error(jma_events, leb_events)
+    
+    visa_f, visa_p, visa_r, visa_err = f1_and_error(jma_events, visa_events)
+    
+    print "JMA:              |          LEB              |          VISA"
+    print "=" * 74
+    print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
+           "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
+           % (len(jma_events), leb_f, leb_p, leb_r,
+              leb_err[0], leb_err[1],
+              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
+    print "=" * 74
+
+    if jma_events is not None:
+      bmap = draw_earth("JMA (orange), LEB (yellow), and Net-VISA (blue)",
+                        projection="mill",
+                        resolution="l",
+                        llcrnrlon = JAPAN_LON_1, urcrnrlon = JAPAN_LON_2,
+                        llcrnrlat = JAPAN_LAT_1, urcrnrlat = JAPAN_LAT_2)
+      draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="o", ms=10, mfc="none", mec="yellow", mew=1)
+      draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="s", ms=10, mfc="none", mec="blue", mew=1)
+      draw_events(bmap, jma_events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="*", ms=10, mfc="orange")
+    
   if options.gui:
     gui(leb_events, sel3_events, visa_events, options.runid)
 
