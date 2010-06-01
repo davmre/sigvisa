@@ -7,6 +7,12 @@ double Gaussian_prob(double val, double m, double s)
   return exp(- (val - m) * (val - m) / (2.0 * s * s)) / sqrt(2.0 * PI * s * s);
 }
 
+double Gaussian_logprob(double val, double m, double s)
+{
+  return - (val - m) * (val - m) / (2.0 * s * s) - .5 * log( 2.0 * PI * s * s);
+}
+
+
 double Gaussian_sample(double m, double s)
 /* ========================================================================
  * Returns a normal (Gaussian) distributed real number.

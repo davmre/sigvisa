@@ -296,15 +296,16 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   const char * arrslo_fname;
   const char * arrphase_fname;
   const char * arrsnr_fname;
+  const char * arramp_fname;
   
-  if (!PyArg_ParseTuple(args, "O!ddO!O!ssssssssss", &py_EarthModel, &p_earth,
+  if (!PyArg_ParseTuple(args, "O!ddO!O!sssssssssss", &py_EarthModel, &p_earth,
                         &start_time, &end_time, 
                         &PyArray_Type, &detectionsobj,
                         &PyArray_Type, &siteupobj,
                         &numevent_fname, &evloc_fname, &evmag_fname, 
                         &evdet_fname, &arrtime_fname, &numfalse_fname,
                         &arraz_fname, &arrslo_fname, &arrphase_fname,
-                        &arrsnr_fname)
+                        &arrsnr_fname, &arramp_fname)
       || !detectionsobj || !siteupobj)
     return -1;
   
@@ -361,6 +362,8 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   ArrivalPhasePrior_Init_Params(&self->arr_phase_prior, arrphase_fname);
 
   ArrivalSNRPrior_Init_Params(&self->arr_snr_prior, arrsnr_fname);
+
+  ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
   
   return 0;
 }
@@ -392,6 +395,8 @@ static void py_net_model_dealloc(NetModel_t * self)
   ArrivalPhasePrior_UnInit(&self->arr_phase_prior);
 
   ArrivalSNRPrior_UnInit(&self->arr_snr_prior);
+
+  ArrivalAmplitudePrior_UnInit(&self->arr_amp_prior);
   
   self->ob_type->tp_free((PyObject*)self);
 }

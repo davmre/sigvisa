@@ -171,10 +171,10 @@ def gui(leb_events, sel3_events, events, runid):
            marker='o', ms=10, mec="red",
            linestyle="none", mfc="none")
   
-  x_pts, y_pts = compute_roc_curve(leb_events, sel3_events,
-                                   read_sel3_svm_scores())
-  
-  plt.plot(x_pts, y_pts, label="SEL3+SVM", color="red")
+  #x_pts, y_pts = compute_roc_curve(leb_events, sel3_events,
+  #                                 read_sel3_svm_scores())
+  #
+  #plt.plot(x_pts, y_pts, label="SEL3+SVM", color="red")
   
   x_pts, y_pts = compute_roc_curve(leb_events, events, evscores)
   

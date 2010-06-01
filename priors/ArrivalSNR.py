@@ -31,10 +31,10 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   if options.verbose:
     print "True SNR: Overall mean, sigma:", true_mean, true_sigma
     print "False SNR: Overall mean, sigma:", false_mean, false_sigma
-
+    
   site_true = dict((siteid, []) for siteid in range(earthmodel.NumSites()))
   site_false = dict((siteid, []) for siteid in range(earthmodel.NumSites()))
-
+  
   for detnum in true_dets:
     site_true[int(detections[detnum, DET_SITE_COL])].append(detections[detnum,
                                                                 DET_SNR_COL])

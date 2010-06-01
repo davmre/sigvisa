@@ -57,6 +57,7 @@ typedef struct Detection_t
 #include "priors/ArrivalSlownessPrior.h"
 #include "priors/ArrivalPhasePrior.h"
 #include "priors/ArrivalSNRPrior.h"
+#include "priors/ArrivalAmplitudePrior.h"
 #include "priors/EarthModel.h"
 #include "priors/Laplace.h"
 #include "priors/Poisson.h"
@@ -90,6 +91,7 @@ typedef struct NetModel_t
   ArrivalSlownessPrior_t arr_slo_prior;
   ArrivalPhasePrior_t arr_phase_prior;
   ArrivalSNRPrior_t arr_snr_prior;
+  ArrivalAmplitudePrior_t arr_amp_prior;
   
 } NetModel_t;
 
