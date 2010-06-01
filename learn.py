@@ -1,4 +1,5 @@
 import os
+import matplotlib.pyplot as plt
 from optparse import OptionParser
 
 from database.dataset import *
@@ -13,6 +14,7 @@ import priors.ArrivalAzimuthPrior
 import priors.ArrivalSlownessPrior
 import priors.ArrivalPhasePrior
 import priors.ArrivalSNR
+import priors.ArrivalAmplitudePrior
 
 import netvisa
 
@@ -45,7 +47,9 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                            os.path.join(param_dirname,
                                         "ArrivalPhasePrior.txt"),
                            os.path.join(param_dirname,
-                                        "ArrivalSNR.txt")
+                                        "ArrivalSNR.txt"),
+                           os.path.join(param_dirname,
+                                        "ArrivalAmplitudePrior.txt")
                            )
   
   return model
@@ -124,7 +128,15 @@ def main(param_dirname):
                                        "ArrivalSNR.txt"),
                           options, earthmodel, detections, leb_events,
                           leb_evlist)
-  
+
+  priors.ArrivalAmplitudePrior.learn(os.path.join(param_dirname,
+                                                  "ArrivalAmplitudePrior.txt"),
+                                     options, earthmodel, detections,
+                                     leb_events, leb_evlist)
+
+  if options.gui:
+    plt.show()
+    
 if __name__ == "__main__":
   try:
     main("parameters")

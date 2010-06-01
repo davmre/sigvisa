@@ -29,10 +29,12 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                       double * p_detslosc,
                                       double * p_detazsc,
                                       double * p_detphasesc,
-                                      double * p_snrsc)
+                                      double * p_snrsc,
+                                      double * p_ampsc)
 {
   EarthModel_t * p_earth;
   double pred_arrtime;
+  double dist;
   int detnum;
   int numtimedefphases;
 
@@ -112,6 +114,30 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                              det->site_det, det->snr_det);
 #endif
 
+    dist = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
+                            siteid);
+    
+    *p_ampsc += ArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                              p_event->evmag, p_event->evdepth,
+                                              dist, siteid, phaseid,
+                                              det->amp_det);
+    
+    if (isnan(*p_ampsc))
+    {
+      printf("nan arr-amp mb %.2lg, dep %.2lg dist %.2lg siteid %d phaseid %d"
+             " amp %.2lg", p_event->evmag, p_event->evdepth,
+             dist, siteid, phaseid, det->amp_det);
+      exit(1);
+    }
+    
+    *p_ampsc -= FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                                   siteid, det->amp_det);
+    if (isnan(*p_ampsc))
+    {
+      printf("nan false-amp siteid %d amp %.2lg", siteid, det->amp_det);
+      exit(1);
+    }
+
   }
 
   *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
@@ -138,16 +164,18 @@ int score_event_site_phase(NetModel_t * p_netmodel,
   double   detazsc;
   double   detphasesc;
   double   detsnrsc;
+  double   detampsc;
 
   detcnt = 0;
-  detsc = dettimesc = detslosc = detazsc = detphasesc = detsnrsc = 0;
+  detsc = dettimesc = detslosc = detazsc = detphasesc = detsnrsc = detampsc =0;
   
   poss = score_event_site_phase_int(p_netmodel, p_event, siteid, phaseid,
                                     distance, pred_az, &detcnt, &detsc,
                                     &dettimesc, &detslosc, &detazsc,
-                                    &detphasesc, &detsnrsc);
+                                    &detphasesc, &detsnrsc, &detampsc);
 
-  *p_score = detsc + dettimesc + detslosc + detazsc + detphasesc + detsnrsc;
+  *p_score = detsc + dettimesc + detslosc + detazsc + detphasesc + detsnrsc
+    + detampsc;
 
   return poss;
 }
@@ -176,11 +204,13 @@ int score_event_site_phase_simple(NetModel_t * p_netmodel,
 
 
 static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event, 
-                 double * p_numsc, double * p_locsc, double * p_magsc,
-                 double * p_detsc, double * p_dettimesc,
-                 double * p_detazsc, double * p_detslosc,
-                 double * p_detphasesc, double * p_detsnrsc,
-                 int * p_poss_detcnt, int * p_detcnt)
+                            double * p_numsc, double * p_locsc, 
+                            double * p_magsc,
+                            double * p_detsc, double * p_dettimesc,
+                            double * p_detazsc, double * p_detslosc,
+                            double * p_detphasesc, double * p_detsnrsc,
+                            double * p_detampsc,
+                            int * p_poss_detcnt, int * p_detcnt)
 {
   EarthModel_t * p_earth;
   Detection_t * p_detections;
@@ -222,7 +252,7 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
                                                    p_detsc, p_dettimesc,
                                                    p_detslosc, p_detazsc,
                                                    p_detphasesc,
-                                                   p_detsnrsc);   
+                                                   p_detsnrsc, p_detampsc);   
     }
   }
 }
@@ -230,20 +260,20 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
 double score_event(NetModel_t * p_netmodel, Event_t * p_event)
 {
   double numsc, locsc, magsc, detsc, dettimesc, detazsc, detslosc, detphasesc;
-  double detsnrsc;
+  double detsnrsc, detampsc;
   double score;
   int possdetcnt, detcnt;
 
   numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 
-    detphasesc = detsnrsc = 0;
+    detphasesc = detsnrsc = detampsc = 0;
   possdetcnt = detcnt = 0;
   
   score_event_int(p_netmodel, p_event, &numsc, &locsc, &magsc, &detsc, 
                   &dettimesc, &detazsc, &detslosc, &detphasesc, &detsnrsc,
-                  &possdetcnt, &detcnt);
+                  &detampsc, &possdetcnt, &detcnt);
   
   score = numsc + locsc + magsc + detsc + dettimesc + detazsc + detslosc
-    + detphasesc + detsnrsc;
+    + detphasesc + detsnrsc + detampsc;
 
   return score;
 }
@@ -261,6 +291,7 @@ double score_world(NetModel_t * p_netmodel,
   double detslosc;
   double detphasesc;
   double detsnrsc;
+  double detampsc;
   
   int poss_detcnt;
   int detcnt;
@@ -273,14 +304,14 @@ double score_world(NetModel_t * p_netmodel,
   }
   
   numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 
-    detphasesc = detsnrsc = 0;
+    detphasesc = detsnrsc = detampsc = 0;
   poss_detcnt = detcnt = 0;
   
   for (i=0; i<numevents; i++)
   {
     score_event_int(p_netmodel, p_events + i, &numsc, &locsc, &magsc, &detsc,
                     &dettimesc, &detazsc, &detslosc, &detphasesc,
-                    &detsnrsc,
+                    &detsnrsc, &detampsc,
                     &poss_detcnt, &detcnt);
   }
   
@@ -301,13 +332,15 @@ double score_world(NetModel_t * p_netmodel,
            detphasesc/numevents, detphasesc/detcnt);
     printf("Det SNR: score %lf, avg-event %lf avg-det %lf\n", detsnrsc, 
            detsnrsc/numevents, detsnrsc/detcnt);
+    printf("Det AMP: score %lf, avg-event %lf avg-det %lf\n", detampsc, 
+           detampsc/numevents, detampsc/detcnt);
     printf("Avg. # Detections: Possible %lf, Actual %lf\n", 
            ((double) poss_detcnt) / ((double) numevents),
            ((double) detcnt) / ((double) numevents));
   }
   
   score = numsc + locsc + magsc + detsc + dettimesc + detslosc + detazsc +
-    detphasesc + detsnrsc;
+    detphasesc + detsnrsc + detampsc;
   
   if (verbose)
     printf("Total: %lf Avg. %lf\n", score, score/numevents);
