@@ -189,21 +189,38 @@ def gui(leb_events, sel3_events, events, runid):
   
   plt.show()
 
-def suppress_duplicates(events):
-  new_events = []
-  evnum1 = 0
-  while evnum1 < len(events):
-    evnum2 = evnum1 + 1
-    while (evnum2 < len(events)
-           and abs(events[evnum1, EV_TIME_COL]
-                   - events[evnum2, EV_TIME_COL]) < 20 
-           and dist_deg(events[evnum1, [EV_LON_COL, EV_LAT_COL]],
-                        events[evnum2, [EV_LON_COL, EV_LAT_COL]]) < 2):
-      evnum2 += 1
-    new_events.append(events[evnum1])
-    evnum1 = evnum2
+def suppress_duplicates(events, evscores):
+  # we'll figure out which events to keep, initially we decide to keep
+  # everything
+  keep_event = np.ones(len(events), bool)
 
-  events = np.array(new_events)
+  for evnum1 in range(len(events)):
+    # if we have already discarded this event (due a colliding earlier event)
+    # then move on
+    if not keep_event[evnum1]:
+      continue
+
+    # otherwise try to find all colliding future events
+    for evnum2 in range(evnum1+1, len(events)):
+      # since events are sorted by time if the following condition fails
+      # then there is no future colliding event
+      if abs(events[evnum1, EV_TIME_COL]
+             - events[evnum2, EV_TIME_COL]) > 50:
+        break
+
+      # the two events collide
+      if dist_deg(events[evnum1, [EV_LON_COL, EV_LAT_COL]],
+                  events[evnum2, [EV_LON_COL, EV_LAT_COL]]) < 5:
+        
+        # keep the better of the two events
+        if (evscores[int(events[evnum1, EV_ORID_COL])] >
+            evscores[int(events[evnum2, EV_ORID_COL])]):
+          keep_event[evnum2] = False
+        else:
+          keep_event[evnum1] = False
+          break
+  
+  events = events[keep_event]
   
   # recompute orid2num
   orid2num = {}
@@ -308,7 +325,10 @@ def main():
     jma_events = None
     
   if options.suppress:
-    visa_events, visa_orid2num = suppress_duplicates(visa_events)
+    cursor.execute("select orid, score from visa_origin where runid=%s",
+                   (options.runid,))
+    visa_scores = dict(cursor.fetchall())    
+    visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_scores)
 
   if options.mag:
     analyze_by_attr("mb", MAG_RANGES, [ev[EV_MB_COL] for ev in leb_events],
