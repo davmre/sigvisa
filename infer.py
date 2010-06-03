@@ -166,6 +166,10 @@ def main(param_dirname):
                     help = "verbose output (False)")
   parser.add_option("-d", "--descrip", dest="descrip", default="",
                     help = "description of the run ('')")
+  parser.add_option("-p", "--propose", dest="propose_run", default=None,
+                    type = int,
+                    help = "use run RUNID's events as proposal",
+                    metavar="RUNID")
   (options, args) = parser.parse_args()
 
   if options.seed == 0:
@@ -183,12 +187,12 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
-  if options.verbose:
-    print "===="
-    print "LEB:"
-    print "===="
-    analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
-                sel3_events, sel3_evlist)
+##   if options.verbose:
+##     print "===="
+##     print "LEB:"
+##     print "===="
+##     analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
+##                 sel3_events, sel3_evlist)
   
   #print_events(netmodel, earthmodel, leb_events, leb_evlist, "LEB")
   #netmodel.score_world(leb_events, leb_evlist, 1)
@@ -211,9 +215,15 @@ def main(param_dirname):
 
   print "===="
   print "NET runid %d" % runid
-  print "===="  
+  print "===="
+  if options.propose_run is not None:
+    propose_events = read_events(cursor, start_time, end_time, "visa",
+                                 options.propose_run)[0]
+  else:
+    propose_events = None
   events, ev_detlist = netmodel.infer(runid, options.numsamples,
                                       options.window, options.step,
+                                      propose_events,
                                       options.verbose,
                                       lambda a,b,c,d,e,f:
                                       write_events(a,b,c,d,e,f,detections))

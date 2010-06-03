@@ -12,6 +12,9 @@ import database.db
 import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import matplotlib.pyplot as plt
+# for type 1 fonts
+plt.rcParams['ps.useafm'] = True
+#plt.rcParams['pdf.use14corefonts'] = True
 from utils.draw_earth import draw_events, draw_earth
 
 AZGAP_RANGES = [(0, 90), (90, 180), (180, 270), (270, 360)]
@@ -34,6 +37,8 @@ def read_sel3_svm_scores():
   return evscores
 
 def compute_roc_curve(gold_events, guess_events, guess_ev_scores, freq=30):
+
+  freq = min(len(guess_events)/10, freq)
   
   true_idx, false_idx, mat = find_true_false_guess(gold_events, guess_events)
   true_set = set(true_idx)
@@ -140,7 +145,7 @@ def find_nearest(leb_events, events):
     nearest.append(minevnum)
   return nearest
 
-def gui(leb_events, sel3_events, events, runid):
+def gui(options, leb_events, sel3_events, events):
   #
   # draw and the leb, sel3 and predicted events
   #
@@ -159,7 +164,7 @@ def gui(leb_events, sel3_events, events, runid):
   #
   cursor = database.db.connect().cursor()
   cursor.execute("select orid, score from visa_origin where runid=%s",
-                 (runid,))
+                 (options.runid,))
   evscores = dict(cursor.fetchall())
 
   plt.figure()
@@ -170,18 +175,38 @@ def gui(leb_events, sel3_events, events, runid):
   plt.plot([(sel3_p/100.0)], [(sel3_r/100.0)], label="SEL3",
            marker='o', ms=10, mec="red",
            linestyle="none", mfc="none")
-  
-  #x_pts, y_pts = compute_roc_curve(leb_events, sel3_events,
-  #                                 read_sel3_svm_scores())
-  #
-  #plt.plot(x_pts, y_pts, label="SEL3+SVM", color="red")
-  
+
+  if options.svm:
+    x_pts, y_pts = compute_roc_curve(leb_events, sel3_events,
+                                     read_sel3_svm_scores())
+    
+    plt.plot(x_pts, y_pts, label="SEL3+SVM", color="red",
+             linestyle=":")
+    
   x_pts, y_pts = compute_roc_curve(leb_events, events, evscores)
-  
-  plt.plot(x_pts, y_pts, label="NetVISA", color="blue")
-  
-  plt.xlim(0, 1)
-  plt.ylim(0, 1)
+    
+  plt.plot(x_pts, y_pts, label=options.run_name, color="blue",
+           linestyle="-")
+
+  if options.runid2 is not None:
+    events2 = read_events(cursor, options.data_start, options.data_end,
+                          "visa", options.runid2)[0]
+    
+    cursor.execute("select orid, score from visa_origin where runid=%s",
+                   (options.runid2,))
+    evscores2 = dict(cursor.fetchall())
+
+    if options.suppress:
+      events2 = suppress_duplicates(events2, evscores2)[0]
+    
+    x_pts, y_pts = compute_roc_curve(leb_events, events2, evscores2)
+    
+    plt.plot(x_pts, y_pts, label=options.run2_name, color="green",
+             linestyle="--")
+
+    
+  plt.xlim(.39, 1)
+  plt.ylim(.39, 1)
   plt.xlabel("precision")
   plt.ylabel("recall")
   plt.legend(loc = "upper right")
@@ -236,6 +261,16 @@ def main():
                     type="int",
                     help = "the run-identifier to analyze (last runid)")
 
+  parser.add_option("--run_name", dest="run_name", default="NET-VISA",
+                    help = "the name of the run (NET-VISA)")
+
+  parser.add_option("-k", "--runid2", dest="runid2", default=None,
+                    type="int",
+                    help = "the second run-identifier to analyze")
+  
+  parser.add_option("--run2_name", dest="run2_name", default="NET-VISA2",
+                    help = "the name of run2 (NET-VISA2)")
+
   parser.add_option("-m", "--maxtime", dest="maxtime", default=None,
                     type="float",
                     help = "Maximum time to analyze for")
@@ -276,6 +311,10 @@ def main():
                     action = "store_true",
                     help = "compare with JMA events (False)")
 
+  parser.add_option("-z", "--svm", dest="svm", default=False,
+                    action = "store_true",
+                    help = "use svm scores to improve SEL3 (False)")
+
 
   (options, args) = parser.parse_args()
 
@@ -299,6 +338,8 @@ def main():
 
   if options.maxtime is not None:
     data_end = options.maxtime
+
+  options.data_start, options.data_end = data_start, data_end
   
   print "%.1f - %.1f (%.1f hrs), runtime %s" \
         % (data_start, data_end, (data_end-data_start) / 3600.,
@@ -485,7 +526,7 @@ def main():
                   marker="*", ms=10, mfc="orange")
     
   if options.gui:
-    gui(leb_events, sel3_events, visa_events, options.runid)
+    gui(options, leb_events, sel3_events, visa_events)
 
 if __name__ == "__main__":
   main()

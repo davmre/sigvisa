@@ -110,6 +110,7 @@ typedef struct World_t
   int numsamples;
   int window;
   int step;
+  PyObject * propose_eventobj;
   int verbose;
   PyObject * write_events_cb;
 } World_t;
@@ -253,6 +254,41 @@ static void add_propose_hough_events(NetModel_t * p_netmodel,
 
 }
 
+static int propose_from_eventobj(NetModel_t * p_netmodel,
+                                 Event_t ** p_p_events,
+                                 int low_evtime, int high_evtime,
+                                 PyArrayObject * propose_eventobj)
+{
+  int numevents;
+  Py_ssize_t i;
+
+  numevents = 0;
+  
+  for(i=0; i<propose_eventobj->dimensions[0]; i++)
+  {
+    double evtime;
+    evtime = ARRAY2(propose_eventobj, i, EV_TIME_COL);
+    
+    if ((evtime >= low_evtime) && (evtime < high_evtime))
+    {
+      Event_t * p_event;
+
+      p_event = alloc_event(p_netmodel);
+      
+      p_event->evlon = ARRAY2(propose_eventobj, i, EV_LON_COL);
+      p_event->evlat = ARRAY2(propose_eventobj, i, EV_LAT_COL);
+      p_event->evdepth = ARRAY2(propose_eventobj, i, EV_DEPTH_COL);
+      p_event->evtime = evtime;
+      p_event->evmag = ARRAY2(propose_eventobj, i, EV_MB_COL);
+     
+      p_p_events[numevents ++] = p_event;
+    }
+  }
+
+  return numevents;
+}
+
+
 /* add events using the propose_invert proposer */
 static void add_propose_invert_events(NetModel_t * p_netmodel,
                                       World_t * p_world)
@@ -263,12 +299,17 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
   time_t t1;
   
   t1 = time(NULL);
-  
-  numevents = propose_invert(p_netmodel, pp_events,
-                             p_world->low_evtime, p_world->high_evtime,
-                             p_world->low_detnum, p_world->high_detnum,
-                             5.0, 5.0);
 
+  if (p_world->propose_eventobj != Py_None)
+    numevents = propose_from_eventobj(p_netmodel, pp_events,
+                                  p_world->low_evtime, p_world->high_evtime,
+                                  (PyArrayObject * )p_world->propose_eventobj);
+  else
+    numevents = propose_invert(p_netmodel, pp_events,
+                               p_world->low_evtime, p_world->high_evtime,
+                               p_world->low_detnum, p_world->high_detnum,
+                               5.0, 5.0);
+  
   t1 = time(NULL) - t1;
   
   assert(numevents < 1000);
@@ -1280,13 +1321,15 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   int window;
   int step;
   int verbose;
+  PyObject * propose_eventobj;
   PyObject * write_events_cb;
 
   PyObject * retobj;
   PyObject * eventsobj;
   PyObject * evdetlistobj;
   
-  if (!PyArg_ParseTuple(args, "iiiiiO", &runid, &numsamples, &window, &step,
+  if (!PyArg_ParseTuple(args, "iiiiOiO", &runid, &numsamples, &window, &step,
+                        &propose_eventobj,
                         &verbose, &write_events_cb))
     return NULL;
 
@@ -1296,6 +1339,7 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   p_world->numsamples = numsamples;
   p_world->window = window;
   p_world->step = step;
+  p_world->propose_eventobj = propose_eventobj;
   p_world->verbose = verbose;
   p_world->write_events_cb = write_events_cb;
   
