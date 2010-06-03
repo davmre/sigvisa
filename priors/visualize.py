@@ -3,7 +3,10 @@ import os, sys, time, math
 import numpy as np
 from optparse import OptionParser
 import matplotlib.pyplot as plt
+# for type 1 fonts
+plt.rcParams['ps.useafm'] = True
 
+from utils.draw_earth import draw_events, draw_earth, draw_density
 from database.dataset import *
 import netvisa, learn
 from results.compare import *
@@ -34,10 +37,38 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
-  visualize_detection(options, earthmodel, netmodel, start_time, end_time,
-                      detections, leb_events, leb_evlist, site_up)
+  visualize_location_prior(options, earthmodel, netmodel)
+  
+  #visualize_detection(options, earthmodel, netmodel, start_time, end_time,
+  #                    detections, leb_events, leb_evlist, site_up)
 
   plt.show()
+
+
+def visualize_location_prior(options, earthmodel, netmodel):
+  LON_BUCKET_SIZE = 2
+  # Z axis is along the earth's axis
+  # Z goes from -1 to 1 and will have the same number of buckets as longitude
+  Z_BUCKET_SIZE = (2.0 / 360.0) * LON_BUCKET_SIZE
+  
+  lon_arr = np.arange(-180., 180., LON_BUCKET_SIZE)
+  z_arr = np.arange(-1.0, 1.0, Z_BUCKET_SIZE)
+  lat_arr = np.arcsin(z_arr) * 180. / np.pi
+  
+  prob = np.zeros((len(lon_arr), len(lat_arr)))
+
+  for loni, lon in enumerate(lon_arr):
+    for lati, lat in enumerate(lat_arr):
+      prob[loni, lati] = netmodel.location_logprob(lon, lat, 0)
+
+  #import pdb
+  #pdb.set_trace()
+  
+  bmap = draw_earth("Log Prior Density of Events")
+  draw_density(bmap, lon_arr, lat_arr, prob,
+               #, np.log(prob) / np.log(2),
+               colorbar=False)
+
   
 def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
                         detections, leb_events, leb_evlist, site_up):
@@ -89,15 +120,15 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
     prob = det.astype(float) / occ.astype(float)
     x_bucket_pts = range(0, 180, 10)
     
-    plt.bar(left=x_bucket_pts, height=prob, width=10, alpha=.5,
-            label="data 3-4 mb")
+    plt.bar(left=x_bucket_pts, height=prob, width=10, alpha=.1,
+            label="data 3-4 mb", color="blue")
     
     mindist, maxdist = earthmodel.PhaseRange(plot_phaseid)
     x_pts = range(int(mindist), int(maxdist)+1)
     y_pts = [math.exp(netmodel.detection_logprob(1, 0, 3.5, x, SITEID,
                                                  plot_phaseid)) \
              for x in x_pts]
-    plt.plot(x_pts, y_pts, label="model 3.5 mb")
+    plt.plot(x_pts, y_pts, label="model 3.5 mb", color="black")
     
     plt.xlim(0,180)
     plt.ylim(0, 1)

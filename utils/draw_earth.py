@@ -30,7 +30,7 @@ def draw_earth(title, **args):
   plt.subplots_adjust(left=0.02, right=0.98)
 
   try:
-    bmap.fillcontinents(color=(0.5,.7,0.5,1), lake_color=(.7,.7,1,1), zorder=0)
+    bmap.fillcontinents(color=(0.5,.7,0.5,1), lake_color=(.7,.7,1,1), zorder=1)
   except:
     bmap.fillcontinents(color=(0.5,.7,0.5,1))
     
