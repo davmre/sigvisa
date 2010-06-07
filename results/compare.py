@@ -48,6 +48,9 @@ def find_unmatched(gold_events, guess_events):
     mat_gold.add(i)
   return [x for x in range(len(gold_events)) if x not in mat_gold]
 
+def find_matched(gold_events, guess_events):
+  return list(set(i for (i,j) in find_matching(gold_events, guess_events)))
+
 def f1_and_error(gold_events, guess_events):
   indices = find_matching(gold_events, guess_events)
   # compute precision

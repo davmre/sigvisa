@@ -204,6 +204,21 @@ def gui(options, leb_events, sel3_events, events):
     plt.plot(x_pts, y_pts, label=options.run2_name, color="green",
              linestyle="--")
 
+  if options.runid3 is not None:
+    events3 = read_events(cursor, options.data_start, options.data_end,
+                          "visa", options.runid3)[0]
+    
+    cursor.execute("select orid, score from visa_origin where runid=%s",
+                   (options.runid3,))
+    evscores3 = dict(cursor.fetchall())
+
+    if options.suppress:
+      events3 = suppress_duplicates(events3, evscores3)[0]
+    
+    x_pts, y_pts = compute_roc_curve(leb_events, events3, evscores3)
+    
+    plt.plot(x_pts, y_pts, label=options.run3_name, color="green",
+             linestyle=":")
     
   plt.xlim(.39, 1)
   plt.ylim(.39, 1)
@@ -264,12 +279,20 @@ def main():
   parser.add_option("--run_name", dest="run_name", default="NET-VISA",
                     help = "the name of the run (NET-VISA)")
 
-  parser.add_option("-k", "--runid2", dest="runid2", default=None,
+  parser.add_option("--runid2", dest="runid2", default=None,
                     type="int",
                     help = "the second run-identifier to analyze")
   
   parser.add_option("--run2_name", dest="run2_name", default="NET-VISA2",
                     help = "the name of run2 (NET-VISA2)")
+
+  parser.add_option("--runid3", dest="runid3", default=None,
+                    type="int",
+                    help = "the third run-identifier to analyze")
+  
+  parser.add_option("--run3_name", dest="run3_name", default="NET-VISA3",
+                    help = "the name of run3 (NET-VISA3)")
+
 
   parser.add_option("-m", "--maxtime", dest="maxtime", default=None,
                     type="float",
@@ -443,6 +466,14 @@ def main():
     visa_f, visa_p, visa_r, visa_err = f1_and_error(neic_us_events,
                                                     visa_us_events)
 
+    leb_recalled = find_matched(neic_us_events, leb_us_events)
+    sel3_recalled = find_matched(neic_us_events, sel3_us_events)
+    visa_recalled = find_matched(neic_us_events, visa_us_events)
+    
+    print "LEB recall", [neic_us_events[i, EV_ORID_COL] for i in leb_recalled]
+    print "SEL3 recall",[neic_us_events[i, EV_ORID_COL] for i in sel3_recalled]
+    print "VISA recall",[neic_us_events[i, EV_ORID_COL] for i in visa_recalled]
+    
     print "NEIC (US):         |          LEB              |          VISA"
     print "=" * 74
     print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \

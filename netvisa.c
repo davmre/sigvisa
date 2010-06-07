@@ -14,6 +14,7 @@ static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
@@ -40,6 +41,9 @@ static PyMethodDef NetModel_methods[] = {
    "location_sample() -> (lon, lat, depth)"},
   {"detection_logprob", (PyCFunction)py_detection_logprob, METH_VARARGS,
    "detection_logprob(isdet, evdepth, evmag, dist, siteid, phaseid)"
+   " -> log probability"},
+  {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
+   "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid, phaseid)"
    " -> log probability"},
   {NULL}  /* Sentinel */
 };
@@ -779,6 +783,28 @@ static PyObject * py_detection_logprob(NetModel_t * p_netmodel,
                                                    ->event_det_prior,
                                                    isdet, evdepth, evmag,
                                                    dist, siteid, phaseid));
+}
+
+static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,
+                                     PyObject * args)
+{
+  double arrtime;
+  double pred_arrtime;
+  double det_deltime;
+  int siteid;
+  int phaseid;
+
+  double logprob;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &arrtime, &pred_arrtime, &det_deltime,
+                        &siteid, &phaseid))
+    return NULL;
+
+  logprob = ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
+                                     arrtime, pred_arrtime,
+                                     det_deltime, siteid, phaseid);
+  
+  return Py_BuildValue("d", logprob);
 }
 
 static PyObject * py_srand(PyObject * self, PyObject * args)
