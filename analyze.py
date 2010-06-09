@@ -38,7 +38,7 @@ def read_sel3_svm_scores():
 
 def compute_roc_curve(gold_events, guess_events, guess_ev_scores, freq=30):
 
-  freq = min(len(guess_events)/10, freq)
+  freq = max(1, min(len(guess_events)/10, freq))
   
   true_idx, false_idx, mat = find_true_false_guess(gold_events, guess_events)
   true_set = set(true_idx)
