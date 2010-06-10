@@ -8,6 +8,12 @@ def draw_earth(title, **args):
   """
   default projection="moll" and resolution="l"
   """
+  if "nofillcontinents" in args:
+    del args["nofillcontinents"]
+    nofillcontinents = True
+  else:
+    nofillcontinents = False
+    
   if "projection" not in args:
     args["projection"] = "moll"
   if "resolution" not in args:
@@ -17,7 +23,7 @@ def draw_earth(title, **args):
   if len(args) == 2:
     args["lat_0"] = 0
     args["lon_0"] = 0
-    
+
   plt.figure()
   plt.title(title)
   bmap = Basemap(**args)
@@ -29,10 +35,12 @@ def draw_earth(title, **args):
   bmap.drawcoastlines()
   plt.subplots_adjust(left=0.02, right=0.98)
 
-  try:
-    bmap.fillcontinents(color=(0.5,.7,0.5,1), lake_color=(.7,.7,1,1), zorder=1)
-  except:
-    bmap.fillcontinents(color=(0.5,.7,0.5,1))
+  if not nofillcontinents:
+    try:
+      bmap.fillcontinents(color=(0.5,.7,0.5,1), lake_color=(.7,.7,1,1),
+                          zorder=1)
+    except:
+      bmap.fillcontinents(color=(0.5,.7,0.5,1))
     
   #bmap.drawmeridians(np.arange(-180,210,30))
   #bmap.drawparallels(np.arange(-90,120,30))

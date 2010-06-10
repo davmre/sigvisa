@@ -127,15 +127,26 @@ def read_detections(cursor, start_time, end_time):
 
   return detections, arid2num
 
-def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype):
-  cursor.execute("select lass.orid, lass.arid, ph.id-1 from %s_assoc lass, "
-                 "%s_origin lori, static_phaseid ph where "
-                 "ph.timedef='d' and "
-                 "lass.orid=lori.orid and lass.phase=ph.phase and lori.time "
-                 "between %s and %s" % (evtype, evtype, start_time, end_time))
+def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
+               runid=None):
+  if evtype == "visa":
+    cursor.execute("select vass.orid, vass.arid, ph.id-1 from visa_assoc vass,"
+                   "visa_origin vori, static_phaseid ph where "
+                   "vass.orid=vori.orid and vass.phase=ph.phase and vori.time "
+                   "between %s and %s and vass.runid=vori.runid "
+                   "and vass.runid=%s", (start_time, end_time, runid))
+  else:
+    cursor.execute("select lass.orid, lass.arid, ph.id-1 from %s_assoc lass, "
+                   "%s_origin lori, static_phaseid ph where "
+                   "ph.timedef='d' and "
+                   "lass.orid=lori.orid and lass.phase=ph.phase and lori.time "
+                   "between %s and %s"
+                   % (evtype, evtype, start_time, end_time))
   
   evlist = [[] for _ in range(len(orid2num))]
   for orid, arid, phaseid in cursor:
+    if orid not in orid2num:
+      continue
     evnum = orid2num[orid]
     if arid in arid2num:
       detnum = arid2num[arid]
