@@ -37,13 +37,13 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
-  #visualize_arrtime(options, earthmodel, netmodel,
-  #                  detections, leb_events, leb_evlist)
+  visualize_arrtime(options, earthmodel, netmodel,
+                    detections, leb_events, leb_evlist)
 
   visualize_location_prior(options, earthmodel, netmodel)
   
-  #visualize_detection(options, earthmodel, netmodel, start_time, end_time,
-  #                    detections, leb_events, leb_evlist, site_up)
+  visualize_detection(options, earthmodel, netmodel, start_time, end_time,
+                      detections, leb_events, leb_evlist, site_up)
 
   plt.show()
 

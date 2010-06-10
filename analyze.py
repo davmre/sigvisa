@@ -38,7 +38,10 @@ def read_sel3_svm_scores():
 
 def compute_roc_curve(gold_events, guess_events, guess_ev_scores, freq=30):
 
-  freq = max(1, min(len(guess_events)/10, freq))
+  if len(guess_events) < 100:
+    freq = 1
+  else:
+    freq = min(len(guess_events)/10, freq)
   
   true_idx, false_idx, mat = find_true_false_guess(gold_events, guess_events)
   true_set = set(true_idx)
@@ -466,13 +469,19 @@ def main():
     visa_f, visa_p, visa_r, visa_err = f1_and_error(neic_us_events,
                                                     visa_us_events)
 
-    leb_recalled = find_matched(neic_us_events, leb_us_events)
-    sel3_recalled = find_matched(neic_us_events, sel3_us_events)
-    visa_recalled = find_matched(neic_us_events, visa_us_events)
+    leb_recalled = find_matching(neic_us_events, leb_us_events)
+    sel3_recalled = find_matching(neic_us_events, sel3_us_events)
+    visa_recalled = find_matching(neic_us_events, visa_us_events)
     
-    print "LEB recall", [neic_us_events[i, EV_ORID_COL] for i in leb_recalled]
-    print "SEL3 recall",[neic_us_events[i, EV_ORID_COL] for i in sel3_recalled]
-    print "VISA recall",[neic_us_events[i, EV_ORID_COL] for i in visa_recalled]
+    print "LEB recall", [(int(neic_us_events[i, EV_ORID_COL]),
+                          int(leb_us_events[j, EV_ORID_COL]))
+                         for (i,j) in leb_recalled]
+    print "SEL3 recall",[(int(neic_us_events[i, EV_ORID_COL]),
+                          int(sel3_us_events[j, EV_ORID_COL]))
+                         for (i,j) in sel3_recalled]
+    print "VISA recall",[(int(neic_us_events[i, EV_ORID_COL]),
+                          int(visa_us_events[j, EV_ORID_COL]))
+                         for (i,j) in visa_recalled]
     
     print "NEIC (US):         |          LEB              |          VISA"
     print "=" * 74
