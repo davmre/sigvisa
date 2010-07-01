@@ -57,7 +57,7 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
 
 def main(param_dirname):
   if len(sys.argv) != 3:
-    print "Usage: python density.py <runid> <orid>"
+    print "Usage: python debug.py <runid> <orid>"
   
   runid, orid = int(sys.argv[1]), int(sys.argv[2])
   print "Debugging run %d origin %d" % (runid, orid)
@@ -92,7 +92,7 @@ def main(param_dirname):
   cursor.execute("select orid, score from visa_origin where runid=%s",
                  (runid,))
   visa_evscores = dict(cursor.fetchall())
-  visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_evscores)
+  #visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_evscores)
   
   visa_evlist = read_assoc(cursor, start_time, end_time, visa_orid2num,
                            arid2num, "visa", runid=runid)
@@ -128,8 +128,9 @@ def main(param_dirname):
   lat1 = event[EV_LAT_COL] - 10
   lat2 = event[EV_LAT_COL] + 10
   
-  bmap = draw_earth("NET-VISA posterior density, NEIC(white), LEB(yellow), "
-                    "SEL3(red), NET-VISA(blue)",
+  bmap = draw_earth("",
+                    #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
+                    #"SEL3(red), NET-VISA(blue)",
                     projection="mill",
                     resolution="l",
                     llcrnrlon = lon1, urcrnrlon = lon2,
@@ -172,6 +173,7 @@ def main(param_dirname):
 
   draw_density(bmap, lon_arr, lat_arr, score, colorbar=False)
 
+  plt.savefig("output/run_%d_orid_%d.ps" % (runid, orid))
   plt.show()
 
 if __name__ == "__main__":

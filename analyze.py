@@ -13,7 +13,9 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import matplotlib.pyplot as plt
 # for type 1 fonts
-plt.rcParams['ps.useafm'] = True
+plt.rcParams['text.usetex'] = True
+# for type 1 fonts
+#plt.rcParams['ps.useafm'] = True
 #plt.rcParams['pdf.use14corefonts'] = True
 from utils.draw_earth import draw_events, draw_earth
 
@@ -153,13 +155,14 @@ def gui(options, leb_events, sel3_events, events):
   # draw and the leb, sel3 and predicted events
   #
   
-  bmap = draw_earth("LEB(yellow), SEL3(red) and Net-VISA(blue)")
+  bmap = draw_earth("LEB(yellow), SEL3(red) and NET-VISA(blue)",
+                    nofillcontinents = True, projection="cyl")
   draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="o", ms=10, mfc="none", mec="red", mew=1)
+              marker="o", ms=8, mfc="none", mec="red", mew=1)
   draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="s", ms=10, mfc="none", mec="blue", mew=1)
+              marker="s", ms=8, mfc="none", mec="blue", mew=1)
   draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="*", ms=10, mfc="yellow")
+              marker="*", ms=8, mfc="yellow")
 
 
   #
@@ -493,7 +496,7 @@ def main():
     print "=" * 74
 
     if options.gui is not None:
-      bmap = draw_earth("NEIC(orange), LEB(yellow), and Net-VISA(blue)",
+      bmap = draw_earth("NEIC(orange), LEB(yellow), and NET-VISA(blue)",
                         projection="mill",
                         resolution="l",
                         llcrnrlon = US_LON_1, urcrnrlon = US_LON_2,
@@ -553,7 +556,7 @@ def main():
     print "=" * 74
 
     if jma_events is not None:
-      bmap = draw_earth("JMA (orange), LEB (yellow), and Net-VISA (blue)",
+      bmap = draw_earth("JMA (orange), LEB (yellow), and NET-VISA (blue)",
                         projection="mill",
                         resolution="l",
                         llcrnrlon = JAPAN_LON_1, urcrnrlon = JAPAN_LON_2,
