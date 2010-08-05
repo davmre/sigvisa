@@ -40,7 +40,7 @@ def main(param_dirname):
   visualize_arrtime(options, earthmodel, netmodel,
                     detections, leb_events, leb_evlist)
 
-  visualize_location_prior(options, earthmodel, netmodel)
+  #visualize_location_prior(options, earthmodel, netmodel)
   
   visualize_detection(options, earthmodel, netmodel, start_time, end_time,
                       detections, leb_events, leb_evlist, site_up)
@@ -78,8 +78,8 @@ def visualize_arrtime(options, earthmodel, netmodel,
           *STEP for x in bins]
   
   plt.figure()
-  plt.title("Time residuals around IASPEI prediction for P phase at ASAR")
-  plt.bar(left=bins, height=data_prob, width=STEP, alpha=.1, color="blue",
+  plt.title("Time residuals around IASPEI prediction for P phase at station 6")
+  plt.bar(left=bins, height=data_prob, width=STEP, alpha=1, color="blue",
           linewidth=0,
           label="data")
   plt.plot(bins, prob, color="black", label="model")
@@ -151,7 +151,7 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
   SITEID = 6
   for plot_phaseid in range(numtimedefphases):
     plt.figure()
-    plt.title("Detection probability at ASAR for %s phase, surface event"
+    plt.title("Detection probability at station 6 for %s phase, surface event"
               % earthmodel.PhaseName(plot_phaseid))
     
     # now, bucket the phase data for the P phase at ASAR
@@ -166,7 +166,7 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
     prob = det.astype(float) / occ.astype(float)
     x_bucket_pts = range(0, 180, 10)
     
-    plt.bar(left=x_bucket_pts, height=prob, width=10, alpha=.1,
+    plt.bar(left=x_bucket_pts, height=prob, width=10, alpha=1,
             label="data 3--4 mb", color="blue")
     
     mindist, maxdist = earthmodel.PhaseRange(plot_phaseid)
