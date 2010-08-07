@@ -6,8 +6,11 @@ def connect():
     # on linux we don't use named pipes
     dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
   elif os.name in ['nt']:
-    # on windows we need named pipes
-    dbconn = MySQLdb.connect(named_pipe=True, user="ctbt", db="ctbt3mos")
-
+    # on windows we can use named pipes
+    try:
+      dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
+    except:
+      dbconn = MySQLdb.connect(named_pipe=True, user="ctbt", db="ctbt3mos")
+  
   return dbconn
 
