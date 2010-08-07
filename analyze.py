@@ -5,7 +5,7 @@ from optparse import OptionParser
 
 from database.dataset import *
 from results.compare import *
-from utils.geog import degdiff, dist_deg
+from utils.geog import degdiff, dist_deg, dist_km
 import database.db
 
 # ignore warnings from matplotlib in python 2.4
@@ -13,7 +13,7 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import matplotlib.pyplot as plt
 # for type 1 fonts
-plt.rcParams['text.usetex'] = True
+#plt.rcParams['text.usetex'] = True
 # for type 1 fonts
 #plt.rcParams['ps.useafm'] = True
 #plt.rcParams['pdf.use14corefonts'] = True
@@ -344,6 +344,11 @@ def main():
                     action = "store_true",
                     help = "use svm scores to improve SEL3 (False)")
 
+  parser.add_option("-e", "--error", dest="error", default=False,
+                    action = "store_true",
+                    help = "compute the error of VISA and SEL3 on "
+                    "LEB events predicted by both")
+
 
   (options, args) = parser.parse_args()
 
@@ -399,6 +404,47 @@ def main():
                    (options.runid,))
     visa_scores = dict(cursor.fetchall())    
     visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_scores)
+
+  if options.error:
+    leb_sel3 = find_matching(leb_events, sel3_events)
+    leb_visa = find_matching(leb_events, visa_events)
+    # leb events common to both
+    common_leb = list(set([x for (x,y) in leb_sel3])
+                      & set([x for (x,y) in leb_visa]))
+    common_leb_sel3 = dict((leb_evnum, sel3_evnum) for (leb_evnum, sel3_evnum)
+                           in leb_sel3 if leb_evnum in common_leb)
+    common_leb_visa = dict((leb_evnum, visa_evnum) for (leb_evnum, visa_evnum)
+                           in leb_visa if leb_evnum in common_leb)
+    
+    buckets = [([], []) for b in MAG_RANGES]
+    for evnum in common_leb:
+      for bnum, (mag_low, mag_high) in enumerate(MAG_RANGES):
+        if leb_events[evnum, EV_MB_COL] > mag_low \
+           and leb_events[evnum, EV_MB_COL] <= mag_high:
+          leb_ev = leb_events[evnum]
+          sel3_ev = sel3_events[common_leb_sel3[evnum]]
+          visa_ev = visa_events[common_leb_visa[evnum]]
+          sel3_dist = dist_km((leb_ev[EV_LON_COL], leb_ev[EV_LAT_COL]),
+                              (sel3_ev[EV_LON_COL], sel3_ev[EV_LAT_COL]))
+          visa_dist = dist_km((leb_ev[EV_LON_COL], leb_ev[EV_LAT_COL]),
+                              (visa_ev[EV_LON_COL], visa_ev[EV_LAT_COL]))
+          buckets[bnum][0].append(sel3_dist)
+          buckets[bnum][1].append(visa_dist)
+          break
+      else:
+        raise ValueError("Event mag %f not found in any mag range"
+                         % leb_events[evnum, EV_MB_COL])
+      
+    print "%d leb events detected by both sel3 and visa" % len(common_leb)
+    print "   mb   | #ev |  SEL3   |  VISA"
+    print "        |     | err  sd | err  sd"
+    print "---------------------------------"
+    for bnum, (mag_low, mag_high) in enumerate(MAG_RANGES):
+      print " %d -- %d | %3d | %3d %3d | %3d %3d" \
+            % (mag_low, mag_high, len(buckets[bnum][0]),
+               np.average(buckets[bnum][0]), np.std(buckets[bnum][0]),
+               np.average(buckets[bnum][1]), np.std(buckets[bnum][1]))
+
 
   if options.mag:
     analyze_by_attr("mb", MAG_RANGES, [ev[EV_MB_COL] for ev in leb_events],
