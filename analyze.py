@@ -417,6 +417,7 @@ def main():
                            in leb_visa if leb_evnum in common_leb)
     
     buckets = [([], []) for b in MAG_RANGES]
+    all = ([], [])
     for evnum in common_leb:
       for bnum, (mag_low, mag_high) in enumerate(MAG_RANGES):
         if leb_events[evnum, EV_MB_COL] > mag_low \
@@ -430,6 +431,8 @@ def main():
                               (visa_ev[EV_LON_COL], visa_ev[EV_LAT_COL]))
           buckets[bnum][0].append(sel3_dist)
           buckets[bnum][1].append(visa_dist)
+          all[0].append(sel3_dist)
+          all[1].append(visa_dist)
           break
       else:
         raise ValueError("Event mag %f not found in any mag range"
@@ -444,6 +447,10 @@ def main():
             % (mag_low, mag_high, len(buckets[bnum][0]),
                np.average(buckets[bnum][0]), np.std(buckets[bnum][0]),
                np.average(buckets[bnum][1]), np.std(buckets[bnum][1]))
+    print "   all  | %3d | %3d %3d | %3d %3d" \
+          % (len(all[0]),
+             np.average(all[0]), np.std(all[0]),
+             np.average(all[1]), np.std(all[1]))
 
 
   if options.mag:
