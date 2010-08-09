@@ -105,6 +105,11 @@ typedef struct World_t
   double world_score;
   int ev_orid_sequence;
 
+  /* Cached proposed events */
+  Event_t ** pp_prop_events;
+  int num_prop_events;
+  double max_prop_evtime;
+
   /* static entries */
   int runid;
   int numsamples;
@@ -296,23 +301,56 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
   Event_t * pp_events[1000];     /* assume at most 1000 events init */
   int numevents;
   int i;
+  int saved_num_prop_events;
   time_t t1;
+  
+  /* first time init */
+  if (p_world->max_prop_evtime < p_world->low_evtime)
+    p_world->max_prop_evtime = p_world->low_evtime;
+
+  saved_num_prop_events = p_world->num_prop_events;
   
   t1 = time(NULL);
 
   if (p_world->propose_eventobj != Py_None)
     numevents = propose_from_eventobj(p_netmodel, pp_events,
-                                  p_world->low_evtime, p_world->high_evtime,
+                                      p_world->max_prop_evtime, 
+                                      p_world->high_evtime,
                                   (PyArrayObject * )p_world->propose_eventobj);
   else
     numevents = propose_invert(p_netmodel, pp_events,
-                               p_world->low_evtime, p_world->high_evtime,
+                               p_world->max_prop_evtime, p_world->high_evtime,
                                p_world->low_detnum, p_world->high_detnum,
                                5.0, 5.0);
   
   t1 = time(NULL) - t1;
   
   assert(numevents < 1000);
+
+  /* cache all the newly proposed events */
+  for (i=0; i<numevents; i++)
+  {
+    Event_t * p_event = alloc_event(p_netmodel);
+    copy_event(p_netmodel, p_event, pp_events[i]);
+    p_world->pp_prop_events[p_world->num_prop_events ++] = p_event;
+  }
+  /* update the max time of the cached proposed events */
+  p_world->max_prop_evtime = p_world->high_evtime;
+  
+  /* extend the proposed events with previously cached events, note
+   * that the cached events are sorted across windows but not within a window */
+  for (i=saved_num_prop_events-1;
+       i>=0 && (p_world->pp_prop_events[i]->evtime 
+                > (p_world->low_evtime - p_world->window));
+       i--)
+  {
+    if (p_world->pp_prop_events[i]->evtime > p_world->low_evtime)
+    {
+      Event_t * p_event = alloc_event(p_netmodel);
+      copy_event(p_netmodel, p_event, p_world->pp_prop_events[i]);
+      pp_events[numevents ++] = p_event;
+    }
+  }
 
   if (p_world->verbose)
   {
@@ -1083,9 +1121,12 @@ static World_t * alloc_world(NetModel_t * p_netmodel)
   
   /* assume that we can't have more events then detections */
   p_world = (World_t *) calloc(1, sizeof(*p_world));
-  p_world->maxevents = p_netmodel->numdetections;
+  p_world->maxevents = p_netmodel->numdetections + 1000;
   p_world->pp_events = (Event_t **) calloc(p_world->maxevents,
                                            sizeof(*p_world->pp_events));
+
+  p_world->pp_prop_events = (Event_t **) calloc(p_world->maxevents,
+                                             sizeof(*p_world->pp_prop_events));
 
   return p_world;
 }
@@ -1104,6 +1145,18 @@ static void free_world(World_t * p_world)
   }
 
   free(p_world->pp_events);
+
+  for (i=0; i<p_world->num_prop_events; i++)
+  {
+    Event_t * p_event;
+    
+    p_event = p_world->pp_prop_events[i];
+
+    free_event(p_event);
+  }
+
+  free(p_world->pp_prop_events);
+
   free(p_world);
 }
 
