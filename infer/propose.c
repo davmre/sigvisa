@@ -844,6 +844,141 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
   return numevents;
 }
 
+/* uniformly propose the event all over the earth */
+/* python -m utils.check_propose python -k 1237700200 -r .75 -d 10 -t 10
+ * found the event 5288798 but took 5 hours over a 5 minute window
+ */
+int propose_uniform(NetModel_t * p_netmodel, Event_t **pp_events,
+                    double time_low, double time_high, int det_low,
+                    int det_high, double degree_step, double time_step,
+                    double depth_step, double mag_step)
+{
+  EarthModel_t * p_earth;
+  int numsites;
+  int numtimedefphases;
+  
+  int numlon;
+  int numlat;
+  double z_step;
+
+  int detnum;
+
+  int numevents;
+
+  Event_t * p_best_event;
+  Event_t * p_event;
+  int * p_skip_det;                          /* numdetections */
+  
+  p_earth = p_netmodel->p_earth;
+  
+  numlon = (int) ceil(360.0 / degree_step);
+  numlat = numlon /2;
+  z_step = 2.0 / numlat;
+  
+  numsites = EarthModel_NumSites(p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+  p_skip_det = (int *) calloc(p_netmodel->numdetections, sizeof(*p_skip_det));
+  
+  if (!p_skip_det)
+  {
+    return -1;
+  }
+
+  p_event = alloc_event(p_netmodel);
+
+  numevents = 0;
+
+  do
+  {
+    int siteid;
+    int phase;
+
+    p_best_event = alloc_event(p_netmodel);
+    p_best_event->evscore = 0;
+
+    for (p_event->evlon = -180; p_event->evlon < 180;
+         p_event->evlon += degree_step)
+    {
+      double z;
+      for (z=-1; z<=1; z+= z_step)
+      {
+        p_event->evlat = asin(z) * RAD2DEG;
+        
+        for (p_event->evdepth = MIN_DEPTH; p_event->evdepth <= MAX_DEPTH;
+             p_event->evdepth += depth_step)
+        {
+
+          for (p_event->evtime = time_low; p_event->evtime <= time_high;
+               p_event->evtime += time_step)
+          {
+            
+            for (p_event->evmag = MIN_MAGNITUDE;
+                 p_event->evmag <= 6; p_event->evmag += mag_step)
+            {
+              /* score this event using the best detections available */
+              propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                                      p_skip_det);
+
+              if (p_event->evscore > p_best_event->evscore)
+              {
+                copy_event(p_netmodel, p_best_event, p_event);
+
+#ifdef NEVER
+                printf("CURR BEST: ");
+                print_event(p_best_event);
+#endif
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    /* now lets see if we found a good event */
+    
+    if (0 == p_best_event->evscore)
+    {
+      free_event(p_best_event);
+      free_event(p_event);
+      break;
+    }
+    
+    /* now, improve this event to take advantage of its detections */
+    propose_best_event(p_netmodel, p_best_event, det_low, det_high,
+                       p_skip_det, time_low, time_high, 1);
+    propose_best_event(p_netmodel, p_best_event, det_low, det_high,
+                       p_skip_det, time_low, time_high, .1);
+    
+    /*
+     * we will identify the detections used by the best event and make them
+     * off-limits for future events
+     */
+    for (siteid = 0; siteid < numsites; siteid ++)
+    {
+      for (phase = 0; phase < numtimedefphases; phase ++)
+      {
+        detnum = p_best_event->p_detids[siteid * numtimedefphases + phase];
+
+        if (detnum != -1)
+        {
+          p_skip_det[detnum] = 1;
+        }
+      }
+    }
+    
+    /* add the best event to the list of events */
+    pp_events[numevents ++] = p_best_event;
+    
+  } while (1);
+
+  free(p_skip_det);
+
+  /* free_event(p_event); */
+
+  return numevents;
+}
+
 PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
 {
   double time_low;
@@ -852,6 +987,8 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
   int det_high;
   double degree_step;
   double time_step;
+  double depth_step;
+  double mag_step;
   
   PyObject * eventsobj;
   PyObject * evdetlistobj;
@@ -866,9 +1003,18 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
 
   pp_events = (Event_t **) calloc(p_netmodel->numdetections,
                                   sizeof(*pp_events));
-  
+
   numevents = propose_invert(p_netmodel, pp_events, time_low, time_high, 
                              det_low, det_high, degree_step, time_step);
+  
+  /*
+  depth_step = 350;
+  mag_step = 2;
+  
+  numevents = propose_uniform(p_netmodel, pp_events, time_low, time_high,
+                              det_low, det_high, degree_step, time_step,
+                              depth_step, mag_step);
+  */
 
   if (numevents < 0)
   {
