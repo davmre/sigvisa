@@ -15,6 +15,8 @@ static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
@@ -44,6 +46,12 @@ static PyMethodDef NetModel_methods[] = {
    " -> log probability"},
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
    "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid, phaseid)"
+   " -> log probability"},
+  {"arraz_logprob", (PyCFunction)py_arraz_logprob, METH_VARARGS,
+   "arraz_logprob(arraz, pred_arraz, det_delaz, siteid, phaseid)"
+   " -> log probability"},
+  {"arrslo_logprob", (PyCFunction)py_arrslo_logprob, METH_VARARGS,
+   "arrslo_logprob(arrslo, pred_arrslo, det_delslo, siteid, phaseid)"
    " -> log probability"},
   {NULL}  /* Sentinel */
 };
@@ -803,6 +811,50 @@ static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,
   logprob = ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
                                      arrtime, pred_arrtime,
                                      det_deltime, siteid, phaseid);
+  
+  return Py_BuildValue("d", logprob);
+}
+
+static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,
+                                   PyObject * args)
+{
+  double arraz;
+  double pred_arraz;
+  double det_delaz;
+  int siteid;
+  int phaseid;
+
+  double logprob;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &arraz, &pred_arraz, &det_delaz,
+                        &siteid, &phaseid))
+    return NULL;
+
+  logprob = ArrivalAzimuthPrior_LogProb(&p_netmodel->arr_az_prior,
+                                        arraz, pred_arraz,
+                                        det_delaz, siteid, phaseid);
+  
+  return Py_BuildValue("d", logprob);
+}
+
+static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,
+                                    PyObject * args)
+{
+  double arrslo;
+  double pred_arrslo;
+  double det_delslo;
+  int siteid;
+  int phaseid;
+
+  double logprob;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &arrslo, &pred_arrslo, &det_delslo,
+                        &siteid, &phaseid))
+    return NULL;
+
+  logprob = ArrivalSlownessPrior_LogProb(&p_netmodel->arr_slo_prior,
+                                         arrslo, pred_arrslo,
+                                         det_delslo, siteid, phaseid);
   
   return Py_BuildValue("d", logprob);
 }
