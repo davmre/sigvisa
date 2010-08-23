@@ -1,29 +1,110 @@
 import math, random
 import rpy2.robjects as robjects
 import numpy as np
+from scipy.optimize import fmin_ncg
+import time
+
+def logistic(a): return 1.0 / (1.0 + np.exp(-a))
 
 def test_logistic():
-  def logistic(a): return 1.0 / (1.0 + math.exp(-a))
-  
+  NUM_DATA=10000
   random.seed(10)
-  x = [random.random() for i in range(10000)]
-  w = [random.random() for i in range(10000)]
+  def generate(a,b,c):
+    return int(random.random() < logistic(2*a - 3*b + 5*c - 2))
+  
+  x = [random.random() for i in range(NUM_DATA)]
+  w = [random.random() for i in range(NUM_DATA)]
+  z = [random.random() for i in range(NUM_DATA)]
 
-  y = [int(random.random() < logistic(2*a - 3*b)) for a,b in zip(x,w)]
+  y = [generate(a,b,c) for a,b,c in zip(x,w,z)]
 
-  model = LogisticModel("y", ["x", "w"], [x, w], y)
+  t1 = time.time()
+  model = LogisticModel("y", ["x", "w", "z"], [x, w, z], y)
+  t2 = time.time()
 
-  ypred = [model[a,b] for a,b in zip(x,w)]
+  ypred = [model[a,b,c] for a,b,c in zip(x,w,z)]
 
-  err = math.sqrt(float(sum((y1-y2) ** 2 for y1, y2 in zip(y, ypred)))/ len(y))
+  err = math.sqrt(float(sum((a-b) ** 2 for a, b in zip(y, ypred)))/ len(y))
 
-  print "logistic"
+  x2 = [random.random() for i in range(NUM_DATA)]
+  w2 = [random.random() for i in range(NUM_DATA)]
+  z2 = [random.random() for i in range(NUM_DATA)]
+
+  y2 = [generate(a,b,c) for a,b,c in zip(x2,w2,z2)]
+
+  ypred2 = [model[a,b,c] for a,b,c in zip(x2,w2,z2)]
+
+  err2 = math.sqrt(float(sum((a-b) ** 2 for a, b in zip(y2, ypred2)))/ len(y2))
+
+  print "logistic in %.2f secs" % (t2-t1)
   print "coeffs", model.coeffs
-  print "rmse", err
-  assert(err < .45)
+  print "rmse on training data", err
+  print "rmse on test data", err2
+  assert (err < .5)
   
 class LogisticModel:
-  def __init__(self, name, dim_names, dim_vals, samples, weights=None):
+  def __init__(self, name, dim_names, dim_vals, samples, weights=None,
+               alpha = 1e-6):
+    """
+    Logistic Regression Model. Learns to predict a probability based
+    on specified inputs
+    
+    Note: samples must be an array of  0 and 1 values
+
+    alpha/2 is the L2 regularization term
+    Note: the intercept coefficient is not regularized
+    """
+    assert(len(dim_names) == len(dim_vals))
+    self.dim_names = dim_names
+
+    dim_vals = [x for x in dim_vals]              # make a copy
+    dim_vals.append(np.ones_like(dim_vals[0])) # add intercept
+
+    if weights is None:
+      weights = np.ones_like(dim_vals[0])
+    else:
+      weights = np.array(weights)
+    
+    features = np.column_stack(dim_vals)
+    output = 2 * np.array(samples) - 1  # convert 0 to -1 and 1 to 1
+
+    feat_outer = np.array([np.outer(x,x) for x in features])
+
+    regul = alpha * np.ones(len(dim_vals))
+    regul[-1] = 0
+    
+    def neg_log_lik(coeffs):
+      return - (np.log(logistic(output * (features * coeffs).sum(axis=1)))
+                * weights).sum() + (regul * coeffs ** 2).sum() / 2
+
+    def grad_neg_log_lik(coeffs):
+      return - ((output * logistic( -output * (features * coeffs).sum(axis=1))
+                 * weights) * features.T).sum(axis=1) + regul * coeffs
+    
+    def hess_neg_log_lik(coeffs):
+      sgn_log_odds = output * (features * coeffs).sum(axis=1)
+      return ((logistic(-sgn_log_odds) * logistic(sgn_log_odds) * weights)
+              * feat_outer.T).sum(axis=2) + regul * np.eye(len(coeffs))
+    
+    #self.coeffs = fmin(neg_log_lik, np.zeros(features.shape[1]))
+    
+    #self.coeffs = fmin_bfgs(neg_log_lik, np.zeros(features.shape[1]),
+    #                        fprime = grad_neg_log_lik)
+
+    self.coeffs, fopt, fcall, gcalls, hcalls, warnflag \
+                 = fmin_ncg(neg_log_lik, np.zeros(features.shape[1]),
+                            fprime = grad_neg_log_lik, fhess=hess_neg_log_lik,
+                            disp = 0, full_output=1, avextol=1e-12)
+    if warnflag:
+      self.converged = False
+      print "LogisticModel: Warning(%d): regression did not converge" % warnflag
+      print "coeffs:", self.coeffs
+      print "fopt %.1f fcalls=%d gcalls=%d hcalls=%d" % (fopt, fcalls, gcalls,
+                                                         hcalls)
+    else:
+      self.converged = True
+    
+  def __init2__(self, name, dim_names, dim_vals, samples, weights=None):
     """
     Logistic Regression Model. Learns to predict a probability based
     on specified inputs

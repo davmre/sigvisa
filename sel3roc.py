@@ -11,40 +11,37 @@ import matplotlib.pyplot as plt
 curr_color = 0
 colors=["red", "blue", "orange", "yellow", "brown", "purple"]
 
+NUMPTS = 200
+
 def draw_roc(label, fname):
-  scores = []
-  total_true, total_false = 0, 0
   fp = open(fname)
+  false_sel3, true_sel3 = [], []
   for line in fp:
     orid, istrue, score = line.rstrip().split()
-    
-    istrue = bool(int(istrue))
     score = float(score)
-    
-    scores.append((score, istrue))
+    istrue = bool(int(istrue))
     
     if istrue:
-      total_true += 1
+      true_sel3.append(score)
     else:
-      total_false += 1
+      false_sel3.append(score)
+  
   fp.close()
-  
-  scores.sort(reverse=True)
-  
+
+  min_score = min(min(true_sel3), min(false_sel3)) - 1
+  max_score = max(max(true_sel3), max(false_sel3)) + 1
+
   # compute the ROC curve
   x_pts, y_pts = [], []
-  num_true, num_false = 0, 0
-  
-  for cnt, (score, istrue) in enumerate(scores):
-    if istrue:
-      num_true += 1
-    else:
-      num_false += 1
-    
-    if cnt % 30 == 0 or cnt == len(scores)-1:
-      y_pts.append(float(num_true) / total_true)
-      x_pts.append(float(num_false) / (cnt+1.0))
 
+  for cnt in range(NUMPTS):
+    sep = min_score + float(cnt) * (max_score - min_score) / NUMPTS
+    y = float(len(filter(lambda x: x>sep, true_sel3))) / len(true_sel3)
+    x = float(len(filter(lambda x: x>sep, false_sel3))) / len(false_sel3)
+      
+    x_pts.append(x)
+    y_pts.append(y)
+    
   global curr_color
   plt.plot(x_pts, y_pts, label=label, color=colors[curr_color])
   curr_color += 1
@@ -66,8 +63,8 @@ def main():
 
   plt.xlim(0, 1)
   plt.ylim(0, 1)
-  plt.xlabel("false events")
-  plt.ylabel("true events")
+  plt.xlabel("False positive rate")
+  plt.ylabel("True positive rate")
   plt.legend(loc = "lower right")
   plt.grid(True)
   

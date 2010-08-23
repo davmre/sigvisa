@@ -67,7 +67,7 @@ def learn_phase_site(phasename, true_data, fake_data):
     else:
       dist170_feat.append(0)
       
-    if phasename in ("PKPab"):
+    if phasename in ("PKPab",):
       dist175_feat.append(gtf(dist, 175, 30))
     else:
       dist175_feat.append(0)
@@ -95,7 +95,8 @@ def learn_phase_site(phasename, true_data, fake_data):
                     dist12540_feat, dist145_feat, dist170_feat,
                     dist175_feat, mag6_feat, mag68_feat, md_feat]
   
-  model = LogisticModel("y", feature_names, feature_values, output)
+  model = LogisticModel("y", feature_names, feature_values, output,
+                        alpha=1e-5)
 
   for i in range(len(model.coeffs)):
     # for any feature which is not being used, set its coefficients to zero
