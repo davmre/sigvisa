@@ -12,11 +12,22 @@ import netvisa, learn
 from results.compare import *
 from utils import Laplace
 
+from utils.LogisticModel import LogisticModel
+
 def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-t", "--train", dest="train", default=False,
                     action = "store_true",
                     help = "visualize training data (False)")
+  parser.add_option("-a", "--arrival", dest="arrival", default=False,
+                    action = "store_true",
+                    help = "visualize arrival parameters (False)")
+  parser.add_option("-l", "--location", dest="location", default=False,
+                    action = "store_true",
+                    help = "visualize location prior (False)")
+  parser.add_option("-d", "--detection", dest="detection", default=False,
+                    action = "store_true",
+                    help = "visualize detection prior (False)")
   parser.add_option("-w", "--write", dest="write", default=None,
                     help = "location to write figures to",
                     metavar="DIRNAME")
@@ -38,19 +49,32 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
-  visualize_arrtime(options, earthmodel, netmodel,
-                    detections, leb_events, leb_evlist)
-
-  visualize_arraz(options, earthmodel, netmodel,
-                  detections, leb_events, leb_evlist)
-
-  visualize_arrslo(options, earthmodel, netmodel,
-                   detections, leb_events, leb_evlist)
-
-  #visualize_location_prior(options, earthmodel, netmodel)
+  # if no options is selected then select all options
+  if not options.arrival and not options.location and not options.detection:
+    options.arrival = options.location = options.detection = True
   
-  #visualize_detection(options, earthmodel, netmodel, start_time, end_time,
-  #                    detections, leb_events, leb_evlist, site_up)
+  if options.arrival:
+    print "visualizing arrival parameters"
+    
+    visualize_arrtime(options, earthmodel, netmodel,
+                      detections, leb_events, leb_evlist)
+    
+    visualize_arraz(options, earthmodel, netmodel,
+                    detections, leb_events, leb_evlist)
+    
+    visualize_arrslo(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist)
+
+  if options.location:
+    print "visualizing location prior"
+    
+    visualize_location_prior(options, earthmodel, netmodel)
+
+  if options.detection:
+    print "visualizing detection prior"
+    
+    visualize_detection(options, earthmodel, netmodel, start_time, end_time,
+                        detections, leb_events, leb_evlist, site_up)
 
   plt.show()
 
@@ -235,7 +259,10 @@ def visualize_location_prior(options, earthmodel, netmodel):
                #, np.log(prob) / np.log(2),
                colorbar=False)
 
-  
+def gtf(val, m, s):
+  return math.exp(- float(val - m) ** 2 / (2.0 * float(s) ** 2)) \
+         / math.sqrt(2.0 * math.pi * float(s) ** 2)
+
 def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
                         detections, leb_events, leb_evlist, site_up):
   
@@ -269,6 +296,7 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
                                     event[EV_DEPTH_COL], dist))
 
   SITEID = 6
+  PHASEID=0
   for plot_phaseid in range(numtimedefphases):
     plt.figure()
     plt.title("Detection probability at station 6 for %s phase, surface event"
@@ -285,10 +313,11 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
           det[distidx] += 1
     prob = det.astype(float) / occ.astype(float)
     x_bucket_pts = range(0, 180, 10)
-    
+    # plot the data
     plt.bar(left=x_bucket_pts, height=prob, width=10, alpha=1,
             label="data 3--4 mb", color="blue")
     
+    # plot the model
     mindist, maxdist = earthmodel.PhaseRange(plot_phaseid)
     x_pts = range(int(mindist), int(maxdist)+1)
     y_pts = [math.exp(netmodel.detection_logprob(1, 0, 3.5, x, SITEID,

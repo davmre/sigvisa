@@ -114,8 +114,8 @@ def main(param_dirname):
     plt.plot(x_pts, y_pts)
     plt.xlim(0, 1)
     plt.ylim(0, 1)
-    plt.xlabel("false events")
-    plt.ylabel("true events")
+    plt.xlabel("False positive rate")
+    plt.ylabel("True positive rate")
     plt.grid(True)
 
     bins = range(-100,200,5)

@@ -140,9 +140,9 @@ def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
   
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-n", "--numsamples", dest="numsamples", default=1000,
+  parser.add_option("-n", "--numsamples", dest="numsamples", default=10,
                     type="int",
-                    help = "number of samples per window step (1000)")
+                    help = "number of samples per window step (10)")
   parser.add_option("-w", "--window", dest="window", default=1800,
                     type="int",
                     help = "window size in seconds (1800)")
