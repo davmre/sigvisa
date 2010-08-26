@@ -160,7 +160,7 @@ def main(param_dirname):
 
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
-                marker="*", ms=10, mfc="white", mew=2)
+                marker="*", ms=10, mfc="white", mew=1)
 
   # draw a density
   LON_BUCKET_SIZE = .5
@@ -189,6 +189,10 @@ def main(param_dirname):
       if sc > best: best = sc
       if sc < worst: worst = sc
 
+  # we want crude levels upto 90 % of the max
+  real_best = best
+  best *= .9
+  
   # create 5 levels from worst to 0 and 5 from 0 to best (unless if best < 0)
   if best <= 0 or worst >= 0:
     levels = np.linspace(worst, best, 10).tolist()
@@ -196,7 +200,8 @@ def main(param_dirname):
     levels = np.linspace(worst, 0, 5).tolist() \
              + np.linspace(0, best, 5).tolist()
 
-  levels = np.round(levels, 1)
+  levels = np.round(levels, 1).tolist() \
+           + np.round([real_best*.95, real_best], 1).tolist()
   
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
 
