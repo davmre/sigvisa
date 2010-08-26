@@ -156,12 +156,18 @@ def gui(options, leb_events, sel3_events, events):
   #
   
   bmap = draw_earth("LEB(yellow), SEL3(red) and NET-VISA(blue)",
-                    nofillcontinents = True, projection="cyl")
+                    nofillcontinents = False, projection="cyl")
   draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
               marker="o", ms=8, mfc="none", mec="red", mew=1)
   draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
               marker="s", ms=8, mfc="none", mec="blue", mew=1)
   draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+              marker="*", ms=8, mfc="yellow")
+
+  bmap = draw_earth("Missed LEB events",
+                    nofillcontinents = False, projection="cyl")
+  missed_leb_idx = find_unmatched(leb_events, events)
+  draw_events(bmap, leb_events[missed_leb_idx][:,[EV_LON_COL,EV_LAT_COL]],
               marker="*", ms=8, mfc="yellow")
 
 
