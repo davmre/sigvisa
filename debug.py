@@ -13,7 +13,7 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import matplotlib.pyplot as plt
 # for type 1 fonts
-plt.rcParams['ps.useafm'] = True
+#plt.rcParams['ps.useafm'] = True
 #plt.rcParams['pdf.use14corefonts'] = True
 from utils.draw_earth import draw_events, draw_earth, draw_density
 
@@ -57,15 +57,21 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
 
 def main(param_dirname):
   if len(sys.argv) != 3:
-    print "Usage: python debug.py <runid> <orid>"
+    print "Usage: python debug.py <runid> <leb|visa> <orid>"
   
-  runid, orid = int(sys.argv[1]), int(sys.argv[2])
-  print "Debugging run %d origin %d" % (runid, orid)
+  runid, orid_type, orid = int(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+  if orid_type not in ("visa", "leb"):
+    print "invalid orid_type %s" % orid_type
+  print "Debugging run %d %s origin %d" % (runid, orid_type, orid)
   
   # find the event time and use that to configure start and end time
   cursor = database.db.connect().cursor()
-  cursor.execute("select time from visa_origin where runid=%s and orid=%s",
-                 (runid, orid))
+  if orid_type == "visa":
+    cursor.execute("select time from visa_origin where runid=%s and orid=%s",
+                   (runid, orid))
+  elif orid_type == "leb":
+    cursor.execute("select time from leb_origin where orid=%s", (orid,))
+
   evtime, = cursor.fetchone()
   print "Event Time %.1f" % evtime
 
@@ -120,9 +126,15 @@ def main(param_dirname):
   print_events(netmodel, earthmodel, detections, neic_events, None, "NEIC")
 
   # now draw a window around the event location
-  evnum = visa_orid2num[orid]
-  event = visa_events[evnum].copy()
-
+  if orid_type == "visa":
+    evnum = visa_orid2num[orid]
+    event = visa_events[evnum].copy()
+    event_detlist = visa_evlist[evnum]
+  elif orid_type == "leb":
+    evnum = leb_orid2num[orid]
+    event = leb_events[evnum].copy()
+    event_detlist = leb_evlist[evnum]
+  
   lon1 = event[EV_LON_COL] - 10
   lon2 = event[EV_LON_COL] + 10
   lat1 = event[EV_LAT_COL] - 10
@@ -138,17 +150,17 @@ def main(param_dirname):
                     nofillcontinents=True)
   if len(leb_events):
     draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
-                marker="o", ms=10, mfc="none", mec="yellow", mew=1)
+                marker="o", ms=10, mfc="none", mec="yellow", mew=2)
   if len(sel3_events):
     draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
-                marker="o", ms=10, mfc="none", mec="red", mew=1)
+                marker="o", ms=10, mfc="none", mec="red", mew=2)
     
   draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="s", ms=10, mfc="none", mec="blue", mew=1)
+              marker="s", ms=10, mfc="none", mec="blue", mew=2)
 
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
-                marker="*", ms=10, mfc="white", mew=1)
+                marker="*", ms=10, mfc="white", mew=2)
 
   # draw a density
   LON_BUCKET_SIZE = .5
@@ -156,24 +168,39 @@ def main(param_dirname):
   # Z goes from -1 to 1 and will have the same number of buckets as longitude
   Z_BUCKET_SIZE = (2.0 / 360.0) * LON_BUCKET_SIZE
   
-  lon_arr = np.arange(-180., 180., LON_BUCKET_SIZE)
+  lon_arr = np.arange(-190., 190., LON_BUCKET_SIZE)
   z_arr = np.arange(-1.0, 1.0, Z_BUCKET_SIZE)
   lat_arr = np.arcsin(z_arr) * 180. / np.pi
   
   score = np.zeros((len(lon_arr), len(lat_arr)))
-
+  best, worst = -np.inf, np.inf
   for loni, lon in enumerate(lon_arr):
     for lati, lat in enumerate(lat_arr):
-      event = visa_events[evnum].copy()
+      if lon<-180: lon+=360
+      if lon>180: lon-=360
+      tmp = event.copy()
       if dist_deg((event[EV_LON_COL], event[EV_LAT_COL]), (lon, lat)) > 15:
         continue
-      event[EV_LON_COL] = lon
-      event[EV_LAT_COL] = lat
-      score[loni, lati] = netmodel.score_event(event, visa_evlist[evnum])
+      tmp[EV_LON_COL] = lon
+      tmp[EV_LAT_COL] = lat
+      sc = netmodel.score_event(tmp, event_detlist)
+      score[loni, lati] = sc
 
-  draw_density(bmap, lon_arr, lat_arr, score, colorbar=False)
+      if sc > best: best = sc
+      if sc < worst: worst = sc
 
-  plt.savefig("output/run_%d_orid_%d.ps" % (runid, orid))
+  # create 5 levels from worst to 0 and 5 from 0 to best (unless if best < 0)
+  if best <= 0 or worst >= 0:
+    levels = np.linspace(worst, best, 10).tolist()
+  else:
+    levels = np.linspace(worst, 0, 5).tolist() \
+             + np.linspace(0, best, 5).tolist()
+
+  levels = np.round(levels, 1)
+  
+  draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
+
+  plt.savefig("output/debug_run_%d_%s_orid_%d.png" % (runid, orid_type, orid))
   plt.show()
 
 if __name__ == "__main__":
