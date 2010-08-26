@@ -1,5 +1,6 @@
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 
 import geog
@@ -80,7 +81,7 @@ def draw_vectors(bmap, vectors, scale, **args):
     x2, y2 = bmap(lon2, lat2)
     plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
     
-def draw_density(bmap, lons, lats, vals, levels=None, colorbar=True):
+def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
   
@@ -89,17 +90,15 @@ def draw_density(bmap, lons, lats, vals, levels=None, colorbar=True):
   x_arr = np.array(x).reshape(lon_arr.shape)
   y_arr = np.array(y).reshape(lat_arr.shape)
 
-  args = [x_arr, y_arr, vals]
-  if levels is not None:
-    args.append(levels)
+  args = [x_arr, y_arr, vals, levels]
 
-  kwargs = {'zorder':5}
-    
-  bmap.contour(*args, **kwargs)
-  cs = bmap.contourf(*args, **kwargs)
+  cs1 = bmap.contour(*args, linewidths=.5, colors="k", zorder=6)
+  cs2 = bmap.contourf(*args, cmap=plt.cm.jet, zorder=5, extend="both",
+                      norm=matplotlib.colors.BoundaryNorm(cs1.levels,
+                                                          plt.cm.jet.N))
 
   if colorbar:
-    plt.colorbar(cs, orientation="horizontal")
+    plt.colorbar(cs2, orientation="vertical", drawedges=True)
 
 def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
   """
