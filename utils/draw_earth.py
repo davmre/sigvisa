@@ -25,7 +25,7 @@ def draw_earth(title, **args):
     args["lat_0"] = 0
     args["lon_0"] = 0
 
-  plt.figure()
+  plt.figure(figsize=(8,4.8))
   plt.title(title)
   bmap = Basemap(**args)
   try:
