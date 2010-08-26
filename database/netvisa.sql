@@ -108,6 +108,16 @@ left join sel3_origin sel3 on dist_deg(leb.lon, leb.lat, sel3.lon,
 sel3.lat) <= 5 and abs(sel3.time-leb.time)<=50 and sel3.time between
 run.data_start and run.data_end;
 
+/* format the output of visa_origin to trim decimal points */
+create or replace view visa_origin_deb as select runid, orid, round(lon,1) lon, round(lat,1) lat, round(depth,1) depth, round(time,1) time, round(mb,1) mb, round(score,1) score from visa_origin;
+
+/* join visa_assoc with idcx_arrival */
+create or replace view visa_assoc_deb as select runid, orid, phase, sta, round(timeres,1) timeres, round(azres,1) azres, round(slores,1) slores from visa_assoc join idcx_arrival using (arid);
+
+create or replace view leb_origin_deb as select orid, round(lon,1) lon, round(lat,1) lat, round(depth,1) depth, round(time,1) time, round(mb,1) mb from leb_origin;
+
+/* join leb_assoc with leb_arrival */
+create or replace view leb_assoc_deb as select orid, phase, sta, round(timeres,1) timeres, round(azres,1) azres, round(slores,1) slores, arid from leb_assoc;
 
 grant select,insert,update on visa_run to ctbt@localhost;
 grant select,insert on visa_origin to ctbt@localhost;
