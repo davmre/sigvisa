@@ -90,10 +90,10 @@ def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True):
   x_arr = np.array(x).reshape(lon_arr.shape)
   y_arr = np.array(y).reshape(lat_arr.shape)
 
-  args = [x_arr, y_arr, vals, levels]
-
-  cs1 = bmap.contour(*args, linewidths=.5, colors="k", zorder=6)
-  cs2 = bmap.contourf(*args, cmap=plt.cm.jet, zorder=5, extend="both",
+  cs1 = bmap.contour(x_arr, y_arr, vals, levels, linewidths=.5, colors="k",
+                     zorder=6)
+  cs2 = bmap.contourf(x_arr, y_arr, vals, levels, cmap=plt.cm.jet, zorder=5,
+                      extend="both",
                       norm=matplotlib.colors.BoundaryNorm(cs1.levels,
                                                           plt.cm.jet.N))
 
