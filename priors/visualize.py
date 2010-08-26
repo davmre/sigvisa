@@ -11,8 +11,11 @@ from database.dataset import *
 import netvisa, learn
 from results.compare import *
 from utils import Laplace
+import utils.GMM, utils.LinearModel
 
 from utils.LogisticModel import LogisticModel
+from priors.ArrivalAmplitudePrior import print_2gmm, print_list,\
+     learn_amp_model, predict_amp_model
 
 def main(param_dirname):
   parser = OptionParser()
@@ -63,6 +66,9 @@ def main(param_dirname):
                     detections, leb_events, leb_evlist)
     
     visualize_arrslo(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist)
+
+    visualize_arramp(options, earthmodel, netmodel,
                      detections, leb_events, leb_evlist)
 
   if options.location:
@@ -126,7 +132,6 @@ def visualize_arrtime(options, earthmodel, netmodel,
   plt.xlabel("Time")
   plt.ylabel("Probability")
   plt.xlim(MIN,MAX)
-  #plt.ylim(0, .06)
   plt.grid()
   plt.legend()
   
@@ -335,6 +340,203 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
                               % earthmodel.PhaseName(plot_phaseid))
       print "saving fig to %s" % pathname
       plt.savefig(pathname)
+
+def visualize_arramp(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist):
+
+  # create a dataset for each site, phase and for all sites, each phase
+  false_logamps = []
+  all_phase_logamps = []
+  phase_logamps = dict((phase, [])
+                       for phase in range(earthmodel.NumTimeDefPhases()))
+  site_false_logamps = dict((sitenum, []) for sitenum in
+                            range(earthmodel.NumSites()))
+  site_phase_logamps = dict((sitenum, dict((phase, []) for phase in
+                                      range(earthmodel.NumTimeDefPhases())))
+                            for sitenum in range(earthmodel.NumSites()))
+
+  false_slo = []
+  false_az = []
+  site_false_slo = dict((sitenum, []) for sitenum in
+                        range(earthmodel.NumSites()))
+  site_false_az =  dict((sitenum, []) for sitenum in
+                        range(earthmodel.NumSites()))
+  
+  site_phase_false_slo = dict((sitenum, dict((phase, []) for phase in
+                                             range(earthmodel.NumPhases())))
+                              for sitenum in range(earthmodel.NumSites()))
+  
+  false_phase = dict((phase, 0) for phase in range(earthmodel.NumPhases()))
+  
+  site_false_phase = dict((sitenum, dict((phase, 0) for phase in
+                                         range(earthmodel.NumPhases())))
+                          for sitenum in range(earthmodel.NumSites()))
+  
+  # first, the set of true detections
+  true_dets = set()
+  for evnum, detlist in enumerate(leb_evlist):
+    for phase, detnum in detlist:
+      true_dets.add(detnum)
+      sitenum = int(detections[detnum, DET_SITE_COL])
+      datum = (leb_events[evnum, EV_MB_COL], leb_events[evnum, EV_DEPTH_COL],
+               earthmodel.Delta(leb_events[evnum, EV_LON_COL],
+                                leb_events[evnum, EV_LAT_COL], sitenum),
+               np.log(detections[detnum, DET_AMP_COL]))
+
+      all_phase_logamps.append(datum)
+      phase_logamps[phase].append(datum)
+      site_phase_logamps[sitenum][phase].append(datum)
+  
+  # next, the false detections
+  for detnum in range(len(detections)):
+    if detnum not in true_dets:
+      sitenum = int(detections[detnum, DET_SITE_COL])
+      phasenum = int(detections[detnum, DET_PHASE_COL])
+      datum = np.log(detections[detnum, DET_AMP_COL])
+      
+      false_logamps.append(datum)
+      site_false_logamps[sitenum].append(datum)
+      
+      false_slo.append(detections[detnum, DET_SLO_COL])
+      site_false_slo[sitenum].append(detections[detnum, DET_SLO_COL])
+      
+      false_az.append(detections[detnum, DET_AZI_COL])
+      site_false_az[sitenum].append(detections[detnum, DET_AZI_COL])
+
+      site_phase_false_slo[sitenum][phasenum].append(
+        detections[detnum, DET_SLO_COL])
+
+      false_phase[phasenum] += 1
+      site_false_phase[sitenum][phasenum] += 1
+  
+  # learn the overall false detection model (for all sites)
+  false_wts, false_means, false_stds = utils.GMM.estimate(2, false_logamps)
+  
+  print "Overall False log(Amp):",
+  print_2gmm(false_wts, false_means, false_stds)
+  
+  STEP = .1
+  bins = np.arange(-7, 8, STEP)
+  
+  plt.figure()
+  plt.title("log(amp) for false detections -- all sites")
+  plt.hist(false_logamps, bins, label="data", alpha=.5)
+  plt.plot(bins, [utils.GMM.evaluate(false_wts, false_means, false_stds,
+                                     x+STEP/2)
+                  * STEP * len(false_logamps) for x in bins], label="model")
+  plt.xlabel("log(amp)")
+  plt.ylabel("frequency")
+  plt.legend()
+  
+  SLO_STEP = 1
+  slo_bins = np.arange(0, 50, SLO_STEP)
+  plt.figure()
+  plt.title("Slowness of false detections -- all sites")
+  plt.hist(false_slo, slo_bins, label="data", alpha=.5)
+  plt.xlabel("slowness")
+  plt.ylabel("frequency")
+  plt.legend()
+
+  AZ_STEP = 10
+  az_bins = np.arange(0, 360, AZ_STEP)
+  plt.figure()
+  plt.title("Azimuth of false detections -- all sites")
+  plt.hist(false_az, az_bins, label="data", alpha=.5)
+  plt.xlabel("azimuth")
+  plt.ylabel("frequency")
+  plt.legend()
+
+  SITEID, PHASEID = 6, 0
+  data = site_false_logamps[SITEID]
+  wts, means, stds = utils.GMM.estimate(2, data)
+  print "Siteid 6 false log(amp)"
+  print_2gmm(wts, means, stds)
+
+  plt.figure()
+  plt.title("log(amp) for false detections -- site %d" % SITEID)
+  plt.hist(data, bins, label="data", alpha=.5)
+  plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
+                  * STEP * len(data) for x in bins], label="model")
+  plt.xlabel("log(amp)")
+  plt.ylabel("frequency")
+  plt.legend()
+  
+  plt.figure()
+  plt.title("Slowness of false detections -- site %d" % SITEID )
+  plt.hist(site_false_slo[SITEID], slo_bins, label="data", alpha=.5)
+  plt.xlabel("slowness")
+  plt.ylabel("frequency")
+  plt.legend()
+
+  for phasenum in range(2):
+    plt.figure()
+    plt.title("Slowness of false detections -- site %d, phase %s"
+              % (SITEID, earthmodel.PhaseName(phasenum)))
+    plt.hist(site_phase_false_slo[SITEID][phasenum], slo_bins,
+             label="data", alpha=.5)
+    plt.xlabel("slowness")
+    plt.ylabel("frequency")
+    plt.legend()
+  
+  plt.figure()
+  plt.title("Azimuth of false detections -- site %d" % SITEID)
+  plt.hist(site_false_az[SITEID], az_bins, label="data", alpha=.5)
+  plt.xlabel("azimuth")
+  plt.ylabel("frequency")
+  plt.legend()
+
+  plt.figure()
+  plt.title("Phase of false detections -- all sites")
+  plt.bar(left=range(earthmodel.NumPhases()),
+          height=[false_phase[p] for p in range(earthmodel.NumPhases())],
+          color="blue", label="data")
+  plt.xlabel("phase index")
+  plt.ylabel("frequency")
+  
+  plt.figure()
+  plt.title("Phase of false detections -- site %d" % SITEID)
+  plt.bar(left=range(earthmodel.NumPhases()),
+          height=[site_false_phase[SITEID][p]
+                  for p in range(earthmodel.NumPhases())],
+          color="blue", label="data")
+  plt.xlabel("phase index")
+  plt.ylabel("frequency")
+  
+  data = site_phase_logamps[SITEID][PHASEID]
+  coeffs = learn_amp_model(data)
+  print "Amp model coefficients (intercept, mb, depth, dist)"
+  print_list(sys.stdout, coeffs)
+  
+  x_pts = range(0, 180)
+  y_pts = np.array([predict_amp_model(coeffs, 3.5, 0, x) for x in x_pts])
+
+  dist_sum = np.zeros(18, float)
+  dist_count = np.ones(18, float) * 1e-6
+  
+  for (mb, depth, dist, logamp) in data:
+    if mb >=3 and mb <=4 and depth <=50:
+      idx = int(dist/10)
+      dist_sum[idx] += logamp
+      dist_count[idx] += 1
+
+  dist_avg = dist_sum / dist_count
+  
+  plt.figure()
+  plt.title("Log Amplitude at station %d for %s phase, surface event"
+            % (SITEID, earthmodel.PhaseName(PHASEID)))
+  plt.bar(range(0, 180, 10), dist_avg, width=10,
+          label="data 3--4 mb", color="blue", linewidth=1)
+  plt.plot(x_pts, y_pts, label="model 3.5 mb", color = "black", linewidth=2)
+  
+  plt.xlim(0,180)
+  plt.xlabel("Distance (deg)")
+  plt.ylabel("Avg. Log Amplitude")
+  plt.legend(loc="upper right")
+  if options.write is not None:
+    pathname = os.path.join(options.write, "logamp_%d_%s.png"
+                            % (SITEID, earthmodel.PhaseName(PHASEID)))
+    print "saving fig to %s" % pathname
+    plt.savefig(pathname)
   
 if __name__ == "__main__":
   main("parameters")
