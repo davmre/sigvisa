@@ -200,8 +200,11 @@ def main(param_dirname):
     levels = np.linspace(worst, 0, 5).tolist() \
              + np.linspace(0, best, 5).tolist()
 
-  levels = np.round(levels, 1).tolist() \
-           + np.round([real_best*.95, real_best], 1).tolist()
+  levels = np.round(levels, 1).tolist()
+
+  # then a couple of extra levels near the top
+  if real_best > 0:
+    levels += np.round([real_best*.95, best], 1).tolist()
   
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
 
