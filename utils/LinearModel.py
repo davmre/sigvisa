@@ -7,7 +7,7 @@ def test_linear():
   x = [random.random() for i in range(10000)]
   w = [random.random() for i in range(10000)]
 
-  y = [random.normalvariate(2*a - 3*b, .1) for a,b in zip(x,w)]
+  y = [random.normalvariate(2*a - 3*b + 5, .1) for a,b in zip(x,w)]
 
   model = LinearModel("y", ["x", "w"], [x, w], y)
 

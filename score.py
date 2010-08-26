@@ -80,7 +80,7 @@ def main(param_dirname):
           print 1,
         else:
           print 0,
-        print prob
+        print prob, netmodel.score_event(event, sel3_evlist[evnum])
         
       else:
         print >>fp, netmodel.score_event(event, sel3_evlist[evnum])

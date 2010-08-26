@@ -44,7 +44,7 @@ def test_logistic():
   
 class LogisticModel:
   def __init__(self, name, dim_names, dim_vals, samples, weights=None,
-               alpha = 1e-6):
+               alpha = 0):
     """
     Logistic Regression Model. Learns to predict a probability based
     on specified inputs
@@ -91,7 +91,7 @@ class LogisticModel:
     #self.coeffs = fmin_bfgs(neg_log_lik, np.zeros(features.shape[1]),
     #                        fprime = grad_neg_log_lik)
 
-    self.coeffs, fopt, fcall, gcalls, hcalls, warnflag \
+    self.coeffs, fopt, fcalls, gcalls, hcalls, warnflag \
                  = fmin_ncg(neg_log_lik, np.zeros(features.shape[1]),
                             fprime = grad_neg_log_lik, fhess=hess_neg_log_lik,
                             disp = 0, full_output=1, avextol=1e-12)
