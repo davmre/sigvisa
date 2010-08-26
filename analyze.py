@@ -162,11 +162,15 @@ def gui(options, leb_events, sel3_events, events):
               marker="s", ms=8, mfc="none", mec="blue", mew=1)
   draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
               marker="*", ms=8, mfc="yellow")
+  if options.write:
+    plt.savefig("output/run_%d_events.png" % (options.runid))
 
   bmap = draw_earth("Missed LEB events")
   missed_leb_idx = find_unmatched(leb_events, events)
   draw_events(bmap, leb_events[missed_leb_idx][:,[EV_LON_COL,EV_LAT_COL]],
               marker="*", ms=8, mfc="yellow")
+  if options.write:
+    plt.savefig("output/run_%d_missed.png" % (options.runid))
 
 
   #
@@ -178,25 +182,25 @@ def gui(options, leb_events, sel3_events, events):
   evscores = dict(cursor.fetchall())
 
   plt.figure()
-  plt.title("ROC curve with LEB as ground truth over the whole earth")
+  plt.title("Precision-Recall curve with LEB as ground truth")
   
   sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
   
   plt.plot([(sel3_p/100.0)], [(sel3_r/100.0)], label="SEL3",
            marker='o', ms=10, mec="red",
-           linestyle="none", mfc="none")
+           linestyle="none", mfc="none", linewidth=3)
 
   if options.svm:
     x_pts, y_pts = compute_roc_curve(leb_events, sel3_events,
                                      read_sel3_svm_scores())
     
-    plt.plot(x_pts, y_pts, label="SEL3+SVM", color="red",
-             linestyle=":")
+    plt.plot(x_pts, y_pts, label="SEL3 extrapolation", color="red",
+             linestyle=":", linewidth=3)
     
   x_pts, y_pts = compute_roc_curve(leb_events, events, evscores)
     
   plt.plot(x_pts, y_pts, label=options.run_name, color="blue",
-           linestyle="-")
+           linestyle="-", linewidth=3)
 
   if options.runid2 is not None:
     events2 = read_events(cursor, options.data_start, options.data_end,
@@ -212,7 +216,7 @@ def gui(options, leb_events, sel3_events, events):
     x_pts, y_pts = compute_roc_curve(leb_events, events2, evscores2)
     
     plt.plot(x_pts, y_pts, label=options.run2_name, color="green",
-             linestyle="--")
+             linestyle="--", linewidth=3)
 
   if options.runid3 is not None:
     events3 = read_events(cursor, options.data_start, options.data_end,
@@ -228,7 +232,7 @@ def gui(options, leb_events, sel3_events, events):
     x_pts, y_pts = compute_roc_curve(leb_events, events3, evscores3)
     
     plt.plot(x_pts, y_pts, label=options.run3_name, color="green",
-             linestyle=":")
+             linestyle=":", linewidth=3)
     
   plt.xlim(.39, 1)
   plt.ylim(.39, 1)
@@ -236,6 +240,8 @@ def gui(options, leb_events, sel3_events, events):
   plt.ylabel("recall")
   plt.legend(loc = "upper right")
   plt.grid(True)
+  if options.write:
+    plt.savefig("output/run_%d_roc.png" % (options.runid))
   
   plt.show()
 
@@ -352,6 +358,10 @@ def main():
                     action = "store_true",
                     help = "compute the error of VISA and SEL3 on "
                     "LEB events predicted by both")
+
+  parser.add_option("-w", "--write", dest="write", default=False,
+                    action = "store_true",
+                    help = "write the results to output/ sub-directory")
 
 
   (options, args) = parser.parse_args()
