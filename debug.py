@@ -1,6 +1,7 @@
 # draw the density around a point
 
 import sys
+from optparse import OptionParser
 
 from database.dataset import *
 import netvisa, learn
@@ -56,10 +57,22 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
   return score
 
 def main(param_dirname):
-  if len(sys.argv) != 3:
-    print "Usage: python debug.py <runid> <leb|visa> <orid>"
+  parser = OptionParser()
+  parser.set_usage("Usage: python debug.py [options] <runid> <leb|visa> <orid>")
+  parser.add_option("-w", "--window", dest="window", default=10.0,
+                    type="float",
+                    help = "window size around event location (10.0)",
+                    metavar="degrees")
+  parser.add_option("-r", "--resolution", dest="resolution", default=.5,
+                    type="float",
+                    help = "resolution in degrees (.5)", metavar="degrees")
+  (options, args) = parser.parse_args()
   
-  runid, orid_type, orid = int(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+  if len(args) != 3:
+    parser.print_help()
+    sys.exit(1)
+  
+  runid, orid_type, orid = int(args[0]), args[1], int(args[2])
   if orid_type not in ("visa", "leb"):
     print "invalid orid_type %s" % orid_type
   print "Debugging run %d %s origin %d" % (runid, orid_type, orid)
@@ -72,7 +85,11 @@ def main(param_dirname):
   elif orid_type == "leb":
     cursor.execute("select time from leb_origin where orid=%s", (orid,))
 
-  evtime, = cursor.fetchone()
+  fetch = cursor.fetchone()
+  if fetch is None:
+    print "Event not found"
+    sys.exit(2)
+  evtime, = fetch
   print "Event Time %.1f" % evtime
 
   start_time, end_time, end_det_time = evtime-100, evtime+100,\
@@ -135,10 +152,10 @@ def main(param_dirname):
     event = leb_events[evnum].copy()
     event_detlist = leb_evlist[evnum]
   
-  lon1 = event[EV_LON_COL] - 10
-  lon2 = event[EV_LON_COL] + 10
-  lat1 = event[EV_LAT_COL] - 10
-  lat2 = event[EV_LAT_COL] + 10
+  lon1 = event[EV_LON_COL] - options.window
+  lon2 = event[EV_LON_COL] + options.window
+  lat1 = event[EV_LAT_COL] - options.window
+  lat2 = event[EV_LAT_COL] + options.window
   
   bmap = draw_earth("",
                     #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
@@ -163,14 +180,18 @@ def main(param_dirname):
                 marker="*", ms=10, mfc="white", mew=1)
 
   # draw a density
-  LON_BUCKET_SIZE = .5
+  LON_BUCKET_SIZE = options.resolution
   # Z axis is along the earth's axis
   # Z goes from -1 to 1 and will have the same number of buckets as longitude
   Z_BUCKET_SIZE = (2.0 / 360.0) * LON_BUCKET_SIZE
   
-  lon_arr = np.arange(-190., 190., LON_BUCKET_SIZE)
-  z_arr = np.arange(-1.0, 1.0, Z_BUCKET_SIZE)
-  lat_arr = np.arcsin(z_arr) * 180. / np.pi
+  lon_arr = np.arange(event[EV_LON_COL] - options.window,
+                      event[EV_LON_COL] + options.window,
+                      LON_BUCKET_SIZE)
+  z_arr = np.arange(np.sin(np.radians(event[EV_LAT_COL] - options.window)),
+                    np.sin(np.radians(event[EV_LAT_COL] + options.window)),
+                    Z_BUCKET_SIZE)
+  lat_arr = np.degrees(np.arcsin(z_arr))
   
   score = np.zeros((len(lon_arr), len(lat_arr)))
   best, worst = -np.inf, np.inf
@@ -179,8 +200,6 @@ def main(param_dirname):
       if lon<-180: lon+=360
       if lon>180: lon-=360
       tmp = event.copy()
-      if dist_deg((event[EV_LON_COL], event[EV_LAT_COL]), (lon, lat)) > 15:
-        continue
       tmp[EV_LON_COL] = lon
       tmp[EV_LAT_COL] = lat
       sc = netmodel.score_event(tmp, event_detlist)
@@ -204,7 +223,7 @@ def main(param_dirname):
 
   # then a couple of extra levels near the top
   if real_best > 0:
-    levels += np.round([real_best*.95, best], 1).tolist()
+    levels += np.round([real_best*.95, real_best], 1).tolist()
   
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
 
