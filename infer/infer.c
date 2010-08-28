@@ -321,7 +321,7 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
     numevents = propose_invert(p_netmodel, pp_events,
                                p_world->max_prop_evtime, p_world->high_evtime,
                                p_world->low_detnum, p_world->high_detnum,
-                               5.0, 5.0);
+                               3.0, 5.0);
   
   t1 = time(NULL) - t1;
   

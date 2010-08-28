@@ -500,7 +500,8 @@ int propose2(NetModel_t * p_netmodel, Event_t **pp_events,
 static void propose_best_detections(NetModel_t * p_netmodel,
                                     Event_t * p_event,
                                     int det_low, int det_high,
-                                    int * p_skip_det)
+                                    int * p_skip_det,
+                                    int P_phase_only)
 {
   EarthModel_t * p_earth;
   int numsites;
@@ -536,6 +537,7 @@ static void propose_best_detections(NetModel_t * p_netmodel,
     double best_phase_score;
     int siteid;
     int phase;
+    double distance, pred_az;
     
     if (p_skip_det[detnum])
       continue;
@@ -551,23 +553,26 @@ static void propose_best_detections(NetModel_t * p_netmodel,
     best_phase = -1;
     best_phase_score = 0;
 
+    distance = EarthModel_Delta(p_earth, p_event->evlon,
+                                p_event->evlat, siteid);
+
+    pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
+                                        p_event->evlat, siteid);
+  
     /* find the best phase for this detection if it is to match the event */
     for (phase=0; phase < numtimedefphases; phase++)
     {
-      double distance, pred_az;
       int poss;
       double detscore;
 
+      /* we assume P phase is phasenum 0 */
+      if (P_phase_only && (phase > 0))
+        continue;
+      
       /* pP phases have too much variance, they are not helping ! */
       if (EARTH_PHASE_pP == phase)
         continue;
               
-      distance = EarthModel_Delta(p_earth, p_event->evlon,
-                                  p_event->evlat, siteid);
-
-      pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
-                                          p_event->evlat, siteid);
-  
       p_event->p_detids[siteid * numtimedefphases + phase] = detnum;
 
       poss = score_event_site_phase(p_netmodel, p_event, siteid, phase,
@@ -654,7 +659,7 @@ static void propose_best_event(NetModel_t * p_netmodel,
                p_event->evmag += 1)
           {
             propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                    p_skip_det);
+                                    p_skip_det, 0);
             if (p_event->evscore > p_best_event->evscore)
             {
               copy_event(p_netmodel, p_best_event, p_event);
@@ -761,12 +766,12 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
       lon = p_event->evlon;
       lat = p_event->evlat;
 
-      for (lonidx=-1; lonidx<2; lonidx++)
+      for (lonidx=-2; lonidx<3; lonidx++)
       {
         p_event->evlon = lon + lonidx * degree_step;
         FIXUP_EVLON(p_event);
         
-        for (latidx=-1; latidx<2; latidx ++)
+        for (latidx=-2; latidx<3; latidx ++)
         {
           double trvtime;
           p_event->evlat = lat + latidx * degree_step;
@@ -787,7 +792,7 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
           
           /* score this event using the best detections available */
           propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                  p_skip_det);
+                                  p_skip_det, 1 /* try P phase only */);
 
           if (p_event->evscore > p_best_event->evscore)
           {
@@ -918,7 +923,7 @@ int propose_uniform(NetModel_t * p_netmodel, Event_t **pp_events,
             {
               /* score this event using the best detections available */
               propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                      p_skip_det);
+                                      p_skip_det, 1);
 
               if (p_event->evscore > p_best_event->evscore)
               {
@@ -1006,7 +1011,7 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
 
   numevents = propose_invert(p_netmodel, pp_events, time_low, time_high, 
                              det_low, det_high, degree_step, time_step);
-  
+
   /*
   depth_step = 350;
   mag_step = 2;

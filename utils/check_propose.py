@@ -22,17 +22,22 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
     inv = netmodel.invert_det(detid, 0)
     if inv is None:
       inv_ev = None
-      inv_score = None
+      inv_score = -np.inf
+      inv_dist = np.inf
     else:
       inv_ev = event.copy()
       inv_ev[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv
       inv_ev[EV_MB_COL] = 3.0
-      inv_score = netmodel.score_event(inv_ev, event_detlist)
+      #inv_score = netmodel.score_event(inv_ev, event_detlist)
+      inv_score = netmodel.score_event_det(inv_ev, 0, detid)
+      inv_dist = dist_deg((event[EV_LON_COL], event[EV_LAT_COL]),
+                          (inv_ev[EV_LON_COL], inv_ev[EV_LAT_COL]))
     
-    print "(%s, %d, %s, %.1f)" \
+    print "(%s, %d, %s, detsc %.1f, invsc %.1f, invdist %.1f)" \
           % (earthmodel.PhaseName(phaseid), detid,
              earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL])),
-             netmodel.score_event_det(event, phaseid, detid)),
+             netmodel.score_event_det(event, phaseid, detid), inv_score,
+             inv_dist),
   print "\nEv Score:", netmodel.score_event(event, event_detlist)
   
 def main(param_dirname):
