@@ -171,9 +171,10 @@ def main(param_dirname):
   if len(sel3_events):
     draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=10, mfc="none", mec="red", mew=2)
-    
-  draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="s", ms=10, mfc="none", mec="blue", mew=2)
+
+  if len(visa_events):
+    draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=10, mfc="none", mec="blue", mew=2)
 
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
