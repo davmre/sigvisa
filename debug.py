@@ -238,21 +238,21 @@ def main(param_dirname):
     if inv_ev is not None and inv_ev[3] > start_time and inv_ev[3] < end_time:
       invert_evs.append(inv_ev)
   invert_evs = np.array(invert_evs)
-  bmap = draw_earth("", nofillcontinents=False)
+  #bmap2 = draw_earth("")
+  bmap = draw_earth("")
   if len(invert_evs):
     draw_events(bmap, invert_evs[:,[0, 1]],
-                marker="s", ms=5, mfc="none", mec="blue", mew=1)
-  if len(leb_events):
-    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
-                marker="o", ms=10, mfc="none", mec="yellow", mew=2)
+                marker="s", ms=10, mfc="none", mec="blue", mew=2)
   if len(sel3_events):
     draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=10, mfc="none", mec="red", mew=2)
-
+  if len(leb_events):
+    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="yellow", mew=2)
 
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
-                marker="*", ms=10, mfc="white", mew=1)  
+                marker="*", ms=12, mfc="white", mew=1)
 
 if __name__ == "__main__":
   main("parameters")
