@@ -680,17 +680,12 @@ static void propose_best_event(NetModel_t * p_netmodel,
  * inverted detections */
 int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
                    double time_low, double time_high, int det_low,
-                   int det_high, double degree_step, double time_step)
+                   int det_high, double degree_step, int num_step)
 {
   EarthModel_t * p_earth;
   int numsites;
   int numtimedefphases;
   
-  int numlon;
-  int numlat;
-  int numtime;
-  double z_step;
-
   int lonidx, latidx;
   double lon, lat;
 
@@ -704,11 +699,6 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
   
   p_earth = p_netmodel->p_earth;
   
-  numlon = (int) ceil(360.0 / degree_step);
-  numlat = numlon /2;
-  numtime = (int) ceil((time_high - time_low) / time_step);
-  z_step = 2.0 / numlat;
-  
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
@@ -720,21 +710,6 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
   }
 
   p_event = alloc_event(p_netmodel);
-
-#ifdef NEVER
-  /* REMOVE ME */
-  p_event->evlon = -177.38;
-  p_event->evlat = -26.37;
-  p_event->evdepth = 515.6;
-  p_event->evmag = 3.4;
-  p_event->evtime = 1237732497;
-  
-  propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                          p_skip_det);
-  print_event(p_event);
-  return 0;
-  /* REMOVE ME */
-#endif
 
   numevents = 0;
 
@@ -765,13 +740,13 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
       /* save the longitude and latitude */
       lon = p_event->evlon;
       lat = p_event->evlat;
-
-      for (lonidx=-2; lonidx<3; lonidx++)
+      
+      for (lonidx=-num_step; lonidx<=num_step; lonidx++)
       {
         p_event->evlon = lon + lonidx * degree_step;
         FIXUP_EVLON(p_event);
         
-        for (latidx=-2; latidx<3; latidx ++)
+        for (latidx=-num_step; latidx<=num_step; latidx ++)
         {
           double trvtime;
           p_event->evlat = lat + latidx * degree_step;
@@ -991,9 +966,7 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
   int det_low;
   int det_high;
   double degree_step;
-  double time_step;
-  double depth_step;
-  double mag_step;
+  int num_step;
   
   PyObject * eventsobj;
   PyObject * evdetlistobj;
@@ -1002,24 +975,23 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
   int numevents;
   Event_t ** pp_events;
   
-  if (!PyArg_ParseTuple(args, "ddiidd", &time_low, &time_high, &det_low,
-                        &det_high, &degree_step, &time_step))
+  if (!PyArg_ParseTuple(args, "ddiidi", &time_low, &time_high, &det_low,
+                        &det_high, &degree_step, &num_step))
     return NULL;
 
   pp_events = (Event_t **) calloc(p_netmodel->numdetections,
                                   sizeof(*pp_events));
 
   numevents = propose_invert(p_netmodel, pp_events, time_low, time_high, 
-                             det_low, det_high, degree_step, time_step);
+                             det_low, det_high, degree_step, num_step);
 
-  /*
-  depth_step = 350;
-  mag_step = 2;
+#ifdef NEVER
   
   numevents = propose_uniform(p_netmodel, pp_events, time_low, time_high,
-                              det_low, det_high, degree_step, time_step,
-                              depth_step, mag_step);
-  */
+                              det_low, det_high, degree_step, 
+                              degree_step * 10 /* time_step */,
+                              350 /* depth_step */, 2 /* mag_step */);
+#endif
 
   if (numevents < 0)
   {
