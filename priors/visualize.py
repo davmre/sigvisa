@@ -127,8 +127,8 @@ def visualize_arrtime(options, earthmodel, netmodel,
   plt.bar(left=bins, height=data_prob, width=STEP, alpha=1, color="blue",
           linewidth=0,
           label="data")
-  plt.plot(bins, prob, color="black", label="Laplace", linewidth=2)
-  plt.plot(bins, mix_prob, color="red", label="Laplace+uniform", linewidth=2)
+  plt.plot(bins, prob, color="black", label="Laplace", linewidth=3)
+  #plt.plot(bins, mix_prob, color="red", label="Laplace+uniform", linewidth=3)
   plt.xlabel("Time")
   plt.ylabel("Probability")
   plt.xlim(MIN,MAX)
@@ -178,8 +178,8 @@ def visualize_arraz(options, earthmodel, netmodel,
   plt.bar(left=bins, height=data_prob, width=STEP, alpha=1, color="blue",
           linewidth=0,
           label="data")
-  plt.plot(bins, prob, color="black", label="Laplace", linewidth=2)
-  plt.plot(bins, mix_prob, color="red", label="Laplace+uniform", linewidth=2)
+  plt.plot(bins, prob, color="black", label="Laplace", linewidth=3)
+  #plt.plot(bins, mix_prob, color="red", label="Laplace+uniform", linewidth=3)
   plt.xlabel("Azimuth")
   plt.ylabel("Probability")
   plt.xlim(-20, 20)
@@ -230,8 +230,8 @@ def visualize_arrslo(options, earthmodel, netmodel,
   plt.bar(left=bins, height=data_prob, width=STEP, alpha=1, color="blue",
           linewidth=0,
           label="data")
-  plt.plot(bins, prob, color="black", label="Laplace", linewidth=2)
-  plt.plot(bins, mix_prob, color="red", label="Laplace+uniform", linewidth=2)  
+  plt.plot(bins, prob, color="black", label="Laplace", linewidth=3)
+  #plt.plot(bins, mix_prob, color="red", label="Laplace+uniform", linewidth=3)
   plt.xlabel("Slowness")
   plt.ylabel("Probability")
   plt.xlim(-10, 10)
@@ -328,7 +328,7 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
     y_pts = [math.exp(netmodel.detection_logprob(1, 0, 3.5, x, SITEID,
                                                  plot_phaseid)) \
              for x in x_pts]
-    plt.plot(x_pts, y_pts, label="model 3.5 mb", color="black")
+    plt.plot(x_pts, y_pts, label="model 3.5 mb", color="black", linewidth=3)
     
     plt.xlim(0,180)
     plt.ylim(0, 1)
@@ -423,7 +423,8 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.hist(false_logamps, bins, label="data", alpha=.5)
   plt.plot(bins, [utils.GMM.evaluate(false_wts, false_means, false_stds,
                                      x+STEP/2)
-                  * STEP * len(false_logamps) for x in bins], label="model")
+                  * STEP * len(false_logamps) for x in bins], label="model",
+           linewidth=3)
   plt.xlabel("log(amp)")
   plt.ylabel("frequency")
   plt.legend()
@@ -456,7 +457,7 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.title("log(amp) for false detections -- site %d" % SITEID)
   plt.hist(data, bins, label="data", alpha=.5)
   plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
-                  * STEP * len(data) for x in bins], label="model")
+                  * STEP * len(data) for x in bins], label="model", linewidth=3)
   plt.xlabel("log(amp)")
   plt.ylabel("frequency")
   plt.legend()
@@ -526,7 +527,7 @@ def visualize_arramp(options, earthmodel, netmodel,
             % (SITEID, earthmodel.PhaseName(PHASEID)))
   plt.bar(range(0, 180, 10), dist_avg, width=10,
           label="data 3--4 mb", color="blue", linewidth=1)
-  plt.plot(x_pts, y_pts, label="model 3.5 mb", color = "black", linewidth=2)
+  plt.plot(x_pts, y_pts, label="model 3.5 mb", color = "black", linewidth=3)
   
   plt.xlim(0,180)
   plt.xlabel("Distance (deg)")
