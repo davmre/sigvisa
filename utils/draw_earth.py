@@ -33,7 +33,7 @@ def draw_earth(title, **args):
   except:
     bmap.drawmapboundary()
     
-  bmap.drawcoastlines()
+  bmap.drawcoastlines(zorder=10)
   plt.subplots_adjust(left=0.02, right=0.98)
 
   if not nofillcontinents:
