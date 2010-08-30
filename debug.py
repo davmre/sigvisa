@@ -229,7 +229,31 @@ def main(param_dirname):
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
 
   plt.savefig("output/debug_run_%d_%s_orid_%d.png" % (runid, orid_type, orid))
-  plt.show()
+
+  ########
+  # next display all the inverted events in this window
+  invert_evs = []
+  for detnum in range(len(detections)):
+    inv_ev = netmodel.invert_det(detnum,0)
+    if inv_ev is not None and inv_ev[3] > start_time and inv_ev[3] < end_time:
+      invert_evs.append(inv_ev)
+  invert_evs = np.array(invert_evs)
+  bmap = draw_earth("", nofillcontinents=False)
+  if len(invert_evs):
+    draw_events(bmap, invert_evs[:,[0, 1]],
+                marker="s", ms=5, mfc="none", mec="blue", mew=1)
+  if len(leb_events):
+    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="yellow", mew=2)
+  if len(sel3_events):
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="red", mew=2)
+
+
+  if len(neic_events):
+    draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="white", mew=1)  
 
 if __name__ == "__main__":
   main("parameters")
+  plt.show()
