@@ -12,6 +12,7 @@ import netvisa, learn
 from results.compare import *
 from utils import Laplace
 import utils.GMM, utils.LinearModel
+import database.db
 
 from utils.LogisticModel import LogisticModel
 from priors.ArrivalAmplitudePrior import print_2gmm, print_list,\
@@ -134,7 +135,21 @@ def visualize_arrtime(options, earthmodel, netmodel,
   plt.xlim(MIN,MAX)
   plt.grid()
   plt.legend()
-  
+
+  # now, visualize travel time residuals from the LEB arrivals
+  cursor = database.db.connect().cursor()
+  cursor.execute("select lon, lat, timeres from leb_origin join leb_assoc "
+                 "using (orid) where sta='ASAR' and phase='P' and time between "
+                 "(select start_time from dataset where label='training') and "
+                 "(select end_time from dataset where label='training')")
+  events = np.array(cursor.fetchall())
+  posevs = events[events[:,2] > 0]
+  negevs = events[events[:,2] < 0]
+  bmap = draw_earth("Distribution of residuals, P phase, station 6")
+  draw_events(bmap, posevs[:,[0,1]],
+              marker="o", ms=10, mfc="none", mec="blue", mew=1)
+  draw_events(bmap, negevs[:,[0,1]],
+              marker="o", ms=10, mfc="none", mec="red", mew=1)
 
 def visualize_arraz(options, earthmodel, netmodel,
                     detections, leb_events, leb_evlist):
