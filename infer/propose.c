@@ -792,7 +792,7 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
           
           /* score this event using the best detections available */
           propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                  p_skip_det, 1 /* try P phase only */);
+                                  p_skip_det, 0 /* all phases */);
 
           if (p_event->evscore > p_best_event->evscore)
           {
