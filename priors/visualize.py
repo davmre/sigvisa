@@ -60,6 +60,14 @@ def main(param_dirname):
   if options.arrival:
     print "visualizing arrival parameters"
     
+    visualize_arramp(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist)
+    plt.show()
+    sys.exit()
+    
+    visualize_arrphase(options, earthmodel, netmodel,
+                       detections, leb_events, leb_evlist)
+    
     visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist)
     
@@ -69,8 +77,6 @@ def main(param_dirname):
     visualize_arrslo(options, earthmodel, netmodel,
                      detections, leb_events, leb_evlist)
 
-    visualize_arramp(options, earthmodel, netmodel,
-                     detections, leb_events, leb_evlist)
 
   if options.location:
     print "visualizing location prior"
@@ -86,6 +92,38 @@ def main(param_dirname):
   plt.show()
 
 
+def visualize_arrphase(options, earthmodel, netmodel,
+                       detections, leb_events, leb_evlist):
+  true_false_phases = np.zeros((earthmodel.NumTimeDefPhases(),
+                                earthmodel.NumPhases()))
+  for evnum, event in enumerate(leb_events):
+    for phaseid, detnum in leb_evlist[evnum]:
+      true_false_phases[phaseid, int(detections[detnum, DET_PHASE_COL])] += 1
+  
+  # add-one smoothing
+  true_false_phases += 1;
+  
+  true_false_phases = (true_false_phases.T
+                       / true_false_phases.sum(axis=1).astype(float)).T
+
+  print "Sn phase emissions:"
+  print true_false_phases[3]
+  print "Sh phase sum", true_false_phases[3].sum()
+  
+  x = np.arange(earthmodel.NumPhases())
+  y = np.arange(earthmodel.NumTimeDefPhases())
+  X,Y = np.meshgrid(x,y)
+  
+  plt.figure()
+  plt.title("Phase confusion matrix -- all stations")
+  plt.contourf(X, Y, true_false_phases)
+  plt.plot([0,13], [0,13], color="black", linewidth=3)
+  plt.xticks(x, [earthmodel.PhaseName(i) for i in x], rotation="vertical")
+  plt.yticks(y, [earthmodel.PhaseName(i) for i in y])
+  plt.xlabel("Arrival Phase")
+  plt.ylabel("True Phase")
+  plt.subplots_adjust(bottom=.17)        # extra space for the ticks and label
+  
 def visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist):
   MIN=-7
@@ -506,8 +544,12 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.bar(left=range(earthmodel.NumPhases()),
           height=[false_phase[p] for p in range(earthmodel.NumPhases())],
           color="blue", label="data")
-  plt.xlabel("phase index")
+  plt.xticks(np.arange(earthmodel.NumPhases()),
+             [earthmodel.PhaseName(i)
+              for i in np.arange(earthmodel.NumPhases())], rotation="vertical")
+  plt.xlabel("Arrival Phase")
   plt.ylabel("frequency")
+  plt.subplots_adjust(bottom=.17)        # extra space for the ticks and label
   
   plt.figure()
   plt.title("Phase of false detections -- site %d" % SITEID)
@@ -515,13 +557,18 @@ def visualize_arramp(options, earthmodel, netmodel,
           height=[site_false_phase[SITEID][p]
                   for p in range(earthmodel.NumPhases())],
           color="blue", label="data")
-  plt.xlabel("phase index")
+  plt.xticks(np.arange(earthmodel.NumPhases()),
+             [earthmodel.PhaseName(i)
+              for i in np.arange(earthmodel.NumPhases())], rotation="vertical")
+  plt.xlabel("Arrival Phase")
   plt.ylabel("frequency")
+  plt.subplots_adjust(bottom=.17)        # extra space for the ticks and label
   
   data = site_phase_logamps[SITEID][PHASEID]
   coeffs = learn_amp_model(data)
   print "Amp model coefficients (intercept, mb, depth, dist)"
   print_list(sys.stdout, coeffs)
+  print
   
   x_pts = range(0, 180)
   y_pts = np.array([predict_amp_model(coeffs, 3.5, 0, x) for x in x_pts])

@@ -164,7 +164,7 @@ def main(param_dirname):
                     resolution="l",
                     llcrnrlon = lon1, urcrnrlon = lon2,
                     llcrnrlat = lat1, urcrnrlat = lat2,
-                    nofillcontinents=True)
+                    nofillcontinents=True, figsize=(4.5,4))
   if len(leb_events):
     draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=10, mfc="none", mec="yellow", mew=2)
@@ -185,11 +185,13 @@ def main(param_dirname):
   # Z axis is along the earth's axis
   # Z goes from -1 to 1 and will have the same number of buckets as longitude
   Z_BUCKET_SIZE = (2.0 / 360.0) * LON_BUCKET_SIZE
-  
+
+  # skip one degree at the bottom of the map to display the map scale
+  # otherwise, the density totally covers it up
   lon_arr = np.arange(event[EV_LON_COL] - options.window,
                       event[EV_LON_COL] + options.window,
                       LON_BUCKET_SIZE)
-  z_arr = np.arange(np.sin(np.radians(event[EV_LAT_COL] - options.window)),
+  z_arr = np.arange(np.sin(np.radians(event[EV_LAT_COL] - options.window *.88)),
                     np.sin(np.radians(event[EV_LAT_COL] + options.window)),
                     Z_BUCKET_SIZE)
   lat_arr = np.degrees(np.arcsin(z_arr))
@@ -227,8 +229,51 @@ def main(param_dirname):
     levels += np.round([real_best*.95, real_best], 1).tolist()
   
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
+  
+  
+  # add a map scale
+  scale_lon, scale_lat = event[EV_LON_COL], \
+                         event[EV_LAT_COL]-options.window * .98
+  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+                    fontsize=8, barstyle='fancy',
+                    labelstyle='simple', units='km')
 
+  
   plt.savefig("output/debug_run_%d_%s_orid_%d.png" % (runid, orid_type, orid))
+
+  bmap = draw_earth("",
+                    #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
+                    #"SEL3(red), NET-VISA(blue)",
+                    projection="mill",
+                    resolution="l",
+                    llcrnrlon = event[EV_LON_COL] - 30,
+                    urcrnrlon = event[EV_LON_COL] + 30,
+                    llcrnrlat = event[EV_LAT_COL] - 20,
+                    urcrnrlat = event[EV_LAT_COL] + 20,
+                    figsize=(4.5,4))
+  if len(leb_events):
+    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="yellow", mew=2)
+  if len(sel3_events):
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="red", mew=2)
+
+  if len(visa_events):
+    draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=10, mfc="none", mec="blue", mew=2)
+
+  if len(neic_events):
+    draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="white", mew=1)
+
+  scale_lon, scale_lat = event[EV_LON_COL], \
+                         event[EV_LAT_COL]-19
+  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,5000,
+                    fontsize=8, barstyle='fancy',
+                    labelstyle='simple', units='km')
+  
+  plt.savefig("output/debug_area_run_%d_%s_orid_%d.png"
+              % (runid, orid_type, orid))
 
   ########
   # next display all the inverted events in this window

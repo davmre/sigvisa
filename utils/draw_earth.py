@@ -14,7 +14,13 @@ def draw_earth(title, **args):
     nofillcontinents = True
   else:
     nofillcontinents = False
-    
+
+  if "figsize" in args:
+    figsize = args["figsize"]
+    del args["figsize"]
+  else:
+    figsize = (8, 4.8)
+  
   if "projection" not in args:
     args["projection"] = "moll"
   if "resolution" not in args:
@@ -25,7 +31,7 @@ def draw_earth(title, **args):
     args["lat_0"] = 0
     args["lon_0"] = 0
 
-  plt.figure(figsize=(8,4.8))
+  plt.figure(figsize=figsize)
   plt.title(title)
   bmap = Basemap(**args)
   try:
