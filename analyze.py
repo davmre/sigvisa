@@ -165,12 +165,38 @@ def gui(options, leb_events, sel3_events, events):
   if options.write:
     plt.savefig("output/run_%d_events.png" % (options.runid))
 
-  bmap = draw_earth("Missed LEB events")
-  missed_leb_idx = find_unmatched(leb_events, events)
-  draw_events(bmap, leb_events[missed_leb_idx][:,[EV_LON_COL,EV_LAT_COL]],
-              marker="*", ms=8, mfc="yellow")
-  if options.write:
-    plt.savefig("output/run_%d_missed.png" % (options.runid))
+  if options.events:
+    bmap = draw_earth("LEB(yellow) and SEL3(red)")
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=8, mfc="none", mec="red", mew=1)
+    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=8, mfc="yellow")
+    if options.write:
+      plt.savefig("output/run_%d_leb_sel3.png" % (options.runid))
+  
+    bmap = draw_earth("LEB(yellow) and NET-VISA(blue)")
+    draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=8, mfc="none", mec="blue", mew=1)
+    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=8, mfc="yellow")
+    if options.write:
+      plt.savefig("output/run_%d_leb_visa.png" % (options.runid))
+  
+    bmap = draw_earth("SEL3(red) and NET-VISA(blue)")
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=8, mfc="none", mec="red", mew=1)
+    draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=8, mfc="none", mec="blue", mew=1)
+    if options.write:
+      plt.savefig("output/run_%d_sel3_visa.png" % (options.runid))
+  
+  
+    bmap = draw_earth("Missed LEB events")
+    missed_leb_idx = find_unmatched(leb_events, events)
+    draw_events(bmap, leb_events[missed_leb_idx][:,[EV_LON_COL,EV_LAT_COL]],
+                marker="*", ms=8, mfc="yellow")
+    if options.write:
+      plt.savefig("output/run_%d_missed.png" % (options.runid))
 
 
   #
@@ -363,6 +389,9 @@ def main():
                     action = "store_true",
                     help = "write the results to output/ sub-directory")
 
+  parser.add_option("--events", dest="events", default=False,
+                    action = "store_true",
+                    help="draw predicted events (False)")
 
   (options, args) = parser.parse_args()
 
