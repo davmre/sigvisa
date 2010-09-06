@@ -84,9 +84,14 @@ def read_events(cursor, start_time, end_time, evtype, runid=None):
   return events, orid2num
 
 def read_isc_events(cursor, start_time, end_time, author):
-  cursor.execute("select lon, lat, depth, time, mb, eventid from isc_events "
-                 "where author='%s' and time between %d and %d order by time"
-                 % (author, start_time, end_time))
+  if author is None:
+    cursor.execute("select lon, lat, depth, time, mb, eventid from "
+                   "isc_events where time between %d and %d order by time"
+                   % (start_time, end_time))
+  else:
+    cursor.execute("select lon, lat, depth, time, mb, eventid from "
+                   "isc_events where author='%s' and time between %d "
+                   "and %d order by time"% (author, start_time, end_time))
     
   events = np.array(cursor.fetchall())
 

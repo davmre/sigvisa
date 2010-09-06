@@ -60,13 +60,13 @@ def main(param_dirname):
   if options.arrival:
     print "visualizing arrival parameters"
     
-    visualize_arramp(options, earthmodel, netmodel,
-                     detections, leb_events, leb_evlist)
-    plt.show()
-    sys.exit()
-    
     visualize_arrphase(options, earthmodel, netmodel,
                        detections, leb_events, leb_evlist)
+    plt.show()
+    sys.exit()
+
+    visualize_arramp(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist)    
     
     visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist)
@@ -106,14 +106,13 @@ def visualize_arrphase(options, earthmodel, netmodel,
   true_false_phases = (true_false_phases.T
                        / true_false_phases.sum(axis=1).astype(float)).T
 
-  print "Sn phase emissions:"
-  print true_false_phases[3]
-  print "Sh phase sum", true_false_phases[3].sum()
+  #for i in range(earthmodel.NumTimeDefPhases()):
+  #  print "[%d]:" % i, true_false_phases[i]
   
   x = np.arange(earthmodel.NumPhases())
   y = np.arange(earthmodel.NumTimeDefPhases())
   X,Y = np.meshgrid(x,y)
-  
+
   plt.figure()
   plt.title("Phase confusion matrix -- all stations")
   plt.contourf(X, Y, true_false_phases)
@@ -123,7 +122,19 @@ def visualize_arrphase(options, earthmodel, netmodel,
   plt.xlabel("Arrival Phase")
   plt.ylabel("True Phase")
   plt.subplots_adjust(bottom=.17)        # extra space for the ticks and label
-  
+
+  from mpl_toolkits.mplot3d import Axes3D
+  fig = plt.figure()
+  plt.title("Phase confusion matrix -- all stations")
+  ax = fig.add_subplot(111, projection='3d')
+  ax.bar3d(list(X.flat), list(Y.flat), list((true_false_phases * 0).flat),
+           1, 1, list(true_false_phases.flat), alpha=1)
+  #ax.set_xticks(x, [earthmodel.PhaseName(i) for i in x])
+  #ax.set_yticks(y, [earthmodel.PhaseName(i) for i in y])
+  ax.set_xlabel("Arrival Phase")
+  ax.set_ylabel("True Phase")
+  ax.set_zlabel("Probability")
+
 def visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist):
   MIN=-7
