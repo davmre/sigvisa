@@ -65,7 +65,10 @@ def main(param_dirname):
                     metavar="degrees")
   parser.add_option("-r", "--resolution", dest="resolution", default=.5,
                     type="float",
-                    help = "resolution in degrees (.5)", metavar="degrees")
+                    help = "resolution in degrees (.5)",
+                    metavar="degrees")
+  parser.add_option("-s", "--suppress", dest="suppress", default=False,
+                    action = "store_true", help = "suppress duplicates")
   (options, args) = parser.parse_args()
   
   if len(args) != 3:
@@ -115,12 +118,15 @@ def main(param_dirname):
   cursor.execute("select orid, score from visa_origin where runid=%s",
                  (runid,))
   visa_evscores = dict(cursor.fetchall())
-  #visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_evscores)
+  if options.suppress:
+    visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_evscores)
   
   visa_evlist = read_assoc(cursor, start_time, end_time, visa_orid2num,
                            arid2num, "visa", runid=runid)
 
   neic_events = read_isc_events(cursor, start_time, end_time, "NEIC")
+
+  all_isc_events = read_isc_events(cursor, start_time, end_time, None)
   
   site_up = read_uptime(cursor, start_time, end_det_time)
   
@@ -202,10 +208,19 @@ def main(param_dirname):
     for lati, lat in enumerate(lat_arr):
       if lon<-180: lon+=360
       if lon>180: lon-=360
-      tmp = event.copy()
-      tmp[EV_LON_COL] = lon
-      tmp[EV_LAT_COL] = lat
-      sc = netmodel.score_event(tmp, event_detlist)
+
+      sc = -np.inf
+      for evnum in range(len(visa_events)):
+        tmp = visa_events[evnum].copy()
+        tmp[EV_LON_COL] = lon
+        tmp[EV_LAT_COL] = lat
+        sc = max(sc, netmodel.score_event(tmp, visa_evlist[evnum]))
+      for evnum in range(len(leb_events)):
+        tmp = leb_events[evnum].copy()
+        tmp[EV_LON_COL] = lon
+        tmp[EV_LAT_COL] = lat
+        sc = max(sc, netmodel.score_event(tmp, leb_evlist[evnum]))
+      
       score[loni, lati] = sc
 
       if sc > best: best = sc
@@ -251,6 +266,100 @@ def main(param_dirname):
                     llcrnrlat = event[EV_LAT_COL] - 20,
                     urcrnrlat = event[EV_LAT_COL] + 20,
                     figsize=(4.5,4))
+  if len(sel3_events):
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="red", mew=2)
+
+  if len(visa_events):
+    draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=10, mfc="none", mec="blue", mew=2)
+
+  if len(leb_events):
+    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="yellow", mew=2)
+  
+  if len(neic_events):
+    draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="white", mew=1)
+
+  scale_lon, scale_lat = event[EV_LON_COL], \
+                         event[EV_LAT_COL]-19
+  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,5000,
+                    fontsize=8, barstyle='fancy',
+                    labelstyle='simple', units='km')
+  
+  plt.savefig("output/debug_area_run_%d_%s_orid_%d.png"
+              % (runid, orid_type, orid))
+
+  bmap = draw_earth("",
+                    #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
+                    #"SEL3(red), NET-VISA(blue)",
+                    projection="mill",
+                    resolution="l",
+                    llcrnrlon = event[EV_LON_COL] - options.window,
+                    urcrnrlon = event[EV_LON_COL] + options.window,
+                    llcrnrlat = event[EV_LAT_COL] - options.window,
+                    urcrnrlat = event[EV_LAT_COL] + options.window,
+                    figsize=(4.5,4))
+  if len(all_isc_events):
+    draw_events(bmap, all_isc_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="none", mec="yellow", mew=1)
+
+  if len(sel3_events):
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="red", mew=2)
+
+  if len(visa_events):
+    draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=10, mfc="none", mec="blue", mew=2)
+
+  draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
+  
+  scale_lon, scale_lat = event[EV_LON_COL], \
+                         event[EV_LAT_COL]-options.window * .98
+  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+                    fontsize=8, barstyle='fancy',
+                    labelstyle='simple', units='km')
+  
+  plt.savefig("output/debug_dens_isc_run_%d_%s_orid_%d.png"
+              % (runid, orid_type, orid))
+
+  bmap = draw_earth("",
+                    #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
+                    #"SEL3(red), NET-VISA(blue)",
+                    projection="ortho",
+                    resolution="l",
+                    lon_0 = event[EV_LON_COL],
+                    lat_0 = event[EV_LAT_COL],
+                    figsize=(4.5,4))
+  if len(all_isc_events):
+    draw_events(bmap, all_isc_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="none", mec="yellow", mew=1)
+
+  if len(sel3_events):
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=10, mfc="none", mec="red", mew=2)
+
+  if len(visa_events):
+    draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=10, mfc="none", mec="blue", mew=2)
+
+  scale_lon, scale_lat = event[EV_LON_COL], \
+                         event[EV_LAT_COL]-options.window * .8
+  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+                    fontsize=8, barstyle='fancy',
+                    labelstyle='simple', units='km')
+  
+  plt.savefig("output/debug_isc_run_%d_%s_orid_%d.png"
+              % (runid, orid_type, orid))
+
+  bmap = draw_earth("",
+                    #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
+                    #"SEL3(red), NET-VISA(blue)",
+                    projection="ortho",
+                    resolution="l",
+                    lon_0 = event[EV_LON_COL], lat_0 = event[EV_LAT_COL],
+                    figsize=(4.5,4))
   if len(leb_events):
     draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=10, mfc="none", mec="yellow", mew=2)
@@ -266,13 +375,7 @@ def main(param_dirname):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=10, mfc="white", mew=1)
 
-  scale_lon, scale_lat = event[EV_LON_COL], \
-                         event[EV_LAT_COL]-19
-  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,5000,
-                    fontsize=8, barstyle='fancy',
-                    labelstyle='simple', units='km')
-  
-  plt.savefig("output/debug_area_run_%d_%s_orid_%d.png"
+  plt.savefig("output/debug_globe_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
 
   ########
