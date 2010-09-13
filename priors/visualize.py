@@ -60,13 +60,17 @@ def main(param_dirname):
   if options.arrival:
     print "visualizing arrival parameters"
     
-    visualize_arrphase(options, earthmodel, netmodel,
-                       detections, leb_events, leb_evlist)
+    visualize_arramp(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist)    
+    
     plt.show()
     sys.exit()
 
-    visualize_arramp(options, earthmodel, netmodel,
-                     detections, leb_events, leb_evlist)    
+    visualize_corr_ttime(options, earthmodel, netmodel,
+                         detections, leb_events, leb_evlist)
+    
+    visualize_arrphase(options, earthmodel, netmodel,
+                       detections, leb_events, leb_evlist)
     
     visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist)
@@ -91,7 +95,66 @@ def main(param_dirname):
 
   plt.show()
 
+def visualize_corr_ttime(options, earthmodel, netmodel,
+                         detections, leb_events, leb_evlist):
+  ratios = []
+  p_ttimes = []
+  s_ttimes = []
+  s_iaspei_ttimes = []
+  for evnum, event in enumerate(leb_events):
+    p_ttime, s_ttime, s_iaspei_ttime = {}, {}, {}
+    for phaseid, detnum in leb_evlist[evnum]:
+      ttime = detections[detnum, DET_TIME_COL] - event[EV_TIME_COL]
+      if earthmodel.PhaseName(phaseid) == 'P':
+        p_ttime[detections[detnum, DET_SITE_COL]] = ttime
+      elif earthmodel.PhaseName(phaseid) == 'S':
+        s_ttime[detections[detnum, DET_SITE_COL]] = ttime
+        iaspei_arrtime = earthmodel.ArrivalTime(event[EV_LON_COL],
+                                                event[EV_LAT_COL],
+                                                event[EV_DEPTH_COL],
+                                                event[EV_TIME_COL], phaseid,
+                                         int(detections[detnum,DET_SITE_COL]))
+        assert(iaspei_arrtime > 0)
+        s_iaspei_ttime[detections[detnum, DET_SITE_COL]] = iaspei_arrtime \
+                                                           - event[EV_TIME_COL]
+    for sta in p_ttime.iterkeys():
+      if sta in s_ttime:
+        ratios.append(s_ttime[sta]/p_ttime[sta])
+        p_ttimes.append(p_ttime[sta])
+        s_ttimes.append(s_ttime[sta])
+        s_iaspei_ttimes.append(s_iaspei_ttime[sta])
 
+  
+  plt.figure()
+  plt.title("IASPEI residuals -- S phase")
+  plt.hist(np.array(s_ttimes) - np.array(s_iaspei_ttimes),
+           np.arange(-25, 25, .25))
+  plt.xlabel("time (sec)")
+  plt.ylabel("frequency")
+  plt.xlim(-25,25)
+  plt.ylim(0,75)
+
+  plt.figure()
+  plt.title("S and P travel times")
+  plt.scatter(p_ttimes, s_ttimes)
+  plt.xlabel("P Travel Time")
+  plt.ylabel("S Travel Time")
+
+  
+  s_model = utils.LinearModel.LinearModel("s_ttime", ["p_ttime"],
+                                          [p_ttimes], s_ttimes)
+  print "S model", s_model.coeffs
+  s_pred_ttimes = [s_model[a] for a in p_ttimes]
+  
+  plt.figure()
+  plt.title("Predicted residuals -- S phase")
+  plt.hist(np.array(s_ttimes) - np.array(s_pred_ttimes),
+           np.arange(-25, 25, .25))
+  plt.xlabel("time (sec)")
+  plt.ylabel("frequency")
+  plt.xlim(-25,25)
+  plt.ylim(0,75)
+  
 def visualize_arrphase(options, earthmodel, netmodel,
                        detections, leb_events, leb_evlist):
   true_false_phases = np.zeros((earthmodel.NumTimeDefPhases(),
@@ -109,19 +172,38 @@ def visualize_arrphase(options, earthmodel, netmodel,
   #for i in range(earthmodel.NumTimeDefPhases()):
   #  print "[%d]:" % i, true_false_phases[i]
   
-  x = np.arange(earthmodel.NumPhases())
-  y = np.arange(earthmodel.NumTimeDefPhases())
+  x = np.arange(0, earthmodel.NumPhases(), .1)
+  y = np.arange(0, earthmodel.NumTimeDefPhases(), .1)
   X,Y = np.meshgrid(x,y)
+  
+  Z = np.zeros((len(y), len(x)))
+  
+  for xi, x_val in enumerate(x):
+    for yi, y_val in enumerate(y):
+      Z[yi, xi] = true_false_phases[int(y_val), int(x_val)]
 
+  x_ticks = np.arange(earthmodel.NumPhases())
+  y_ticks = np.arange(earthmodel.NumTimeDefPhases())
+  
   plt.figure()
   plt.title("Phase confusion matrix -- all stations")
-  plt.contourf(X, Y, true_false_phases)
-  plt.plot([0,13], [0,13], color="black", linewidth=3)
-  plt.xticks(x, [earthmodel.PhaseName(i) for i in x], rotation="vertical")
-  plt.yticks(y, [earthmodel.PhaseName(i) for i in y])
+  plt.contourf(X, Y, Z)
+  plt.plot([0,13.9], [0,13.9], color="black", linewidth=3)
+  plt.xticks(x_ticks + .5, [earthmodel.PhaseName(i) for i in x_ticks],
+             rotation="vertical")
+  plt.yticks(y_ticks + .5, [earthmodel.PhaseName(i) for i in y_ticks])
   plt.xlabel("Arrival Phase")
   plt.ylabel("True Phase")
   plt.subplots_adjust(bottom=.17)        # extra space for the ticks and label
+  if options.write is not None:
+    pathname = os.path.join(options.write, "phase_confusion_all.png")
+    print "saving fig to %s" % pathname
+    plt.savefig(pathname)
+
+
+  x = np.arange(earthmodel.NumPhases())
+  y = np.arange(earthmodel.NumTimeDefPhases())
+  X,Y = np.meshgrid(x,y)
 
   from mpl_toolkits.mplot3d import Axes3D
   fig = plt.figure()
@@ -442,9 +524,11 @@ def visualize_arramp(options, earthmodel, netmodel,
     for phase, detnum in detlist:
       true_dets.add(detnum)
       sitenum = int(detections[detnum, DET_SITE_COL])
+      
       datum = (leb_events[evnum, EV_MB_COL], leb_events[evnum, EV_DEPTH_COL],
-               earthmodel.Delta(leb_events[evnum, EV_LON_COL],
-                                leb_events[evnum, EV_LAT_COL], sitenum),
+               #earthmodel.Delta(leb_events[evnum, EV_LON_COL],
+               #                 leb_events[evnum, EV_LAT_COL], sitenum),
+               detections[detnum, DET_TIME_COL] - leb_events[evnum,EV_TIME_COL],
                np.log(detections[detnum, DET_AMP_COL]))
 
       all_phase_logamps.append(datum)
@@ -577,15 +661,15 @@ def visualize_arramp(options, earthmodel, netmodel,
   
   data = site_phase_logamps[SITEID][PHASEID]
   coeffs = learn_amp_model(data)
-  print "Amp model coefficients (intercept, mb, depth, dist)"
+  print "Amp model coefficients (intercept, mb, depth, ttime)"
   print_list(sys.stdout, coeffs)
   print
   
-  x_pts = range(0, 180)
+  x_pts = range(200, 800, 10)
   y_pts = np.array([predict_amp_model(coeffs, 3.5, 0, x) for x in x_pts])
 
-  dist_sum = np.zeros(18, float)
-  dist_count = np.ones(18, float) * 1e-6
+  dist_sum = np.zeros(90, float)
+  dist_count = np.ones(90, float) * 1e-6
   
   for (mb, depth, dist, logamp) in data:
     if mb >=3 and mb <=4 and depth <=50:
@@ -598,14 +682,15 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.figure()
   plt.title("Log Amplitude at station %d for %s phase, surface event"
             % (SITEID, earthmodel.PhaseName(PHASEID)))
-  plt.bar(range(0, 180, 10), dist_avg, width=10,
+  plt.bar(range(0, 900, 10), dist_avg, width=10,
           label="data 3--4 mb", color="blue", linewidth=1)
   plt.plot(x_pts, y_pts, label="model 3.5 mb", color = "black", linewidth=3)
   
-  plt.xlim(0,180)
-  plt.xlabel("Distance (deg)")
+  plt.xlim(0,900)
+  #plt.xlabel("Distance (deg)")
+  plt.xlabel("Travel Time (sec)")
   plt.ylabel("Avg. Log Amplitude")
-  plt.legend(loc="upper right")
+  plt.legend(loc="lower left")
   if options.write is not None:
     pathname = os.path.join(options.write, "logamp_%d_%s.png"
                             % (SITEID, earthmodel.PhaseName(PHASEID)))
