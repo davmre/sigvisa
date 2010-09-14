@@ -311,6 +311,52 @@ def suppress_duplicates(events, evscores):
     orid2num[ev[EV_ORID_COL]] = len(orid2num)
   
   return events, orid2num
+
+def assert_time_sorted(events):
+  for evnum, event in enumerate(events):
+    if evnum < len(events)-1 \
+       and events[evnum+1, EV_TIME_COL] < event[EV_TIME_COL]:
+      assert(False)
+
+def kleinermackey_match(gold_events, guess_events):
+  # check events are sorted
+  assert_time_sorted(gold_events)
+  assert_time_sorted(guess_events)
+
+  err_dist = np.array([np.inf for _ in range(len(gold_events))])
+  is_true = np.array([0 for _ in range(len(guess_events))])
+  
+  gold_evnum_start = 0
+  for guess_evnum in range(len(guess_events)):
+    for gold_evnum in range(gold_evnum_start, len(gold_events)):
+      if gold_events[gold_evnum, EV_TIME_COL]\
+         < guess_events[guess_evnum, EV_TIME_COL]-40:
+        gold_evnum_start = max(gold_evnum_start, gold_evnum+1)
+        continue
+      elif gold_events[gold_evnum, EV_TIME_COL]\
+         > guess_events[guess_evnum, EV_TIME_COL]+40:
+        break
+      dist = dist_km(gold_events[gold_evnum, [EV_LON_COL, EV_LAT_COL]],
+                     guess_events[guess_evnum, [EV_LON_COL, EV_LAT_COL]])
+      if dist < 250:
+        is_true[guess_evnum] = 1
+        err_dist[gold_evnum] = min(dist, err_dist[gold_evnum])
+  errs = err_dist[err_dist < np.inf]
+  return (100. * is_true.sum() / len(guess_events),
+          100. * len(errs) / len(gold_events),
+          np.average(errs), np.std(errs))
+
+def kleinermackey_display(leb_events, sel3_events, visa_events):
+  sel3_p, sel3_r, sel3_err, sel3_std \
+          = kleinermackey_match(leb_events, sel3_events)
+  visa_p, visa_r, visa_err, visa_std \
+          = kleinermackey_match(leb_events, visa_events)
+  
+  print "Kleiner & Mackey criteria (any event in 250km, 40s ball):"
+  print "SEL3: Precision %.1f, Recall %.1f, Avg Err %.1f, Std Err %.1f" %\
+        (sel3_p, sel3_r, sel3_err, sel3_std)
+  print "VISA: Precision %.1f, Recall %.1f, Avg Err %.1f, Std Err %.1f" %\
+        (visa_p, visa_r, visa_err, visa_std)
   
 def main():
   parser = OptionParser()
@@ -393,6 +439,15 @@ def main():
                     action = "store_true",
                     help="draw predicted events (False)")
 
+  parser.add_option("-p", "--phase", dest="phase", default=False,
+                    action = "store_true",
+                    help = "analyze predictions by labels (False)")
+
+  parser.add_option("-k", "--kleinermackey", dest="kleinermackey",
+                    default=False, action = "store_true",
+                    help = "Use Kleiner&Mackey 250km, 40s criteria, "
+                    "with no matching")
+  
   (options, args) = parser.parse_args()
 
   cursor = database.db.connect().cursor()
@@ -423,6 +478,8 @@ def main():
            str(run_end - run_start))
   
   print "D='%s' N=%d W=%s S=%s" % (descrip, numsamples, str(window), str(step))
+
+  detections, arid2num = read_detections(cursor, data_start, data_end)
   
   leb_events, leb_orid2num = read_events(cursor, data_start, data_end, "leb")
 
@@ -448,6 +505,33 @@ def main():
     visa_scores = dict(cursor.fetchall())    
     visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_scores)
 
+  leb_evlist = read_assoc(cursor, data_start, data_end, leb_orid2num,
+                          arid2num, "leb")
+  visa_evlist = read_assoc(cursor, data_start, data_end, visa_orid2num,
+                           arid2num, "visa", runid=options.runid)  
+
+  if options.kleinermackey:
+    kleinermackey_display(leb_events, sel3_events, visa_events)
+    
+  if options.phase:
+    leb_visa = find_matching(leb_events, visa_events)
+    buckets = [[] for b in MAG_RANGES]
+    all = []
+    for (leb_evnum, visa_evnum) in leb_visa:
+      for bnum, (mag_low, mag_high) in enumerate(MAG_RANGES):
+        if leb_events[leb_evnum, EV_MB_COL] > mag_low \
+           and leb_events[leb_evnum, EV_MB_COL] <= mag_high:
+          diff = len(visa_evlist[visa_evnum]) - len(leb_evlist[leb_evnum])
+          buckets[bnum].append(diff)
+          all.append(diff)
+          break
+    for bnum, (mag_low, mag_high) in enumerate(MAG_RANGES):
+      print " %d -- %d | %3d | %3d %3d" %\
+            (mag_low, mag_high, len(buckets[bnum]),
+             np.average(buckets[bnum]), np.std(buckets[bnum]))
+    print " all  | %3d | %3d %3d" % (len(all), np.average(all),
+                                     np.std(all))
+    
   if options.error:
     leb_sel3 = find_matching(leb_events, sel3_events)
     leb_visa = find_matching(leb_events, visa_events)
