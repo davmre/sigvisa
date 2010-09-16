@@ -15,7 +15,7 @@ typedef struct PhaseAmp_t
   double intercept;
   double mb_coeff;
   double depth_coeff;
-  double dist_coeff;
+  double ttime_coeff;
 
   double std;                                /* standard deviation */
   
@@ -35,7 +35,7 @@ void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
                                        const char * filename);
 
 double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
-                                     double mb, double depth, double dist,
+                                     double mb, double depth, double ttime,
                                      int siteid, int phaseid, double amp);
 
 double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * 

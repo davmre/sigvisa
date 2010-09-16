@@ -54,7 +54,7 @@ void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
     
       if (5 != fscanf(fp, "%lg %lg %lg %lg %lg\n", &p_phase->intercept,
                       &p_phase->mb_coeff, &p_phase->depth_coeff,
-                      &p_phase->dist_coeff, &p_phase->std))
+                      &p_phase->ttime_coeff, &p_phase->std))
       {
         fprintf(stderr, "Error reading amp model for site %d phase %d\n", 
                 siteid, phaseid);
@@ -67,7 +67,7 @@ void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
 }
 
 double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
-                                     double mb, double depth, double dist,
+                                     double mb, double depth, double ttime,
                                      int siteid, int phaseid, double amp)
 {
   double logamp;
@@ -82,7 +82,7 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
   
   return Gaussian_logprob(logamp, p_phase->intercept + p_phase->mb_coeff * mb
                           + p_phase->depth_coeff * depth
-                          + p_phase->dist_coeff * dist, p_phase->std);
+                          + p_phase->ttime_coeff * ttime, p_phase->std);
 }
 
 double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * 

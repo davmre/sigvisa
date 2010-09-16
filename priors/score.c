@@ -34,7 +34,7 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
 {
   EarthModel_t * p_earth;
   double pred_arrtime;
-  double dist;
+  double ttime;
   int detnum;
   int numtimedefphases;
 
@@ -114,19 +114,19 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                              det->site_det, det->snr_det);
 #endif
 
-    dist = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
-                            siteid);
+    ttime = EarthModel_ArrivalTime(p_earth, p_event->evlon, p_event->evlat,
+                                   p_event->evdepth, 0, phaseid, siteid);
     
     *p_ampsc += ArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
                                               p_event->evmag, p_event->evdepth,
-                                              dist, siteid, phaseid,
+                                              ttime, siteid, phaseid,
                                               det->amp_det);
     
     if (isnan(*p_ampsc))
     {
-      printf("nan arr-amp mb %.2lg, dep %.2lg dist %.2lg siteid %d phaseid %d"
+      printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d phaseid %d"
              " amp %.2lg", p_event->evmag, p_event->evdepth,
-             dist, siteid, phaseid, det->amp_det);
+             ttime, siteid, phaseid, det->amp_det);
       exit(1);
     }
     

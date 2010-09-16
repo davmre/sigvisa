@@ -2,8 +2,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from database.dataset import *
 import utils.GMM, utils.LinearModel
+import math
 
 NUM_PRIOR = 100                          # number of prior points
+
+def gtf(val, m, s):
+  return math.exp(- float(val - m) ** 2 / (2.0 * float(s) ** 2)) \
+         / math.sqrt(2.0 * math.pi * float(s) ** 2)
 
 def print_2gmm(wts, means, stds):
   print "w1=%.2f m1=%.2f s1=%.2f w2=%.2f m2=%.2f s2=%.2f"\
@@ -17,28 +22,51 @@ def print_list(fp, list):
 def learn_amp_model(data):
   mb_list = []
   depth_list = []
-  dist_list = []
+  ttime_list = []
+  ttime0_list = []
+  ttime50_list = []
+  ttime100_list = []
+  mb_ttime_list = []
   logamp_list = []
   
-  for (mb, depth, dist, logamp) in data:
+  for (mb, depth, ttime, logamp) in data:
     mb_list.append(mb)
     depth_list.append(depth)
-    dist_list.append(dist)
+    ttime_list.append(ttime)
+    ttime0_list.append(gtf(ttime, 10, 20))
+    ttime50_list.append(gtf(ttime, 50, 20))
+    ttime100_list.append(gtf(ttime, 90, 20))
+    mb_ttime_list.append((7-mb)*ttime)
     logamp_list.append(logamp)
   
-  model = utils.LinearModel.LinearModel("logamp", ["mb", "depth", "dist"],
-                                        [mb_list, depth_list, dist_list],
+  model = utils.LinearModel.LinearModel("logamp", ["mb", "depth", "ttime"],
+#                                                   "ttime0", "ttime50",
+#                                                   "ttime100", "mb_ttime"],
+                                        [mb_list, depth_list, ttime_list],
+#                                         ttime0_list, ttime50_list,
+#                                         ttime100_list, mb_ttime_list],
                                         logamp_list)
-  logamp_pred = [model[a,b,c] for a,b,c in zip(mb_list, depth_list, dist_list)]
+  logamp_pred = [model[a,b,c] for a,b,c \
+                 in zip(mb_list, depth_list,ttime_list)
+                 #, ttime0_list, ttime50_list,
+                 #       ttime100_list, mb_ttime_list)
+                 ]
   
   std = np.sqrt(float(sum((y1-y2) ** 2 for y1, y2
                           in zip(logamp_list, logamp_pred))) /len(logamp_pred))
   
-  return model.coeffs[-1], model.coeffs[0], model.coeffs[1], model.coeffs[2],\
-         std
+  return model.coeffs[-1], model.coeffs[0], model.coeffs[1],\
+         model.coeffs[2], std
+#, model.coeffs[3], model.coeffs[4],\
+#         model.coeffs[5], model.coeffs[6], std
 
-def predict_amp_model(coeffs, mb, depth, dist):
-  return coeffs[0] + coeffs[1] * mb + coeffs[2] * depth + coeffs[3] * dist
+def predict_amp_model(coeffs, mb, depth, ttime):
+  return coeffs[0] + coeffs[1] * mb + coeffs[2] * depth \
+         + coeffs[3] * ttime
+#+ coeffs[4] * gtf(ttime, 10, 20) \
+#         + coeffs[5] * gtf(ttime, 50, 20)\
+#         + coeffs[6] * gtf(ttime, 90, 20)\
+#         + coeffs[7] * (7 - mb) * ttime
 
 def learn(param_filename, options, earthmodel, detections, leb_events,
           leb_evlist):
@@ -66,8 +94,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       true_dets.add(detnum)
       sitenum = int(detections[detnum, DET_SITE_COL])
       datum = (leb_events[evnum, EV_MB_COL], leb_events[evnum, EV_DEPTH_COL],
-               earthmodel.Delta(leb_events[evnum, EV_LON_COL],
-                                leb_events[evnum, EV_LAT_COL], sitenum),
+               detections[detnum, DET_TIME_COL] - leb_events[evnum,EV_TIME_COL],
                np.log(detections[detnum, DET_AMP_COL]))
 
       all_phase_logamps.append(datum)
