@@ -61,8 +61,7 @@ def main(param_dirname):
     print "visualizing arrival parameters"
     
     visualize_arramp(options, earthmodel, netmodel,
-                     detections, leb_events, leb_evlist)    
-    
+                     detections, leb_events, leb_evlist)
     plt.show()
     sys.exit()
 
@@ -671,9 +670,9 @@ def visualize_arramp(options, earthmodel, netmodel,
   dist_sum = np.zeros(90, float)
   dist_count = np.ones(90, float) * 1e-6
   
-  for (mb, depth, dist, logamp) in data:
+  for (mb, depth, ttime, logamp) in data:
     if mb >=3 and mb <=4 and depth <=50:
-      idx = int(dist/10)
+      idx = int(ttime/10)
       dist_sum[idx] += logamp
       dist_count[idx] += 1
 
@@ -692,7 +691,38 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.ylabel("Avg. Log Amplitude")
   plt.legend(loc="lower left")
   if options.write is not None:
-    pathname = os.path.join(options.write, "logamp_%d_%s.png"
+    pathname = os.path.join(options.write, "logamp_%d_%s_3_4.png"
+                            % (SITEID, earthmodel.PhaseName(PHASEID)))
+    print "saving fig to %s" % pathname
+    plt.savefig(pathname)
+
+  x_pts = range(15, 95)
+  y_pts = np.array([predict_amp_model(coeffs, 4.5, 0, x) for x in x_pts])
+
+  dist_sum = np.zeros(90, float)
+  dist_count = np.ones(90, float) * 1e-6
+  
+  for (mb, depth, ttime, logamp) in data:
+    if mb >=4 and mb <=5 and depth <=50:
+      idx = int(ttime/10)
+      dist_sum[idx] += logamp
+      dist_count[idx] += 1
+
+  dist_avg = dist_sum / dist_count
+  
+  plt.figure()
+  plt.title("Log Amplitude at station %d for %s phase, surface event"
+            % (SITEID, earthmodel.PhaseName(PHASEID)))
+  plt.bar(range(0, 900, 10), dist_avg, width=10,
+          label="data 4--5 mb", color="blue", linewidth=1)
+  plt.plot(x_pts, y_pts, label="model 4.5 mb", color = "black", linewidth=3)
+  
+  plt.xlim(0,900)
+  plt.xlabel("Distance (deg)")
+  plt.ylabel("Avg. Log Amplitude")
+  plt.legend(loc="upper right")
+  if options.write is not None:
+    pathname = os.path.join(options.write, "logamp_%d_%s_4_5.png"
                             % (SITEID, earthmodel.PhaseName(PHASEID)))
     print "saving fig to %s" % pathname
     plt.savefig(pathname)
