@@ -20,8 +20,9 @@ import matplotlib.pyplot as plt
 from utils.draw_earth import draw_events, draw_earth
 
 AZGAP_RANGES = [(0, 90), (90, 180), (180, 270), (270, 360)]
-DETCNT_RANGES = [(0, 2), (2, 3), (3,4), (4,5), (5,6), (6, 100)]
+DETCNT_RANGES = [(-1, 0), (0, 1), (1, 2), (2, 3), (3,4), (4,5), (5,6), (6, 100)]
 TPHASE_RANGES = [(-1, 0), (0, 100)]
+HPHASE_RANGES = [(-1, 0), (0, 100)]
 MAG_RANGES = [(0,2), (2,3), (3,4), (4,9)]
 
 JAPAN_LON_1, JAPAN_LON_2 = 130, 145
@@ -397,10 +398,18 @@ def main():
   parser.add_option("-d", "--detcnt", dest="detcnt", default=False,
                     action = "store_true",
                     help = "analyze by number of timedef detections (False)")
+
+  parser.add_option("--missdet", dest="missdet", default=False,
+                    action = "store_true",
+                    help = "analyze by number of missed detections (False)")
   
   parser.add_option("-t", "--tphase", dest="tphase", default=False,
                     action = "store_true",
                     help = "analyze by number of T phases (False)")
+
+  parser.add_option("-y", "--hphase", dest="hphase", default=False,
+                    action = "store_true",
+                    help = "analyze by number of H phases (False)")
   
   parser.add_option("-a", "--az", dest="azgap", default=False,
                     action = "store_true",
@@ -595,6 +604,18 @@ def main():
     analyze_by_attr("# Det", DETCNT_RANGES, detcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
+  if options.missdet:
+    detcnts = []
+    for leb_event in leb_events:
+      cursor.execute("select count(*) from leb_assoc  "
+                     "where orid=%s and timedef='d' and arid not in "
+                     "(select arid from idcx_arrival_net)",
+                     (int(leb_event[EV_ORID_COL]),))
+      detcnts.append(cursor.fetchone()[0])
+      
+    analyze_by_attr("# Mis", DETCNT_RANGES, detcnts,
+                    leb_events, sel3_events, visa_events, options.verbose)
+
   if options.tphase:
     tcnts = []
     for leb_event in leb_events:
@@ -604,6 +625,17 @@ def main():
       tcnts.append(cursor.fetchone()[0])
     
     analyze_by_attr("T Phases", TPHASE_RANGES, tcnts,
+                    leb_events, sel3_events, visa_events, options.verbose)
+
+  if options.hphase:
+    hcnts = []
+    for leb_event in leb_events:
+      cursor.execute("select count(*) from leb_assoc "
+                     "where orid=%s and phase='H'",
+                     (int(leb_event[EV_ORID_COL]),))
+      hcnts.append(cursor.fetchone()[0])
+    
+    analyze_by_attr("H Phases", HPHASE_RANGES, hcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
   if options.azgap:

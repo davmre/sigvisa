@@ -167,7 +167,7 @@ def main(param_dirname):
   parser.add_option("-d", "--descrip", dest="descrip", default="",
                     help = "description of the run ('')")
   parser.add_option("-p", "--propose", dest="propose_run", default=None,
-                    type = int,
+                    type = str,
                     help = "use run RUNID's events as proposal",
                     metavar="RUNID")
   (options, args) = parser.parse_args()
@@ -217,8 +217,21 @@ def main(param_dirname):
   print "NET runid %d" % runid
   print "===="
   if options.propose_run is not None:
-    propose_events = read_events(cursor, start_time, end_time, "visa",
-                                 options.propose_run)[0]
+    propose_events = []
+    for prop_type in options.propose_run.split(","):
+      # is this a NET-VISA runid?
+      if prop_type.isdigit():
+        prop_run = int(prop_type)
+        prop_events = read_events(cursor, start_time, end_time, "visa",
+                                  prop_run)[0]
+      else:
+        prop_events = read_events(cursor, start_time, end_time,
+                                  prop_type)[0]
+      propose_events.extend(prop_events.tolist())
+    propose_events.sort(cmp=lambda x,y: cmp(x[EV_TIME_COL], y[EV_TIME_COL]))
+    propose_events = np.array(propose_events)
+    print "Using %d events as birth proposer" % len(propose_events)
+
   else:
     propose_events = None
   events, ev_detlist = netmodel.infer(runid, options.numsamples,
