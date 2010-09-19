@@ -24,6 +24,7 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
       inv_ev = None
       inv_score = -np.inf
       inv_dist = np.inf
+      tres = np.inf
     else:
       inv_ev = event.copy()
       inv_ev[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv
