@@ -27,17 +27,25 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
     else:
       inv_ev = event.copy()
       inv_ev[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv
+      # try inverting as a magnitude 3 or a magnitude 4
       inv_ev[EV_MB_COL] = 3.0
-      #inv_score = netmodel.score_event(inv_ev, event_detlist)
-      inv_score = netmodel.score_event_det(inv_ev, 0, detid)
+      inv_score3 = netmodel.score_event(inv_ev, event_detlist)
+      inv_ev[EV_MB_COL] = 4.0
+      inv_score4 = netmodel.score_event(inv_ev, event_detlist)
+      inv_score = max(inv_score3, inv_score4)
       inv_dist = dist_deg((event[EV_LON_COL], event[EV_LAT_COL]),
                           (inv_ev[EV_LON_COL], inv_ev[EV_LAT_COL]))
+      tres = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
+                                    0, event[EV_TIME_COL],
+                                    phaseid,
+                                    int(detections[detid, DET_SITE_COL]))\
+                                    - detections[detid, DET_TIME_COL]
     
-    print "(%s, %d, %s, detsc %.1f, invsc %.1f, invdist %.1f)" \
+    print "(%s, %d, %s, detsc %.1f, invsc %.1f, invdist %.1f tres %.1f)" \
           % (earthmodel.PhaseName(phaseid), detid,
              earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL])),
              netmodel.score_event_det(event, phaseid, detid), inv_score,
-             inv_dist),
+             inv_dist, tres),
   print "\nEv Score:", netmodel.score_event(event, event_detlist)
   
 def main(param_dirname):

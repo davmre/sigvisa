@@ -687,7 +687,7 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
   int numtimedefphases;
   
   int lonidx, latidx;
-  double lon, lat;
+  double lon, lat, mag;
 
   int detnum;
 
@@ -736,47 +736,52 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
       {
         continue;
       }
-      p_event->evmag = 3.0;
+
       /* save the longitude and latitude */
       lon = p_event->evlon;
       lat = p_event->evlat;
       
-      for (lonidx=-num_step; lonidx<=num_step; lonidx++)
+      for (mag=3; mag <4.1; mag+=1)
       {
-        p_event->evlon = lon + lonidx * degree_step;
-        FIXUP_EVLON(p_event);
+        p_event->evmag = mag;
         
-        for (latidx=-num_step; latidx<=num_step; latidx ++)
+        for (lonidx=-num_step; lonidx<=num_step; lonidx++)
         {
-          double trvtime;
-          p_event->evlat = lat + latidx * degree_step;
-          FIXUP_EVLAT(p_event);
-          
-          trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
-                                           p_event->evlat, p_event->evdepth, 0,
-                                           EARTH_PHASE_P, p_inv_det->site_det);
-          if (trvtime < 0)
-            continue;
-          
-          p_event->evtime = p_inv_det->time_det - trvtime;
-
-          if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
+          p_event->evlon = lon + lonidx * degree_step;
+          FIXUP_EVLON(p_event);
+        
+          for (latidx=-num_step; latidx<=num_step; latidx ++)
           {
-            continue;
-          }
+            double trvtime;
+            p_event->evlat = lat + latidx * degree_step;
+            FIXUP_EVLAT(p_event);
           
-          /* score this event using the best detections available */
-          propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                  p_skip_det, 0 /* all phases */);
+            trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+                                             p_event->evlat, p_event->evdepth,0,
+                                             EARTH_PHASE_P,p_inv_det->site_det);
+            if (trvtime < 0)
+              continue;
+          
+            p_event->evtime = p_inv_det->time_det - trvtime;
 
-          if (p_event->evscore > p_best_event->evscore)
-          {
-            copy_event(p_netmodel, p_best_event, p_event);
+            if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
+            {
+              continue;
+            }
+          
+            /* score this event using the best detections available */
+            propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                                    p_skip_det, 0 /* all phases */);
+
+            if (p_event->evscore > p_best_event->evscore)
+            {
+              copy_event(p_netmodel, p_best_event, p_event);
 
 #ifdef NEVER
-            printf("CURR BEST: ");
-            print_event(p_best_event);
+              printf("CURR BEST: ");
+              print_event(p_best_event);
 #endif
+            }
           }
         }
       }

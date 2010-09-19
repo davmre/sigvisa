@@ -69,6 +69,8 @@ def main(param_dirname):
                     metavar="degrees")
   parser.add_option("-s", "--suppress", dest="suppress", default=False,
                     action = "store_true", help = "suppress duplicates")
+  parser.add_option("-x", "--text_only", dest="text_only", default=False,
+                    action = "store_true", help = "text only")
   (options, args) = parser.parse_args()
   
   if len(args) != 3:
@@ -148,6 +150,9 @@ def main(param_dirname):
                "VISA")
   print_events(netmodel, earthmodel, detections, neic_events, None, "NEIC")
 
+  if options.text_only:
+    return
+  
   # now draw a window around the event location
   if orid_type == "visa":
     evnum = visa_orid2num[orid]
@@ -402,6 +407,7 @@ def main(param_dirname):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=12, mfc="white", mew=1)
 
+  plt.show()
+
 if __name__ == "__main__":
   main("parameters")
-  plt.show()
