@@ -60,19 +60,17 @@ def main(param_dirname):
   if options.arrival:
     print "visualizing arrival parameters"
     
+    visualize_arrtime(options, earthmodel, netmodel,
+                      detections, leb_events, leb_evlist)
+    
     visualize_arramp(options, earthmodel, netmodel,
-                     detections, leb_events, leb_evlist)
-    plt.show()
-    sys.exit()
-
+                     detections, leb_events, leb_evlist)    
+    
     visualize_corr_ttime(options, earthmodel, netmodel,
                          detections, leb_events, leb_evlist)
     
     visualize_arrphase(options, earthmodel, netmodel,
                        detections, leb_events, leb_evlist)
-    
-    visualize_arrtime(options, earthmodel, netmodel,
-                      detections, leb_events, leb_evlist)
     
     visualize_arraz(options, earthmodel, netmodel,
                     detections, leb_events, leb_evlist)
@@ -216,6 +214,40 @@ def visualize_arrphase(options, earthmodel, netmodel,
   ax.set_ylabel("True Phase")
   ax.set_zlabel("Probability")
 
+def plot_ttime_residuals(netmodel,residuals, title, SITEID, PHASEID, MIN, MAX,
+                         STEP):
+  loc, scale = Laplace.estimate(residuals)
+  mix_prob, mix_loc, mix_scale = Laplace.estimate_laplace_uniform_dist(
+    residuals, MIN, MAX)
+
+  bins = np.arange(MIN, MAX+STEP, STEP)
+  data_prob = np.zeros(len(bins))
+  for r in residuals:
+    if r < MAX+STEP:
+      data_prob[int((r-MIN)/STEP)] += 1
+
+  data_prob /= sum(data_prob)
+
+  x_vals = np.arange(MIN, MAX+STEP, STEP/10.)
+  curve = [np.exp(Laplace.ldensity(loc, scale, x))
+          *(STEP) for x in x_vals]
+  mix_curve = [np.exp(Laplace.ldensity_laplace_uniform_dist(
+    mix_prob, mix_loc, mix_scale, MIN, MAX, x)) * (STEP) for x in x_vals]
+  
+  plt.figure()
+  plt.title(title)
+  plt.bar(left=bins, height=data_prob, width=STEP, alpha=1, color="blue",
+          linewidth=0,
+          label="data")
+  plt.plot(x_vals, curve, color="black", label="Laplace", linewidth=3)
+  plt.plot(x_vals, mix_curve, color="red", label="Laplace+uniform", linewidth=3)
+  plt.xlabel("Time")
+  plt.ylabel("Probability")
+  plt.xlim(MIN,MAX)
+  plt.ylim(0,.15)
+  plt.grid()
+  plt.legend()
+  
 def visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist):
   MIN=-7
@@ -225,6 +257,7 @@ def visualize_arrtime(options, earthmodel, netmodel,
   SITEID=6                              # ASAR
   PHASEID=0
   residuals = []
+  residuals1, residuals2, residuals3, residuals4 = [], [], [], []
   for evnum, event in enumerate(leb_events):
     for phaseid, detnum in leb_evlist[evnum]:
       if phaseid == PHASEID and detections[detnum, DET_SITE_COL] == SITEID:
@@ -236,35 +269,35 @@ def visualize_arrtime(options, earthmodel, netmodel,
           res = detections[detnum, DET_TIME_COL] - pred_arrtime
           if res > MIN and res < MAX:
             residuals.append(res)
+            dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL],
+                                    SITEID)
+            if dist < 40:
+              residuals1.append(res)
+            elif dist < 60:
+              residuals2.append(res)
+            elif dist < 80:
+              residuals3.append(res)
+            else:
+              residuals4.append(res)
+            
 
-  mix_prob, mix_loc, mix_scale = Laplace.estimate_laplace_uniform_dist(
-    residuals, MIN, MAX)
+  plot_ttime_residuals(netmodel,residuals,
+                       "TTime Residuals, P phase, site 6, all distances",
+                       SITEID, PHASEID, MIN, MAX, STEP)
+  plot_ttime_residuals(netmodel,residuals1,
+                       "TTime Residuals, P phase, site 6, distances < 40",
+                       SITEID, PHASEID, MIN, MAX, STEP)
+  plot_ttime_residuals(netmodel,residuals2,
+                       "TTime Residuals, P phase, site 6, distances 40 -- 60",
+                       SITEID, PHASEID, MIN, MAX, STEP)
+  plot_ttime_residuals(netmodel,residuals3,
+                       "TTime Residuals, P phase, site 6, distances 60 -- 80",
+                       SITEID, PHASEID, MIN, MAX, STEP)
+  plot_ttime_residuals(netmodel,residuals4,
+                       "TTime Residuals, P phase, site 6, distances > 80",
+                       SITEID, PHASEID, MIN, MAX, STEP)
 
-  bins = np.arange(MIN, MAX+STEP, STEP)
-  data_prob = np.zeros(len(bins))
-  for r in residuals:
-    if r < MAX+STEP:
-      data_prob[int((r-MIN)/STEP)] += 1
-
-  data_prob /= sum(data_prob)
-  
-  prob = [np.exp(netmodel.arrtime_logprob(x, 0, 0, SITEID, PHASEID))
-          *STEP for x in bins]
-  mix_prob = [np.exp(Laplace.ldensity_laplace_uniform_dist(
-    mix_prob, mix_loc, mix_scale, MIN, MAX, x)) * STEP for x in bins]
-  
-  plt.figure()
-  plt.title("Time residuals around IASPEI prediction for P phase at station 6")
-  plt.bar(left=bins, height=data_prob, width=STEP, alpha=1, color="blue",
-          linewidth=0,
-          label="data")
-  plt.plot(bins, prob, color="black", label="Laplace", linewidth=3)
-  #plt.plot(bins, mix_prob, color="red", label="Laplace+uniform", linewidth=3)
-  plt.xlabel("Time")
-  plt.ylabel("Probability")
-  plt.xlim(MIN,MAX)
-  plt.grid()
-  plt.legend()
+  return
 
   # now, visualize travel time residuals from the LEB arrivals
   cursor = database.db.connect().cursor()
