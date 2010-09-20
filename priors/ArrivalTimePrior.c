@@ -69,6 +69,14 @@ double ArrivalTimePrior_LogProb(const ArrivalTimePrior_t * prior,
   return Laplace_ldensity(loc, scale, res);
 }
 
+double ArrivalTimePrior_MeanResidual(const ArrivalTimePrior_t * prior,
+                                     int siteid, int phaseid)
+{
+  assert((siteid < prior->numsites) && (phaseid < prior->numphases));
+  
+  return prior->locs[siteid * prior->numphases + phaseid];
+}
+
 
 void ArrivalTimePrior_UnInit(ArrivalTimePrior_t * prior)
 {

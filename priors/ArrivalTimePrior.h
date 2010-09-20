@@ -14,4 +14,7 @@ double ArrivalTimePrior_LogProb(const ArrivalTimePrior_t * prior,
                                 double arrtime, double pred_arrtime,
                                 double det_deltime, int siteid, int phaseid);
 
+double ArrivalTimePrior_MeanResidual(const ArrivalTimePrior_t * prior,
+                                     int siteid, int phaseid);
+
 void ArrivalTimePrior_UnInit(ArrivalTimePrior_t * prior);
