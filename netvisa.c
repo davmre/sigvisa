@@ -15,6 +15,7 @@ static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
@@ -47,6 +48,9 @@ static PyMethodDef NetModel_methods[] = {
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
    "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid, phaseid)"
    " -> log probability"},
+  {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
+   "mean_travel_time(evlon, evlat, evdepth, siteid, phaseid)"
+   " -> travel time in seconds"},
   {"arraz_logprob", (PyCFunction)py_arraz_logprob, METH_VARARGS,
    "arraz_logprob(arraz, pred_arraz, det_delaz, siteid, phaseid)"
    " -> log probability"},
@@ -813,6 +817,31 @@ static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,
                                      det_deltime, siteid, phaseid);
   
   return Py_BuildValue("d", logprob);
+}
+
+static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,
+                                      PyObject * args)
+{
+  double evlon, evlat, evdepth;
+  int siteid;
+  int phaseid;
+  double trvtime;
+
+  EarthModel_t * p_earth;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &evlon, &evlat, &evdepth,
+                        &siteid, &phaseid))
+    return NULL;
+
+  p_earth = p_netmodel->p_earth;
+
+  trvtime = EarthModel_ArrivalTime(p_earth, evlon, evlat, evdepth, 0, phaseid,
+                                   siteid);
+  
+  trvtime += ArrivalTimePrior_MeanResidual(&p_netmodel->arr_time_prior,
+                                           siteid, phaseid);
+  
+  return Py_BuildValue("d", trvtime);
 }
 
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,
