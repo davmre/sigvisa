@@ -1,6 +1,6 @@
 #checks whether invert detection works correctly
 
-import os, sys
+import os, sys, time
 import numpy as np
 from optparse import OptionParser
 
@@ -106,6 +106,7 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
+  t1 = time.time()
   tot_leb, pos_leb, nearby_inv, pos_inv = 0, 0, 0, 0
   for leb_evnum, leb_event in enumerate(leb_events):
     leb_detlist = leb_evlist[leb_evnum]
@@ -118,9 +119,9 @@ def main(param_dirname):
     
     for phaseid, detid in leb_detlist:
       inv_ev = netmodel.invert_det(detid, 0)
-      if (inv_ev is None or (inv_ev[EV_TIME_COL] - leb_event[EV_TIME_COL] > 50)
+      if (inv_ev is None or (inv_ev[EV_TIME_COL] - leb_event[EV_TIME_COL] > 100)
           or (dist_deg((inv_ev[EV_LON_COL], inv_ev[EV_LAT_COL]),
-                      (leb_event[EV_LON_COL], leb_event[EV_LAT_COL])) > 5)):
+                      (leb_event[EV_LON_COL], leb_event[EV_LAT_COL])) > 10)):
         continue
       else:
         has_nearby_inv = True
@@ -128,15 +129,15 @@ def main(param_dirname):
         tmp_ev = leb_event.copy()
         tmp_ev[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv_ev
 
-        for mag in [3., 4.,]:
+        for mag in [2.,3.,4.,5.]:
           tmp_ev[EV_MB_COL] = mag
           
-          for loni in [-2, -1, 0, 1, 2]:
-            tmp_ev[EV_LON_COL] = inv_ev[EV_LON_COL] + loni * 2.5
+          for loni in range(-10,11):
+            tmp_ev[EV_LON_COL] = inv_ev[EV_LON_COL] + loni * 1.0
             fixup_event_lon(tmp_ev)
             
-            for lati in [-2, -1, 0, 1, 2]:
-              tmp_ev[EV_LAT_COL] = inv_ev[EV_LAT_COL] + lati * 2.5
+            for lati in range(-10,11):
+              tmp_ev[EV_LAT_COL] = inv_ev[EV_LAT_COL] + lati * 1.0
               fixup_event_lat(tmp_ev)
 
               trvtime = earthmodel.ArrivalTime(
@@ -147,11 +148,11 @@ def main(param_dirname):
                 continue
 
               tmp_ev[EV_TIME_COL] = detections[detid, DET_TIME_COL] - trvtime
-          
+        
               if tmp_ev[EV_TIME_COL] < start_time \
-                 or tmp_ev[EV_TIME_COL] > end_time:
+                     or tmp_ev[EV_TIME_COL] > end_time:
                 continue
-              
+            
               inv_score = netmodel.score_event(tmp_ev, leb_detlist)
 
               if inv_score > 0:
@@ -163,6 +164,8 @@ def main(param_dirname):
     if has_pos_inv:
       pos_inv += 1
 
+  t2 = time.time()
+  print "%.1f secs elapsed" % (t2 - t1)
   print "%.1f %% LEB events had +ve score"\
         % (pos_leb * 100. / tot_leb)
   print "%.1f %% LEB events had a nearby invert"\
