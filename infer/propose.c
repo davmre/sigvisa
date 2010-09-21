@@ -900,8 +900,7 @@ int propose_uniform(NetModel_t * p_netmodel, Event_t **pp_events,
                p_event->evtime += time_step)
           {
             
-            for (p_event->evmag = MIN_MAGNITUDE;
-                 p_event->evmag <= 6; p_event->evmag += mag_step)
+            for (p_event->evmag = 3; p_event->evmag < 4.1; p_event->evmag += 1)
             {
               /* score this event using the best detections available */
               propose_best_detections(p_netmodel, p_event, det_low, det_high,
@@ -966,6 +965,239 @@ int propose_uniform(NetModel_t * p_netmodel, Event_t **pp_events,
   return numevents;
 }
 
+/* python -m utils.check_propose -k 1238096900 -r .6 */
+int propose_invert_grid(NetModel_t * p_netmodel, Event_t **pp_events,
+                        double time_low, double time_high, int det_low,
+                        int det_high, double degree_step, double time_step)
+{
+  double * p_site_ttime;                     /* numsites */
+  int * p_skip_det;                          /* numdetections */
+
+  EarthModel_t * p_earth;
+  int numsites;
+  int numtimedefphases;
+  
+  int numlon;
+  int numlat;
+  int numtime;
+  double z_step;
+
+  unsigned short * p_bucket_score;     /* numlon x numlat x numtime */
+
+  
+  int lonidx, latidx, timeidx;
+  double lon, lat, time;
+
+  int detnum, sitenum;
+
+  double bucket_score;  
+  double best_lon, best_lat, best_time, best_bucket_score;
+  int numevents;
+  Event_t * p_event;
+
+  Event_t ** pp_inv_event;
+  
+  p_skip_det = (int *) calloc(p_netmodel->numdetections, sizeof(*p_skip_det));
+  
+  p_earth = p_netmodel->p_earth;
+  numsites = EarthModel_NumSites(p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+  p_site_ttime = (double *) malloc(numsites * sizeof(*p_site_ttime));
+
+  numlon = (int) ceil(360.0 / degree_step);
+  numlat = numlon /2;
+  numtime = (int) ceil((time_high - time_low) / time_step);
+  z_step = 2.0 / numlat;
+  
+  p_bucket_score = (unsigned short *)malloc(numlon * numlat * numtime
+                                            * sizeof(*p_bucket_score));
+
+  if (!p_bucket_score)
+  {
+    printf("can't allocate %d x %d x %d x %d bytes\n", numlon, numlat,
+           numtime, (int)sizeof(*p_bucket_score));
+    return -1;
+  }
+
+  pp_inv_event = (Event_t **)calloc(det_high-det_low, sizeof(*pp_inv_event));
+  
+  for (detnum=det_low; detnum<det_high; detnum ++)
+  {
+    Detection_t * p_det;
+    int inv_status;
+
+    pp_inv_event[detnum] = alloc_event(p_netmodel);
+      
+    p_det = p_netmodel->p_detections + detnum;
+
+    inv_status = invert_detection(p_earth, p_det, pp_inv_event[detnum],
+                                  0 /* don't perturb */);
+    if (0 != inv_status)
+    {
+      free(pp_inv_event[detnum]);
+      pp_inv_event[detnum] = NULL;
+    }
+  }
+  
+  
+  numevents = 0;
+  p_event = alloc_event(p_netmodel);
+  
+  do {
+    /* 
+     * First, we will compute the number of detections which hit each bucket 
+     */
+
+    memset(p_bucket_score, 0, numlon * numlat * numtime
+           * sizeof(*p_bucket_score));
+
+    BEGIN_LON_LOOP;
+    BEGIN_LAT_LOOP;
+
+    /* compute the distance to each site */
+    for (sitenum = 0; sitenum < numsites; sitenum ++)
+    {
+      p_site_ttime[sitenum] = EarthModel_ArrivalTime(p_earth, lon,
+                                                     lat, 0, 0,
+                                                     EARTH_PHASE_P, sitenum);
+    }
+    
+    for (detnum = det_low; detnum < det_high; detnum ++)
+    {
+      Detection_t * p_det;
+      
+      if (p_skip_det[detnum] || (!pp_inv_event[detnum]) ||
+          (simple_distance_deg(lon, lat, pp_inv_event[detnum]->evlon, 
+                               pp_inv_event[detnum]->evlat) > 10))
+        continue;
+      
+      p_det = p_netmodel->p_detections + detnum;
+
+      /* if the event can be detected at this site */
+      if (p_site_ttime[p_det->site_det] > 0)
+      {
+        double evtime;
+        
+        evtime = p_det->time_det - p_site_ttime[p_det->site_det];
+
+        if ((evtime < time_low) || (evtime >= time_high))
+          continue;
+        
+        /* give a count of 2 to the nearest bucket and a smaller count
+        * to nearby buckets */
+        timeidx = (int) ((evtime + (time_step/2) - time_low) / time_step);
+
+        if ((timeidx >= 0) && (timeidx < numtime))
+        {
+          BUCKET(lonidx, latidx, timeidx) += 2;
+/*
+          if ((timeidx+1) < numtime)
+            BUCKET(lonidx, latidx, timeidx+1) += 1;
+        
+          if ((timeidx-1) >= 0)
+            BUCKET(lonidx, latidx, timeidx-1) += 1;
+*/
+
+
+          if ((lonidx==25) && (latidx==213) && (timeidx==7))
+          {
+            printf("phase %d lon %.1f lat %.1f detnum %d dettime %.1f site %d site trvtime %.1f\n", p_det->phase_det, lon, lat, detnum, p_det->time_det, p_det->site_det, p_site_ttime[p_det->site_det]);
+            printf("lonidx %d latidx %d timeidx %d\n", lonidx, latidx, timeidx);
+            
+          }
+        }
+        
+      }
+    }
+    
+    END_LAT_LOOP;
+    END_LON_LOOP;
+
+    /*
+     * Second, we will find the best bucket and construct an event from it
+     */
+
+    best_bucket_score = best_lon = best_lat = best_time = 0;
+  
+    BEGIN_LON_LOOP;  
+    BEGIN_LAT_LOOP;
+    BEGIN_TIME_LOOP;
+  
+    bucket_score = BUCKET(lonidx, latidx, timeidx);
+  
+    if (bucket_score > best_bucket_score)
+    {
+      printf("current best %.1f: lon %.1f lat %.1f time %.1f (%d, %d, %d)\n",
+             bucket_score, lon, lat, time, lonidx, latidx, timeidx);
+      
+#ifdef NEVER
+      p_event->evlon = lon;
+      p_event->evlat = lat;
+      p_event->evdepth = 0;
+      p_event->evtime = time;
+      p_event->evmag = 3.0;
+
+      propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                              p_skip_det, 0 /* all phases */);
+
+      /* now, improve this event to take advantage of its detections */
+      propose_best_event(p_netmodel, p_best_event, det_low, det_high,
+                         p_skip_det, time_low, time_high, 1);
+      propose_best_event(p_netmodel, p_best_event, det_low, det_high,
+                         p_skip_det, time_low, time_high, .1);
+
+      if (p_event->evscore > 0)
+#endif
+      {
+        best_bucket_score = bucket_score;
+        best_lon = lon;
+        best_lat = lat;
+        best_time = time;
+      }
+    }
+  
+    END_TIME_LOOP;
+    END_LAT_LOOP;
+    END_LON_LOOP;
+
+    if (best_bucket_score > 2)
+    {
+      p_event->evlon = best_lon;
+      p_event->evlat = best_lat;
+      p_event->evdepth = 0;
+      p_event->evtime = best_time;
+      p_event->evmag = 3.0;
+
+      propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                              p_skip_det, 0 /* all phases */);
+
+      pp_events[numevents++] = p_event;
+      p_event = alloc_event(p_netmodel);
+    }
+    else
+      break;
+    
+  } while (0);
+
+  for(detnum=det_low; detnum < det_high; detnum++)
+  {
+    if (pp_inv_event[detnum])
+    {
+      free(pp_inv_event[detnum]);
+    }
+  }
+  free(pp_inv_event);
+  
+  free(p_event);
+  free(p_bucket_score);
+  free(p_site_ttime);
+  free(p_skip_det);
+  
+  return numevents;
+}
+
+
 PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
 {
   double time_low;
@@ -991,6 +1223,11 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
 
   numevents = propose_invert(p_netmodel, pp_events, time_low, time_high, 
                              det_low, det_high, degree_step, num_step);
+
+#ifdef NEVER
+  numevents = propose_invert_grid(p_netmodel, pp_events, time_low, time_high, 
+                                  det_low, det_high, .5, 100.0);
+#endif
 
 #ifdef NEVER
   
