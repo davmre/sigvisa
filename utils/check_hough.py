@@ -181,19 +181,11 @@ def main(param_dirname):
       if inverted_event is None:
         continue
       inv_lon, inv_lat, inv_depth, inv_time = inverted_event
-      
-      inv_event = event.copy()
-      inv_event[EV_LON_COL] = round_to(inv_lon, options.degree_step)
-      fixup_event_lon(inv_event)
-      inv_event[EV_LAT_COL] = round_to(inv_lat, options.degree_step)
-      fixup_event_lat(inv_event)
-      inv_event[EV_TIME_COL] = round_to(inv_time, options.time_step)
 
-      if (inv_event[EV_LON_COL] == event[EV_LON_COL] 
-          and inv_event[EV_LAT_COL] == event[EV_LAT_COL]
-          and inv_event[EV_TIME_COL] == event[EV_TIME_COL]):
+      if (dist_deg((event[EV_LON_COL], event[EV_LAT_COL]),
+                   (inv_lon, inv_lat)) < 10 and
+          abs(inv_time - event[EV_TIME_COL]) < 100):
         tot_inv_hits += 1
-      
           
   t2 = time.time()
   print "%.1f secs elapsed" % (t2 - t1)

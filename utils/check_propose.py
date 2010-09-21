@@ -8,7 +8,15 @@ import random
 from database.dataset import *
 import netvisa, learn
 from utils.geog import dist_deg
-from infer import print_events
+
+def print_events(netmodel, earthmodel, detections, events, event_detlists,
+                 title):
+  print "****", title, "****"
+  for evnum, event in enumerate(events):
+    print_event(netmodel, earthmodel, detections, event,
+                event_detlists[evnum])
+  print "=" * 78
+  
 
 def print_event(netmodel, earthmodel, detections, event, event_detlist):
   print ("%d: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f"
@@ -102,7 +110,8 @@ def main(param_dirname):
 
   print "%.1f seconds to propose %d event(s)" % (t2-t1, len(prop_events))
 
-  print_events(netmodel, earthmodel, prop_events, prop_evlist, "PROP")
+  print_events(netmodel, earthmodel, detections,
+               prop_events, prop_evlist, "PROP")
   
   for leb_evnum, leb_event in enumerate(leb_events):
     
