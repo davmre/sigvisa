@@ -1032,3 +1032,38 @@ void print_event(const Event_t * p_event)
          p_event->orid);
 }
 
+void print_event_detections(EarthModel_t * p_earth, const Event_t * p_event)
+{
+  int detcnt;
+  int numsites;
+  int numtimedefphases;
+  int siteid;
+  int phaseid;
+  
+  numsites = EarthModel_NumSites(p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+  
+  detcnt = 0;
+  
+  for (siteid = 0; siteid < numsites; siteid ++)
+  {
+    for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
+    {
+      int detnum;
+        
+      detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
+
+      if (detnum != -1)
+      {
+        if (!detcnt)
+          printf("[");
+        printf("%d ", detnum);
+        detcnt ++;
+      }
+    }
+  }
+
+  if (detcnt)
+    printf("]\n");
+}
+

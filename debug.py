@@ -46,8 +46,15 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
   detlist = [x for x in event_detlist]
   detlist.sort()
   for phaseid, detid in detlist:
-    print "(%s, %d, %d)" % (earthmodel.PhaseName(phaseid),
-                            int(detections[detid, DET_SITE_COL]), detid),
+    tres = detections[detid, DET_TIME_COL] \
+           - earthmodel.ArrivalTime(event[EV_LON_COL],
+                                    event[EV_LAT_COL],
+                                    event[EV_DEPTH_COL],
+                                    event[EV_TIME_COL],
+                                    phaseid,
+                                    int(detections[detid, DET_SITE_COL]))
+    print "(%s %d %d %.1f)" % (earthmodel.PhaseName(phaseid),
+                            int(detections[detid, DET_SITE_COL]), detid, tres),
   print
   score = netmodel.score_event(event, event_detlist)
   print "Ev Score: %.1f    (prior location logprob %.1f)" \
