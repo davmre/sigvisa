@@ -547,9 +547,10 @@ static void propose_best_detections(NetModel_t * p_netmodel,
     p_det = p_netmodel->p_detections + detnum;
 
     /* tx phases are causing a lot of confusion */
+    /*
     if (EARTH_PHASE_tx == p_det->phase_det)
       continue;
-    
+    */
     siteid = p_det->site_det;
   
     best_phase = -1;
@@ -743,7 +744,7 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
       lon = p_event->evlon;
       lat = p_event->evlat;
       
-      for (mag=3; mag <4.1; mag+=1)
+      for (mag=3; mag <3.1; mag+=1)
       {
         p_event->evmag = mag;
         
@@ -775,6 +776,14 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
             propose_best_detections(p_netmodel, p_event, det_low, det_high,
                                     p_skip_det, 0 /* all phases */);
 
+#ifdef VERBOSE
+            if ((!lonidx) && (!latidx))
+            {
+              printf("detnum %d: ", inv_detnum);
+              print_event(p_event);
+              print_event_detections(p_earth, p_event);
+            }
+#endif
             if (p_event->evscore > p_best_event->evscore)
             {
               copy_event(p_netmodel, p_best_event, p_event);
@@ -803,7 +812,13 @@ int propose_invert(NetModel_t * p_netmodel, Event_t **pp_events,
                        p_skip_det, time_low, time_high, 1);
     propose_best_event(p_netmodel, p_best_event, det_low, det_high,
                        p_skip_det, time_low, time_high, .1);
-    
+
+#ifdef VERBOSE
+    printf("BEST:");
+    print_event(p_best_event);
+    print_event_detections(p_earth, p_best_event);
+#endif
+
     /*
      * we will identify the detections used by the best event and make them
      * off-limits for future events
