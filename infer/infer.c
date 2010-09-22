@@ -1323,7 +1323,10 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     }
 #endif
     
-    remove_negative_events(p_world);
+    /* only remove negative events if numsamples > 0. This allows a
+     * numsamples=0 run to save all the proposed events */
+    if (p_world->numsamples)
+      remove_negative_events(p_world);
     
 /*
     change_events(p_netmodel, p_world, 2);
