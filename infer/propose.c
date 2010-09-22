@@ -115,7 +115,7 @@ int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
   if (!p_skip_det)
   {
     printf("Can't allocate %d x %d bytes\n", p_netmodel->numdetections,
-           sizeof(*p_skip_det));
+           (int)sizeof(*p_skip_det));
     free(p_bucket_score);
     return -1;
   }
