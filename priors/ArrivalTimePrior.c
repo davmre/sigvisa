@@ -66,10 +66,7 @@ double ArrivalTimePrior_LogProb(const ArrivalTimePrior_t * prior,
 
   res = arrtime - pred_arrtime;
   
-  if (res > (5 * scale))
-    return -INFINITY;
-  else
-    return Laplace_ldensity(loc, scale, res);
+  return Laplace_ldensity(loc, scale, res);
 }
 
 double ArrivalTimePrior_MeanResidual(const ArrivalTimePrior_t * prior,
