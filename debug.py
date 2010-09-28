@@ -261,9 +261,12 @@ def main(param_dirname):
   # add a map scale
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-options.window * .98
-  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
-                    fontsize=8, barstyle='fancy',
-                    labelstyle='simple', units='km')
+  try:
+    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+                      fontsize=8, barstyle='fancy',
+                      labelstyle='simple', units='km')
+  except:
+    pass
 
   
   plt.savefig("output/debug_run_%d_%s_orid_%d.png" % (runid, orid_type, orid))
@@ -296,9 +299,12 @@ def main(param_dirname):
 
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-19
-  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,5000,
-                    fontsize=8, barstyle='fancy',
-                    labelstyle='simple', units='km')
+  try:
+    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,5000,
+                      fontsize=8, barstyle='fancy',
+                      labelstyle='simple', units='km')
+  except:
+    pass
   
   plt.savefig("output/debug_area_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
@@ -329,9 +335,12 @@ def main(param_dirname):
   
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-options.window * .98
-  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
-                    fontsize=8, barstyle='fancy',
-                    labelstyle='simple', units='km')
+  try:
+    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+                      fontsize=8, barstyle='fancy',
+                      labelstyle='simple', units='km')
+  except:
+    pass
   
   plt.savefig("output/debug_dens_isc_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
@@ -358,9 +367,13 @@ def main(param_dirname):
 
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-options.window * .8
-  bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
-                    fontsize=8, barstyle='fancy',
-                    labelstyle='simple', units='km')
+  try:
+    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+                      fontsize=8, barstyle='fancy',
+                      labelstyle='simple', units='km')
+  except:
+    pass
+  
   
   plt.savefig("output/debug_isc_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))

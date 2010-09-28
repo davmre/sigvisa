@@ -37,7 +37,10 @@ def draw_earth(title, **args):
   try:
     bmap.drawmapboundary(fill_color=(.7,.7,1,1))
   except:
-    bmap.drawmapboundary()
+    try:
+      bmap.drawmapboundary()
+    except:
+      pass
 
   try:
     bmap.drawcoastlines(zorder=10)
@@ -57,7 +60,10 @@ def draw_earth(title, **args):
     try:
       bmap.drawmapboundary(fill_color=(.7,.7,1))
     except:
-      bmap.drawmapboundary()
+      try:
+        bmap.drawmapboundary()
+      except:
+        pass
   
   #bmap.drawmeridians(np.arange(-180,210,30))
   #bmap.drawparallels(np.arange(-90,120,30))
