@@ -18,6 +18,20 @@ import matplotlib.pyplot as plt
 #plt.rcParams['pdf.use14corefonts'] = True
 from utils.draw_earth import draw_events, draw_earth, draw_density
 
+def best_score(netmodel, event, event_detlist):
+  
+  curr_detlist = []
+  curr_score = netmodel.score_event(event, curr_detlist)
+  
+  for item in event_detlist:
+    curr_detlist.append(item)
+    score = netmodel.score_event(event, curr_detlist)
+    if score > curr_score:
+      curr_score = score
+    else:
+      curr_detlist.pop(-1)
+  return curr_score
+    
 def print_events(netmodel, earthmodel, detections, leb_events, leb_evlist,
                  label):
   print "=" * 60
@@ -53,8 +67,24 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
                                     event[EV_TIME_COL],
                                     phaseid,
                                     int(detections[detid, DET_SITE_COL]))
-    print "(%s %d %d %.1f)" % (earthmodel.PhaseName(phaseid),
-                            int(detections[detid, DET_SITE_COL]), detid, tres),
+    
+    inv = netmodel.invert_det(detid, 0)
+    if inv is None:
+      idist, itimediff = "_", "_"
+      iscore = "_"
+    else:
+      (ilon, ilat, idepth, itime) = inv
+      idist = "%.1f" % dist_deg((ilon, ilat), event[[EV_LON_COL, EV_LAT_COL]])
+      itimediff = "%.1f" % (itime - event[EV_TIME_COL],)
+      ievent = event.copy()
+      (ievent[EV_LON_COL], ievent[EV_LAT_COL], ievent[EV_DEPTH_COL],
+       ievent[EV_TIME_COL]) = inv
+      ievent [EV_MB_COL] = 3.0
+      iscore = "%.1f" % best_score(netmodel, ievent, detlist)
+      
+    print "(%s %d %d %.1f %s %s)" % (earthmodel.PhaseName(phaseid),
+                            int(detections[detid, DET_SITE_COL]), detid, tres,
+                                     iscore, idist),
   print
   score = netmodel.score_event(event, event_detlist)
   print "Ev Score: %.1f    (prior location logprob %.1f)" \
