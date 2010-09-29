@@ -68,6 +68,9 @@ def main(param_dirname):
   parser.add_option("-s", "--silent", dest="verbose", default=True,
                     action = "store_false",
                     help = "silent, i.e. no output (False)")
+  parser.add_option("-i", "--visa_leb_runid", dest="visa_leb_runid",
+                    default=None, help = "Visa runid to be treated as leb",
+                    metavar="RUNID")
   (options, args) = parser.parse_args()
 
   if options.quick:
@@ -77,7 +80,7 @@ def main(param_dirname):
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data(hours=hours)
+         = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid)
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
   

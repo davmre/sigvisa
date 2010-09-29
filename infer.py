@@ -166,6 +166,8 @@ def main(param_dirname):
                     help = "verbose output (False)")
   parser.add_option("-d", "--descrip", dest="descrip", default="",
                     help = "description of the run ('')")
+  parser.add_option("-l", "--label", dest="label", default="validation",
+                    help = "training, validation (default), or test")
   parser.add_option("-p", "--propose", dest="propose_run", default=None,
                     type = str,
                     help = "use run RUNID's events as proposal",
@@ -179,7 +181,7 @@ def main(param_dirname):
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data("validation", hours=options.hours, skip=options.skip)
+         = read_data(options.label, hours=options.hours, skip=options.skip)
 
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,

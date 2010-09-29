@@ -35,6 +35,9 @@ def main(param_dirname):
   parser.add_option("-w", "--write", dest="write", default=None,
                     help = "location to write figures to",
                     metavar="DIRNAME")
+  parser.add_option("-i", "--visa_leb_runid", dest="visa_leb_runid",
+                    default=None, help = "Visa runid to be treated as leb",
+                    metavar="RUNID")
   (options, args) = parser.parse_args()
 
   if options.train:
@@ -44,7 +47,7 @@ def main(param_dirname):
     
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
               sel3_evlist, site_up, sites, phasenames, phasetimedef \
-              = read_data(label)
+              = read_data(label, visa_leb_runid=options.visa_leb_runid)
   
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   
@@ -374,8 +377,10 @@ def visualize_arrslo(options, earthmodel, netmodel,
   SITEID=6                              # ASAR
   PHASEID=0
   residuals = []
+  true_detections = set()
   for evnum, event in enumerate(leb_events):
     for phaseid, detnum in leb_evlist[evnum]:
+      true_detections.add(detnum)
       if phaseid == PHASEID and detections[detnum, DET_SITE_COL] == SITEID:
         evlon, evlat, evdepth = event[EV_LON_COL], event[EV_LAT_COL],\
                                 event[EV_DEPTH_COL]
@@ -384,7 +389,9 @@ def visualize_arrslo(options, earthmodel, netmodel,
         res = pred_arrslo - detections[detnum, DET_SLO_COL]
         if res > MIN and res < MAX:
           residuals.append(res)
-
+  
+  true_det_list = list(true_detections)
+  
   mix_prob, mix_loc, mix_scale = Laplace.estimate_laplace_uniform_dist(
     residuals, MIN, MAX)
 
@@ -417,6 +424,57 @@ def visualize_arrslo(options, earthmodel, netmodel,
   plt.grid()
   plt.legend()
 
+  plt.figure()
+  plt.title("Slowness of true and false detections at all stations")
+  plt.hist([detections[detnum, DET_SLO_COL] for detnum in range(len(detections))
+            if detnum not in true_detections], label="false")
+  plt.hist([detections[detnum, DET_SLO_COL] for detnum in true_detections],
+           label="true")
+  plt.xlabel("Slowness")
+  plt.ylabel("Count")
+  plt.legend()
+
+  plt.figure()
+  plt.title("Slowness of true and false detections at site 0")
+  plt.hist([detections[detnum, DET_SLO_COL] for detnum in range(len(detections))
+            if detnum not in true_detections
+            and detections[detnum, DET_SITE_COL] == 0], label="false")
+  plt.hist([detections[detnum, DET_SLO_COL] for detnum in true_det_list
+            if detections[detnum, DET_SITE_COL] == 0],
+           label="true")
+  plt.xlabel("Slowness")
+  plt.ylabel("Count")
+  plt.legend()
+
+  plt.figure()
+  plt.title("Slowness of true and false detections at site 6")
+  plt.hist([detections[detnum, DET_SLO_COL] for detnum in range(len(detections))
+            if detnum not in true_detections
+            and detections[detnum, DET_SITE_COL] == 6], label="false")
+  plt.hist([detections[detnum, DET_SLO_COL] for detnum in true_det_list
+            if detections[detnum, DET_SITE_COL] == 6],
+           label="true")
+  plt.xlabel("Slowness")
+  plt.ylabel("Count")
+  plt.legend()
+
+  plt.figure()
+  plt.title("Slowness of false detections by site")
+  plt.scatter([detections[detnum, DET_SLO_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections],
+              [detections[detnum, DET_SITE_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections], s=1)
+  plt.xlabel("Slowness")
+  plt.ylabel("Site index")
+
+  plt.figure()
+  plt.title("Slowness of true detections by site")
+  plt.scatter([detections[detnum, DET_SLO_COL] for detnum in true_det_list],
+              [detections[detnum, DET_SITE_COL] for detnum in true_det_list],
+              s=1)
+  plt.xlabel("Slowness")
+  plt.ylabel("Site index")
+  
 
 def visualize_location_prior(options, earthmodel, netmodel):
   LON_BUCKET_SIZE = .5

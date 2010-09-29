@@ -194,7 +194,8 @@ def read_phases(cursor):
 
   return phasenames, phasetimedef
 
-def read_data(label="training", hours=None, skip=0, verbose=1):
+def read_data(label="training", hours=None, skip=0, verbose=1,
+              visa_leb_runid=None):
   """
   Reads
   - LEB events/assoc,
@@ -244,6 +245,9 @@ def read_data(label="training", hours=None, skip=0, verbose=1):
     
   sites:
     o. lon, lat, elev, is_array?
+
+  visa_leb_runid is a special parameter which says that a certain visa run
+  is to be treated as leb
   """
   cursor = db.connect().cursor()
   start_time, end_time = read_timerange(cursor, label, hours, skip)
@@ -262,10 +266,16 @@ def read_data(label="training", hours=None, skip=0, verbose=1):
   if verbose:
     print "done (%d detections)" % len(det)
     print "Reading LEB events and associations...",
-  
-  leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "leb")
-  leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
-                          arid2num, "leb")
+
+  if visa_leb_runid is None:
+    leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "leb")
+    leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
+                            arid2num, "leb")
+  else:
+    leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "visa",
+                                           visa_leb_runid)
+    leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
+                            arid2num, "visa", visa_leb_runid)
 
   if verbose:
     print "done (%d events %d with >=3 det %d with >=3 P det)" \
