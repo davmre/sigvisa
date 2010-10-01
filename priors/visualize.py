@@ -26,6 +26,12 @@ def main(param_dirname):
   parser.add_option("-a", "--arrival", dest="arrival", default=False,
                     action = "store_true",
                     help = "visualize arrival parameters (False)")
+  parser.add_option("-n", "--noise", dest="noise", default=False,
+                    action = "store_true",
+                    help = "visualize noise parameters (False)")
+  parser.add_option("-c", "--correlate", dest="correlate", default=False,
+                    action = "store_true",
+                    help = "visualize correlations (False)")
   parser.add_option("-l", "--location", dest="location", default=False,
                     action = "store_true",
                     help = "visualize location prior (False)")
@@ -57,9 +63,20 @@ def main(param_dirname):
                                 phasetimedef)
 
   # if no options is selected then select all options
-  if not options.arrival and not options.location and not options.detection:
-    options.arrival = options.location = options.detection = True
-  
+  if (not options.arrival and not options.location and not options.detection
+      and not options.noise and not options.correlate):
+    options.arrival = options.location = options.detection = \
+                      options.noise = options.correlate = True
+
+  if options.correlate:
+    print "visualize correlations of P and S residuals"
+    visualize_p_s_res_corr(options, earthmodel, netmodel,
+                           detections, leb_events, leb_evlist)
+  if options.noise:
+    print "visualize noise"
+    visualize_noise(options, earthmodel, netmodel,
+                    detections, leb_events, leb_evlist)
+    
   if options.arrival:
     print "visualizing arrival parameters"
     
@@ -95,6 +112,62 @@ def main(param_dirname):
 
   plt.show()
 
+def visualize_p_s_res_corr(options, earthmodel, netmodel,
+                           detections, leb_events, leb_evlist):
+  all_p_res, all_s_res = [], []
+  
+  # for each phase the list of p travel time and phase travel time
+  all_ttime_phase_p = dict((i, ([], [])) for i in
+                           range(earthmodel.NumTimeDefPhases()))
+  
+  for evnum, event in enumerate(leb_events):
+    
+    site_p_res = dict((i, None) for i in range(earthmodel.NumSites()))
+    site_s_res = dict((i, None) for i in range(earthmodel.NumSites()))
+    
+    site_p_ttime = dict((i, None) for i in range(earthmodel.NumSites()))
+
+    for phaseid, detnum in leb_evlist[evnum]:
+      evlon, evlat, evdepth, evtime = event[EV_LON_COL], event[EV_LAT_COL],\
+                                      event[EV_DEPTH_COL], event[EV_TIME_COL]
+      siteid = int(detections[detnum, DET_SITE_COL])
+      pred_arrtime =  earthmodel.ArrivalTime(evlon, evlat, evdepth, evtime,
+                                             phaseid, siteid)
+      if pred_arrtime > 0:
+        res = detections[detnum, DET_TIME_COL] - pred_arrtime
+        ttime = detections[detnum, DET_TIME_COL] - evtime
+
+        if earthmodel.PhaseName(phaseid) == 'P':
+          site_p_res[siteid] = res
+          site_p_ttime[siteid] = ttime
+          
+        elif earthmodel.PhaseName(phaseid) == 'S':
+          site_s_res[siteid] = res
+
+        if site_p_res[siteid] is not None:
+          all_ttime_phase_p[phaseid][0].append(ttime)
+          all_ttime_phase_p[phaseid][1].append(site_p_ttime[siteid])
+
+    for siteid in range(earthmodel.NumSites()):
+      if site_p_res[siteid] is not None and site_s_res[siteid] is not None:
+        all_p_res.append(site_p_res[siteid])
+        all_s_res.append(site_s_res[siteid])
+
+  plt.figure()
+  plt.title("P and S phase residuals, all stations")
+  plt.scatter(all_p_res, all_s_res)
+  plt.xlabel("P phase residual (time in secs)")
+  plt.ylabel("S phase residual (time in secs)")
+  plt.grid()
+
+  for phaseid in range(earthmodel.NumTimeDefPhases()):
+    if len(all_ttime_phase_p[phaseid][1]):  
+      plt.figure()
+      plt.title("Phase %s ttime vs P ttime" % earthmodel.PhaseName(phaseid))
+      plt.scatter(all_ttime_phase_p[phaseid][1], all_ttime_phase_p[phaseid][0])
+      plt.xlabel("P phase ttime (secs)")
+      plt.ylabel("%s phase ttime (secs)" % earthmodel.PhaseName(phaseid))
+  
 def visualize_corr_ttime(options, earthmodel, netmodel,
                          detections, leb_events, leb_evlist):
   ratios = []
@@ -368,6 +441,37 @@ def visualize_arraz(options, earthmodel, netmodel,
   plt.grid()
   plt.legend()
 
+def visualize_noise(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist):
+  true_detections = set()
+  for evnum, event in enumerate(leb_events):
+    for phaseid, detnum in leb_evlist[evnum]:
+      true_detections.add(detnum)
+
+  plt.figure()
+  plt.title("Overall noise distribution")
+  plt.hist([detections[detnum, DET_TIME_COL] for detnum in
+            range(len(detections)) if detnum not in true_detections])
+  plt.xlabel("Time")
+  plt.ylabel("Count")
+
+  plt.figure()
+  plt.title("Site 0 noise distribution")
+  plt.hist([detections[detnum, DET_TIME_COL] for detnum in
+            range(len(detections)) if detnum not in true_detections and
+            detections[detnum, DET_SITE_COL] == 0])
+  plt.xlabel("Time")
+  plt.ylabel("Count")
+
+  plt.figure()
+  plt.title("Site 6 noise distribution")
+  plt.hist([detections[detnum, DET_TIME_COL] for detnum in
+            range(len(detections)) if detnum not in true_detections and
+            detections[detnum, DET_SITE_COL] == 6])
+  plt.xlabel("Time")
+  plt.ylabel("Count")
+  
+  
 def visualize_arrslo(options, earthmodel, netmodel,
                      detections, leb_events, leb_evlist):
   MIN=-40
