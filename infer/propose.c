@@ -51,7 +51,6 @@ for (timeidx = 0; timeidx < numtime; timeidx ++)\
       (p_event)->evlat = 180 - (p_event)->evlat;        \
   } while(0)
 
-
 /* Hough transform-based method for proposing events */
 int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
                   double time_low, double time_high, int det_low,
@@ -616,8 +615,55 @@ static void propose_best_detections(NetModel_t * p_netmodel,
   free(p_event_best_score);
 }
 
-/* find the best event which explains the given detections */
 static void propose_best_event(NetModel_t * p_netmodel,
+                               Event_t * p_event,
+                               int det_low, int det_high,
+                               int * p_skip_det,
+                               double time_low, double time_high,
+                               double scale)
+{
+  Event_t * p_best_event;
+  int i;
+  
+  p_best_event = alloc_event(p_netmodel);
+  
+  /* first make a copy of the current event */
+  copy_event(p_netmodel, p_best_event, p_event);  
+
+  for (i=0; i<10000; i++)
+  {
+    p_event->evlon = p_best_event->evlon + RAND_UNIFORM(-scale, scale) * 5.0;
+    FIXUP_EVLON(p_event);
+    p_event->evlat = p_best_event->evlat + RAND_UNIFORM(-scale, scale) * 5.0;
+    FIXUP_EVLAT(p_event);
+    p_event->evdepth = RAND_UNIFORM(MAX(MIN_DEPTH, 
+                                        p_best_event->evdepth-100*scale), 
+                                    MIN(MAX_DEPTH,
+                                        p_best_event->evdepth+100*scale));
+    p_event->evtime = RAND_UNIFORM(MAX(p_best_event->evtime - scale * 50, 
+                                       time_low),
+                                   MIN(p_best_event->evtime + scale * 50,
+                                       time_high));
+    
+    p_event->evmag = RAND_UNIFORM(MAX(MIN_MAGNITUDE, 
+                                      p_best_event->evmag - scale), 
+                                  MIN(MAX_MAGNITUDE,
+                                      p_best_event->evmag + scale));
+
+    propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                            p_skip_det, 0);
+
+    if (p_event->evscore > p_best_event->evscore)
+      copy_event(p_netmodel, p_best_event, p_event);   
+  }
+
+  copy_event(p_netmodel, p_event, p_best_event);
+
+  free_event(p_best_event);
+}
+
+/* find the best event which explains the given detections */
+static void propose_best_event2(NetModel_t * p_netmodel,
                                Event_t * p_event,
                                int det_low, int det_high,
                                int * p_skip_det,
