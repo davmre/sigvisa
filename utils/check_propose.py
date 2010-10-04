@@ -9,6 +9,36 @@ from database.dataset import *
 import netvisa, learn
 from utils.geog import dist_deg
 
+def print_events_simple(netmodel, earthmodel, detections, events,
+                        event_detlists, title, evstart_time, evend_time):
+  print "****", title, "****"
+  for evnum, event in enumerate(events):
+    if event[EV_TIME_COL] > evstart_time and event[EV_TIME_COL] < evend_time:
+      print_event_simple(netmodel, earthmodel, detections, event,
+                         event_detlists[evnum])
+  print "=" * 78
+
+def print_event_simple(netmodel, earthmodel, detections, event, event_detlist):
+  print ("%d: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f"
+         % (event[ EV_ORID_COL], event[ EV_LON_COL], event[ EV_LAT_COL],
+            event[ EV_DEPTH_COL], event[ EV_MB_COL],
+            event[ EV_TIME_COL]))
+  print "Detections:",
+  detlist = [x for x in event_detlist]
+  detlist.sort()
+  for phaseid, detid in detlist:
+    tres = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
+                                  event[EV_DEPTH_COL], event[EV_TIME_COL],
+                                  phaseid,
+                                  int(detections[detid, DET_SITE_COL]))\
+                                  - detections[detid, DET_TIME_COL]
+    
+    print "(%s, %d, %s, tres %.1f)" \
+          % (earthmodel.PhaseName(phaseid), detid,
+             earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL])),
+             tres),
+  print "\nEv Score:", netmodel.score_event(event, event_detlist)
+
 def print_events(netmodel, earthmodel, detections, events, event_detlists,
                  title):
   print "****", title, "****"
@@ -100,6 +130,8 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
+  print_events_simple(netmodel, earthmodel, detections, leb_events, leb_evlist,
+                      "LEB", start_time, (start_time + options.window))
   t1 = time.time()
   prop_events, prop_evlist = netmodel.propose(start_time,
                                               start_time + options.window,
@@ -110,8 +142,9 @@ def main(param_dirname):
 
   print "%.1f seconds to propose %d event(s)" % (t2-t1, len(prop_events))
 
-  print_events(netmodel, earthmodel, detections,
-               prop_events, prop_evlist, "PROP")
+  print_events_simple(netmodel, earthmodel, detections,
+                      prop_events, prop_evlist, "PROP",
+                      start_time, (start_time + options.window))
   
   for leb_evnum, leb_event in enumerate(leb_events):
     
@@ -137,8 +170,8 @@ def main(param_dirname):
 
     if best_score is not None:
       print "--> BEST MATCH"
-      print_event(netmodel, earthmodel, detections, best_prop_event,
-                  prop_evlist[best_prop_evnum])
+      print_event_simple(netmodel, earthmodel, detections, best_prop_event,
+                         prop_evlist[best_prop_evnum])
     else:
       print "--> MISS\n -"
   
