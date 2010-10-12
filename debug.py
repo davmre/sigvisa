@@ -82,9 +82,9 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
       ievent [EV_MB_COL] = 3.0
       iscore = "%.1f" % best_score(netmodel, ievent, detlist)
       
-    print "(%s %d:%d %.1f %.1f)" % (earthmodel.PhaseName(phaseid),
+    print "(%s %d:%d %.1f %s %s)" % (earthmodel.PhaseName(phaseid),
                             int(detections[detid, DET_SITE_COL]), detid, tres,
-                                    detsc),
+                                     idist, itimediff),
   print
   score = netmodel.score_event(event, event_detlist)
   print "Ev Score: %.1f    (prior location logprob %.1f)" \
