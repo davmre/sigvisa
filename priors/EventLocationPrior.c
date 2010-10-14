@@ -5,11 +5,13 @@
 
 #include "../netvisa.h"
 
+#define BUCKET(loni, lati) dist->p_bucketprob[(loni) * dist->numlat + (lati)]
+
 void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
                                     const char * filename)
 {
   FILE * fp;
-  double discount;
+  double uniform;
   int lonidx;
   int latidx;
   
@@ -21,9 +23,9 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
     exit(1);
   }
 
-  if (1 != fscanf(fp, "%lg\n", &discount))
+  if (1 != fscanf(fp, "%lg\n", &uniform))
   {
-    fprintf(stderr, "error reading discount from %s\n", filename);
+    fprintf(stderr, "error reading uniform prior from %s\n", filename);
     exit(1);
   }
   
@@ -84,6 +86,14 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
         / dist->p_lonprob[lonidx];
     }
   }
+
+  /* initialize the probability of a hypothetical bucket at the north-pole,
+   * this is useful for interpolating */
+  dist->north_pole_prob = 0;
+  for (lonidx = 0; lonidx < dist->numlon; lonidx ++)
+    dist->north_pole_prob += dist->p_bucketprob[lonidx * dist->numlat 
+                                                + dist->numlat-1];
+  dist->north_pole_prob /= dist->numlon;
 }
 
 void EventLocationPrior_UnInit(EventLocationPrior_t * dist)
@@ -93,19 +103,33 @@ void EventLocationPrior_UnInit(EventLocationPrior_t * dist)
   free(dist->p_latprob);
 }
 
+/* interpolate the value inside a rectangle given the values at the
+ * four corners lower-left, lower-right, upper-left, upper-right and
+ * the x, y values plus the x_size and y_size of the rectangle
+ * (assuming 0,0 is lower-left)
+ */
+double interpolate_rect(double ll_val, double lr_val, double ul_val,
+                        double ur_val, double x, double y,
+                        double x_max, double y_max)
+{
+  double ll_wt, lr_wt, ul_wt, ur_wt;
+
+  ll_wt = ((x_max - x) / x_max) * ((y_max - y) / y_max);
+  lr_wt = (    x       / x_max) * ((y_max - y) / y_max);
+  ul_wt = ((x_max - x) / x_max) * (    y       / y_max);
+  ur_wt = (    x       / x_max) * (    y       / y_max);
+
+
+  return (ll_wt * ll_val + lr_wt * lr_val + ul_wt * ul_val + ur_wt * ur_val)
+    / (ll_wt + lr_wt + ul_wt + ur_wt);
+}
+
 
 double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
                                   double lon, double lat, double depth)
 {
-  int lonidx;
-  int latidx;
+  double val;
   
-  if (lon == 180)
-    lon = -180;
-  
-  if (lat == 90)
-    lat = 89;
-
   /* the event location better be valid */
   if ((lon < -180) || (lon > 180) || (lat < -90) || (lat > 90) 
       || (depth < MIN_DEPTH) || (depth > MAX_DEPTH))
@@ -116,14 +140,48 @@ double EventLocationPrior_LogProb(const EventLocationPrior_t * dist,
     
     return -HUGE_VAL;
   }
+
+  if (lat == 90)
+    val = dist->north_pole_prob;
+
+  else
+  {
+    int lonidx, lonidx2;
+    int latidx, latidx2;
+
+    double lon_rem, z_rem;
+
+    if (lon == 180)
+      lon = -180;
+
+    lonidx = (int) floor((lon - (-180)) / dist->lonstep);
+    latidx = (int) floor((LAT2Z(lat) - (-1)) / dist->zstep);
+    
+    lon_rem = lon - (-180) - (lonidx * dist->lonstep);
+    z_rem = LAT2Z(lat) - (-1) - (latidx * dist->zstep);
+
+    lonidx2 = (lonidx + 1) % dist->numlon;
+    
+    if ((latidx+1) < dist->numlat)
+    {
+      latidx2 = latidx + 1;
+    
+      val = interpolate_rect(BUCKET(lonidx, latidx), BUCKET(lonidx2, latidx),
+                             BUCKET(lonidx, latidx2), BUCKET(lonidx2, latidx2),
+                             lon_rem, z_rem, dist->lonstep, dist->zstep);
+
+    }
+    else
+    {
+      val = interpolate_rect(BUCKET(lonidx, latidx), BUCKET(lonidx2, latidx),
+                             dist->north_pole_prob, dist->north_pole_prob,
+                             lon_rem, z_rem, dist->lonstep, dist->zstep);
+    }
+  }
   
-
-  lonidx = (int) floor((lon - (-180)) / dist->lonstep);
-  latidx = (int) floor((LAT2Z(lat) - (-1)) / dist->zstep);
-
   /* the probability density at any point in the bucket is uniform within the
    * bucket so we divide the bucket probability by the area of the bucket */
-  return log(dist->p_bucketprob[lonidx * dist->numlat + latidx])\
+  return log(val)\
     - log(dist->lonstep) - log(dist->zstep) - log(MAX_DEPTH-MIN_DEPTH);
 }
 

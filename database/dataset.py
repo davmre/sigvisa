@@ -33,6 +33,8 @@ MAX_TRAVEL_TIME = 2000.0
 
 MAX_DEPTH = 700.0
 
+AVG_EARTH_RADIUS_KM = 6371.0            # when modeled as a sphere
+
 def read_timerange(cursor, label, hours, skip):
   # determine the start and end time for the specified label
   cursor.execute("select start_time, end_time from dataset where label=%s",
