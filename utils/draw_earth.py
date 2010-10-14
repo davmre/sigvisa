@@ -111,7 +111,8 @@ def draw_vectors(bmap, vectors, scale, **args):
     x2, y2 = bmap(lon2, lat2)
     plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
     
-def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True):
+def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
+                 nolines = False):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
   
@@ -121,7 +122,7 @@ def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True):
   y_arr = np.array(y).reshape(lat_arr.shape)
 
   cs1 = bmap.contour(x_arr, y_arr, vals, levels, linewidths=.5, colors="k",
-                     zorder=6)
+                     zorder=6 - int(nolines))
   cs2 = bmap.contourf(x_arr, y_arr, vals, levels, cmap=plt.cm.jet, zorder=5,
                       extend="both",
                       norm=matplotlib.colors.BoundaryNorm(cs1.levels,

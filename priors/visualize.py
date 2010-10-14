@@ -581,7 +581,7 @@ def visualize_arrslo(options, earthmodel, netmodel,
   
 
 def visualize_location_prior(options, earthmodel, netmodel):
-  LON_BUCKET_SIZE = .5
+  LON_BUCKET_SIZE = .25
   # Z axis is along the earth's axis
   # Z goes from -1 to 1 and will have the same number of buckets as longitude
   Z_BUCKET_SIZE = (2.0 / 360.0) * LON_BUCKET_SIZE
@@ -600,7 +600,7 @@ def visualize_location_prior(options, earthmodel, netmodel):
   #pdb.set_trace()
   
   bmap = draw_earth("Log Prior Density of Events")
-  draw_density(bmap, lon_arr, lat_arr, prob,
+  draw_density(bmap, lon_arr, lat_arr, prob, levels=30, nolines=True,
                #, np.log(prob) / np.log(2),
                colorbar=False)
 
