@@ -12,7 +12,10 @@ typedef struct EventLocationPrior_t
   /* numlon x numlat array of latitude probabilities normalized for
    * each longitude */
   double * p_latprob;
-  
+
+  double north_pole_prob;                    /* probability of a
+                                              * hypothetical bucket at
+                                              * the north pole */
 } EventLocationPrior_t;
 
 void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,

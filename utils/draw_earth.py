@@ -25,8 +25,14 @@ def draw_earth(title, **args):
     args["projection"] = "moll"
   if "resolution" not in args:
     args["resolution"] = "l"
+
+  if "draw_grid" in args:
+    del args["draw_grid"]
+    draw_grid = True
+  else:
+    draw_grid = False
   
-  # if no args other than projection and resolution then center the map
+  # if no args other than those above then center the map
   if len(args) == 2:
     args["lat_0"] = 0
     args["lon_0"] = 0
@@ -64,9 +70,11 @@ def draw_earth(title, **args):
         bmap.drawmapboundary()
       except:
         pass
+
+  if draw_grid:
+    bmap.drawmeridians(np.arange(-180, 180, 30), zorder=10)
+    bmap.drawparallels(np.arange(-90, 90, 30), zorder=10)
   
-  #bmap.drawmeridians(np.arange(-180,210,30))
-  #bmap.drawparallels(np.arange(-90,120,30))
   return bmap
 
 def draw_events(bmap, events, **args):
