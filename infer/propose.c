@@ -623,90 +623,64 @@ static void propose_best_event(NetModel_t * p_netmodel,
                                double scale)
 {
   Event_t * p_best_event;
+  Event_t * p_curr_event;
   int i;
   const int N = 1000;
   
   p_best_event = alloc_event(p_netmodel);
+  p_curr_event = alloc_event(p_netmodel);
   
-  /* first make a copy of the current event */
+  /* the initial event is the starting event as well as the initial best */
   copy_event(p_netmodel, p_best_event, p_event);
+  copy_event(p_netmodel, p_curr_event, p_event);
 
   for (i=0; i<N; i++)
   {
-    /* first do an improvement in all dimensions */
-    p_event->evlon = p_best_event->evlon + RAND_UNIFORM(-scale, scale) * 5.0;
+    /* perturb the current event in all dimensions */
+    p_event->evlon = p_curr_event->evlon + RAND_UNIFORM(-scale, scale) * 5.0;
     FIXUP_EVLON(p_event);
-    p_event->evlat = p_best_event->evlat + RAND_UNIFORM(-scale, scale) * 5.0;
+    p_event->evlat = p_curr_event->evlat + RAND_UNIFORM(-scale, scale) * 5.0;
     FIXUP_EVLAT(p_event);
     p_event->evdepth = RAND_UNIFORM(MAX(MIN_DEPTH, 
-                                        p_best_event->evdepth-100*scale), 
+                                        p_curr_event->evdepth-100*scale), 
                                     MIN(MAX_DEPTH,
-                                        p_best_event->evdepth+100*scale));
-    p_event->evtime = RAND_UNIFORM(MAX(p_best_event->evtime - scale * 75, 
+                                        p_curr_event->evdepth+100*scale));
+    p_event->evtime = RAND_UNIFORM(MAX(p_curr_event->evtime - scale * 50, 
                                        time_low),
-                                   MIN(p_best_event->evtime + scale * 75,
+                                   MIN(p_curr_event->evtime + scale * 50,
                                        time_high));
     
     p_event->evmag = RAND_UNIFORM(MAX(MIN_MAGNITUDE, 
-                                      p_best_event->evmag - scale), 
+                                      p_curr_event->evmag - scale), 
                                   MIN(MAX_MAGNITUDE,
-                                      p_best_event->evmag + scale));
+                                      p_curr_event->evmag + scale));
 
     propose_best_detections(p_netmodel, p_event, det_low, det_high,
                             p_skip_det, 0);
 
+    /* maintain the overall best event */
     if (p_event->evscore > p_best_event->evscore)
       copy_event(p_netmodel, p_best_event, p_event);
-    else
-      copy_event(p_netmodel, p_event, p_best_event);
 
-    /* next do an improvement in each dimension given the current set
-    * of detections */
-    switch((i%5))
+    if (p_event->evscore > p_curr_event->evscore)
+      copy_event(p_netmodel, p_curr_event, p_event);
+
+#ifdef SIM_ANNEAL    
+    else
     {
-    case 0:
-      p_event->evlon = p_best_event->evlon + RAND_UNIFORM(-scale, scale)*5.0;
-      FIXUP_EVLON(p_event);
-      break;
-
-    case 1:
-      p_event->evlat = p_best_event->evlat + RAND_UNIFORM(-scale, scale)*5.0;
-      FIXUP_EVLAT(p_event);
-      break;
-
-    case 2:
-      p_event->evdepth = RAND_UNIFORM(MAX(MIN_DEPTH, 
-                                          p_best_event->evdepth-100*scale), 
-                                      MIN(MAX_DEPTH,
-                                          p_best_event->evdepth+100*scale));
-      break;
-    case 3:
-      p_event->evtime = RAND_UNIFORM(MAX(p_best_event->evtime - scale * 75, 
-                                         time_low),
-                                     MIN(p_best_event->evtime + scale * 75,
-                                         time_high));
-      break;
-
-    case 4:
-      p_event->evmag = RAND_UNIFORM(MAX(MIN_MAGNITUDE, 
-                                        p_best_event->evmag - scale), 
-                                    MIN(MAX_MAGNITUDE,
-                                        p_best_event->evmag + scale));
-      break;
-    }
-
-    propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                            p_skip_det, 0);
+      double temp = 20.0 / log(N+2);
       
-    /* p_event->evscore = score_event(p_netmodel, p_event); */
-    if (p_event->evscore > p_best_event->evscore)
-      copy_event(p_netmodel, p_best_event, p_event);
-    else
-      copy_event(p_netmodel, p_event, p_best_event);    
+      if (RAND_DOUBLE < exp((p_event->evscore - p_curr_event->evscore) / temp))
+        copy_event(p_netmodel, p_event, p_curr_event);
+    }
+#endif
+
   }
 
+  /* return the overall best event */
   copy_event(p_netmodel, p_event, p_best_event);
 
+  free_event(p_curr_event);
   free_event(p_best_event);
 }
 
