@@ -53,7 +53,7 @@ def learn(param_fname, leb_events, UNIFORM_PROB=.1):
   # then we'll use leave-one-out cross-validation to select the best
   # bandwidth
   bandwidth, best_loglike = None, None
-  for b in [.25, .5, 1, 1.5, 2, 3, 4]:
+  for b in [.25, .5, .75, 1, 1.25, 1.5, 2]:
     loglike = leave_one_loglike(leb_events[indices], b)
     print "b=%.1f %.3f" % (b, loglike)
     if best_loglike is None or loglike > best_loglike:
@@ -62,7 +62,7 @@ def learn(param_fname, leb_events, UNIFORM_PROB=.1):
   print "Best bandwidth,", bandwidth
 
   ########
-  # next, we will count the number of events which land in each bucket
+  # next, we will create a grid
   ########
   LON_INTERVAL = 1
   # use half as many latitude buckets as longitude buckets
@@ -72,41 +72,35 @@ def learn(param_fname, leb_events, UNIFORM_PROB=.1):
   lon_arr = np.arange(-180., 180., LON_INTERVAL)
   lat_arr = np.degrees(np.arcsin(np.arange(-1.0, 1.0, Z_INTERVAL)))
 
-  # create a multi-dim index and score for each space bucket
-  lon_idx, lat_idx = np.mgrid[0:len(lon_arr), 0:len(lat_arr)]
-  
-  count = np.zeros((len(lon_arr), len(lat_arr)), float)
-
-  for event in leb_events:
-    lonidx = int((event[EV_LON_COL]+180) // LON_INTERVAL)
-    latidx = int((np.sin(np.radians(event[EV_LAT_COL])) + 1.0) // Z_INTERVAL)
-    
-    count[lonidx, latidx] += 1;
-
   #####
-  # then, using the event counts we will compute the kernel density at each
-  # point using 10 grid points around that point
+  # then, compute the kernel density at each of the grid points
+  # from each of the events, we only look at grid points within 10
+  # degrees of the event
   #####
   density = np.zeros((len(lon_arr), len(lat_arr)), float)
-  for lon_idx in range(len(lon_arr)):
-    for lat_idx in range(len(lat_arr)):
-      lon, lat = lon_arr[lon_idx], lat_arr[lat_idx]
-      for loni2 in range(-10, 10):
-        for lati2 in range(-10, 10):
-          if (lat_idx + lati2) < 0 or (lat_idx + lati2) >= len(lat_arr):
-            continue
-          lon2 = lon_arr[(lon_idx + loni2) % len(lon_arr)]
-          lat2 = lat_arr[lat_idx + lati2]
-          c = count[(lon_idx + loni2) % len(lon_arr), lat_idx + lati2]
-          if c == 0:
-            continue
+  for event in leb_events:
+    lon, lat = event[[EV_LON_COL, EV_LAT_COL]]
+    lonidx = int((lon + 180) // LON_INTERVAL)
+    latidx = int((np.sin(np.radians(lat)) + 1.0) // Z_INTERVAL)
+      
+    for loni2 in range(-10, 10):
+      for lati2 in range(-10, 10):
+        
+        lonidx2 = (lonidx + loni2) % len(lon_arr)
+        latidx2 = latidx + lati2
+        
+        if latidx2 < 0 or latidx2 >= len(lat_arr):
+          continue
+        
+        lon2 = lon_arr[lonidx2]
+        lat2 = lat_arr[latidx2]
+        
+        density[lonidx2, latidx2] += kernel(bandwidth,
+                                              dist_deg((lon,lat), (lon2,lat2)))
 
-          density[lon_idx, lat_idx] += c * kernel(bandwidth,
-                                               dist_deg((lon,lat), (lon2,lat2)))
-  
   # note, in the above, we simply added the density contribution from each
   # nearby event but didn't divide by the total number of events, so..
-  density /= float(count.sum())
+  density /= float(len(leb_events))
   
   # convert the density at the grid points into a probability for each
   # bucket (the grid point is in the lower-left corner of the bucket)
