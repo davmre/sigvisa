@@ -4,6 +4,8 @@ from numpy import exp, log, pi, degrees, radians
 from database.dataset import *
 from utils.geog import dist_deg
 
+UNIFORM_PROB = .001
+
 def kernel(bandwidth, distance):
   # convert bandwidth and distance to radians
   b, d = radians(bandwidth), radians(distance)
@@ -27,21 +29,16 @@ def leave_one_loglike_pt(leb_events, bandwidth, left_index):
                           leb_events[left_index,[EV_LON_COL, EV_LAT_COL]])
       log_like.append(log(kernel(bandwidth, distance)))
   
-  return logadd(log_like) - log(len(leb_events)-1)
+  kernel_loglike = logadd(log_like) - log(len(leb_events)-1)
+
+  return logadd([log(1-UNIFORM_PROB) + kernel_loglike,
+                 log(UNIFORM_PROB) - log(4 * pi * AVG_EARTH_RADIUS_KM ** 2)])
 
 def leave_one_loglike(leb_events, bandwidth):
   return sum(leave_one_loglike_pt(leb_events, bandwidth, idx) \
              for idx in range(len(leb_events))) / len(leb_events)
 
-# compute the log kernel density at a point
-def log_density_pt(leb_events, bandwidth, lon, lat):
-  log_like = []
-  for ev in leb_events:
-    distance = dist_deg(ev[[EV_LON_COL, EV_LAT_COL]], (lon, lat))
-    log_like.append(log(kernel(bandwidth, distance)))
-  return logadd(log_like) - log(len(leb_events))
-
-def learn(param_fname, leb_events, UNIFORM_PROB=.1):
+def learn(param_fname, leb_events):
   ########
   # first we will learn the optimal bandwidth (in degrees)
   ########
@@ -96,7 +93,7 @@ def learn(param_fname, leb_events, UNIFORM_PROB=.1):
         lat2 = lat_arr[latidx2]
         
         density[lonidx2, latidx2] += kernel(bandwidth,
-                                              dist_deg((lon,lat), (lon2,lat2)))
+                                            dist_deg((lon,lat), (lon2,lat2)))
 
   # note, in the above, we simply added the density contribution from each
   # nearby event but didn't divide by the total number of events, so..
