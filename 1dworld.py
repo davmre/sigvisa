@@ -122,6 +122,20 @@ def world_log_density(world):
       
   return logprob
 
+def compute_median_levels(array, n):
+  vals = [x for x in array.flat]
+  vals.sort()
+  levs = [array.min()]
+  for i in range(n):
+    if not len(vals):
+      break
+    lev = vals[len(vals)/2]
+    
+    levs.extend(np.linspace(levs[-1], lev, 5)[1:])
+    
+    vals = vals[len(vals)/2+1:]
+  return levs
+
 def plot_posterior(true_world, obs):
   dets = []
   for arrtime in obs:
@@ -158,7 +172,9 @@ def plot_posterior(true_world, obs):
   
   plt.figure()
 
-  plt.contourf(X, Y, logprob.T, 100, cmap=matplotlib.cm.jet)
+  levels = compute_median_levels(logprob, 100)
+
+  plt.contourf(X, Y, logprob.T, levels=levels, cmap=matplotlib.cm.jet)
   
   plt.plot([x for x,y in grad_locs1], [y for x,y in grad_locs1],
            marker="s", ms=4, mfc="none",
