@@ -79,6 +79,9 @@ def main(param_dirname):
     
   if options.arrival:
     print "visualizing arrival parameters"
+
+    visualize_arr_slo_az(options, earthmodel, netmodel,
+                         detections, leb_events, leb_evlist)
     
     visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist)
@@ -470,6 +473,51 @@ def visualize_noise(options, earthmodel, netmodel,
             detections[detnum, DET_SITE_COL] == 6])
   plt.xlabel("Time")
   plt.ylabel("Count")
+  
+
+def visualize_arr_slo_az(options, earthmodel, netmodel,
+                         detections, leb_events, leb_evlist):
+  SITEID=6                              # ASAR
+  PHASEID=0
+  
+  true_detections = set()
+  for evnum, event in enumerate(leb_events):
+    for phaseid, detnum in leb_evlist[evnum]:
+      true_detections.add(detnum)
+
+  plt.figure()
+  plt.title("Azimuth and Slowness of false detections -- all sites")
+  plt.scatter([detections[detnum, DET_AZI_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections],
+              [detections[detnum, DET_SLO_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections],
+              s=1)
+  plt.xlabel("Azimuth")
+  plt.ylabel("Slowness")
+
+  plt.figure()
+  plt.title("Azimuth and Slowness of false detections -- site 6")
+  plt.scatter([detections[detnum, DET_AZI_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections
+               and detections[detnum, DET_SITE_COL] == 6],
+              [detections[detnum, DET_SLO_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections
+               and detections[detnum, DET_SITE_COL] == 6],
+              s=1)
+  plt.xlabel("Azimuth")
+  plt.ylabel("Slowness")
+
+  plt.figure()
+  plt.title("Azimuth and Slowness of false detections -- site 1")
+  plt.scatter([detections[detnum, DET_AZI_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections
+               and detections[detnum, DET_SITE_COL] == 1],
+              [detections[detnum, DET_SLO_COL] for detnum in
+               range(len(detections)) if detnum not in true_detections
+               and detections[detnum, DET_SITE_COL] == 1],
+              s=1)
+  plt.xlabel("Azimuth")
+  plt.ylabel("Slowness")
   
   
 def visualize_arrslo(options, earthmodel, netmodel,
