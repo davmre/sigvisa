@@ -833,24 +833,65 @@ PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args)
                                                    evtime, phaseid, siteid));
 }
 
+PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
+                                           PyObject * args)
+{
+  double lon, lat, depth, evtime;
+  int phaseid;
+  double sitelon, sitelat, siteelev;
+  
+  if (!PyArg_ParseTuple(args, "ddddiddd", &lon, &lat, &depth, &evtime, 
+                        &phaseid, &sitelon, &sitelat, &siteelev))
+    return NULL;
 
-double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
-                              double depth, double evtime, 
+  if ((phaseid < 0) || (phaseid > p_earth->numphases))
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid");
+    return NULL;
+  }
+
+  if (!p_earth->p_phase_time_def[phaseid])
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: phaseid is not time-def");
+    return NULL;
+  }
+
+  return Py_BuildValue("d",
+                       EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
+                                                    evtime, phaseid, sitelon,
+                                                    sitelat, siteelev));
+}
+
+double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
+                              double lat, double depth, double evtime, 
                               int phaseid, int siteid)
 {
-  double trvtime, slow;
   Site_t * p_site;
+  
+  assert(siteid < p_earth->numsites);
+  
+  p_site = p_earth->p_sites + siteid;  
+
+  return EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
+                                      evtime, phaseid, p_site->sitelon,
+                                      p_site->sitelat, p_site->siteelev);
+}
+
+
+double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon, 
+                                    double lat, double depth, double evtime, 
+                                    int phaseid, double sitelon,
+                                    double sitelat, double siteelev)
+{
+  double trvtime, slow;
   EarthPhaseModel_t * p_phase;
   double delta, esaz, seaz;
 
-  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases)
-         && p_earth->p_phase_time_def[phaseid]);
+  assert((phaseid < p_earth->numphases) && p_earth->p_phase_time_def[phaseid]);
   
-  p_site = p_earth->p_sites + siteid;
   p_phase = p_earth->p_phases + phaseid;
   
-  dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
-               &seaz);
+  dist_azimuth(lon, lat, sitelon, sitelat, &delta, &esaz, &seaz);
   
   travel_time(p_phase, depth, delta, &trvtime, &slow);
   
@@ -861,8 +902,8 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
                               GEOCENTRIC_COLAT((90-lat) * DEG2RAD), 
                               depth, phaseid);
 
-  if (p_site->siteelev >= -998)
-    trvtime += p_site->siteelev / p_phase->surf_vel;
+  if (siteelev >= -998)
+    trvtime += siteelev / p_phase->surf_vel;
   
   return evtime + trvtime;
 }
