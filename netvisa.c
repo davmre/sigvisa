@@ -115,6 +115,12 @@ static PyMethodDef EarthModel_methods[] = {
      "Compute the arrival time of an event at a site\n"
      "ArrivalTime(evlon, evlat, evdepth, evtime, phaseid, siteid) -> arrtime"
     },
+    {"ArrivalTimeCoord", (PyCFunction)py_EarthModel_ArrivalTime_Coord,
+     METH_VARARGS,
+     "Compute the arrival time of an event at a coordinate\n"
+     "ArrivalTime(evlon, evlat, evdepth, evtime, phaseid, sitelon, sitelat,"
+     "siteelev) -> arrtime"
+    },
     {"ArrivalAzimuth", (PyCFunction)py_EarthModel_ArrivalAzimuth,
      METH_VARARGS,
      "Compute the arrival azimuth of an event at a site\n"

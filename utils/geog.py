@@ -73,6 +73,39 @@ def degdiff(angle1, angle2):
   # 200 is -160 etc.
   return delta - (delta > 180) * 360
 
+def azimuth(loc1, loc2):
+  """
+  Angle in degrees measured clockwise from north starting at
+  loc1 towards loc2. loc1 and loc2 are (longitude, latitude) in degrees.
+  >>> int(azimuth((10,0), (20, 0)))
+  90
+  >>> int(azimuth((20,0), (10, 0)))
+  270
+  >>> int(azimuth((10,0), (10, 45)))
+  0
+  >>> azimuth((10, 45), (10, 0))
+  180.0
+  >>> int(azimuth((133.9, -23.665), (132.6, -.83)))
+  356
+  """
+  sin_delta = np.sin(np.radians(dist_deg(loc1, loc2)))
+  
+  # convert to degrees and the latitude to colatitude
+  phi1, theta1 = np.radians(loc1[0]), np.radians(90.0 - loc1[1])
+  phi2, theta2 = np.radians(loc2[0]), np.radians(90.0 - loc2[1])
+
+  cos_zeta = (np.cos(theta2) * np.sin(theta1) - np.sin(theta2)*np.cos(theta1)\
+              * np.cos(phi2 - phi1)) / sin_delta
+
+  # zeta known accurate upto half-circle
+  half_zeta = np.degrees(safe_acos(cos_zeta))
+
+  east = np.sin(phi2 - phi1) >= 0
+  
+  zeta = half_zeta * east + (360 - half_zeta) * (~east)
+
+  return zeta
+
 def _test():
   import doctest
   doctest.testmod()

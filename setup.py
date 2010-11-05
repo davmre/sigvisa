@@ -2,6 +2,8 @@ from distutils.core import setup, Extension
 import numpy as np
 import os
 
+extra_compile_args = ['-std=c99', '-D_GNU_SOURCE']
+
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
                   'EarthModel.c', 'ArrivalTimePrior.c', 'NumFalseDetPrior.c',
@@ -17,7 +19,8 @@ netvisa_module = Extension('netvisa',
                                        for f in priors_sources]
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]
-                                      + ["netvisa.c"])
+                                      + ["netvisa.c"]),
+                           extra_compile_args = extra_compile_args
                            )
 setup (name = 'netvisa',
        version = '1.0',

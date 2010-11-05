@@ -85,6 +85,14 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
                               double depth, double evtime, 
                               int phaseid, int siteid);
 
+PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
+                                           PyObject * args);
+
+double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon, 
+                                    double lat, double depth, double evtime, 
+                                    int phaseid, double sitelon,
+                                    double sitelat, double siteelev);
+
 PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, 
                                         PyObject * args);
 
