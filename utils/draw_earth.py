@@ -84,8 +84,19 @@ def draw_events(bmap, events, **args):
   if "zorder" not in args:
     args["zorder"] = 10
   
-  for ev in events:
+  # if there are any array args then we need to apply them to each event
+  # separately
+  array_args = []
+  for argname, argval in args.iteritems():
+    if not np.issctype(type(argval)):
+      assert(len(events) == len(argval))
+      array_args.append((argname, argval))
+      
+  for enum, ev in enumerate(events):
     x,y = bmap(ev[0], ev[1])
+    # set each of the array argument for this event
+    for (argname, argval) in array_args:
+      args[argname] = argval[enum]
     bmap.plot([x], [y], **args)
 
 def draw_events_mag(bmap, events, **args):
