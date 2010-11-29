@@ -112,7 +112,7 @@ run.data_start and run.data_end;
 create or replace view visa_origin_deb as select runid, orid, round(lon,1) lon, round(lat,1) lat, round(depth,1) depth, round(time,1) time, round(mb,1) mb, round(score,1) score from visa_origin;
 
 /* join visa_assoc with idcx_arrival */
-create or replace view visa_assoc_deb as select concat(runid, ':', orid) orid, phase, sta, round(timeres,1) tres, round(azres,1) azres, round(slores,1) slores, arid, round(time,1) time from visa_assoc join idcx_arrival using (arid);
+create or replace view visa_assoc_deb as select runid, orid, phase, sta, round(timeres,1) tres, round(azres,1) azres, round(slores,1) slores, arid, round(time,1) time from visa_assoc join idcx_arrival using (arid);
 
 create or replace view leb_origin_deb as select orid, round(lon,1) lon, round(lat,1) lat, round(depth,1) depth, round(time,1) time, round(mb,1) mb from leb_origin;
 
