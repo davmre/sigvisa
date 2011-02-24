@@ -22,10 +22,13 @@ Integrated Seismological Analysis.
 - To analyze the results of a run:
   python analyze.py   (with an opitional run-identifier e.g. -i 23)
 
-- To get details about a missed event:
+- To get details about a missed event or to debug an event:
     python debug.py <runid> leb <leb-orid>
-  OR, to understand a predicted event:
+  To understand a predicted event:
     python debug.py <runid> visa <visa-orid>
+
+- To see the waveforms of an event:
+  python2.6 -m utils.waveform leb 5288665
 
 Directory Layout
 ================
