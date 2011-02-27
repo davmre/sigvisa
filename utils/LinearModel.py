@@ -1,5 +1,4 @@
 import math, random
-import rpy2.robjects as robjects
 import numpy as np
 
 def test_linear():
@@ -13,15 +12,38 @@ def test_linear():
 
   ypred = [model[a,b] for a,b in zip(x,w)]
 
-  err = np.sqrt(float(sum((y1-y2) ** 2 for y1, y2 in zip(y, ypred))) / len(y))
-
   print "linear"
   print "coeffs", model.coeffs
+  
+  err = np.sqrt(float(sum((y1-y2) ** 2 for y1, y2 in zip(y, ypred))) / len(y))
+
   print "RMSE", err
   assert(err < .11)
 
 class LinearModel:
   def __init__(self, name, dim_names, dim_vals, samples):
+    """
+    Learns a linear function of the input dimensions
+    """
+    assert(len(dim_names) == len(dim_vals))
+    self.name, self.dim_names = name, dim_names
+
+    datalen = len(dim_vals[0])
+    
+    dim_vals = [d for d in dim_vals]              # make a copy
+    dim_vals.append(np.ones(datalen))             # add intercept
+    
+    data = np.vstack([np.array(d) for d in dim_vals]).T
+    
+    self.coeffs, residues, rank, sing  = np.linalg.lstsq(data, samples, 1e-6)
+    self.converged = True
+    #print "Rank:", rank
+    #print "Singular values:", sing
+    if rank < len(dim_vals):
+      print "Warning: LinearModel: predictors are not independent"
+      
+      
+  def __init2__(self, name, dim_names, dim_vals, samples):
     """
     Learns a linear function of the input dimensions
     """

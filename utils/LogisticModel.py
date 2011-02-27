@@ -1,5 +1,4 @@
 import math, random
-import rpy2.robjects as robjects
 import numpy as np
 from scipy.optimize import fmin_ncg
 import time
@@ -112,6 +111,7 @@ class LogisticModel:
     Note: samples must be an array of values between 0 and 1
     """
     assert(len(dim_names) == len(dim_vals))
+    import rpy2.robjects as robjects
 
     if weights is None:
       weights = [1 for i in range(len(samples))]
