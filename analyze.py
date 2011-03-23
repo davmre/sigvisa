@@ -391,6 +391,10 @@ def main():
                     action = "store_true",
                     help = "verbose output (False)")
 
+  parser.add_option("-1", "--type1", dest="type1", default=False,
+                    action = "store_true",
+                    help = "Type 1 fonts (False)")
+
   parser.add_option("-b", "--mag", dest="mag", default=False,
                     action = "store_true",
                     help = "analyze by magnitude (False)")
@@ -519,6 +523,10 @@ def main():
   visa_evlist = read_assoc(cursor, data_start, data_end, visa_orid2num,
                            arid2num, "visa", runid=options.runid)  
 
+  # use Type 1 fonts by invoking latex
+  if options.type1:
+    plt.rcParams['text.usetex'] = True
+    
   if options.kleinermackey:
     kleinermackey_display(leb_events, sel3_events, visa_events)
     
