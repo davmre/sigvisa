@@ -233,6 +233,45 @@ create table idcx_arrival (
 load data local infile 'idcx_arrival.csv' into table idcx_arrival fields
 terminated by ', ' optionally enclosed by '"' ignore 1 lines;
 
+/* idcx_tohoku
+ * 9.0 Earthquake off the coast of Japan, March 11 & March 12 2011
+*/
+
+create table arrival_tohoku (
+ sta         varchar(6) not null,
+ time        double not null,
+ arid        int not null,
+ jdate       int,
+ stassid     int,
+ chanid      int,
+ chan        varchar(8),
+ iphase      varchar(8),
+ stype       varchar(1),
+ deltim      double,
+ azimuth     double,
+ delaz       double,
+ slow        double,
+ delslo      double,
+ ema         double,
+ rect        double,
+ amp         double,
+ per         double,
+ logat       double,
+ clip        varchar(1),
+ fm          varchar(2),
+ snr         double,
+ qual        varchar(1),
+ auth        varchar(15),
+ commid      int,
+ lddate      datetime,
+ 
+ primary key (time, arid),
+ index (arid)
+) engine = myisam;
+
+load data local infile 'arrival_tohoku.csv' into table arrival_tohoku fields
+terminated by ',' optionally enclosed by '"' ignore 1 lines;
+
 /* leb_assoc */
 
 create table leb_assoc (
