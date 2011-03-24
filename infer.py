@@ -142,9 +142,9 @@ def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
   
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-n", "--numsamples", dest="numsamples", default=1000,
+  parser.add_option("-n", "--numsamples", dest="numsamples", default=10,
                     type="int",
-                    help = "number of samples per window step (1000)")
+                    help = "number of samples per window step (10)")
   parser.add_option("-w", "--window", dest="window", default=1800,
                     type="int",
                     help = "window size in seconds (1800)")
@@ -174,16 +174,37 @@ def main(param_dirname):
                     type = str,
                     help = "use run RUNID's events as proposal",
                     metavar="RUNID")
+  parser.add_option("-a", "--arrival_table", dest="arrival_table",
+                    default=None,
+                    help = "arrival table to use for inferring on")
   (options, args) = parser.parse_args()
 
   if options.seed == 0:
     options.seed = int(time.time())
   
   netvisa.srand(options.seed)
-  
-  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data(options.label, hours=options.hours, skip=options.skip)
+
+  if options.arrival_table is None:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data(options.label, hours=options.hours,
+                            skip=options.skip)
+  else:
+    cursor = db.connect().cursor()
+    # read the time range from the table
+    cursor.execute("select min(time), max(time) from %s"
+                   % options.arrival_table)
+    start_time, end_time = cursor.fetchone()
+    # read the detections and uptime
+    detections = read_detections(cursor, start_time, end_time,
+                                 options.arrival_table)[0]
+    site_up = read_uptime(cursor, start_time, end_time,
+                          options.arrival_table)
+    # read the rest of the static data
+    sites = read_sites(cursor)
+    phasenames, phasetimedef = read_phases(cursor)
+    assert(len(phasenames) == len(phasetimedef))
+
 
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
@@ -248,21 +269,24 @@ def main(param_dirname):
                                       write_events(a,b,c,d,e,f,detections))
   #print_events(netmodel, earthmodel, events, ev_detlist, "VISA")
 
-  
-  # store the results
-  f, p, r, err = f1_and_error(leb_events, events)
 
-  conn = database.db.connect()
-  cursor = conn.cursor()
-  cursor.execute("update visa_run set f1=%f, prec=%f, "
-                 "recall=%f, error_avg=%f, error_sd=%f "
-                 "where runid=%d" %
-                 (f, p, r, err[0], err[1], runid))
-  conn.commit()
-  msg = ("Runid=%d F1=%.2f, Prec=%.2f, Recall=%.2f, Avg Error = %.2f+-%.2f"
-         % (runid, f, p, r, err[0], err[1]))
+  if options.arrival_table is None:
+    # store the results
+    f, p, r, err = f1_and_error(leb_events, events)
+    
+    conn = database.db.connect()
+    cursor = conn.cursor()
+    cursor.execute("update visa_run set f1=%f, prec=%f, "
+                   "recall=%f, error_avg=%f, error_sd=%f "
+                   "where runid=%d" %
+                   (f, p, r, err[0], err[1], runid))
+    conn.commit()
+    msg = ("Runid=%d F1=%.2f, Prec=%.2f, Recall=%.2f, Avg Error = %.2f+-%.2f"
+           % (runid, f, p, r, err[0], err[1]))
   
-
+  else:
+    msg = "Runid=%d #events=%d" % (runid, len(events))
+    
   if options.verbose:      
     print "===="
     print "EVAL"
