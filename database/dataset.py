@@ -37,8 +37,8 @@ AVG_EARTH_RADIUS_KM = 6371.0            # when modeled as a sphere
 
 def read_timerange(cursor, label, hours, skip):
   # determine the start and end time for the specified label
-  cursor.execute("select start_time, end_time from dataset where label=%s",
-                 (label,))
+  cursor.execute("select start_time, end_time from dataset where "
+                 "label='%s'" % label)
   row = cursor.fetchone()
   if row is None:
     raise ValueError("Unknown label %s" % label)
@@ -113,7 +113,7 @@ def read_detections(cursor, start_time, end_time):
                  "ph.id-1, iarr.amp, iarr.per from idcx_arrival_net iarr, "
                  "static_siteid site, static_phaseid ph where "
                  "iarr.sta=site.sta and iarr.iphase=ph.phase and "
-                 "iarr.time between %s and %s order by iarr.time, iarr.arid",
+                 "iarr.time between %d and %d order by iarr.time, iarr.arid" %
                  (start_time, end_time))
   
   detections = np.array(cursor.fetchall())
@@ -142,14 +142,14 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
     cursor.execute("select vass.orid, vass.arid, ph.id-1 from visa_assoc vass,"
                    "visa_origin vori, static_phaseid ph where "
                    "vass.orid=vori.orid and vass.phase=ph.phase and vori.time "
-                   "between %s and %s and vass.runid=vori.runid "
-                   "and vass.runid=%s", (start_time, end_time, runid))
+                   "between %f and %f and vass.runid=vori.runid "
+                   "and vass.runid=%d" % (start_time, end_time, runid))
   else:
     cursor.execute("select lass.orid, lass.arid, ph.id-1 from %s_assoc lass, "
                    "%s_origin lori, static_phaseid ph where "
                    "ph.timedef='d' and "
                    "lass.orid=lori.orid and lass.phase=ph.phase and lori.time "
-                   "between %s and %s"
+                   "between %f and %f"
                    % (evtype, evtype, start_time, end_time))
   
   evlist = [[] for _ in range(len(orid2num))]
@@ -171,10 +171,11 @@ def read_uptime(cursor, start_time, end_time):
                      int(ceil((end_time - start_time) / UPTIME_QUANT))),
                     bool)
   
-  cursor.execute("select site.id-1, truncate((arr.time-%s)/3600, 0), count(*) "
+  cursor.execute("select snum, hnum, count(*) from "
+                 "(select site.id-1 snum,trunc((arr.time-%d)/3600, 0) hnum "
                  "from idcx_arrival arr, static_siteid site "
                  "where arr.sta = site.sta and "
-                 "arr.time between %s and %s group by 1, 2",
+                 "arr.time between %d and %d) sitearr group by snum, hnum" %
                  (start_time, start_time, end_time))
   
   for (siteidx, timeidx, cnt) in cursor.fetchall():
@@ -183,7 +184,9 @@ def read_uptime(cursor, start_time, end_time):
   return uptime
 
 def read_sites(cursor):
-  cursor.execute("select lon, lat, elev, statype='ar' from static_siteid "
+  cursor.execute("select lon, lat, elev, "
+                 "(case statype when 'ar' then 1 else 0 end) "
+                 "from static_siteid "
                  "order by id")
   return np.array(cursor.fetchall())
 
@@ -192,7 +195,8 @@ def read_phases(cursor):
                  "order by id")
   phasenames = np.array(cursor.fetchall())[:,0]
 
-  cursor.execute("select timedef='d' from static_phaseid "
+  cursor.execute("select (case timedef when 'd' then 1 else 0 end) "
+                 "from static_phaseid "
                  "order by id")
   phasetimedef = np.array(cursor.fetchall())[:,0].astype(bool)
 
