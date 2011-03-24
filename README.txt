@@ -17,7 +17,13 @@ Integrated Seismological Analysis.
 - To test your model run "python score.py"
 
 - To do inference and store the results into the database
+
   call "python infer.py -r 1" (to do inference on 1 hour)
+
+  For longer inference you might want to use the handy utility bgjob
+  to run jobs in the background, for example:
+
+  utils/bgjob python infer.py
 
 - To analyze the results of a run:
   python analyze.py   (with an opitional run-identifier e.g. -i 23)
