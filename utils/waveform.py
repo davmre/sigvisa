@@ -15,16 +15,37 @@ from utils.geog import dist_deg, azimuth
 class MissingWaveform(Exception):
   pass
 
-def plot_ss_waveforms(siteid, start_time, end_time):
+def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
+                      event):
   cursor = database.db.connect().cursor()
-  cursor.execute("select sta from static_siteid where id=%s", (siteid+1,))
+  cursor.execute("select sta from static_siteid where id=%d" % (siteid+1,))
   sta, = cursor.fetchone()
   print "Station:", sta
 
-  cursor.execute("select distinct chan from idcx_wfdisc where sta=%s", (sta,))
+  cursor.execute("select distinct chan from idcx_wfdisc where sta='%s'" % sta)
   chans = [x for x, in cursor.fetchall()]
   print "Channels:", chans
-  
+
+  # get the times of all the arrivals at this site within the window
+  all_det_times = []
+  for det in detections:
+    if int(det[DET_SITE_COL]) == siteid:
+      arrtime = det[DET_TIME_COL]
+      if arrtime > start_time and arrtime < end_time:
+        all_det_times.append(arrtime - start_time)
+
+  # get the times of all the phases at this site from the event in the window
+  all_phase_times, all_phase_names = [], []
+  for phaseid in xrange(earthmodel.NumTimeDefPhases()):
+    arrtime = earthmodel.ArrivalTime(event[ EV_LON_COL],
+                                     event[ EV_LAT_COL],
+                                     event[ EV_DEPTH_COL],
+                                     event[ EV_TIME_COL],
+                                     phaseid,
+                                     siteid)
+    if arrtime > start_time and arrtime < end_time:
+      all_phase_times.append(arrtime - start_time)
+      all_phase_names.append(earthmodel.PhaseName(phaseid))
 
   plt.figure()
   plt.xlabel("Time (s)")
@@ -46,6 +67,17 @@ def plot_ss_waveforms(siteid, start_time, end_time):
     plt.plot(timevals, trc.data, 'k')
     plt.plot(timevals, env, 'k:')
 
+    maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+    plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
+            width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
+
+    plt.bar(left=all_phase_times,
+            height=[maxtrc-mintrc for _ in all_phase_times],
+            width=.25, bottom=mintrc, color="blue", linewidth=0, alpha=.5)
+
+    for arrtime, phname in zip(all_phase_times, all_phase_names):
+      plt.text(arrtime, 0, phname)
+    
     #st.plot(color='k')
 
 
@@ -53,22 +85,22 @@ def fetch_array_elements(siteid):
   cursor = database.db.connect().cursor()
   # extract the station name and the reference station
   cursor.execute("select s1.sta, s2.refsta, s2.staname from static_siteid s1, "
-                 "static_site s2 where s1.id=%s and "
-                 "s2.sta=s1.sta and s2.offdate=-1", (siteid+1,))
+                 "static_site s2 where s1.id=%d and "
+                 "s2.sta=s1.sta and s2.offdate=-1" % (siteid+1,))
   sta, refsta, staname = cursor.fetchone()
   # deduce the channel with the most number of array elements
   cursor.execute("select c.chan, count(*) from static_sitechan c, "
                  "static_site s where c.offdate=-1 and s.offdate=-1 and "
-                 "c.sta=s.sta and s.statype='ss' and s.refsta=%s and "
-                 "c.vang=0 and c.hang=-1 group by 1 order by 2 desc limit 1",
+                 "c.sta=s.sta and s.statype='ss' and s.refsta='%s' and "
+                 "c.vang=0 and c.hang=-1 group by 1 order by 2 desc limit 1" %
                  (refsta,))
   chan,chan_cnt = cursor.fetchone()
   # now, return the name and locations of all these array elements
   cursor.execute("select s.sta, s.lon, s.lat, s.elev-c.edepth from "
                  "static_site s, static_sitechan c "
-                 "where s.refsta=%s and s.offdate=-1 and s.statype='ss' "
+                 "where s.refsta='%s' and s.offdate=-1 and s.statype='ss' "
                  "and c.sta=s.sta and c.offdate=-1 and c.vang=0 and c.hang=-1 "
-                 "and c.chan=%s", (refsta, chan))
+                 "and c.chan='%s'" % (refsta, chan))
   arrsta = np.array(cursor.fetchall())
   print "Station: %s, Refsta: %s, Chan: %s, %d array elements" \
         % (sta, refsta, chan, len(arrsta))
@@ -111,6 +143,7 @@ def plot_fk_arr(siteid, start_time, end_time):
   labels = 'rel.power abs.power baz slow'.split()
 
   fig = plt.figure()
+  plt.suptitle(sta)
   for i, lab in enumerate(labels):
     ax = fig.add_subplot(4,1,i+1)
     ax.scatter(out[:,0], out[:,i+1], c=out[:,1], alpha=0.6, edgecolors='none')
@@ -184,9 +217,9 @@ def fetch_waveform(station, chan, stime, etime):
   data = []
   
   while True:
-    cursor.execute("select * from idcx_wfdisc where sta = %s and chan = %s "
-                   "and time <= %s and %s < endtime",
-                   (station, chan, stime,stime))
+    cursor.execute("select * from idcx_wfdisc where sta = '%s' and chan ='%s' "
+                   "and time <= %f and %f < endtime" %
+                   (station, chan, stime, stime))
     
     waveform = cursor.fetchone()
     if waveform is None:
@@ -283,9 +316,9 @@ def main(param_dirname):
   # load the event
   cursor = database.db.connect().cursor()
   if evtype == "leb":
-    cursor.execute("select time from leb_origin where orid=%s", (leb_orid,))
+    cursor.execute("select time from leb_origin where orid=%d" % (leb_orid,))
   else:
-    cursor.execute("select time from visa_origin where runid=%s and orid=%s",
+    cursor.execute("select time from visa_origin where runid=%d and orid=%d" %
                    (visa_runid, visa_orid))
   fetch = cursor.fetchone()
   if fetch is None:
@@ -316,7 +349,9 @@ def main(param_dirname):
   sites = read_sites(cursor)
   site_up = read_uptime(cursor, start_time, end_time)
   phasenames, phasetimedef = read_phases(cursor)
-
+  cursor.execute("select sta from static_siteid site order by id")
+  sitenames = np.array(cursor.fetchall())[:,0]
+  
   # load the earthmodel and the NET-VISA model
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
@@ -363,9 +398,9 @@ def main(param_dirname):
     if isdet:
       if idx > (last_det_idx+1):
         print "..... missed by %d sites" % (idx - last_det_idx - 1)
-      print "%d, %d (%s) seaz %d esaz %d" \
+      print "ttime %d, %s (%s, siteid %d) seaz %d esaz %d" \
             % (arrtime - event[ EV_TIME_COL],
-               siteid, site_type,
+               sitenames[siteid], site_type, siteid,
                azimuth(sites[siteid, [SITE_LON_COL, SITE_LAT_COL]],
                        event[ [EV_LON_COL, EV_LAT_COL]]),
                azimuth(event[ [EV_LON_COL, EV_LAT_COL]],
@@ -382,7 +417,8 @@ def main(param_dirname):
   for arrtime, siteid, isdet in all_site_arrtimes:
     if isdet:
       if not sites[siteid, SITE_IS_ARRAY]:
-        plot_ss_waveforms(siteid, arrtime-20, arrtime+20)
+        plot_ss_waveforms(siteid, arrtime-20, arrtime+20, detections,
+                          earthmodel, event)
       else:
         plot_fk_arr(siteid, arrtime-20, arrtime+20)
         #plot_focused_arr(earthmodel, event, siteid, 20)
