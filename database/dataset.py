@@ -107,14 +107,15 @@ def read_isc_events(cursor, start_time, end_time, author):
   return events
 
 
-def read_detections(cursor, start_time, end_time):
+def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival"):
   cursor.execute("select site.id-1, iarr.arid, iarr.time, iarr.deltim, "
                  "iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, "
-                 "ph.id-1, iarr.amp, iarr.per from idcx_arrival_net iarr, "
+                 "ph.id-1, iarr.amp, iarr.per from %s iarr, "
                  "static_siteid site, static_phaseid ph where "
+                 "iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and "
                  "iarr.sta=site.sta and iarr.iphase=ph.phase and "
                  "iarr.time between %d and %d order by iarr.time, iarr.arid" %
-                 (start_time, end_time))
+                 (arrival_table, start_time, end_time))
   
   detections = np.array(cursor.fetchall())
 
@@ -163,7 +164,7 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
         
   return evlist
 
-def read_uptime(cursor, start_time, end_time):
+def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
   cursor.execute("select count(*) from static_siteid")
   numsites, = cursor.fetchone()
   
@@ -173,10 +174,10 @@ def read_uptime(cursor, start_time, end_time):
   
   cursor.execute("select snum, hnum, count(*) from "
                  "(select site.id-1 snum,trunc((arr.time-%d)/3600, 0) hnum "
-                 "from idcx_arrival arr, static_siteid site "
+                 "from %s arr, static_siteid site "
                  "where arr.sta = site.sta and "
                  "arr.time between %d and %d) sitearr group by snum, hnum" %
-                 (start_time, start_time, end_time))
+                 (start_time, arrival_table, start_time, end_time))
   
   for (siteidx, timeidx, cnt) in cursor.fetchall():
     uptime[siteidx, timeidx] = True

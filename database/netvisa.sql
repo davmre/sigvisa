@@ -126,8 +126,8 @@ create or replace view leb_origin_deb as select orid, round(lon,1) lon, round(la
 create or replace view leb_assoc_deb as select orid, phase, sta, round(timeres,1) tres, round(azres,1) azres, round(slores,1) slores, arid, round(time,1) time from leb_assoc join leb_arrival using (sta, arid);
 
 grant select,insert,update on visa_run to ctbt@localhost;
-grant select,insert on visa_origin to ctbt@localhost;
-grant select,insert on visa_assoc to ctbt@localhost;
+grant select,insert,delete on visa_origin to ctbt@localhost;
+grant select,insert,delete on visa_assoc to ctbt@localhost;
 grant select on visa_vs_leb to ctbt@localhost;
 grant execute on ctbt3mos.* to ctbt@localhost;
 
