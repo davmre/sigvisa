@@ -59,6 +59,12 @@ create table visa_assoc (
 /* some utility functions */
 delimiter |
 
+create function trunc(num double, digits integer)
+returns double deterministic
+begin
+return truncate(num, digits);
+end|
+
 create function dist_deg(lon1 double, lat1 double, lon2 double, lat2 double)
 returns double deterministic
 begin

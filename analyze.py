@@ -204,7 +204,7 @@ def gui(options, leb_events, sel3_events, events):
   # draw an ROC curve
   #
   cursor = database.db.connect().cursor()
-  cursor.execute("select orid, score from visa_origin where runid=%s",
+  cursor.execute("select orid, score from visa_origin where runid=%d" %
                  (options.runid,))
   evscores = dict(cursor.fetchall())
 
@@ -233,7 +233,7 @@ def gui(options, leb_events, sel3_events, events):
     events2 = read_events(cursor, options.data_start, options.data_end,
                           "visa", options.runid2)[0]
     
-    cursor.execute("select orid, score from visa_origin where runid=%s",
+    cursor.execute("select orid, score from visa_origin where runid=%d" %
                    (options.runid2,))
     evscores2 = dict(cursor.fetchall())
 
@@ -249,7 +249,7 @@ def gui(options, leb_events, sel3_events, events):
     events3 = read_events(cursor, options.data_start, options.data_end,
                           "visa", options.runid3)[0]
     
-    cursor.execute("select orid, score from visa_origin where runid=%s",
+    cursor.execute("select orid, score from visa_origin where runid=%d" %
                    (options.runid3,))
     evscores3 = dict(cursor.fetchall())
 
@@ -472,7 +472,7 @@ def main():
   print "RUNID %d:" % options.runid,
 
   cursor.execute("select run_start, run_end, data_start, data_end, descrip, "
-                 "numsamples, window, step from visa_run where runid=%s",
+                 "numsamples, window, step from visa_run where runid=%d" %
                  options.runid)
   run_start, run_end, data_start, data_end, descrip, numsamples, window, step\
              = cursor.fetchone()
@@ -513,7 +513,7 @@ def main():
     jma_events = None
     
   if options.suppress:
-    cursor.execute("select orid, score from visa_origin where runid=%s",
+    cursor.execute("select orid, score from visa_origin where runid=%d" %
                    (options.runid,))
     visa_scores = dict(cursor.fetchall())    
     visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_scores)
@@ -605,7 +605,7 @@ def main():
     detcnts = []
     for leb_event in leb_events:
       cursor.execute("select count(*) from leb_assoc join idcx_arrival_net "
-                     "using (arid) where orid=%s and timedef='d'",
+                     "using (arid) where orid=%d and timedef='d'" %
                      (int(leb_event[EV_ORID_COL]),))
       detcnts.append(cursor.fetchone()[0])
       
@@ -616,8 +616,8 @@ def main():
     detcnts = []
     for leb_event in leb_events:
       cursor.execute("select count(*) from leb_assoc  "
-                     "where orid=%s and timedef='d' and arid not in "
-                     "(select arid from idcx_arrival_net)",
+                     "where orid=%d and timedef='d' and arid not in "
+                     "(select arid from idcx_arrival_net)" %
                      (int(leb_event[EV_ORID_COL]),))
       detcnts.append(cursor.fetchone()[0])
       
@@ -628,7 +628,7 @@ def main():
     tcnts = []
     for leb_event in leb_events:
       cursor.execute("select count(*) from leb_assoc "
-                     "where orid=%s and phase='T'",
+                     "where orid=%d and phase='T'" %
                      (int(leb_event[EV_ORID_COL]),))
       tcnts.append(cursor.fetchone()[0])
     
@@ -639,7 +639,7 @@ def main():
     hcnts = []
     for leb_event in leb_events:
       cursor.execute("select count(*) from leb_assoc "
-                     "where orid=%s and phase='H'",
+                     "where orid=%d and phase='H'" %
                      (int(leb_event[EV_ORID_COL]),))
       hcnts.append(cursor.fetchone()[0])
     
@@ -651,8 +651,8 @@ def main():
     leb_azgaps = [None for _ in leb_events]
     for (leb_orid, leb_evnum) in leb_orid2num.iteritems():
       cursor.execute("select esaz from leb_assoc join leb_arrival "
-                     "using(arid,sta) where orid=%s and "
-                     "timedef='d' and time between %s and %s",
+                     "using(arid,sta) where orid=%d and "
+                     "timedef='d' and time between %f and %f" %
                      (leb_orid, data_start, data_end))
       esazlist = [x for (x,) in cursor.fetchall()]
       leb_azgaps[leb_evnum] = azimuth_gap(esazlist)
@@ -729,7 +729,7 @@ def main():
                   marker="*", ms=10, mfc="orange")
 
       cursor = database.db.connect().cursor()
-      cursor.execute("select orid, score from visa_origin where runid=%s",
+      cursor.execute("select orid, score from visa_origin where runid=%d" %
                      (options.runid,))
       evscores = dict(cursor.fetchall())
     

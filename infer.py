@@ -88,7 +88,8 @@ def print_event(netmodel, earthmodel, event, event_detlist, label):
 def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
                  detections):
   # store the events and associations
-  cursor = database.db.connect().cursor()
+  conn = database.db.connect()
+  cursor = conn.cursor()
   world_score = 0.0
   for evnum in range(len(events)):
     event = events[evnum]
@@ -97,7 +98,7 @@ def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
     world_score += evscore
     
     cursor.execute("insert into visa_origin (runid, orid, lon, lat, depth, "
-                   "time, mb, score) values (%s, %s, %s, %s, %s, %s, %s, %s)",
+                   "time, mb, score) values (%d, %d, %f, %f, %f, %f, %f, %f)"%
                    (runid, event[EV_ORID_COL], event[EV_LON_COL],
                     event[EV_LAT_COL], event[EV_DEPTH_COL], event[EV_TIME_COL],
                     event[EV_MB_COL], evscore))
@@ -127,22 +128,23 @@ def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
       
       cursor.execute("insert into visa_assoc(runid, orid, phase, arid, score, "
                      "timeres, azres, slores) "
-                     "values (%s, %s, %s, %s, %s, %s, %s, %s)",
+                     "values (%d, %d, '%s', %d, %f, %f, %f, %f)" %
                      (runid, event[EV_ORID_COL],
                       earthmodel.PhaseName(phaseid),
                       detections[detnum, DET_ARID_COL],
                       netmodel.score_event_det(event, phaseid, detnum),
                       timeres, azres, slores))
   
-  cursor.execute("update visa_run set data_end=%s, run_end=now(), "
-                 "score = score + %s where runid=%s",
+  cursor.execute("update visa_run set data_end=%f, run_end=now(), "
+                 "score = score + %f where runid=%d" %
                  (maxtime, world_score, runid))
+  conn.commit()
   
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-n", "--numsamples", dest="numsamples", default=10,
+  parser.add_option("-n", "--numsamples", dest="numsamples", default=1000,
                     type="int",
-                    help = "number of samples per window step (10)")
+                    help = "number of samples per window step (1000)")
   parser.add_option("-w", "--window", dest="window", default=1800,
                     type="int",
                     help = "window size in seconds (1800)")
@@ -206,12 +208,14 @@ def main(param_dirname):
   #netmodel.score_world(sel3_events, sel3_evlist, 1)
 
   # create a runid
-  cursor = database.db.connect().cursor()
+  conn = database.db.connect()
+  cursor = conn.cursor()
   cursor.execute ("insert into visa_run(run_start, numsamples, window, step, "
                   "seed, data_start, score, descrip) values "
-                  "(now(), %s, %s, %s, %s, %s, 0, %s)",
+                  "(now(), %d, %d, %d, %d, %f, 0, '%s')" %
                   (options.numsamples, options.window, options.step,
                    options.seed, start_time, options.descrip))
+  conn.commit()
   cursor.execute("select max(runid) from visa_run")
   runid, = cursor.fetchone()
 
@@ -248,12 +252,13 @@ def main(param_dirname):
   # store the results
   f, p, r, err = f1_and_error(leb_events, events)
 
-  cursor = database.db.connect().cursor()
-  cursor.execute("update visa_run set f1=%s, prec=%s, "
-                 "recall=%s, error_avg=%s, error_sd=%s "
-                 "where runid=%s",
+  conn = database.db.connect()
+  cursor = conn.cursor()
+  cursor.execute("update visa_run set f1=%f, prec=%f, "
+                 "recall=%f, error_avg=%f, error_sd=%f "
+                 "where runid=%d" %
                  (f, p, r, err[0], err[1], runid))
-
+  conn.commit()
   msg = ("Runid=%d F1=%.2f, Prec=%.2f, Recall=%.2f, Avg Error = %.2f+-%.2f"
          % (runid, f, p, r, err[0], err[1]))
   

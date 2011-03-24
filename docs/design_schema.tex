@@ -1,0 +1,142 @@
+% Database Schema
+
+\chapter{Database Schema}
+
+This chapter describes all the tables used by NET-VISA.
+
+\section{dataset}\label{tbl-dataset}
+
+The time ranges for the different datasets used for training,
+validation, and testing.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Name} & \bf{Datatype} & \bf{Description} \\
+\hline
+label & varchar(20) & one of training, validation or test \\
+start\_time & number & starting time for the dataset \\
+end\_time & number & ending time for the dataset \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{static\_phaseid}\label{tbl-static-phaseid}
+
+The list of phases used by NET-VISA.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Name} & \bf{Datatype} & \bf{Description} \\
+\hline
+id & number & internal numeric identifier starting from 1\\
+phase & varchar2(20) & the phase name \\
+timedef & varchar2(1) & either 'd' or 'n' \\
+\hline
+\end{tabular}
+\end{center}
+If timedef is 'd', the corresponding phase is used by NET-VISA to
+associate arrivals to events. Otherwise, if timedef is 'n' the phase is
+not used in association, but arrivals with this phase are still
+considered by NET-VISA for possible relabeling.
+
+
+\section{static\_siteid}\label{tbl-static-siteid}
+
+The list of sites whose arrivals are considered by NET-VISA.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Name} & \bf{Datatype} & \bf{Description} \\
+\hline
+id & number & internal numeric identifier starting from 1\\
+sta & varchar2(6) & the short identifier of the station \\
+lat & float(24) & latitude \\
+lon & float(24) & longitude \\
+elev & float(24) & elevation \\
+staname & float(24) & full name of the station \\
+statype & char(2) & 'ss' (single station) or 'ar' (array station) \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{visa\_run} \label{tbl-visa-run}
+
+The table records the start and end times plus the results of each
+inference run.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Name} & \bf{Datatype} & \bf{Description} \\
+\hline
+ \underline{runid}      &     int  & run identifier\\
+ run\_start  &     date & starting time of run\\
+ run\_end    &     date & ending time of run\\
+ numsamples &     int & number of samples per time window\\
+ window     &     int & window size in seconds \\
+ step       &     int & window increment in seconds \\
+ seed       &     int & random number generator seed \\
+ data\_start &     float(24) & start time of the dataset \\
+ data\_end   &     float(24) & end time of the dataset \\
+ score      &     float(24) & overall internal score \\
+ f1         &     float(24) & f1 score vs LEB \\
+ prec       &     float(24) & precision vs LEB \\
+ recall     &     float(24) & recall vs LEB \\
+ error\_avg  &     float(24) & average error of matched events vs LEB \\
+ error\_sd   &     float(24) & standard deviation of matched events vs LEB\\
+ descrip    &     varchar(100) & descriptive comment about the run \\
+\hline
+\end{tabular}
+\end{center}
+
+The ending time of the run and the various scores are filled in after
+inference is over.
+
+\section{visa\_origin}\label{tbl-visa-origin}
+
+This table records all the predicted events.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Name} & \bf{Datatype} & \bf{Description} \\
+\hline
+ \underline{runid}   & int  & run identifier from \tt{visa\_run} \\
+ \underline{orid}    & int  & origin identifier \\
+ lon     & float(24)  &  longitude \\
+ lat     & float(24)  &  latitude \\
+ depth   & float(24)  &  depth \\
+ time    & float(24)  &  time \\
+ mb      & float(24)  &  body wave magnitude \\
+ score   & float(24)  &  internal score \\
+\hline
+\end{tabular}
+\end{center}
+
+
+\section{visa\_assoc}\label{tbl-visa-assoc}
+
+The table records the association of events predicted by NET-VISA to the
+corresponding arrivals in IDCX.
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\bf{Name} & \bf{Datatype} & \bf{Description} \\
+\hline
+ \underline{runid}  &  int & run identifier from \tt{visa\_run}\\
+ \underline{orid}   &  int & origin identifier from \tt{visa\_origin}\\
+ phase  &  varchar(20) & phase name \\
+ \underline{arid}   &  int & arrival identifier from \tt{idcx.arrivals}\\
+ score  &  float(24) & internal score \\
+ timeres & float(24) & time residual \\
+ azres   & float(24) & azimuth residual \\
+ slores  & float(24) & slowness residual \\
+\hline
+\end{tabular}
+\end{center}
+
+

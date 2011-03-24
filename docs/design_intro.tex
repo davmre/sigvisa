@@ -1,0 +1,49 @@
+%Introduction
+
+
+\chapter{Introduction}
+
+
+\section{Software Pre-requisites}
+To use the NET-VISA software on your workstation, please follow the
+following steps.
+
+\begin{enumerate}
+\item Install Python and the following packages:
+\begin{enumerate}
+\item cx\_Oracle
+\item numpy
+\item scipy
+\item matplotlib
+\item Basemap
+\end{enumerate}
+\item Set the following environment variables:
+{\footnotesize
+\begin{verbatim}
+export PATH=$PATH:/opt/oracle/app/oracle/product/10.2.0/client_1/bin
+export TNS_ADMIN=/opt/oracle/app/oracle/product/10.2.0/client_1/network/admin
+export VISA_ORA_USER=nimar/nimar@irdb
+\end{verbatim}
+}
+\end{enumerate}
+
+\section{Training, Validation and Test}
+
+To see the time ranges that will be used for training, validation, and
+testing, check the time ranges in the table {\em dataset}. For example:
+\begin{verbatim}
+$> sqlplus nimar/nimar@irdb
+SQL> col begin format a20;
+SQL> col end format a20;
+SQL> select label, unixts_to_char(start_time) begin,
+unixts_to_char(end_time) end from dataset;
+
+LABEL                BEGIN                END
+-------------------- -------------------- --------------------
+training             01-APR-08 00:00:00   01-APR-09 00:00:00
+validation           01-APR-09 00:00:00   01-MAY-09 00:00:00
+test                 01-MAY-09 00:00:00   01-JUL-09 00:00:00
+
+\end{verbatim}
+
+

@@ -1,0 +1,66 @@
+
+\documentclass[12pt,leqno]{book}
+\usepackage{amsmath,amssymb,amsfonts} % Typical maths resource packages
+\usepackage{graphics}                 % Packages to allow inclusion of graphics
+\usepackage{color}                    % For creating coloured text and background
+\usepackage{hyperref}                 % For creating hyperlinks in cross references
+
+\parindent 1cm
+\parskip 0.2cm
+\topmargin 0.2cm
+\oddsidemargin 1cm
+\evensidemargin 0.5cm
+\textwidth 15cm
+\textheight 21cm
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{remark}[theorem]{Remark}
+\newtheorem{definition}[theorem]{Definition}
+
+
+\def\R{\mathbb{ R}}
+\def\S{\mathbb{ S}}
+\def\I{\mathbb{ I}}
+\makeindex
+
+
+\title{NET-VISA Design Document}
+
+\author{Nimar~S.~Arora  \\
+{\small\em \copyright \  Draft date \today }}
+
+ \date{ }
+\begin{document}
+\maketitle
+ \addcontentsline{toc}{chapter}{Contents}
+\pagenumbering{roman}
+\tableofcontents
+\listoffigures
+\listoftables
+
+% optional preface
+%\chapter*{Preface}\normalsize
+%  \addcontentsline{toc}{chapter}{Preface}
+%\pagestyle{plain}
+
+
+
+\pagestyle{headings}
+\pagenumbering{arabic}
+
+\include{design_intro}
+\include{design_est}
+\include{design_inf}
+\include{design_schema}
+
+\begin{thebibliography}{99}
+  \addcontentsline{toc}{chapter}{Bibliography}
+\bibitem{lamport} L. Lamport. {\bf \LaTeX \ A Document Preparation System}
+Addison-Wesley, California 1986.
+\end{thebibliography}
+
+\include{design_index}
+  \addcontentsline{toc}{chapter}{Index}
+\end{document}

@@ -40,12 +40,14 @@ int main(int argc, char **argv)
     exit(EXIT_FAILURE);
   }
 
-  /* close stdin and redirect stdout and stderr to file */
-  fclose(stdin);
+  /* Close stdin and redirect stdout and stderr to file.
+   * The order in which these files are closed and reopened is important!
+   */
   sprintf(fname, "bgjob-%d.out", sid);
   freopen(fname, "wb", stdout);
   sprintf(fname, "bgjob-%d.err", sid);
   freopen(fname, "wb", stderr);
+  fclose(stdin);
         
   /* build the command line */
   cmdline[0]='\0';
@@ -58,6 +60,9 @@ int main(int argc, char **argv)
   /* print the command line before executing it */
   printf(cmdline);
   printf("\n");
+  fflush(stdout);
+  fflush(stderr);
+  
   system(cmdline);
   
   return 0;
