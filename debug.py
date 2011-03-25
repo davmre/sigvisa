@@ -125,10 +125,10 @@ def main(param_dirname):
   # find the event time and use that to configure start and end time
   cursor = database.db.connect().cursor()
   if orid_type == "visa":
-    cursor.execute("select time from visa_origin where runid=%s and orid=%s",
+    cursor.execute("select time from visa_origin where runid=%d and orid=%d"%
                    (runid, orid))
   elif orid_type == "leb":
-    cursor.execute("select time from leb_origin where orid=%s", (orid,))
+    cursor.execute("select time from leb_origin where orid=%d"% (orid,))
 
   fetch = cursor.fetchone()
   if fetch is None:
@@ -158,7 +158,7 @@ def main(param_dirname):
   visa_events, visa_orid2num = read_events(cursor, start_time, end_time,"visa",
                                            runid=runid)
 
-  cursor.execute("select orid, score from visa_origin where runid=%s",
+  cursor.execute("select orid, score from visa_origin where runid=%d" %
                  (runid,))
   visa_evscores = dict(cursor.fetchall())
   if options.suppress:
