@@ -32,23 +32,23 @@ def best_score(netmodel, event, event_detlist):
       curr_detlist.pop(-1)
   return curr_score
     
-def print_events(netmodel, earthmodel, detections, leb_events, leb_evlist,
+def print_events(sitenames, netmodel, earthmodel, detections, leb_events, leb_evlist,
                  label):
   print "=" * 60
   if leb_evlist is None:
     for evnum in range(len(leb_events)):
-      print_event(netmodel, earthmodel, detections, leb_events[evnum],
+      print_event(sitenames, netmodel, earthmodel, detections, leb_events[evnum],
                   None, label)
   else:
     score = 0
     for evnum in range(len(leb_events)):
-      score += print_event(netmodel, earthmodel, detections, leb_events[evnum],
+      score += print_event(sitenames, netmodel, earthmodel, detections, leb_events[evnum],
                            leb_evlist[evnum], label)
       print "-" * 60
     print "Total: %.1f" % score
     print "=" * 60
 
-def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
+def print_event(sitenames, netmodel, earthmodel, detections, event, event_detlist, label):
   print ("%s: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f orid %d"
          % (label, event[ EV_LON_COL], event[ EV_LAT_COL],
             event[ EV_DEPTH_COL], event[ EV_MB_COL],
@@ -82,9 +82,9 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist, label):
       ievent [EV_MB_COL] = 3.0
       iscore = "%.1f" % best_score(netmodel, ievent, detlist)
       
-    print "(%s %d:%d %.1f %s %s)" % (earthmodel.PhaseName(phaseid),
-                            int(detections[detid, DET_SITE_COL]), detid, tres,
-                                     idist, itimediff),
+    print "(%s %s %.1f)" % (earthmodel.PhaseName(phaseid),
+                            sitenames[int(detections[detid, DET_SITE_COL])],
+                            tres),
   print
   score = netmodel.score_event(event, event_detlist)
   print "Ev Score: %.1f    (prior location logprob %.1f)" \
@@ -108,6 +108,9 @@ def main(param_dirname):
                     action = "store_true", help = "suppress duplicates")
   parser.add_option("-x", "--text_only", dest="text_only", default=False,
                     action = "store_true", help = "text only")
+  parser.add_option("-a", "--arrival_table", dest="arrival_table",
+                    default="idcx_arrival",
+                    help = "arrival table to use for inferring on")
   (options, args) = parser.parse_args()
   
   if len(args) != 3:
@@ -139,7 +142,8 @@ def main(param_dirname):
 
   # read all detections which could have been caused by events in the
   # time range
-  detections, arid2num = read_detections(cursor, start_time, end_det_time)
+  detections, arid2num = read_detections(cursor, start_time, end_det_time,
+                                         options.arrival_table)
 
   # read LEB events
   leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "leb")
@@ -167,9 +171,13 @@ def main(param_dirname):
 
   all_isc_events = read_isc_events(cursor, start_time, end_time, None)
   
-  site_up = read_uptime(cursor, start_time, end_det_time)
+  site_up = read_uptime(cursor, start_time, end_det_time,
+                        options.arrival_table)
   
   sites = read_sites(cursor)
+  
+  cursor.execute("select sta from static_siteid site order by id")
+  sitenames = np.array(cursor.fetchall())[:,0]
   
   phasenames, phasetimedef = read_phases(cursor)
   
@@ -180,12 +188,12 @@ def main(param_dirname):
                                 phasetimedef)
 
   # print all the events
-  print_events(netmodel, earthmodel, detections, leb_events, leb_evlist, "LEB")
-  print_events(netmodel, earthmodel, detections, sel3_events, sel3_evlist,
+  print_events(sitenames, netmodel, earthmodel, detections, leb_events, leb_evlist, "LEB")
+  print_events(sitenames, netmodel, earthmodel, detections, sel3_events, sel3_evlist,
                "SEL3")
-  print_events(netmodel, earthmodel, detections, visa_events, visa_evlist,
+  print_events(sitenames, netmodel, earthmodel, detections, visa_events, visa_evlist,
                "VISA")
-  print_events(netmodel, earthmodel, detections, neic_events, None, "NEIC")
+  print_events(sitenames, netmodel, earthmodel, detections, neic_events, None, "NEIC")
 
   if options.text_only:
     return
