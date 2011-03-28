@@ -89,15 +89,15 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
   
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-d", "--degree_step", dest="degree_step", default=2.5,
+  parser.add_option("-d", "--degree_delta", dest="degree_delta", default=5.0,
                     type="float",
-                    help = "degree step (2.5)")
-  parser.add_option("-n", "--num_step", dest="num_step", default=2,
+                    help = "degree step (5.0)")
+  parser.add_option("-c", "--num_seconds", dest="num_seconds", default=300,
                     type="int",
-                    help = "number of steps (2)")
-  parser.add_option("-r", "--hours", dest="hours", default=None,
+                    help = "number of seconds per window (300)")
+  parser.add_option("-r", "--hours", dest="hours", default=.7,
                     type="float",
-                    help = "inference on HOURS worth of data (all)")
+                    help = "inference on HOURS worth of data (0.7)")
   parser.add_option("-k", "--skip", dest="skip", default=0,
                     type="float",
                     help = "skip the first HOURS of data (0)")
@@ -120,7 +120,7 @@ def main(param_dirname):
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation", hours=options.hours, skip=options.skip)
 
-  if (end_time - MAX_TRAVEL_TIME - options.degree_step) <= start_time:
+  if (end_time - MAX_TRAVEL_TIME) <= start_time:
     print "Error: too short an interval"
     sys.exit(1)
     
@@ -136,8 +136,8 @@ def main(param_dirname):
   prop_events, prop_evlist = netmodel.propose(start_time,
                                               start_time + options.window,
                                               0, len(detections),
-                                              options.degree_step,
-                                              options.num_step)
+                                              options.degree_delta,
+                                              options.num_seconds)
   t2 = time.time()
 
   print "%.1f seconds to propose %d event(s)" % (t2-t1, len(prop_events))

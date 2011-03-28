@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -14,6 +13,7 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
   double uniform;
   int lonidx;
   int latidx;
+  double cum_lon_prob;
   
   fp = fopen(filename, "r");
 
@@ -68,6 +68,7 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
   dist->p_latprob = (double *)calloc(dist->numlon * dist->numlat,
                                      sizeof(*dist->p_latprob));
 
+  cum_lon_prob = 0;
   for (lonidx = 0; lonidx < dist->numlon; lonidx ++)
   {
     dist->p_lonprob[lonidx] = 0;
@@ -85,6 +86,13 @@ void EventLocationPrior_Init_Params(EventLocationPrior_t * dist,
         = dist->p_bucketprob[lonidx * dist->numlat + latidx]
         / dist->p_lonprob[lonidx];
     }
+
+    cum_lon_prob += dist->p_lonprob[lonidx];
+  }
+
+  for (lonidx = 0; lonidx < dist->numlon; lonidx ++)
+  {
+    dist->p_lonprob[lonidx] /= cum_lon_prob;
   }
 
   /* initialize the probability of a hypothetical bucket at the north-pole,
@@ -202,7 +210,11 @@ static int sample_vec(int veclen, double * p_probvec)
       break;
   }
   
-  assert(i < veclen);
+  if (i >= veclen)
+  {
+    printf("sample_vec: tgt=%f cum=%f\n", tgt, cum);
+    exit(1);
+  }
   
   return i;
 }

@@ -145,6 +145,9 @@ def main(param_dirname):
   parser.add_option("-n", "--numsamples", dest="numsamples", default=10,
                     type="int",
                     help = "number of samples per window step (10)")
+  parser.add_option("-c", "--numseconds", dest="numseconds", default=1800,
+                    type="int",
+                    help = "seconds of birth moves per window (1800)")
   parser.add_option("-w", "--window", dest="window", default=1800,
                     type="int",
                     help = "window size in seconds (1800)")
@@ -262,6 +265,7 @@ def main(param_dirname):
   else:
     propose_events = None
   events, ev_detlist = netmodel.infer(runid, options.numsamples,
+                                      options.numseconds,
                                       options.window, options.step,
                                       propose_events,
                                       options.verbose,
