@@ -1,8 +1,8 @@
 This package contains the NET-VISA implementation. Network Vertically
 Integrated Seismological Analysis.
 
-- rpy2, R, and numpy are required. To test rpy2 and R
-  run: python -m utils.LogisticModel
+- numpy and scipy are required. To test them, run:
+  python -m utils.LogisticModel
   Also, matplotlib and Basemap are required for the visualization
 
 - Load the data in a mysql database:
@@ -35,6 +35,9 @@ Integrated Seismological Analysis.
 
 - To see the waveforms of an event:
   python2.6 -m utils.waveform leb 5288665
+ 
+  or to see the waveform at a station during a timerange
+  python2.6 -m utils.wave_sta AS31 1237683300 1237683500
 
 Directory Layout
 ================

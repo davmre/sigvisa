@@ -33,10 +33,10 @@ def print_event_simple(netmodel, earthmodel, detections, event, event_detlist):
                                   int(detections[detid, DET_SITE_COL]))\
                                   - detections[detid, DET_TIME_COL]
     
-    print "(%s, %d, %s, tres %.1f)" \
+    print "(%s, %d, %s, tres %.1f, sc %.1f)" \
           % (earthmodel.PhaseName(phaseid), detid,
              earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL])),
-             tres),
+             tres, netmodel.score_event_det(event, phaseid, detid)),
   print "\nEv Score:", netmodel.score_event(event, event_detlist)
 
 def print_events(netmodel, earthmodel, detections, events, event_detlists,

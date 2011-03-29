@@ -34,6 +34,9 @@ def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
       
       res = arrtime - pred_arrtime
 
+      if res > 30:
+        continue
+      
       if res > 1000:
         raise ValueError("residual too large")
       
@@ -44,25 +47,25 @@ def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
 
   # learn the overall residual for and sample some points
   # for an empirical Bayes prior
-  overall_loc, overall_scale = Laplace.estimate(overall_res)
-  overall_prior = [Laplace.sample(overall_loc, overall_scale) for _ in
+  overall_params = Laplace.estimate_trunc(overall_res)
+  overall_prior = [Laplace.sample_trunc(*overall_params) for _ in
                    xrange(NUM_PRIOR)]
 
-  print "Overall Arrival Time location and scale:", overall_loc, overall_scale
+  print "Overall Arrival Time Parameters:", overall_params
 
   # learn the overall site residual for each site and sample some points
   # for an empirical Bayes prior
   site_prior = {}
-  print "Site Arrival Time Residuals: Location and Scale"
+  print "Site Arrival Time Parameters:"
   for siteid in range(earthmodel.NumSites()):
     reslist = site_res[siteid]
     if len(reslist) < NUM_PRIOR:
       site_prior[siteid] = []
     else:
-      site_loc, site_scale = Laplace.estimate(reslist)
-      site_prior[siteid] = [Laplace.sample(site_loc, site_scale)
+      site_params = Laplace.estimate_trunc(reslist)
+      site_prior[siteid] = [Laplace.sample_trunc(*site_params)
                             for _ in xrange(NUM_PRIOR)]
-      print siteid, ":", site_loc, site_scale
+      print siteid, ":", site_params
   
   # learn the overall phase residual for each phase and sample some points
   # for an empirical Bayes prior
@@ -73,10 +76,10 @@ def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
     if len(reslist) < NUM_PRIOR:
       phase_prior[phaseid] = []
     else:
-      phase_loc, phase_scale = Laplace.estimate(reslist)
-      phase_prior[phaseid] = [Laplace.sample(phase_loc, phase_scale)
+      phase_params = Laplace.estimate_trunc(reslist)
+      phase_prior[phaseid] = [Laplace.sample_trunc(*phase_params)
                               for _ in xrange(NUM_PRIOR)]
-      print phaseid, ":", phase_loc, phase_scale
+      print phaseid, ":", phase_params
   
   fp = open(param_filename, "w")
   
@@ -86,8 +89,8 @@ def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
     for phaseid in range(earthmodel.NumPhases()):
       reslist = site_phase_res[siteid, phaseid] + site_prior[siteid]\
                 + phase_prior[phaseid] + overall_prior
-      loc, scale = Laplace.estimate(reslist)
-      print >>fp, loc, scale
-      
+      loc, scale, minval, maxval = Laplace.estimate_trunc(reslist)
+      print >>fp, loc, scale, minval, maxval
+  
   fp.close()
   
