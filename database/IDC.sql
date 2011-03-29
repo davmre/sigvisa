@@ -37,8 +37,8 @@ create table static_siteid (
   statype     char(2)
 );
 
-/* only use sites which have at least a 1000 P phase detections */
-insert into static_siteid select rownum, freq.sta,site.lat, site.lon,site.elev,site.staname,site.statype from (select sta, count(*) p_cnt from leb_assoc where phase='P' and timedef='d' group by sta order by p_cnt desc) freq, static_site site where freq.sta=site.sta and site.offdate=-1 and freq.p_cnt > 1000;
+/* only use sites which have at least a 100 P phase detections */
+insert into static_siteid select rownum, freq.sta,site.lat, site.lon,site.elev,site.staname,site.statype from (select sta, count(*) p_cnt from leb_assoc where phase='P' and timedef='d' group by sta order by p_cnt desc) freq, static_site site where freq.sta=site.sta and site.offdate=-1 and freq.p_cnt > 100;
 
 commit;
 

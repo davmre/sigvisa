@@ -34,7 +34,7 @@ def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
       
       res = arrtime - pred_arrtime
 
-      if abs(res) > 30:
+      if abs(res) > 10:
         continue
       
       if res > 1000:
