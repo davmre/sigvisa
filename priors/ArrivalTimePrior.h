@@ -5,6 +5,8 @@ typedef struct ArrivalTimePrior_t
 
   double * locs;                             /* numsites x numphases */
   double * scales;                           /* numsites x numphases */
+  double * minvals;                          /* numsites x numphases */
+  double * maxvals;                          /* numsites x numphases */
 } ArrivalTimePrior_t;
 
 void ArrivalTimePrior_Init_Params(ArrivalTimePrior_t * prior,

@@ -145,9 +145,9 @@ def main(param_dirname):
   parser.add_option("-n", "--numsamples", dest="numsamples", default=10,
                     type="int",
                     help = "number of samples per window step (10)")
-  parser.add_option("-c", "--numseconds", dest="numseconds", default=1800,
+  parser.add_option("-c", "--numseconds", dest="numseconds", default=900,
                     type="int",
-                    help = "seconds of birth moves per window (1800)")
+                    help = "seconds of birth moves per window (900)")
   parser.add_option("-w", "--window", dest="window", default=1800,
                     type="int",
                     help = "window size in seconds (1800)")

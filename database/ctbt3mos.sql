@@ -269,8 +269,10 @@ create table arrival_tohoku (
  index (arid)
 ) engine = myisam;
 
+/* optional:
 load data local infile 'arrival_tohoku.csv' into table arrival_tohoku fields
 terminated by ',' optionally enclosed by '"' ignore 1 lines;
+*/
 
 /* leb_assoc */
 
@@ -552,6 +554,9 @@ fields terminated by ', ' optionally enclosed by '"' ignore 1 lines;
                                     
 /* change the location of the data from /archive/ops/ to /var/ctbt_data/ */
 update idcx_wfdisc set dir = concat('/var/ctbt_data/', substr(dir,14));
+
+-- update idcx_wfdisc set dir = replace(dir, '/','\\');
+-- update idcx_wfdisc set dir = concat('C:\\Users\\Nimar\\Data', dir);
 
 create table static_siteid (
   id          int,
