@@ -6,6 +6,17 @@ from database.dataset import *
 import netvisa, learn
 from results.compare import *
 
+def prune_detections(netmodel, events, event_detlists):
+  for evnum, event in enumerate(events):
+    dellist = []
+    for evdetnum, (phaseid, detid) in enumerate(event_detlists[evnum]):
+      detsc = netmodel.score_event_det(event, phaseid, detid)
+      if detsc is None or np.isinf(detsc):
+        dellist.append(evdetnum)
+    while len(dellist):
+      evdetnum = dellist.pop()
+      event_detlists[evnum].pop(evdetnum)
+  
 def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-x", "--text", dest="gui", default=True,
@@ -30,6 +41,9 @@ def main(param_dirname):
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
+
+  prune_detections(netmodel, leb_events, leb_evlist)
+  prune_detections(netmodel, sel3_events, sel3_evlist)
   
   print "LEB:"
   netmodel.score_world(leb_events, leb_evlist, 1)
@@ -150,4 +164,13 @@ def main(param_dirname):
     plt.show()
 
 if __name__ == "__main__":
-  main("parameters")
+  try:
+    main("parameters")
+  except SystemExit:
+    raise
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    pdb.post_mortem(sys.exc_traceback)
+    raise
+
