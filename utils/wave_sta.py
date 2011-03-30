@@ -12,17 +12,28 @@ def main(param_dirname):
     print "Usage: python wave_sta.py <sta> <start time> <end time>"
     sys.exit(1)
   
-  sta, start_time, end_time = sys.argv[1], float(sys.argv[2]),float(sys.argv[3])
+  sta, start_time, end_time = sys.argv[1],float(sys.argv[2]),float(sys.argv[3])
   cursor = db.connect().cursor()
   cursor.execute("select distinct chan from idcx_wfdisc where sta='%s'" % sta)
   chans = [x for x, in cursor.fetchall()]
+  if not len(chans):
+    # for array station use the reference station instead
+    cursor.execute("select refsta from static_site where sta='%s' and "
+                   "offdate=-1" % sta)
+    sta, = cursor.fetchone()
+    cursor.execute("select distinct chan from idcx_wfdisc where sta='%s'"% sta)
+    chans = [x for x, in cursor.fetchall()]
+    
   print "Channels:", chans
   for chan in chans:
     data, samprate = wave.fetch_waveform(sta, chan, start_time, end_time)
     timerange = np.arange(start_time, end_time, 1.0/samprate)
     plt.figure()
     plt.suptitle("%s -- %s" % (sta, chan))
-    plt.plot(timerange, data)
+    #plt.plot(timerange, wave.lowpass_filter(data, samprate, 0.5))
+    # remove the low-frequency noise
+    plt.plot(timerange, wave.highpass_filter(data, samprate, 0.5))
+    #plt.plot(timerange, data)
     plt.xlabel("Time")
     plt.ylabel("nm")
   plt.show()

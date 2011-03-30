@@ -101,3 +101,30 @@ def fetch_waveform(station, chan, stime, etime):
     etime = stime + (desired_samples - available_samples) / float(samprate)
 
   return data, samprate
+
+# http://en.wikipedia.org/wiki/High-pass_filter
+def highpass_filter(data, samprate, cutoff_freq):
+  """
+  Returns the data with the lower frequencies below cutoff_freq removed
+  """
+  rc = 1.0 / (2 * np.pi * cutoff_freq)
+  alpha = rc / (rc + 1.0/samprate)
+
+  output = [0 for _ in data]
+  output[0] = data[0]
+  for i in xrange(1, len(data)):
+    output[i] = alpha * output[i-1] + alpha * (data[i] - data[i-1])
+  return output
+
+def lowpass_filter(data, samprate, cutoff_freq):
+  """
+  Returns the data with the higher frequencies above cutoff_freq removed
+  """
+  rc = 1.0 / (2 * np.pi * cutoff_freq)
+  alpha = (1.0/samprate) / (rc + (1.0/samprate))
+
+  output = [0 for _ in data]
+  output[0] = data[0]
+  for i in xrange(1, len(data)):
+    output[i] = (1-alpha) * output[i-1] + alpha * data[i]
+  return output
