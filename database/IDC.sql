@@ -74,6 +74,25 @@ commit;
 create or replace view idcx_arrival_net as
 select * from idcx_arrival idcx where delaz > 0 and delslo > 0 and snr > 0;
 
+/* load the ISC events for validation */
+create table isc_events (
+ eventid     int not null,
+ region      varchar(100) not null,
+ author      varchar(10) not null,
+ lon         float not null,
+ lat         float not null,
+ depth       float not null,
+ time        float not null,
+ mb          float not null,
+ ndef        int,
+ nsta        int,
+ gap         int,
+ primary key (eventid, author)
+);
+create index isc_events_time on isc_events(time);
+create index isc_events_author_time on isc_events(author, time);
+
+-- sqlldr userid=user/pass control=isc_events.ctl log=isc_events.log skip=1
 
 /* tables to write results */
 create table visa_run (
