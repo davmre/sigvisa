@@ -545,6 +545,11 @@ static void propose_best_detections(NetModel_t * p_netmodel,
     
     p_det = p_netmodel->p_detections + detnum;
 
+    /* tx phases are causing a lot of confusion */
+    
+    if (EARTH_PHASE_tx == p_det->phase_det)
+      continue;
+    
     siteid = p_det->site_det;
   
     best_phase = -1;
@@ -566,6 +571,10 @@ static void propose_best_detections(NetModel_t * p_netmodel,
       if (P_phase_only && (phase > 0))
         continue;
       
+      /* pP phases have too much variance, they are not helping ! */
+      if (EARTH_PHASE_pP == phase)
+        continue;
+              
       p_event->p_detids[siteid * numtimedefphases + phase] = detnum;
 
       poss = score_event_site_phase(p_netmodel, p_event, siteid, phase,

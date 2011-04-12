@@ -32,23 +32,15 @@ void ArrivalTimePrior_Init_Params(ArrivalTimePrior_t * prior,
   prior->scales = (double *)calloc(prior->numsites * prior->numphases,
                                    sizeof(*prior->scales));
 
-  prior->minvals = (double *)calloc(prior->numsites * prior->numphases,
-                                    sizeof(*prior->minvals));
-  
-  prior->maxvals = (double *)calloc(prior->numsites * prior->numphases,
-                                    sizeof(*prior->maxvals));
-  
   for (siteid = 0; siteid < prior->numsites; siteid ++)
   {
     for (phaseid = 0; phaseid < prior->numphases; phaseid ++)
     {
-      if (4 != fscanf(fp, "%lg %lg %lg %lg\n", 
+      if (2 != fscanf(fp, "%lg %lg\n", 
                       &prior->locs[siteid * prior->numphases + phaseid],
-                      &prior->scales[siteid * prior->numphases + phaseid],
-                      &prior->minvals[siteid * prior->numphases + phaseid],
-                      &prior->maxvals[siteid * prior->numphases + phaseid]))
+                      &prior->scales[siteid * prior->numphases + phaseid]))
       {
-        fprintf(stderr, "ArrivalTimePrior: can't read params for siteid %d"
+        fprintf(stderr, "ArrivalTimePrior: can't read loc, scale for siteid %d"
                 " phaseid %d in file %s", siteid, phaseid, filename);
         exit(1);
       }
@@ -66,27 +58,15 @@ double ArrivalTimePrior_LogProb(const ArrivalTimePrior_t * prior,
   double loc;
   double scale;
   double res;
-  double minval;
-  double maxval;
   
   assert((siteid < prior->numsites) && (phaseid < prior->numphases));
   
   loc = prior->locs[siteid * prior->numphases + phaseid];
   scale = prior->scales[siteid * prior->numphases + phaseid] + det_deltime;
-  
-  minval = prior->minvals[siteid * prior->numphases + phaseid];
-  
-  maxval = prior->maxvals[siteid * prior->numphases + phaseid];
-  
-  res = arrtime - pred_arrtime;
 
-  if ((res > maxval) || (res < minval))
-  {
-    return -INFINITY;
-  }
+  res = arrtime - pred_arrtime;
   
-  
-  return Laplace_trunc_ldensity(loc, scale, minval, maxval, res);
+  return Laplace_ldensity(loc, scale, res);
 }
 
 double ArrivalTimePrior_MeanResidual(const ArrivalTimePrior_t * prior,
@@ -102,7 +82,5 @@ void ArrivalTimePrior_UnInit(ArrivalTimePrior_t * prior)
 {
   free(prior->locs);
   free(prior->scales);
-  free(prior->minvals);
-  free(prior->maxvals);
 }
 
