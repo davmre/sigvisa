@@ -262,8 +262,8 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   start_time, end_time = read_timerange(cursor, label, hours, skip)
 
   if verbose:
-    print "Dataset: %.1f hrs from %d" % ((end_time-start_time)/3600,
-                                         start_time),
+    print "Dataset: %.1f hrs from %d to %d " % ((end_time-start_time)/3600.,
+                                                start_time, end_time),
     print "i.e. %s to %s" % (strftime("%x %X", gmtime(start_time)),
                              strftime("%x %X", gmtime(end_time)))
 

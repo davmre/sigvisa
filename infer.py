@@ -198,6 +198,23 @@ def main(param_dirname):
     cursor.execute("select min(time), max(time) from %s"
                    % options.arrival_table)
     start_time, end_time = cursor.fetchone()
+    if options.skip >= start_time and options.skip <= end_time:
+      start_time = options.skip
+    else:
+      start_time += options.skip * 60. * 60.
+    
+    if options.hours is None:
+      pass
+    elif options.hours >= start_time and options.hours <= end_time:
+      end_time = options.hours
+    else:
+      end_time = start_time + options.hours * 60. * 60.
+    
+    print "Dataset: %.1f hrs from %d to %d" % ((end_time-start_time)/3600,
+                                               start_time, end_time),
+    print "i.e. %s to %s" % (strftime("%x %X", gmtime(start_time)),
+                             strftime("%x %X", gmtime(end_time)))
+    
     # read the detections and uptime
     detections = read_detections(cursor, start_time, end_time,
                                  options.arrival_table)[0]
