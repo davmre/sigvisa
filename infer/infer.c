@@ -319,10 +319,24 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
                                       p_world->high_evtime,
                                   (PyArrayObject * )p_world->propose_eventobj);
   else
-    numevents = propose_invert(p_netmodel, pp_events,
-                               p_world->max_prop_evtime, p_world->high_evtime,
-                               p_world->low_detnum, p_world->high_detnum,
-                               5.0, p_world->numseconds);
+  {
+    /* if there are too many detections then we need to spend a fixed
+     * time in this window */
+    if ((p_world->high_detnum - p_world->low_detnum) > 1500)
+      numevents = propose_invert_timed(p_netmodel, pp_events,
+                                       p_world->max_prop_evtime,
+                                       p_world->high_evtime,
+                                       p_world->low_detnum, 
+                                       p_world->high_detnum,
+                                       5.0, p_world->numseconds);
+    else
+      numevents = propose_invert_step(p_netmodel, pp_events,
+                                      p_world->max_prop_evtime,
+                                      p_world->high_evtime,
+                                      p_world->low_detnum,
+                                      p_world->high_detnum,
+                                      2.5, 2);
+  }
   
   t1 = time(NULL) - t1;
   
