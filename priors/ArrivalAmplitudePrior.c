@@ -75,11 +75,16 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
   
   assert((siteid >= 0) && (siteid < prior->numsites));
   assert((phaseid >= 0) && (phaseid < prior->numphases));
+
+  if (amp < 0)
+    amp = 1;
+  else if (amp > MAX_AMP)
+    amp = MAX_AMP;
   
   logamp = log(amp);
 
   p_phase = prior->p_site_phase_amp + siteid * prior->numphases + phaseid;
-  
+
   return Gaussian_logprob(logamp, p_phase->intercept + p_phase->mb_coeff * mb
                           + p_phase->depth_coeff * depth
                           + p_phase->ttime_coeff * ttime, p_phase->std);
@@ -93,15 +98,23 @@ double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t *
   
   assert((siteid >= 0) && (siteid < prior->numsites));
 
+  if (amplitude < 0)
+    amplitude = 1;
+  else if (amplitude > MAX_AMP)
+    amplitude = MAX_AMP;
+  
   logamp = log(amplitude);
   
   p_false = prior->p_site_false + siteid;
   
-  /* std could be 0 */
+  /* std could be 0 so we add 1e-6
+   * we mix with a uniform distribution to avoid extreme values when
+   * the amplitude is far from the mean */
   return log(p_false->wt0 * Gaussian_prob(logamp, p_false->mean0, 
-                                          p_false->std0 + 1e-6)
+                                          p_false->std0 + 1e-6) * .9
              + p_false->wt1 * Gaussian_prob(logamp, p_false->mean1, 
-                                            p_false->std1 + 1e-6));
+                                            p_false->std1 + 1e-6) * .9
+             + .1 / MAX_AMP);
 }
 
 void ArrivalAmplitudePrior_UnInit(ArrivalAmplitudePrior_t * prior)
