@@ -97,6 +97,7 @@ end|
 
 delimiter ;
 
+/* Display all the LEB events and any matching VISA events */
 create or replace view visa_vs_leb as select run.runid runid, leb.orid
 leb, vo.orid visa, round(vo.score) score, round(dist_km(leb.lon,
 leb.lat, vo.lon, vo.lat)) err_km, round(leb.lon) lon, round(leb.lat)
@@ -104,6 +105,14 @@ lat, round(leb.time) time, round(leb.mb,1) mb from visa_run run join
 leb_origin leb on leb.time between run.data_start and run.data_end
 left join visa_origin vo on dist_deg(leb.lon, leb.lat, vo.lon, vo.lat)
 <= 5 and abs(vo.time-leb.time)<=50 and vo.runid=run.runid;
+
+/* display all the VISA events which don't have any corresponding LEB event */
+create or replace view visa_spurious as select vo.runid runid,
+vo.orid visa, round(vo.score) score, round(vo.lon) lon, round(vo.lat)
+lat, round(vo.time) time, round(vo.mb,1) mb from visa_origin vo
+where not exists (select 1 from leb_origin leb 
+where dist_deg(leb.lon, leb.lat, vo.lon, vo.lat)
+<= 10 and abs(vo.time-leb.time)<=100);
 
 create or replace view sel3_vs_leb as select run.runid runid, leb.orid
 leb, sel3.orid sel3, round(dist_km(leb.lon, leb.lat, sel3.lon,
