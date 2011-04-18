@@ -204,14 +204,16 @@ def read_phases(cursor):
   return phasenames, phasetimedef
 
 def read_data(label="training", hours=None, skip=0, verbose=1,
-              visa_leb_runid=None):
+              visa_leb_runid=None, read_leb_detections=False):
   """
   Reads
-  - LEB events/assoc,
+  - LEB events/assoc, with IDCX arrivals
   - SEL3 events/assoc,
   - IDCX arrivals with delaz>0 and delsnr>0
   - Site information
   - Phase information
+  - LEB assoc with LEB arrivals
+  - LEB arrivals
 
 
   The data is divided into the following labels:
@@ -268,20 +270,31 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
                              strftime("%x %X", gmtime(end_time)))
 
   if verbose:
-    print "Reading detections...",
+    print "Reading SEL3 detections...",
     
   det, arid2num = read_detections(cursor, start_time, end_time)
 
   if verbose:
     print "done (%d detections)" % len(det)
+
+  if read_leb_detections:
+    leb_det, leb_arid2num = read_detections(cursor, start_time, end_time,
+                                            "leb_arrival")
+    if verbose:
+      print "done (%d detections)" % len(leb_det)
+
+  if verbose:
     print "Reading LEB events and associations...",
 
   if visa_leb_runid is None:
     leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "leb")
     leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
                             arid2num, "leb")
+    if read_leb_detections:
+      leb_leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
+                                  leb_arid2num, "leb")
   else:
-    leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "visa",
+    leb_events, leb_orid2num = read_events(cursor, start_time, end_time,"visa",
                                            visa_leb_runid)
     leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
                             arid2num, "visa", visa_leb_runid)
@@ -314,6 +327,11 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
     print "done (%d sites %d array, %d phases %d timedef)" \
           % (len(sites), sites[:,SITE_IS_ARRAY].sum(), len(phasenames),
              sum(phasetimedef))
-    
-  return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef
+
+  if read_leb_detections:
+    return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
+         sel3_evlist, site_up, sites, phasenames, phasetimedef,\
+         leb_det, leb_leb_evlist
+  else:
+    return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
+           sel3_evlist, site_up, sites, phasenames, phasetimedef

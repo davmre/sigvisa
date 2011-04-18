@@ -79,8 +79,10 @@ def main(param_dirname):
     hours = None
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid)
+         sel3_evlist, site_up, sites, phasenames, phasetimedef, \
+         leb_detections, leb_leb_evlist\
+         = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid,
+                     read_leb_detections=True)
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
   
@@ -110,7 +112,8 @@ def main(param_dirname):
 
   priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
                                              "ArrivalTimePrior.txt"),
-                                earthmodel, detections, leb_events, leb_evlist)
+                                earthmodel, leb_detections, leb_events,
+                                leb_leb_evlist)
 
   priors.ArrivalAzimuthPrior.learn(os.path.join(param_dirname,
                                                 "ArrivalAzimuthPrior.txt"),
