@@ -888,10 +888,6 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       double score_delta;
       int poss;
 
-      /* pP phases have too much variance, they are not helping ! */
-      if (EARTH_PHASE_pP == phaseid)
-        continue;
-
       old_detnum = p_event->p_detids[p_detection->site_det * numtimedefphases
                                      + phaseid];
 
