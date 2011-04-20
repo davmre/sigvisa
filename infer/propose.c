@@ -545,11 +545,6 @@ static void propose_best_detections(NetModel_t * p_netmodel,
     
     p_det = p_netmodel->p_detections + detnum;
 
-    /* tx phases are causing a lot of confusion */
-    
-    if (EARTH_PHASE_tx == p_det->phase_det)
-      continue;
-    
     siteid = p_det->site_det;
   
     best_phase = -1;
