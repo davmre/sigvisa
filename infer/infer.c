@@ -850,10 +850,6 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
   
   p_detection = p_netmodel->p_detections + detnum;
     
-  /* tx phases are causing a lot of confusion */
-  if (EARTH_PHASE_tx == p_detection->phase_det)
-    return;
-
   p_earth = p_netmodel->p_earth;
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
     
