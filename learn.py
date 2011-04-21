@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import matplotlib.pyplot as plt
 from optparse import OptionParser
 
@@ -79,12 +80,13 @@ def main(param_dirname):
     hours = None
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef, \
-         leb_detections, leb_leb_evlist\
-         = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid,
-                     read_leb_detections=True)
+         sel3_evlist, site_up, sites, phasenames, phasetimedef \
+         = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid)
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
+
+  leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
+                                       leb_evlist)
   
   priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
                              start_time, end_time, leb_events)
@@ -112,8 +114,8 @@ def main(param_dirname):
 
   priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
                                              "ArrivalTimePrior.txt"),
-                                earthmodel, leb_detections, leb_events,
-                                leb_leb_evlist)
+                                earthmodel, detections, leb_events,
+                                leb_evlist)
 
   priors.ArrivalAzimuthPrior.learn(os.path.join(param_dirname,
                                                 "ArrivalAzimuthPrior.txt"),
@@ -142,7 +144,68 @@ def main(param_dirname):
 
   if options.gui:
     plt.show()
+
+def compute_secondary_dets(earthmodel, detections, leb_events, leb_evlist):
+  """
+  Add secondary detections to LEB
+  """
+  # compute the set of detections which are off-limits
+  detused = [False for detnum in xrange(len(detections))]
+  for detlist in leb_evlist:
+    for phaseid, detnum in detlist:
+      detused[detnum] = True
+  
+  # assign each unassigned detection to the first event-phase within 10 seconds
+  leb_seclist = []
+  low_detnum = 0
+  for event,detlist in zip(leb_events, leb_evlist):
+    phase_site = [[[] for siteid in xrange(earthmodel.NumSites())]
+                  for phaseid in xrange(earthmodel.NumPhases())]
+
+    for phaseid, detnum in detlist:
+      siteid = int(detections[detnum, DET_SITE_COL])
+      prev_dets = phase_site[phaseid][siteid]
+      prev_dets.append(detnum)
     
+    for detnum in xrange(low_detnum, len(detections)):
+      det = detections[detnum]
+
+      if det[DET_TIME_COL] < event[EV_TIME_COL]:
+        low_detnum += 1
+        continue
+
+      if det[DET_TIME_COL] > (event[EV_TIME_COL] + MAX_TRAVEL_TIME):
+        break
+
+      if detused[detnum]:
+        continue
+      
+      siteid = int(det[DET_SITE_COL])
+      
+      for phaseid in xrange(earthmodel.NumTimeDefPhases()):
+        prev_dets = phase_site[phaseid][siteid]
+        if not len(prev_dets):
+          continue
+
+        last_detnum = prev_dets[-1]
+        last_det_time = detections[last_detnum, DET_TIME_COL]
+        if det[DET_TIME_COL] > last_det_time \
+               and det[DET_TIME_COL] < (last_det_time + 10):
+          prev_dets.append(detnum)
+          detused[detnum]
+          break
+        
+    seclist = []
+    for siteid in xrange(earthmodel.NumSites()):
+      for phaseid in xrange(earthmodel.NumPhases()):
+        detnums = phase_site[phaseid][siteid]
+        if len(detnums):
+          seclist.append(tuple([phaseid] + detnums))
+    
+    leb_seclist.append(seclist)
+            
+  return leb_seclist
+
 if __name__ == "__main__":
   try:
     main("parameters")
