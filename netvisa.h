@@ -15,9 +15,12 @@ typedef struct Event_t
   double evtime;
   double evmag;
 
-  /* array of numsites x numtimedefphases */
-  int * p_detids;                            /* detection numbers or -1 */
+  /* array of numsites * numtimedefphases */
+  int * p_num_dets; /* number of secondary detections, 0 to MAX_PHASE_DET */
 
+  /* array of numsites * numtimedefphases * MAX_PHASE_DET */
+  int * p_all_detids;       /* all detids, first one is the primary */
+  
   int orid;
   double evscore;
 } Event_t;
@@ -47,6 +50,7 @@ typedef struct Detection_t
 } Detection_t;
 
 
+#include "priors/NumSecDetPrior.h"
 #include "priors/NumEventPrior.h"
 #include "priors/EventLocationPrior.h"
 #include "priors/EventMagPrior.h"
@@ -81,6 +85,7 @@ typedef struct NetModel_t
 
   EarthModel_t * p_earth;
   
+  NumSecDetPrior_t num_secdet_prior;
   NumEventPrior_t num_event_prior;
   EventLocationPrior_t event_location_prior;
   EventMagPrior_t event_mag_prior;
@@ -174,6 +179,12 @@ typedef struct NetModel_t
 
 /* maximum time taken by any phase */
 #define MAX_TRAVEL_TIME ((double) 2000.0)
+
+/* the spacing between secondary detections */
+#define SECDET_INTERVAL ((double) 5.0)
+
+/* maximum number of primary + secondary detections for any phase */
+#define MAX_PHASE_DET  15
 
 /* max time residual should not be needed in a proper model but due to
  * unexplained extremely high variance in some of the travel time residual

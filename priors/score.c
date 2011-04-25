@@ -56,7 +56,11 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
   if (!NetModel_IsSiteUp(p_netmodel, siteid, pred_arrtime))
     return 0;
   
-  detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
+  if (p_event->p_num_dets[siteid * numtimedefphases + phaseid] > 0)
+    detnum = p_event->p_all_detids[(siteid * numtimedefphases 
+                                    + phaseid) * MAX_PHASE_DET];
+  else
+    detnum = -1;
         
   if (detnum != -1)
   {

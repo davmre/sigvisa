@@ -232,7 +232,7 @@ int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
 
       for (i=0; i<numsites; i++)
         for (j=0; j<numtimedefphases; j++)
-          p_event->p_detids[i * numtimedefphases + j] = -1;
+          p_event->p_num_dets[i * numtimedefphases + j] = 0;
     
       pp_events[numevents++] = p_event;
     }
@@ -262,12 +262,18 @@ int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
       p_det = p_netmodel->p_detections + detnum;
   
       /* save the old detnum */
-      old_detnum = p_event->p_detids[p_det->site_det * numtimedefphases 
-                                     + EARTH_PHASE_P];
-
-      p_event->p_detids[p_det->site_det * numtimedefphases + EARTH_PHASE_P]
-        = detnum;
-    
+      if (p_event->p_num_dets[p_det->site_det * numtimedefphases 
+                              + EARTH_PHASE_P] > 0)
+        old_detnum = p_event->p_all_detids[(p_det->site_det * numtimedefphases 
+                                            + EARTH_PHASE_P) * MAX_PHASE_DET];
+      else
+        old_detnum = -1;
+      
+      p_event->p_num_dets[p_det->site_det * numtimedefphases
+                          + EARTH_PHASE_P] = 1;
+      p_event->p_all_detids[(p_det->site_det * numtimedefphases 
+                             + EARTH_PHASE_P) * MAX_PHASE_DET] = detnum;
+      
       poss = score_event_site_phase_simple(p_netmodel, p_event, 
                                            p_det->site_det, 
                                            EARTH_PHASE_P, &detscore);
@@ -278,9 +284,19 @@ int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
         p_site_score[p_det->site_det] = detscore;
       }
       else
+      {
         /* restore the old detnum */
-        p_event->p_detids[p_det->site_det * numtimedefphases + EARTH_PHASE_P] 
-          = old_detnum;
+        if (-1 == old_detnum)
+          p_event->p_num_dets[p_det->site_det * numtimedefphases 
+                              + EARTH_PHASE_P] = 0;
+        else
+        {
+          p_event->p_num_dets[p_det->site_det * numtimedefphases 
+                              + EARTH_PHASE_P] = 1;
+          p_event->p_all_detids[(p_det->site_det * numtimedefphases 
+                                 + EARTH_PHASE_P) * MAX_PHASE_DET] = old_detnum;
+        }
+      }
     }
 
     /*
@@ -289,7 +305,11 @@ int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
     event_numdet = 0;
     for (sitenum = 0; sitenum < numsites; sitenum ++)
     {
-      detnum = p_event->p_detids[sitenum * numtimedefphases + EARTH_PHASE_P];
+      if (p_event->p_num_dets[sitenum * numtimedefphases + EARTH_PHASE_P] > 0)
+        detnum = p_event->p_all_detids[(sitenum * numtimedefphases 
+                                        + EARTH_PHASE_P) * MAX_PHASE_DET];
+      else
+        detnum = -1;
 
       if (detnum != -1)
       {
@@ -303,195 +323,6 @@ int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
   free(p_site_score);
   free(p_skip_det);
   free(p_bucket_score);
-  
-  return numevents;
-}
-
-/* brute force -- find all events at each possible time which have a good
- * score */
-int propose2(NetModel_t * p_netmodel, Event_t **pp_events,
-            double time_low, double time_high, int det_low,
-            int det_high, double degree_step, double time_step)
-{
-  EarthModel_t * p_earth;
-  int numsites;
-  int numtimedefphases;
-  
-  int numlon;
-  int numlat;
-  int numtime;
-  double z_step;
-  
-  int lonidx, latidx, timeidx;
-  double lon, lat, time;
-
-  int detnum;
-
-  int numevents;
-
-  Event_t * p_best_event;
-  Event_t * p_event;
-  int * p_event_best_detids;                 /* numsites * numtimedefphases */
-  double * p_event_best_score;               /* numsites * numtimedefphases */
-  int * p_skip_det;                          /* numdetections */
-  
-  p_earth = p_netmodel->p_earth;
-  
-  numlon = (int) ceil(360.0 / degree_step);
-  numlat = numlon /2;
-  numtime = (int) ceil((time_high - time_low) / time_step);
-  z_step = 2.0 / numlat;
-  
-  numsites = EarthModel_NumSites(p_earth);
-  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-
-  p_event_best_detids = (int *) malloc(numsites * numtimedefphases 
-                                       * sizeof (*p_event_best_score));
-  p_event_best_score = (double *) malloc(numsites * numtimedefphases 
-                                         * sizeof (*p_event_best_score));
-  
-  p_skip_det = (int *) calloc(p_netmodel->numdetections, sizeof(*p_skip_det));
-  
-  if (!p_skip_det || !p_event_best_score || !p_event_best_detids)
-  {
-    return -1;
-  }
-
-  p_event = alloc_event(p_netmodel);
-  
-  numevents = 0;
-
-  do
-  {
-    int i;
-    int siteid;
-    int phase;
-
-    p_best_event = alloc_event(p_netmodel);
-    p_best_event->evscore = 0;
-    
-    BEGIN_LON_LOOP;
-    BEGIN_LAT_LOOP;
-    BEGIN_TIME_LOOP;
-
-    p_event->evlon = lon;
-    p_event->evlat = lat;
-    p_event->evtime = time;
-    p_event->evmag = 3.0;
-    p_event->evdepth = 0.0;
-    
-    /* find the best set of available detections for this event */
-    for (i=0; i < numsites * numtimedefphases; i++)
-    {
-      p_event_best_detids[i] = -1;
-      p_event_best_score[i] = 0;
-    }
-
-    /* for each detection find the best phase at the event */
-    for (detnum = det_low; detnum < det_high; detnum ++)
-    {
-      Detection_t * p_det;
-      int best_phase;
-      double best_phase_score;
-    
-      if (p_skip_det[detnum])
-        continue;
-    
-      p_det = p_netmodel->p_detections + detnum;
-      siteid = p_det->site_det;
-  
-      best_phase = -1;
-      best_phase_score = 0;
-
-      for (phase=0; phase < numtimedefphases; phase++)
-      {
-        double distance, pred_az;
-        int poss;
-        double detscore;
-
-        distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
-                                    siteid);
-
-        pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
-                                            p_event->evlat, siteid);
-  
-        p_event->p_detids[siteid * numtimedefphases + phase] = detnum;
-
-        poss = score_event_site_phase(p_netmodel, p_event, siteid, phase,
-                                      distance, pred_az, &detscore);
-
-        if (poss && (detscore > 0)
-            && ((-1 == best_phase) || (detscore > best_phase_score)))
-        {
-          best_phase = phase;
-          best_phase_score = detscore;
-        }
-      }
-
-      if ((-1 != best_phase) 
-          && ((-1 == p_event_best_detids[siteid * numtimedefphases 
-                                         + best_phase])
-              || (best_phase_score 
-                  > p_event_best_score[siteid * numtimedefphases 
-                                       + best_phase])))
-      {
-        p_event_best_detids[siteid * numtimedefphases + best_phase] = detnum;
-        p_event_best_score[siteid * numtimedefphases + best_phase] 
-          = best_phase_score;
-      }
-    }
-  
-    /* score the best such event */
-    for (i=0; i < numsites * numtimedefphases; i++)
-    {
-      p_event->p_detids[i] = p_event_best_detids[i];
-    }
-    p_event->evscore = score_event(p_netmodel, p_event);
-    
-    if (p_event->evscore > p_best_event->evscore)
-    {
-      copy_event(p_netmodel, p_best_event, p_event);
-
-      printf("CURR BEST: ");
-      print_event(p_best_event);
-    }
-    
-    END_LON_LOOP;  
-    END_LAT_LOOP;
-    END_TIME_LOOP;
-  
-    if (0 == p_best_event->evscore)
-    {
-      free_event(p_best_event);
-      free_event(p_event);
-      break;
-    }
-    
-    /*
-     * we will identify the detections used by the best event and make them
-     * off-limits for future events
-     */
-    for (siteid = 0; siteid < numsites; siteid ++)
-    {
-      for (phase = 0; phase < numtimedefphases; phase ++)
-      {
-        detnum = p_best_event->p_detids[siteid * numtimedefphases + phase];
-
-        if (detnum != -1)
-        {
-          p_skip_det[detnum] = 1;
-        }
-      }
-    }
-    
-    /* add the best event to the list of events */
-    pp_events[numevents ++] = p_best_event;
-    
-  } while (1);
-
-  free(p_event_best_detids);
-  free(p_event_best_score);
-  free(p_skip_det);
   
   return numevents;
 }
@@ -566,8 +397,10 @@ static void propose_best_detections(NetModel_t * p_netmodel,
       if (P_phase_only && (phase > 0))
         continue;
       
-      p_event->p_detids[siteid * numtimedefphases + phase] = detnum;
-
+      p_event->p_num_dets[siteid * numtimedefphases + phase] = 1;
+      p_event->p_all_detids[(siteid * numtimedefphases + phase)*MAX_PHASE_DET]
+        = detnum;
+      
       poss = score_event_site_phase(p_netmodel, p_event, siteid, phase,
                                     distance, pred_az, &detscore);
 
@@ -598,7 +431,13 @@ static void propose_best_detections(NetModel_t * p_netmodel,
   /* score the best such event */
   for (i=0; i < numsites * numtimedefphases; i++)
   {
-    p_event->p_detids[i] = p_event_best_detids[i];
+    if (-1 == p_event_best_detids[i])
+      p_event->p_num_dets[i] = 0;
+    else
+    {
+      p_event->p_num_dets[i] = 1;
+      p_event->p_all_detids[i * MAX_PHASE_DET] = p_event_best_detids[i];
+    }
   }
   p_event->evscore = score_event(p_netmodel, p_event);
 
@@ -921,10 +760,11 @@ int propose_invert_timed (NetModel_t * p_netmodel, Event_t **pp_events,
       {
         for (phase = 0; phase < numtimedefphases; phase ++)
         {
-          detnum = p_best_event->p_detids[siteid * numtimedefphases + phase];
-          
-          if (detnum != -1)
+          if (p_best_event->p_num_dets[siteid * numtimedefphases + phase] > 0)
           {
+            detnum = p_best_event->p_all_detids[(siteid * numtimedefphases 
+                                                 + phase) * MAX_PHASE_DET];
+          
             p_skip_det[detnum] = 1;
             /* no point inverting these detections either */
             p_skip_inv[detnum - det_low] = 1;
@@ -1100,10 +940,10 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     {
       for (phase = 0; phase < numtimedefphases; phase ++)
       {
-        detnum = p_best_event->p_detids[siteid * numtimedefphases + phase];
-
-        if (detnum != -1)
+        if (p_best_event->p_num_dets[siteid * numtimedefphases + phase] > 0)
         {
+          detnum = p_best_event->p_all_detids[(siteid * numtimedefphases
+                                               + phase)*MAX_PHASE_DET];
           p_skip_det[detnum] = 1;
         }
       }
@@ -1232,10 +1072,11 @@ int propose_uniform(NetModel_t * p_netmodel, Event_t **pp_events,
     {
       for (phase = 0; phase < numtimedefphases; phase ++)
       {
-        detnum = p_best_event->p_detids[siteid * numtimedefphases + phase];
-
-        if (detnum != -1)
+        if (p_best_event->p_num_dets[siteid * numtimedefphases + phase] > 0)
         {
+          detnum = p_best_event->p_all_detids[(siteid * numtimedefphases 
+                                               + phase) * MAX_PHASE_DET];
+
           p_skip_det[detnum] = 1;
         }
       }
