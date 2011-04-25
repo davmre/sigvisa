@@ -5,6 +5,7 @@ from optparse import OptionParser
 
 from database.dataset import *
 
+import priors.NumSecDetPrior
 import priors.NumEventPrior
 import priors.EventLocationPrior
 import priors.EventMagPrior
@@ -31,6 +32,7 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
     
   model = netvisa.NetModel(earthmodel,
                            start_time, end_time, detections, site_up,
+                           os.path.join(param_dirname, "NumSecDetPrior.txt"),
                            os.path.join(param_dirname, "NumEventPrior.txt"),
                            os.path.join(param_dirname,
                                         "EventLocationPrior.txt"),
@@ -87,7 +89,10 @@ def main(param_dirname):
 
   leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
                                        leb_evlist)
-  
+
+  priors.NumSecDetPrior.learn(os.path.join(param_dirname, "NumSecDetPrior.txt"),
+                              leb_seclist)
+
   priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
                              start_time, end_time, leb_events)
   

@@ -308,6 +308,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   double end_time;
   PyArrayObject * detectionsobj;
   PyArrayObject * siteupobj;
+  const char * numsecdet_fname;
   const char * numevent_fname;
   const char * evloc_fname;
   const char * evmag_fname;
@@ -320,10 +321,10 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   const char * arrsnr_fname;
   const char * arramp_fname;
   
-  if (!PyArg_ParseTuple(args, "O!ddO!O!sssssssssss", &py_EarthModel, &p_earth,
+  if (!PyArg_ParseTuple(args, "O!ddO!O!ssssssssssss", &py_EarthModel, &p_earth,
                         &start_time, &end_time, 
                         &PyArray_Type, &detectionsobj,
-                        &PyArray_Type, &siteupobj,
+                        &PyArray_Type, &siteupobj, &numsecdet_fname,
                         &numevent_fname, &evloc_fname, &evmag_fname, 
                         &evdet_fname, &arrtime_fname, &numfalse_fname,
                         &arraz_fname, &arrslo_fname, &arrphase_fname,
@@ -365,6 +366,8 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
 
   alloc_site_up(siteupobj, &self->numsites, &self->numtime, &self->p_site_up);
   
+  NumSecDetPrior_Init_Params(&self->num_secdet_prior, numsecdet_fname);
+
   NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
   
   EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
@@ -430,14 +433,14 @@ static void convert_event_detections(Event_t * p_event, int numsites,
 {
   Py_ssize_t j;
 
-  p_event->p_detids = (int *)malloc(numsites * numtimedefphases *
-                                    sizeof(*p_event->p_detids));
-
-  /* initialize all detections to -1, i.e. no detection */
-  for (j=0; j<numsites * numtimedefphases; j++)
-    p_event->p_detids[j] = -1;
-
-
+  p_event->p_all_detids = (int *) malloc(numsites * numtimedefphases *
+                                         MAX_PHASE_DET *
+                                         sizeof(*p_event->p_all_detids));
+  
+  /* allocate and initialize the number of detections to 0 */
+  p_event->p_num_dets = (int *) calloc(numsites * numtimedefphases,
+                                       sizeof(*p_event->p_num_dets));
+  
   assert(phasedet_list);
   assert(PyList_Check(phasedet_list));
     
@@ -449,6 +452,8 @@ static void convert_event_detections(Event_t * p_event, int numsites,
     long phaseid;
     long detid;
     int siteid;
+    int numdet;
+    int k;
       
     phasedet_tuple = PyList_GetItem(phasedet_list, j);
     assert(phasedet_tuple);
@@ -456,17 +461,31 @@ static void convert_event_detections(Event_t * p_event, int numsites,
 
     phaseobj = PyTuple_GetItem(phasedet_tuple, 0);
     assert(phaseobj && PyInt_Check(phaseobj));
-      
+    
     detobj = PyTuple_GetItem(phasedet_tuple, 1);
     assert(detobj && PyInt_Check(detobj));
-      
+    
+    numdet = MIN((int) PyTuple_GET_SIZE(phasedet_tuple) - 1, MAX_PHASE_DET);
+    
     phaseid = PyInt_AS_LONG(phaseobj);
     detid = PyInt_AS_LONG(detobj);
 
     assert((detid >= 0) && (detid < numdetections));
     siteid = p_detections[detid].site_det;
 
-    p_event->p_detids[siteid * numtimedefphases + phaseid] = detid;
+    p_event->p_num_dets[siteid * numtimedefphases + phaseid] = numdet;
+    
+    for (k=0; k<numdet; k++)
+    {
+      detobj = PyTuple_GetItem(phasedet_tuple, k+1);
+      assert(detobj && PyInt_Check(detobj));
+      
+      detid = PyInt_AS_LONG(detobj);
+      assert((detid >= 0) && (detid < numdetections));
+    
+      p_event->p_all_detids[siteid * numtimedefphases * MAX_PHASE_DET 
+                            + phaseid * MAX_PHASE_DET + k] = detid;
+    }
   }
 }
 
@@ -512,7 +531,10 @@ static void free_events(int numevents, Event_t * p_events)
 {
   int i;
   for (i=0; i<numevents; i++)
-    free(p_events[i].p_detids);
+  {
+    free(p_events[i].p_all_detids);
+    free(p_events[i].p_num_dets);
+  }
   
   free(p_events);
 }
@@ -654,12 +676,19 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
   p_event->evtime = ARRAY1(p_event_arrobj, EV_TIME_COL);
   p_event->evmag = ARRAY1(p_event_arrobj, EV_MB_COL);
 
-  p_event->p_detids = (int *)malloc(numsites * numtimedefphases *
-                                    sizeof(*p_event->p_detids));
+  p_event->p_all_detids = (int *) malloc(numsites * numtimedefphases *
+                                         MAX_PHASE_DET *
+                                         sizeof(*p_event->p_all_detids));
+  
+  /* allocate and initialize the number of detections to 0 */
+  p_event->p_num_dets = (int *) calloc(numsites * numtimedefphases,
+                                       sizeof(*p_event->p_num_dets));
 
   p_det = p_netmodel->p_detections + detnum;
   
-  p_event->p_detids[p_det->site_det * numtimedefphases + phaseid] = detnum;
+  p_event->p_num_dets[p_det->site_det * numtimedefphases + phaseid] = 1;
+  p_event->p_all_detids[p_det->site_det * numtimedefphases * MAX_PHASE_DET
+                        + phaseid * MAX_PHASE_DET + 0] = detnum;
   
   distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
                               p_det->site_det);
@@ -955,15 +984,30 @@ void convert_events_to_pyobj(const EarthModel_t * p_earth,
     {
       for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
       {
-        int detnum;
+        int numdet;
         
-        detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
+        numdet = p_event->p_num_dets[siteid * numtimedefphases + phaseid];
 
-        if (detnum != -1)
+        if (numdet > 0)
         {
+          int pos;
           PyObject * p_phase_det_obj;
           
-          p_phase_det_obj = Py_BuildValue("(ii)", phaseid, detnum);
+          /* first the phase and then the detnums */
+          p_phase_det_obj = PyTuple_New(numdet + 1);
+          
+          /* tuple set_item steals a reference so we don't need to decr it */
+          PyTuple_SetItem(p_phase_det_obj, 0, Py_BuildValue("i", phaseid));
+          
+          for (pos=0; pos<numdet; pos++)
+          {
+            int detnum;
+            detnum = p_event->p_all_detids[siteid * numtimedefphases 
+                                           * MAX_PHASE_DET 
+                                           + phaseid * MAX_PHASE_DET + pos];
+            
+            PyTuple_SetItem(p_phase_det_obj, pos+1,Py_BuildValue("i", detnum));
+          }
           
           PyList_Append(p_detlistobj, p_phase_det_obj);
           /* List Append increments the refcount so we need to
@@ -993,22 +1037,29 @@ Event_t * alloc_event(NetModel_t * p_netmodel)
   numsites = EarthModel_NumSites(p_netmodel->p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
  
-  p_event->p_detids = (int *)malloc(numsites * numtimedefphases *
-                                    sizeof(*p_event->p_detids));
+  p_event->p_all_detids = (int *) malloc(numsites * numtimedefphases *
+                                         MAX_PHASE_DET *
+                                         sizeof(*p_event->p_all_detids));
+  
+  /* allocate and initialize the number of detections to 0 */
+  p_event->p_num_dets = (int *) calloc(numsites * numtimedefphases,
+                                       sizeof(*p_event->p_num_dets));
 
   return p_event;
 }
 
 void free_event(Event_t * p_event)
 {
-  free(p_event->p_detids);
+  free(p_event->p_all_detids);
+  free(p_event->p_num_dets);
   free(p_event);
 }
 
 void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event)
 {
-  int * p_tgt_detids;
+  int * p_tgt_all_detids;
+  int * p_tgt_num_dets;
   int numsites;
   int numtimedefphases;
   
@@ -1016,18 +1067,22 @@ void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
   numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
  
   /* save the detids pointer */
-  p_tgt_detids = p_tgt_event->p_detids;
+  p_tgt_all_detids = p_tgt_event->p_all_detids;
+  p_tgt_num_dets = p_tgt_event->p_num_dets;
   
   /* copy the event */
   *p_tgt_event = *p_src_event;
 
   /* restore the detids pointer */
-  p_tgt_event->p_detids = p_tgt_detids;
+  p_tgt_event->p_all_detids = p_tgt_all_detids;
+  p_tgt_event->p_num_dets = p_tgt_num_dets;
   
   /* copy the detids */
-  memcpy(p_tgt_event->p_detids, p_src_event->p_detids,
-         numsites * numtimedefphases * sizeof(*p_src_event->p_detids));
-
+  memcpy(p_tgt_event->p_num_dets, p_src_event->p_num_dets,
+         numsites * numtimedefphases * sizeof(*p_src_event->p_num_dets));
+  memcpy(p_tgt_event->p_all_detids, p_src_event->p_all_detids,
+         numsites * numtimedefphases * MAX_PHASE_DET 
+         * sizeof(*p_src_event->p_all_detids));
 }
 
 void print_event(const Event_t * p_event)
@@ -1055,16 +1110,24 @@ void print_event_detections(EarthModel_t * p_earth, const Event_t * p_event)
   {
     for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
     {
-      int detnum;
-        
-      detnum = p_event->p_detids[siteid * numtimedefphases + phaseid];
+      int numdet;
+      
+      numdet = p_event->p_num_dets[siteid * numtimedefphases + phaseid];
 
-      if (detnum != -1)
+      if (numdet > 0)
       {
-        if (!detcnt)
+        int pos;
+        
+        for (pos = 0; pos < numdet; pos ++)
+        {
+          int detnum = p_event->p_all_detids[siteid * numtimedefphases 
+                                             * MAX_PHASE_DET 
+                                             + phaseid * MAX_PHASE_DET + pos];
+          if (!detcnt)
           printf("[");
-        printf("%d ", detnum);
-        detcnt ++;
+          printf("%d ", detnum);
+          detcnt ++;
+        }
       }
     }
   }

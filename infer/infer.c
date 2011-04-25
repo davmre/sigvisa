@@ -135,10 +135,10 @@ static void insert_event(NetModel_t * p_netmodel,
   /* assign an origin-id to the event */
   p_event->orid = p_world->ev_orid_sequence ++; 
 
-  /* initialize all detections to -1, i.e. no detection */
-  for (j=0; j<numsites * numtimedefphases; j++)
-    p_event->p_detids[j] = -1; 
-
+  /* initialize the number of detections to 0 for all phases */
+  for (j = 0; j < numsites * numtimedefphases; j ++)
+    p_event->p_num_dets[j] = 0;
+  
   p_event->evscore = score_event(p_netmodel, p_event);
   p_world->world_score += p_event->evscore;
 
@@ -847,12 +847,12 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
   double best_score_delta;
   
   int replaced_detnum;
-  
+      
   p_detection = p_netmodel->p_detections + detnum;
-    
+  
   p_earth = p_netmodel->p_earth;
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-    
+  
   best_evnum = best_phaseid = -1;
   best_score = best_score_delta = 0;
     
@@ -863,7 +863,7 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
     double distance, pred_az;
     
     p_event = p_world->pp_events[evnum];
-
+    
     /* if the event couldn't possibly have caused the detection then
      * don't bother with it */
     if (fabs(p_event->evtime - p_detection->time_det) > MAX_TRAVEL_TIME)
@@ -884,12 +884,21 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       double score_delta;
       int poss;
 
-      old_detnum = p_event->p_detids[p_detection->site_det * numtimedefphases
-                                     + phaseid];
+      if (p_event->p_num_dets[p_detection->site_det * numtimedefphases
+                              + phaseid] > 0)
+        old_detnum = p_event->p_all_detids[p_detection->site_det 
+                                           * numtimedefphases * MAX_PHASE_DET
+                                           + phaseid * MAX_PHASE_DET + 0];
+      else
+        old_detnum = -1;
 
       /* change the detection of this phase and measure the score */
-      p_event->p_detids[p_detection->site_det * numtimedefphases + phaseid]
-        = detnum;
+      p_event->p_num_dets[p_detection->site_det * numtimedefphases
+                          + phaseid] = 1;
+      p_event->p_all_detids[p_detection->site_det 
+                            * numtimedefphases * MAX_PHASE_DET
+                            + phaseid * MAX_PHASE_DET + 0] = detnum;
+
 
       poss = score_event_site_phase(p_netmodel, p_event,
                                     p_detection->site_det, phaseid,
@@ -897,9 +906,9 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
 
       /* now, compute the probability that this phase was not detected
        * at this site */
-      p_event->p_detids[p_detection->site_det * numtimedefphases + phaseid]
-        = -1;
-
+      p_event->p_num_dets[p_detection->site_det * numtimedefphases
+                          + phaseid] = 0;
+      
       poss = score_event_site_phase(p_netmodel, p_event,
                                     p_detection->site_det, phaseid,
                                     distance, pred_az, &not_det_prob);
@@ -907,7 +916,7 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       score -= not_det_prob;
 
       /* if we have come across the current event/phase of the detection
-       * then we need to change the event phase to noise for now */
+       * then we need to leave the event phase as noise for now */
       if (old_detnum == detnum)
       {
         p_event->evscore -= score;
@@ -927,9 +936,13 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       {
         double old_score;
         
-        p_event->p_detids[p_detection->site_det * numtimedefphases + phaseid]
-          = old_detnum;
-
+        p_event->p_num_dets[p_detection->site_det * numtimedefphases
+                            + phaseid] = 1;
+        
+        p_event->p_all_detids[p_detection->site_det 
+                              * numtimedefphases * MAX_PHASE_DET
+                              + phaseid * MAX_PHASE_DET + 0] = old_detnum;
+        
         poss = score_event_site_phase(p_netmodel, p_event,
                                       p_detection->site_det, phaseid,
                                       distance, pred_az, &old_score);
@@ -948,12 +961,12 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
     }
   }
 
-  replaced_detnum = -1;
-  
+  replaced_detnum = -1;    
+
   if (best_score > 0)
   {
     Event_t * p_event;
-      
+
     p_event = p_world->pp_events[best_evnum];
 
 #ifdef DEBUG2
@@ -962,11 +975,22 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
            p_event->evscore, p_event->evscore + best_score_delta);
 #endif
     
-    replaced_detnum = p_event->p_detids[p_detection->site_det *numtimedefphases
-                                        + best_phaseid];
+    if (p_event->p_num_dets[p_detection->site_det * numtimedefphases
+                            + best_phaseid] > 0)
+      replaced_detnum = p_event->p_all_detids[p_detection->site_det 
+                                              * numtimedefphases * MAX_PHASE_DET
+                                              + best_phaseid 
+                                              * MAX_PHASE_DET + 0];
+    else
+      replaced_detnum = -1;
+
+    p_event->p_num_dets[p_detection->site_det * numtimedefphases
+                        + best_phaseid] = 1;
+    p_event->p_all_detids[p_detection->site_det 
+                          * numtimedefphases * MAX_PHASE_DET
+                          + best_phaseid 
+                          * MAX_PHASE_DET + 0] = detnum;
     
-    p_event->p_detids[p_detection->site_det * numtimedefphases 
-                      + best_phaseid] = detnum;
     p_event->evscore += best_score_delta;
     p_world->world_score += best_score_delta;
   }
