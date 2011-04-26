@@ -114,6 +114,7 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival"):
                  "static_siteid site, static_phaseid ph where "
                  "iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and "
                  "iarr.sta=site.sta and iarr.iphase=ph.phase and "
+                 "ascii(iarr.iphase) = ascii(ph.phase) and "
                  "iarr.time between %d and %d order by iarr.time, iarr.arid" %
                  (arrival_table, start_time, end_time))
   
@@ -149,6 +150,7 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
     cursor.execute("select lass.orid, lass.arid, ph.id-1 from %s_assoc lass, "
                    "%s_origin lori, static_phaseid ph where "
                    "ph.timedef='d' and "
+                   " ascii(lass.phase) = ascii(ph.phase) and "
                    "lass.orid=lori.orid and lass.phase=ph.phase and lori.time "
                    "between %f and %f"
                    % (evtype, evtype, start_time, end_time))
