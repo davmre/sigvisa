@@ -4,7 +4,7 @@ import numpy as np
 from optparse import OptionParser
 import matplotlib.pyplot as plt
 # for type 1 fonts
-plt.rcParams['ps.useafm'] = True
+#plt.rcParams['ps.useafm'] = True
 
 from utils.draw_earth import draw_events, draw_earth, draw_density
 from database.dataset import *
@@ -44,6 +44,9 @@ def main(param_dirname):
   parser.add_option("-i", "--visa_leb_runid", dest="visa_leb_runid",
                     default=None, help = "Visa runid to be treated as leb",
                     metavar="RUNID")
+  parser.add_option("-1", "--type1", dest="type1", default=False,
+                    action = "store_true",
+                    help = "Type 1 fonts (False)")
   (options, args) = parser.parse_args()
 
   if options.train:
@@ -61,6 +64,9 @@ def main(param_dirname):
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
+
+  if options.type1:
+    plt.rcParams['text.usetex'] = True
 
   # if no options is selected then select all options
   if (not options.arrival and not options.location and not options.detection
@@ -646,8 +652,13 @@ def visualize_location_prior(options, earthmodel, netmodel):
 
   #import pdb
   #pdb.set_trace()
-  
-  bmap = draw_earth("Log Prior Density of Events")
+
+  # for publications don't add a title
+  if options.type1:
+    bmap = draw_earth("")
+  else:
+    bmap = draw_earth("Log Prior Density of Events")
+    
   draw_density(bmap, lon_arr, lat_arr, prob, levels=30, nolines=True,
                #, np.log(prob) / np.log(2),
                colorbar=False)

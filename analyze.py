@@ -272,6 +272,62 @@ def gui(options, leb_events, sel3_events, events):
   
   plt.show()
 
+# reduce the number of visa events (using the score) until the precision
+# exactly matches that of SEL3
+def match_sel3_prec(visa_events, visa_scores, leb_events, sel3_events):
+  # first find SEL3's precision
+  sel3_prec = float(len(find_matching(leb_events,sel3_events)))/len(sel3_events)
+
+  true_visa, false_visa, mat_leb_visa = \
+             find_true_false_guess(leb_events, visa_events)
+
+  num_true = len(true_visa)
+  num_false = len(visa_events) - num_true
+
+  visa_prec = float(num_true) / len(visa_events)
+  if visa_prec  > sel3_prec:
+    print "Visa precision is higher than SEL3's (no pruning)"
+    return visa_events, compute_orid2num(visa_events)
+    
+  # sort all the visa events by score
+  scores = []
+  for evnum, event in enumerate(visa_events):
+    evscore = visa_scores[int(event[EV_ORID_COL])]
+    scores.append((evscore, evnum in true_visa))
+
+  scores.sort()
+
+  # now, scan the scores from left to right until the precision is at least as
+  # high as sel3
+  cum_true, cum_false = 0, 0
+  for evscore, istrue in scores:
+    # compute the precision if everything below this event is pruned out
+    visa_prec = float(num_true - cum_true)\
+                /(len(visa_events) - cum_true - cum_false)
+    if visa_prec >= sel3_prec:
+      print "Pruning visa events below score %.1f new prec %.1f" \
+            % (evscore, visa_prec * 100.)
+      thresh = evscore
+      break
+
+    if istrue:
+      cum_true += 1
+    else:
+      cum_false += 1
+  else:
+    print "Pruning all the VISA events!"
+    thresh = np.inf
+
+  keep_event = np.ones(len(visa_events), bool)
+
+  for evnum, event in enumerate(visa_events):
+    if visa_scores[event[EV_ORID_COL]] < thresh:
+      keep_event[evnum] = 0
+
+  events = visa_events[keep_event]
+  
+  return events, compute_orid2num(events)
+    
 def suppress_duplicates(events, evscores):
   # we'll figure out which events to keep, initially we decide to keep
   # everything
@@ -305,13 +361,16 @@ def suppress_duplicates(events, evscores):
   
   events = events[keep_event]
   
+  return events, compute_orid2num(events)
+
+def compute_orid2num(events):
   # recompute orid2num
   orid2num = {}
   
   for ev in events:
     orid2num[ev[EV_ORID_COL]] = len(orid2num)
   
-  return events, orid2num
+  return orid2num
 
 def assert_time_sorted(events):
   for evnum, event in enumerate(events):
@@ -461,6 +520,10 @@ def main():
                     help = "Use Kleiner&Mackey 250km, 40s criteria, "
                     "with no matching")
   
+  parser.add_option("-x", "--sel3_prec", dest="sel3_prec", default=False,
+                    action = "store_true",
+                    help = "match sel3 precision by dropping events (False)")
+  
   (options, args) = parser.parse_args()
 
   cursor = database.db.connect().cursor()
@@ -502,6 +565,10 @@ def main():
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,
                                            "visa", options.runid)
 
+  cursor.execute("select orid, score from visa_origin where runid=%d" %
+                 (options.runid,))
+  visa_scores = dict(cursor.fetchall())
+
   if options.neic:
     neic_events = read_isc_events(cursor, data_start, data_end, "NEIC")
   else:
@@ -513,11 +580,12 @@ def main():
     jma_events = None
     
   if options.suppress:
-    cursor.execute("select orid, score from visa_origin where runid=%d" %
-                   (options.runid,))
-    visa_scores = dict(cursor.fetchall())    
     visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_scores)
 
+  if options.sel3_prec:
+    visa_events, visa_orid2num = match_sel3_prec(visa_events, visa_scores,
+                                                 leb_events, sel3_events)
+    
   leb_evlist = read_assoc(cursor, data_start, data_end, leb_orid2num,
                           arid2num, "leb")
   visa_evlist = read_assoc(cursor, data_start, data_end, visa_orid2num,
