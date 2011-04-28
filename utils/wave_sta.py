@@ -1,8 +1,12 @@
 # plot the waveform at a station in a time range
++# example usage which shows a clear P (at 69s) and an S phase (324s)
++# python -m utils.wave_sta ASAR 1237683000 1237683400
 
 import sys, MySQLdb,struct
 import matplotlib.pyplot as plt
 import numpy as np
+
+import obspy.signal
 
 from database import db, wave
 
@@ -27,15 +31,25 @@ def main(param_dirname):
   print "Channels:", chans
   for chan in chans:
     data, samprate = wave.fetch_waveform(sta, chan, start_time, end_time)
+    filtered_data = obspy.signal.filter.bandpass(data,1,4,samprate)
+    cft_data = obspy.signal.recStalta(filtered_data, int(1.5 * samprate),
+                                      int(60 * samprate))
     timerange = np.arange(start_time, end_time, 1.0/samprate)
     plt.figure()
     plt.suptitle("%s -- %s" % (sta, chan))
+    plt.xlabel("Time (s)")
+    
     #plt.plot(timerange, wave.lowpass_filter(data, samprate, 0.5))
     # remove the low-frequency noise
-    plt.plot(timerange, wave.highpass_filter(data, samprate, 0.5))
-    #plt.plot(timerange, data)
-    plt.xlabel("Time")
-    plt.ylabel("nm")
+    #plt.plot(timerange, wave.highpass_filter(data, samprate, 0.5))
+
+    axes = plt.subplot(2, 1, 1)
+    plt.plot(timerange, filtered_data)
+
+    plt.subplot(2, 1, 2, sharex=axes)
+    plt.plot(timerange, cft_data)
+    plt.ylabel("STA/LTA")
+
   plt.show()
 
 if __name__ == "__main__":
