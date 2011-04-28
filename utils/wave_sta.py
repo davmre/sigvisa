@@ -1,6 +1,6 @@
 # plot the waveform at a station in a time range
-+# example usage which shows a clear P (at 69s) and an S phase (324s)
-+# python -m utils.wave_sta ASAR 1237683000 1237683400
+# example usage which shows a clear P (at 69s) and an S phase (324s)
+# python -m utils.wave_sta ASAR 1237683000 1237683400
 
 import sys, MySQLdb,struct
 import matplotlib.pyplot as plt
