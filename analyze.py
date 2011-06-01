@@ -830,9 +830,35 @@ def main():
       
 
   if options.jma:
-    leb_f, leb_p, leb_r, leb_err = f1_and_error(jma_events, leb_events)
+    jma_jap_events = filter_by_lonlat(jma_events, JAPAN_LON_1, JAPAN_LON_2,
+                                      JAPAN_LAT_1, JAPAN_LAT_2)
+    leb_jap_events = filter_by_lonlat(leb_events, JAPAN_LON_1, JAPAN_LON_2,
+                                      JAPAN_LAT_1, JAPAN_LAT_2)
+    visa_jap_events = filter_by_lonlat(visa_events, JAPAN_LON_1, JAPAN_LON_2,
+                                      JAPAN_LAT_1, JAPAN_LAT_2)
+
+    leb_recalled = find_matching(jma_jap_events, leb_jap_events)
+    visa_recalled = find_matching(jma_jap_events, visa_jap_events)
+
+    leb_rec_list = [(int(jma_jap_events[i, EV_ORID_COL]),
+                          int(leb_jap_events[j, EV_ORID_COL]))
+                         for (i,j) in leb_recalled]
+    leb_rec_list.sort()
+    print "LEB recall", leb_rec_list 
+
+    visa_rec_list = [(int(jma_jap_events[i, EV_ORID_COL]),
+                          int(visa_jap_events[j, EV_ORID_COL]))
+                         for (i,j) in visa_recalled]
+    visa_rec_list.sort()
     
-    visa_f, visa_p, visa_r, visa_err = f1_and_error(jma_events, visa_events)
+    print "VISA recall", visa_rec_list
+    
+    
+    leb_f, leb_p, leb_r, leb_err = f1_and_error(jma_jap_events,
+                                                leb_jap_events)
+    
+    visa_f, visa_p, visa_r, visa_err = f1_and_error(jma_jap_events,
+                                                    visa_jap_events)
     
     print "JMA:              |          LEB              |          VISA"
     print "=" * 74
@@ -849,12 +875,12 @@ def main():
                         resolution="l",
                         llcrnrlon = JAPAN_LON_1, urcrnrlon = JAPAN_LON_2,
                         llcrnrlat = JAPAN_LAT_1, urcrnrlat = JAPAN_LAT_2)
-      draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="o", ms=10, mfc="none", mec="yellow", mew=1)
-      draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="s", ms=10, mfc="none", mec="blue", mew=1)
       draw_events(bmap, jma_events[:,[EV_LON_COL, EV_LAT_COL]],
                   marker="*", ms=10, mfc="orange")
+      draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="o", ms=10, mfc="none", mec="yellow", mew=2)
+      draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
+                  marker="s", ms=10, mfc="none", mec="blue", mew=2)
     
   if options.gui:
     gui(options, leb_events, sel3_events, visa_events)
