@@ -110,6 +110,8 @@ def main(param_dirname):
   parser.add_option("-v", "--verbose", dest="verbose", default=False,
                     action = "store_true",
                     help = "verbose output (False)")
+  parser.add_option("-l", "--label", dest="label", default="validation",
+                    help = "training, validation (default), or test")
 
   (options, args) = parser.parse_args()
 
@@ -118,7 +120,7 @@ def main(param_dirname):
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data("validation", hours=options.hours, skip=options.skip)
+         = read_data(options.label, hours=options.hours, skip=options.skip)
 
   if (end_time - MAX_TRAVEL_TIME) <= start_time:
     print "Error: too short an interval"
