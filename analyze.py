@@ -490,6 +490,10 @@ def main():
                     action = "store_true",
                     help = "compare with NEIC events (False)")
 
+  parser.add_option("-c", "--coords", dest="coords", default=None,
+                    help = "compare with ISC author in a region: e.g. "
+                    "THE,-10,26,36,60 (default: none)")
+  
   parser.add_option("-j", "--JMA", dest="jma", default=False,
                     action = "store_true",
                     help = "compare with JMA events (False)")
@@ -829,6 +833,35 @@ def main():
 
       
 
+  if options.coords is not None:
+    agency, minlon, maxlon, minlat, maxlat = options.coords.split(",")
+    minlon, maxlon, minlat, maxlat = float(minlon), float(maxlon),\
+                                     float(minlat), float(maxlat)
+    
+    agency_events = read_isc_events(cursor, data_start, data_end, agency)
+    agency_events = filter_by_lonlat(agency_events, minlon, maxlon,
+                                     minlat, maxlat)
+    leb_ag_events = filter_by_lonlat(leb_events, minlon, maxlon,
+                                     minlat, maxlat)
+    visa_ag_events = filter_by_lonlat(visa_events, minlon, maxlon,
+                                      minlat, maxlat)
+    
+    leb_f, leb_p, leb_r, leb_err = f1_and_error(agency_events,
+                                                leb_ag_events)
+    
+    visa_f, visa_p, visa_r, visa_err = f1_and_error(agency_events,
+                                                    visa_ag_events)
+    
+    print "%s:              |          LEB              |          VISA"\
+          % agency
+    print "=" * 74
+    print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
+           "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
+           % (len(agency_events), leb_f, leb_p, leb_r,
+              leb_err[0], leb_err[1],
+              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
+    print "=" * 74
+
   if options.jma:
     jma_jap_events = filter_by_lonlat(jma_events, JAPAN_LON_1, JAPAN_LON_2,
                                       JAPAN_LAT_1, JAPAN_LAT_2)
@@ -864,7 +897,7 @@ def main():
     print "=" * 74
     print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
            "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
-           % (len(jma_events), leb_f, leb_p, leb_r,
+           % (len(jma_jap_events), leb_f, leb_p, leb_r,
               leb_err[0], leb_err[1],
               visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
     print "=" * 74
