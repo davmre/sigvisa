@@ -2,14 +2,15 @@
 # inspired by: http://stackoverflow.com/questions/65447/getting-data-from-an-oracle-database-as-a-csv-file-or-any-other-custom-text-form
 #
 # example:
-# python oracle2csv.py user/pass tablename filename.csv
+# python export2csv.py oracle user/pass tablename filename.csv
+#   OR
+# python export2csv.py mysql user:ctbt,db=ctbt3mos tablename filename.csv
 
 from optparse import OptionParser
-import sys
-import cx_Oracle, csv
+import sys, csv
 
 def main():
-  parser = OptionParser(usage = "Usage: %prog [options] connect-string "
+  parser = OptionParser(usage = "Usage: %prog [options] db-type connect-args"
                         + "db-table csv-filename")
   parser.add_option("-o", "--orderby", dest="orderby",
                     help="order the output by these columns (e.g. a,b)",
@@ -19,12 +20,19 @@ def main():
                     metavar = "CLAUSE")
   (options, args) = parser.parse_args()
 
-  if len(args) != 3:
+  if len(args) != 4:
     parser.print_help()
     sys.exit(1)
+
+  if args[0] == "oracle":
+    import cx_Oracle
+    db = cx_Oracle.connect(args[1])
+  elif args[0] == "mysql":
+    import MySQLdb
+    connargs = dict(pair.split(":") for pair in args[1].split(","))
+    db = MySQLdb.connect(**connargs)
   
-  orcl = cx_Oracle.connect(args[0])
-  convert_table(orcl, args[1], args[2], options.where, options.orderby)
+  convert_table(db, args[2], args[3], options.where, options.orderby)
 
 def convert_table(orcl, tablename, filename, where, orderby):
   
