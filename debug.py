@@ -194,6 +194,7 @@ def main(param_dirname):
   print_events(sitenames, netmodel, earthmodel, detections, visa_events, visa_evlist,
                "VISA")
   print_events(sitenames, netmodel, earthmodel, detections, neic_events, None, "NEIC")
+  print_events(sitenames, netmodel, earthmodel, detections, all_isc_events, None, "ISC")
 
   if options.text_only:
     return
@@ -235,6 +236,10 @@ def main(param_dirname):
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=10, mfc="white", mew=1)
+  
+  elif len(all_isc_events):
+    draw_events(bmap, all_isc_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="none", mec="yellow", mew=1)
 
   # draw a density
   LON_BUCKET_SIZE = options.resolution
@@ -334,6 +339,9 @@ def main(param_dirname):
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=10, mfc="white", mew=1)
+  elif len(all_isc_events):
+    draw_events(bmap, all_isc_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="none", mec="yellow", mew=1)
 
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-19
@@ -373,12 +381,12 @@ def main(param_dirname):
   
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-options.window * .98
-  try:
-    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
-                      fontsize=8, barstyle='fancy',
-                      labelstyle='simple', units='km')
-  except:
-    pass
+##  try:
+##    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+##                      fontsize=8, barstyle='fancy',
+##                      labelstyle='simple', units='km')
+##  except:
+##    pass
   
   plt.savefig("output/debug_dens_isc_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
@@ -405,12 +413,12 @@ def main(param_dirname):
 
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-options.window * .8
-  try:
-    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
-                      fontsize=8, barstyle='fancy',
-                      labelstyle='simple', units='km')
-  except:
-    pass
+##  try:
+##    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+##                      fontsize=8, barstyle='fancy',
+##                      labelstyle='simple', units='km')
+##  except:
+##    pass
   
   
   plt.savefig("output/debug_isc_run_%d_%s_orid_%d.png"
@@ -437,6 +445,9 @@ def main(param_dirname):
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=10, mfc="white", mew=1)
+  elif len(all_isc_events):
+    draw_events(bmap, all_isc_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="none", mec="yellow", mew=1)
 
   plt.savefig("output/debug_globe_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
@@ -464,6 +475,9 @@ def main(param_dirname):
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=12, mfc="white", mew=1)
+  elif len(all_isc_events):
+    draw_events(bmap, all_isc_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=10, mfc="none", mec="yellow", mew=1)
 
   plt.show()
 

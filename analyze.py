@@ -492,7 +492,7 @@ def main():
 
   parser.add_option("-c", "--coords", dest="coords", default=None,
                     help = "compare with ISC author in a region: e.g. "
-                    "THE,-10,26,36,60 (default: none)")
+                    "THE,-10,26,36,60 or NNC,38,96,30,57 (default: none)")
   
   parser.add_option("-j", "--JMA", dest="jma", default=False,
                     action = "store_true",
