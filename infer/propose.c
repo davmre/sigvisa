@@ -514,69 +514,6 @@ static void propose_best_event(NetModel_t * p_netmodel,
   free_event(p_best_event);
 }
 
-/* find the best event which explains the given detections */
-static void propose_best_event2(NetModel_t * p_netmodel,
-                               Event_t * p_event,
-                               int det_low, int det_high,
-                               int * p_skip_det,
-                               double time_low, double time_high,
-                               double scale)
-{
-  double init_lon, init_lat, init_time;
-  int lonidx, latidx, timeidx;
-  Event_t * p_best_event;
-  
-  p_best_event = alloc_event(p_netmodel);
-  
-  /* first make a copy of the current event */
-  copy_event(p_netmodel, p_best_event, p_event);  
-  
-  init_lon = p_event->evlon;
-  init_lat = p_event->evlat;
-  init_time = p_event->evtime;
-
-  /* try to improve the existing event */
-  for (lonidx = -2; lonidx < 3; lonidx ++)
-  {
-    p_event->evlon = init_lon + lonidx * 2.5 * scale;
-    FIXUP_EVLON(p_event);
-    for (latidx = -2; latidx < 3; latidx ++)
-    {
-      p_event->evlat = init_lat + latidx * 2.5 * scale;
-      FIXUP_EVLAT(p_event);
-
-      for (timeidx = -2; timeidx < 3; timeidx ++)
-      {
-        p_event->evtime = init_time + timeidx * 25.0 * scale;
-        if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
-          continue;
-
-        for (p_event->evdepth = 0; p_event->evdepth < MAX_DEPTH;
-             p_event->evdepth += (MAX_DEPTH/4))
-        {
-
-          for (p_event->evmag = MIN_MAGNITUDE;
-               p_event->evmag < (MIN_MAGNITUDE+4);
-               p_event->evmag += 1)
-          {
-            propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                    p_skip_det, 0);
-            if (p_event->evscore > p_best_event->evscore)
-            {
-              copy_event(p_netmodel, p_best_event, p_event);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  /* finally, return the best event */
-  copy_event(p_netmodel, p_event, p_best_event);
-  
-  free_event(p_best_event);
-}
-
 /* propose events by inverting detections and keeping the best
  * inverted detections 
  * this version does a timed number of steps */
@@ -639,10 +576,40 @@ int propose_invert_timed (NetModel_t * p_netmodel, Event_t **pp_events,
     
     inv_status = invert_detection(p_earth, p_inv_det, p_event,
                                   0 /* don't perturb */);
+
+    /* if the detection can't be inverted or the inverted event time is
+     * outside the bounds of the desired window then skip it */
     if ((0 != inv_status) || (p_event->evtime < time_low)
         || (p_event->evtime > time_high))
     {
       p_skip_inv[det_off] = 1;
+    }
+    /* otherwise, check if there is an earlier detection which inverts to the
+     * same location, and if so then skip this one */
+    else
+    {
+      int inv_detnum2;
+      
+      for (inv_detnum2 = det_low; inv_detnum2 < inv_detnum; inv_detnum2++)
+      {
+        Event_t * p_event2;
+        int det_off2 = inv_detnum2 - det_low;
+        
+        /* ensure that the prior detection is not being skipped */
+        if (!p_skip_inv[det_off2])
+        {
+          p_event2 = p_inv_events + det_off2;
+          
+          /* if the two inverted events are very close to each other then
+           * skip this one */
+          if ((ABS(p_event->evtime - p_event2->evtime) < 50)
+              && (simple_distance_deg(p_event->evlon, p_event->evlat,
+                                      p_event2->evlon, p_event2->evlat) < 5))
+          {
+            p_skip_inv[det_off] = 1;
+          }
+        }
+      }
     }
   }
 
@@ -794,6 +761,9 @@ int propose_invert_timed (NetModel_t * p_netmodel, Event_t **pp_events,
 /* propose events by inverting detections and keeping the best
  * inverted detections 
  * this version does a fixed number of steps per detection */
+/* can be very slow when there are a large number of detections, for example:
+  python -m utils.check_propose -k 1299822400 -l tohoku -d 2.5 -w 1800  -r 1.2
+*/
 int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
                         double time_low, double time_high, int det_low,
                         int det_high, double degree_step, int num_step)
@@ -805,7 +775,7 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
   int lonidx, latidx;
   double lon, lat, mag;
 
-  int detnum;
+  int detnum, inv_detnum;
 
   int numevents;
 
@@ -813,6 +783,9 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
   Event_t * p_event;
   int * p_skip_det;                          /* numdetections */
   
+  Event_t * p_inv_events;
+  int * p_skip_inv;
+
   p_earth = p_netmodel->p_earth;
   
   numsites = EarthModel_NumSites(p_earth);
@@ -825,6 +798,56 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     return -1;
   }
 
+  p_inv_events = (Event_t *)calloc(det_high - det_low, sizeof(*p_inv_events));
+  if (!p_inv_events)
+  {
+    return -1;
+  }
+  
+  /* initialize to 0 to indicate that the detection is not to be skipped */
+  p_skip_inv = (int *)calloc(det_high - det_low, sizeof(*p_skip_inv));
+  if (!p_skip_inv)
+  {
+    return -1;
+  }
+
+  /* first invert all the detections */
+  for (inv_detnum = det_low; inv_detnum < det_high; inv_detnum ++)
+  {
+    Detection_t * p_inv_det;
+    int inv_status;
+    int det_off = inv_detnum - det_low;
+    
+    p_inv_det = p_netmodel->p_detections + inv_detnum;
+
+    p_event = p_inv_events+det_off;
+    
+    inv_status = invert_detection(p_earth, p_inv_det, p_event,
+                                  0 /* don't perturb */);
+
+    /* if the detection can't be inverted or the inverted event time is
+     * outside the bounds of the desired window then skip it */
+    if ((0 != inv_status) || (p_event->evtime < time_low)
+        || (p_event->evtime > time_high))
+    {
+      p_skip_inv[det_off] = 1;
+    }
+  }
+  
+#ifdef VERBOSE
+  {
+    int cnt;
+    cnt = 0;
+    for (inv_detnum = det_low; inv_detnum < det_high; inv_detnum ++)
+    {
+      if (p_skip_inv[inv_detnum - det_low])
+        cnt ++;
+    }
+    printf("invert_step: %d detection %d skipped\n", det_high-det_low,
+           cnt);
+  }
+#endif
+  
   p_event = alloc_event(p_netmodel);
 
   numevents = 0;
@@ -833,7 +856,6 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
   {
     int siteid;
     int phase;
-    int inv_detnum;
 
     p_best_event = alloc_event(p_netmodel);
     p_best_event->evscore = 0;
@@ -841,21 +863,19 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     for (inv_detnum = det_low; inv_detnum < det_high; inv_detnum ++)
     {
       Detection_t * p_inv_det;
-      int inv_status;
+      int det_off = inv_detnum - det_low;
       
+      if (p_skip_inv[det_off])
+        continue;
+
       p_inv_det = p_netmodel->p_detections + inv_detnum;
       
-      inv_status = invert_detection(p_earth, p_inv_det, p_event,
-                                    0 /* don't perturb */);
-      if ((0 != inv_status) || (p_event->evtime < time_low)
-          || (p_event->evtime > time_high))
-      {
-        continue;
-      }
-
       /* save the longitude and latitude */
-      lon = p_event->evlon;
-      lat = p_event->evlat;
+      lon = (p_inv_events + det_off)->evlon;
+      lat = (p_inv_events + det_off)->evlat;
+
+      /* fix the depth to 0 */
+      p_event->evdepth = 0;
       
       for (mag=3; mag <4.1; mag+=1)
       {
@@ -926,6 +946,10 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     propose_best_event(p_netmodel, p_best_event, det_low, det_high,
                        p_skip_det, time_low, time_high, .1);
 
+    /* and, once more find the best detections for this event */
+    propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                            p_skip_det, 0 /* all phases */);
+    
 #ifdef VERBOSE
     printf("BEST:");
     print_event(p_best_event);
@@ -953,7 +977,9 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     pp_events[numevents ++] = p_best_event;
     
   } while (1);
-
+  
+  free(p_skip_inv);
+  free(p_inv_events);
   free(p_skip_det);
   
   return numevents;
@@ -1334,7 +1360,7 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
   int det_low;
   int det_high;
   double degree_delta;
-  int num_seconds;
+  int num_step;
   
   PyObject * eventsobj;
   PyObject * evdetlistobj;
@@ -1344,14 +1370,19 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
   Event_t ** pp_events;
   
   if (!PyArg_ParseTuple(args, "ddiidi", &time_low, &time_high, &det_low,
-                        &det_high, &degree_delta, &num_seconds))
+                        &det_high, &degree_delta, &num_step))
     return NULL;
 
   pp_events = (Event_t **) calloc(p_netmodel->numdetections,
                                   sizeof(*pp_events));
 
+  numevents = propose_invert_step(p_netmodel, pp_events, time_low, time_high, 
+                                  det_low, det_high, degree_delta, num_step);
+
+#ifdef NEVER
   numevents = propose_invert_timed(p_netmodel, pp_events, time_low, time_high, 
                                    det_low, det_high, degree_delta, num_seconds);
+#endif
 
 #ifdef NEVER
   numevents = propose_invert_grid(p_netmodel, pp_events, time_low, time_high, 
