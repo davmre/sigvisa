@@ -16,7 +16,19 @@ def prune_detections(netmodel, events, event_detlists):
     while len(dellist):
       evdetnum = dellist.pop()
       event_detlists[evnum].pop(evdetnum)
-  
+
+def extract_false_detections(numdets, leb_evlist):
+  """
+  Returns a list of false detnums
+  """
+  falsedets = set(range(numdets))
+  for evlist in leb_evlist:
+    for phaseid, detid in evlist:
+      falsedets.remove(detid)
+  falsedets = list(falsedets)
+  falsedets.sort()
+  return falsedets
+
 def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-x", "--text", dest="gui", default=True,
@@ -47,6 +59,12 @@ def main(param_dirname):
   
   print "LEB:"
   netmodel.score_world(leb_events, leb_evlist, 1)
+
+  falsedets = extract_false_detections(len(detections), leb_evlist)
+  
+  print "FALSE:"
+  netmodel.logprob_false(falsedets, 1)
+  
   
   print "SEL3:"
   netmodel.score_world(sel3_events, sel3_evlist, 1)
@@ -101,17 +119,26 @@ def main(param_dirname):
       
     fp.close()
     
-  if options.gui:
-    leb_scores = [netmodel.score_event(leb_events[i], leb_evlist[i])
-                  for i in range(len(leb_events))]
+  leb_scores = [netmodel.score_event(leb_events[i], leb_evlist[i])
+                for i in range(len(leb_events))]
 
-    true_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
-                 for i in true_sel3_idx]
+  true_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+               for i in true_sel3_idx]
     
-    false_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
-                  for i in false_sel3_idx]
+  false_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+                for i in false_sel3_idx]
 
 
+  print "%.1f %% False-SEL3 events had +ve score" \
+        % (100.0 * sum(s > 0 for s in false_sel3) / len(false_sel3))
+    
+  print "%.1f %% True-SEL3 events had +ve score" \
+        % (100.0 * sum(s > 0 for s in true_sel3) / len(true_sel3))
+  
+  print "%.1f %% LEB events had +ve score" \
+        % (100.0 * sum(s > 0 for s in leb_scores) / len(leb_scores))
+  
+  if options.gui:
     # compute the ROC curve
     x_pts, y_pts = [], []
     for sep in range(-100, 200, 2):
@@ -146,9 +173,6 @@ def main(param_dirname):
     plt.xlabel("score")
     plt.ylabel("number of events")
 
-    print "%.1f %% False-SEL3 events had +ve score" \
-          % (100.0 * sum(s > 0 for s in false_sel3) / len(false_sel3))
-    
     plt.figure()
     plt.title("LEB event scores")
     plt.hist(leb_scores, bins, facecolor = "blue", label = "true events",
@@ -159,8 +183,6 @@ def main(param_dirname):
     plt.xlabel("score")
     plt.ylabel("number of events")
 
-    print "%.1f %% LEB events had +ve score" \
-          % (100.0 * sum(s > 0 for s in leb_scores) / len(leb_scores))
     plt.show()
 
 if __name__ == "__main__":

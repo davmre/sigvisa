@@ -5,6 +5,8 @@
 
 #include "../netvisa.h"
 
+#define UNIF_FALSE 0.1          /* uniform prior on false amplitude */
+
 void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
                                        const char * filename)
 {
@@ -111,10 +113,10 @@ double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t *
    * we mix with a uniform distribution to avoid extreme values when
    * the amplitude is far from the mean */
   return log(p_false->wt0 * Gaussian_prob(logamp, p_false->mean0, 
-                                          p_false->std0 + 1e-6) * .9
+                                          p_false->std0 + 1e-6) *(1-UNIF_FALSE)
              + p_false->wt1 * Gaussian_prob(logamp, p_false->mean1, 
-                                            p_false->std1 + 1e-6) * .9
-             + .1 / MAX_AMP);
+                                            p_false->std1 +1e-6)*(1-UNIF_FALSE)
+             + UNIF_FALSE / (MAX_LOGAMP - MIN_LOGAMP));
 }
 
 void ArrivalAmplitudePrior_UnInit(ArrivalAmplitudePrior_t * prior)

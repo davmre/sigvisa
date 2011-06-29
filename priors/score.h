@@ -16,3 +16,6 @@ int score_event_site_phase_simple(NetModel_t * p_netmodel,
                                   int phaseid, double * p_score);
 
 double prob_event(NetModel_t * p_netmodel, Event_t * p_event);
+
+double logprob_false(NetModel_t * p_netmodel, int numdets, int * p_detids,
+                     int verbose);

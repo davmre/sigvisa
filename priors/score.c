@@ -411,3 +411,61 @@ double prob_event(NetModel_t * p_netmodel, Event_t * p_event)
   return logprob;
 }
 
+double logprob_false(NetModel_t * p_netmodel, int numdets, int * p_detids,
+                     int verbose)
+{
+  int i;
+ 
+  double sum_logprob = 0;
+
+  double * p_sum_site_amp;
+  int * p_cnt_site;
+
+  double worst_amp=0;
+  
+  /* array of sum logprob amp per site, initialized to zero */
+  p_sum_site_amp = (double *)calloc(p_netmodel->numsites,
+                                    sizeof(*p_sum_site_amp));
+
+  /* keep track of the count for each site */
+  p_cnt_site = (int *) calloc(p_netmodel->numsites,
+                              sizeof(*p_cnt_site));
+  
+  
+  for (i=0; i<numdets; i++)
+  {
+    double logprob;
+    
+    int detid = p_detids[i];
+    
+    Detection_t * p_det = p_netmodel->p_detections + detid;
+
+    int siteid = p_det->site_det;
+    
+    logprob = FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                                 siteid,
+                                                 p_det->amp_det);
+
+    p_sum_site_amp[siteid] += logprob;
+    p_cnt_site[siteid] ++;
+
+    sum_logprob += logprob;
+
+    if (logprob < worst_amp)
+      worst_amp = logprob;
+  }
+
+  if (verbose)
+  {
+    for (i=0; i<p_netmodel->numsites; i++)
+      if (p_cnt_site[i] > 100)
+        printf("Site[%d], cnt %d, Avg amplitude logprob: %lf\n",
+               i, p_cnt_site[i], p_sum_site_amp[i] / p_cnt_site[i]);
+    
+    printf("Avg. amplitude logprob: %lf   worst %lf\n", sum_logprob / numdets,
+           worst_amp);
+  }
+  
+  return sum_logprob;
+}
+

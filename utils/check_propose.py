@@ -89,12 +89,12 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
   
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-d", "--degree_delta", dest="degree_delta", default=5.0,
+  parser.add_option("-d", "--degree_delta", dest="degree_delta", default=2.5,
                     type="float",
-                    help = "degree step (5.0)")
-  parser.add_option("-c", "--num_seconds", dest="num_seconds", default=300,
+                    help = "degree step (2.5)")
+  parser.add_option("-c", "--num_step", dest="num_step", default=2,
                     type="int",
-                    help = "number of seconds per window (300)")
+                    help = "number of steps of size degree step (2)")
   parser.add_option("-r", "--hours", dest="hours", default=.7,
                     type="float",
                     help = "inference on HOURS worth of data (0.7)")
@@ -139,7 +139,7 @@ def main(param_dirname):
                                               start_time + options.window,
                                               0, len(detections),
                                               options.degree_delta,
-                                              options.num_seconds)
+                                              options.num_step)
   t2 = time.time()
 
   print "%.1f seconds to propose %d event(s)" % (t2-t1, len(prop_events))

@@ -7,6 +7,7 @@
 static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_logprob_false(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
@@ -24,6 +25,9 @@ static PyMethodDef NetModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
    "score_world(events, ev_detlist, verbose) "
    "-> log probability\n"},
+  {"logprob_false", (PyCFunction)py_logprob_false, METH_VARARGS,
+   "logprob_false(falsedets, verbose) "
+   "-> log probability\n"},
   {"score_event", (PyCFunction)py_score_event, METH_VARARGS,
    "score_event(event, detlist) -> log probability ratio"},
   {"score_event_det", (PyCFunction)py_score_event_det, METH_VARARGS,
@@ -34,7 +38,7 @@ static PyMethodDef NetModel_methods[] = {
    "infer(runid, numsamples, window, step, propose_events,verbose, write_cb)\n"
    "      -> events, ev_detlist"},
   {"propose", (PyCFunction)py_propose, METH_VARARGS,
-   "propose(time_low, time_high, det_low, det_high, degree_step, time_step)\n"
+   "propose(time_low, time_high, det_low, det_high, degree_step, num_step)\n"
    " -> events, ev_detlist"},
   {"invert_det", (PyCFunction)py_invert_det, METH_VARARGS,
    "invert_det(detnum, perturb?) -> (lon, lat, depth, time) or None"},
@@ -211,7 +215,7 @@ static PyMethodDef netvisaMethods[] = {
   {NULL, NULL}
 };
 
-void initnetvisa()
+void initnetvisa(void)
 {
   PyObject * m;
   
@@ -575,6 +579,52 @@ static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args)
   
   free_events(numevents, p_events);
   
+  return Py_BuildValue("d", score);
+}
+
+static PyObject * py_logprob_false(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  PyObject * p_falsedets_obj;
+  int verbose;
+  int numdets;
+  int * p_detids;
+  int i;
+  
+  double score;
+  
+  if (!PyArg_ParseTuple(args, "O!i",
+                        &PyList_Type, &p_falsedets_obj, &verbose)
+      || !p_falsedets_obj)
+    return NULL;
+
+  numdets = PyList_Size(p_falsedets_obj);
+  
+  p_detids = (int *)malloc(numdets * sizeof(*p_detids));
+
+  if (!p_detids)
+    return NULL;
+
+  for (i=0; i<numdets; i++)
+  {
+    PyObject * p_item = PyList_GetItem(p_falsedets_obj, i);
+
+    if (!p_item)
+    {
+      free(p_detids);
+      return NULL;
+    }
+
+    p_detids[i] = (int)PyInt_AsLong(p_item);
+  }
+
+  if (verbose)
+    printf("%d false detections\n", numdets);
+
+  score = logprob_false(p_netmodel, numdets, p_detids, verbose);
+  
+  free(p_detids);
+
   return Py_BuildValue("d", score);
 }
 

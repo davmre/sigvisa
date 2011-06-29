@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "../netvisa.h"
 
@@ -1136,7 +1137,6 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
   double alat, alon, a, b, c, coslat, dlon;
   double geoc_co_lat, geog_co_lat;
   double  r123, r13, r13sq, sinlat, x1, x2, x3;
-  double  atan2(), cos(), sin();
   
   /*
    * Convert a geographical location to geocentric cartesian 
