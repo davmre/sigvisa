@@ -21,5 +21,6 @@ def kstest(values, cdf):
   
   stat *= np.sqrt(len(values))
   
+  # 5% level
   return stat <= 1.358, stat
 

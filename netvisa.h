@@ -158,10 +158,6 @@ typedef struct NetModel_t
 #define BOOLARRAY2(arr,i,j) (*((npy_bool *)PyArray_GETPTR2(arr,i,j)))
 #define BOOLARRAY1(arr,i) (*((npy_bool *)PyArray_GETPTR1(arr,i)))
 
-#define MAX_AMP ((double) 10000.0)
-#define MIN_LOGAMP ((double) -5.0)
-#define MAX_LOGAMP ((double) +10.0)
-
 #define MIN_MAGNITUDE   ((double) 2.0)
 #define MAX_MAGNITUDE   ((double) 8.0)
 

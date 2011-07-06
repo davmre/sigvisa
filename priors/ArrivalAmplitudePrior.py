@@ -1,10 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from database.dataset import *
-import utils.GMM, utils.LinearModel
+import utils.GMM, utils.LinearModel,utils.kdensity
 import math
+from utils.kstest import kstest
 
 NUM_PRIOR = 100                          # number of prior points
+
+BWRANGE = np.array([.01, .1, .2, .3, .4, .5]) # range of bandwidths
+
+laplace_density = lambda b,x: np.exp(-np.abs(x/b))
 
 def gtf(val, m, s):
   return math.exp(- float(val - m) ** 2 / (2.0 * float(s) ** 2)) \
@@ -73,7 +78,8 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
 
   fp = open(param_filename, "w")
 
-  print >>fp, earthmodel.NumSites(), earthmodel.NumTimeDefPhases()
+  print >>fp, earthmodel.NumSites(), earthmodel.NumTimeDefPhases(),\
+        MIN_LOGAMP, MAX_LOGAMP, STEP_LOGAMP
   
   
   # create a dataset for each site, phase and for all sites, each phase
@@ -111,7 +117,9 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       site_false_logamps[sitenum].append(datum)
     
   # learn the overall false detection model (for all sites)
-  false_wts, false_means, false_stds = utils.GMM.estimate(2, false_logamps)
+  false_dens, false_bw = utils.kdensity.kdensity_estimate_bw\
+                         (MIN_LOGAMP, MAX_LOGAMP, STEP_LOGAMP,
+                          np.array(false_logamps), laplace_density, BWRANGE)
 
   #print_list(fp, false_wts)
   #print_list(fp, false_means)
@@ -119,8 +127,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   #print >> fp
   
   if options.verbose:
-    print "Overall False log(Amp):",
-    print_2gmm(false_wts, false_means, false_stds)
+    print "Overall False log(Amp): best bw", false_bw
 
   STEP = .1
   bins = np.arange(-7, 8, STEP)
@@ -128,8 +135,9 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     plt.figure()
     plt.title("log(amp) for false detections -- all sites")
     plt.hist(false_logamps, bins, label="data", alpha=.5)
-    plt.plot(bins, [utils.GMM.evaluate(false_wts, false_means, false_stds,
-                                       x+STEP/2)
+    plt.plot(bins, [utils.kdensity.kdensity_pdf(MIN_LOGAMP, MAX_LOGAMP,
+                                                STEP_LOGAMP,
+                                                false_dens, x+STEP/2)
                     * STEP * len(false_logamps) for x in bins], label="model",
              linewidth=3)
     
@@ -158,24 +166,35 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   
   # now, learn the site-specific false detection model and the amplitude model
   for sitenum in range(earthmodel.NumSites()):
-    data = site_false_logamps[sitenum] + false_prior
-    wts, means, stds = utils.GMM.estimate(2, data)
+    if len(site_false_logamps[sitenum]) <= 100:
+      data = site_false_logamps[sitenum] + false_prior
+    else:
+      data = site_false_logamps[sitenum]
     
-    print_list(fp, wts)
-    print_list(fp, means)
-    print_list(fp, stds)
+    density, bw = utils.kdensity.kdensity_estimate_bw\
+                  (MIN_LOGAMP, MAX_LOGAMP, STEP_LOGAMP,
+                   np.array(data), laplace_density, BWRANGE)
+    
+    print_list(fp, density)
     print >> fp
 
     if options.verbose:
-      print "[%d]: False" % (sitenum,),
-      
-      print_2gmm(wts, means, stds)
+      print "[%d]: False bw %.2f\n" % (sitenum, bw),
+      if len(site_false_logamps[sitenum]) > 100:
+        acc, stat = kstest(site_false_logamps[sitenum],
+                           lambda x: utils.kdensity.kdensity_cdf(MIN_LOGAMP,
+                                                                 MAX_LOGAMP,
+                                                                 STEP_LOGAMP,
+                                                                 density, x))
+        print "KS statistic", stat, " acc", acc
     
     if sitenum in [6, 24, 84, 113] and options.gui:
       plt.figure()
       plt.title("log(amp) for false detections -- %d" % sitenum)
       plt.hist(data, bins, label="data", alpha=.5)
-      plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
+      plt.plot(bins, [utils.kdensity.kdensity_pdf(MIN_LOGAMP, MAX_LOGAMP,
+                                                  STEP_LOGAMP,
+                                                  density, x+STEP/2)
                       * STEP * len(data) for x in bins], label="model",
                linewidth=3)
       plt.xlabel("log(amp)")
@@ -188,8 +207,8 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       print_list(fp, coeffs)
       print >> fp
       
-      if options.verbose:
-        print "[%d]: phase %d amplitude coeffs:\n" % (sitenum, phase), coeffs
+      #if options.verbose:
+      #  print "[%d]: phase %d amplitude coeffs:\n" % (sitenum, phase), coeffs
       
   fp.close()
   return
