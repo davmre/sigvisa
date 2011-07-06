@@ -203,7 +203,7 @@ def falseamp_goodness(detections, earthmodel, netmodel, falsedets):
       continue
     acc, stat = kstest(site_falseamps[site],
                        lambda x: netmodel.falseamp_cdf(site, x))
-    print "[%d]: KS Stat %.2f -- acc %s" % (site, stat, acc)
+    print "[%d]: noise amp KS Stat %.2f -- acc %s" % (site, stat, acc)
 
 if __name__ == "__main__":
   try:

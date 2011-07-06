@@ -22,30 +22,39 @@ void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
     exit(1);
   }
 
-  if (2 != fscanf(fp, "%d %d\n", &prior->numsites, &prior->numphases))
+  if (5 != fscanf(fp, "%d %d %lg %lg %lg\n",
+                  &prior->numsites, &prior->numphases, &prior->min_logamp,
+                  &prior->max_logamp, &prior->step_logamp))
   {
     fprintf(stderr, "error reading num sites, num phases from %s\n", filename);
     exit(1);
   }
 
-  prior->p_site_false = (SiteFalseAmp_t *) calloc(prior->numsites,
-                                              sizeof(*prior->p_site_false));
+  prior->numstep = (int) ((prior->max_logamp - prior->min_logamp)
+                          /prior->step_logamp);
+  
+
+  prior->p_site_false = (double *) calloc(prior->numsites * prior->numstep,
+                                          sizeof(*prior->p_site_false));
   prior->p_site_phase_amp = (PhaseAmp_t *) calloc(prior->numsites 
                                                   * prior->numphases,
                                              sizeof(*prior->p_site_phase_amp));
   
   for (siteid = 0; siteid < prior->numsites; siteid ++)
   {
-    SiteFalseAmp_t * p_false;
+    double * p_false;
+    int i;
     
-    p_false = prior->p_site_false + siteid;
+    p_false = prior->p_site_false + siteid * prior->numstep;
     
-    if (6 != fscanf(fp, "%lg %lg %lg %lg %lg %lg\n", &p_false->wt0,
-                    &p_false->wt1, &p_false->mean0, &p_false->mean1,
-                    &p_false->std0, &p_false->std1))
+    for (i=0; i<prior->numstep; i++)
     {
-      fprintf(stderr, "Error reading false amp model for site %d\n", siteid);
-      exit(1);
+      if (1 != fscanf(fp, "%lg ", p_false + i))
+      {
+        fprintf(stderr, "error reading false amp density for site %d\n",
+                siteid);
+        exit(1);
+      }
     }
     
     for (phaseid = 0; phaseid < prior->numphases; phaseid ++)
@@ -77,11 +86,7 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
   
   assert((siteid >= 0) && (siteid < prior->numsites));
   assert((phaseid >= 0) && (phaseid < prior->numphases));
-
-  if (amp < 0)
-    amp = 1;
-  else if (amp > MAX_AMP)
-    amp = MAX_AMP;
+  assert(amp > 0);
   
   logamp = log(amp);
 
@@ -96,51 +101,47 @@ double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t *
                                           prior, int siteid, double amplitude)
 {
   double logamp;
-  SiteFalseAmp_t * p_false;
+  int idx;
   
   assert((siteid >= 0) && (siteid < prior->numsites));
-
+  
   assert(amplitude > 0);
   
   logamp = log(amplitude);
   
-  p_false = prior->p_site_false + siteid;
-
-  /* std could be 0 so we add 1e-6
-   * we mix with a uniform distribution to avoid extreme values when
-   * the amplitude is far from the mean */
-  return log(p_false->wt0 * Gaussian_prob(logamp, p_false->mean0, 
-                                          p_false->std0 + 1e-6) *(1-UNIF_FALSE)
-             + p_false->wt1 * Gaussian_prob(logamp, p_false->mean1, 
-                                            p_false->std1 +1e-6)*(1-UNIF_FALSE)
-             + UNIF_FALSE / (MAX_LOGAMP - MIN_LOGAMP));
+  assert((logamp > prior->min_logamp) && (logamp < prior->max_logamp));
+  
+  idx = (int) ((logamp - prior->min_logamp) / prior->step_logamp);
+  
+  return log(prior->p_site_false[siteid * prior->numstep + idx]);
 }
 
 double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 
                                       prior, int siteid, double amplitude)
 {
   double logamp;
-  SiteFalseAmp_t * p_false;
+  int idx;
+  int i;
+  double sum;
   
   assert((siteid >= 0) && (siteid < prior->numsites));
-
+  
   assert(amplitude > 0);
   
   logamp = log(amplitude);
-
-  p_false = prior->p_site_false + siteid;
-
-  if (logamp > MAX_LOGAMP)
-    logamp = MAX_LOGAMP;
   
-  if (logamp < MIN_LOGAMP)
-    logamp = MIN_LOGAMP + .001;
+  assert((logamp > prior->min_logamp) && (logamp < prior->max_logamp));
   
-  return p_false->wt0 * Gaussian_cdf(logamp, p_false->mean0, 
-                                     p_false->std0 + 1e-6) *(1-UNIF_FALSE)
-    + p_false->wt1 * Gaussian_cdf(logamp, p_false->mean1,
-                                  p_false->std1 +1e-6)*(1-UNIF_FALSE)
-    + UNIF_FALSE * (logamp - MIN_LOGAMP) / (MAX_LOGAMP - MIN_LOGAMP);
+  idx = (int) ((logamp - prior->min_logamp) / prior->step_logamp);
+
+  sum = 0;
+  
+  for (i=0; i<=idx; i++)
+    sum += prior->p_site_false[siteid * prior->numstep + i];
+
+  sum *= prior->step_logamp;
+  
+  return sum;
 }
 
 

@@ -468,12 +468,13 @@ double logprob_false(NetModel_t * p_netmodel, int numdets, int * p_detids,
 
   if (verbose)
   {
+    /*
     for (i=0; i<p_netmodel->numsites; i++)
       if (p_cnt_site[i] > 100)
         printf("Site[%d], cnt %d, Avg amplitude logprob: %lf\n",
                i, p_cnt_site[i], p_sum_site_amp[i] / p_cnt_site[i]);
-    
-    printf("Avg. amplitude logprob: %lf   worst %lf\n", sum_logprob / numdets,
+    */
+    printf("Avg. noise amp logprob: %lf   worst %lf\n", sum_logprob / numdets,
            worst_amp);
   }
   
