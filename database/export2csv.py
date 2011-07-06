@@ -4,14 +4,14 @@
 # example:
 # python export2csv.py oracle user/pass tablename filename.csv
 #   OR
-# python export2csv.py mysql user:ctbt,db=ctbt3mos tablename filename.csv
+# python export2csv.py mysql user=ctbt,db=ctbt3mos tablename filename.csv
 
 from optparse import OptionParser
 import sys, csv
 
 def main():
   parser = OptionParser(usage = "Usage: %prog [options] db-type connect-args"
-                        + "db-table csv-filename")
+                        + " db-table csv-filename")
   parser.add_option("-o", "--orderby", dest="orderby",
                     help="order the output by these columns (e.g. a,b)",
                     metavar = "COLLIST")
@@ -29,7 +29,7 @@ def main():
     db = cx_Oracle.connect(args[1])
   elif args[0] == "mysql":
     import MySQLdb
-    connargs = dict(pair.split(":") for pair in args[1].split(","))
+    connargs = dict(pair.split("=") for pair in args[1].split(","))
     db = MySQLdb.connect(**connargs)
   
   convert_table(db, args[2], args[3], options.where, options.orderby)
