@@ -13,19 +13,19 @@ insert into dataset values ('validation', 1238544000, 1241136000);
 /* 01-MAY-09 00:00:00 -- 01-JULY-09 00:00:00 (2 month) */
 insert into dataset values ('test', 1241136000, 1246406400);
 
-create synonym leb_arrival for leb.arrival;
+create synonym leb_arrival for leb_ref.arrival;
 
-create synonym leb_assoc for leb.assoc;
+create table leb_assoc as select * from leb_ref.assoc;
 
-create synonym leb_origin for leb.origin;
+create table leb_origin as select * from leb_ref.origin;
 
-create synonym idcx_arrival for idcx.arrival;
+create table idcx_arrival as select * from idcx_ref.arrival;
 
-create synonym sel3_assoc for sel3.assoc;
+create table sel3_assoc as select * from sel3_ref.assoc;
 
-create synonym sel3_origin for sel3.origin;
+create table sel3_origin as select * from sel3_ref.origin;
 
-create synonym static_site for static.site;
+create synonym static_site for static_ref.site;
 
 create table static_siteid (
   id          int primary key,

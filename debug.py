@@ -281,23 +281,15 @@ def main(param_dirname):
       if sc > best: best = sc
       if sc < worst: worst = sc
 
-  # we want crude levels upto 90 % of the max
-  real_best = best
-  best *= .9
-  
-  # create 5 levels from worst to 0 and 5 from 0 to best (unless if best < 0)
-  if best <= 0 or worst >= 0:
-    levels = np.linspace(worst, best, 10).tolist()
+  if worst < best * .9:
+    levels = np.arange(worst, best*.9, (best*.9 - worst)/5).tolist() +\
+             np.linspace(best*.9, best, 5).tolist()
   else:
-    levels = np.linspace(worst, 0, 5).tolist() \
-             + np.linspace(0, best, 5).tolist()
+    levels = np.linspace(worst, best, 10).tolist()
 
+  # round the levels so they are easier to display in the legend
   levels = np.round(levels, 1).tolist()
 
-  # then a couple of extra levels near the top
-  if real_best > 0:
-    levels += np.round([real_best*.95, real_best], 1).tolist()
-  
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
   
   
@@ -305,7 +297,8 @@ def main(param_dirname):
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-options.window * .98
   try:
-    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,500,
+    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,
+                      options.window*100,
                       fontsize=8, barstyle='fancy',
                       labelstyle='simple', units='km')
   except:
