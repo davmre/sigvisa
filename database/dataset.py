@@ -28,6 +28,7 @@ MIN_MAGNITUDE = 2.0
 MAX_MAGNITUDE = 8.0
 
 MIN_LOGAMP = -5.0
+MAX_LOGAMP = +10.0
 
 UPTIME_QUANT = 3600                     # 1 hour
 

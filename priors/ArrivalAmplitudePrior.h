@@ -41,4 +41,7 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
 double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * 
                                           prior, int siteid, double amplitude);
 
+double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 
+                                      prior, int siteid, double amplitude);
+
 void ArrivalAmplitudePrior_UnInit(ArrivalAmplitudePrior_t * prior);

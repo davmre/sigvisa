@@ -8,6 +8,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_logprob_false(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_falseamp_cdf(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
@@ -28,6 +29,8 @@ static PyMethodDef NetModel_methods[] = {
   {"logprob_false", (PyCFunction)py_logprob_false, METH_VARARGS,
    "logprob_false(falsedets, verbose) "
    "-> log probability\n"},
+  {"falseamp_cdf", (PyCFunction)py_falseamp_cdf, METH_VARARGS,
+   "falseamp_cdf(site, amp) -> cdf\n"},
   {"score_event", (PyCFunction)py_score_event, METH_VARARGS,
    "score_event(event, detlist) -> log probability ratio"},
   {"score_event_det", (PyCFunction)py_score_event_det, METH_VARARGS,
@@ -626,6 +629,19 @@ static PyObject * py_logprob_false(NetModel_t * p_netmodel, PyObject * args)
   free(p_detids);
 
   return Py_BuildValue("d", score);
+}
+
+static PyObject * py_falseamp_cdf(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  int site;
+  double amp;
+  
+  if (!PyArg_ParseTuple(args, "id", &site, &amp))
+    return NULL;
+  
+  return Py_BuildValue("d", FalseArrivalAmplitudePrior_cdf(
+                         &p_netmodel->arr_amp_prior, site, amp));
 }
 
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args)

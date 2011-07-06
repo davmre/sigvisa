@@ -5,6 +5,7 @@ from optparse import OptionParser
 from database.dataset import *
 import netvisa, learn
 from results.compare import *
+from utils.kstest import kstest
 
 def prune_detections(netmodel, events, event_detlists):
   for evnum, event in enumerate(events):
@@ -49,6 +50,8 @@ def main(param_dirname):
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation")
   
+  earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
+  
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
@@ -61,9 +64,10 @@ def main(param_dirname):
   netmodel.score_world(leb_events, leb_evlist, 1)
 
   falsedets = extract_false_detections(len(detections), leb_evlist)
-  
+
   print "FALSE:"
   netmodel.logprob_false(falsedets, 1)
+  falseamp_goodness(detections, earthmodel, netmodel, falsedets)
   
   
   print "SEL3:"
@@ -182,8 +186,24 @@ def main(param_dirname):
     plt.ylim(0,150)
     plt.xlabel("score")
     plt.ylabel("number of events")
-
+    
     plt.show()
+
+def falseamp_goodness(detections, earthmodel, netmodel, falsedets):
+  # divide the falsedets detections into per-site detections
+  site_falseamps = dict((s,[]) for s in range(earthmodel.NumSites()))
+  
+  for detnum in falsedets:
+    det = detections[detnum]
+    site_falseamps[det[DET_SITE_COL]].append(det[DET_AMP_COL])
+  
+  # compute the KS statistic for each site
+  for site in range(earthmodel.NumSites()):
+    if len(site_falseamps[site]) < 100:
+      continue
+    acc, stat = kstest(site_falseamps[site],
+                       lambda x: netmodel.falseamp_cdf(site, x))
+    print "[%d]: KS Stat %.2f -- acc %s" % (site, stat, acc)
 
 if __name__ == "__main__":
   try:

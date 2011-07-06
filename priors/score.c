@@ -411,6 +411,16 @@ double prob_event(NetModel_t * p_netmodel, Event_t * p_event)
   return logprob;
 }
 
+int compare_double(const double * pnum1, const double * pnum2)
+{
+  if (*pnum1 < *pnum2)
+    return -1;
+  else if (*pnum1 > *pnum2)
+    return 1;
+  else
+    return 0;
+}
+
 double logprob_false(NetModel_t * p_netmodel, int numdets, int * p_detids,
                      int verbose)
 {
@@ -419,6 +429,7 @@ double logprob_false(NetModel_t * p_netmodel, int numdets, int * p_detids,
   double sum_logprob = 0;
 
   double * p_sum_site_amp;
+  
   int * p_cnt_site;
 
   double worst_amp=0;

@@ -67,6 +67,7 @@ typedef struct Detection_t
 #include "priors/Poisson.h"
 #include "priors/Gaussian.h"
 #include "priors/LogNormal.h"
+#include "priors/Gamma.h"
 
 typedef struct NetModel_t
 {
