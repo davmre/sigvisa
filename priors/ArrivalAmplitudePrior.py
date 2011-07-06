@@ -130,8 +130,9 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     plt.hist(false_logamps, bins, label="data", alpha=.5)
     plt.plot(bins, [utils.GMM.evaluate(false_wts, false_means, false_stds,
                                        x+STEP/2)
-                    * STEP * len(false_logamps) for x in bins], label="model")
-
+                    * STEP * len(false_logamps) for x in bins], label="model",
+             linewidth=3)
+    
     plt.xlabel("log(amp)")
     plt.ylabel("frequency")
     plt.legend()
@@ -170,12 +171,13 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       
       print_2gmm(wts, means, stds)
     
-    if sitenum == 113 and options.gui:
+    if sitenum in [6, 24, 84, 113] and options.gui:
       plt.figure()
-      plt.title("log(amp) for false detections -- WRA")
+      plt.title("log(amp) for false detections -- %d" % sitenum)
       plt.hist(data, bins, label="data", alpha=.5)
       plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
-                      * STEP * len(data) for x in bins], label="model")
+                      * STEP * len(data) for x in bins], label="model",
+               linewidth=3)
       plt.xlabel("log(amp)")
       plt.ylabel("frequency")
       plt.legend()

@@ -11,7 +11,7 @@ from database.dataset import *
 import netvisa, learn
 from results.compare import *
 from utils import Laplace
-import utils.GMM, utils.LinearModel
+import utils.GMM, utils.LinearModel, utils.gamma
 import database.db
 
 from utils.LogisticModel import LogisticModel
@@ -83,6 +83,10 @@ def main(param_dirname):
     visualize_noise(options, earthmodel, netmodel,
                     detections, leb_events, leb_evlist)
     
+    visualize_arramp(options, earthmodel, netmodel,
+                     detections, leb_events, leb_evlist)    
+    
+    
   if options.arrival:
     print "visualizing arrival parameters"
 
@@ -91,9 +95,6 @@ def main(param_dirname):
     
     visualize_arrtime(options, earthmodel, netmodel,
                       detections, leb_events, leb_evlist)
-    
-    visualize_arramp(options, earthmodel, netmodel,
-                     detections, leb_events, leb_evlist)    
     
     visualize_corr_ttime(options, earthmodel, netmodel,
                          detections, leb_events, leb_evlist)
@@ -742,7 +743,8 @@ def visualize_detection(options, earthmodel, netmodel, start_time, end_time,
 
 def visualize_arramp(options, earthmodel, netmodel,
                      detections, leb_events, leb_evlist):
-
+  # TODO: learn the false arrival amplitude of each site as Gamma distribution
+  #
   # create a dataset for each site, phase and for all sites, each phase
   false_logamps = []
   all_phase_logamps = []
@@ -812,12 +814,14 @@ def visualize_arramp(options, earthmodel, netmodel,
   
   # learn the overall false detection model (for all sites)
   false_wts, false_means, false_stds = utils.GMM.estimate(2, false_logamps)
+  false_params = utils.gamma.estimate(false_logamps)
   
   print "Overall False log(Amp):",
   print_2gmm(false_wts, false_means, false_stds)
+  print "OR as Gamma: location, shape, scale:", false_params
   
   STEP = .1
-  bins = np.arange(-7, 8, STEP)
+  bins = np.arange(MIN_LOGAMP, MAX_LOGAMP, STEP)
   
   plt.figure()
   plt.title("log(amp) for false detections -- all sites")
@@ -825,6 +829,9 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.plot(bins, [utils.GMM.evaluate(false_wts, false_means, false_stds,
                                      x+STEP/2)
                   * STEP * len(false_logamps) for x in bins], label="model",
+           linewidth=3)
+  plt.plot(bins, [np.exp(utils.gamma.ldensity(false_params, x + STEP/2))
+                  * STEP * len(false_logamps) for x in bins], label="gamma",
            linewidth=3)
   plt.xlabel("log(amp)")
   plt.ylabel("frequency")
@@ -851,14 +858,18 @@ def visualize_arramp(options, earthmodel, netmodel,
   SITEID, PHASEID = 6, 0
   data = site_false_logamps[SITEID]
   wts, means, stds = utils.GMM.estimate(2, data)
+  params = utils.gamma.estimate(data)
   print "Siteid 6 false log(amp)"
   print_2gmm(wts, means, stds)
+  print "OR Gamma:", params
 
   plt.figure()
   plt.title("log(amp) for false detections -- site %d" % SITEID)
   plt.hist(data, bins, label="data", alpha=.5)
   plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
-                  * STEP * len(data) for x in bins], label="model", linewidth=3)
+                  * STEP * len(data) for x in bins], label="model",linewidth=3)
+  plt.plot(bins, [np.exp(utils.gamma.ldensity(params, x+STEP/2))
+                  * STEP * len(data) for x in bins], label="gamma",linewidth=3)
   plt.xlabel("log(amp)")
   plt.ylabel("frequency")
   plt.legend()

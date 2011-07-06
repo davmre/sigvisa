@@ -4,4 +4,6 @@ double Gaussian_logprob(double val, double m, double s);
 
 double Gaussian_sample(double m, double s);
 
+double Gaussian_cdf(double val, double m, double s);
+
 

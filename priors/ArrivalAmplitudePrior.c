@@ -100,15 +100,12 @@ double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t *
   
   assert((siteid >= 0) && (siteid < prior->numsites));
 
-  if (amplitude < 0)
-    amplitude = 1;
-  else if (amplitude > MAX_AMP)
-    amplitude = MAX_AMP;
+  assert(amplitude > 0);
   
   logamp = log(amplitude);
   
   p_false = prior->p_site_false + siteid;
-  
+
   /* std could be 0 so we add 1e-6
    * we mix with a uniform distribution to avoid extreme values when
    * the amplitude is far from the mean */
@@ -118,6 +115,34 @@ double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t *
                                             p_false->std1 +1e-6)*(1-UNIF_FALSE)
              + UNIF_FALSE / (MAX_LOGAMP - MIN_LOGAMP));
 }
+
+double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 
+                                      prior, int siteid, double amplitude)
+{
+  double logamp;
+  SiteFalseAmp_t * p_false;
+  
+  assert((siteid >= 0) && (siteid < prior->numsites));
+
+  assert(amplitude > 0);
+  
+  logamp = log(amplitude);
+
+  p_false = prior->p_site_false + siteid;
+
+  if (logamp > MAX_LOGAMP)
+    logamp = MAX_LOGAMP;
+  
+  if (logamp < MIN_LOGAMP)
+    logamp = MIN_LOGAMP + .001;
+  
+  return p_false->wt0 * Gaussian_cdf(logamp, p_false->mean0, 
+                                     p_false->std0 + 1e-6) *(1-UNIF_FALSE)
+    + p_false->wt1 * Gaussian_cdf(logamp, p_false->mean1,
+                                  p_false->std1 +1e-6)*(1-UNIF_FALSE)
+    + UNIF_FALSE * (logamp - MIN_LOGAMP) / (MAX_LOGAMP - MIN_LOGAMP);
+}
+
 
 void ArrivalAmplitudePrior_UnInit(ArrivalAmplitudePrior_t * prior)
 {
