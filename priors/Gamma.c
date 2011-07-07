@@ -2,6 +2,10 @@
 
 #include "../netvisa.h"
 
+#ifndef M_PI
+ #define M_PI           ((double) 3.14159265358979323846)
+#endif
+
 static double loggamma(double num)
 {
   return (num - .5) * log(num) - num + .5 * log(2 * M_PI);  

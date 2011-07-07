@@ -1,6 +1,11 @@
+#include "../netvisa.h"
+
 #include <math.h>
 
-#include "../netvisa.h"
+#ifndef M_2_SQRTPI
+ #define M_2_SQRTPI	((double) 1.12837916709551257390)
+#endif
+
 
 static double std_cdf(double x);
 static double std_GL(double a, double b);
