@@ -116,6 +116,7 @@ typedef struct World_t
   int birthsteps;
   int window;
   int step;
+  int numthreads;
   PyObject * propose_eventobj;
   int verbose;
   PyObject * write_events_cb;
@@ -279,7 +280,8 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
                                     p_world->high_evtime,
                                     p_world->low_detnum,
                                     p_world->high_detnum,
-                                    2.5, p_world->birthsteps);
+                                    2.5, p_world->birthsteps,
+                                    p_world->numthreads);
   }
   
   t1 = time(NULL) - t1;
@@ -1090,6 +1092,7 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   int birthsteps;
   int window;
   int step;
+  int numthreads;
   int verbose;
   PyObject * propose_eventobj;
   PyObject * write_events_cb;
@@ -1098,9 +1101,9 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   PyObject * eventsobj;
   PyObject * evdetlistobj;
   
-  if (!PyArg_ParseTuple(args, "iiiiiOiO", &runid, &numsamples, 
+  if (!PyArg_ParseTuple(args, "iiiiiiOiO", &runid, &numsamples, 
                         &birthsteps,
-                        &window, &step,
+                        &window, &step, &numthreads,
                         &propose_eventobj,
                         &verbose, &write_events_cb))
     return NULL;
@@ -1112,6 +1115,7 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   p_world->birthsteps = birthsteps;
   p_world->window = window;
   p_world->step = step;
+  p_world->numthreads = numthreads;
   p_world->propose_eventobj = propose_eventobj;
   p_world->verbose = verbose;
   p_world->write_events_cb = write_events_cb;

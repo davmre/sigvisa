@@ -2,7 +2,7 @@ from distutils.core import setup, Extension
 import numpy as np
 import os
 
-extra_compile_args = ['-std=c99', '-D_GNU_SOURCE']
+extra_compile_args = ['-std=c99']
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
