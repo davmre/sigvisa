@@ -180,6 +180,9 @@ def main(param_dirname):
   parser.add_option("-a", "--arrival_table", dest="arrival_table",
                     default=None,
                     help = "arrival table to use for inferring on")
+  parser.add_option("-z", "--threads", dest="threads", default=1,
+                    type="int",
+                    help = "number of threads (1)")
   (options, args) = parser.parse_args()
 
   if options.seed == 0:
@@ -284,6 +287,7 @@ def main(param_dirname):
   events, ev_detlist = netmodel.infer(runid, options.numsamples,
                                       options.birthsteps,
                                       options.window, options.step,
+                                      options.threads,
                                       propose_events,
                                       options.verbose,
                                       lambda a,b,c,d,e,f:

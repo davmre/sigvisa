@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <time.h>
 
+#include <pthread.h>
+
 #include "../netvisa.h"
 #include "quickselect.h"
 
@@ -50,6 +52,29 @@ for (timeidx = 0; timeidx < numtime; timeidx ++)\
     else if ((p_event)->evlat > 90)                     \
       (p_event)->evlat = 180 - (p_event)->evlat;        \
   } while(0)
+
+
+struct thread_data {
+  int det_low;
+  int det_high;
+  int *p_skip_inv;
+  int *p_skip_det;
+  
+  int num_step;
+  double degree_step;
+  double time_low;
+  double time_high;
+  int numthreads;
+  
+  NetModel_t *p_netmodel;
+  Event_t *p_inv_events;
+  Event_t *p_event;
+  EarthModel_t *p_earth;
+  
+  int tid;
+  Event_t *p_best_event;
+};
+
 
 /* Hough transform-based method for proposing events */
 int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
@@ -758,6 +783,107 @@ int propose_invert_timed (NetModel_t * p_netmodel, Event_t **pp_events,
   return numevents;
 }
 
+void *propose_invert_step_helper(void *args)
+{
+  struct thread_data *params = (struct thread_data *) args;
+
+  int det_low = params->det_low;
+  int det_high = params->det_high;
+  int *p_skip_inv = params->p_skip_inv;
+  int *p_skip_det = params->p_skip_det;
+
+  int num_step = params->num_step;
+  double degree_step = params->degree_step;
+  double time_low = params->time_low;
+  double time_high = params->time_high;
+  int numthreads = params->numthreads;
+
+  NetModel_t * p_netmodel = params->p_netmodel;
+  Event_t *p_inv_events = params->p_inv_events;
+  Event_t *p_event = params->p_event;
+  EarthModel_t * p_earth = params->p_earth;
+
+  int tid = params->tid;
+
+  int inv_detnum, lonidx, latidx;
+  double lon, lat, mag;
+
+  /* Loop increments by NUM_THREADS to ensure that each thread gets a
+   * different datum */
+  for (inv_detnum = det_low+tid; inv_detnum < det_high; 
+       inv_detnum += numthreads)
+  {
+    Detection_t * p_inv_det;
+    int det_off = inv_detnum - det_low;
+
+    if (p_skip_inv[det_off])
+      continue;
+
+    p_inv_det = p_netmodel->p_detections + inv_detnum;
+
+    /* save the longitude and latitude */
+    lon = (p_inv_events + det_off)->evlon;
+    lat = (p_inv_events + det_off)->evlat;
+
+    /* fix the depth to 0 */
+    p_event->evdepth = 0;
+
+    for (mag=3; mag <4.1; mag+=1)
+    {
+      p_event->evmag = mag;
+
+      for (lonidx=-num_step; lonidx<=num_step; lonidx++)
+      {
+        p_event->evlon = lon + lonidx * degree_step;
+        FIXUP_EVLON(p_event);
+
+        for (latidx=-num_step; latidx<=num_step; latidx ++)
+        {
+          double trvtime;
+          p_event->evlat = lat + latidx * degree_step;
+          FIXUP_EVLAT(p_event);
+
+          trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+                                           p_event->evlat, p_event->evdepth,0,
+                                           EARTH_PHASE_P, p_inv_det->site_det);
+          if (trvtime < 0)
+            continue;
+
+          p_event->evtime = p_inv_det->time_det - trvtime;
+
+          if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
+          {
+            continue;
+          }
+
+          /* score this event using the best detections available */
+          propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                                  p_skip_det, 0 /* all phases */);
+
+#ifdef VERBOSE
+          if ((!lonidx) && (!latidx))
+          {
+            printf("detnum %d: ", inv_detnum);
+            print_event(p_event);
+            print_event_detections(p_earth, p_event);
+          }
+#endif    //Compare to the score in p_best_events with index tid (for this thread)
+          if (p_event->evscore > params->p_best_event->evscore)
+          {
+            copy_event(p_netmodel, params->p_best_event, p_event);
+
+#ifdef NEVER
+            printf("CURR BEST: ");
+            print_event(params->p_best_event);
+#endif
+          }
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
 /* propose events by inverting detections and keeping the best
  * inverted detections 
  * this version does a fixed number of steps per detection */
@@ -766,21 +892,18 @@ int propose_invert_timed (NetModel_t * p_netmodel, Event_t **pp_events,
 */
 int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
                         double time_low, double time_high, int det_low,
-                        int det_high, double degree_step, int num_step)
+                        int det_high, double degree_step, int num_step,
+                        int numthreads)
 {
   EarthModel_t * p_earth;
   int numsites;
   int numtimedefphases;
   
-  int lonidx, latidx;
-  double lon, lat, mag;
-
   int detnum, inv_detnum;
 
   int numevents;
 
   Event_t * p_best_event;
-  Event_t * p_event;
   int * p_skip_det;                          /* numdetections */
   
   Event_t * p_inv_events;
@@ -817,6 +940,7 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     Detection_t * p_inv_det;
     int inv_status;
     int det_off = inv_detnum - det_low;
+    Event_t * p_event;
     
     p_inv_det = p_netmodel->p_detections + inv_detnum;
 
@@ -848,95 +972,73 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
   }
 #endif
   
-  p_event = alloc_event(p_netmodel);
-
   numevents = 0;
 
   do
   {
     int siteid;
     int phase;
+    pthread_t * threads;
+    struct thread_data * thread_args;
 
+    /* Initialize what will be the overall best event */
     p_best_event = alloc_event(p_netmodel);
     p_best_event->evscore = 0;
+
+    /* TODO: move the thread allocation outside the loop */
     
-    for (inv_detnum = det_low; inv_detnum < det_high; inv_detnum ++)
+    /* Create threads and call the helper function with arguments */
+    threads = (pthread_t *) calloc(numthreads, sizeof(*threads));
+    thread_args = (struct thread_data *) calloc(numthreads,
+                                                sizeof(*thread_args));
+    
+    for (int i = 0; i < numthreads; i++)
     {
-      Detection_t * p_inv_det;
-      int det_off = inv_detnum - det_low;
-      
-      if (p_skip_inv[det_off])
-        continue;
+      thread_args[i].det_low = det_low;
+      thread_args[i].det_high = det_high;
+      thread_args[i].p_skip_inv = p_skip_inv;
+      thread_args[i].p_skip_det = p_skip_det;
+      thread_args[i].num_step = num_step;
+      thread_args[i].degree_step = degree_step;
+      thread_args[i].time_low = time_low;
+      thread_args[i].time_high = time_high;
+      thread_args[i].numthreads = numthreads;
+      thread_args[i].p_netmodel = p_netmodel;
+      thread_args[i].p_inv_events = p_inv_events;
+      thread_args[i].p_event = alloc_event(p_netmodel);
+      thread_args[i].p_earth = p_earth;
+      thread_args[i].tid = i;
+      thread_args[i].p_best_event = alloc_event(p_netmodel);
+      thread_args[i].p_best_event->evscore = 0;
+      pthread_create(&threads[i], NULL, propose_invert_step_helper,
+                     (void *) &thread_args[i]);
+    }
 
-      p_inv_det = p_netmodel->p_detections + inv_detnum;
-      
-      /* save the longitude and latitude */
-      lon = (p_inv_events + det_off)->evlon;
-      lat = (p_inv_events + det_off)->evlat;
-
-      /* fix the depth to 0 */
-      p_event->evdepth = 0;
-      
-      for (mag=3; mag <4.1; mag+=1)
+    /* Wait for all threads to finish */
+    for (int i = 0; i < numthreads; i++)
+    {
+      pthread_join(threads[i], NULL);
+    }
+	
+    /* Get the best event from all threads combined */
+    for (int i = 0; i < numthreads; ++i)
+    {
+      if (thread_args[i].p_best_event->evscore > p_best_event->evscore)
       {
-        p_event->evmag = mag;
-        
-        for (lonidx=-num_step; lonidx<=num_step; lonidx++)
-        {
-          p_event->evlon = lon + lonidx * degree_step;
-          FIXUP_EVLON(p_event);
-        
-          for (latidx=-num_step; latidx<=num_step; latidx ++)
-          {
-            double trvtime;
-            p_event->evlat = lat + latidx * degree_step;
-            FIXUP_EVLAT(p_event);
-          
-            trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
-                                             p_event->evlat, p_event->evdepth,0,
-                                             EARTH_PHASE_P,p_inv_det->site_det);
-            if (trvtime < 0)
-              continue;
-          
-            p_event->evtime = p_inv_det->time_det - trvtime;
-
-            if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
-            {
-              continue;
-            }
-          
-            /* score this event using the best detections available */
-            propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                    p_skip_det, 0 /* all phases */);
-
-#ifdef VERBOSE
-            if ((!lonidx) && (!latidx))
-            {
-              printf("detnum %d: ", inv_detnum);
-              print_event(p_event);
-              print_event_detections(p_earth, p_event);
-            }
-#endif
-            if (p_event->evscore > p_best_event->evscore)
-            {
-              copy_event(p_netmodel, p_best_event, p_event);
-
-#ifdef NEVER
-              printf("CURR BEST: ");
-              print_event(p_best_event);
-#endif
-            }
-          }
-        }
+        copy_event(p_netmodel, p_best_event, thread_args[i].p_best_event);
+        free_event(thread_args[i].p_best_event);
+        free_event(thread_args[i].p_event);
       }
     }
+    
+    free(thread_args);
+    free(threads);
+    
     /* finished inverting all detections and trying events in a ball around
      * them now let's see if we got something good */
-    
     if (0 == p_best_event->evscore)
     {
       free_event(p_best_event);
-      free_event(p_event);
       break;
     }
     
@@ -947,7 +1049,7 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
                        p_skip_det, time_low, time_high, .1);
 
     /* and, once more find the best detections for this event */
-    propose_best_detections(p_netmodel, p_event, det_low, det_high,
+    propose_best_detections(p_netmodel, p_best_event, det_low, det_high,
                             p_skip_det, 0 /* all phases */);
     
 #ifdef VERBOSE
@@ -985,6 +1087,7 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
   return numevents;
 }
 
+//Essentially just the for loop above, along with parameter extraction
 /* uniformly propose the event all over the earth */
 /* python -m utils.check_propose python -k 1237700200 -r .75 -d 10 -t 10
  * found the event 5288798 but took 5 hours over a 5 minute window
@@ -1377,11 +1480,11 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
                                   sizeof(*pp_events));
 
   numevents = propose_invert_step(p_netmodel, pp_events, time_low, time_high, 
-                                  det_low, det_high, degree_delta, num_step);
+                                  det_low, det_high, degree_delta, num_step,1);
 
 #ifdef NEVER
   numevents = propose_invert_timed(p_netmodel, pp_events, time_low, time_high, 
-                                   det_low, det_high, degree_delta, num_seconds);
+                                   det_low, det_high,degree_delta,num_seconds);
 #endif
 
 #ifdef NEVER

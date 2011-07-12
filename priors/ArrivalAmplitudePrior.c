@@ -113,7 +113,8 @@ double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t *
   
   idx = (int) ((logamp - prior->min_logamp) / prior->step_logamp);
   
-  return log(prior->p_site_false[siteid * prior->numstep + idx]);
+  return log(prior->p_site_false[siteid * prior->numstep + idx]
+             * (1-UNIF_FALSE) + (1.0/10.0)*UNIF_FALSE);
 }
 
 double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 

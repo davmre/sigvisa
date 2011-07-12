@@ -38,8 +38,8 @@ static PyMethodDef NetModel_methods[] = {
   {"prob_event", (PyCFunction)py_prob_event, METH_VARARGS,
    "prob_event(event, detlist) -> log probability ratio"},
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
-   "infer(runid, numsamples, window, step, propose_events,verbose, write_cb)\n"
-   "      -> events, ev_detlist"},
+   "infer(runid, numsamples, window, step, threads, propose_events, verbose,"
+   "write_cb)\n -> events, ev_detlist"},
   {"propose", (PyCFunction)py_propose, METH_VARARGS,
    "propose(time_low, time_high, det_low, det_high, degree_step, num_step)\n"
    " -> events, ev_detlist"},
