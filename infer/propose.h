@@ -7,7 +7,8 @@ int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
 
 int propose_invert_timed(NetModel_t * p_netmodel, Event_t **pp_events,
                          double time_low, double time_high, int det_low,
-                         int det_high, double degree_delta, int num_secs);
+                         int det_high, double degree_delta, int num_secs,
+                         int numthreads);
 
 int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
                         double time_low, double time_high, int det_low,
