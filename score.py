@@ -68,8 +68,6 @@ def main(param_dirname):
 
   print "FALSE:"
   netmodel.logprob_false(falsedets, 1)
-  falseamp_goodness(options, detections, earthmodel, netmodel, falsedets)
-  
   
   print "SEL3:"
   netmodel.score_world(sel3_events, sel3_evlist, 1)
@@ -188,44 +186,6 @@ def main(param_dirname):
     
     plt.show()
 
-def falseamp_goodness(options, detections, earthmodel, netmodel, falsedets):
-  # divide the falsedets detections into per-site detections
-  site_falseamps = dict((s,[]) for s in range(earthmodel.NumSites()))
-  
-  for detnum in falsedets:
-    det = detections[detnum]
-    site_falseamps[det[DET_SITE_COL]].append(det[DET_AMP_COL])
-
-  numchecked, numacc, tot_stat = 0, 0, 0.
-  # compute the KS statistic for each site
-  for site in range(earthmodel.NumSites()):
-    if len(site_falseamps[site]) < 100:
-      continue
-    numchecked += 1
-    
-    acc, stat = kstest(site_falseamps[site],
-                       lambda x: netmodel.falseamp_cdf(site, x))
-    if acc:
-      numacc += 1
-    
-    tot_stat += stat
-    
-    if options.gui and site in [6, 24, 84, 113]:
-      xpts = [x for x in site_falseamps[site]]
-      xpts.sort()
-      
-      plt.figure()
-      plt.title("Noise amplitude CDF -- site %d" % site )
-      plt.plot(np.log(xpts), (np.arange(len(xpts)) + 1.0) / len(xpts),
-               label="empirical")
-      plt.plot(np.log(xpts), [netmodel.falseamp_cdf(site, x) for x in xpts],
-               label="model")
-      plt.xlabel("Log amplitude")
-      plt.legend()
-
-  print "Noise Log Amplitude: KS Test %d / %d accepted, avg stat %.2f"\
-        % (numacc, numchecked, tot_stat / numchecked)
-  
 if __name__ == "__main__":
   try:
     main("parameters")

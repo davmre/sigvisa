@@ -22,39 +22,30 @@ void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
     exit(1);
   }
 
-  if (5 != fscanf(fp, "%d %d %lg %lg %lg\n",
-                  &prior->numsites, &prior->numphases, &prior->min_logamp,
-                  &prior->max_logamp, &prior->step_logamp))
+  if (2 != fscanf(fp, "%d %d\n", &prior->numsites, &prior->numphases))
   {
     fprintf(stderr, "error reading num sites, num phases from %s\n", filename);
     exit(1);
   }
 
-  prior->numstep = (int) ((prior->max_logamp - prior->min_logamp)
-                          /prior->step_logamp);
-  
-
-  prior->p_site_false = (double *) calloc(prior->numsites * prior->numstep,
-                                          sizeof(*prior->p_site_false));
+  prior->p_site_false = (SiteFalseAmp_t *) calloc(prior->numsites,
+                                              sizeof(*prior->p_site_false));
   prior->p_site_phase_amp = (PhaseAmp_t *) calloc(prior->numsites 
                                                   * prior->numphases,
                                              sizeof(*prior->p_site_phase_amp));
   
   for (siteid = 0; siteid < prior->numsites; siteid ++)
   {
-    double * p_false;
-    int i;
+    SiteFalseAmp_t * p_false;
     
-    p_false = prior->p_site_false + siteid * prior->numstep;
+    p_false = prior->p_site_false + siteid;
     
-    for (i=0; i<prior->numstep; i++)
+    if (6 != fscanf(fp, "%lg %lg %lg %lg %lg %lg\n", &p_false->wt0,
+                    &p_false->wt1, &p_false->mean0, &p_false->mean1,
+                    &p_false->std0, &p_false->std1))
     {
-      if (1 != fscanf(fp, "%lg ", p_false + i))
-      {
-        fprintf(stderr, "error reading false amp density for site %d\n",
-                siteid);
-        exit(1);
-      }
+      fprintf(stderr, "Error reading false amp model for site %d\n", siteid);
+      exit(1);
     }
     
     for (phaseid = 0; phaseid < prior->numphases; phaseid ++)
@@ -86,7 +77,11 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
   
   assert((siteid >= 0) && (siteid < prior->numsites));
   assert((phaseid >= 0) && (phaseid < prior->numphases));
-  assert(amp > 0);
+
+  if (amp < 0)
+    amp = 1;
+  else if (amp > MAX_AMP)
+    amp = MAX_AMP;
   
   logamp = log(amp);
 
@@ -101,50 +96,28 @@ double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t *
                                           prior, int siteid, double amplitude)
 {
   double logamp;
-  int idx;
+  SiteFalseAmp_t * p_false;
   
   assert((siteid >= 0) && (siteid < prior->numsites));
-  
-  assert(amplitude > 0);
+
+  if (amplitude < 0)
+    amplitude = 1;
+  else if (amplitude > MAX_AMP)
+    amplitude = MAX_AMP;
   
   logamp = log(amplitude);
   
-  assert((logamp > prior->min_logamp) && (logamp < prior->max_logamp));
+  p_false = prior->p_site_false + siteid;
   
-  idx = (int) ((logamp - prior->min_logamp) / prior->step_logamp);
-  
-  return log(prior->p_site_false[siteid * prior->numstep + idx]
-             * (1-UNIF_FALSE) + (1.0/10.0)*UNIF_FALSE);
+  /* std could be 0 so we add 1e-6
+   * we mix with a uniform distribution to avoid extreme values when
+   * the amplitude is far from the mean */
+  return log(p_false->wt0 * Gaussian_prob(logamp, p_false->mean0, 
+                                          p_false->std0 + 1e-6) *(1-UNIF_FALSE)
+             + p_false->wt1 * Gaussian_prob(logamp, p_false->mean1, 
+                                            p_false->std1 +1e-6)*(1-UNIF_FALSE)
+             + UNIF_FALSE / LOG_MAX_AMP);
 }
-
-double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 
-                                      prior, int siteid, double amplitude)
-{
-  double logamp;
-  int idx;
-  int i;
-  double sum;
-  
-  assert((siteid >= 0) && (siteid < prior->numsites));
-  
-  assert(amplitude > 0);
-  
-  logamp = log(amplitude);
-  
-  assert((logamp > prior->min_logamp) && (logamp < prior->max_logamp));
-  
-  idx = (int) ((logamp - prior->min_logamp) / prior->step_logamp);
-
-  sum = 0;
-  
-  for (i=0; i<=idx; i++)
-    sum += prior->p_site_false[siteid * prior->numstep + i];
-
-  sum *= prior->step_logamp;
-  
-  return sum;
-}
-
 
 void ArrivalAmplitudePrior_UnInit(ArrivalAmplitudePrior_t * prior)
 {
