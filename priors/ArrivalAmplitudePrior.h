@@ -1,4 +1,15 @@
 
+typedef struct SiteFalseAmp_t
+{
+  double wt0;
+  double wt1;
+  double mean0;
+  double mean1;
+  double std0;
+  double std1;
+  
+} SiteFalseAmp_t;
+
 typedef struct PhaseAmp_t
 {
   double intercept;
@@ -14,12 +25,8 @@ typedef struct ArrivalAmplitudePrior_t
 {
   int numsites;
   int numphases;
-  double min_logamp;
-  double max_logamp;
-  double step_logamp;
-  int numstep;
-  
-  double * p_site_false;                     /* numsites x numstep */
+ 
+  SiteFalseAmp_t * p_site_false;             /* numsites x */
   PhaseAmp_t * p_site_phase_amp;             /* numsites x numphases */
 
 } ArrivalAmplitudePrior_t;
@@ -33,8 +40,5 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
 
 double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * 
                                           prior, int siteid, double amplitude);
-
-double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 
-                                      prior, int siteid, double amplitude);
 
 void ArrivalAmplitudePrior_UnInit(ArrivalAmplitudePrior_t * prior);

@@ -207,6 +207,8 @@ typedef struct NetModel_t
 #define DELTA_TIME 50                        /* in seconds */
 #define DELTA_DIST 5                         /* in degrees */
 
+#define MAX_AMP 10000.0
+#define LOG_MAX_AMP 9.2103
 
 Event_t * alloc_event(NetModel_t * p_netmodel);
 void free_event(Event_t * p_event);

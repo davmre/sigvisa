@@ -326,7 +326,7 @@ def plot_ttime_residuals(netmodel,residuals, title, SITEID, PHASEID, MIN, MAX,
           linewidth=0,
           label="data")
   plt.plot(x_vals, curve, color="black", label="Laplace", linewidth=3)
-  plt.plot(x_vals, mix_curve, color="red", label="Laplace+uniform", linewidth=3)
+  #plt.plot(x_vals, mix_curve, color="red", label="Laplace+uniform", linewidth=3)
   plt.xlabel("Time")
   plt.ylabel("Probability")
   plt.xlim(MIN,MAX)
@@ -830,9 +830,9 @@ def visualize_arramp(options, earthmodel, netmodel,
                                      x+STEP/2)
                   * STEP * len(false_logamps) for x in bins], label="model",
            linewidth=3)
-  plt.plot(bins, [np.exp(utils.gamma.ldensity(false_params, x + STEP/2))
-                  * STEP * len(false_logamps) for x in bins], label="gamma",
-           linewidth=3)
+  #plt.plot(bins, [np.exp(utils.gamma.ldensity(false_params, x + STEP/2))
+  #                * STEP * len(false_logamps) for x in bins], label="gamma",
+  #         linewidth=3)
   plt.xlabel("log(amp)")
   plt.ylabel("frequency")
   plt.legend()
@@ -868,8 +868,8 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.hist(data, bins, label="data", alpha=.5)
   plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
                   * STEP * len(data) for x in bins], label="model",linewidth=3)
-  plt.plot(bins, [np.exp(utils.gamma.ldensity(params, x+STEP/2))
-                  * STEP * len(data) for x in bins], label="gamma",linewidth=3)
+  #plt.plot(bins, [np.exp(utils.gamma.ldensity(params, x+STEP/2))
+  #               * STEP * len(data) for x in bins], label="gamma",linewidth=3)
   plt.xlabel("log(amp)")
   plt.ylabel("frequency")
   plt.legend()
