@@ -64,15 +64,19 @@ struct thread_data {
   double degree_step;
   double time_low;
   double time_high;
-  int numthreads;
   
   NetModel_t *p_netmodel;
   Event_t *p_inv_events;
   Event_t *p_event;
   EarthModel_t *p_earth;
   
-  int tid;
+  int N;
+  double scale;
+  Event_t *p_curr_event;
   Event_t *p_best_event;
+
+  int tid;
+  int numthreads;
 };
 
 
@@ -470,26 +474,25 @@ static void propose_best_detections(NetModel_t * p_netmodel,
   free(p_event_best_score);
 }
 
-static void propose_best_event(NetModel_t * p_netmodel,
-                               Event_t * p_event,
-                               int det_low, int det_high,
-                               int * p_skip_det,
-                               double time_low, double time_high,
-                               double scale)
+void *propose_best_event_helper(void *args)
 {
-  Event_t * p_best_event;
-  Event_t * p_curr_event;
-  int i;
-  const int N = 1000;
+  struct thread_data *params = (struct thread_data *) args;
   
-  p_best_event = alloc_event(p_netmodel);
-  p_curr_event = alloc_event(p_netmodel);
+  int det_low = params->det_low;
+  int det_high = params->det_high;
+  int *p_skip_det = params->p_skip_det;
   
-  /* the initial event is the starting event as well as the initial best */
-  copy_event(p_netmodel, p_best_event, p_event);
-  copy_event(p_netmodel, p_curr_event, p_event);
+  double time_low = params->time_low;
+  double time_high = params->time_high;
 
-  for (i=0; i<N; i++)
+  NetModel_t * p_netmodel = params->p_netmodel;
+  Event_t *p_event = params->p_event;
+  Event_t *p_curr_event = params->p_curr_event;
+
+  double scale = params->scale;
+
+  srand(time(NULL) + params->tid);
+  for (int i = 0; i < params->N; i += 1)
   {
     /* perturb the current event in all dimensions */
     p_event->evlon = p_curr_event->evlon + RAND_UNIFORM(-scale, scale) * 5.0;
@@ -514,8 +517,8 @@ static void propose_best_event(NetModel_t * p_netmodel,
                             p_skip_det, 0);
 
     /* maintain the overall best event */
-    if (p_event->evscore > p_best_event->evscore)
-      copy_event(p_netmodel, p_best_event, p_event);
+    if (p_event->evscore > params->p_best_event->evscore)
+      copy_event(p_netmodel, params->p_best_event, p_event);
 
     if (p_event->evscore > p_curr_event->evscore)
       copy_event(p_netmodel, p_curr_event, p_event);
@@ -523,7 +526,7 @@ static void propose_best_event(NetModel_t * p_netmodel,
 #ifdef SIM_ANNEAL    
     else
     {
-      double temp = 20.0 / log(N+2);
+      double temp = 20.0 / log(params->N+2);
       
       if (RAND_DOUBLE < exp((p_event->evscore - p_curr_event->evscore) / temp))
         copy_event(p_netmodel, p_event, p_curr_event);
@@ -531,12 +534,78 @@ static void propose_best_event(NetModel_t * p_netmodel,
 #endif
 
   }
+  return NULL;
+}
+
+static void propose_best_event(NetModel_t * p_netmodel,
+                               Event_t * p_event,
+                               int det_low, int det_high,
+                               int * p_skip_det,
+                               double time_low, double time_high,
+                               double scale, int numthreads)
+{
+  Event_t * p_best_event;
+  Event_t * p_curr_event;
+  const int N = 1000;
+  
+  p_best_event = alloc_event(p_netmodel);
+  p_curr_event = alloc_event(p_netmodel);
+  
+  /* the initial event is the starting event as well as the initial best */
+  copy_event(p_netmodel, p_best_event, p_event);
+  copy_event(p_netmodel, p_curr_event, p_event);
+
+  /* Allocate space for threads and args, initialize starting values */
+  pthread_t * threads;
+  struct thread_data * thread_args;
+  threads = (pthread_t *) calloc(numthreads, sizeof(*threads));
+  thread_args = (struct thread_data *) calloc(numthreads,
+                                              sizeof(*thread_args));
+
+  for (int i = 0; i < numthreads; i++)
+  {
+    thread_args[i].det_low = det_low;
+    thread_args[i].det_high = det_high;
+    thread_args[i].p_skip_det = p_skip_det;
+    thread_args[i].time_low = time_low;
+    thread_args[i].time_high = time_high;
+    thread_args[i].p_netmodel = p_netmodel;
+    thread_args[i].p_event = alloc_event(p_netmodel);
+    copy_event(p_netmodel, thread_args[i].p_event, p_event);
+    thread_args[i].p_curr_event = alloc_event(p_netmodel);
+    copy_event(p_netmodel, thread_args[i].p_curr_event, p_curr_event);
+    thread_args[i].p_best_event = alloc_event(p_netmodel);
+    copy_event(p_netmodel, thread_args[i].p_best_event, p_best_event);
+    thread_args[i].N = N/numthreads+1;
+    thread_args[i].scale = scale;
+    thread_args[i].tid = i;
+    pthread_create(&threads[i], NULL, propose_best_event_helper,
+                   (void *) &thread_args[i]);
+  }
+
+  /* Wait for all threads to finish */
+  for (int i = 0; i < numthreads; i++)
+  {
+    pthread_join(threads[i], NULL);
+  }
+
+  /* Get best event from all threads */
+  for (int i = 0; i < numthreads; i++)
+  {
+    if (thread_args[i].p_best_event->evscore > p_best_event->evscore)
+      copy_event(p_netmodel, p_best_event, thread_args[i].p_best_event);
+    free_event(thread_args[i].p_event);
+    free_event(thread_args[i].p_curr_event);
+    free_event(thread_args[i].p_best_event);
+  }
 
   /* return the overall best event */
   copy_event(p_netmodel, p_event, p_best_event);
 
   free_event(p_curr_event);
   free_event(p_best_event);
+  free(threads);
+  free(thread_args);
 }
 
 /* propose events by inverting detections and keeping the best
@@ -546,7 +615,8 @@ static void propose_best_event(NetModel_t * p_netmodel,
    num_secs is the number of seconds to spend in proposing birth moves */
 int propose_invert_timed (NetModel_t * p_netmodel, Event_t **pp_events,
                           double time_low, double time_high, int det_low,
-                          int det_high, double degree_delta, int num_secs)
+                          int det_high, double degree_delta, int num_secs,
+                          int numthreads)
 {
   EarthModel_t * p_earth;
   int numsites;
@@ -732,9 +802,9 @@ int propose_invert_timed (NetModel_t * p_netmodel, Event_t **pp_events,
     {
       /* now, improve this event to take advantage of its detections */
       propose_best_event(p_netmodel, p_best_event, det_low, det_high,
-                         p_skip_det, time_low, time_high, 1);
+                         p_skip_det, time_low, time_high, 1, numthreads);
       propose_best_event(p_netmodel, p_best_event, det_low, det_high,
-                         p_skip_det, time_low, time_high, .1);
+                         p_skip_det, time_low, time_high, .1, numthreads);
 
 #ifdef VERBOSE
       printf("BEST:");
@@ -974,20 +1044,9 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
   
   numevents = 0;
 
-  do
-  {
-    int siteid;
-    int phase;
+  /* Allocate space for threads and args, initialize starting values */
     pthread_t * threads;
     struct thread_data * thread_args;
-
-    /* Initialize what will be the overall best event */
-    p_best_event = alloc_event(p_netmodel);
-    p_best_event->evscore = 0;
-
-    /* TODO: move the thread allocation outside the loop */
-    
-    /* Create threads and call the helper function with arguments */
     threads = (pthread_t *) calloc(numthreads, sizeof(*threads));
     thread_args = (struct thread_data *) calloc(numthreads,
                                                 sizeof(*thread_args));
@@ -1005,9 +1064,23 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
       thread_args[i].numthreads = numthreads;
       thread_args[i].p_netmodel = p_netmodel;
       thread_args[i].p_inv_events = p_inv_events;
-      thread_args[i].p_event = alloc_event(p_netmodel);
       thread_args[i].p_earth = p_earth;
       thread_args[i].tid = i;
+  }
+
+  do
+  {
+    int siteid;
+    int phase;
+
+    /* Initialize what will be the overall best event */
+    p_best_event = alloc_event(p_netmodel);
+    p_best_event->evscore = 0;
+
+    /* Create threads and have them run the proposal loop */
+    for (int i = 0; i < numthreads; i++)
+    {
+      thread_args[i].p_event = alloc_event(p_netmodel);
       thread_args[i].p_best_event = alloc_event(p_netmodel);
       thread_args[i].p_best_event->evscore = 0;
       pthread_create(&threads[i], NULL, propose_invert_step_helper,
@@ -1026,13 +1099,10 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
       if (thread_args[i].p_best_event->evscore > p_best_event->evscore)
       {
         copy_event(p_netmodel, p_best_event, thread_args[i].p_best_event);
+      }
         free_event(thread_args[i].p_best_event);
         free_event(thread_args[i].p_event);
       }
-    }
-    
-    free(thread_args);
-    free(threads);
     
     /* finished inverting all detections and trying events in a ball around
      * them now let's see if we got something good */
@@ -1044,9 +1114,9 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     
     /* now, improve this event to take advantage of its detections */
     propose_best_event(p_netmodel, p_best_event, det_low, det_high,
-                       p_skip_det, time_low, time_high, 1);
+                       p_skip_det, time_low, time_high, 1, numthreads);
     propose_best_event(p_netmodel, p_best_event, det_low, det_high,
-                       p_skip_det, time_low, time_high, .1);
+                       p_skip_det, time_low, time_high, .1, numthreads);
 
     /* and, once more find the best detections for this event */
     propose_best_detections(p_netmodel, p_best_event, det_low, det_high,
@@ -1080,6 +1150,9 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     
   } while (1);
   
+  free(thread_args);
+  free(threads);
+
   free(p_skip_inv);
   free(p_inv_events);
   free(p_skip_det);
@@ -1095,7 +1168,7 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
 int propose_uniform(NetModel_t * p_netmodel, Event_t **pp_events,
                     double time_low, double time_high, int det_low,
                     int det_high, double degree_step, double time_step,
-                    double depth_step, double mag_step)
+                    double depth_step, double mag_step, int numthreads)
 {
   EarthModel_t * p_earth;
   int numsites;
@@ -1189,9 +1262,9 @@ int propose_uniform(NetModel_t * p_netmodel, Event_t **pp_events,
     
     /* now, improve this event to take advantage of its detections */
     propose_best_event(p_netmodel, p_best_event, det_low, det_high,
-                       p_skip_det, time_low, time_high, 1);
+                       p_skip_det, time_low, time_high, 1, numthreads);
     propose_best_event(p_netmodel, p_best_event, det_low, det_high,
-                       p_skip_det, time_low, time_high, .1);
+                       p_skip_det, time_low, time_high, .1, numthreads);
     
     /*
      * we will identify the detections used by the best event and make them
