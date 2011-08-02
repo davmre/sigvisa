@@ -3,9 +3,9 @@
  */
 load data local infile 'sumatra_idcx_arrival.csv' into table idcx_arrival fields terminated by ',' lines terminated by '\r\n' ignore 1 lines;
 
---load data local infile 'sumatra_leb_origin.csv' into table leb_origin fields terminated by ',' lines terminated by '\r\n' ignore 1 lines;
+load data local infile 'sumatra_leb_origin.csv' into table leb_origin fields terminated by ',' lines terminated by '\r\n' ignore 1 lines;
 
---load data local infile 'sumatra_leb_assoc.csv' into table leb_assoc fields terminated by ',' lines terminated by '\r\n' ignore 1 lines;
+load data local infile 'sumatra_leb_assoc.csv' into table leb_assoc fields terminated by ',' lines terminated by '\r\n' ignore 1 lines;
 
 load data local infile 'sumatra_sel3_origin.csv' into table sel3_origin fields terminated by ',' lines terminated by '\r\n' ignore 1 lines;
 
