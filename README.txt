@@ -1,4 +1,4 @@
-This package contains the NET-VISA implementation. Network Vertically
+This package contains the SIG-VISA implementation. Signal-based Vertically
 Integrated Seismological Analysis.
 
 - numpy and scipy are required. To test them, run:
