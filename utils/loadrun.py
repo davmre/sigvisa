@@ -11,7 +11,7 @@ def importtable(curs, tar, fname, tabname, inp_runid=None):
   colnames = inp.next()
 
   for runid_pos in xrange(len(colnames)):
-    if colnames[runid_pos] == "runid":
+    if colnames[runid_pos].lower() == "runid":
       break
   else:
     print >> sys.stderr, "No runid in table"
@@ -21,7 +21,7 @@ def importtable(curs, tar, fname, tabname, inp_runid=None):
     colnames.pop(runid_pos)
 
   query = "insert into %s (%s) values (%s)" % (tabname, ",".join(colnames),
-                                           ",".join(["'%s'" for _ in colnames]))
+                                           ",".join(["%s" for _ in colnames]))
   
   for line in inp:
     if inp_runid is None:
@@ -29,6 +29,12 @@ def importtable(curs, tar, fname, tabname, inp_runid=None):
     else:
       line[runid_pos] = str(inp_runid)
 
+    for i in range(len(line)):
+      if line[i] == '':
+        line[i] = 'null'
+      else:
+        line[i] = "'" + line[i] + "'"
+    
     curs.execute(query % tuple(line))
     
   
@@ -65,4 +71,13 @@ def main():
   tar.close()
   
 if __name__ == "__main__":
-  main()
+  try:
+    main()
+  except SystemExit:
+    raise
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    pdb.post_mortem(sys.exc_traceback)
+    raise
+
