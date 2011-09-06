@@ -2,6 +2,7 @@
 
 import sys, MySQLdb, struct
 import matplotlib.pyplot as plt
+import gzip
 
 from obspy.core import Trace, Stream, UTCDateTime
 from obspy.signal import filter as sig_filter

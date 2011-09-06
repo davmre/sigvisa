@@ -1,5 +1,6 @@
 import sys, MySQLdb,struct
 import numpy as np
+import gzip
 
 import database.db
 

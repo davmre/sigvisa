@@ -34,7 +34,7 @@ def main(param_dirname):
     filtered_data = obspy.signal.filter.bandpass(data,1,4,samprate)
     cft_data = obspy.signal.recStalta(filtered_data, int(1.5 * samprate),
                                       int(60 * samprate))
-    timerange = np.arange(start_time, end_time, 1.0/samprate)
+    timerange = np.arange(start_time, end_time, 1.0/samprate)[:len(data)]
     plt.figure()
     plt.suptitle("%s -- %s" % (sta, chan))
     plt.xlabel("Time (s)")
