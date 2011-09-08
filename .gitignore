@@ -5,3 +5,4 @@ parameters/*.txt
 bgjob*
 utils/bgjob
 build
+database/*.csv

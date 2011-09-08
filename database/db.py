@@ -9,7 +9,7 @@ def connect():
     import MySQLdb
     if os.name in ['posix']:
       # on linux we don't use named pipes
-      dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
+      dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket="/home/dmoore/mysql/tmp/mysql.sock")
     elif os.name in ['nt']:
       # on windows we can use named pipes
       try:
