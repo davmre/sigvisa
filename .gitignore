@@ -1,0 +1,7 @@
+*~
+*.pyc
+*.so
+parameters/*.txt
+bgjob*
+utils/bgjob
+build
