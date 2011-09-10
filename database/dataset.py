@@ -111,20 +111,19 @@ def read_isc_events(cursor, start_time, end_time, author):
   return events
 
 
-def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival"):
-  cursor.execute("select site.id-1, iarr.arid, iarr.time, iarr.deltim, "
-                 "iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, "
-                 "ph.id-1, iarr.amp, iarr.per from %s iarr, "
-                 "static_siteid site, static_phaseid ph where "
-                 "iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and "
-                 "iarr.sta=site.sta and iarr.iphase=ph.phase and "
-                 "ascii(iarr.iphase) = ascii(ph.phase) and "
-                 "iarr.time between %d and %d order by iarr.time, iarr.arid" %
-                 (arrival_table, start_time, end_time))
+def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", noarrays=False):
+  
+  print "reading detections... "
+
+  sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s iarr, static_siteid site, static_phaseid ph where %s iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.time between %d and %d order by iarr.time, iarr.arid" %  (arrival_table, ("site.statype='ss' and " if noarrays else ""), start_time, end_time)
+
+  print sql_query
+  cursor.execute(sql_query)
   
   detections = np.array(cursor.fetchall())
 
-  cursor.execute("select sta from static_siteid site order by id")
+  sql_query = "select sta from static_siteid site order by id"
+  cursor.execute(sql_query)
   sitenames = np.array(cursor.fetchall())[:,0]
   corr_dict = load_az_slow_corr(os.path.join('parameters', 'sasc'))
   #print len(corr_dict), "SASC corrections loaded"
@@ -210,7 +209,7 @@ def read_phases(cursor):
   return phasenames, phasetimedef
 
 def read_data(label="training", hours=None, skip=0, verbose=1,
-              visa_leb_runid=None, read_leb_detections=False):
+              visa_leb_runid=None, read_leb_detections=False, noarrays=False):
   """
   Reads
   - LEB events/assoc, with IDCX arrivals
@@ -229,8 +228,9 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   - training
   
   Setting 'hours' to None will return all the data from the specified
-  dataset. 'skip' controls the number of initial hours to skip, for example
-  for testing the second 2 hour window set hours=2 skip=2
+  dataset. 'skip' controls the number of initial hours to skip, for
+  example for testing the second 2 hour window set hours=2
+  skip=2. 'noarrays' prohibits using data from array stations.
 
   Returns the following tuple
          start_time, end_time, detections, leb_events, leb_evlist, sel3_events,
@@ -278,14 +278,14 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   if verbose:
     print "Reading SEL3 detections...",
     
-  det, arid2num = read_detections(cursor, start_time, end_time)
+  det, arid2num = read_detections(cursor, start_time, end_time, noarrays=noarrays)
 
   if verbose:
     print "done (%d detections)" % len(det)
 
   if read_leb_detections:
     leb_det, leb_arid2num = read_detections(cursor, start_time, end_time,
-                                            "leb_arrival")
+                                            "leb_arrival", noarrays)
     if verbose:
       print "done (%d detections)" % len(leb_det)
 

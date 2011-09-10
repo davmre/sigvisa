@@ -180,6 +180,9 @@ def main(param_dirname):
   parser.add_option("-a", "--arrival_table", dest="arrival_table",
                     default=None,
                     help = "arrival table to use for inferring on")
+  parser.add_option("-y", "--noarrays", dest="noarrays", default=False,
+                    action="store_true",
+                    help = "omit data from array stations (used for sigvisa testing)")
   parser.add_option("-z", "--threads", dest="threads", default=1,
                     type="int",
                     help = "number of threads (1)")
@@ -194,7 +197,7 @@ def main(param_dirname):
     start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
                 sel3_evlist, site_up, sites, phasenames, phasetimedef \
                 = read_data(options.label, hours=options.hours,
-                            skip=options.skip)
+                            skip=options.skip, noarrays=options.noarrays)
   else:
     cursor = db.connect().cursor()
     # read the time range from the table
@@ -220,7 +223,7 @@ def main(param_dirname):
     
     # read the detections and uptime
     detections = read_detections(cursor, start_time, end_time,
-                                 options.arrival_table)[0]
+                                 options.arrival_table, options.noarrays)[0]
     site_up = read_uptime(cursor, start_time, end_time,
                           options.arrival_table)
     # read the rest of the static data
@@ -255,10 +258,10 @@ def main(param_dirname):
   conn = database.db.connect()
   cursor = conn.cursor()
   cursor.execute ("insert into visa_run(run_start, numsamples, window, step, "
-                  "seed, data_start, score, descrip) values "
-                  "(now(), %d, %d, %d, %d, %f, 0, '%s')" %
+                  "seed, data_start, noarrays, score, descrip) values "
+                  "(now(), %d, %d, %d, %d, %f, %s, 0, '%s')" %
                   (options.numsamples, options.window, options.step,
-                   options.seed, start_time, options.descrip))
+                   options.seed, start_time, "TRUE" if options.noarrays else "FALSE", options.descrip))
   conn.commit()
   cursor.execute("select max(runid) from visa_run")
   runid, = cursor.fetchone()

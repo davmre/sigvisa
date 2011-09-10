@@ -1,7 +1,7 @@
 import os
 
 
-def connect():
+def connect(unix_socket=None):
   if os.getenv("VISA_ORA_USER") is not None:
     import cx_Oracle
     dbconn = cx_Oracle.connect(os.getenv("VISA_ORA_USER"))
@@ -9,7 +9,10 @@ def connect():
     import MySQLdb
     if os.name in ['posix']:
       # on linux we don't use named pipes
-      dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket="/home/dmoore/mysql/tmp/mysql.sock")
+      if unix_socket is not None:
+        dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket=unix_socket)
+      else:
+        dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
     elif os.name in ['nt']:
       # on windows we can use named pipes
       try:

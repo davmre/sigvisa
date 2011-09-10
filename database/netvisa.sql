@@ -13,6 +13,7 @@ create table visa_run (
  seed            int,
  data_start      double,
  data_end        double,
+ noarrays	 boolean,
 
  score           double,
 
