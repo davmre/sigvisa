@@ -103,6 +103,7 @@ def fetch_waveform(station, chan, stime, etime):
 
   return data, samprate
 
+
 # http://en.wikipedia.org/wiki/High-pass_filter
 def highpass_filter(data, samprate, cutoff_freq):
   """
@@ -129,3 +130,4 @@ def lowpass_filter(data, samprate, cutoff_freq):
   for i in xrange(1, len(data)):
     output[i] = (1-alpha) * output[i-1] + alpha * data[i]
   return output
+

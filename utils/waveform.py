@@ -256,7 +256,7 @@ def fetch_waveform(station, chan, stime, etime):
   stats = {'network': station, 'station': station, 'location': '',
            'channel': chan, 'npts': len(data), 'sampling_rate': samprate,
            'mseed' : {'dataquality' : 'D'}}
-  stats['starttime '] = UTCDateTime(stime)
+  stats['starttime'] = UTCDateTime(stime)
   return Trace(data=np.array(data), header=stats)
 
   #return samprate, np.array(data)
