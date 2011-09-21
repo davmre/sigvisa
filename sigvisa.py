@@ -154,7 +154,7 @@ class SigModel:
         TT_SEARCH_STEP = 1 # seconds
         
         # TODO: make this depend on some probability threshold, rather than absolute time
-        TT_SEARCH_WIDTH = float(4.0) # seconds
+        TT_SEARCH_WIDTH = float(1.0) # seconds
         MAX_TT = 2000 # seconds
         MAX_ENVELOPE_LEN = 100 # seconds
         SUBTRACE_LEN = 900.0 # seconds
@@ -201,22 +201,27 @@ class SigModel:
                     #print "building artimess: appending ", arrtimes
                     arrtimess.append(arrtimes)
                 
+
                 total_combos = int((max_arrtime - min_arrtime) ** len(relevant_events))
                 print "looping over ", total_combos, " total combos on subtrace ", i, "."
                 for i in range(total_combos):
                     indices = self.__decode_counter__(i, max_arrtime - min_arrtime)
                     ttimes = []
                     ttll = 0
-                    for (i, idx) in enumerate(indices):
-                        ttimes.append(arrtimess[i][idx]-relevant_events[i][3])
-                        ttll = ttll + self.ttime_model_logprob(ttimes[-1], lat, lon, depth, siteid, 0)
 
+                    if len(relevant_events) > 0:
+                        for (i, idx) in enumerate(indices):
+#                            print i,idx, len(ttimes), relevant_events
+                            ttimes.append(arrtimess[i][idx]-relevant_events[i][3])
+                            ttll = ttll + self.ttime_model_logprob(ttimes[-1], lat, lon, depth, siteid, 0)
+                    
                     wavell = self.waveform_model_trace(relevant_events, subtrace, ttimes)
-                    #print "testing atimes ", ttimes, " with lp ", ttll, " and wavell ", wavell
+#                    print "testing atimes ", ttimes, " with lp ", ttll, " and wavell ", wavell
+
                     # equiv to p() = p() + p(subtrace | ttimes, events)p(ttimes|events)
                     # which will eventually sum over all choices of travel times.
                     subtrace_ll = self.__log_addprob__(subtrace_ll, ttll + wavell)
-                    #print "added subtrace_ll now ", subtrace_ll
+#                    print "added subtrace_ll now ", subtrace_ll
                 trace_ll = trace_ll + subtrace_ll
                 print "added trace_ll now ", trace_ll
             ll = ll + trace_ll
@@ -227,12 +232,14 @@ class SigModel:
     def __log_addprob__(self, lp1, lp2):
         a = np.max((lp1, lp2))
         b = np.min((lp1, lp2))
-        if a-b > 20:
+        if a-b > 50:
             return a
         else:
             return a + np.log(1 + np.exp(a-b))
 
     def __decode_counter__(self, c, base):
+        if base <= 1:
+            return [0]
         counts = []
         while c > 0:
             counts.append(np.mod(c, base))
