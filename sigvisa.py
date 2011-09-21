@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from optparse import OptionParser
-from obspy.core import Trace
+from obspy.core import Trace, Stream, UTCDateTime
 
 from database import db, dataset
 import utils.waveform
@@ -64,16 +64,17 @@ class SigModel:
             rel_time = event[3] - stats['starttime'].getTimeStamp()
             (emeans, evars) = self.envelope(event, siteid, samprate)
 
-            print "event at t=", rel_time+ttime, ", mb = ", event[4]
+#           print rel_time, event[3], stats['starttime'].getTimeStamp(), ttime
+            #print "event at t=", rel_time+ttime, ", mb = ", event[4]
             base_t = int( (rel_time + ttime) * samprate  )
             for i in range(len(emeans)):
                # print "  adding emeans[", i, "] = ", emeans[i], " to means[", base_t+i, "]."
                 try:
-                    print len(means), len(variances), base_t, i, base_t+1
+                    #print len(means), len(variances), base_t, i, base_t+1
                     means[base_t +i] = means[base_t+i] + emeans[i]
                     variances[base_t +i] = variances[base_t+i] + evars[i]
                 except IndexError:
-                    sys.stderr.write("Predicted arrival at time " + str(event[3] + ttime) + " - " + str(event[3] + ttime + i*samprate) + " falls outside trace boundaries " + str(stats['starttime'].getTimeStamp()) + " - " + str(stats['starttime'].getTimeStamp() + len(means)*samprate) + ".\n")
+                    sys.stderr.write("Predicted arrival at time " + str(event[3] + ttime) + " - " + str(event[3] + ttime + i*samprate) + " falls outside trace boundaries " + str(stats['starttime'].getTimeStamp()) + " - " + str(stats['starttime'].getTimeStamp() + len(means)/samprate) + ".\n")
                     break
         return (means, variances)
 
@@ -150,13 +151,13 @@ class SigModel:
                             = prod_signal prod_event int_ttimes p(signal | ttime, event)p(ttime | event)
         """
 
-        TT_SEARCH_STEP = .5 # seconds
+        TT_SEARCH_STEP = 1 # seconds
         
         # TODO: make this depend on some probability threshold, rather than absolute time
-        TT_SEARCH_WIDTH = 10 # seconds
+        TT_SEARCH_WIDTH = float(4.0) # seconds
         MAX_TT = 2000 # seconds
         MAX_ENVELOPE_LEN = 100 # seconds
-        SUBTRACE_LEN = 2000.0 # seconds
+        SUBTRACE_LEN = 900.0 # seconds
         
 
         ll = 0
@@ -164,7 +165,7 @@ class SigModel:
             trace_start = trace.stats['starttime'].getTimeStamp()
             siteid = int(self.siteid[trace.stats["station"]])
 
-            nsubtraces = np.ceil(len(trace.data)/SUBTRACE_LEN)
+            nsubtraces = np.ceil(len(trace.data)/(SUBTRACE_LEN / (trace.stats["window_size"] * trace.stats["overlap"])))
             subtraces = np.array_split(trace.data, nsubtraces)
 
             trace_ll = 0
@@ -172,11 +173,12 @@ class SigModel:
             # compute loglikelihood for each subtrace
             for (i, subtrace_data) in enumerate(subtraces):
                 subtrace_start = trace_start + i * SUBTRACE_LEN
-                subtrace_end = subtrace_start + len(subtrace_data)
+                subtrace_end = subtrace_start + len(subtrace_data) * (trace.stats["window_size"] * trace.stats["overlap"])
                 
-                subtrace_ll = 0
+                subtrace_ll = float("-inf")
 
                 subtrace = self.__copy_trace__(trace, subtrace_data)
+                subtrace.stats['starttime'] = UTCDateTime(subtrace_start)
 
                 relevant_events = []
                 arrtimess = []
@@ -188,6 +190,7 @@ class SigModel:
                     point_arrtime = etime + self.ttime_model_point(lat, lon, depth, siteid, 0)
                     min_arrtime = point_arrtime - TT_SEARCH_WIDTH/2
                     max_arrtime = point_arrtime + TT_SEARCH_WIDTH/2
+#                    print  min_arrtime, max_arrtime, point_arrtime, TT_SEARCH_WIDTH, TT_SEARCH_WIDTH/2
 
                     # don't consider events that can't possibly affect the current subtrace
                     if max_arrtime + MAX_ENVELOPE_LEN < subtrace_start or min_arrtime > subtrace_end:
@@ -195,9 +198,9 @@ class SigModel:
 
                     arrtimes = np.arange(min_arrtime, max_arrtime, TT_SEARCH_STEP)
                     relevant_events.append(event)
-                    print "building artimess: appending ", arrtimes
+                    #print "building artimess: appending ", arrtimes
                     arrtimess.append(arrtimes)
-
+                
                 total_combos = int((max_arrtime - min_arrtime) ** len(relevant_events))
                 print "looping over ", total_combos, " total combos on subtrace ", i, "."
                 for i in range(total_combos):
@@ -207,13 +210,13 @@ class SigModel:
                     for (i, idx) in enumerate(indices):
                         ttimes.append(arrtimess[i][idx]-relevant_events[i][3])
                         ttll = ttll + self.ttime_model_logprob(ttimes[-1], lat, lon, depth, siteid, 0)
-                    print "testing atimes ", ttimes, " with lp ", ttll
-                    wavell = self.waveform_model_trace(relevant_events, subtrace, ttimes)
 
+                    wavell = self.waveform_model_trace(relevant_events, subtrace, ttimes)
+                    #print "testing atimes ", ttimes, " with lp ", ttll, " and wavell ", wavell
                     # equiv to p() = p() + p(subtrace | ttimes, events)p(ttimes|events)
                     # which will eventually sum over all choices of travel times.
                     subtrace_ll = self.__log_addprob__(subtrace_ll, ttll + wavell)
-                    print "added subtrace_ll now ", subtrace_ll
+                    #print "added subtrace_ll now ", subtrace_ll
                 trace_ll = trace_ll + subtrace_ll
                 print "added trace_ll now ", trace_ll
             ll = ll + trace_ll
