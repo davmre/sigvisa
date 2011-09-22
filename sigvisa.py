@@ -130,6 +130,24 @@ class SigModel:
 
         return ll
 
+    def ttime_point_matrix(self, events, phase):
+        ttimes = dict()
+
+        for trace in self.traces:
+            siteid = int(self.siteid[trace.stats["station"]])
+
+            if siteid in ttimes.keys():
+                continue
+
+            ttime_list = np.zeros((len(events),1))
+            for (i, event) in enumerate(events):
+                lat = event[0]
+                lon = event[1]
+                depth = event[2]
+            
+                ttime_list[i] = self.ttime_model_point(lat, lon, depth, siteid, phase)
+            ttimes[siteid] = ttime_list
+        return ttimes
 
     def ttime_model_point(self, lat, lon, depth, siteid, phase):
         return self.earthmodel.ArrivalTime(lat, lon, depth, 0, phase, siteid)
@@ -141,6 +159,28 @@ class SigModel:
 
         pred_ttime = self.earthmodel.ArrivalTime(lat, lon, depth, 0, phase, siteid)
         return self.netmodel.arrtime_logprob(ttime, pred_ttime, 0, siteid, phase)
+
+    def log_likelihood_complete(self, events, ttimes):
+        """
+        Compute p(signals| events, travel_times) for a given set of travel times, expressed as a dictionary mapping siteids to n-element arrays (n=#of events). 
+        """
+        
+        ll = 0
+        for (i, trace) in enumerate(self.traces):
+            trace_start = trace.stats['starttime'].getTimeStamp()
+            siteid = int(self.siteid[trace.stats["station"]])
+            
+            wavell = self.waveform_model_trace(events, trace, np.array(ttimes[siteid]))
+            ttll = 0
+            for (j, event) in enumerate(events):
+                etime = event[3]
+                lat = event[0]
+                lon = event[1]
+                depth = event[2]
+                
+                ttll = ttll + self.ttime_model_logprob(ttimes[siteid][j], lat, lon, depth, siteid, 0)
+            ll = ll + wavell + ttll
+        return ll
 
     def log_likelihood(self, events):
         """ 
@@ -366,7 +406,8 @@ def main():
     
 
     # calculate likelihood
-    ll = sm.log_likelihood(events)
+    peak_ttimes = sm.ttime_point_matrix(events, 0)
+    ll = sm.log_likelihood_complete(events, peak_ttimes)
 
     if options.gui:
         plt.show()
