@@ -12,10 +12,9 @@ import utils.waveform
 import netvisa, learn
 
 class SigModel:
-    def __init__(self, start_time, end_time, traces, earthmodel, netmodel, siteid):
+    def __init__(self, start_time, end_time, earthmodel, netmodel, siteid):
         self.start_time = start_time
         self.end_time = end_time
-        self.traces = traces
         self.earthmodel = earthmodel
         self.netmodel = netmodel
         self.siteid = siteid
@@ -23,6 +22,11 @@ class SigModel:
         self.noise_mean=660
         self.noise_variance=2500
 
+
+    def learn(self, events, ttimes):
+        """
+        Find maximum-likelhood parameter estimates 
+        """
         
     def envelope(self, event, siteid, hz):
         """
@@ -115,7 +119,7 @@ class SigModel:
             
         return ll
 
-    def waveform_model(self, events, ttimes):
+    def waveform_model(self, traces, events, ttimes):
         """
         Compute p(signals | events, travel times). Combined with the travel time model, we can then integrate over travel times to get p(signals | events), i.e. the overall likelihood.
 
@@ -124,27 +128,27 @@ class SigModel:
         """
 
         ll = 0
-        for (i, trace) in enumerate(self.traces):
+        for (i, trace) in enumerate(traces):
             ll = ll + self.waveform_model_trace(events, trace, ttimes[i])
             
 
         return ll
 
-    def ttime_point_matrix(self, events, phase):
+    def ttime_point_matrix(self, siteids, events, phase):
         ttimes = dict()
 
-        for trace in self.traces:
-            siteid = int(self.siteid[trace.stats["station"]])
-
-            if siteid in ttimes.keys():
-                continue
+        for siteid in siteids:
+            #siteid = int(self.siteid[trace.stats["station"]])
+            #if siteid in ttimes.keys():
+            #    continue
+            siteid = int(siteid)
 
             ttime_list = np.zeros((len(events),1))
             for (i, event) in enumerate(events):
                 lat = event[0]
                 lon = event[1]
                 depth = event[2]
-            
+           
                 ttime_list[i] = self.ttime_model_point(lat, lon, depth, siteid, phase)
             ttimes[siteid] = ttime_list
         return ttimes
@@ -160,16 +164,16 @@ class SigModel:
         pred_ttime = self.earthmodel.ArrivalTime(lat, lon, depth, 0, phase, siteid)
         return self.netmodel.arrtime_logprob(ttime, pred_ttime, 0, siteid, phase)
 
-    def log_likelihood_complete(self, events, ttimes):
+    def log_likelihood_complete(self, traces, events, ttimes):
         """
         Compute p(signals| events, travel_times) for a given set of travel times, expressed as a dictionary mapping siteids to n-element arrays (n=#of events). 
         """
         
         ll = 0
-        for (i, trace) in enumerate(self.traces):
+        for (i, trace) in enumerate(traces):
             trace_start = trace.stats['starttime'].getTimeStamp()
             siteid = int(self.siteid[trace.stats["station"]])
-            
+
             wavell = self.waveform_model_trace(events, trace, np.array(ttimes[siteid]))
             ttll = 0
             for (j, event) in enumerate(events):
@@ -182,7 +186,7 @@ class SigModel:
             ll = ll + wavell + ttll
         return ll
 
-    def log_likelihood(self, events):
+    def log_likelihood(self, traces, events):
         """ 
         Compute p(signals | events) by integrating over travel times:
 
@@ -201,7 +205,7 @@ class SigModel:
         
 
         ll = 0
-        for trace in self.traces:
+        for trace in traces:
             trace_start = trace.stats['starttime'].getTimeStamp()
             siteid = int(self.siteid[trace.stats["station"]])
 
@@ -324,6 +328,35 @@ def window_energies(trace, window_size=1, overlap=0.5):
   
   return windows
 
+def load_traces(cursor, stations, start_time, end_time):
+    traces = []
+    for sta in stations:
+        cursor.execute("select chan from idcx_wfdisc where sta='%s'" % sta)
+        chan, = cursor.fetchone()
+        print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", start_time, ", end_time: ", end_time, "}", 
+        try:
+            trace = utils.waveform.fetch_waveform(sta, chan, start_time, end_time)
+            print " ... successfully loaded."
+        except (utils.waveform.MissingWaveform, IOError):
+            print " ... not found, skipping."
+            continue
+        traces.append(trace)
+    print "fetched ", len(traces), " waveforms."
+    return traces
+    
+def process_traces(traces, f, opts):
+    # process each trace to yield a representation suitable for inference.
+    # currently, that means computing energies within overlapping windows
+    processed_traces = []
+    for trace in traces:
+        processed_data = f(trace)
+        new_header = trace.stats.copy()
+        new_header.update(opts)
+        new_header["npts_processed"] = len(processed_data)
+        processed_trace = Trace(processed_data, header=new_header)
+        processed_traces.append(processed_trace)    
+    return processed_traces
+
 def main():
     parser = OptionParser() 
     # make options for which set of events to load, and what time period
@@ -353,34 +386,10 @@ def main():
     siteids = dict(stations)
     stations = stations[:,0]
 
-    traces = []
-    for sta in stations:
-        cursor.execute("select chan from idcx_wfdisc where sta='%s'" % sta)
-        chan, = cursor.fetchone()
-        print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", options.start_time, ", end_time: ", options.end_time, "}", 
-        try:
-            trace = utils.waveform.fetch_waveform(sta, chan, options.start_time, options.end_time)
-            print " ... successfully loaded."
-        except (utils.waveform.MissingWaveform, IOError):
-            print " ... not found, skipping."
-            continue
-        traces.append(trace)
-    print "fetched ", len(traces), " waveforms."
-    
-
-    # process each trace to yield a representation suitable for inference.
-    # currently, that means computing energies within overlapping windows
-    print "processing..."    
-    processed_traces = []
-    for trace in traces:
-        processed_data = window_energies(trace, window_size=options.window_size, overlap=options.overlap)
-        new_header = trace.stats.copy()
-        new_header["window_size"] = options.window_size
-        new_header["overlap"] = options.overlap
-        new_header["npts_processed"] = len(processed_data)
-        processed_trace = Trace(processed_data, header=new_header)
-        processed_traces.append(processed_trace)    
-    print "done."
+    traces = load_traces(cursor, stations, options.start_time, options.end_time)
+    f = lambda trace: window_energies(trace, window_size=options.window_size, overlap=options.overlap)
+    opts = dict(window_size=options.window_size, overlap=options.overlap)
+    energies = process_traces(traces, f, opts)
 
     # load earth and net models
     # read the detections and uptime
@@ -392,13 +401,10 @@ def main():
     sites = dataset.read_sites(cursor)
     phasenames, phasetimedef = dataset.read_phases(cursor)
     assert(len(phasenames) == len(phasetimedef))
-    earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
-    netmodel = learn.load_netvisa("parameters",
+    sm = learn.load_sigvisa("parameters",
                                 options.start_time, options.end_time,
-                                detections, site_up, sites, phasenames,
+                                detections, site_up, sites, siteids, phasenames,
                                 phasetimedef)
-
-    sm = SigModel(options.start_time, options.end_time, processed_traces, earthmodel, netmodel, siteids)
     
 
     # read appropriate event set (e.g. netvisa)
@@ -406,8 +412,8 @@ def main():
     
 
     # calculate likelihood
-    peak_ttimes = sm.ttime_point_matrix(events, 0)
-    ll = sm.log_likelihood_complete(events, peak_ttimes)
+    peak_ttimes = sm.ttime_point_matrix(siteids.values(), events, 0)
+    ll = sm.log_likelihood_complete(energies, events, peak_ttimes)
 
     if options.gui:
         plt.show()

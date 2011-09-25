@@ -18,7 +18,7 @@ import priors.ArrivalPhasePrior
 import priors.ArrivalSNR
 import priors.ArrivalAmplitudePrior
 
-import netvisa
+import netvisa, sigvisa
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
   model = netvisa.EarthModel(sites, phasenames, phasetimedef,
@@ -56,6 +56,15 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                            )
   
   return model
+
+def load_sigvisa(param_dirname, start_time, end_time, detections, site_up,
+                 sites, siteids, phasenames, phasetimedef):
+  earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
+  netmodel = load_netvisa(param_dirname, start_time, end_time, detections, site_up,
+                 sites, phasenames, phasetimedef)
+
+  sigmodel = sigvisa.SigModel(start_time, end_time, earthmodel, netmodel, siteids)
+  return sigmodel
 
 def main(param_dirname):
   parser = OptionParser()
