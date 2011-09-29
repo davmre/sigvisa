@@ -63,6 +63,9 @@ class SigModel:
             samprate = self.__samprate(trace.stats) # hz
             max_event_samples = MAX_EVENT_LENGTH * samprate
 
+            if siteid not in ttimes.keys():
+                ttimes[siteid] = self.__nanlist(len(events))
+
             prev_arrival_end = 0
             if siteid not in normalizer.keys():
                 results[siteid] = 0
@@ -169,7 +172,8 @@ class SigModel:
         samprate = 1 / (trace.stats["window_size"]*trace.stats["overlap"])
         siteid = int(self.siteid[trace.stats["station"]])
 
-        timerange = np.arange(0, npts/samprate, 1.0/samprate)
+        start_time = trace.stats['starttime'].getTimeStamp()
+        timerange = np.arange(start_time, start_time+npts/samprate, 1.0/samprate)
         plt.figure()
         plt.suptitle("%s -- %s" % (sta, chan))
         plt.xlabel("Time (s)")
@@ -442,16 +446,15 @@ def main():
     parser.add_option("--overlap", dest="overlap", default=0.5,
                     type="float",
                     help = "fraction of a window length between the start of successive windows (0.5)")
-    parser.add_option("--start", dest="start_time", type="float",
+    parser.add_option("--start", dest="start_time", type="float", default=1237680000,
                     help = "start time")
-    parser.add_option("--end", dest="end_time", type="float",
+    parser.add_option("--end", dest="end_time", type="float", default=1237683600,
                     help = "end time")
     parser.add_option("--events", dest="event_set", default="leb",
                     help = "set of events for which to compute likelihood: visa, leb, or sel3 (leb)")
     parser.add_option("--runid", dest="runid", default=None, type="int",
                     help = "ID of netvisa run from which to use events (0)")
-    parser.add_option("-g", "--gui", dest="gui", default=False,
-                    action = "store_true",
+    parser.add_option("-g", "--gui", dest="gui", default=None,
                     help = "show trace and envelope plots (False)")
     (options, args) = parser.parse_args()
 
@@ -502,20 +505,17 @@ def main():
     # calculate likelihood
 #    peak_ttimes = sm.ttime_point_matrix(siteids.values(), events, 0)
     assoc_ttimes = sm.ttimes_from_assoc(evlist, events, detections, arid2num)
-    ll = sm.log_likelihood_complete(energies, events, assoc_ttimes)
-    print "log-likelihood is ", ll
+    #ll = sm.log_likelihood_complete(energies, events, assoc_ttimes)
+    #print "log-likelihood is ", ll
 
     print "learning params..."
     sm.learn(energies, events, assoc_ttimes)
 
-    if options.gui:
-        limit = 10
-        for trace in energies:
-            (means, variances) = sm.all_envelopes(trace.stats, events, assoc_ttimes)
-            sm.plot_envelope(trace, means, variances)
-            limit = limit-1
-            if limit <= 0:
-                break
+    if options.gui is not None:
+        for trace in energies:          
+            if options.gui == "all" or options.gui == trace.stats["station"]:
+                (means, variances) = sm.all_envelopes(trace.stats, events, assoc_ttimes)
+                sm.plot_envelope(trace, means, variances)
         plt.show()
 
 
