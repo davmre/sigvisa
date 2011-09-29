@@ -49,7 +49,7 @@ class SigModel:
         self.__learn_noise_params(traces, events, ttimes)
 
     def __learn_noise_params(self, traces, events, ttimes):
-        MAX_EVENT_LENGTH = 500 # seconds
+        MAX_EVENT_LENGTH = 50 # seconds
 
         for trace in traces:
             siteid = self.siteid[trace.stats["station"]]
@@ -90,7 +90,7 @@ class SigModel:
 
             prev_arrival_end = 0
             noise_var = 0
-            for (tel_atime, event, ttime) in sorted_by_atime:
+            for (rel_atime, event, ttime) in sorted_by_atime:
                 if np.isnan(ttime):
                     continue
 
@@ -488,14 +488,25 @@ def load_traces(cursor, stations, start_time, end_time):
     for sta in stations:
         cursor.execute("select chan from idcx_wfdisc where sta='%s'" % sta)
         chan, = cursor.fetchone()
-        print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", start_time, ", end_time: ", end_time, "}", 
-        try:
-            trace = utils.waveform.fetch_waveform(sta, chan, start_time, end_time)
-            print " ... successfully loaded."
-        except (utils.waveform.MissingWaveform, IOError):
-            print " ... not found, skipping."
-            continue
-        traces.append(trace)
+
+        # select all waveforms which overlap with the designated period
+        cursor.execute("select time,endtime from idcx_wfdisc where sta = '%s' and chan ='%s' "
+                       "and endtime > %f and time < %f" %
+                       (sta, chan, start_time, end_time))
+        waveforms = cursor.fetchall()
+        for (stime, etime) in waveforms:
+            
+            st = np.max((stime, start_time))
+            et = np.min((etime, end_time))
+
+            print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
+            try:
+                trace = utils.waveform.fetch_waveform(sta, chan, stime, etime)
+                traces.append(trace)
+                print " ... successfully loaded."
+            except (utils.waveform.MissingWaveform, IOError):
+                print " ... not found, skipping."
+                continue
     print "fetched ", len(traces), " waveforms."
     return traces
     
