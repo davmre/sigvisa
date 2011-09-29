@@ -48,25 +48,28 @@ class SigModel:
 
         self.__learn_noise_params(traces, events, ttimes)
 
-    def __learn_noise_params(self, traces, events, ttimes):
+
+    def __expectation_over_noise(self, f, traces, events, ttimes):
         MAX_EVENT_LENGTH = 50 # seconds
 
+        results = dict()
+        normalizer = dict()
+
+        # compute the expectation of some function over all the noisey parts of the signal
         for trace in traces:
             siteid = self.siteid[trace.stats["station"]]
             samprate = self.__samprate(trace.stats) # hz
             max_event_samples = MAX_EVENT_LENGTH * samprate
 
             prev_arrival_end = 0
-            noise_mean = 0
-            total_samples = 0
+            if siteid not in normalizer.keys():
+                results[siteid] = 0
+                normalizer[siteid] = 0
 
             compute_rel_atime = lambda (event, ttime): event[3] - trace.stats['starttime'].getTimeStamp() + ttime
             rel_atimes = map(compute_rel_atime, zip(events, ttimes[siteid]))
             sorted_by_atime = sorted(zip(rel_atimes, events, ttimes[siteid]), key = lambda triple: triple[0])
 
-            print "siteid is ", siteid
-            print sorted_by_atime
-
             for (rel_atime, event, ttime) in sorted_by_atime:
                 if np.isnan(ttime):
                     continue
@@ -77,38 +80,28 @@ class SigModel:
                 arrival_i = int( (rel_atime - max_event_samples) * samprate )
                 if (arrival_i - prev_arrival_end) > 0:
                     
-                    noise_mean = noise_mean + np.sum(trace.data[prev_arrival_end:arrival_i])
-                    total_samples = total_samples + (arrival_i-prev_arrival_end)
+                    results[siteid] = results[siteid] + np.sum(trace.data[prev_arrival_end:arrival_i])
+                    normalizer[siteid] = normalizer[siteid] + (arrival_i-prev_arrival_end)
                     prev_arrival_end = arrival_i + max_event_samples*2
 
 
-            if prev_arrival_end != 0:
-                noise_mean = noise_mean / total_samples
-            else:
-            # if no arrivals recorded at this station, we assume the whole thing is noise
-                noise_mean = np.mean(trace.data[prev_arrival_end:])                
+            if prev_arrival_end == 0:
+            # if no arrivals recorded during this trace, we assume the whole thing is noise
+                results[siteid] = results[siteid] + np.sum(f(trace.data[prev_arrival_end:], siteid))
+                normalizer[siteid] = normalizer[siteid] + len(trace.data)
 
-            prev_arrival_end = 0
-            noise_var = 0
-            for (rel_atime, event, ttime) in sorted_by_atime:
-                if np.isnan(ttime):
-                    continue
+        for siteid in results.keys():
+            results[siteid] = results[siteid] / normalizer[siteid]
+        return results
 
-                # everything within max_event_samples of the current
-                # arrival IN BOTH DIRECTIONS will be off limits, just
-                # for safety
-                arrival_i = int( (rel_atime - max_event_samples) * samprate )
-                if (arrival_i - prev_arrival_end) > 0:
-                    noise_var = noise_var + np.sum((trace.data[prev_arrival_end:arrival_i] - noise_mean)**2)
-                    prev_arrival_end = arrival_i + max_event_samples*2
-            if prev_arrival_end != 0:
-                noise_var = noise_var / total_samples
-            else:
-                noise_var = np.mean((trace.data[prev_arrival_end:] - noise_mean)**2)
-            self.sta_noise_means[siteid] = noise_mean
-            self.sta_noise_vars[siteid] = noise_var
-            print "setting noise mean and var for station ", trace.stats["station"], " to ", noise_mean, ", ", noise_var, " on basis of ", total_samples, "/", len(trace.data), " samples."
-                    
+    def __learn_noise_params(self, traces, events, ttimes):
+        expectation_f = lambda x, siteid: x
+        self.sta_noise_means = self.__expectation_over_noise(expectation_f, traces, events, ttimes)
+        print self.sta_noise_means
+        
+        variance_f = lambda x, siteid: (x - self.sta_noise_means[siteid])**2
+        self.sta_noise_vars = self.__expectation_over_noise(variance_f, traces, events, ttimes)
+
 
     def envelope(self, event, siteid, hz):
         """
