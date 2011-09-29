@@ -11,6 +11,8 @@ from database import db, dataset
 import utils.waveform
 import netvisa, learn
 
+MAX_TRAVEL_TIME = 2000 # seconds
+
 class SigModel:
     def __init__(self, start_time, end_time, earthmodel, netmodel, siteid):
         self.start_time = start_time
@@ -97,7 +99,6 @@ class SigModel:
     def __learn_noise_params(self, traces, events, ttimes):
         expectation_f = lambda x, siteid: x
         self.sta_noise_means = self.__expectation_over_noise(expectation_f, traces, events, ttimes)
-        print self.sta_noise_means
         
         variance_f = lambda x, siteid: (x - self.sta_noise_means[siteid])**2
         self.sta_noise_vars = self.__expectation_over_noise(variance_f, traces, events, ttimes)
@@ -229,6 +230,44 @@ class SigModel:
             ttimes[siteid] = ttime_list
         return ttimes
 
+    def ttimes_from_assoc(self, evlist, events, detections, arid2num):
+
+        ttimes = dict()
+
+        # generate reverse index, to save doing lots of searches
+        arid2siteid = dict()
+        for det in detections:
+            arid2siteid[int(det[1])] = int(det[0])
+
+        # we have a list of detections for each event. for each event,
+        # then, we go through, calculate the station corresponding to
+        # each detection, and then calculate the travel time that this
+        # implies from that event to that station. we then update the
+        # corresponding element of the travel time matrix that we're
+        # calculating.
+        for (evnum, event) in enumerate(evlist):
+            for (phaseid, detnum) in event:
+
+                # for now we're only going to concern ourselves with P arrivals
+                #if phaseid != 0:
+                #    continue
+            
+                arid = self.__reverse_conv(detnum, arid2num)
+                siteid = arid2siteid[arid]
+
+                event_time = events[evnum][3]
+                arrival_time = detections[detnum][2]
+                travel_time = arrival_time - event_time
+
+                if siteid not in ttimes.keys():
+                    ttimes[siteid] = self.__nanlist(len(evlist))
+                elif not np.isnan(ttimes[siteid][evnum]):
+                    travel_time = np.amin((travel_time, ttimes[siteid][evnum]))
+                print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
+                ttimes[siteid][evnum] = travel_time
+
+        return ttimes
+
     def ttime_model_point(self, lat, lon, depth, siteid, phase):
         return self.earthmodel.ArrivalTime(lat, lon, depth, 0, phase, siteid)
 
@@ -282,92 +321,6 @@ class SigModel:
         print "computing likelihood took ", (end-start), " seconds."
         return ll
 
-    def log_likelihood(self, traces, events):
-        """ 
-        Compute p(signals | events) by integrating over travel times:
-
-        p(signals | events) = int_ttimes p(signals | ttimes, events) p(ttimes | events)
-                            = int_ttimes prod_signal prod_event p(signal | ttime, event)p(ttime | event)
-                            = prod_signal prod_event int_ttimes p(signal | ttime, event)p(ttime | event)
-        """
-
-        TT_SEARCH_STEP = 1 # seconds
-        
-        # TODO: make this depend on some probability threshold, rather than absolute time
-        TT_SEARCH_WIDTH = float(1.0) # seconds
-        MAX_TT = 2000 # seconds
-        MAX_ENVELOPE_LEN = 100 # seconds
-        SUBTRACE_LEN = 900.0 # seconds
-        
-
-        ll = 0
-        for trace in traces:
-            trace_start = trace.stats['starttime'].getTimeStamp()
-            siteid = int(self.siteid[trace.stats["station"]])
-
-            nsubtraces = np.ceil(len(trace.data)/(SUBTRACE_LEN / (trace.stats["window_size"] * trace.stats["overlap"])))
-            subtraces = np.array_split(trace.data, nsubtraces)
-
-            trace_ll = 0
-
-            # compute loglikelihood for each subtrace
-            for (i, subtrace_data) in enumerate(subtraces):
-                subtrace_start = trace_start + i * SUBTRACE_LEN
-                subtrace_end = subtrace_start + len(subtrace_data) * (trace.stats["window_size"] * trace.stats["overlap"])
-                
-                subtrace_ll = float("-inf")
-
-                subtrace = self.__copy_trace__(trace, subtrace_data)
-                subtrace.stats['starttime'] = UTCDateTime(subtrace_start)
-
-                relevant_events = []
-                arrtimess = []
-                for event in events:
-                    etime = event[3]
-                    lat = event[0]
-                    lon = event[1]
-                    depth = event[2]
-                    point_arrtime = etime + self.ttime_model_point(lat, lon, depth, siteid, 0)
-                    min_arrtime = point_arrtime - TT_SEARCH_WIDTH/2
-                    max_arrtime = point_arrtime + TT_SEARCH_WIDTH/2
-#                    print  min_arrtime, max_arrtime, point_arrtime, TT_SEARCH_WIDTH, TT_SEARCH_WIDTH/2
-
-                    # don't consider events that can't possibly affect the current subtrace
-                    if max_arrtime + MAX_ENVELOPE_LEN < subtrace_start or min_arrtime > subtrace_end:
-                        continue
-
-                    arrtimes = np.arange(min_arrtime, max_arrtime, TT_SEARCH_STEP)
-                    relevant_events.append(event)
-                    #print "building artimess: appending ", arrtimes
-                    arrtimess.append(arrtimes)
-                
-
-                total_combos = int((max_arrtime - min_arrtime) ** len(relevant_events))
-                print "looping over ", total_combos, " total combos on subtrace ", i, "."
-                for i in range(total_combos):
-                    indices = self.__decode_counter__(i, max_arrtime - min_arrtime)
-                    ttimes = []
-                    ttll = 0
-
-                    if len(relevant_events) > 0:
-                        for (i, idx) in enumerate(indices):
-#                            print i,idx, len(ttimes), relevant_events
-                            ttimes.append(arrtimess[i][idx]-relevant_events[i][3])
-                            ttll = ttll + self.ttime_model_logprob(ttimes[-1], lat, lon, depth, siteid, 0)
-                    
-                    wavell = self.waveform_model_trace(relevant_events, subtrace, ttimes)
-#                    print "testing atimes ", ttimes, " with lp ", ttll, " and wavell ", wavell
-
-                    # equiv to p() = p() + p(subtrace | ttimes, events)p(ttimes|events)
-                    # which will eventually sum over all choices of travel times.
-                    subtrace_ll = self.__log_addprob__(subtrace_ll, ttll + wavell)
-#                    print "added subtrace_ll now ", subtrace_ll
-                trace_ll = trace_ll + subtrace_ll
-                print "added trace_ll now ", trace_ll
-            ll = ll + trace_ll
-            print "added ll now ", ll
-        return ll
-
     #TODO: move this and following to a util package
     def __log_addprob__(self, lp1, lp2):
         a = np.max((lp1, lp2))
@@ -406,43 +359,7 @@ class SigModel:
         l[:] = np.NAN
         return l
 
-    def ttimes_from_assoc(self, evlist, events, detections, arid2num):
-
-        ttimes = dict()
-
-        # generate reverse index, to save doing lots of searches
-        arid2siteid = dict()
-        for det in detections:
-            arid2siteid[int(det[1])] = int(det[0])
-
-        # we have a list of detections for each event. for each event,
-        # then, we go through, calculate the station corresponding to
-        # each detection, and then calculate the travel time that this
-        # implies from that event to that station. we then update the
-        # corresponding element of the travel time matrix that we're
-        # calculating.
-        for (evnum, event) in enumerate(evlist):
-            for (phaseid, detnum) in event:
-
-                # for now we're only going to concern ourselves with P arrivals
-                #if phaseid != 0:
-                #    continue
-            
-                arid = self.__reverse_conv(detnum, arid2num)
-                siteid = arid2siteid[arid]
-
-                event_time = events[evnum][3]
-                arrival_time = detections[detnum][2]
-                travel_time = arrival_time - event_time
-
-                if siteid not in ttimes.keys():
-                    ttimes[siteid] = self.__nanlist(len(evlist))
-                elif not np.isnan(ttimes[siteid][evnum]):
-                    travel_time = np.amin((travel_time, ttimes[siteid][evnum]))
-                print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
-                ttimes[siteid][evnum] = travel_time
-
-        return ttimes
+    
 
 def window_energies(trace, window_size=1, overlap=0.5):
   """
@@ -545,7 +462,8 @@ def main():
     siteids = dict(stations)
     stations = stations[:,0]
 
-    #TODO: figure out the right way to od this
+    # convert all values in the siteids dictionary from strings to ints
+    # TODO: figure out the proper pythonic way to do this
     siteids_ints = dict()
     for sta in siteids.keys():
         siteids_ints[sta] = int(siteids[sta])
@@ -561,6 +479,7 @@ def main():
     detections, arid2num = dataset.read_detections(cursor, options.start_time, options.end_time, "idcx_arrival", 1)
     site_up = dataset.read_uptime(cursor, options.start_time, options.end_time,
                           "idcx_arrival")
+
     # read the rest of the static data
     sites = dataset.read_sites(cursor)
     phasenames, phasetimedef = dataset.read_phases(cursor)
@@ -572,10 +491,13 @@ def main():
     
 
     # read appropriate event set (e.g. netvisa)
-    events, orid2num = dataset.read_events(cursor, options.start_time, options.end_time, options.event_set, options.runid)
+    earliest_event_time = options.start_time - MAX_TRAVEL_TIME
+    events, orid2num = dataset.read_events(cursor, earliest_event_time, options.end_time, options.event_set, options.runid)
+    print "loaded ", len(events), " events."
     
     # read associations, as training data for learning
-    evlist = dataset.read_assoc(cursor, options.start_time, options.end_time, orid2num, arid2num, options.event_set, options.runid)
+    evlist = dataset.read_assoc(cursor, earliest_event_time, options.end_time, orid2num, arid2num, options.event_set, options.runid)
+    print "loaded associations for ", len(events), " events."
 
     # calculate likelihood
 #    peak_ttimes = sm.ttime_point_matrix(siteids.values(), events, 0)
@@ -583,15 +505,17 @@ def main():
     ll = sm.log_likelihood_complete(energies, events, assoc_ttimes)
     print "log-likelihood is ", ll
 
-
-
     print "learning params..."
     sm.learn(energies, events, assoc_ttimes)
 
     if options.gui:
+        limit = 10
         for trace in energies:
             (means, variances) = sm.all_envelopes(trace.stats, events, assoc_ttimes)
             sm.plot_envelope(trace, means, variances)
+            limit = limit-1
+            if limit <= 0:
+                break
         plt.show()
 
 
