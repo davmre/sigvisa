@@ -1,5 +1,5 @@
 
-
+import time
 import sys, MySQLdb,struct
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,15 +19,97 @@ class SigModel:
         self.netmodel = netmodel
         self.siteid = siteid
 
-        self.noise_mean=660
-        self.noise_variance=2500
+        # parameters
 
+        self.sta_noise_means = dict()
+        self.sta_noise_vars = dict()
+        for s in siteid.values():
+            self.sta_noise_means[s] = 10
+            self.sta_noise_vars[s] = 10
 
-    def learn(self, events, ttimes):
+        self.envelope_peak_coeff = 5000
+        self.envelope_decay_coeff = 1
+
+    def learn(self, traces, events, ttimes):
         """
         Find maximum-likelhood parameter estimates 
         """
-        
+
+        # need to learn noise mean and var at each station. and envelop height, and decay.
+        # we'll know where the envelopes start, but we don't know where they end unless we know the envelope params. without that, we don't know what's noise and what's not. but we can guess - take the mode (or equivalent) under the assumption that most of the time we're seeing noise. the noise variance is uninteresting, since I don't think it changes the model that much.
+        # alternately we could take some "known-clean" times which are far away from any event arrival, and just find the mean and variance in those regions. 
+        # as far as the envelope parameters, for any given signal we know where all of the envelopes start. if we know the noise mean, then we can essentially zero things out, and then it should be easy to tell where they end. 
+
+        # the likelihood decomposes over traces, so at each trace we can find values of all four parameters which maximize it. That's good for the noise params, since those are trace-specific anyway, but it's not necessarily good for the other params - we really want to optimize those over all traces.
+
+        # I forsee a two-step process then. First, we estimate noise levels in some hacky way. Then, search for param values to optimize the likelihood. In principle we could do this with numpy's optimize, if computing the likelihood doesn't take too long. how long does it take? about .6 seconds with my current settings (just three stations of traces), which is much too long. maybe when things are in C... anyway, learning is not the problem; it only has to run once.
+
+# 
+
+        self.__learn_noise_params(traces, events, ttimes)
+
+    def __learn_noise_params(self, traces, events, ttimes):
+        MAX_EVENT_LENGTH = 500 # seconds
+
+        for trace in traces:
+            siteid = self.siteid[trace.stats["station"]]
+            samprate = self.__samprate(trace.stats) # hz
+            max_event_samples = MAX_EVENT_LENGTH * samprate
+
+            prev_arrival_end = 0
+            noise_mean = 0
+            total_samples = 0
+
+            compute_rel_atime = lambda (event, ttime): event[3] - trace.stats['starttime'].getTimeStamp() + ttime
+            rel_atimes = map(compute_rel_atime, zip(events, ttimes[siteid]))
+            sorted_by_atime = sorted(zip(rel_atimes, events, ttimes[siteid]), key = lambda triple: triple[0])
+
+            print "siteid is ", siteid
+            print sorted_by_atime
+
+            for (rel_atime, event, ttime) in sorted_by_atime:
+                if np.isnan(ttime):
+                    continue
+
+                # everything within max_event_samples of the current
+                # arrival IN BOTH DIRECTIONS will be off limits, just
+                # for safety
+                arrival_i = int( (rel_atime - max_event_samples) * samprate )
+                if (arrival_i - prev_arrival_end) > 0:
+                    
+                    noise_mean = noise_mean + np.sum(trace.data[prev_arrival_end:arrival_i])
+                    total_samples = total_samples + (arrival_i-prev_arrival_end)
+                    prev_arrival_end = arrival_i + max_event_samples*2
+
+
+            if prev_arrival_end != 0:
+                noise_mean = noise_mean / total_samples
+            else:
+            # if no arrivals recorded at this station, we assume the whole thing is noise
+                noise_mean = np.mean(trace.data[prev_arrival_end:])                
+
+            prev_arrival_end = 0
+            noise_var = 0
+            for (tel_atime, event, ttime) in sorted_by_atime:
+                if np.isnan(ttime):
+                    continue
+
+                # everything within max_event_samples of the current
+                # arrival IN BOTH DIRECTIONS will be off limits, just
+                # for safety
+                arrival_i = int( (rel_atime - max_event_samples) * samprate )
+                if (arrival_i - prev_arrival_end) > 0:
+                    noise_var = noise_var + np.sum((trace.data[prev_arrival_end:arrival_i] - noise_mean)**2)
+                    prev_arrival_end = arrival_i + max_event_samples*2
+            if prev_arrival_end != 0:
+                noise_var = noise_var / total_samples
+            else:
+                noise_var = np.mean((trace.data[prev_arrival_end:] - noise_mean)**2)
+            self.sta_noise_means[siteid] = noise_mean
+            self.sta_noise_vars[siteid] = noise_var
+            print "setting noise mean and var for station ", trace.stats["station"], " to ", noise_mean, ", ", noise_var, " on basis of ", total_samples, "/", len(trace.data), " samples."
+                    
+
     def envelope(self, event, siteid, hz):
         """
         Return the mean and variance of the effect of an event at a station.
@@ -36,17 +118,19 @@ class SigModel:
         # model is a triangle with constant slope
         
         # initial height depends on event magnitude (mb) and distance (compute from lat/long)
-        dist= self.earthmodel.Delta(event[0], event[1], siteid)
+        distance_deg= self.earthmodel.Delta(event[0], event[1], siteid)
+        distance_mi=12000 * (distance_deg/180)
+
         mb = event[4]
 
         # TODO: figure out what this model should actually be
         envelopem = []
         envelopev = []
-        newmean = (200-dist)/180 * mb * 20
+        newmean = self.envelope_peak_coeff / distance_mi * np.exp(mb)
         while newmean > 0:
             envelopem.append(newmean)
             envelopev.append(newmean/2)
-            newmean = newmean - 1/(2*hz)
+            newmean = newmean - self.envelope_decay_coeff/hz
         return np.array(envelopem), np.array(envelopev)
 
     def all_envelopes(self, stats, events, ttimes):
@@ -54,15 +138,17 @@ class SigModel:
         Combine information from all events at a single station, and return the resulting mean and variance.
         """
 
-        siteid = int(self.siteid[stats["station"]])
+        siteid = self.siteid[stats["station"]]
         npts = stats["npts_processed"]
-        samprate = 1 / (stats["window_size"]*stats["overlap"])
+        samprate = self.__samprate(stats)
 
-        means = np.ones((npts, 1))*self.noise_mean
-        variances = np.ones((npts, 1))*self.noise_variance
+        means = np.ones((npts, 1))*self.sta_noise_means[siteid]
+        variances = np.ones((npts, 1))*self.sta_noise_vars[siteid]
 
         for (event, ttime) in zip(events, ttimes):
             if len(event) < 4:
+                continue
+            if np.isnan(ttime):
                 continue
 
             rel_time = event[3] - stats['starttime'].getTimeStamp()
@@ -82,15 +168,12 @@ class SigModel:
                     break
         return (means, variances)
 
-    def plot_envelope(self, trace, events, means=None, variances=None):
+    def plot_envelope(self, trace, means, variances):
         sta = trace.stats["station"]
         chan = trace.stats["channel"]
         npts = trace.stats["npts_processed"]
         samprate = 1 / (trace.stats["window_size"]*trace.stats["overlap"])
         siteid = int(self.siteid[trace.stats["station"]])
-
-        if means is None or variances is None:
-            (means, variances) = self.all_envelopes(trace.stats, events)
 
         timerange = np.arange(0, npts/samprate, 1.0/samprate)
         plt.figure()
@@ -168,15 +251,32 @@ class SigModel:
         """
         Compute p(signals| events, travel_times) for a given set of travel times, expressed as a dictionary mapping siteids to n-element arrays (n=#of events). 
         """
+
+        start = time.time()
         
         ll = 0
         for (i, trace) in enumerate(traces):
             trace_start = trace.stats['starttime'].getTimeStamp()
             siteid = int(self.siteid[trace.stats["station"]])
 
+            if siteid not in ttimes.keys():
+                ttimes[siteid] = self.__nanlist(len(events))
+
             wavell = self.waveform_model_trace(events, trace, np.array(ttimes[siteid]))
             ttll = 0
             for (j, event) in enumerate(events):
+
+                # if we don't have a travel time from an event to this
+                # station, then there still *is* a travel time, we
+                # just don't observe it. we should really sum across
+                # all travel times, but since this missing travel time
+                # issue really only comes up in parameter learning,
+                # and our calculations here have no impact on
+                # parameter choices, I'm just going to ignore the
+                # issue for now.
+                if np.isnan(ttimes[siteid][j]):
+                    continue
+
                 etime = event[3]
                 lat = event[0]
                 lon = event[1]
@@ -184,6 +284,9 @@ class SigModel:
                 
                 ttll = ttll + self.ttime_model_logprob(ttimes[siteid][j], lat, lon, depth, siteid, 0)
             ll = ll + wavell + ttll
+
+        end = time.time()
+        print "computing likelihood took ", (end-start), " seconds."
         return ll
 
     def log_likelihood(self, traces, events):
@@ -296,6 +399,58 @@ class SigModel:
         processed_trace = Trace(newdata, header=new_header)
         return processed_trace    
 
+    def __samprate(self, stats):
+        return 1 / (stats["window_size"]*stats["overlap"])
+
+    def __reverse_conv(self, num, xxx2num):
+        for (xxx, n) in xxx2num.viewitems():
+            if n == num:
+                return xxx
+        return None
+
+    def __nanlist(self, n):
+        l = np.empty((n, 1))
+        l[:] = np.NAN
+        return l
+
+    def ttimes_from_assoc(self, evlist, events, detections, arid2num):
+
+        ttimes = dict()
+
+        # generate reverse index, to save doing lots of searches
+        arid2siteid = dict()
+        for det in detections:
+            arid2siteid[int(det[1])] = int(det[0])
+
+        # we have a list of detections for each event. for each event,
+        # then, we go through, calculate the station corresponding to
+        # each detection, and then calculate the travel time that this
+        # implies from that event to that station. we then update the
+        # corresponding element of the travel time matrix that we're
+        # calculating.
+        for (evnum, event) in enumerate(evlist):
+            for (phaseid, detnum) in event:
+
+                # for now we're only going to concern ourselves with P arrivals
+                #if phaseid != 0:
+                #    continue
+            
+                arid = self.__reverse_conv(detnum, arid2num)
+                siteid = arid2siteid[arid]
+
+                event_time = events[evnum][3]
+                arrival_time = detections[detnum][2]
+                travel_time = arrival_time - event_time
+
+                if siteid not in ttimes.keys():
+                    ttimes[siteid] = self.__nanlist(len(evlist))
+                elif not np.isnan(ttimes[siteid][evnum]):
+                    travel_time = np.amin((travel_time, ttimes[siteid][evnum]))
+                print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
+                ttimes[siteid][evnum] = travel_time
+
+        return ttimes
+
 def window_energies(trace, window_size=1, overlap=0.5):
   """
   Returns a vector giving the signal energy in each of many
@@ -386,6 +541,12 @@ def main():
     siteids = dict(stations)
     stations = stations[:,0]
 
+    #TODO: figure out the right way to od this
+    siteids_ints = dict()
+    for sta in siteids.keys():
+        siteids_ints[sta] = int(siteids[sta])
+    siteids = siteids_ints
+
     traces = load_traces(cursor, stations, options.start_time, options.end_time)
     f = lambda trace: window_energies(trace, window_size=options.window_size, overlap=options.overlap)
     opts = dict(window_size=options.window_size, overlap=options.overlap)
@@ -393,8 +554,7 @@ def main():
 
     # load earth and net models
     # read the detections and uptime
-    detections = dataset.read_detections(cursor, options.start_time, options.end_time,
-                                 "idcx_arrival", 1)[0]
+    detections, arid2num = dataset.read_detections(cursor, options.start_time, options.end_time, "idcx_arrival", 1)
     site_up = dataset.read_uptime(cursor, options.start_time, options.end_time,
                           "idcx_arrival")
     # read the rest of the static data
@@ -408,17 +568,30 @@ def main():
     
 
     # read appropriate event set (e.g. netvisa)
-    events, stuff = dataset.read_events(cursor, options.start_time, options.end_time, options.event_set, options.runid)
+    events, orid2num = dataset.read_events(cursor, options.start_time, options.end_time, options.event_set, options.runid)
     
+    # read associations, as training data for learning
+    evlist = dataset.read_assoc(cursor, options.start_time, options.end_time, orid2num, arid2num, options.event_set, options.runid)
 
     # calculate likelihood
-    peak_ttimes = sm.ttime_point_matrix(siteids.values(), events, 0)
-    ll = sm.log_likelihood_complete(energies, events, peak_ttimes)
+#    peak_ttimes = sm.ttime_point_matrix(siteids.values(), events, 0)
+    assoc_ttimes = sm.ttimes_from_assoc(evlist, events, detections, arid2num)
+    ll = sm.log_likelihood_complete(energies, events, assoc_ttimes)
+    print "log-likelihood is ", ll
+
+
+
+    print "learning params..."
+    sm.learn(energies, events, assoc_ttimes)
 
     if options.gui:
+        for trace in energies:
+            (means, variances) = sm.all_envelopes(trace.stats, events, assoc_ttimes)
+            sm.plot_envelope(trace, means, variances)
         plt.show()
 
-    print "log-likelihood is ", ll
+
+
  
 if __name__ == "__main__":
     main()
