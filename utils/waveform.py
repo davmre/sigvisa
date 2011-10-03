@@ -125,6 +125,10 @@ def plot_fk_arr(siteid, start_time, end_time):
                              "latitude": float(arrsta[arridx, 2]),
                              "elevation": float(arrsta[arridx, 3])}
     trcs.append(trc)
+  
+  if len(trcs) == 0:
+    raise MissingWaveform("Can't find data for array sta %s"
+                            % (sta))
   st = Stream(trcs)
 
   # perform F-K analysis to compute slowness and backazimuth
@@ -239,8 +243,13 @@ def fetch_waveform(station, chan, stime, etime):
     # how many samples are actually available
     available_samples = waveform['nsamp'] - first_off
     # grab the available and needed samples
-    segment = _read_waveform_from_file(waveform, first_off,
-                                       min(desired_samples, available_samples))
+    try:
+      segment = _read_waveform_from_file(waveform, first_off,
+                                         min(desired_samples, available_samples))
+    except IOError:
+      raise MissingWaveform("Can't find data for sta %s chan %s time %d"
+                            % (station, chan, stime))
+
     data.extend(segment)
     
     # do we have all the data that we need
@@ -416,14 +425,16 @@ def main(param_dirname):
 
   # plot the waveforms at all the sites where it was detected
   for arrtime, siteid, isdet in all_site_arrtimes:
-    if isdet:
-      if not sites[siteid, SITE_IS_ARRAY]:
-        plot_ss_waveforms(siteid, arrtime-20, arrtime+20, detections,
+    try:
+      if isdet:
+        if not sites[siteid, SITE_IS_ARRAY]:
+          plot_ss_waveforms(siteid, arrtime-20, arrtime+20, detections,
                           earthmodel, event)
-      else:
-        plot_fk_arr(siteid, arrtime-20, arrtime+20)
+        else:
+          plot_fk_arr(siteid, arrtime-20, arrtime+20)
         #plot_focused_arr(earthmodel, event, siteid, 20)
-        
+    except MissingWaveform as e:
+      print e
   plt.show()
   
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from optparse import OptionParser
 
 from database.dataset import *
 import database.db
-import netvisa, learn
+import netvisa, sigvisa, learn
 from results.compare import *
 from utils.geog import dist_km, degdiff
 
@@ -163,6 +163,9 @@ def main(param_dirname):
   parser.add_option("-s", "--seed", dest="seed", default=123456789,
                     type="int",
                     help = "random number generator seed (123456789)")
+  parser.add_option("-g", "--sigvisa", dest="sigvisa", default=False,
+                    action = "store_true",
+                    help = "do inference using SIGVISA (False)")
   parser.add_option("-x", "--text", dest="gui", default=True,
                     action = "store_false",
                     help = "text only output (False)")
@@ -193,13 +196,17 @@ def main(param_dirname):
   
   netvisa.srand(options.seed)
 
+  # connect to database
+  conn = database.db.connect()
+  cursor = conn.cursor()
+
   if options.arrival_table is None:
+
     start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
                 = read_data(options.label, hours=options.hours,
                             skip=options.skip, noarrays=options.noarrays)
   else:
-    cursor = db.connect().cursor()
     # read the time range from the table
     cursor.execute("select min(time), max(time) from %s"
                    % options.arrival_table)
@@ -215,6 +222,7 @@ def main(param_dirname):
       end_time = options.hours
     else:
       end_time = start_time + options.hours * 60. * 60.
+
     
     print "Dataset: %.1f hrs from %d to %d" % ((end_time-start_time)/3600,
                                                start_time, end_time),
@@ -222,7 +230,7 @@ def main(param_dirname):
                              strftime("%x %X", gmtime(end_time)))
     
     # read the detections and uptime
-    detections = read_detections(cursor, start_time, end_time,
+    detections, arid2num = read_detections(cursor, start_time, end_time,
                                  options.arrival_table, options.noarrays)[0]
     site_up = read_uptime(cursor, start_time, end_time,
                           options.arrival_table)
@@ -231,12 +239,41 @@ def main(param_dirname):
     phasenames, phasetimedef = read_phases(cursor)
     assert(len(phasenames) == len(phasetimedef))
 
+    earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
+    netmodel = learn.load_netvisa(param_dirname,
+                                  start_time, end_time,
+                                  detections, site_up, sites, phasenames,
+                                  phasetimedef)
+    model = netmodel
 
-  earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
-  netmodel = learn.load_netvisa(param_dirname,
-                                start_time, end_time,
-                                detections, site_up, sites, phasenames,
-                                phasetimedef)
+    # load sigvisa stuff
+  if options.sigvisa:
+    print "loading traces for SIGVISA..."
+    cursor.execute("select sta, id from static_siteid where statype='ss'")
+    stations = np.array(cursor.fetchall())
+    siteids = dict(stations)
+    stations = stations[:,0]
+    
+    # convert all values in the siteids dictionary from strings to ints
+    # TODO: figure out the proper pythonic way to do this
+    siteids_ints = dict()
+    for sta in siteids.keys():
+      siteids_ints[sta] = int(siteids[sta])
+    siteids = siteids_ints
+
+    traces = sigvisa.load_traces(cursor, stations, start_time, end_time)
+    f = lambda trace: sigvisa.window_energies(trace, window_size=1, overlap=.5)
+    opts = dict(window_size=1, overlap=.5)
+    energies = sigvisa.process_traces(traces, f, opts)
+
+    print "creating sigvisa model..."
+    sigmodel = learn.load_sigvisa("parameters",
+                                  start_time, end_time,
+                                  detections, site_up, sites, siteids, phasenames,
+                                  phasetimedef)
+    print "learning noise params, as a temporary hack"
+    sigmodel.learn_from_scratch(cursor, energies, start_time, end_time, detections, arid2num)
+    model = sigmodel
 
 ##   if options.verbose:
 ##     print "===="
@@ -255,8 +292,7 @@ def main(param_dirname):
   #netmodel.score_world(sel3_events, sel3_evlist, 1)
 
   # create a runid
-  conn = database.db.connect()
-  cursor = conn.cursor()
+
   cursor.execute ("insert into visa_run(run_start, numsamples, window, step, "
                   "seed, data_start, noarrays, score, descrip) values "
                   "(now(), %d, %d, %d, %d, %f, %s, 0, '%s')" %
@@ -287,7 +323,18 @@ def main(param_dirname):
 
   else:
     propose_events = None
-  events, ev_detlist = netmodel.infer(runid, options.numsamples,
+
+  if options.sigvisa:
+    events = sigmodel.infer(runid, energies, options.numsamples,
+                                      options.birthsteps,
+                                      options.window, options.step,
+                                      options.threads,
+                                      propose_events,
+                                      options.verbose,
+                                      lambda a,b,c,d,e,f:
+                                      write_events(a,b,c,d,e,f,detections))
+  else:
+    events, ev_detlist = netmodel.infer(runid, options.numsamples,
                                       options.birthsteps,
                                       options.window, options.step,
                                       options.threads,

@@ -3,6 +3,7 @@ import time
 import sys, MySQLdb,struct
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.optimize
 
 from optparse import OptionParser
 from obspy.core import Trace, Stream, UTCDateTime
@@ -12,6 +13,7 @@ import utils.waveform
 import netvisa, learn
 
 MAX_TRAVEL_TIME = 2000 # seconds
+
 
 class SigModel:
     def __init__(self, start_time, end_time, earthmodel, netmodel, siteid):
@@ -30,7 +32,20 @@ class SigModel:
             self.sta_noise_vars[s] = 10
 
         self.envelope_peak_coeff = 5000
-        self.envelope_decay_coeff = 1
+        self.envelope_decay_coeff = 10
+
+    def learn_from_scratch(self, cursor, energies, start_time, end_time, detections, arid2num, event_set="leb", runid=None):
+        earliest_event_time = start_time - MAX_TRAVEL_TIME
+        events, orid2num = dataset.read_events(cursor, earliest_event_time, end_time, event_set, runid)
+        print "loaded ", len(events), " events."
+
+    # read associations, as training data for learning
+        evlist = dataset.read_assoc(cursor, earliest_event_time, end_time, orid2num, arid2num, event_set, runid)
+        print "loaded associations for ", len(events), " events."
+        assoc_ttimes = self.ttimes_from_assoc(evlist, events, detections, arid2num)
+        self.learn(energies, events, assoc_ttimes)
+    
+        return assoc_ttimes
 
     def learn(self, traces, events, ttimes):
         """
@@ -49,7 +64,15 @@ class SigModel:
 # 
 
         self.__learn_noise_params(traces, events, ttimes)
+        #self.__learn_envelope_params(traces, events, ttimes)
 
+    def __learn_envelope_params(self, traces, events, ttimes):
+        ll = lambda (peak, decay): -1 * self.log_likelihood_complete(traces, events, ttimes, peak, decay)
+        xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((5000, 1)), full_output=True)
+        print "learned params: ", xopt
+        print "give likelihood ", fopt
+        self.envelope_peak_coeff = xopt[0]
+        self.envelope_decay_coeff = xopt[1]
 
     def __expectation_over_noise(self, f, traces, events, ttimes):
         MAX_EVENT_LENGTH = 50 # seconds
@@ -107,10 +130,15 @@ class SigModel:
         self.sta_noise_vars = self.__expectation_over_noise(variance_f, traces, events, ttimes)
 
 
-    def envelope(self, event, siteid, hz):
+    def envelope(self, event, siteid, hz, peak_coeff=None, decay_coeff=None):
         """
         Return the mean and variance of the effect of an event at a station.
         """
+
+        if peak_coeff is None:
+            peak_coeff = self.envelope_peak_coeff
+        if decay_coeff is None:
+            decay_coeff = self.envelope_decay_coeff
 
         # model is a triangle with constant slope
         
@@ -123,17 +151,22 @@ class SigModel:
         # TODO: figure out what this model should actually be
         envelopem = []
         envelopev = []
-        newmean = self.envelope_peak_coeff / distance_mi * np.exp(mb)
+        newmean = peak_coeff / distance_mi * np.exp(mb)
         while newmean > 0:
             envelopem.append(newmean)
             envelopev.append(newmean/2)
-            newmean = newmean - self.envelope_decay_coeff/hz
+            newmean = newmean - decay_coeff/hz
         return np.array(envelopem), np.array(envelopev)
 
-    def all_envelopes(self, stats, events, ttimes):
+    def all_envelopes(self, stats, events, ttimes, peak_coeff=None, decay_coeff=None):
         """
         Combine information from all events at a single station, and return the resulting mean and variance.
         """
+
+        if peak_coeff is None:
+            peak_coeff = self.envelope_peak_coeff
+        if decay_coeff is None:
+            decay_coeff = self.envelope_decay_coeff
 
         siteid = self.siteid[stats["station"]]
         npts = stats["npts_processed"]
@@ -149,10 +182,10 @@ class SigModel:
                 continue
 
             rel_time = event[3] - stats['starttime'].getTimeStamp()
-            (emeans, evars) = self.envelope(event, siteid, samprate)
+            (emeans, evars) = self.envelope(event, siteid, samprate, peak_coeff, decay_coeff)
 
 #           print rel_time, event[3], stats['starttime'].getTimeStamp(), ttime
-            #print "event at t=", rel_time+ttime, ", mb = ", event[4]
+#           print "event at t=", rel_time+ttime, ", mb = ", event[4]
             base_t = int( (rel_time + ttime) * samprate  )
             for i in range(len(emeans)):
                # print "  adding emeans[", i, "] = ", emeans[i], " to means[", base_t+i, "]."
@@ -161,7 +194,7 @@ class SigModel:
                     means[base_t +i] = means[base_t+i] + emeans[i]
                     variances[base_t +i] = variances[base_t+i] + evars[i]
                 except IndexError:
-                    sys.stderr.write("Predicted arrival at time " + str(event[3] + ttime) + " - " + str(event[3] + ttime + i*samprate) + " falls outside trace boundaries " + str(stats['starttime'].getTimeStamp()) + " - " + str(stats['starttime'].getTimeStamp() + len(means)/samprate) + ".\n")
+                    #sys.stderr.write("Predicted arrival at time " + str(event[3] + ttime) + " - " + str(event[3] + ttime + i*samprate) + " falls outside trace boundaries " + str(stats['starttime'].getTimeStamp()) + " - " + str(stats['starttime'].getTimeStamp() + len(means)/samprate) + ".\n")
                     break
         return (means, variances)
 
@@ -190,29 +223,20 @@ class SigModel:
         plt.ylabel("Envelope Variance")
 
 
-    def waveform_model_trace(self, events, trace, ttimes):
-        (means, variances) = self.all_envelopes(trace.stats, events, ttimes)
+    def waveform_model_trace(self, events, trace, ttimes, peak_coeff=None, decay_coeff=None):
+
+        if peak_coeff is None:
+            peak_coeff = self.envelope_peak_coeff
+        if decay_coeff is None:
+            decay_coeff = self.envelope_decay_coeff
+
+        (means, variances) = self.all_envelopes(trace.stats, events, ttimes, peak_coeff, decay_coeff)
         #self.plot_envelope(trace, events, means, variances)
 
         ll=0
         for i in range(len(means)):
             ll = ll - .5 * np.log(2*np.pi * variances[i]) - .5 * (trace.data[i] - means[i])**2 / variances[i]
             
-        return ll
-
-    def waveform_model(self, traces, events, ttimes):
-        """
-        Compute p(signals | events, travel times). Combined with the travel time model, we can then integrate over travel times to get p(signals | events), i.e. the overall likelihood.
-
-        The current implementation is a toy model, in which Gaussian
-        white noise is added to a deterministic envelope.
-        """
-
-        ll = 0
-        for (i, trace) in enumerate(traces):
-            ll = ll + self.waveform_model_trace(events, trace, ttimes[i])
-            
-
         return ll
 
     def ttime_point_matrix(self, siteids, events, phase):
@@ -233,6 +257,7 @@ class SigModel:
                 ttime_list[i] = self.ttime_model_point(lat, lon, depth, siteid, phase)
             ttimes[siteid] = ttime_list
         return ttimes
+
 
     def ttimes_from_assoc(self, evlist, events, detections, arid2num):
 
@@ -267,7 +292,7 @@ class SigModel:
                     ttimes[siteid] = self.__nanlist(len(evlist))
                 elif not np.isnan(ttimes[siteid][evnum]):
                     travel_time = np.amin((travel_time, ttimes[siteid][evnum]))
-                print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
+                #print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
                 ttimes[siteid][evnum] = travel_time
 
         return ttimes
@@ -283,13 +308,21 @@ class SigModel:
         pred_ttime = self.earthmodel.ArrivalTime(lat, lon, depth, 0, phase, siteid)
         return self.netmodel.arrtime_logprob(ttime, pred_ttime, 0, siteid, phase)
 
-    def log_likelihood_complete(self, traces, events, ttimes):
+    def log_likelihood_complete(self, traces, events, ttimes, peak_coeff=None, decay_coeff=None):
         """
         Compute p(signals| events, travel_times) for a given set of travel times, expressed as a dictionary mapping siteids to n-element arrays (n=#of events). 
         """
 
+        if peak_coeff is None:
+            peak_coeff = self.envelope_peak_coeff
+        if decay_coeff is None:
+            decay_coeff = self.envelope_decay_coeff
+
         start = time.time()
         
+        print "likelihood called w/ params peak = ", peak_coeff, ", decay_coeff = ", decay_coeff
+
+
         ll = 0
         for (i, trace) in enumerate(traces):
             trace_start = trace.stats['starttime'].getTimeStamp()
@@ -298,7 +331,8 @@ class SigModel:
             if siteid not in ttimes.keys():
                 ttimes[siteid] = self.__nanlist(len(events))
 
-            wavell = self.waveform_model_trace(events, trace, np.array(ttimes[siteid]))
+
+            wavell = self.waveform_model_trace(events, trace, np.array(ttimes[siteid]), peak_coeff, decay_coeff)
             ttll = 0
             for (j, event) in enumerate(events):
 
@@ -322,8 +356,12 @@ class SigModel:
             ll = ll + wavell + ttll
 
         end = time.time()
-        print "computing likelihood took ", (end-start), " seconds."
+        print "computed likelihood ", ll, " in time ", (end-start), " seconds."
         return ll
+
+    def infer(self, runid, traces, numsamples, birthsteps, window, step, threads, propose_events, verbose, write_cb):
+
+        return py_infer_sig(runid, traces, numsamples, birthsteps, window, step, threads, propose_events, verbose, write_cb)
 
     #TODO: move this and following to a util package
     def __log_addprob__(self, lp1, lp2):
@@ -415,7 +453,7 @@ def load_traces(cursor, stations, start_time, end_time):
 
             print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
             try:
-                trace = utils.waveform.fetch_waveform(sta, chan, stime, etime)
+                trace = utils.waveform.fetch_waveform(sta, chan, int(np.ceil(st)), int(np.floor(et)))
                 traces.append(trace)
                 print " ... successfully loaded."
             except (utils.waveform.MissingWaveform, IOError):
@@ -503,23 +541,28 @@ def main():
     print "loaded associations for ", len(events), " events."
 
     # calculate likelihood
-#    peak_ttimes = sm.ttime_point_matrix(siteids.values(), events, 0)
+    peak_ttimes = sm.ttime_point_matrix(siteids.values(), events, 0)
     assoc_ttimes = sm.ttimes_from_assoc(evlist, events, detections, arid2num)
-    #ll = sm.log_likelihood_complete(energies, events, assoc_ttimes)
-    #print "log-likelihood is ", ll
-
-    print "learning params..."
+    ttimes = peak_ttimes
     sm.learn(energies, events, assoc_ttimes)
 
+
+    ll = sm.log_likelihood_complete(energies, events, ttimes)
+    print "log-likelihood is ", ll
+
+    #print "learning params..."
+
+
     if options.gui is not None:
-        for trace in energies:          
-            if options.gui == "all" or options.gui == trace.stats["station"]:
-                (means, variances) = sm.all_envelopes(trace.stats, events, assoc_ttimes)
+        for trace in energies:   
+            siteid = siteids[trace.stats["station"]]       
+            if options.gui == "all" or trace.stats["station"] in options.gui:
+                (means, variances) = sm.all_envelopes(trace.stats, events, ttimes[siteid])
                 sm.plot_envelope(trace, means, variances)
         plt.show()
 
 
 
- 
+
 if __name__ == "__main__":
     main()

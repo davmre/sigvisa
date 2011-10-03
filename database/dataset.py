@@ -117,7 +117,6 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", n
 
   sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s iarr, static_siteid site, static_phaseid ph where %s iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.time between %d and %d order by iarr.time, iarr.arid" %  (arrival_table, ("site.statype='ss' and " if noarrays else ""), start_time, end_time)
 
-  print sql_query
   cursor.execute(sql_query)
   
   detections = np.array(cursor.fetchall())
@@ -337,7 +336,7 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   if read_leb_detections:
     return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef,\
-         leb_det, leb_leb_evlist
+         leb_det, leb_leb_evlist, arid2num
   else:
     return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
-           sel3_evlist, site_up, sites, phasenames, phasetimedef
+           sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num

@@ -53,6 +53,10 @@
 
 typedef struct World_t
 {
+
+  /* are we doing inference from signal data (SIGVISA)? */
+  int sigvisa;
+
   /* the inferred events, events be store in ascending order of time */
   int maxevents;
   Event_t ** pp_events;
@@ -72,14 +76,15 @@ typedef struct World_t
   /* the maximum time that we will hypothesize events */
   double high_evtime;
   
-  /* this is the earliest detection which could have affected a new
-   * event */
-  int low_detnum;
-  
-  /* detections above this will not be looked at since they couldn't have been
-   * caused by any event currently being hypothesized 
-   * high_detnum are all detections below high_evtime + MAX_TRAVEL_TIME */
-  int high_detnum;
+  /* NETVISA ONLY: this is the earliest detection which could have
+   * affected a new event  */
+  int low_detnum; 
+
+  /* NETVISA ONLY: detections above this will not be looked at since
+   * they couldn't have been caused by any event currently being
+   * hypothesized high_detnum are all detections below high_evtime +
+   * MAX_TRAVEL_TIME */
+  int high_detnum; 
 
   /*
 
@@ -97,8 +102,10 @@ typedef struct World_t
 
   */
 
-  int inv_detnum;           /* detection number to be inverted next */
-  int inv_detnum_wrap;          /* wrap around inverting detections */
+  int inv_detnum;           /* NETVISA ONLY: detection number to be
+			       inverted next */
+  int inv_detnum_wrap;          /* NETVISA ONLY: wrap around inverting
+				   detections */
   int drop_evnum;                /* event number to be dropped next */
   int write_evnum;               /* event number to be written next */
   
@@ -112,6 +119,7 @@ typedef struct World_t
 
   /* static entries */
   int runid;
+  PyObject * traces;
   int numsamples;
   int birthsteps;
   int window;
@@ -846,6 +854,22 @@ static World_t * alloc_world(NetModel_t * p_netmodel)
   return p_world;
 }
 
+static World_t * alloc_world_sigvisa(SigModel_t * p_sigmodel)
+{
+  World_t * p_world;
+  
+  /* assume that we won't have more than MAX_EVENT_RATE events per second */
+  p_world = (World_t *) calloc(1, sizeof(*p_world));
+
+  p_world->maxevents = (p_sigmodel->end_time - p_sigmodel->start_time)*MAX_EVENT_RATE + 1000;
+  p_world->pp_events = (Event_t **) calloc(p_world->maxevents,
+                                           sizeof(*p_world->pp_events));
+  p_world->pp_prop_events = (Event_t **) calloc(p_world->maxevents,
+                                             sizeof(*p_world->pp_prop_events));
+
+  return p_world;
+}
+
 static void free_world(World_t * p_world)
 {
   int i;
@@ -929,12 +953,6 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
         break;
     }
 
-#ifdef NEVER
-    /* add an initial set of events in the new window */
-     add_propose_hough_events(p_netmodel, p_world);
-    
-    add_invert_events(p_netmodel, p_world);
-#endif
 
     add_propose_invert_events(p_netmodel, p_world);
 
@@ -953,36 +971,6 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     {
       int numdel;
       double old_score;
-#ifdef NEVER
-      Event_t * p_new_event;
-
-      old_score = p_world->world_score;
-      
-      /* birth move */
-      p_new_event = add_event(p_netmodel, p_world);
-
-      change_detections(p_netmodel, p_world);
-
-      if (p_world->world_score < old_score)
-      {
-        delete_event(p_world, p_new_event);
-        free_event(p_new_event);
-        change_detections(p_netmodel, p_world);
-      }
-      else if (p_world->verbose)
-      {
-        printf("birth+%.1f->%.1f: ", p_world->world_score - old_score,
-          p_world->world_score);
-        print_event(p_new_event);
-      }
-
-      if (p_world->world_score < (old_score - 1e-6))
-      {
-        printf("after birth: world score has gone down by %.3f -> %.3f\n", 
-               old_score - p_world->world_score, p_world->world_score);
-      }
-      
-#endif /* NEVER */
 
       old_score = p_world->world_score;
       
@@ -1004,39 +992,6 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
 
       change_detections(p_netmodel, p_world);
     };
-
-#ifdef NEVER
-    /* now for one round try to delete each event and see if that improves
-     * the world score */
-    for (i=p_world->low_evnum; i<p_world->high_evnum; i++)
-    {
-      Event_t * p_old_event;
-      double old_score;
-      
-      old_score = p_world->world_score;
-      
-      p_old_event = p_world->pp_events[i];
-
-      delete_event(p_world, p_old_event);
-      
-      change_detections(p_netmodel, p_world);
-      
-      if (p_world->world_score < old_score)
-      {
-        insert_event(p_netmodel, p_world, p_old_event);
-        change_detections(p_netmodel, p_world);
-      }
-      else
-      {
-        if (p_world->verbose)
-        {
-          printf("kill: ");
-          print_event(p_old_event);
-        }
-        free_event(p_old_event);
-      }
-    }
-#endif
     
     /* only remove negative events if numsamples > 0. This allows a
      * numsamples=0 run to save all the proposed events */
@@ -1121,6 +1076,64 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   p_world->write_events_cb = write_events_cb;
   
   infer(p_netmodel, p_world);
+
+  /* convert the world to python structures */
+  convert_events_to_pyobj(p_netmodel->p_earth,
+                          (const Event_t **)p_world->pp_events,
+                          p_world->high_evnum, &eventsobj, &evdetlistobj);
+  
+  free_world(p_world);
+
+  retobj = Py_BuildValue("(OO)", eventsobj, evdetlistobj);
+
+  /* BuildValue increments the ref count so we need to decrement our ref */
+  Py_DECREF(eventsobj);
+  Py_DECREF(evdetlistobj);
+  
+  return retobj;  
+}
+
+PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
+{
+  World_t * p_world;
+  int runid;
+  int numsamples;
+  int birthsteps;
+  int window;
+  int step;
+  int numthreads;
+  int verbose;
+  PyObject * propose_eventobj;
+  PyObject * write_events_cb;
+  PyObject * traces;
+
+  PyObject * retobj;
+  PyObject * eventsobj;
+  PyObject * evdetlistobj;
+  
+  if (!PyArg_ParseTuple(args, "iOiiiiiOiO", &runid, &traces, &numsamples, 
+                        &birthsteps,
+                        &window, &step, &numthreads,
+                        &propose_eventobj,
+                        &verbose, &write_events_cb))
+    return NULL;
+
+  // todo: define SigModel_t, look at alloc_world
+
+
+  /* allocate the world and initialize the user arguments */
+  p_world = alloc_world(p_sigmodel);
+  p_world->runid = runid;
+  p_world->numsamples = numsamples;
+  p_world->birthsteps = birthsteps;
+  p_world->window = window;
+  p_world->step = step;
+  p_world->numthreads = numthreads;
+  p_world->propose_eventobj = propose_eventobj;
+  p_world->verbose = verbose;
+  p_world->write_events_cb = write_events_cb;
+  
+  infer_sig(p_sigmodel, p_world, traces);
 
   /* convert the world to python structures */
   convert_events_to_pyobj(p_netmodel->p_earth,
