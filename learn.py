@@ -115,11 +115,27 @@ def main(param_dirname):
                                        leb_evlist)
 
   if options.sigvisa:
+    MAX_TRAVEL_TIME = 2000
+    start_time = 1237680000
+    end_time = start_time + hours*3600
+    earliest_event_time = start_time - MAX_TRAVEL_TIME
     cursor = db.connect().cursor()
+
+    detections, arid2num = read_detections(cursor, start_time, end_time, "idcx_arrival", 1)
+
+    print start_time, earliest_event_time
+    events, orid2num = read_events(cursor, earliest_event_time, end_time, "leb", None)
+    print "loaded ", len(events), " events."
+    
+    # read associations, as training data for learning
+    evlist = read_assoc(cursor, earliest_event_time, end_time, orid2num, arid2num, "leb", None)
+    print "loaded associations for ", len(events), " events."
+
+
     energies = sigvisa_util.load_and_process_traces(cursor, start_time=1237680000, end_time=1237683600, window_size=1, overlap=0.5)
     priors.SignalPrior.learn(os.path.join(param_dirname,
                                           "SignalPrior.txt"),
-                             options, earthmodel, energies, leb_events, leb_evlist, detections, arid2num)
+                             options, earthmodel, energies, events, evlist, detections, arid2num)
     return
 
   priors.NumSecDetPrior.learn(os.path.join(param_dirname, "NumSecDetPrior.txt"),

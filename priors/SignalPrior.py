@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.optimize
+import time
 
 from obspy.core import Trace, Stream, UTCDateTime
 
@@ -64,11 +65,9 @@ def expectation_over_noise(fn, traces, events, ttimes):
             # for safety
             arrival_i = int( (rel_atime - max_event_samples) * samprate )
             if (arrival_i - prev_arrival_end) > 0:
-                    
-                results[siteid] = results[siteid] + np.sum(fn(trace.data[prev_arrival_end:arrival_i]))
+                results[siteid] = results[siteid] + np.sum(fn(trace.data[prev_arrival_end:arrival_i], siteid))
                 normalizer[siteid] = normalizer[siteid] + (arrival_i-prev_arrival_end)
                 prev_arrival_end = arrival_i + max_event_samples*2
-
 
         if prev_arrival_end == 0:
             # if no arrivals recorded during this trace, we assume the whole thing is noise
@@ -131,6 +130,8 @@ def ttimes_from_assoc(evlist, events, detections, arid2num):
     # implies from that event to that station. we then update the
     # corresponding element of the travel time matrix that we're
     # calculating.
+
+
     for (evnum, event) in enumerate(evlist):
         for (phaseid, detnum) in event:
 
@@ -149,8 +150,8 @@ def ttimes_from_assoc(evlist, events, detections, arid2num):
                 ttimes[siteid] = __nanlist(len(evlist))
             elif not np.isnan(ttimes[siteid][evnum]):
                 travel_time = np.amin((travel_time, ttimes[siteid][evnum]))
-                #print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
-                ttimes[siteid][evnum] = travel_time
+            print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
+            ttimes[siteid][evnum] = travel_time
 
     return ttimes
 

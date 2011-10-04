@@ -53,6 +53,19 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
   fflush(stdout);
 }
 
+void vector_times_scalar_inplace(int n, double * vector, double scalar) {
+  for (int i=0; i < n; ++i) {
+    *(vector++) *= scalar;
+  }
+}
+
+void print_vector(int n, double * vector) {
+  for(int i=0; i < n; ++i) {
+    fprintf(stdout, "%lf ", *(vector++));
+  }
+  fprintf(stdout, "\n");
+}
+
 long time2idx(double t, double start_time, double hz) {
   double delta_t = t - start_time;
   long result = lround(delta_t * hz);
@@ -146,11 +159,13 @@ void envelope_means_vars(SignalPrior_t * prior,
     phase_env(prior, p_earth, events + i, p_signal->hz, siteid, phaseid, &p_envelope, &len);
     
     add_signals(p_means, p_signal->len, p_envelope, len, lround(time2idx(arrtime, p_signal->start_time, p_signal->hz)));
+    vector_times_scalar_inplace(len, p_envelope, 0.5);
     add_signals(p_vars, p_signal->len, p_envelope, len, lround(time2idx(arrtime, p_signal->start_time, p_signal->hz)));
       
     free(p_envelope);
     //}
   }
+
   
 }
 
@@ -165,8 +180,9 @@ double SignalPrior_LogProb(SignalPrior_t * prior, int numsignals, Signal_t * p_s
     envelope_means_vars(prior, p_signal, p_earth, numevents, events, arrtimes, p_signal->siteid, &p_means, &p_vars);
 
     
-    lp += indep_Gaussian_LogProb(p_signal->len, p_signal->p_data, p_means, p_vars);
-    fprintf(stdout, "lp is %lf\n", lp);
+    double tr_lp =  indep_Gaussian_LogProb(p_signal->len, p_signal->p_data, p_means, p_vars);
+    lp += tr_lp;
+    fprintf(stdout, "trace %d , wavell is %lf, overall %lf\n", i, tr_lp, lp);
 
     free(p_means);
     free(p_vars);
