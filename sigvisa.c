@@ -1,20 +1,33 @@
 #include <math.h>
 #include <stdlib.h>
 
+#define NETVISA_MAIN_MODULE
 #include "sigvisa.h"
 
 static int py_sig_model_init(SigModel_t *self, PyObject *args);
-static void py_net_model_dealloc(SigModel_t * self);
+static void py_sig_model_dealloc(SigModel_t * self);
+static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
 
-static PyObject * py_score_world(SigModel_t * p_netmodel, PyObject * args);
+extern PyTypeObject py_EarthModel;
 
-static PyMethodDef NetModel_methods[] = {
+static PyMethodDef SigModel_methods[] = {
+  {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
+   "set_signals(traces) "
+   "-> num_translated\n"},
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
-   "score_world(events, ev_detlist, verbose) "
+   "score_world(events, arrtimes, verbose) "
    "-> log probability\n"},
+  /*{"infer", (PyCFunction)py_infer, METH_VARARGS,
+   "infer(runid, numsamples, window, step, threads, propose_events, verbose,"
+   "write_cb)\n -> events, ev_detlist"},
+  {"propose", (PyCFunction)py_propose, METH_VARARGS,
+   "propose(time_low, time_high, det_low, det_high, degree_step, num_step)\n"
+   " -> events, ev_detlist"},*/
+  {NULL}  /* Sentinel */
 };
 
-static PyTypeObject py_net_model = {
+static PyTypeObject py_sig_model = {
     PyObject_HEAD_INIT(NULL)
     0,                                       /*ob_size*/
     "sigvisa.SigModel",                      /*tp_name*/
@@ -59,17 +72,17 @@ static PyTypeObject py_net_model = {
 static int py_sig_model_init(SigModel_t *self, PyObject *args)
 {
   EarthModel_t * p_earth;
-  NetModel_t * p_netmodel;
-  PyObject * siteid;
+  //PyObject * siteid;
   double start_time;
   double end_time;
 
-
-  const char * stanoise_fname;
-  const char * env_fname;
-
+  const char * numevent_fname;
+  const char * evloc_fname;
+  const char * evmag_fname;
+  const char * arrtime_fname;
+  const char * sig_fname;
   
-  if (!PyArg_ParseTuple(args, "ddO!O!O",  &start_time, &end_time, &py_EarthModel, &p_earth, &py_NetModel, &p_netmodel, &siteid, &stanoise_fname, &env_fname))
+  if (!PyArg_ParseTuple(args, "O!ddsssss", &py_EarthModel, &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &sig_fname))
     return -1;
   
   if (end_time <= start_time)
@@ -87,21 +100,42 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   self->p_earth = p_earth;
   Py_INCREF((PyObject *)self->p_earth);
 
-  self->p_netmodel = p_netmodel;
-  Py_INCREF((PyObject *)self->p_netmodel);
+  //self->siteid = siteid;
+  //Py_INCREF((PyObject *)self->siteid);
 
-  self->siteid = siteid;
-  Py_INCREF((PyObject *)self->siteid);
-
-  
-  // is this (split into envelope and noise) the right way to structure the model?
-  StationNoisePrior_Init_Params(&self->sta_noise_prior, stanoise_fname);
-  EnvelopePrior_Init_Params(&env_prior->env_prior, env_fname);
+  NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
+  EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
+  EventMagPrior_Init_Params(&self->event_mag_prior, 1, evmag_fname);
+  ArrivalTimeJointPrior_Init_Params(&self->arr_time_joint_prior, arrtime_fname);
+  SignalPrior_Init_Params(&self->sig_prior, sig_fname);
 
   return 0;
 }
 
-static void py_sig_model_dealloc(NetModel_t * self)
+void initsigvisa(void)
+{
+  PyObject * m;
+  
+  py_sig_model.tp_new = PyType_GenericNew;
+  if (PyType_Ready(&py_sig_model) < 0)
+    return;
+
+
+  m = Py_InitModule3("sigvisa", SigModel_methods,
+                     "Signal-Based Vertically Integrated Seismological Processing");
+  import_array();/* Must be present for NumPy. Called first after above line.*/
+
+  Py_INCREF(&py_sig_model);
+  PyModule_AddObject(m, "SigModel", (PyObject *)&py_sig_model);
+}
+
+
+void free_signal(Signal_t * signal) {
+  Py_DECREF(signal->py_array);
+  free(signal);
+}
+
+static void py_sig_model_dealloc(SigModel_t * self)
 {
   if (self->p_earth)
   {
@@ -109,39 +143,89 @@ static void py_sig_model_dealloc(NetModel_t * self)
     self->p_earth = NULL;
   }
   
-  if (self->p_netmodel)
-  {
-    Py_DECREF((PyObject *)self->p_netmodel);
-    self->p_netmodel = NULL;
+  for (int i=0; i < self->numsignals; ++i) {
+    free_signal((self->p_signals + i*sizeof(Signal_t)));
   }
-  
-  if (self->p_siteid)
-  {
-    Py_DECREF((PyObject *)self->p_siteid);
-    self->p_siteid = NULL;
+  free(self->p_signals);
+
+  EventLocationPrior_UnInit(&self->event_location_prior);
+  ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
+  SignalPrior_UnInit(&self->sig_prior);
+
+}
+
+static PyArrayObject * convert_arrtimes(SigModel_t *p_sigmodel, PyObject * p_arrtime_array) {
+  /* 
+     Returns a 3D array indexed by [siteid][eventid][phaseid]
+
+   */
+  PyArrayObject * array = (PyArrayObject *) PyArray_ContiguousFromAny(p_arrtime_array,
+							 NPY_DOUBLE, 3, 3);
+  if (array == NULL) {
+    fprintf(stderr, "arrtimes: argument cannot be interpreted as a " \
+	    "three-dimensional numpy array\n");
+    exit(1);
   }
 
-  StationNoisePrior_UnInit(&self->station_noise_prior);
-  EnvelopePrior_UnInit(&self->envelope_prior);
+ if (array->dimensions[0] != p_sigmodel->p_earth->numsites) {
+   fprintf(stderr, "arrtimes: first dimension %d does not match the number of sites (%d)\n", (int) (array->dimensions[0]), p_sigmodel->p_earth->numsites);
+    exit(1);
+ }
+
+if (array->dimensions[2] != p_sigmodel->p_earth->numphases) {
+  fprintf(stderr, "arrtimes: third dimension %d does not match the number of phases (%d)\n", (int) (array->dimensions[2]), p_sigmodel->p_earth->numphases);
+    exit(1);
+ }
+
+ return array;
 
 }
 
 
-static PyObject * py_score_world(SigModel_t * p_netmodel, PyObject * args)
+static void convert_eventobj_no_det(PyArrayObject * p_events_arrobj, 
+                             int numsites, int * p_numevents, Event_t ** p_p_events)
+{
+  Py_ssize_t numevents;
+  Event_t * p_events;
+  Py_ssize_t i;
+  
+  numevents = p_events_arrobj->dimensions[0];
+
+  p_events = (Event_t *)calloc(numevents, sizeof(*p_events));
+
+  for(i=0; i<numevents; i++)
+  {
+    Event_t * p_event;
+    
+    p_event = p_events + i;
+    
+    p_event->evlon = ARRAY2(p_events_arrobj, i, EV_LON_COL);
+    p_event->evlat = ARRAY2(p_events_arrobj, i, EV_LAT_COL);
+    p_event->evdepth = ARRAY2(p_events_arrobj, i, EV_DEPTH_COL);
+    p_event->evtime = ARRAY2(p_events_arrobj, i, EV_TIME_COL);
+    p_event->evmag = ARRAY2(p_events_arrobj, i, EV_MB_COL);
+
+  }
+  
+  *p_numevents = numevents;
+  *p_p_events = p_events;
+}
+
+
+static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args)
 {
   /* input arguments */
   PyArrayObject * p_events_arrobj;
-  PyObject * p_evlist_obj;
-  int verbose;
+  PyArrayObject * p_arrtimes_arrobj;
  
   int numevents;
   Event_t * p_events;
   double score;
   
-  if (!PyArg_ParseTuple(args, "O!O!i",
+  if (!PyArg_ParseTuple(args, "O!O!",
                         &PyArray_Type, &p_events_arrobj, 
-                        &PyList_Type, &p_evlist_obj, &verbose)
-      || !p_events_arrobj || !p_evlist_obj)
+                        &PyArray_Type, &p_arrtimes_arrobj)
+      || !p_events_arrobj || !p_arrtimes_arrobj)
     return NULL;
 
   if ((2 != p_events_arrobj->nd) || (NPY_DOUBLE 
@@ -153,15 +237,120 @@ static PyObject * py_score_world(SigModel_t * p_netmodel, PyObject * args)
     return NULL;
   }
 
-  convert_eventobj(p_events_arrobj, p_evlist_obj,
-                   EarthModel_NumSites(p_netmodel->p_earth),
-                   EarthModel_NumTimeDefPhases(p_netmodel->p_earth),
-                   p_netmodel->numdetections, p_netmodel->p_detections,
+  convert_eventobj_no_det(p_events_arrobj, EarthModel_NumSites(p_sigmodel->p_earth),
                    &numevents, &p_events);
   
-  score = score_world(p_sigmodel, numevents, p_events, verbose);
+  PyArrayObject * p_arrtimes = convert_arrtimes(p_sigmodel, (PyObject *)p_arrtimes_arrobj);
+
+  int verbose = 1;
+  score = score_world_sig(p_sigmodel, numevents, p_events, p_arrtimes, verbose);
   
   free_events(numevents, p_events);
   
   return Py_BuildValue("d", score);
 }
+
+/* ==== Make a Python Array Obj. from a PyObject, ================
+       generates a double vector w/ contiguous memory which may be a new allocation if
+       the original was not a double type or contiguous 
+    !! Must DECREF the object returned from this routine unless it is returned to the
+       caller of this routines caller using return PyArray_Return(obj) or
+       PyArray_BuildValue with the "N" construct   !!!
+  */
+  PyArrayObject *pyvector(PyObject *objin)  {
+      return (PyArrayObject *) PyArray_ContiguousFromObject(objin,
+          NPY_DOUBLE, 1,1);
+  }
+
+
+int print_signal(Signal_t * signal) {
+  int result = fprintf(stdout, "Signal: at station %d, channel %d (id %d), sampling rate %f, samples %d, start time %f, end time %f\n", 
+		       signal->siteid, 
+		       signal->chan, 
+		       signal->chanid, 
+		       signal->hz, 
+		       signal->len, 
+		       signal->start_time, 
+		       signal->start_time + (signal->len)/(signal->hz));
+  return result;
+}
+
+int ObsPyTrace_to_Signal(PyObject * p_trace, Signal_t * p_signal) {
+
+  // a trace object contains two members: data, a numpy array, and stats, a python dict.
+  PyObject * py_data =  PyObject_GetAttrString(p_trace, "data");
+  p_signal->py_array = pyvector(py_data);
+  p_signal->p_data = (double *) p_signal->py_array->data;  
+  p_signal->len = p_signal->py_array->dimensions[0];
+
+  PyObject * stats = PyObject_GetAttrString(p_trace, "stats");
+
+  PyObject * key = PyString_FromString("starttime_unix");
+  PyObject * py_start_time = PyDict_GetItem(stats, key);
+  Py_DECREF(key);
+  p_signal->start_time = PyFloat_AsDouble(py_start_time);
+ 
+  key = PyString_FromString("hz");
+  PyObject * py_hz = PyDict_GetItem(stats, key);
+  Py_DECREF(key);
+  p_signal->hz = PyFloat_AsDouble(py_hz);
+  
+  key = PyString_FromString("siteid");
+  PyObject * py_siteid = PyDict_GetItem(stats, key);
+  Py_DECREF(key);
+  p_signal->siteid = (int)PyInt_AsLong(py_siteid);
+
+  key = PyString_FromString("chanid");
+  PyObject * py_chanid = PyDict_GetItem(stats, key);
+  Py_DECREF(key);
+  p_signal->chanid = (int)PyInt_AsLong(py_chanid);
+
+  key = PyString_FromString("chan");
+  PyObject * py_chan = PyDict_GetItem(stats, key);
+  Py_DECREF(key);
+  char* chan_str = PyString_AsString(py_chan);
+  if (strcmp("BHZ", chan_str) == 0) {
+    p_signal->chan = CHAN_BHZ;
+  } else if (strcmp("BHE", chan_str) == 0) {
+    p_signal->chan = CHAN_BHE;
+  } else if (strcmp("BHN", chan_str) == 0) {
+    p_signal->chan = CHAN_BHN;
+  } else {
+    p_signal->chan = CHAN_OTHER;
+  }
+  
+  fprintf(stdout, "Converted ");
+  print_signal(p_signal);
+  return 0;
+}
+
+
+int traces_to_signals(PyObject * trace_list, Signal_t ** p_p_signals) {
+  
+  if(!PyList_Check(trace_list)) {
+    fprintf(stderr, "traces_to_signals: expected Python list!\n");
+    exit(1);
+  }
+
+  int n = PyList_Size(trace_list);
+  (*p_p_signals) = calloc(n, sizeof(Signal_t));
+
+  int i;
+  for (i=0; i < n; ++i) {
+    PyObject * p_trace = PyList_GetItem(trace_list, i);
+    ObsPyTrace_to_Signal(p_trace, (*p_p_signals) + i*sizeof(Signal_t) );
+  }
+
+  return i;
+}
+
+
+static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
+  PyObject * p_tracelist_obj;
+  if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
+    return NULL;
+
+  int n = traces_to_signals(p_tracelist_obj, &p_sigmodel->p_signals);
+  return Py_BuildValue("n", n);
+}
+

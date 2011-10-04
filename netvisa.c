@@ -167,7 +167,7 @@ static PyMethodDef EarthModel_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject py_EarthModel = {
+PyTypeObject py_EarthModel = {
     PyObject_HEAD_INIT(NULL)
     0,                                       /*ob_size*/
     "netvisa.EarthModel",                    /*tp_name*/
@@ -531,7 +531,7 @@ static void convert_eventobj(PyArrayObject * p_events_arrobj,
   *p_p_events = p_events;
 }
 
-static void free_events(int numevents, Event_t * p_events)
+void free_events(int numevents, Event_t * p_events)
 {
   int i;
   for (i=0; i<numevents; i++)

@@ -230,6 +230,9 @@ def fetch_waveform(station, chan, stime, etime):
     if waveform is None:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
                             % (station, chan, stime))
+
+    cursor.execute("select id from static_siteid where sta = '%s'" % (station))
+    siteid = cursor.fetchone()['id']
     
     # check the samprate is consistent for all waveforms in this interval
     assert(samprate is None or samprate == waveform['samprate'])
@@ -265,6 +268,9 @@ def fetch_waveform(station, chan, stime, etime):
   stats = {'network': station, 'station': station, 'location': '',
            'channel': chan, 'npts': len(data), 'sampling_rate': samprate,
            'mseed' : {'dataquality' : 'D'}}
+  stats['starttime_unix'] = stime
+  stats['siteid'] = int(siteid)
+  stats['chanid'] = int(waveform['chanid'])
   stats['starttime'] = UTCDateTime(stime)
   return Trace(data=np.array(data), header=stats)
 

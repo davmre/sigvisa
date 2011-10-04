@@ -1,0 +1,169 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy.optimize
+
+from obspy.core import Trace, Stream, UTCDateTime
+
+
+
+
+def learn(filename, options, earthmodel, traces, events, leb_evlist, detections, arid2num):
+    """
+    Find maximum-likelhood parameter estimates 
+    """
+
+    ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
+
+    f = open(filename, 'w')
+    f.write("5000 10\n")
+
+    learn_noise_params(f, traces, events, ttimes)
+    # learn_envelope_params(f, traces, events, ttimes)
+    
+    f.close()
+
+#def learn_envelope_params(traces, events, ttimes):
+#    ll = lambda (peak, decay): -1 * log_likelihood_complete(traces, events, ttimes, peak, decay)
+#    xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((5000, 1)), full_output=True)
+#    print "learned params: ", xopt
+#    print "give likelihood ", fopt
+#    self.envelope_peak_coeff = xopt[0]
+#    self.envelope_decay_coeff = xopt[1]
+    
+
+def expectation_over_noise(fn, traces, events, ttimes):
+    MAX_EVENT_LENGTH = 50 # seconds
+    
+    results = dict()
+    normalizer = dict()
+
+        # compute the expectation of some function over all the noisey parts of the signal
+    for trace in traces:
+        siteid = trace.stats["siteid"]
+        samprate = __samprate(trace.stats) # hz
+        max_event_samples = MAX_EVENT_LENGTH * samprate
+
+        if siteid not in ttimes.keys():
+            ttimes[siteid] = __nanlist(len(events))
+
+        prev_arrival_end = 0
+        if siteid not in normalizer.keys():
+            results[siteid] = 0
+            normalizer[siteid] = 0
+
+        compute_rel_atime = lambda (event, ttime): event[3] - trace.stats['starttime'].getTimeStamp() + ttime
+        rel_atimes = map(compute_rel_atime, zip(events, ttimes[siteid]))
+        sorted_by_atime = sorted(zip(rel_atimes, events, ttimes[siteid]), key = lambda triple: triple[0])
+
+        for (rel_atime, event, ttime) in sorted_by_atime:
+            if np.isnan(ttime):
+                continue
+
+            # everything within max_event_samples of the current
+            # arrival IN BOTH DIRECTIONS will be off limits, just
+            # for safety
+            arrival_i = int( (rel_atime - max_event_samples) * samprate )
+            if (arrival_i - prev_arrival_end) > 0:
+                    
+                results[siteid] = results[siteid] + np.sum(fn(trace.data[prev_arrival_end:arrival_i]))
+                normalizer[siteid] = normalizer[siteid] + (arrival_i-prev_arrival_end)
+                prev_arrival_end = arrival_i + max_event_samples*2
+
+
+        if prev_arrival_end == 0:
+            # if no arrivals recorded during this trace, we assume the whole thing is noise
+            results[siteid] = results[siteid] + np.sum(fn(trace.data[prev_arrival_end:], siteid))
+            normalizer[siteid] = normalizer[siteid] + len(trace.data)
+
+    for siteid in results.keys():
+        results[siteid] = results[siteid] / normalizer[siteid]
+    return results
+
+def learn_noise_params(filehandle, traces, events, ttimes):
+    expectation_f = lambda x, siteid: x
+    sta_noise_means = expectation_over_noise(expectation_f, traces, events, ttimes)
+        
+    variance_f = lambda x, siteid: (x - sta_noise_means[siteid])**2
+    sta_noise_vars = expectation_over_noise(variance_f, traces, events, ttimes)
+
+    filehandle.write(str(len(sta_noise_means)) + "\n")
+    for siteid in sta_noise_means.keys():
+        filehandle.write(str(siteid) + " " + str(sta_noise_means[siteid]) + " " + str(sta_noise_vars[siteid]) + "\n")
+
+
+def plot_envelope(trace, means, variances):
+    sta = trace.stats["station"]
+    chan = trace.stats["channel"]
+    npts = trace.stats["npts_processed"]
+    samprate = 1 / (trace.stats["window_size"]*trace.stats["overlap"])
+    siteid = trace.stats["siteid"]
+
+    start_time = trace.stats['starttime'].getTimeStamp()
+    timerange = np.arange(start_time, start_time+npts/samprate, 1.0/samprate)
+    plt.figure()
+    plt.suptitle("%s -- %s" % (sta, chan))
+    plt.xlabel("Time (s)")
+    
+    axes = plt.subplot(3, 1, 1)
+    plt.plot(timerange, trace.data)
+
+    plt.subplot(3, 1, 2, sharex=axes, sharey=axes)
+    plt.plot(timerange, means)
+    plt.ylabel("Envelope Mean")
+
+    plt.subplot(3, 1, 3, sharex=axes)
+    plt.plot(timerange, variances)
+    plt.ylabel("Envelope Variance")
+
+
+def ttimes_from_assoc(evlist, events, detections, arid2num):
+
+    ttimes = dict()
+
+    # generate reverse index, to save doing lots of searches
+    arid2siteid = dict()
+    for det in detections:
+        arid2siteid[int(det[1])] = int(det[0])
+
+    # we have a list of detections for each event. for each event,
+    # then, we go through, calculate the station corresponding to
+    # each detection, and then calculate the travel time that this
+    # implies from that event to that station. we then update the
+    # corresponding element of the travel time matrix that we're
+    # calculating.
+    for (evnum, event) in enumerate(evlist):
+        for (phaseid, detnum) in event:
+
+            # for now we're only going to concern ourselves with P arrivals
+                #if phaseid != 0:
+            #    continue
+            
+            arid = __reverse_conv(detnum, arid2num)
+            siteid = arid2siteid[arid]
+
+            event_time = events[evnum][3]
+            arrival_time = detections[detnum][2]
+            travel_time = arrival_time - event_time
+            
+            if siteid not in ttimes.keys():
+                ttimes[siteid] = __nanlist(len(evlist))
+            elif not np.isnan(ttimes[siteid][evnum]):
+                travel_time = np.amin((travel_time, ttimes[siteid][evnum]))
+                #print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
+                ttimes[siteid][evnum] = travel_time
+
+    return ttimes
+
+def __reverse_conv(num, xxx2num):
+    for (xxx, n) in xxx2num.viewitems():
+        if n == num:
+            return xxx
+    return None
+
+def __samprate(stats):
+    return 1 / (stats["window_size"]*stats["overlap"])
+
+def __nanlist(n):
+    l = np.empty((n, 1))
+    l[:] = np.NAN
+    return l

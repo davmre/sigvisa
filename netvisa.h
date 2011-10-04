@@ -1,9 +1,14 @@
+#ifndef NETVISA_INCLUDE
+#define NETVISA_INCLUDE
+
 #include <Python.h>
 /* we don't want _import_array defined in all files except the main
  * module of netvisa */
 #if !defined NETVISA_MAIN_MODULE
   #define NO_IMPORT_ARRAY
 #endif
+
+
 #define PY_ARRAY_UNIQUE_SYMBOL PyArray_API
 #include "numpy/arrayobject.h"
 
@@ -152,6 +157,7 @@ typedef struct NetModel_t
 (vector)[0] = (event)->evlon; (vector)[1] = (event)->evlat;\
 (vector)[2] = (event)->evdepth;} while(0)
 
+#define ARRAY3(arr,i,j,k) (*((double *)PyArray_GETPTR3(arr,i,j,k)))
 #define ARRAY2(arr,i,j) (*((double *)PyArray_GETPTR2(arr,i,j)))
 #define ARRAY1(arr,i) (*((double *)PyArray_GETPTR1(arr,i)))
 
@@ -212,6 +218,7 @@ typedef struct NetModel_t
 
 Event_t * alloc_event(NetModel_t * p_netmodel);
 void free_event(Event_t * p_event);
+void free_events(int numevents, Event_t * p_events);
 void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event);
 void print_event(const Event_t * p_event);
@@ -221,3 +228,5 @@ void convert_events_to_pyobj(const EarthModel_t * p_earth,
                              const Event_t ** pp_events, int numevents,
                              PyObject ** pp_eventsobj,
                              PyObject ** pp_evdetlistobj);
+
+#endif // NETVISA_INCLUDE

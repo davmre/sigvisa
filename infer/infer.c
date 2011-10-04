@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "../netvisa.h"
+#include "../sigvisa.h"
 
 #define DEBUG
 /*#define DEBUG2*/
@@ -1122,7 +1123,7 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
 
 
   /* allocate the world and initialize the user arguments */
-  p_world = alloc_world(p_sigmodel);
+  p_world = alloc_world_sigvisa(p_sigmodel);
   p_world->runid = runid;
   p_world->numsamples = numsamples;
   p_world->birthsteps = birthsteps;
@@ -1133,12 +1134,13 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   p_world->verbose = verbose;
   p_world->write_events_cb = write_events_cb;
   
-  infer_sig(p_sigmodel, p_world, traces);
+  // TODO: write inference
+  //infer_sig(p_sigmodel, p_world, traces);
 
   /* convert the world to python structures */
-  convert_events_to_pyobj(p_netmodel->p_earth,
-                          (const Event_t **)p_world->pp_events,
-                          p_world->high_evnum, &eventsobj, &evdetlistobj);
+  //convert_events_to_pyobj(p_netmodel->p_earth,
+  //                        (const Event_t **)p_world->pp_events,
+  //                        p_world->high_evnum, &eventsobj, &evdetlistobj);
   
   free_world(p_world);
 

@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 from optparse import OptionParser
 
 from database.dataset import *
+from database import db
 
+import priors.SignalPrior
 import priors.NumSecDetPrior
 import priors.NumEventPrior
 import priors.EventLocationPrior
@@ -18,7 +20,8 @@ import priors.ArrivalPhasePrior
 import priors.ArrivalSNR
 import priors.ArrivalAmplitudePrior
 
-import netvisa, sigvisa
+
+import netvisa, sigvisa, sigvisa_util
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
   model = netvisa.EarthModel(sites, phasenames, phasetimedef,
@@ -57,13 +60,18 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
   
   return model
 
-def load_sigvisa(param_dirname, start_time, end_time, detections, site_up,
-                 sites, siteids, phasenames, phasetimedef):
+def load_sigvisa(param_dirname, start_time, end_time, site_up,
+                 sites, phasenames, phasetimedef):
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
-  netmodel = load_netvisa(param_dirname, start_time, end_time, detections, site_up,
-                 sites, phasenames, phasetimedef)
 
-  sigmodel = sigvisa.SigModel(start_time, end_time, earthmodel, netmodel, siteids)
+  sigmodel = sigvisa.SigModel(earthmodel, 
+                              start_time, end_time,
+                              os.path.join(param_dirname, "NumEventPrior.txt"),
+                              os.path.join(param_dirname, "EventLocationPrior.txt"),
+                              os.path.join(param_dirname, "EventMagPrior.txt"),
+                              os.path.join(param_dirname, "ArrivalTimePrior.txt"),
+                              os.path.join(param_dirname, "SignalPrior.txt")
+                              )
   return sigmodel
 
 def main(param_dirname):
@@ -83,6 +91,9 @@ def main(param_dirname):
   parser.add_option("-i", "--visa_leb_runid", dest="visa_leb_runid",
                     default=None, help = "Visa runid to be treated as leb",
                     metavar="RUNID")
+  parser.add_option("--sigvisa", dest="sigvisa", default=False,
+                    action = "store_true",
+                    help = "load waveforms and train signal prior (False)")
   (options, args) = parser.parse_args()
 
   if options.quick:
@@ -90,14 +101,26 @@ def main(param_dirname):
   else:
     hours = None
   
+  if options.sigvisa:
+    hours=1
+    print "learning signal parameters from %d hour of data" % (hours)
+
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
+         sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
          = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid)
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
   leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
                                        leb_evlist)
+
+  if options.sigvisa:
+    cursor = db.connect().cursor()
+    energies = sigvisa_util.load_and_process_traces(cursor, start_time=1237680000, end_time=1237683600, window_size=1, overlap=0.5)
+    priors.SignalPrior.learn(os.path.join(param_dirname,
+                                          "SignalPrior.txt"),
+                             options, earthmodel, energies, leb_events, leb_evlist, detections, arid2num)
+    return
 
   priors.NumSecDetPrior.learn(os.path.join(param_dirname, "NumSecDetPrior.txt"),
                               leb_seclist)
@@ -155,6 +178,8 @@ def main(param_dirname):
                                                   "ArrivalAmplitudePrior.txt"),
                                      options, earthmodel, detections,
                                      leb_events, leb_evlist)
+
+
 
   if options.gui:
     plt.show()
