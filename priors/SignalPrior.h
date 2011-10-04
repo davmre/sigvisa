@@ -9,7 +9,7 @@ typedef struct SignalPrior_t
 
 } SignalPrior_t;
 
-void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename);
+void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites);
 
 double SignalPrior_LogProb(SignalPrior_t * prior, int numsignals, Signal_t * p_signals, EarthModel_t * p_earth, int numevents, Event_t * events, PyArrayObject * arrtimes);
 

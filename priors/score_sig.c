@@ -54,7 +54,8 @@ double score_world_sig(SigModel_t * p_sigmodel,
   sigsc = SignalPrior_LogProb(&p_sigmodel->sig_prior, numsignals, p_signals, p_sigmodel->p_earth, numevents, p_events, arrtimes);
   
 
-  double score = numsc + locsc + magsc + atimesc + sigsc;
 
+  double score = numsc + locsc + magsc + atimesc + sigsc;
+  fprintf(stdout, "score is %lf + %lf + %lf + %lf + %lf = %lf\n", numsc, locsc, magsc, atimesc, sigsc, score);
   return score;
 }

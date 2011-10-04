@@ -5,7 +5,7 @@
 
 #include "../sigvisa.h"
 
-void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename) {
+void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites) {
   
   FILE * fp;
 
@@ -23,35 +23,42 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename) {
     exit(1);
   }
 
-  if (1 != fscanf(fp, "%d\n", &prior->numsites))
-  {
-    fprintf(stderr, "error reading num sites from %s\n", filename);
-    exit(1);
-  }
-  
+  prior->numsites = numsites;  
   prior->p_station_noise_means = (double *) calloc(prior->numsites,
                                               sizeof(double));
   prior->p_station_noise_vars = (double *) calloc(prior->numsites,
                                               sizeof(double));
+  int numentries;
+  if (1 != fscanf(fp, "%d\n", &numentries))
+  {
+    fprintf(stderr, "error reading num entries from %s\n", filename);
+    exit(1);
+  }
 
-  for (int i=0; i < prior->numsites; ++i) {
+  for (int i=0; i < numentries; ++i) {
     int siteid;
     double mean, var;
-    if (2 != fscanf(fp, "%d %lf %lf\n", &siteid, &mean, &var))
+    if (3 != fscanf(fp, "%d %lf %lf\n", &siteid, &mean, &var))
       {
 	fprintf(stderr, "error reading mean and variance for site %d from %s\n", i, filename);
 	exit(1);
       }
+    
+    fprintf(stdout, "%d: loaded %d %lf %lf\n", i, siteid, mean, var);
     prior->p_station_noise_means[siteid] = mean;
     prior->p_station_noise_vars[siteid] = var;
   }
 
   fclose(fp);
+  fflush(stdout);
 }
 
-double time2idx(double t, double start_time, double hz) {
+long time2idx(double t, double start_time, double hz) {
   double delta_t = t - start_time;
-  return round(delta_t * hz);
+  long result = lround(delta_t * hz);
+
+  //fprintf(stdout, "time2idx: %lf %lf %lf = %ld\n", t, start_time, hz, result);
+  return result;
 }
 
 double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) {
@@ -91,62 +98,39 @@ void phase_env(SignalPrior_t * prior,
   *t = len;
 }
 
-int add_signals(double * dest, int dest_len, double * source, int source_len, int offset) {
+int add_signals(double * dest, long dest_len, double * source, long source_len, long offset) {
   
-  int max_i = dest_len - offset;
-  int i;
+  long max_i = dest_len - offset;
+  long i;
+
+  //fprintf(stdout, " dest len %ld, source len %ld, offset %ld, max i %ld\n", dest_len, source_len, offset, max_i);
+
   for (i=0; (i < source_len) && (i < max_i); ++i) {
+    if (offset + i < 0 || offset+i > dest_len || i < 0 || i > source_len) continue;
     dest[offset+i] = dest[offset+i] + source[i];
   }
-
   return i;
 }
 
-double * envelope_means(SignalPrior_t * prior, 
+void envelope_means_vars(SignalPrior_t * prior, 
 			Signal_t * p_signal, 
 			EarthModel_t * p_earth, 
 			int numevents, 
 			Event_t * events, 
 			PyArrayObject * arrtimes,
-			int siteid) {
+			 int siteid,
+			 double ** p_p_means,
+			 double ** p_p_vars) {
   
-  double * p_means = (double *) calloc(p_signal->len, sizeof(double));
+  (*p_p_means) = (double *) calloc(p_signal->len, sizeof(double));
+  double *p_means = (*p_p_means);
+  (*p_p_vars) = (double *) calloc(p_signal->len, sizeof(double));
+  double *p_vars = (*p_p_vars);
+
   double noise_mean = prior->p_station_noise_means[p_signal->siteid];
-  for (int i=0; i < p_signal->len; ++i) {
-    p_means[i] = noise_mean;
-  }
-
-  for (int i=0; i < numevents; ++i) {
-    // for (int phaseid = 0; phaseid < p_earth->num_phases; ++phaseid) {
-    
-    int phaseid = 0; /* TODO: work with multiple phases */
-    double arrtime = ARRAY3(arrtimes, siteid, i, phaseid);
-
-    double * p_envelope;
-    int len;
-    phase_env(prior, p_earth, events + i*sizeof(Event_t), p_signal->hz, siteid, phaseid, &p_envelope, &len);
-    
-    add_signals(p_means, p_signal->len, p_envelope, len, time2idx(arrtime, p_signal->start_time, p_signal->hz));
-      
-    free(p_envelope);
-    //}
-  }
-  
-  return p_means;
-
-}
-
-double * envelope_vars(SignalPrior_t * prior, 
-		       Signal_t * p_signal, 
-		       EarthModel_t * p_earth, 
-		       int numevents, 
-		       Event_t * events, 
-		       PyArrayObject * arrtimes,
-		       int siteid) {
-  
-  double * p_vars = (double *) calloc(p_signal->len, sizeof(double));
   double noise_var = prior->p_station_noise_vars[p_signal->siteid];
   for (int i=0; i < p_signal->len; ++i) {
+    p_means[i] = noise_mean;
     p_vars[i] = noise_var;
   }
 
@@ -155,36 +139,39 @@ double * envelope_vars(SignalPrior_t * prior,
     
     int phaseid = 0; /* TODO: work with multiple phases */
     double arrtime = ARRAY3(arrtimes, siteid, i, phaseid);
-    
+    if (arrtime < 0) continue;
+
     double * p_envelope;
     int len;
-    phase_env(prior, p_earth, events + i*sizeof(Event_t), p_signal->hz, siteid, phaseid, &p_envelope, &len);
+    phase_env(prior, p_earth, events + i, p_signal->hz, siteid, phaseid, &p_envelope, &len);
     
-    add_signals(p_vars, p_signal->len, p_envelope, len, time2idx(arrtime, p_signal->start_time, p_signal->hz));
+    add_signals(p_means, p_signal->len, p_envelope, len, lround(time2idx(arrtime, p_signal->start_time, p_signal->hz)));
+    add_signals(p_vars, p_signal->len, p_envelope, len, lround(time2idx(arrtime, p_signal->start_time, p_signal->hz)));
       
     free(p_envelope);
     //}
   }
   
-  return p_vars;
-
 }
-
 
 double SignalPrior_LogProb(SignalPrior_t * prior, int numsignals, Signal_t * p_signals, EarthModel_t * p_earth, int numevents, Event_t * events, PyArrayObject * arrtimes) {
   
   double lp = 0;
-
+  Signal_t * p_signal = p_signals;
   for (int i=0; i < numsignals; ++i) {
-    Signal_t * p_signal = p_signals+i*sizeof(Signal_t);
-    
-    double * p_means = envelope_means(prior, p_signal, p_earth, numevents, events, arrtimes, i);
-    double * p_vars = envelope_vars(prior, p_signal, p_earth, numevents, events, arrtimes, i);
+    print_signal(p_signal);
 
+    double * p_means, * p_vars;
+    envelope_means_vars(prior, p_signal, p_earth, numevents, events, arrtimes, p_signal->siteid, &p_means, &p_vars);
+
+    
     lp += indep_Gaussian_LogProb(p_signal->len, p_signal->p_data, p_means, p_vars);
+    fprintf(stdout, "lp is %lf\n", lp);
 
     free(p_means);
     free(p_vars);
+
+    p_signal++;
   }
 
   return lp;

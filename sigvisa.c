@@ -82,7 +82,7 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arrtime_fname;
   const char * sig_fname;
   
-  if (!PyArg_ParseTuple(args, "O!ddsssss", &py_EarthModel, &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &sig_fname))
+  if (!PyArg_ParseTuple(args, "Oddsssss", &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &sig_fname))
     return -1;
   
   if (end_time <= start_time)
@@ -107,7 +107,8 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
   EventMagPrior_Init_Params(&self->event_mag_prior, 1, evmag_fname);
   ArrivalTimeJointPrior_Init_Params(&self->arr_time_joint_prior, arrtime_fname);
-  SignalPrior_Init_Params(&self->sig_prior, sig_fname);
+  SignalPrior_Init_Params(&self->sig_prior, sig_fname, p_earth->numsites);
+  fflush(stdout);
 
   return 0;
 }
@@ -144,7 +145,7 @@ static void py_sig_model_dealloc(SigModel_t * self)
   }
   
   for (int i=0; i < self->numsignals; ++i) {
-    free_signal((self->p_signals + i*sizeof(Signal_t)));
+    free_signal((self->p_signals + i));
   }
   free(self->p_signals);
 
@@ -172,10 +173,12 @@ static PyArrayObject * convert_arrtimes(SigModel_t *p_sigmodel, PyObject * p_arr
     exit(1);
  }
 
-if (array->dimensions[2] != p_sigmodel->p_earth->numphases) {
+
+ // TODO: make phases work
+ /*if (array->dimensions[2] != p_sigmodel->p_earth->numphases) {
   fprintf(stderr, "arrtimes: third dimension %d does not match the number of phases (%d)\n", (int) (array->dimensions[2]), p_sigmodel->p_earth->numphases);
     exit(1);
- }
+    }*/
 
  return array;
 
@@ -258,8 +261,8 @@ static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args)
        PyArray_BuildValue with the "N" construct   !!!
   */
   PyArrayObject *pyvector(PyObject *objin)  {
-      return (PyArrayObject *) PyArray_ContiguousFromObject(objin,
-          NPY_DOUBLE, 1,1);
+      return (PyArrayObject *) PyArray_ContiguousFromAny(objin,
+          NPY_DOUBLE, 1,2);
   }
 
 
@@ -279,22 +282,38 @@ int ObsPyTrace_to_Signal(PyObject * p_trace, Signal_t * p_signal) {
 
   // a trace object contains two members: data, a numpy array, and stats, a python dict.
   PyObject * py_data =  PyObject_GetAttrString(p_trace, "data");
-  p_signal->py_array = pyvector(py_data);
-  p_signal->p_data = (double *) p_signal->py_array->data;  
-  p_signal->len = p_signal->py_array->dimensions[0];
+  if (py_data == NULL) {
+    fprintf(stderr, "error: py_data is null!\n");
+    exit(1);
+  }
 
+  
+
+  /*  fprintf(stdout, "py_data is an array with depth %d and dimension %d x %d\n", 
+	  ((PyArrayObject *)py_data)->nd,
+	  ((PyArrayObject *)py_data)->dimensions[0],  
+	  ((PyArrayObject *)py_data)->dimensions[1]); */
+
+  p_signal->py_array = pyvector(py_data);
+  Py_INCREF(p_signal->py_array);
+  Py_DECREF(py_data);
+  CHECK_ERROR
+
+  p_signal->p_data = (double *) p_signal->py_array->data;  
+  p_signal->len = PyArray_SIZE(p_signal->py_array);
+  
   PyObject * stats = PyObject_GetAttrString(p_trace, "stats");
 
   PyObject * key = PyString_FromString("starttime_unix");
   PyObject * py_start_time = PyDict_GetItem(stats, key);
   Py_DECREF(key);
   p_signal->start_time = PyFloat_AsDouble(py_start_time);
- 
-  key = PyString_FromString("hz");
+
+  key = PyString_FromString("sampling_rate");
   PyObject * py_hz = PyDict_GetItem(stats, key);
   Py_DECREF(key);
   p_signal->hz = PyFloat_AsDouble(py_hz);
-  
+
   key = PyString_FromString("siteid");
   PyObject * py_siteid = PyDict_GetItem(stats, key);
   Py_DECREF(key);
@@ -304,8 +323,9 @@ int ObsPyTrace_to_Signal(PyObject * p_trace, Signal_t * p_signal) {
   PyObject * py_chanid = PyDict_GetItem(stats, key);
   Py_DECREF(key);
   p_signal->chanid = (int)PyInt_AsLong(py_chanid);
+  CHECK_ERROR
 
-  key = PyString_FromString("chan");
+  key = PyString_FromString("channel");
   PyObject * py_chan = PyDict_GetItem(stats, key);
   Py_DECREF(key);
   char* chan_str = PyString_AsString(py_chan);
@@ -317,10 +337,10 @@ int ObsPyTrace_to_Signal(PyObject * p_trace, Signal_t * p_signal) {
     p_signal->chan = CHAN_BHN;
   } else {
     p_signal->chan = CHAN_OTHER;
-  }
+    }
   
-  fprintf(stdout, "Converted ");
-  print_signal(p_signal);
+  /*fprintf(stdout, "Converted ");
+    print_signal(p_signal);*/
   return 0;
 }
 
@@ -338,8 +358,13 @@ int traces_to_signals(PyObject * trace_list, Signal_t ** p_p_signals) {
   int i;
   for (i=0; i < n; ++i) {
     PyObject * p_trace = PyList_GetItem(trace_list, i);
-    ObsPyTrace_to_Signal(p_trace, (*p_p_signals) + i*sizeof(Signal_t) );
+    ObsPyTrace_to_Signal(p_trace, (*p_p_signals) + i);
   }
+
+  
+  /*for (i=0; i < n; ++i) {
+    print_signal((*p_p_signals) + i);
+    }*/
 
   return i;
 }
@@ -351,6 +376,8 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
     return NULL;
 
   int n = traces_to_signals(p_tracelist_obj, &p_sigmodel->p_signals);
+  p_sigmodel->numsignals = n;
+  
   return Py_BuildValue("n", n);
 }
 

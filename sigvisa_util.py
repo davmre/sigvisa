@@ -13,7 +13,7 @@ import utils.waveform
 import netvisa, learn
 
 
-def arrtime_point_matrix(numsites, events, numphases):
+def arrtime_point_matrix(numsites, events, numphases, earthmodel):
     arrtimes = np.zeros((numsites, len(events), numphases))
         
     for siteid in range(numsites):
@@ -25,7 +25,8 @@ def arrtime_point_matrix(numsites, events, numphases):
 
             for phaseid in range(numphases):
                 arrtimes[siteid,eventid,phaseid] = earthmodel.ArrivalTime(lat, lon, depth, evtime, phaseid, siteid)
-    return ttimes
+                #print "setting %d, %d, %d = %f" % (siteid,eventid,phaseid,arrtimes[siteid,eventid,phaseid])
+    return arrtimes
     
 def window_energies(trace, window_size=1, overlap=0.5):
   """
@@ -134,6 +135,7 @@ def main():
     # read traces for each station
     cursor = db.connect().cursor()
     energies = load_and_process_traces(cursor, options.start_time, options.end_time, options.window_size, options.overlap)
+    print "loaded energies"
 
     # load earth and net models
     # read the detections and uptime
@@ -145,16 +147,23 @@ def main():
     sites = dataset.read_sites(cursor)
     phasenames, phasetimedef = dataset.read_phases(cursor)
     assert(len(phasenames) == len(phasetimedef))
+    print "loaded other info from DB, now loading earth model..."
 
+    earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
+
+    print "now loading sigvisa..."
     sm = learn.load_sigvisa("parameters",
                                 options.start_time, options.end_time,
                                 site_up, sites, phasenames, phasetimedef)
     
+    print "sigvisa loaded, setting signals"
     sm.set_signals(energies)
+    print "signals set, reading events and shit"
 
     # read appropriate event set (e.g. netvisa)
     MAX_TRAVEL_TIME = 2000
     earliest_event_time = options.start_time - MAX_TRAVEL_TIME
+    print "really reading events"
     events, orid2num = dataset.read_events(cursor, earliest_event_time, options.end_time, options.event_set, options.runid)
     print "loaded ", len(events), " events."
     
@@ -163,11 +172,12 @@ def main():
     print "loaded associations for ", len(events), " events."
 
     # calculate likelihood
-    arrtimes = sm.arrtime_point_matrix(len(siteids.values()), events, 1)
+    arrtimes = arrtime_point_matrix(len(sites), events, 1, earthmodel)
 #   assoc_ttimes = sm.ttimes_from_assoc(evlist, events, detections, arid2num)
 
     #sm.learn(energies, events, assoc_ttimes)
-
+    print "scoring world!"
+    print arrtimes[0, 0, 0]
     ll = sm.score_world(events, arrtimes)
     print "log-likelihood is ", ll
 

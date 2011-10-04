@@ -11,6 +11,8 @@
 #define CHAN_BHZ    2
 #define CHAN_OTHER  3
 
+#define CHECK_ERROR if(PyErr_Occurred()) { PyErr_Print(); exit(1); }
+
 typedef struct Signal_t
 {
 
@@ -30,6 +32,8 @@ typedef struct Signal_t
 
 #include "priors/ArrivalTimeJointPrior.h"
 #include "priors/SignalPrior.h"
+
+int print_signal(Signal_t * signal);
 
 typedef struct SigModel_t
 {
