@@ -32,12 +32,19 @@ double ArrivalTimeJointPrior_LogProb(const ArrivalTimeJointPrior_t * prior,
 	double pred_arrtime = EarthModel_ArrivalTime(p_earth, event->evlon, event->evlat, event->evdepth, event->evtime, phaseid, siteid);
 
 	double arrtime = ARRAY3(arrtimes, siteid, i, phaseid);
-	log_prob += ArrivalTimePrior_LogProb(&(prior->single_prior), 
+
+	if (arrtime == -1 || pred_arrtime == -1) {
+	  continue;
+	}
+
+	double ll = ArrivalTimePrior_LogProb(&(prior->single_prior), 
 					     arrtime, 
 					     pred_arrtime, 
 					     0, 
 					     siteid, 
 					     phaseid);
+	log_prob += ll;
+
 	// }
     }
   }

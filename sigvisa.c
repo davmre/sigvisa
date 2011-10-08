@@ -130,12 +130,6 @@ void initsigvisa(void)
   PyModule_AddObject(m, "SigModel", (PyObject *)&py_sig_model);
 }
 
-
-void free_signal(Signal_t * signal) {
-  Py_DECREF(signal->py_array);
-  free(signal);
-}
-
 static void py_sig_model_dealloc(SigModel_t * self)
 {
   if (self->p_earth)
@@ -145,7 +139,7 @@ static void py_sig_model_dealloc(SigModel_t * self)
   }
   
   for (int i=0; i < self->numsignals; ++i) {
-    free_signal((self->p_signals + i));
+    Py_DECREF((self->p_signals+i)->py_array);
   }
   free(self->p_signals);
 
@@ -309,10 +303,16 @@ int ObsPyTrace_to_Signal(PyObject * p_trace, Signal_t * p_signal) {
   Py_DECREF(key);
   p_signal->start_time = PyFloat_AsDouble(py_start_time);
 
-  key = PyString_FromString("sampling_rate");
-  PyObject * py_hz = PyDict_GetItem(stats, key);
+  key = PyString_FromString("window_size");
+  PyObject * py_window_size = PyDict_GetItem(stats, key);
   Py_DECREF(key);
-  p_signal->hz = PyFloat_AsDouble(py_hz);
+  double window_size = PyFloat_AsDouble(py_window_size);
+  key = PyString_FromString("overlap");
+  PyObject * py_overlap = PyDict_GetItem(stats, key);
+  Py_DECREF(key);
+  double overlap = PyFloat_AsDouble(py_overlap);
+  p_signal->hz = 1.0 / (window_size * overlap);
+
 
   key = PyString_FromString("siteid");
   PyObject * py_siteid = PyDict_GetItem(stats, key);

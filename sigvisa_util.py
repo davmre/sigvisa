@@ -25,7 +25,6 @@ def arrtime_point_matrix(numsites, events, numphases, earthmodel):
 
             for phaseid in range(numphases):
                 arrtimes[siteid,eventid,phaseid] = earthmodel.ArrivalTime(lat, lon, depth, evtime, phaseid, siteid)
-                #print "setting %d, %d, %d = %f" % (siteid,eventid,phaseid,arrtimes[siteid,eventid,phaseid])
     return arrtimes
     
 def window_energies(trace, window_size=1, overlap=0.5):

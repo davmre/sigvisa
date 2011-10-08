@@ -5,6 +5,8 @@
 
 #include "../sigvisa.h"
 
+#define MAX_ENV_LENGTH 100
+
 void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites) {
   
   FILE * fp;
@@ -61,9 +63,9 @@ void vector_times_scalar_inplace(int n, double * vector, double scalar) {
 
 void print_vector(int n, double * vector) {
   for(int i=0; i < n; ++i) {
-    fprintf(stdout, "%lf ", *(vector++));
+    if (i == 0 || vector[i] != vector[i-1])
+      fprintf(stdout, "%d %lf \n", i, vector[i]);
   }
-  fprintf(stdout, "\n");
 }
 
 long time2idx(double t, double start_time, double hz) {
@@ -152,15 +154,25 @@ void envelope_means_vars(SignalPrior_t * prior,
     
     int phaseid = 0; /* TODO: work with multiple phases */
     double arrtime = ARRAY3(arrtimes, siteid, i, phaseid);
-    if (arrtime < 0) continue;
+    //if (arrtime < 0) continue;
+    
+    long idx = time2idx(arrtime, p_signal->start_time, p_signal->hz);
+    if (idx < 0 - MAX_ENV_LENGTH * p_signal->hz || idx >= p_signal->len) {
+      //      fprintf(stdout, "   skipping event w/ arrtime %lf (from st %lf) and base_t = %ld ( vs len %d) ...\n", arrtime, (*(events+i)).evtime, idx, p_signal->len);      
+      continue;
+    } else {
+      //      print_event(events+i);
+      // fprintf(stdout, "  event w/ arrtime %lf (from st %lf) and base_t = %ld\n", arrtime, (*(events+i)).evtime, idx);     
+    }
+
 
     double * p_envelope;
     int len;
     phase_env(prior, p_earth, events + i, p_signal->hz, siteid, phaseid, &p_envelope, &len);
     
-    add_signals(p_means, p_signal->len, p_envelope, len, lround(time2idx(arrtime, p_signal->start_time, p_signal->hz)));
+    add_signals(p_means, p_signal->len, p_envelope, len, idx);
     vector_times_scalar_inplace(len, p_envelope, 0.5);
-    add_signals(p_vars, p_signal->len, p_envelope, len, lround(time2idx(arrtime, p_signal->start_time, p_signal->hz)));
+    add_signals(p_vars, p_signal->len, p_envelope, len, idx);
       
     free(p_envelope);
     //}
@@ -169,20 +181,26 @@ void envelope_means_vars(SignalPrior_t * prior,
   
 }
 
+double vector_sum(int n, double * vector) {
+  double result = 0;
+  for (int i=0; i < n; ++i) {
+    result += *(vector++);
+  }
+  return result;
+}
+
 double SignalPrior_LogProb(SignalPrior_t * prior, int numsignals, Signal_t * p_signals, EarthModel_t * p_earth, int numevents, Event_t * events, PyArrayObject * arrtimes) {
   
   double lp = 0;
   Signal_t * p_signal = p_signals;
   for (int i=0; i < numsignals; ++i) {
-    print_signal(p_signal);
+    //print_signal(p_signal);
 
     double * p_means, * p_vars;
     envelope_means_vars(prior, p_signal, p_earth, numevents, events, arrtimes, p_signal->siteid, &p_means, &p_vars);
 
-    
     double tr_lp =  indep_Gaussian_LogProb(p_signal->len, p_signal->p_data, p_means, p_vars);
     lp += tr_lp;
-    fprintf(stdout, "trace %d , wavell is %lf, overall %lf\n", i, tr_lp, lp);
 
     free(p_means);
     free(p_vars);

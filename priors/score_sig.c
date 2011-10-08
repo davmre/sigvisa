@@ -28,7 +28,11 @@ double score_world_sig(SigModel_t * p_sigmodel,
 
   if (verbose)
   {
-    printf ("%d events:\n", numevents);
+    printf ("%d events: \n", numevents);
+    for (int i=0; i < numevents; ++i) {
+      Event_t * e = p_events + i;
+      printf (" event %d lon %lf lat %lf depth %lf time %lf mag %lf\n", i, e->evlon, e->evlat, e->evdepth, e->evtime, e->evmag);
+    }
   }
   
   /* p(events, ttimes | signals) \propto p(signals | events, ttimes)p(ttimes|events)p(events)  */
