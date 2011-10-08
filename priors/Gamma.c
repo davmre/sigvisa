@@ -1,6 +1,6 @@
 #include <math.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 #ifndef M_PI
  #define M_PI           ((double) 3.14159265358979323846)

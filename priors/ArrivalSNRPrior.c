@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 void ArrivalSNRPrior_Init_Params(ArrivalSNRPrior_t * prior,
                                    const char * filename)

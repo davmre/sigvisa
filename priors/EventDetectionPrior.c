@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 #define SKIP_TO_CHAR(fp, ch) while(fgetc(fp) != (ch))
 

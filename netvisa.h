@@ -106,10 +106,6 @@ typedef struct NetModel_t
   
 } NetModel_t;
 
-#include "priors/score.h"
-#include "infer/infer.h"
-#include "infer/propose.h"
-
 #define UPTIME_QUANT     3600                /* 1 hour */
 
 #define NetModel_IsSiteUp(p_netmodel, siteid, arrtime)\

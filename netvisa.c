@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #define NETVISA_MAIN_MODULE
-#include "netvisa.h"
+#include "sigvisa.h"
 
 static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);

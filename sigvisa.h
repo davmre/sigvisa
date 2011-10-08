@@ -71,6 +71,10 @@ typedef struct SigModel_t
 
 #include "priors/score_sig.h"
 
+#include "priors/score.h"
+#include "infer/infer.h"
+#include "infer/propose.h"
+
 #define MAX_EVENT_RATE 1
 
 #endif // SIGVISA_INCLUDE

@@ -1,7 +1,7 @@
 #include <math.h>
 #include <stdlib.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 /*
   returns log( exp(logval1) + exp(logval2) )

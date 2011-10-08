@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 #define UNIF_FALSE 0.1          /* uniform prior on false amplitude */
 

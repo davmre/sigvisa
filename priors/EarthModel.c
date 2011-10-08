@@ -3,7 +3,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 /* CONSTANTS */
 

@@ -1,4 +1,4 @@
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 #include <math.h>
 

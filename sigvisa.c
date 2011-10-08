@@ -18,9 +18,9 @@ static PyMethodDef SigModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
    "score_world(events, arrtimes, verbose) "
    "-> log probability\n"},
-  /*{"infer", (PyCFunction)py_infer, METH_VARARGS,
-   "infer(runid, numsamples, window, step, threads, propose_events, verbose,"
-   "write_cb)\n -> events, ev_detlist"},
+  {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
+   "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
+   "write_cb)\n -> events, ev_detlist"},/*
   {"propose", (PyCFunction)py_propose, METH_VARARGS,
    "propose(time_low, time_high, det_low, det_high, degree_step, num_step)\n"
    " -> events, ev_detlist"},*/

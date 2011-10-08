@@ -6,7 +6,7 @@
 
 #include <pthread.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 #include "quickselect.h"
 
 #define BUCKET(lonidx, latidx, timeidx) \

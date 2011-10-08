@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 void EventMagPrior_Init_Params(EventMagPrior_t * prior, int nparams,
                                const char * filename)

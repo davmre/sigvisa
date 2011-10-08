@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "../netvisa.h"
+#include "../sigvisa.h"
 
 
 void NumFalseDetPrior_Init_Params(NumFalseDetPrior_t * prior,
