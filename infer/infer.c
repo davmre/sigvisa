@@ -4,8 +4,9 @@
 #include <assert.h>
 #include <time.h>
 
-#include "../netvisa.h"
 #include "../sigvisa.h"
+#include "../netvisa.h"
+
 
 #define DEBUG
 /*#define DEBUG2*/
@@ -52,84 +53,6 @@
       (p_event)->evmag = 2 * MAX_MAGNITUDE - (p_event)->evmag;          \
   } while(0)
 
-typedef struct World_t
-{
-
-  /* are we doing inference from signal data (SIGVISA)? */
-  int sigvisa;
-
-  /* the inferred events, events be store in ascending order of time */
-  int maxevents;
-  Event_t ** pp_events;
-  
-  /* events below this number will not be modified since any detection
-   * at low_detnum or higher couldn't have been caused by those below
-   * low_evnum
-   */
-  int low_evnum;
-  
-  /* the maximum number of events in the world */
-  int high_evnum;
-  
-  /* the minimum time that we will hypothesize for new events */
-  double low_evtime;
-
-  /* the maximum time that we will hypothesize events */
-  double high_evtime;
-  
-  /* NETVISA ONLY: this is the earliest detection which could have
-   * affected a new event  */
-  int low_detnum; 
-
-  /* NETVISA ONLY: detections above this will not be looked at since
-   * they couldn't have been caused by any event currently being
-   * hypothesized high_detnum are all detections below high_evtime +
-   * MAX_TRAVEL_TIME */
-  int high_detnum; 
-
-  /*
-
-  low_evnum             low_evtime  high_evnum   high_evtime
-     |                      |           |          |
-     |                      |           |          |
-     v                      v           v          v
-     <-- MAX_TRAVEL_TIME --> <--  WINDOW_SIZE   --> <-- MAX_TRAVEL_TIME -->
-                            ^                                              ^
-                            |                                              |
-                            |                                              |
-                        low_detnum                                  high_detnum
-                                                                              
-    The window will move forward in units of WINDOW_STEP                      
-
-  */
-
-  int inv_detnum;           /* NETVISA ONLY: detection number to be
-			       inverted next */
-  int inv_detnum_wrap;          /* NETVISA ONLY: wrap around inverting
-				   detections */
-  int drop_evnum;                /* event number to be dropped next */
-  int write_evnum;               /* event number to be written next */
-  
-  double world_score;
-  int ev_orid_sequence;
-
-  /* Cached proposed events */
-  Event_t ** pp_prop_events;
-  int num_prop_events;
-  double max_prop_evtime;
-
-  /* static entries */
-  int runid;
-  PyObject * traces;
-  int numsamples;
-  int birthsteps;
-  int window;
-  int step;
-  int numthreads;
-  PyObject * propose_eventobj;
-  int verbose;
-  PyObject * write_events_cb;
-} World_t;
 
 static void insert_event(NetModel_t * p_netmodel,
                          World_t * p_world, Event_t * p_event)
@@ -318,6 +241,95 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
     {
       Event_t * p_event = alloc_event(p_netmodel);
       copy_event(p_netmodel, p_event, p_world->pp_prop_events[i]);
+      pp_events[numevents ++] = p_event;
+    }
+  }
+
+  if (p_world->verbose)
+  {
+    printf("initial window: %d events ela %ds\n", numevents, (int) t1);
+
+    for (i=0; i<numevents; i++)
+    {
+      Event_t * p_event;
+      
+      p_event = pp_events[i];
+      
+      /* we are populating the orid here just for debugging the
+       * proposed event and the score, insert_event below will populate the
+       * real orid and clear out any detections */
+      p_event->orid = p_world->ev_orid_sequence + i;
+
+      printf("init+inv: ");
+      print_event(p_event);
+    }
+  }
+
+  for (i=0; i<numevents; i++)
+    insert_event(p_netmodel, p_world, pp_events[i]);
+
+}
+
+
+/* add events using the propose_invert proposer */
+static void add_propose_invert_events_sig(SigModel_t * p_sigmodel,
+                                      World_t * p_world)
+{
+  Event_t * pp_events[1000];     /* assume at most 1000 events init */
+  int numevents;
+  int i;
+  int saved_num_prop_events;
+  time_t t1;
+  
+  /* first time init */
+  if (p_world->max_prop_evtime < p_world->low_evtime)
+    p_world->max_prop_evtime = p_world->low_evtime;
+
+  saved_num_prop_events = p_world->num_prop_events;
+  
+  t1 = time(NULL);
+
+  if (p_world->propose_eventobj != Py_None)
+    numevents = propose_from_eventobj(p_sigmodel, pp_events,
+                                      p_world->max_prop_evtime, 
+                                      p_world->high_evtime,
+                                  (PyArrayObject * )p_world->propose_eventobj);
+  else
+  {
+    numevents = propose_invert_step_sig(p_sigmodel, pp_events,
+                                    p_world->max_prop_evtime,
+                                    p_world->high_evtime,
+                                    p_world->low_detnum,
+                                    p_world->high_detnum,
+                                    2.5, p_world->birthsteps,
+                                    p_world->numthreads);
+  }
+  
+  t1 = time(NULL) - t1;
+  
+  assert(numevents < 1000);
+
+  /* cache all the newly proposed events */
+  for (i=0; i<numevents; i++)
+  {
+    Event_t * p_event = alloc_event_sig(p_sigmodel);
+    copy_event_sig(p_sigmodel, p_event, pp_events[i]);
+    p_world->pp_prop_events[p_world->num_prop_events ++] = p_event;
+  }
+  /* update the max time of the cached proposed events */
+  p_world->max_prop_evtime = p_world->high_evtime;
+  
+  /* extend the proposed events with previously cached events, note
+   * that the cached events are sorted across windows but not within a window */
+  for (i=saved_num_prop_events-1;
+       i>=0 && (p_world->pp_prop_events[i]->evtime 
+                > (p_world->low_evtime - p_world->window));
+       i--)
+  {
+    if (p_world->pp_prop_events[i]->evtime > p_world->low_evtime)
+    {
+      Event_t * p_event = alloc_event_sig(p_sigmodel);
+      copy_event_sig(p_sigmodel, p_event, p_world->pp_prop_events[i]);
       pp_events[numevents ++] = p_event;
     }
   }
@@ -1094,6 +1106,137 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   return retobj;  
 }
 
+
+
+
+static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
+{
+  int i;
+  time_t t1;
+
+  /* initialize the window */
+  p_world->low_evnum = 0;
+  p_world->high_evnum = 0;
+  p_world->low_evtime = p_sigmodel->start_time;
+  p_world->high_evtime = 0;
+
+  do 
+  {
+    /* initialize high_evtime */
+    p_world->high_evtime = MIN(p_world->low_evtime + p_world->window,
+                               p_sigmodel->end_time);
+
+    /* initialize low_evnum */
+    for ( ; p_world->low_evnum < p_world->high_evnum; p_world->low_evnum ++)
+    {
+      Event_t * p_event;
+      
+      p_event = p_world->pp_events[p_world->low_evnum];
+
+      if (p_event->evtime >= (p_world->low_evtime - MAX_TRAVEL_TIME))
+        break;
+    }
+
+    /* initialize low_detnum */
+    for ( ; p_world->low_detnum < p_netmodel->numdetections;
+          p_world->low_detnum ++)
+    {
+      Detection_t * p_det;
+      
+      p_det = p_netmodel->p_detections + p_world->low_detnum;
+      
+      if (p_det->time_det >= p_world->low_evtime)
+        break;
+    }
+
+
+    add_propose_invert_events_sig(p_sigmodel, p_world);
+
+    /* change the detections to use these new events */
+    change_arrivals(p_sigmodel, p_world);
+
+    /* keep track of whether or not we have wrapped around inverting
+     * detections this will trigger further inverts to perturb around
+     * the inverted location */
+    p_world->inv_detnum = 0;
+    p_world->inv_detnum_wrap = 0;
+
+    t1 = time(NULL);
+
+    for (i=0; i<p_world->numsamples; i++)
+    {
+      int numdel;
+      double old_score;
+
+      old_score = p_world->world_score;
+      
+      /* remove some obvious events */
+      numdel = remove_negative_events(p_world);
+      
+      if (numdel > 0)
+      {
+        change_detections(p_netmodel, p_world);
+      }
+      
+      if (p_world->world_score < (old_score - 1e-6))
+      {
+        printf("after death: world score has gone down by %.3f -> %.3f\n", 
+               old_score - p_world->world_score, p_world->world_score);
+      }
+      
+      change_events(p_netmodel, p_world, 10);
+
+      change_detections(p_netmodel, p_world);
+    };
+    
+    /* only remove negative events if numsamples > 0. This allows a
+     * numsamples=0 run to save all the proposed events */
+    if (p_world->numsamples)
+      remove_negative_events(p_world);
+    
+/*
+    change_events(p_netmodel, p_world, 2);
+    
+    change_detections(p_netmodel, p_world);
+*/
+    t1 = time(NULL) - t1;
+    
+    if (p_world->verbose)
+    {
+      printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela %ds score=%.1f\n",
+             p_world->low_evnum, p_world->high_evnum,
+             p_world->low_evtime, p_world->high_evtime,
+             p_world->low_detnum, p_world->high_detnum, (int) t1,
+             p_world->world_score);
+    }
+    
+
+    /* move the window forward */
+    p_world->low_evtime += p_world->step;
+
+    /* write out any inferred events */
+    write_events(p_netmodel, p_world);
+    
+  } while (p_world->high_evtime < p_netmodel->end_time);
+
+
+  if (p_world->verbose)
+  {
+    for (i=0; i<p_world->high_evnum; i++)
+    {
+      Event_t * p_event;
+    
+      p_event = p_world->pp_events[i];
+
+      printf("orid %d - score %.1f computed score %.1f\n", p_event->orid, 
+             p_event->evscore, score_event(p_netmodel, p_event));
+    }
+    printf("World Score %.1f\n", p_world->world_score);
+  }
+}
+
+
+
 PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
 {
   World_t * p_world;
@@ -1106,21 +1249,17 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   int verbose;
   PyObject * propose_eventobj;
   PyObject * write_events_cb;
-  PyObject * traces;
 
   PyObject * retobj;
   PyObject * eventsobj;
   PyObject * evdetlistobj;
   
-  if (!PyArg_ParseTuple(args, "iOiiiiiOiO", &runid, &traces, &numsamples, 
+  if (!PyArg_ParseTuple(args, "iOiiiiiOiO", &runid, &numsamples, 
                         &birthsteps,
                         &window, &step, &numthreads,
                         &propose_eventobj,
                         &verbose, &write_events_cb))
     return NULL;
-
-  // todo: define SigModel_t, look at alloc_world
-
 
   /* allocate the world and initialize the user arguments */
   p_world = alloc_world_sigvisa(p_sigmodel);
@@ -1135,7 +1274,7 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   p_world->write_events_cb = write_events_cb;
   
   // TODO: write inference
-  //infer_sig(p_sigmodel, p_world, traces);
+  infer_sig(p_sigmodel, p_world);
 
   /* convert the world to python structures */
   //convert_events_to_pyobj(p_netmodel->p_earth,

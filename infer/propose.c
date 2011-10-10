@@ -1102,7 +1102,7 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
       }
         free_event(thread_args[i].p_best_event);
         free_event(thread_args[i].p_event);
-      }
+    }
     
     /* finished inverting all detections and trying events in a ball around
      * them now let's see if we got something good */

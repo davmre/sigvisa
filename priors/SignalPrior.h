@@ -1,3 +1,5 @@
+#include "../infer/infer.h"
+
 typedef struct SignalPrior_t
 {
   int numsites;

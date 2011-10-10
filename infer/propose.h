@@ -14,3 +14,8 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
                         double time_low, double time_high, int det_low,
                         int det_high, double degree_step, int num_step,
                         int numthreads);
+
+int propose_invert_step_sig(SigModel_t * p_sigmodel, Event_t **pp_events,
+			    double time_low, double time_high, 
+			    double degree_step, int num_step,
+			    int numthreads);
