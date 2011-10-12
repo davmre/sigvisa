@@ -19,3 +19,9 @@ int propose_invert_step_sig(SigModel_t * p_sigmodel, Event_t **pp_events,
 			    double time_low, double time_high, 
 			    double degree_step, int num_step,
 			    int numthreads);
+
+
+static void optimize_arrivals(SigModel_t * p_sigmodel,
+			      Event_t * p_event,
+			      int num_other_events,
+			      Event_t ** pp_other_events);

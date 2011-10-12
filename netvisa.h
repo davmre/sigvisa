@@ -11,24 +11,6 @@
 
 #define PY_ARRAY_UNIQUE_SYMBOL PyArray_API
 #include "numpy/arrayobject.h"
-
-
-typedef struct Detection_t
-{
-  int site_det;
-  int arid_det;
-  double time_det;
-  double deltim_det;
-  double azi_det;
-  double delaz_det;
-  double slo_det;
-  double delslo_det;
-  double snr_det;
-  int phase_det;
-  double amp_det;
-  double per_det;
-} Detection_t;
-
 #include "priors/NumEventPrior.h"
 #include "priors/EventLocationPrior.h"
 #include "priors/EventMagPrior.h"

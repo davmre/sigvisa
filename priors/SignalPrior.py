@@ -8,7 +8,7 @@ from obspy.core import Trace, Stream, UTCDateTime
 
 
 
-def learn(filename, options, earthmodel, traces, events, leb_evlist, detections, arid2num):
+def learn(filename, earthmodel, traces, events, leb_evlist, detections, arid2num):
     """
     Find maximum-likelhood parameter estimates 
     """
@@ -18,11 +18,12 @@ def learn(filename, options, earthmodel, traces, events, leb_evlist, detections,
     f = open(filename, 'w')
     f.write("5000 10\n")
 
-    learn_noise_params(f, traces, events, ttimes)
+    sta_noise_means, sta_noise_vars = learn_noise_params(f, traces, events, ttimes)
     # learn_envelope_params(f, traces, events, ttimes)
     
     f.close()
 
+    return sta_noise_means, sta_noise_vars
 #def learn_envelope_params(traces, events, ttimes):
 #    ll = lambda (peak, decay): -1 * log_likelihood_complete(traces, events, ttimes, peak, decay)
 #    xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((5000, 1)), full_output=True)
@@ -38,56 +39,68 @@ def expectation_over_noise(fn, traces, events, ttimes):
     results = dict()
     normalizer = dict()
 
-        # compute the expectation of some function over all the noisey parts of the signal
-    for trace in traces:
-        siteid = trace.stats["siteid"]
-        samprate = __samprate(trace.stats) # hz
-        max_event_samples = MAX_EVENT_LENGTH * samprate
+    # compute the expectation of some function over all the noisey parts of the signal
+    for channel_bundle in traces:
+        for chan_trace in channel_bundle:
+            
+            siteid = chan_trace.stats["siteid"]
+            chan = chan_trace.stats["channel"]
+            samprate = __samprate(chan_trace.stats) # hz
+            max_event_samples = MAX_EVENT_LENGTH * samprate
 
-        if siteid not in ttimes.keys():
-            ttimes[siteid] = __nanlist(len(events))
+            if siteid not in ttimes.keys():
+                ttimes[siteid] = __nanlist(len(events))
 
-        prev_arrival_end = 0
-        if siteid not in normalizer.keys():
-            results[siteid] = 0
-            normalizer[siteid] = 0
+            prev_arrival_end = 0
+            if siteid not in normalizer.keys():
+                results[siteid] = dict()
+                normalizer[siteid] = dict()
+            if chan not in normalizer[siteid].keys():
+                results[siteid][chan] = 0
+                normalizer[siteid][chan] = 0
 
-        compute_rel_atime = lambda (event, ttime): event[3] - trace.stats['starttime'].getTimeStamp() + ttime
-        rel_atimes = map(compute_rel_atime, zip(events, ttimes[siteid]))
-        sorted_by_atime = sorted(zip(rel_atimes, events, ttimes[siteid]), key = lambda triple: triple[0])
+            compute_rel_atime = lambda (event, ttime): event[3] - chan_trace.stats['starttime'].getTimeStamp() + ttime
+            rel_atimes = map(compute_rel_atime, zip(events, ttimes[siteid]))
+            sorted_by_atime = sorted(zip(rel_atimes, events, ttimes[siteid]), key = lambda triple: triple[0])
 
-        for (rel_atime, event, ttime) in sorted_by_atime:
-            if np.isnan(ttime):
-                continue
+            for (rel_atime, event, ttime) in sorted_by_atime:
+                if np.isnan(ttime):
+                    continue
 
             # everything within max_event_samples of the current
             # arrival IN BOTH DIRECTIONS will be off limits, just
             # for safety
-            arrival_i = int( (rel_atime - max_event_samples) * samprate )
-            if (arrival_i - prev_arrival_end) > 0:
-                results[siteid] = results[siteid] + np.sum(fn(trace.data[prev_arrival_end:arrival_i], siteid))
-                normalizer[siteid] = normalizer[siteid] + (arrival_i-prev_arrival_end)
-                prev_arrival_end = arrival_i + max_event_samples*2
+                arrival_i = int( (rel_atime - max_event_samples) * samprate )
+                if (arrival_i - prev_arrival_end) > 0:
+                    results[siteid][chan] = results[siteid][chan] + np.sum(fn(chan_trace.data[prev_arrival_end:arrival_i], siteid, chan))
+                    normalizer[siteid][chan] = normalizer[siteid][chan] + (arrival_i-prev_arrival_end)
+                    prev_arrival_end = arrival_i + max_event_samples*2
 
-        if prev_arrival_end == 0:
+            if prev_arrival_end == 0:
             # if no arrivals recorded during this trace, we assume the whole thing is noise
-            results[siteid] = results[siteid] + np.sum(fn(trace.data[prev_arrival_end:], siteid))
-            normalizer[siteid] = normalizer[siteid] + len(trace.data)
+                results[siteid][chan] = results[siteid][chan] + np.sum(fn(chan_trace.data[prev_arrival_end:], siteid, chan))
+                normalizer[siteid][chan] = normalizer[siteid][chan] + len(chan_trace.data)
 
     for siteid in results.keys():
-        results[siteid] = results[siteid] / normalizer[siteid]
+        for chan in results[siteid].keys():
+            results[siteid][chan] = results[siteid][chan] / normalizer[siteid][chan]
     return results
 
 def learn_noise_params(filehandle, traces, events, ttimes):
-    expectation_f = lambda x, siteid: x
+    expectation_f = lambda x, siteid, chan: x
     sta_noise_means = expectation_over_noise(expectation_f, traces, events, ttimes)
         
-    variance_f = lambda x, siteid: (x - sta_noise_means[siteid])**2
+    variance_f = lambda x, siteid, chan: (x - sta_noise_means[siteid][chan])**2
     sta_noise_vars = expectation_over_noise(variance_f, traces, events, ttimes)
 
     filehandle.write(str(len(sta_noise_means)) + "\n")
     for siteid in sta_noise_means.keys():
-        filehandle.write(str(siteid) + " " + str(sta_noise_means[siteid]) + " " + str(sta_noise_vars[siteid]) + "\n")
+        filehandle.write(str(siteid) + " " + str(len(sta_noise_means[siteid].keys())))
+        for chan in sta_noise_means[siteid].keys():
+            chan_num = sigvisa.canonical_channel_num(chan)
+            filehandle.write(" " + str(chan_num) + " " + str(sta_noise_means[siteid][chan]) + " " + str(sta_noise_vars[siteid][chan]))
+        filehandle.write("\n")
+    return sta_noise_means, sta_noise_vars
 
 
 def plot_envelope(trace, means, variances):

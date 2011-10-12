@@ -62,41 +62,114 @@ def window_energies(trace, window_size=1, overlap=0.5):
 def load_traces(cursor, stations, start_time, end_time):
     traces = []
     for sta in stations:
-        cursor.execute("select chan from idcx_wfdisc where sta='%s'" % sta)
-        chan, = cursor.fetchone()
+        cursor.execute("select chan,time,endtime from idcx_wfdisc where sta='%s'" 
+                       "and endtime > %f and time < %f order by time,endtime" % 
+                       (sta, start_time, end_time))
+        wfdiscs = cursor.fetchall()
 
-        # select all waveforms which overlap with the designated period
-        cursor.execute("select time,endtime from idcx_wfdisc where sta = '%s' and chan ='%s' "
-                       "and endtime > %f and time < %f" %
-                       (sta, chan, start_time, end_time))
-        waveforms = cursor.fetchall()
-        for (stime, etime) in waveforms:
-            
+        last_stime = -1
+        last_etime = -1
+        segment_chans = []
+        for (chan, stime, etime) in waveforms:
+            if stime != last_stime or etime != last_etime:
+                if len(segment_chans) > 0:
+                    traces.append(segment_chans)
+                last_stime = stime
+                last_etime = etime
+                segment_chans = []
+
             st = np.max((stime, start_time))
             et = np.min((etime, end_time))
 
             print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
             try:
                 trace = utils.waveform.fetch_waveform(sta, chan, int(np.ceil(st)), int(np.floor(et)))
-                traces.append(trace)
+                trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
+                segment_chans.append(trace)
                 print " ... successfully loaded."
             except (utils.waveform.MissingWaveform, IOError):
                 print " ... not found, skipping."
                 continue
-    print "fetched ", len(traces), " waveforms."
+
+    print "fetched ", len(traces), " segments."
     return traces
+
+def max_over_channels(channel_bundle):
+    max_data = []
+    for channel in channel_bundle:
+        if len(max_data) == 0:
+            max_data = np.copy(channel.data)
+            continue
+        for i in range(len(channel.data)):
+            max_data[i] = np.max((max_data[i], channel.data[i]))
+    return max_data
+
+def estimate_azi_amp(channel_bundle, det_time, det_len):
+
+    for chan in channel_bundle:
+        det_idx = round((det_time - chan.stats['starttime_unix']) * chan.stats['sampling_rate'])
+        det_end_idx = det_idx + round(det_len * chan.stats['sampling_rate'])
+
+        if chan.stats['channel'] == "BHE":
+            bhe_det_signal = chan.data[det_idx:det_end_idx]
+            bhe_det_energy = np.linalg.norm(bhe_det_signal, 2)
+        else if chan.stats['channel'] == "BHN":
+            bhn_det_signal = chan.data[det_idx:det_end_idx]
+            bhn_det_energy = np.linalg.norm(bhn_det_signal, 2)
+        else if chan.stats['channel'] == "BHZ":
+            bhz_det_signal = chan.data[det_idx:det_end_idx]
+            bhz_det_energy = np.linalg.norm(bhz_det_signal, 2)
+
+        # TODO: learn these functions properly
+
+        # angle of 0 means due north
+        tan_azi = bhe_det_energy/bhn_det_energy
+        tan_decl = bhz_det_energy/bhe_det_energy
+        energy = np.linalg.norm((bhz_det_energy, bhn_det_energy, bhe_det_energy), 2)
+        
+        return np.degrees(np.arctan(tan_azi)), energy, np.degrees(np.arctan(tan_decl))
+
+def det2fake(detections):
+    fake = []
+    for det in detections:
+        fake.append((len(fake), det[0], det[2], det[10], det[4], det[6]))
+
+def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
+    # loop over traces
+    # for each trace, compute sta/lta and apply a station-specific threshold
+    # whenever this threshold is crossed, register a detection with appropriate amplitude, azimuth (from relative channels), and time
+
+    detections = []
+    for channel_bundle in traces:
+        max_data = max_over_channels(channel_bundle)
+        chan = channel_bundle[0].stats["channel"]
+        siteid = channel_bundle[0].stats["siteid"]
+        samprate = channel_bundle[0].stats["sampling_rate"]
+        cft_data = obspy.signal.recStalta(filtered_data, int(1.5 * samprate),
+                                          int(60 * samprate))
+        triggers = triggerOnset(cft_data, sta_high_thresholds[siteid], sta_low_thresholds[siteid], 50 * samprate)
     
+        for (trigger_start, trigger_end) in triggers:
+            det_id = len(detections)
+            det_time = trigger_start
+            det_len = trigger_end - trigger_start
+            det_azi, det_amp, det_slo = estimate_azi_amp_slow(channel_bundle, det_time, det_len)
+            detections.append((det_id, siteid, det_time, det_amp, det_azi, det_slo))
+
 def process_traces(traces, f, opts):
     # process each trace to yield a representation suitable for inference.
     # currently, that means computing energies within overlapping windows
     processed_traces = []
-    for trace in traces:
-        processed_data = f(trace)
-        new_header = trace.stats.copy()
-        new_header.update(opts)
-        new_header["npts_processed"] = len(processed_data)
-        processed_trace = Trace(processed_data, header=new_header)
-        processed_traces.append(processed_trace)    
+    for sta_traces in traces:
+        processed_traces_sta = []
+        for trace in sta_traces:
+            processed_data = f(trace)
+            new_header = trace.stats.copy()
+            new_header.update(opts)
+            new_header["npts_processed"] = len(processed_data)
+            processed_trace = Trace(processed_data, header=new_header)
+            processed_traces_sta.append(processed_trace)    
+        processed_traces.append(processed_traces_sta)
     return processed_traces
 
 def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5):
@@ -108,7 +181,7 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
     f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
     opts = dict(window_size=window_size, overlap=overlap)
     energies = process_traces(traces, f, opts)
-    return energies
+    return energies, traces
 
 def main():
     parser = OptionParser() 
@@ -133,7 +206,7 @@ def main():
 
     # read traces for each station
     cursor = db.connect().cursor()
-    energies = load_and_process_traces(cursor, options.start_time, options.end_time, options.window_size, options.overlap)
+    energies, traces = load_and_process_traces(cursor, options.start_time, options.end_time, options.window_size, options.overlap)
     print "loaded energies"
 
     # load earth and net models
@@ -150,6 +223,8 @@ def main():
 
     earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
 
+    # sta_noise_means, sta_noise_vars = learn.learn_sigvisa("parameters", earthmodel)
+
     print "now loading sigvisa..."
     sm = learn.load_sigvisa("parameters",
                                 options.start_time, options.end_time,
@@ -157,7 +232,14 @@ def main():
     
     print "sigvisa loaded, setting signals"
     sm.set_signals(energies)
-    print "signals set, reading events and shit"
+
+    sta_high_thresholds = dict()
+    sta_low_thresholds = dict()
+    for i in range(200):
+        sta_high_thresholds[i] = 1.5
+        sta_low_thresholds[i] = 0.6
+    print "signals set, computing fake detections"
+    fake_det = fake_detections(traces, sta_high_thresholds, sta_low_thresholds)
 
     # read appropriate event set (e.g. netvisa)
     MAX_TRAVEL_TIME = 2000
@@ -175,13 +257,17 @@ def main():
 #   assoc_ttimes = sm.ttimes_from_assoc(evlist, events, detections, arid2num)
 
     #sm.learn(energies, events, assoc_ttimes)
-    print "scoring world!"
-    print arrtimes[0, 0, 0]
-    ll = sm.score_world(events, arrtimes)
-    print "log-likelihood is ", ll
+    #print "scoring world!"
+    #print arrtimes[0, 0, 0]
+    #ll = sm.score_world(events, arrtimes)
+    #print "log-likelihood is ", ll
 
     #print "learning params..."
 
+    sm.set_fake_detections(det2fake(detections))
+
+    
+    
 
     if options.gui is not None:
         for trace in energies:   

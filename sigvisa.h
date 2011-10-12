@@ -2,13 +2,35 @@
 #define SIGVISA_INCLUDE
 
 #include <Python.h>
+#include <assert.h>
 
+
+
+typedef struct Detection_t
+{
+  int site_det;
+  int arid_det;
+  double time_det;
+  double deltim_det;
+  double azi_det;
+  double delaz_det;
+  double slo_det;
+  double delslo_det;
+  double snr_det;
+  int phase_det;
+  double amp_det;
+  double per_det;
+  
+  int sigvisa_fake;
+
+} Detection_t;
 
 typedef struct Arrival_t {
 
   double time;
   double amp;
   double azi;
+  double slo;
 
 } Arrival_t;
 
@@ -45,6 +67,7 @@ typedef struct Site_t
 #include "netvisa.h"
 
 /* define signal channels */
+#define NUM_CHANS   4
 #define CHAN_BHE    0
 #define CHAN_BHN    1
 #define CHAN_BHZ    2
@@ -57,8 +80,8 @@ typedef struct Site_t
 typedef struct Signal_t
 {
 
-  int len;
-  double * p_data;
+  long len;
+  double * p_data[];
   PyArrayObject * py_array;  /*  we're forced to keep the Python
 				 object around so that we can DECREF
 				 it when finished */
@@ -70,6 +93,17 @@ typedef struct Signal_t
   int chanid;
   
 } Signal_t;
+
+typedef struct ChannelBundle_t {
+  long len;
+
+  double start_time;
+  double hz;
+
+  int siteid;
+
+  Signal_t * p_channels[NUM_CHANS];
+} SignalBundle_t;
 
 #include "priors/ArrivalTimeJointPrior.h"
 #include "priors/SignalPrior.h"
@@ -83,13 +117,14 @@ typedef struct SigModel_t
   double start_time;
   double end_time;
 
-  int numsignals;
-  Signal_t * p_signals;
+  int numsegments;
+  ChannelBundle_t * p_segments;
 
   EarthModel_t * p_earth;
 
-  //StationNoisePrior sta_noise_prior;
-  //EnvelopePrior env_prior;
+  long numdetections;
+  Detection * detections;
+
   SignalPrior_t sig_prior;
 
   NumEventPrior_t num_event_prior;
@@ -127,6 +162,8 @@ typedef struct SigModel_t
 
 #define BOOLARRAY2(arr,i,j) (*((npy_bool *)PyArray_GETPTR2(arr,i,j)))
 #define BOOLARRAY1(arr,i) (*((npy_bool *)PyArray_GETPTR1(arr,i)))
+
+#define UPDATE_AND_VERIFY(a, b) if (*a == -1) *a = *b; else assert(*a == *b);
 
 #define MIN_MAGNITUDE   ((double) 2.0)
 #define MAX_MAGNITUDE   ((double) 8.0)
@@ -182,6 +219,9 @@ void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event);
 void print_event(const Event_t * p_event);
 
+
+#define ALLOC_EVENT(net, sig) if (net != NULL) { alloc_event(net); } else { alloc_event_sig(sig); }
+#define COPY_EVENT(net,sig, a, b) if (net != NULL) { copy_event(net, a, b); } else { copy_event_sig(sig, a, b);}
 
 void convert_events_to_pyobj(const EarthModel_t * p_earth,
                              const Event_t ** pp_events, int numevents,

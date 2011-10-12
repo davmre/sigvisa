@@ -72,24 +72,23 @@ double score_world_sig(SigModel_t * p_sigmodel,
  * if detected returns log probability of detection given event 
  *                     - log probability noise 
  * else returns log probability of mis-detection given event */
-static int score_event_site_phase_int_sig(SigModel_t * p_sigmodel,
-					  const Event_t * p_event,
-					  const World_t * p_world,
-					  int siteid, int phaseid,
-					  double distance, double pred_az,
-					  double * p_arrtimesc,
-					  double * p_arrazsc,
-					  double * p_ampsc,
-					  double * p_sigsc,)
+static int score_event_int_sig(SigModel_t * p_sigmodel,
+			       const Event_t * p_event,
+			       int num_other_events, Events ** pp_other_events,
+			       double * p_arrtimesc,
+			       double * p_arrazsc,
+			       double * p_arrslosc,
+			       double * p_ampsc,
+			       double * p_sigsc)
 {
   EarthModel_t * p_earth;
   double pred_arrtime;
   double ttime;
-  int numtimedefphases;
+  int numtimedefphases, numsites;
 
   p_earth = p_sigmodel->p_earth;
   
-  assert(EarthModel_IsTimeDefPhase(p_earth, phaseid));
+  numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
   pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
@@ -110,173 +109,81 @@ static int score_event_site_phase_int_sig(SigModel_t * p_sigmodel,
     return 0;
   }
 
-  double pred_slow;
+  for (int siteid = 0; siteid < numsites; ++siteid) {
+    for (int phaseid = 0l phaseid < numtimedefphases; ++phaseid) {
 
-
-  // TODO: should be calling joint prior, conditional on other current events
-  *p_arrtimesc += ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_prior,
-                                             arr->time, pred_arrtime,
-					   0, siteid,
-					   phaseid);
-
-
-  *p_arrazsc += ArrivalAzimuthPrior_LogProb(&p_sigmodel->arr_az_prior,
-					    arr->azi, 
-					    pred_az,
-					    0,
-					    siteid, phaseid);
-
-  ttime = EarthModel_ArrivalTime(p_earth, p_event->evlon, p_event->evlat,
-				 p_event->evdepth, 0, phaseid, siteid);
-  *p_ampsc += ArrivalAmplitudePrior_LogProb(&p_sigmodel->arr_amp_prior,
-					    p_event->evmag, p_event->evdepth,
-					    ttime, siteid, phaseid,
-					    det->amp_det);
-  if (isnan(*p_ampsc))
-    {
-      printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d phaseid %d"
-             " amp %.2lg", p_event->evmag, p_event->evdepth,
-             ttime, siteid, phaseid, det->amp_det);
-      exit(1);
+      *p_arrtimesc += ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_prior,
+					       arr->time, pred_arrtime,
+					       0, siteid,
+					       phaseid);
+      
+      
+      double pred_az = EarthModel_ArrivalAzimuth(p_earth, 
+						p_event->evlon, 
+						p_event->evlat, 
+						siteid);
+      *p_arrazsc += ArrivalAzimuthPrior_LogProb(&p_sigmodel->arr_az_prior,
+						arr->azi, 
+						pred_az,
+						0,
+						siteid, phaseid);
+      
+      double pred_slo = EarthModel_ArrivalSlowness(p_earth, 
+						 p_event->evlon, 
+						 p_event->evlat, 
+						 p_event->evdepth, 
+						 phaseid, siteid); 
+      *p_arrslosc += ArrivalSlownessPrior_LogProb(&p_sigmodel->arr_az_prior,
+						  arr->azi, 
+						  pred_slo,
+						  0,
+						  siteid, phaseid);
+      
+      ttime = EarthModel_ArrivalTime(p_earth, p_event->evlon, p_event->evlat,
+				     p_event->evdepth, 0, phaseid, siteid);
+      *p_ampsc += ArrivalAmplitudePrior_LogProb(&p_sigmodel->arr_amp_prior,
+						p_event->evmag, p_event->evdepth,
+						ttime, siteid, phaseid,
+						det->amp_det);
+      if (isnan(*p_ampsc))
+	{
+	  printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d phaseid %d"
+		 " amp %.2lg", p_event->evmag, p_event->evdepth,
+		 ttime, siteid, phaseid, det->amp_det);
+	  exit(1);
+	}
     }
- 
 
-  *p_sigsc += SignalPrior_LogProb()
+  *p_sigsc += SignalPrior_Score_Event(&p_sigmodel->signal_prior, p_sigmodel, p_event,  num_other_events, pp_other_events);
 
   return 1;
 }
 
-/* returns 0 if the event can't be detected at the site */
-int score_event_site_phase(SigModel_t * p_sigmodel,
-                           const Event_t * p_event,
-                           int siteid, int phaseid,
-                           double distance, double pred_az,
-                           double * p_score)
+
+ int score_event_sig(SigModel_t * p_sigmodel,
+		     const Event_t * p_event,
+		     int num_other_events, Events ** pp_other_events)
 {
   int      poss;
-  int      detcnt;
-  double   detsc;
-  double   dettimesc;
-  double   detslosc;
-  double   detazsc;
-  double   detphasesc;
-  double   detsnrsc;
-  double   detampsc;
+  double   arrtimesc;
+  double   arrslosc;
+  double   arrazsc;
+  double   arrampsc;
+  double   sigsc;
 
-  detcnt = 0;
-  detsc = dettimesc = detslosc = detazsc = detphasesc = detsnrsc = detampsc =0;
-  
-  poss = score_event_site_phase_int(p_sigmodel, p_event, siteid, phaseid,
-                                    distance, pred_az, &detcnt, &detsc,
-                                    &dettimesc, &detslosc, &detazsc,
-                                    &detphasesc, &detsnrsc, &detampsc);
 
-  *p_score = detsc + dettimesc + detslosc + detazsc + detphasesc + detsnrsc
-    + detampsc;
+  arrtimesc = arrazsc = arrslosc = arrampsc = sigsc = 0;
+
+  poss = score_event_sig_int(p_sigmodel, p_event, p_world,
+			 &arrtimesc, &arrazsc, 
+			 &arrslosc, &arrampsc, &sigsc
+			 );
+
+  p_event->evscore = arrtimesc + arrazsc + arrslosc + arrampsc + sigsc;
 
   return poss;
 }
 
-/* Scores an event phase, at a site, without requiring the caller to
-   specify the distance or azimuth. */
-int score_event_site_phase_simple(SigModel_t * p_sigmodel,
-                                  const Event_t * p_event, int siteid,
-                                  int phaseid, double * p_score)
-{
-  EarthModel_t * p_earth;
-  double distance, pred_az;
-  int poss;
-
-  p_earth = p_sigmodel->p_earth;
-
-  distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
-                              siteid);
-
-  pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
-                                      p_event->evlat, siteid);
-  
-  poss = score_event_site_phase(p_sigmodel, p_event, siteid, phaseid,
-                                distance, pred_az, p_score);
-
-  return poss;
-}
-
-/*
-static void score_event_int(SigModel_t * p_sigmodel, Event_t * p_event, 
-                            double * p_numsc, double * p_locsc, 
-                            double * p_magsc,
-                            double * p_detsc, double * p_dettimesc,
-                            double * p_detazsc, double * p_detslosc,
-                            double * p_detphasesc, double * p_detsnrsc,
-                            double * p_detampsc,
-                            int * p_poss_detcnt, int * p_detcnt)
-{
-  EarthModel_t * p_earth;
-  Detection_t * p_detections;
-  int numtimedefphases;
-  int numsites;
-  int siteid;
-  int phaseid;
-
-  p_earth = p_sigmodel->p_earth;
-  p_detections = p_sigmodel->p_detections;
-  
-  numsites = EarthModel_NumSites(p_earth);
-  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-
-  *p_numsc += NumEventPrior_LogTimeRate(&p_sigmodel->num_event_prior);
-  
-  *p_locsc += EventLocationPrior_LogProb(&p_sigmodel->event_location_prior,
-                                         p_event->evlon, p_event->evlat,
-                                         p_event->evdepth);
-  
-  *p_magsc += EventMagPrior_LogProb(&p_sigmodel->event_mag_prior,
-                                    p_event->evmag, 0);
-
-  for (siteid=0; siteid<numsites; siteid++)
-  {
-    double distance, pred_az;
-    
-    distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
-                                siteid);
-    pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
-                                        p_event->evlat, siteid);
-    
-    for (phaseid=0; phaseid<numtimedefphases; phaseid++)
-    {
-      *p_poss_detcnt += score_event_site_phase_int(p_sigmodel, p_event,
-                                                   siteid, phaseid,
-                                                   distance, pred_az,
-                                                   p_detcnt,
-                                                   p_detsc, p_dettimesc,
-                                                   p_detslosc, p_detazsc,
-                                                   p_detphasesc,
-                                                   p_detsnrsc, p_detampsc);   
-    }
-  }
-}*/
-
- /*
-double score_event(SigModel_t * p_sigmodel, Event_t * p_event)
-{
-  double numsc, locsc, magsc, detsc, dettimesc, detazsc, detslosc, detphasesc;
-  double detsnrsc, detampsc;
-  double score;
-  int possdetcnt, detcnt;
-
-  numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 
-    detphasesc = detsnrsc = detampsc = 0;
-  possdetcnt = detcnt = 0;
-  
-  score_event_int(p_sigmodel, p_event, &numsc, &locsc, &magsc, &detsc, 
-                  &dettimesc, &detazsc, &detslosc, &detphasesc, &detsnrsc,
-                  &detampsc, &possdetcnt, &detcnt);
-  
-  score = numsc + locsc + magsc + detsc + dettimesc + detazsc + detslosc
-    + detphasesc + detsnrsc + detampsc;
-
-  return score;
-  }*/
 
 
 double prob_event(SigModel_t * p_sigmodel, Event_t * p_event)
@@ -346,64 +253,4 @@ int compare_double(const double * pnum1, const double * pnum2)
     return 1;
   else
     return 0;
-}
-
-double logprob_false(SigModel_t * p_sigmodel, int numdets, int * p_detids,
-                     int verbose)
-{
-  int i;
- 
-  double sum_logprob = 0;
-
-  double * p_sum_site_amp;
-  
-  int * p_cnt_site;
-
-  double worst_amp=0;
-  
-  /* array of sum logprob amp per site, initialized to zero */
-  p_sum_site_amp = (double *)calloc(p_sigmodel->numsites,
-                                    sizeof(*p_sum_site_amp));
-
-  /* keep track of the count for each site */
-  p_cnt_site = (int *) calloc(p_sigmodel->numsites,
-                              sizeof(*p_cnt_site));
-  
-  
-  for (i=0; i<numdets; i++)
-  {
-    double logprob;
-    
-    int detid = p_detids[i];
-    
-    Detection_t * p_det = p_sigmodel->p_detections + detid;
-
-    int siteid = p_det->site_det;
-    
-    logprob = FalseArrivalAmplitudePrior_LogProb(&p_sigmodel->arr_amp_prior,
-                                                 siteid,
-                                                 p_det->amp_det);
-
-    p_sum_site_amp[siteid] += logprob;
-    p_cnt_site[siteid] ++;
-
-    sum_logprob += logprob;
-
-    if (logprob < worst_amp)
-      worst_amp = logprob;
-  }
-
-  if (verbose)
-  {
-    /*
-    for (i=0; i<p_sigmodel->numsites; i++)
-      if (p_cnt_site[i] > 100)
-        printf("Site[%d], cnt %d, Avg amplitude logprob: %lf\n",
-               i, p_cnt_site[i], p_sum_site_amp[i] / p_cnt_site[i]);
-    */
-    printf("Avg. noise amp logprob: %lf   worst %lf\n", sum_logprob / numdets,
-           worst_amp);
-  }
-  
-  return sum_logprob;
 }

@@ -29,7 +29,7 @@ double ArrivalTimeJointPrior_LogProb(const ArrivalTimeJointPrior_t * prior,
       // TODO: loop over phases
       // for (int phaseid=0; phaseid < p_earth->numphases; ++phaseid) {
 
-	double pred_arrtime = EarthModel_ArrivalTime(p_earth, event->evlon, event->evlat, event->evdepth, event->evtime, phaseid, siteid);
+      double pred_arrtime = EarthModel_ArrivalTime(p_earth, event->evlon, event->evlat, event->evdepth, event->evtime, phaseid, siteid);
 
 	double arrtime = ARRAY3(arrtimes, siteid, i, phaseid);
 
@@ -50,6 +50,16 @@ double ArrivalTimeJointPrior_LogProb(const ArrivalTimeJointPrior_t * prior,
   }
 
   return log_prob;
+
+}
+
+double ArrivalTimeJointPrior_Point(const ArrivalTimeJointPrior_t * prior,
+				     EarthModel_t * p_earth,
+				     int numevents,
+				     Event_t * events,
+				     PyArrayObject * arrtimes) {
+
+  double pred_arrtime = EarthModel_ArrivalTime(p_earth, event->evlon, event->evlat, event->evdepth, event->evtime, phaseid, siteid);
 
 }
 

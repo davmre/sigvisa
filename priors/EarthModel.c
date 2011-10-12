@@ -1191,6 +1191,7 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
     *alon2 = SIGN((360.0-fabs(*alon2)), *alon2);
 }
 
+
 /* if possible to invert, returns 0 and stores the lon, lat, depth, time
  * fields, else it returns -1 */
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,

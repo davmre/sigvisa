@@ -38,6 +38,10 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
                                      double mb, double depth, double ttime,
                                      int siteid, int phaseid, double amp);
 
+double ArrivalAmplitudePrior_Point(const ArrivalAmplitudePrior_t * prior,
+				   double mb, double depth, double ttime,
+				   int siteid, int phaseid);
+
 double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * 
                                           prior, int siteid, double amplitude);
 
