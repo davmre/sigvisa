@@ -81,7 +81,7 @@ typedef struct Signal_t
 {
 
   long len;
-  double * p_data[];
+  double * p_data;
   PyArrayObject * py_array;  /*  we're forced to keep the Python
 				 object around so that we can DECREF
 				 it when finished */
@@ -103,7 +103,9 @@ typedef struct ChannelBundle_t {
   int siteid;
 
   Signal_t * p_channels[NUM_CHANS];
-} SignalBundle_t;
+} ChannelBundle_t;
+
+double ChannelBundle_EndTime(ChannelBundle_t * b);
 
 #include "priors/ArrivalTimeJointPrior.h"
 #include "priors/SignalPrior.h"
@@ -123,7 +125,7 @@ typedef struct SigModel_t
   EarthModel_t * p_earth;
 
   long numdetections;
-  Detection * detections;
+  Detection_t * p_detections;
 
   SignalPrior_t sig_prior;
 
@@ -132,17 +134,18 @@ typedef struct SigModel_t
   EventMagPrior_t event_mag_prior;
 
   ArrivalTimeJointPrior_t arr_time_joint_prior;
-
+  ArrivalAzimuthPrior_t arr_az_prior;
+  ArrivalSlownessPrior_t arr_slo_prior;
+  ArrivalAmplitudePrior_t arr_amp_prior;
   /*
   NumSecDetPrior_t num_secdet_prior;
   EventDetectionPrior_t event_det_prior;
   ArrivalTimePrior_t arr_time_prior;
   NumFalseDetPrior_t num_falsedet_prior;
-  ArrivalAzimuthPrior_t arr_az_prior;
-  ArrivalSlownessPrior_t arr_slo_prior;
+
   ArrivalPhasePrior_t arr_phase_prior;
   ArrivalSNRPrior_t arr_snr_prior;
-  ArrivalAmplitudePrior_t arr_amp_prior;*/
+*/
 } SigModel_t;
 
 #include "priors/score_sig.h"
@@ -163,7 +166,7 @@ typedef struct SigModel_t
 #define BOOLARRAY2(arr,i,j) (*((npy_bool *)PyArray_GETPTR2(arr,i,j)))
 #define BOOLARRAY1(arr,i) (*((npy_bool *)PyArray_GETPTR1(arr,i)))
 
-#define UPDATE_AND_VERIFY(a, b) if (*a == -1) *a = *b; else assert(*a == *b);
+#define UPDATE_AND_VERIFY(a, b) if (*a == -1) *a = b; else assert(*a == b);
 
 #define MIN_MAGNITUDE   ((double) 2.0)
 #define MAX_MAGNITUDE   ((double) 8.0)
@@ -209,7 +212,7 @@ typedef struct SigModel_t
 
 #define MAX_EVENT_RATE 1
 
-#define MAX_ENVELOPE_LENGTH = 50  /* TODO: find a number that is not
+#define MAX_ENVELOPE_LENGTH 50  /* TODO: find a number that is not
 				  made up and actually makes sense */
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
@@ -220,8 +223,8 @@ void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
 void print_event(const Event_t * p_event);
 
 
-#define ALLOC_EVENT(net, sig) if (net != NULL) { alloc_event(net); } else { alloc_event_sig(sig); }
-#define COPY_EVENT(net,sig, a, b) if (net != NULL) { copy_event(net, a, b); } else { copy_event_sig(sig, a, b);}
+#define ALLOC_EVENT(net, sig) (net != NULL) ? alloc_event_net(net) : alloc_event_sig(sig);
+#define COPY_EVENT(net,sig, a, b) (net != NULL) ? copy_event_net(net, a, b) : copy_event_sig(sig, a, b);
 
 void convert_events_to_pyobj(const EarthModel_t * p_earth,
                              const Event_t ** pp_events, int numevents,

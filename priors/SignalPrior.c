@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 
 #include "../sigvisa.h"
 
@@ -26,7 +27,7 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
   }
 
   prior->numsites = numsites;  
-  prior->p_stations = (double *) calloc(numsites, sizeof(StationNoiseModel_t));
+  prior->p_stations = (StationNoiseModel_t *) calloc(numsites, sizeof(StationNoiseModel_t));
   int numentries;
   if (1 != fscanf(fp, "%d\n", &numentries))
   {
@@ -53,8 +54,8 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
 	}
     
       fprintf(stdout, "%d: loaded %d %d %lf %lf\n", i, siteid, chan_num, mean, var);
-      prior->p_stations[siteid]->chan_means[chan_num] = mean;
-      prior->p_stations[siteid]->chan_vars[chan_num] = var;
+      (prior->p_stations + siteid)->chan_means[chan_num] = mean;
+      (prior->p_stations + siteid)->chan_vars[chan_num] = var;
     }
   }
 
@@ -97,7 +98,7 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
 
 void phase_env(SignalPrior_t * prior, 
 	       EarthModel_t * p_earth, 
-	       Event_t * event, 
+	       const Event_t * event, 
 	       double hz,
 	       int siteid,
 	       int phaseid,
@@ -144,7 +145,7 @@ void envelope_means_vars(SignalPrior_t * prior,
 			 double end_time,
 			 EarthModel_t * p_earth, 
 			 int numevents, 
-			 Event_t ** pp_events, 
+			 const Event_t ** pp_events, 
 			 int siteid,
 			 int chan_num, 
 			 long * p_len,
@@ -152,32 +153,32 @@ void envelope_means_vars(SignalPrior_t * prior,
 			 double ** pp_vars) {
  
 
-  p_len = time2idx(end_time, start_time, hz);
+  (*p_len) = time2idx(end_time, start_time, hz);
 
-  (*pp_means) = (double *) calloc(p_len, sizeof(double));
+  (*pp_means) = (double *) calloc(*p_len, sizeof(double));
   double *p_means = (*pp_means);
-  (*pp_vars) = (double *) calloc(p_len, sizeof(double));
+  (*pp_vars) = (double *) calloc(*p_len, sizeof(double));
   double *p_vars = (*pp_vars);
 
-  double noise_mean = prior->p_stations[siteid]->chan_means[chan_num];
-  double noise_var = prior->p_stations[siteid]->chan_means[chan_num];
-  for (int i=0; i < p_len; ++i) {
+  double noise_mean = (prior->p_stations + siteid)->chan_means[chan_num];
+  double noise_var = (prior->p_stations + siteid)->chan_means[chan_num];
+  for (int i=0; i < *p_len; ++i) {
     p_means[i] = noise_mean;
     p_vars[i] = noise_var;
   }
 
   for (int i=0; i < numevents; ++i) {
 
-    Event_t * p_event = pp_events[i];
+    const Event_t * p_event = pp_events[i];
 
     // for (int phaseid = 0; phaseid < p_earth->num_phases; ++phaseid) {    
     int phaseid = 0; /* TODO: work with multiple phases */
 
-    double arrtime = p_event->p_arrivals[siteid*p_earth->numtimedefphases + phaseid];
+    double arrtime = (p_event->p_arrivals + siteid*p_earth->numtimedefphases + phaseid)->time;
     if (arrtime < 0) continue;
     
     long idx = time2idx(arrtime, start_time, hz);
-    if (idx < 0 - MAX_ENV_LENGTH * hz || idx >= p_len) {
+    if (idx < 0 - MAX_ENV_LENGTH * hz || idx >= *p_len) {
       //      fprintf(stdout, "   skipping event w/ arrtime %lf (from st %lf) and base_t = %ld ( vs len %d) ...\n", arrtime, (*(events+i)).evtime, idx, p_signal->len);      
       continue;
     } else {
@@ -189,9 +190,9 @@ void envelope_means_vars(SignalPrior_t * prior,
     int env_len;
     phase_env(prior, p_earth, p_event, hz, siteid, phaseid, chan_num, &p_envelope, &env_len);
     
-    add_signals(p_means, p_len, p_envelope, env_len, idx);
-    vector_times_scalar_inplace(len, p_envelope, 0.5);
-    add_signals(p_vars, p_len, p_envelope, env_len, idx);
+    add_signals(p_means, *p_len, p_envelope, env_len, idx);
+    vector_times_scalar_inplace(*p_len, p_envelope, 0.5);
+    add_signals(p_vars, *p_len, p_envelope, env_len, idx);
       
     free(p_envelope);
     //}
@@ -210,11 +211,11 @@ double vector_sum(int n, double * vector) {
   return result;
 }
 
-void evt_arrival_times(Event_t * p_event, int siteid, int numtimedefphases, double * first_arrival, double *last_arrival) {
+void evt_arrival_times(const Event_t * p_event, int siteid, int numtimedefphases, double * first_arrival, double *last_arrival) {
   *first_arrival = DBL_MAX;
   *last_arrival = DBL_MIN;
   for (int i=0; i < numtimedefphases; ++i) {
-    double phase_arr_time = p_event->p_arrivals[siteid*numtimedefphases + i]->time;
+    double phase_arr_time = (p_event->p_arrivals + siteid*numtimedefphases + i)->time;
     if (phase_arr_time < *first_arrival) {
       *first_arrival = phase_arr_time;
     }
@@ -224,10 +225,10 @@ void evt_arrival_times(Event_t * p_event, int siteid, int numtimedefphases, doub
   }
 }
 
-Event_t ** augment_events(int numevents, Event_t ** events, Event_t *event) {
-  Event_t ** augmented =  (Event_t **)malloc((numevents+1)* sizeof(Event *));
+const Event_t ** augment_events(int numevents, const Event_t ** events, const Event_t *event) {
+  const Event_t ** augmented =  (const Event_t **)malloc((numevents+1)* sizeof(Event_t *));
   CHECK_PTR(augmented);
-  memcpy(augmented, events, numevents*sizeof(Event *));
+  memcpy(augmented, events, numevents*sizeof(Event_t *));
   augmented[numevents] = event;
   return augmented;
 }
@@ -235,7 +236,9 @@ Event_t ** augment_events(int numevents, Event_t ** events, Event_t *event) {
 /* Return the score for this event: the ratio of signal likelihoods
    between a world where this event exists, and one where it
    doesn't. */
-double SignalPrior_Score_Event(SignalPrior_t * prior, SigModel * p_sigmodel, Event_t * event, int num_other_events, Events ** pp_other_events) {
+double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int num_other_events, const Event_t ** pp_other_events) {
+
+  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
 
   double score = 0;
   ChannelBundle_t * p_segment = p_sigmodel->p_segments;
@@ -249,29 +252,26 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, SigModel * p_sigmodel, Eve
     last_envelope_time += MAX_ENVELOPE_LENGTH;
 
     /* if this trace doesn't fall within that period, skip it */
-    if (p_signal->start_time > last_envelope_time || p_signal->end_time < first_envelope_time) {
+    if (p_segment->start_time > last_envelope_time || ChannelBundle_EndTime(p_segment) < first_envelope_time) {
       continue;
     }
 
     /* index within this trace at which the event arrives */
-    env_start_idx = time2idx(first_envelope_time, p_segment->start_time, p_segment->hz);
+    long env_start_idx = time2idx(first_envelope_time, p_segment->start_time, p_segment->hz);
     
     /* we compute scores for the background event set, and for an
        augmented event set which includes the specified event. */
-    Event_t ** augmented_events = augment_events(pp_other_events, event, num_other_events);
+    const Event_t ** augmented_events = augment_events(num_other_events, pp_other_events, p_event);
     
     double * p_means, * p_vars;
     long len;
-
-
-
 
     /* score augmented event set */
     double event_lp = 0;
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
 
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_earth, numevents+1, augmented_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
+      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
       long compare_len = MIN(len, p_segment->len - env_start_idx);
       event_lp +=  indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
       free(p_means);
@@ -283,14 +283,15 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, SigModel * p_sigmodel, Eve
     double background_lp = 0;
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_earth, numevents, p_world->pp_prop_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
-    background_lp +=  indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
-    free(p_means);
-    free(p_vars);
+      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events, pp_other_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
+      long compare_len = MIN(len, p_segment->len - env_start_idx);
+      background_lp +=  indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+      free(p_means);
+      free(p_vars);
     }
     score += (event_lp - background_lp);
 
-    p_signal++;
+    p_segment++;
   }
 
   return score;

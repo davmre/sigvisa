@@ -198,7 +198,7 @@ static int propose_from_eventobj(NetModel_t * p_netmodel,
 
 
 /* add events using the propose_invert proposer */
-static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel * p_sigmodel,
+static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
                                       World_t * p_world)
 {
   Event_t * pp_events[1000];     /* assume at most 1000 events init */
@@ -352,6 +352,20 @@ void resort_event(World_t * p_world, int curr_evnum)
   }
 }
 
+int list_other_events(World_t * p_world, int event, const Event_t *** ppp_other_events) {
+
+  int n = p_world->high_evnum - p_world->low_evnum - 1;
+  *ppp_other_events = (const Event_t **) malloc(n * sizeof(const Event_t *));
+  
+  int k=0;
+  for (int evnum=p_world->low_evnum; evnum < p_world->high_evnum; ++evnum) {
+    if (evnum != event) {
+      assert(k < n);
+      (*ppp_other_events)[k++] = p_world->pp_events[evnum];
+    }
+  }
+  return n;
+}
 
 static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, 
 			  World_t * p_world,
@@ -370,7 +384,7 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
     
     p_event = p_world->pp_events[evnum];
     
-    Event_t ** pp_other_events;
+    const Event_t ** pp_other_events;
     int num_other_events = -1;
     if (p_sigmodel != NULL) {
        num_other_events = list_other_events(p_world, evnum, &pp_other_events);
@@ -487,8 +501,7 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
 
 /* greedily find the best event-phase for a detection */
 static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
-  int detnum)
-{
+  int detnum) {
   EarthModel_t * p_earth;
   int numtimedefphases;
   Detection_t * p_detection;
@@ -651,29 +664,15 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
     change_one_detection(p_netmodel, p_world, replaced_detnum);
 }
 
-int list_other_events(World_t * p_world, int event, Event_t *** ppp_other_events) {
 
-  int n = p_world->high_evnum - p_world->low_evnum - 1;
-  *ppp_other_events = (Event_t **) malloc(n * sizeof(Event_t *));
-  
-  int k=0;
-  for (int evnum=p_world->low_evnum; evnum < high_evnum; ++evnum) {
-    if (evnum != event) {
-      assert(k < n);
-      (*ppp_other_events)[k++] = p_world->pp_events[evnum];
-    }
-  }
-  return n;
-}
-
-static void change_arrivals(Sigmodel * p_sigmodel, World_t * p_world) {
+static void change_arrivals(SigModel_t * p_sigmodel, World_t * p_world) {
 
   // to a first approximation: loop over events, for each event, optimize its arrivals
   // note that this is optimizing event scores instead of world scores
 
-  for (int evnum=p_world->low_evnum; evnum < high_evnum; ++evnum) {
-    
-    Event_t ** pp_other_events;
+  for (int evnum=p_world->low_evnum; evnum < p_world->high_evnum; ++evnum) {
+    Event_t * p_event = p_world->pp_events[evnum];
+    const Event_t ** pp_other_events;
     int num_other_events = list_other_events(p_world, evnum, &pp_other_events);
     optimize_arrivals(p_sigmodel, p_event, num_other_events, pp_other_events);
     free(pp_other_events);
@@ -772,7 +771,7 @@ static void free_saved_events(NetModel_t * p_netmodel,
 
 #endif /* SAVE_RESTORE */
 
-static void write_events(NetModel_t * p_netmodel, World_t * p_world)
+static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World_t * p_world)
 {
   PyObject * retval;
   double maxtime;
@@ -781,9 +780,18 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
   int i;
   int numevents;
   
-  if (p_world->high_evtime < p_netmodel->end_time)
+  assert(p_netmodel == NULL || p_sigmodel == NULL);
+
+  double end_time = (p_netmodel != NULL) ? 
+    p_netmodel->end_time : p_sigmodel->end_time;
+  double start_time = (p_netmodel != NULL) ? 
+    p_netmodel->start_time : p_sigmodel->start_time;
+
+  EarthModel_t * p_earth = (p_netmodel != NULL) ? p_netmodel->p_earth : p_sigmodel->p_earth;
+
+  if (p_world->high_evtime < end_time)
     maxtime = MAX(p_world->low_evtime - MAX_TRAVEL_TIME,
-                  p_netmodel->start_time);
+                  start_time);
   else
     maxtime = p_world->high_evtime;
   
@@ -794,7 +802,7 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
        i++)
     numevents ++;
 
-  convert_events_to_pyobj(p_netmodel->p_earth, 
+  convert_events_to_pyobj(p_earth, 
                           (const Event_t **) (p_world->pp_events 
                                               + p_world->write_evnum),
                           numevents, &eventsobj, &evdetlistobj);
@@ -812,10 +820,19 @@ static void write_events(NetModel_t * p_netmodel, World_t * p_world)
     }
   }
   
-  retval = PyObject_CallFunction(p_world->write_events_cb, "OOOOid", 
-                                 p_netmodel, p_netmodel->p_earth, 
-                                 eventsobj, evdetlistobj,
-                                 p_world->runid, maxtime);
+  if (p_netmodel != NULL) {
+    retval = PyObject_CallFunction(p_world->write_events_cb, "OOOOid", 
+				   p_netmodel, 
+				   p_earth, 
+				   eventsobj, evdetlistobj,
+				   p_world->runid, maxtime);
+  } else {
+    retval = PyObject_CallFunction(p_world->write_events_cb, "OOOOid", 
+				   p_sigmodel, 
+				   p_earth, 
+				   eventsobj, evdetlistobj,
+				   p_world->runid, maxtime);
+  }
 
   p_world->write_evnum += numevents;
   
@@ -944,7 +961,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     }
 
 
-    add_propose_invert_events(p_netmodel, p_world);
+    add_propose_invert_events(p_netmodel, NULL, p_world);
 
     /* change the detections to use these new events */
     change_detections(p_netmodel, p_world);
@@ -1009,7 +1026,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     p_world->low_evtime += p_world->step;
 
     /* write out any inferred events */
-    write_events(p_netmodel, p_world);
+    write_events(p_netmodel, NULL, p_world);
     
   } while (p_world->high_evtime < p_netmodel->end_time);
 
@@ -1118,9 +1135,9 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     for ( ; p_world->low_detnum < p_sigmodel->numdetections;
           p_world->low_detnum ++)
     {
-      FakeDetection_t * p_det;
+      Detection_t * p_det;
       
-      p_det = p_sigmodel->p_fake_detections + p_world->low_detnum;
+      p_det = p_sigmodel->p_detections + p_world->low_detnum;
       
       if (p_det->time_det >= p_world->low_evtime)
         break;
@@ -1130,18 +1147,18 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     for( ; p_world->high_detnum < p_sigmodel->numdetections;
          p_world->high_detnum ++)
     {
-      FakeDetection_t * p_det;
+      Detection_t * p_det;
       
-      p_det = p_sigmodel->p_fake_detections + p_world->high_detnum;
+      p_det = p_sigmodel->p_detections + p_world->high_detnum;
       
       if (p_det->time_det >= (p_world->high_evtime + MAX_TRAVEL_TIME))
         break;
     }
 
-    add_propose_invert_events_sig(p_sigmodel, p_world);
+    add_propose_invert_events(NULL, p_sigmodel, p_world);
 
     /* change the arrivals to use these new events */
-    change_arrivals_sig(p_sigmodel, p_world);
+    change_arrivals(p_sigmodel, p_world);
 
     /* keep track of whether or not we have wrapped around inverting
      * detections this will trigger further inverts to perturb around
@@ -1163,7 +1180,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       
       if (numdel > 0)
       {
-        change_arrivals_sig(p_sigmodel, p_world);
+        change_arrivals(p_sigmodel, p_world);
       }
       
       if (p_world->world_score < (old_score - 1e-6))
@@ -1174,7 +1191,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       
       change_events(NULL, p_sigmodel, p_world, 10);
 
-      change_arrivals_sig(p_sigmodel, p_world);
+      change_arrivals(p_sigmodel, p_world);
     };
     
     /* only remove negative events if numsamples > 0. This allows a
@@ -1203,7 +1220,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     p_world->low_evtime += p_world->step;
 
     /* write out any inferred events */
-    write_events(p_sigmodel, p_world);
+    write_events(NULL, p_sigmodel, p_world);
     
   } while (p_world->high_evtime < p_sigmodel->end_time);
 
@@ -1216,8 +1233,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     
       p_event = p_world->pp_events[i];
 
-      printf("orid %d - score %.1f computed score %.1f\n", p_event->orid, 
-             p_event->evscore, score_event(p_sigmodel, p_event));
+      printf("orid %d - score %.1f\n", p_event->orid, 
+             p_event->evscore);
     }
     printf("World Score %.1f\n", p_world->world_score);
   }
@@ -1265,9 +1282,9 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   infer_sig(p_sigmodel, p_world);
 
   /* convert the world to python structures */
-  //convert_events_to_pyobj(p_sigmodel->p_earth,
-  //                        (const Event_t **)p_world->pp_events,
-  //                        p_world->high_evnum, &eventsobj, &evdetlistobj);
+  convert_events_to_pyobj(p_sigmodel->p_earth,
+                          (const Event_t **)p_world->pp_events,
+                          p_world->high_evnum, &eventsobj, &evdetlistobj);
   
   free_world(p_world);
 

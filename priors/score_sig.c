@@ -15,7 +15,7 @@ static inline double log_add_exp(double logval1, double logval2)
 }
 
 
-double score_world_sig(SigModel_t * p_sigmodel, 
+/* double score_world_sig(SigModel_t * p_sigmodel, 
 			   int numevents, 
 			   Event_t * p_events,
 			   PyArrayObject * arrtimes,
@@ -35,9 +35,9 @@ double score_world_sig(SigModel_t * p_sigmodel,
     }
   }
   
-  /* p(events, ttimes | signals) \propto p(signals | events, ttimes)p(ttimes|events)p(events)  */
+  // p(events, ttimes | signals) \propto p(signals | events, ttimes)p(ttimes|events)p(events)  
 
-  /* p(events): prior probabilities of events */
+  // p(events): prior probabilities of events 
 
   numsc = NumEventPrior_LogTimeRate(&p_sigmodel->num_event_prior);
 
@@ -49,12 +49,11 @@ double score_world_sig(SigModel_t * p_sigmodel,
     magsc += EventMagPrior_LogProb(&p_sigmodel->event_mag_prior,
 				   p_event->evmag, 0);
   }
-  /* p(ttimes | events): prior probabilities of travel times, given
-     event (and station) locations */
+  // p(ttimes | events): prior probabilities of travel times, given event (and station) locations
   
   atimesc = ArrivalTimeJointPrior_LogProb(&p_sigmodel->arr_time_joint_prior, p_sigmodel->p_earth, numevents, p_events, arrtimes);
   
-  /* p(signals| events, ttimes): probability of signals given events and travel times. */
+  // p(signals| events, ttimes): probability of signals given events and travel times. 
   sigsc = SignalPrior_LogProb(&p_sigmodel->sig_prior, numsignals, p_signals, p_sigmodel->p_earth, numevents, p_events, arrtimes);
   
 
@@ -63,7 +62,7 @@ double score_world_sig(SigModel_t * p_sigmodel,
   fprintf(stdout, "score is %lf + %lf + %lf + %lf + %lf = %lf\n", numsc, locsc, magsc, atimesc, sigsc, score);
   return score;
 }
-
+*/
 
 
 
@@ -74,7 +73,8 @@ double score_world_sig(SigModel_t * p_sigmodel,
  * else returns log probability of mis-detection given event */
 static int score_event_int_sig(SigModel_t * p_sigmodel,
 			       const Event_t * p_event,
-			       int num_other_events, Events ** pp_other_events,
+			       int num_other_events, 
+			       const Event_t ** pp_other_events,
 			       double * p_arrtimesc,
 			       double * p_arrazsc,
 			       double * p_arrslosc,
@@ -91,28 +91,27 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
-  pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
-                                        p_event->evlat, p_event->evdepth,
-                                        p_event->evtime, phaseid,
-                                        siteid);
-  /* check if the site is in the shadow zone for the event - phase */
-  if (pred_arrtime < 0)
-    return 0;
-
-  /* check if the site is up */
-  if (!SigModel_IsSiteUp(p_sigmodel, siteid, pred_arrtime))
-    return 0;
   
-  Arrival_t * arr = p_event->p_arrivals[siteid*numtimedefphases + phaseid];
-  if (p_arrival == NULL) {
-    printf("error, no arrival info for event!\n");
-    return 0;
-  }
 
   for (int siteid = 0; siteid < numsites; ++siteid) {
-    for (int phaseid = 0l phaseid < numtimedefphases; ++phaseid) {
+    for (int phaseid = 0; phaseid < numtimedefphases; ++phaseid) {
 
-      *p_arrtimesc += ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_prior,
+      pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+					    p_event->evlat, p_event->evdepth,
+					    p_event->evtime, phaseid,
+					    siteid);
+      /* check if the site is in the shadow zone for the event - phase */
+      if (pred_arrtime < 0)
+	continue;
+
+      /* check if the site is up */
+      //if (!SigModel_IsSiteUp(p_sigmodel, siteid, pred_arrtime))
+      //continue;
+  
+      Arrival_t * arr = p_event->p_arrivals +(siteid*numtimedefphases + phaseid);
+
+      // TODO: use joint prior properly
+      *p_arrtimesc += ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_joint_prior.single_prior,
 					       arr->time, pred_arrtime,
 					       0, siteid,
 					       phaseid);
@@ -133,7 +132,7 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
 						 p_event->evlat, 
 						 p_event->evdepth, 
 						 phaseid, siteid); 
-      *p_arrslosc += ArrivalSlownessPrior_LogProb(&p_sigmodel->arr_az_prior,
+      *p_arrslosc += ArrivalSlownessPrior_LogProb(&p_sigmodel->arr_slo_prior,
 						  arr->azi, 
 						  pred_slo,
 						  0,
@@ -144,25 +143,26 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
       *p_ampsc += ArrivalAmplitudePrior_LogProb(&p_sigmodel->arr_amp_prior,
 						p_event->evmag, p_event->evdepth,
 						ttime, siteid, phaseid,
-						det->amp_det);
+						arr->amp);
       if (isnan(*p_ampsc))
 	{
 	  printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d phaseid %d"
 		 " amp %.2lg", p_event->evmag, p_event->evdepth,
-		 ttime, siteid, phaseid, det->amp_det);
+		 ttime, siteid, phaseid, arr->amp);
 	  exit(1);
 	}
     }
+  }
 
-  *p_sigsc += SignalPrior_Score_Event(&p_sigmodel->signal_prior, p_sigmodel, p_event,  num_other_events, pp_other_events);
+  *p_sigsc += SignalPrior_Score_Event(&p_sigmodel->sig_prior, p_sigmodel, p_event,  num_other_events, pp_other_events);
 
   return 1;
 }
 
 
- int score_event_sig(SigModel_t * p_sigmodel,
-		     const Event_t * p_event,
-		     int num_other_events, Events ** pp_other_events)
+int score_event_sig(SigModel_t * p_sigmodel,
+		     Event_t * p_event,
+		     int num_other_events, const Event_t ** pp_other_events)
 {
   int      poss;
   double   arrtimesc;
@@ -174,10 +174,10 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
 
   arrtimesc = arrazsc = arrslosc = arrampsc = sigsc = 0;
 
-  poss = score_event_sig_int(p_sigmodel, p_event, p_world,
-			 &arrtimesc, &arrazsc, 
-			 &arrslosc, &arrampsc, &sigsc
-			 );
+  poss = score_event_int_sig(p_sigmodel, p_event, 
+			     num_other_events, pp_other_events,
+			     &arrtimesc, &arrazsc, 
+			     &arrslosc, &arrampsc, &sigsc);
 
   p_event->evscore = arrtimesc + arrazsc + arrslosc + arrampsc + sigsc;
 
@@ -185,14 +185,14 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
 }
 
 
-
+ /*
 double prob_event(SigModel_t * p_sigmodel, Event_t * p_event)
 {
   Event_t curr_event;
   double logprob;
   double step_z;
 
-  /* make a copy of the event to work with */
+  // make a copy of the event to work with 
   curr_event = *p_event;
 
   #define STEP_LON 1
@@ -230,7 +230,7 @@ double prob_event(SigModel_t * p_sigmodel, Event_t * p_event)
           {
             double score;
             
-            score = score_event(p_sigmodel, &curr_event);
+            score = score_event_sig(p_sigmodel, &curr_event);
             
             logprob = log_add_exp(logprob, score);
           }
@@ -243,14 +243,4 @@ double prob_event(SigModel_t * p_sigmodel, Event_t * p_event)
     + log(STEP_MAG);
   
   return logprob;
-}
-
-int compare_double(const double * pnum1, const double * pnum2)
-{
-  if (*pnum1 < *pnum2)
-    return -1;
-  else if (*pnum1 > *pnum2)
-    return 1;
-  else
-    return 0;
-}
+}*/

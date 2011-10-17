@@ -7,6 +7,7 @@
 static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
 
@@ -16,12 +17,12 @@ static PyMethodDef SigModel_methods[] = {
   {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
    "set_signals(traces) "
    "-> num_translated\n"},
-  {"set_fake_detections", (PyCFunction)py_set_fakedets, METH_VARARGS,
+  {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "
    "-> num_translated\n"},
   {"canonical_channel_num", (PyCFunction)py_canonical_channel_num, METH_VARARGS,
    "canonical_channel_num(chan_name) "
-   "-> channel_num\n"}.
+   "-> channel_num\n"},
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
    "score_world(events, arrtimes, verbose) "
    "-> log probability\n"},
@@ -87,9 +88,12 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * evloc_fname;
   const char * evmag_fname;
   const char * arrtime_fname;
+  const char * arrazi_fname;
+  const char * arrslo_fname;
+  const char * arramp_fname;
   const char * sig_fname;
   
-  if (!PyArg_ParseTuple(args, "Oddsssss", &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &sig_fname))
+  if (!PyArg_ParseTuple(args, "Oddssssssss", &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname))
     return -1;
   
   if (end_time <= start_time)
@@ -114,6 +118,10 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
   EventMagPrior_Init_Params(&self->event_mag_prior, 1, evmag_fname);
   ArrivalTimeJointPrior_Init_Params(&self->arr_time_joint_prior, arrtime_fname);
+  ArrivalAzimuthPrior_Init_Params(&self->arr_az_prior, arrazi_fname);
+  ArrivalSlownessPrior_Init_Params(&self->arr_slo_prior, arrslo_fname);
+  ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
+
   SignalPrior_Init_Params(&self->sig_prior, sig_fname, p_earth->numsites);
   fflush(stdout);
 
@@ -147,12 +155,12 @@ static void py_sig_model_dealloc(SigModel_t * self)
   
   for (int i=0; i < self->numsegments; ++i) {
     for(int j=0; j < NUM_CHANS; ++j) {
-      Signal_t *channel = self->p_segments[i]->p_channels[j];
+      Signal_t *channel = self->p_segments[i].p_channels[j];
       if (channel != NULL) {
 	Py_DECREF(channel->py_array);
       }
     }
-    free(self->p_segments[i]->p_channels;
+    free(self->p_segments[i].p_channels);
   }
   free(self->p_segments);
 
@@ -253,8 +261,11 @@ static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args)
   PyArrayObject * p_arrtimes = convert_arrtimes(p_sigmodel, (PyObject *)p_arrtimes_arrobj);
 
   int verbose = 1;
-  score = score_world_sig(p_sigmodel, numevents, p_events, p_arrtimes, verbose);
   
+  // TODO: make world scoring work
+  //score = score_world_sig(p_sigmodel, numevents, p_events, p_arrtimes, verbose);
+  score = -1;
+
   free_events(numevents, p_events);
   
   return Py_BuildValue("d", score);
@@ -274,7 +285,7 @@ static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args)
 
 
 int print_signal(Signal_t * signal) {
-  int result = fprintf(stdout, "Signal: at station %d, sampling rate %f, samples %d, start time %f, end time %f\n", 
+  int result = fprintf(stdout, "Signal: at station %d, sampling rate %f, samples %ld, start time %f, end time %f\n", 
 		       signal->siteid, 
 		       signal->hz, 
 		       signal->len, 
@@ -286,19 +297,19 @@ int print_signal(Signal_t * signal) {
 
  int canonical_channel_num(char* chan_str) {
    int result = -1;
-  if (strcmp("BHZ", chan_str) == 0) {
-    result = CHAN_BHZ;
-  } else if (strcmp("BHE", chan_str) == 0) {
-    result = CHAN_BHE;
-  } else if (strcmp("BHN", chan_str) == 0) {
-    result = CHAN_BHN;
-  } else {
-    result = CHAN_OTHER;
-  } 
-  return result;
+   if (strcmp("BHZ", chan_str) == 0) {
+     result = CHAN_BHZ;
+   } else if (strcmp("BHE", chan_str) == 0) {
+     result = CHAN_BHE;
+   } else if (strcmp("BHN", chan_str) == 0) {
+     result = CHAN_BHN;
+   } else {
+     result = CHAN_OTHER;
+   } 
+   return result;
  }
 
-static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args) 
+static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args) {
   PyObject * py_chan_str;
   if (!PyArg_ParseTuple(args, "O!", &PyString_Type, &py_chan_str))
     return NULL;
@@ -364,7 +375,7 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
   PyObject * py_chan = PyDict_GetItem(stats, key);
   Py_DECREF(key);
   char* chan_str = PyString_AsString(py_chan);
-  py_chan->chan = canonical_channel_num(chan_str);
+  p_signal->chan = canonical_channel_num(chan_str);
   
   /*fprintf(stdout, "Converted ");
     print_signal(p_signal);*/
@@ -378,7 +389,6 @@ int trace_bundle_to_channel_bundle(PyObject * trace_bundle, ChannelBundle_t * pp
   }
   int n = PyList_Size(trace_bundle);
 
-  pp_channell_bundle->p_channels = calloc(NUM_CHANS, sizeof(Signal_t));
   Signal_t * temp;
 
   pp_channel_bundle->len = -1;
@@ -389,15 +399,15 @@ int trace_bundle_to_channel_bundle(PyObject * trace_bundle, ChannelBundle_t * pp
   int i;
   for (i=0; i < n; ++i) {
     PyObject * p_trace = PyList_GetItem(trace_bundle, i);
-    temp = p_signal = malloc(sizeof(Signal_t));
+    temp = malloc(sizeof(Signal_t));
     trace_to_signal(p_trace, temp);
     pp_channel_bundle->p_channels[temp->chan] = temp;
 
     /* ensure that all channels within a bundle have the same attributes */
-    UPDATE_AND_VERIFY(pp_channel_bundle->len, temp->len);
-    UPDATE_AND_VERIFY(pp_channel_bundle->start_time, temp->start_time);
-    UPDATE_AND_VERIFY(pp_channel_bundle->hz, temp->hz);
-    UPDATE_AND_VERIFY(pp_channel_bundle->siteid, temp->siteid);
+    UPDATE_AND_VERIFY(&pp_channel_bundle->len, temp->len);
+    UPDATE_AND_VERIFY(&pp_channel_bundle->start_time, temp->start_time);
+    UPDATE_AND_VERIFY(&pp_channel_bundle->hz, temp->hz);
+    UPDATE_AND_VERIFY(&pp_channel_bundle->siteid, temp->siteid);
   }
   
   return i;
@@ -454,14 +464,14 @@ int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
       exit(1);
     }
 
-    (*pp_detections)[i]->id_det = (int)PyInt_AsLong(PyTuple_GetItem(0));
-    (*pp_detections)[i]->site_det = (int)PyInt_AsLong(PyTuple_GetItem(1));
-    (*pp_detections)[i]->time_det = (double)PyFloat_AsDouble(PyTuple_GetItem(2));
-    (*pp_detections)[i]->amp_det = (double)PyFloat_AsDouble(PyTuple_GetItem(3));
-    (*pp_detections)[i]->azi_det = (double)PyFloat_AsDouble(PyTuple_GetItem(4));
-    (*pp_detections)[i]->slo_det = (double)PyFloat_AsDouble(PyTuple_GetItem(5));
+    (*pp_detections)[i].arid_det = (int)PyInt_AsLong(PyTuple_GetItem(p_fakedet, 0));
+    (*pp_detections)[i].site_det = (int)PyInt_AsLong(PyTuple_GetItem(p_fakedet, 1));
+    (*pp_detections)[i].time_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 2));
+    (*pp_detections)[i].amp_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 3));
+    (*pp_detections)[i].azi_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 4));
+    (*pp_detections)[i].slo_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 5));
 
-    (*pp_detections)[i]->sigvisa_fake = 1;
+    (*pp_detections)[i].sigvisa_fake = 1;
   }
 
   return i;
@@ -473,7 +483,7 @@ static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args)
     return NULL;
 
 
-  int n = dete(p_detlist_obj, &p_sigmodel->p_detections);
+  int n = convert_fake_detections(p_detlist_obj, &p_sigmodel->p_detections);
   p_sigmodel->numdetections = n;
   
   return Py_BuildValue("n", n);
@@ -583,7 +593,7 @@ Event_t * alloc_event_sig(SigModel_t * p_sigmodel)
   p_event->p_all_detids = NULL;
   p_event->p_num_dets = NULL;
 
-  p_event->p_arrivals = = (Arrival_t *) calloc(numsites * numtimedefphases,
+  p_event->p_arrivals = (Arrival_t *) calloc(numsites * numtimedefphases,
                                        sizeof(*p_event->p_arrivals));
   return p_event;
 }
@@ -609,8 +619,8 @@ void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
   int numsites;
   int numtimedefphases;
   
-  numsites = EarthModel_NumSites(p_netmodel->p_earth);
-  numtimedefphases = EarthModel_NumTimeDefPhases(p_netmodel->p_earth);
+  numsites = EarthModel_NumSites(p_sigmodel->p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
  
   /* save the arrivals pointer */
   p_tgt_arrivals = p_tgt_event->p_arrivals;
@@ -632,4 +642,9 @@ void print_event(const Event_t * p_event)
          p_event->evlon, p_event->evlat, p_event->evdepth,
          p_event->evtime, p_event->evmag, p_event->evscore,
          p_event->orid);
+}
+
+
+double ChannelBundle_EndTime(ChannelBundle_t * b) {
+  return b->start_time + (b->len / b->hz);
 }

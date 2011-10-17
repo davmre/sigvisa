@@ -253,6 +253,8 @@ def main(param_dirname):
     stations = np.array(cursor.fetchall())
     siteids = dict(stations)
     stations = stations[:,0]
+
+
     
     # convert all values in the siteids dictionary from strings to ints
     # TODO: figure out the proper pythonic way to do this
@@ -261,16 +263,20 @@ def main(param_dirname):
       siteids_ints[sta] = int(siteids[sta])
     siteids = siteids_ints
 
-    traces = sigvisa.load_traces(cursor, stations, start_time, end_time)
-    f = lambda trace: sigvisa.window_energies(trace, window_size=1, overlap=.5)
-    opts = dict(window_size=1, overlap=.5)
-    energies = sigvisa.process_traces(traces, f, opts)
 
     print "creating sigvisa model..."
     sigmodel = learn.load_sigvisa("parameters",
                                   start_time, end_time,
                                   detections, site_up, sites, siteids, phasenames,
                                   phasetimedef)
+
+    #traces = sigvisa.load_traces(cursor, stations, start_time, end_time)
+    traces = sigvisa.synthesize_traces()
+
+    f = lambda trace: sigvisa.window_energies(trace, window_size=1, overlap=.5)
+    opts = dict(window_size=1, overlap=.5)
+    energies = sigvisa.process_traces(traces, f, opts)
+
     print "learning noise params, as a temporary hack"
     sigmodel.learn_from_scratch(cursor, energies, start_time, end_time, detections, arid2num)
     model = sigmodel

@@ -53,16 +53,6 @@ double ArrivalTimeJointPrior_LogProb(const ArrivalTimeJointPrior_t * prior,
 
 }
 
-double ArrivalTimeJointPrior_Point(const ArrivalTimeJointPrior_t * prior,
-				     EarthModel_t * p_earth,
-				     int numevents,
-				     Event_t * events,
-				     PyArrayObject * arrtimes) {
-
-  double pred_arrtime = EarthModel_ArrivalTime(p_earth, event->evlon, event->evlat, event->evdepth, event->evtime, phaseid, siteid);
-
-}
-
 void ArrivalTimeJointPrior_UnInit(ArrivalTimeJointPrior_t * prior)
 {
   ArrivalTimePrior_UnInit(&prior->single_prior);

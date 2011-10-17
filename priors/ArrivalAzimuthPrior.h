@@ -14,8 +14,4 @@ double ArrivalAzimuthPrior_LogProb(const ArrivalAzimuthPrior_t * prior,
                                    double arraz, double pred_arraz,
                                    double det_delaz, int siteid, int phaseid);
 
-double ArrivalAmplitudePrior_Point(const ArrivalAmplitudePrior_t * prior,
-				   double mb, double depth, double ttime,
-				   int siteid, int phaseid);
-
 void ArrivalAzimuthPrior_UnInit(ArrivalAzimuthPrior_t * prior);

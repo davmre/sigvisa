@@ -1,27 +1,12 @@
 PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args);
 
-int propose_hough(NetModel_t * p_netmodel, Event_t **pp_events,
-                  double time_low, double time_high, int det_low,
-                  int det_high, double degree_step, double time_step);
-
-
-int propose_invert_timed(NetModel_t * p_netmodel, Event_t **pp_events,
-                         double time_low, double time_high, int det_low,
-                         int det_high, double degree_delta, int num_secs,
-                         int numthreads);
-
-int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
+int propose_invert_step(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
+			Event_t **pp_events,
                         double time_low, double time_high, int det_low,
                         int det_high, double degree_step, int num_step,
                         int numthreads);
 
-int propose_invert_step_sig(SigModel_t * p_sigmodel, Event_t **pp_events,
-			    double time_low, double time_high, 
-			    double degree_step, int num_step,
-			    int numthreads);
-
-
-static void optimize_arrivals(SigModel_t * p_sigmodel,
-			      Event_t * p_event,
-			      int num_other_events,
-			      Event_t ** pp_other_events);
+void optimize_arrivals(SigModel_t * p_sigmodel,
+		       Event_t * p_event,
+		       int num_other_events,
+		       const Event_t ** pp_other_events);
