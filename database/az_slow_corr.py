@@ -79,8 +79,8 @@ class AzSlowCorr:
     Returns corrected azimuth slowness and their errors
     """
     # if the input values are not valid return them unmodified
-    if raw_azimuth < 0 or raw_slow < 0 or delaz < 0 or delslo < 0:
-      return azimuth, slow, delaz, delslo
+    if raw_azimuth < 0 or raw_slow <= 0 or delaz < 0 or delslo < 0:
+      return raw_azimuth, raw_slow, delaz, delslo
     
     azimuth, slow = raw_azimuth, raw_slow
     tot_az_error, tot_slow_err = delaz, delslo
