@@ -7,6 +7,8 @@ import database.db
 import netvisa, sigvisa, learn
 from results.compare import *
 from utils.geog import dist_km, degdiff
+from utils.waveform import *
+from sigvisa_util import *
 
 def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
                 sel3_events, sel3_evlist):
@@ -248,14 +250,12 @@ def main(param_dirname):
 
     # load sigvisa stuff
   if options.sigvisa:
-    print "loading traces for SIGVISA..."
+    #print "loading traces for SIGVISA..."
     cursor.execute("select sta, id from static_siteid where statype='ss'")
     stations = np.array(cursor.fetchall())
     siteids = dict(stations)
     stations = stations[:,0]
 
-
-    
     # convert all values in the siteids dictionary from strings to ints
     # TODO: figure out the proper pythonic way to do this
     siteids_ints = dict()
@@ -263,22 +263,31 @@ def main(param_dirname):
       siteids_ints[sta] = int(siteids[sta])
     siteids = siteids_ints
 
-
     print "creating sigvisa model..."
     sigmodel = learn.load_sigvisa("parameters",
                                   start_time, end_time,
-                                  detections, site_up, sites, siteids, phasenames,
+                                  site_up, sites, phasenames,
                                   phasetimedef)
 
     #traces = sigvisa.load_traces(cursor, stations, start_time, end_time)
-    traces = sigvisa.synthesize_traces()
+    stalist = (25, 104, 12)
+    evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1))  )
+    sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
 
-    f = lambda trace: sigvisa.window_energies(trace, window_size=1, overlap=.5)
-    opts = dict(window_size=1, overlap=.5)
-    energies = sigvisa.process_traces(traces, f, opts)
+    signals = sigmodel.get_signals()
+    print "got signals"
+    print signals
 
-    print "learning noise params, as a temporary hack"
-    sigmodel.learn_from_scratch(cursor, energies, start_time, end_time, detections, arid2num)
+    sta_high_thresholds = dict()
+    sta_low_thresholds = dict()
+    for i in range(200):
+      sta_high_thresholds[i] = 4
+      sta_low_thresholds[i] = 0.9
+    print "signals set, computing fake detections"
+    fake_det = fake_detections(signals, sta_high_thresholds, sta_low_thresholds)
+    print fake_det
+    return
+  
     model = sigmodel
 
 ##   if options.verbose:
@@ -331,7 +340,7 @@ def main(param_dirname):
     propose_events = None
 
   if options.sigvisa:
-    events = sigmodel.infer(runid, energies, options.numsamples,
+    events = sigmodel.infer(runid, options.numsamples,
                                       options.birthsteps,
                                       options.window, options.step,
                                       options.threads,
@@ -339,6 +348,8 @@ def main(param_dirname):
                                       options.verbose,
                                       lambda a,b,c,d,e,f:
                                       write_events(a,b,c,d,e,f,detections))
+    print "inferred events", events
+    return
   else:
     events, ev_detlist = netmodel.infer(runid, options.numsamples,
                                       options.birthsteps,

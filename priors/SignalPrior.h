@@ -21,4 +21,10 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
 
 double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * event, int num_other_events, const Event_t ** pp_other_events);
 
+void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior, 
+				   EarthModel_t * p_earth, 
+				   int numevents, 
+				   const Event_t ** pp_events,
+				   ChannelBundle_t * p_segment);
+
 void SignalPrior_UnInit(SignalPrior_t * prior);

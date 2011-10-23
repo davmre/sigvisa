@@ -81,6 +81,35 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
     
     #st.plot(color='k')
 
+def plot_segment(channel_traces, all_det_times=None):
+  plt.figure()
+  plt.xlabel("Time (s)")
+
+  for chidx, trc in enumerate(channel_traces):
+    if chidx == 0:
+      axes = plt.subplot(len(channel_traces), 1, 1)
+    else:
+      plt.subplot(len(channel_traces), 1, chidx+1, sharex=axes)
+      
+    chan_name = trc.stats["channel"]
+
+    plt.ylabel(chan_name)
+
+    if trc.stats["window_size"] is not None:
+      srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
+      npts = trc.stats.npts_processed
+    else:
+      srate = trc.stats.sampling_rate
+      npts = trc.stats.npts
+    timevals = np.arange(0, npts/srate, 1.0 /srate)
+
+    plt.plot(timevals, trc, 'k:')
+
+    if all_det_times is not None:
+      maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+      plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
+              width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
+  plt.show()
 
 def fetch_array_elements(siteid):
   cursor = database.db.connect().cursor()

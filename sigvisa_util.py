@@ -7,11 +7,13 @@ import scipy.optimize
 
 from optparse import OptionParser
 from obspy.core import Trace, Stream, UTCDateTime
+import obspy.signal.filter
+from obspy.signal.trigger import triggerOnset
 
 from database import db, dataset
 import utils.waveform
 import netvisa, learn
-
+import sys
 
 def arrtime_point_matrix(numsites, events, numphases, earthmodel):
     arrtimes = np.zeros((numsites, len(events), numphases))
@@ -59,18 +61,21 @@ def window_energies(trace, window_size=1, overlap=0.5):
   
   return windows
 
-def load_traces(cursor, stations, start_time, end_time):
+def load_traces(cursor, stations, start_time, end_time, small):
     traces = []
-    for sta in stations:
-        cursor.execute("select chan,time,endtime from idcx_wfdisc where sta='%s'" 
-                       "and endtime > %f and time < %f order by time,endtime" % 
-                       (sta, start_time, end_time))
+
+    for (idx, sta) in enumerate(stations):
+        if (small and idx > 2):
+            break
+
+        sql = "select chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
+        cursor.execute(sql)
         wfdiscs = cursor.fetchall()
 
         last_stime = -1
         last_etime = -1
         segment_chans = []
-        for (chan, stime, etime) in waveforms:
+        for (chan, stime, etime) in wfdiscs:
             if stime != last_stime or etime != last_etime:
                 if len(segment_chans) > 0:
                     traces.append(segment_chans)
@@ -104,35 +109,103 @@ def max_over_channels(channel_bundle):
             max_data[i] = np.max((max_data[i], channel.data[i]))
     return max_data
 
-def estimate_azi_amp(channel_bundle, det_time, det_len):
 
-    for chan in channel_bundle:
-        det_idx = round((det_time - chan.stats['starttime_unix']) * chan.stats['sampling_rate'])
-        det_end_idx = det_idx + round(det_len * chan.stats['sampling_rate'])
 
-        if chan.stats['channel'] == "BHE":
-            bhe_det_signal = chan.data[det_idx:det_end_idx]
-            bhe_det_energy = np.linalg.norm(bhe_det_signal, 2)
-        else if chan.stats['channel'] == "BHN":
-            bhn_det_signal = chan.data[det_idx:det_end_idx]
-            bhn_det_energy = np.linalg.norm(bhn_det_signal, 2)
-        else if chan.stats['channel'] == "BHZ":
-            bhz_det_signal = chan.data[det_idx:det_end_idx]
-            bhz_det_energy = np.linalg.norm(bhz_det_signal, 2)
+def enframe(x, win, inc):
+    """
+    Splits the vector up into (overlapping) frames beginning at increments
+    of inc. Each frame is multiplied by the window win().
+    The length of the frames is given by the length of the window win().
+    The centre of frame I is x((I-1)*inc+(length(win)+1)/2) for I=1,2,...
+    
+    :param x: signal to split in frames
+    :param win: window multiplied to each frame, length determines frame length
+    :param inc: increment to shift frames, in samples
+    :return f: output matrix, each frame occupies one row
+    :return length, no_win: length of each frame in samples, number of frames
+    """
+    nx = len(x)
+    nwin = len(win)
+    if (nwin == 1):
+        length = win
+    else:
+	        #length = nextpow2(nwin)
+        length = nwin
+    nf = int(np.fix((nx - length + inc) // inc))
+	    #f = np.zeros((nf, length))
+    indf = inc * np.arange(nf)
+    inds = np.arange(length) + 1
+    f = x[(np.transpose(np.vstack([indf] * length)) + \
+               np.vstack([inds] * nf)) - 1]
+    if (nwin > 1):
+        w = np.transpose(win)
+        f = f * np.vstack([w] * nf)
+    no_win, _ = f.shape
+    return f, length, no_win
+    
 
-        # TODO: learn these functions properly
+def estimate_azi_amp_slo(channel_bundle_det_window):
 
-        # angle of 0 means due north
-        tan_azi = bhe_det_energy/bhn_det_energy
-        tan_decl = bhz_det_energy/bhe_det_energy
-        energy = np.linalg.norm((bhz_det_energy, bhn_det_energy, bhe_det_energy), 2)
-        
-        return np.degrees(np.arctan(tan_azi)), energy, np.degrees(np.arctan(tan_decl))
+    FRAME_LEN = 20
+    FRAME_INC = 5
+
+    bhe_num = 0
+    bhn_num = 1
+    bhz_num = 2
+
+    # first dim is channel, second is frame, third is idx
+    frames = np.array(map(lambda chan : enframe(chan, obspy.signal.invsim.cosTaper(FRAME_LEN, .1), FRAME_INC)[0], channel_bundle_det_window))
+
+    maxamp = -1
+    maxamp_azi = None
+    maxamp_slo = None
+    nframes = frames.shape[1]
+    for frameno in range(nframes):
+        A = np.matrix(frames[:,frameno,:]).squeeze()
+
+        M = (A-np.mean(A,axis=1))
+        covM = np.cov(M)
+        l,u = np.linalg.eigh(covM)
+
+        # sort so that largest eigenvalue is first
+        reorder = np.argsort(l)[::-1]
+        l = np.take(l, reorder)
+        u = np.take(u, reorder, axis=1)
+
+        amp = np.linalg.norm(l, 2)
+        rect = 1 - (l[2] + l[1])/ (2 * l[0])
+
+        inang1 = np.rad2deg(np.arccos(np.abs(u[bhz_num,0])))
+        inang3 = np.rad2deg(np.arccos(np.abs(u[bhz_num,2])))
+
+        seazp = np.rad2deg(np.arctan2(u[bhn_num,0], u[bhe_num,0])) + 180
+
+        if amp > maxamp:
+            maxamp = amp
+            maxamp_azi = seazp
+            maxamp_slo = inang1
+
+    return maxamp_azi, maxamp, maxamp_slo
 
 def det2fake(detections):
     fake = []
     for det in detections:
         fake.append((len(fake), det[0], det[2], det[10], det[4], det[6]))
+
+def order_channels(channel_bundle):
+    nchans = len(channel_bundle)
+    bhe_num = None
+    bhz_num = None
+    bhn_num = None
+    for chan_num in range(nchans):
+        chan = channel_bundle[chan_num]
+        if chan.stats['channel'] == "BHE":
+            bhe_num = chan_num
+        elif chan.stats['channel'] == "BHN":
+            bhn_num = chan_num
+        elif chan.stats['channel'] == "BHZ":
+            bhz_num = chan_num
+    return channel_bundle[bhe_num], channel_bundle[bhn_num], channel_bundle[bhz_num]
 
 def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
     # loop over traces
@@ -141,20 +214,32 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
 
     detections = []
     for channel_bundle in traces:
-        max_data = max_over_channels(channel_bundle)
-        chan = channel_bundle[0].stats["channel"]
+        channel_bundle = order_channels(channel_bundle)
         siteid = channel_bundle[0].stats["siteid"]
         samprate = channel_bundle[0].stats["sampling_rate"]
-        cft_data = obspy.signal.recStalta(filtered_data, int(1.5 * samprate),
+        start_time = channel_bundle[0].stats["starttime_unix"]
+            
+        print "computing sta/lta and triggers at ", siteid
+        max_data = max_over_channels(channel_bundle)
+        cft_data = obspy.signal.recStalta(max_data, int(1.5 * samprate),
                                           int(60 * samprate))
         triggers = triggerOnset(cft_data, sta_high_thresholds[siteid], sta_low_thresholds[siteid], 50 * samprate)
-    
+
+        print " estimating detection info ..., "
+        i=0
         for (trigger_start, trigger_end) in triggers:
             det_id = len(detections)
-            det_time = trigger_start
-            det_len = trigger_end - trigger_start
-            det_azi, det_amp, det_slo = estimate_azi_amp_slow(channel_bundle, det_time, det_len)
-            detections.append((det_id, siteid, det_time, det_amp, det_azi, det_slo))
+            det_time = trigger_start / samprate + start_time
+            
+            channel_bundle_window = map(lambda c : c[trigger_start:trigger_end], channel_bundle)
+
+            det_azi, det_amp, det_slo = estimate_azi_amp_slo(channel_bundle_window)
+            if det_azi is not None:
+                det = (det_id, siteid, det_time, det_amp, det_azi, det_slo)
+                print "adding det", det
+                detections.append(det)
+                i = i+1
+    return detections
 
 def process_traces(traces, f, opts):
     # process each trace to yield a representation suitable for inference.
@@ -172,16 +257,23 @@ def process_traces(traces, f, opts):
         processed_traces.append(processed_traces_sta)
     return processed_traces
 
-def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5):
+def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, small=False):
     cursor.execute("select sta, id from static_siteid where statype='ss'")
     stations = np.array(cursor.fetchall())
     stations = stations[:,0]
 
-    traces = load_traces(cursor, stations, start_time, end_time)
+    traces = load_traces(cursor, stations, start_time, end_time, small)
     f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
     opts = dict(window_size=window_size, overlap=overlap)
     energies = process_traces(traces, f, opts)
     return energies, traces
+
+def print_trace(trace):
+    prevx = None
+    for (i, x) in enumerate(trace.data):
+        if x != prevx:
+            print i, x
+            prevx = x
 
 def main():
     parser = OptionParser() 
@@ -200,13 +292,15 @@ def main():
                     help = "set of events for which to compute likelihood: visa, leb, or sel3 (leb)")
     parser.add_option("--runid", dest="runid", default=None, type="int",
                     help = "ID of netvisa run from which to use events (0)")
+    parser.add_option("--small", dest="small", default=False, action = "store_true",
+                    help = "read only a small subset of signals, for debugging (False)")
     parser.add_option("-g", "--gui", dest="gui", default=None,
                     help = "show trace and envelope plots (False)")
     (options, args) = parser.parse_args()
 
     # read traces for each station
     cursor = db.connect().cursor()
-    energies, traces = load_and_process_traces(cursor, options.start_time, options.end_time, options.window_size, options.overlap)
+    energies, traces = load_and_process_traces(cursor, options.start_time, options.end_time, options.window_size, options.overlap, options.small)
     print "loaded energies"
 
     # load earth and net models
@@ -233,6 +327,17 @@ def main():
     print "sigvisa loaded, setting signals"
     sm.set_signals(energies)
 
+    print "set energies"
+
+    recovered = sm.get_signals()
+    print "recovered this:"
+    #utils.waveform.plot_segment(energies[0])
+    utils.waveform.plot_segment(recovered[0])
+
+    plt.show()
+
+    return
+    
     sta_high_thresholds = dict()
     sta_low_thresholds = dict()
     for i in range(200):
@@ -240,6 +345,8 @@ def main():
         sta_low_thresholds[i] = 0.6
     print "signals set, computing fake detections"
     fake_det = fake_detections(traces, sta_high_thresholds, sta_low_thresholds)
+
+    return
 
     # read appropriate event set (e.g. netvisa)
     MAX_TRAVEL_TIME = 2000
@@ -264,7 +371,7 @@ def main():
 
     #print "learning params..."
 
-    sm.set_fake_detections(det2fake(detections))
+    #sm.set_fake_detections(det2fake(detections))
 
     
     

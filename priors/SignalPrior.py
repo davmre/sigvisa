@@ -4,7 +4,7 @@ import scipy.optimize
 import time
 
 from obspy.core import Trace, Stream, UTCDateTime
-
+import sigvisa
 
 
 

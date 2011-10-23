@@ -39,7 +39,7 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
 
     int siteid;
     int num_chans;
-    if (1 != fscanf(fp, "%d %d", &siteid, &num_chans)) {
+    if (2 != fscanf(fp, "%d %d", &siteid, &num_chans)) {
       fprintf(stderr, "error reading siteid and num_chans from station line %d of %s\n", i, filename);
       exit(1);
     }
@@ -68,6 +68,14 @@ void vector_times_scalar_inplace(int n, double * vector, double scalar) {
     *(vector++) *= scalar;
   }
 }
+double * vector_times_scalar_copy(int n, double * vector, double scalar) {
+  double * nvector = malloc(n * sizeof(double));
+  for (int i=0; i < n; ++i) {
+    nvector[i] = vector[i]*scalar;
+  }
+  return nvector;
+}
+
 
 void print_vector(int n, double * vector) {
   for(int i=0; i < n; ++i) {
@@ -97,27 +105,32 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
 
 
 void phase_env(SignalPrior_t * prior, 
-	       EarthModel_t * p_earth, 
-	       const Event_t * event, 
+	       const Arrival_t * p_arr, 
 	       double hz,
-	       int siteid,
-	       int phaseid,
 	       int chan_num,
 	       double ** p_envelope,
 	       int * t) {
 
-  // TODO: make use of chanid
+  double newmean = prior->env_height * exp(p_arr->amp);
 
-  double distance_deg = EarthModel_Delta(p_earth, event->evlon, event->evlat, siteid);
-  double distance_mi = 12000 * (distance_deg/180);
+  double component_coeff = 0;
+  switch (chan_num) {
+  case CHAN_BHE:
+    component_coeff = SPHERE2X(p_arr->azi, p_arr->slo); break;
+  case CHAN_BHN:
+    component_coeff = SPHERE2Y(p_arr->azi, p_arr->slo); break;
+  case CHAN_BHZ:
+    component_coeff = SPHERE2Z(p_arr->azi, p_arr->slo); break;
+  }
 
-  double newmean = prior->env_height / distance_mi * exp(event->evmag);
+  //  printf("generating event signal with arrival azi %lf and slo %lf\n", p_arr->azi, p_arr->slo);
+  //  printf("channel is %d and ratio is %lf\n", chan_num, component_coeff);
 
   double step = (prior->env_decay / hz);
   int len = ceil( newmean / step );
   double * means = (double *) calloc(len, sizeof(double));
   for (int i=0; i < len; ++i) {
-    means[i] = newmean;
+    means[i] = newmean * component_coeff;
     newmean -= step;
   }
   
@@ -153,28 +166,38 @@ void envelope_means_vars(SignalPrior_t * prior,
 			 double ** pp_vars) {
  
 
+
+
   (*p_len) = time2idx(end_time, start_time, hz);
 
   (*pp_means) = (double *) calloc(*p_len, sizeof(double));
   double *p_means = (*pp_means);
-  (*pp_vars) = (double *) calloc(*p_len, sizeof(double));
-  double *p_vars = (*pp_vars);
+
+  double *p_vars=0;
+  if (pp_vars != NULL) {
+    (*pp_vars) = (double *) calloc(*p_len, sizeof(double));
+    p_vars = (*pp_vars);
+  }
 
   double noise_mean = (prior->p_stations + siteid)->chan_means[chan_num];
   double noise_var = (prior->p_stations + siteid)->chan_means[chan_num];
   for (int i=0; i < *p_len; ++i) {
     p_means[i] = noise_mean;
-    p_vars[i] = noise_var;
+    if (pp_vars != NULL) p_vars[i] = noise_var;
   }
 
   for (int i=0; i < numevents; ++i) {
-
+    
     const Event_t * p_event = pp_events[i];
 
     // for (int phaseid = 0; phaseid < p_earth->num_phases; ++phaseid) {    
     int phaseid = 0; /* TODO: work with multiple phases */
 
-    double arrtime = (p_event->p_arrivals + siteid*p_earth->numtimedefphases + phaseid)->time;
+    const Arrival_t * p_arr = p_event->p_arrivals + siteid*p_earth->numtimedefphases + phaseid;
+
+    //    printf("event %d at siteid %d, ratios n/z %lf e/z %lf\n", i, siteid, SPHERE2Y(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo), SPHERE2X(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo)   );
+
+    double arrtime = p_arr->time;
     if (arrtime < 0) continue;
     
     long idx = time2idx(arrtime, start_time, hz);
@@ -188,11 +211,12 @@ void envelope_means_vars(SignalPrior_t * prior,
 
     double * p_envelope;
     int env_len;
-    phase_env(prior, p_earth, p_event, hz, siteid, phaseid, chan_num, &p_envelope, &env_len);
-    
+    phase_env(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
     add_signals(p_means, *p_len, p_envelope, env_len, idx);
-    vector_times_scalar_inplace(*p_len, p_envelope, 0.5);
-    add_signals(p_vars, *p_len, p_envelope, env_len, idx);
+    if (pp_vars != NULL) {
+      vector_times_scalar_inplace(*p_len, p_envelope, 0.5);
+      add_signals(p_vars, *p_len, p_envelope, env_len, idx);
+    }
       
     free(p_envelope);
     //}
@@ -201,7 +225,44 @@ void envelope_means_vars(SignalPrior_t * prior,
   
 }
 
+/* Fills in the signal envelope for a set of event arrivals at a
+   three-axis station. p_segment must set start_time, hz, and
+   siteid. */
+void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior, 
+				 EarthModel_t * p_earth, 
+				 int numevents, 
+				 const Event_t ** pp_events,
+				 ChannelBundle_t * p_segment) {
+  int chan_nums[3];
+  chan_nums[0] = CHAN_BHE;
+  chan_nums[1] = CHAN_BHN;
+  chan_nums[2] = CHAN_BHZ;
 
+  double end_time = p_segment->start_time + p_segment->len / p_segment->hz;
+
+  for (int i=0; i < 3; ++i) {
+    
+    int chan_num = chan_nums[i];
+    
+    p_segment->p_channels[chan_num] = alloc_signal(p_segment);
+    p_segment->p_channels[chan_num]->chan = chan_num;
+
+    //printf("segment siteid is %d\n", p_segment->siteid);
+
+    envelope_means_vars(prior, 
+			p_segment->hz, p_segment->start_time, end_time,
+			p_earth, numevents, pp_events, 
+			p_segment->siteid,chan_num, 
+			&(p_segment->p_channels[chan_num]->len),
+			&(p_segment->p_channels[chan_num]->p_data),
+			NULL);
+    assert(p_segment->p_channels[chan_num]->len == p_segment->len);
+
+    //printf("generated signal of length %ld:\n", p_segment->p_channels[chan_num]->len);
+    //print_vector(p_segment->p_channels[chan_num]->len, p_segment->p_channels[chan_num]->p_data);
+  }
+
+}
 
 double vector_sum(int n, double * vector) {
   double result = 0;
@@ -299,6 +360,5 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
 }
 
 void SignalPrior_UnInit(SignalPrior_t * prior) {
-  free(prior->p_stations);
   free(prior->p_stations);
 }

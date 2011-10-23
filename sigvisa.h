@@ -2,6 +2,8 @@
 #define SIGVISA_INCLUDE
 
 #include <Python.h>
+#include <math.h>
+#include <float.h>
 #include <assert.h>
 
 
@@ -111,6 +113,7 @@ double ChannelBundle_EndTime(ChannelBundle_t * b);
 #include "priors/SignalPrior.h"
 
 int print_signal(Signal_t * signal);
+Signal_t * alloc_signal(ChannelBundle_t * p_segment);
 
 typedef struct SigModel_t
 {
@@ -203,6 +206,10 @@ typedef struct SigModel_t
 #define RAD2DEG                ((double) (180 / PI))
 #define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
 
+#define SPHERE2X(azi, incl) sin(DEG2RAD * incl)*cos(DEG2RAD * azi)
+#define SPHERE2Y(azi, incl) sin(DEG2RAD * incl)*sin(DEG2RAD * azi)
+#define SPHERE2Z(azi, incl) cos(DEG2RAD * incl)
+
 /* DELTA_TIME and DELTA_DIST are used in evaluating the answer */
 #define DELTA_TIME 50                        /* in seconds */
 #define DELTA_DIST 5                         /* in degrees */
@@ -214,6 +221,8 @@ typedef struct SigModel_t
 
 #define MAX_ENVELOPE_LENGTH 50  /* TODO: find a number that is not
 				  made up and actually makes sense */
+
+#define MAX_PHASE 1
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);

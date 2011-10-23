@@ -1,5 +1,8 @@
 import numpy as np
 
+from database.dataset import *
+import database.db
+
 AVG_EARTH_RADIUS_KM = 6371.0
 
 # strip away any trailing errors which can cause arccos to return nan
@@ -109,6 +112,13 @@ def azimuth(loc1, loc2):
 def _test():
   import doctest
   doctest.testmod()
+
+def stations_by_distance(evlon, evlat, sites):
+  dist = lambda site : dist_km((evlon, evlat), (site[0], site[1]))
+  dists = map(dist, sites)
+  sites = zip(dists, sites)
+  sites = zip(range(len(sites)), sites)
+  return sorted(sites, key = lambda site: site[1])
 
 if __name__ == "__main__":
   _test()

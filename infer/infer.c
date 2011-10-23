@@ -217,11 +217,13 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
   
   t1 = time(NULL);
 
-  if (p_world->propose_eventobj != Py_None)
+  if (p_world->propose_eventobj != Py_None) {
     numevents = propose_from_eventobj(p_netmodel, p_sigmodel, pp_events,
                                       p_world->max_prop_evtime, 
                                       p_world->high_evtime,
                                   (PyArrayObject * )p_world->propose_eventobj);
+    printf("propose_from_eventobj proposed %d events\n", numevents);
+  }
   else
   {
     numevents = propose_invert_step(p_netmodel, p_sigmodel, pp_events,
@@ -231,7 +233,9 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
                                     p_world->high_detnum,
                                     2.5, p_world->birthsteps,
                                     p_world->numthreads);
+    printf("propose_invert_step proposed %d events\n", numevents);
   }
+
   
   t1 = time(NULL) - t1;
   
@@ -1155,8 +1159,11 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
         break;
     }
 
+    printf("adding initial event proposals\n");
     add_propose_invert_events(NULL, p_sigmodel, p_world);
 
+
+    printf("changing arrivals\n");
     /* change the arrivals to use these new events */
     change_arrivals(p_sigmodel, p_world);
 
@@ -1206,14 +1213,14 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 */
     t1 = time(NULL) - t1;
     
-    if (p_world->verbose)
-    {
+    //    if (p_world->verbose)
+    //{
       printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela %ds score=%.1f\n",
              p_world->low_evnum, p_world->high_evnum,
              p_world->low_evtime, p_world->high_evtime,
              p_world->low_detnum, p_world->high_detnum, (int) t1,
              p_world->world_score);
-    }
+      //}
     
 
     /* move the window forward */
@@ -1259,7 +1266,7 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   PyObject * eventsobj;
   PyObject * evdetlistobj;
   
-  if (!PyArg_ParseTuple(args, "iOiiiiiOiO", &runid, &numsamples, 
+  if (!PyArg_ParseTuple(args, "iiiiiiOiO", &runid, &numsamples, 
                         &birthsteps,
                         &window, &step, &numthreads,
                         &propose_eventobj,
@@ -1279,6 +1286,7 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   p_world->write_events_cb = write_events_cb;
   
   // TODO: write inference
+  printf("created world, calling inference...\n");
   infer_sig(p_sigmodel, p_world);
 
   /* convert the world to python structures */

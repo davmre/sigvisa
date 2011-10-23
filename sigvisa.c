@@ -7,7 +7,9 @@
 static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
 
@@ -17,6 +19,12 @@ static PyMethodDef SigModel_methods[] = {
   {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
    "set_signals(traces) "
    "-> num_translated\n"},
+  {"synthesize_signals", (PyCFunction)py_synthesize_signals, METH_VARARGS,
+   "synthesize_signals(evlist, stalist, start_time, end_time, hz) "
+   "-> success\n"},
+  {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
+   "get_signals() "
+   "-> signals\n"},
   {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "
    "-> num_translated\n"},
@@ -128,6 +136,8 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   return 0;
 }
 
+static PyObject * traceClass_obj;
+
 void initsigvisa(void)
 {
   PyObject * m;
@@ -143,6 +153,10 @@ void initsigvisa(void)
 
   Py_INCREF(&py_sig_model);
   PyModule_AddObject(m, "SigModel", (PyObject *)&py_sig_model);
+
+  PyObject * pmod = PyImport_ImportModule("obspy.core");
+  traceClass_obj = PyObject_GetAttrString(pmod, "Trace");
+  Py_DECREF(pmod);
 }
 
 static void py_sig_model_dealloc(SigModel_t * self)
@@ -157,10 +171,12 @@ static void py_sig_model_dealloc(SigModel_t * self)
     for(int j=0; j < NUM_CHANS; ++j) {
       Signal_t *channel = self->p_segments[i].p_channels[j];
       if (channel != NULL) {
-	Py_DECREF(channel->py_array);
+	if (channel->py_array != NULL) {
+	  Py_DECREF(channel->py_array);
+	}
       }
     }
-    free(self->p_segments[i].p_channels);
+    //free(self->p_segments[i].p_channels);
   }
   free(self->p_segments);
 
@@ -200,8 +216,39 @@ static PyArrayObject * convert_arrtimes(SigModel_t *p_sigmodel, PyObject * p_arr
 }
 
 
+static Event_t ** indirect_event_list(int numevents, Event_t * evlist) {
+
+  Event_t ** ilist = calloc(numevents, sizeof(Event_t *));
+
+  for (int i=0; i < numevents; ++i) {
+    ilist[i] = &evlist[i];
+  }
+  return ilist;
+}
+
+static void convert_tuple_int(PyObject * tuple, 
+				    int * p_len, int ** pp_ints)
+{
+  Py_ssize_t len;
+  int * p_ints;
+  Py_ssize_t i;
+  
+  len = PyTuple_Size(tuple);
+
+  p_ints = (int *)calloc(len, sizeof(*p_ints));
+
+  for(i=0; i<len; i++)
+  {
+    p_ints[i] = PyInt_AsLong(PyTuple_GetItem(tuple, i));
+  }
+  
+  *p_len = len;
+  *pp_ints = p_ints;
+}
+
+
 static void convert_eventobj_no_det(PyArrayObject * p_events_arrobj, 
-                             int numsites, int * p_numevents, Event_t ** p_p_events)
+				    int * p_numevents, Event_t ** p_p_events)
 {
   Py_ssize_t numevents;
   Event_t * p_events;
@@ -255,8 +302,7 @@ static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args)
     return NULL;
   }
 
-  convert_eventobj_no_det(p_events_arrobj, EarthModel_NumSites(p_sigmodel->p_earth),
-                   &numevents, &p_events);
+  convert_eventobj_no_det(p_events_arrobj, &numevents, &p_events);
   
   PyArrayObject * p_arrtimes = convert_arrtimes(p_sigmodel, (PyObject *)p_arrtimes_arrobj);
 
@@ -295,6 +341,21 @@ int print_signal(Signal_t * signal) {
 }
 
 
+PyObject* canonical_channel_name(int num) {
+   switch (num) {
+   case CHAN_BHZ:
+     return PyString_FromString("BHZ");
+   case CHAN_BHE:
+     return PyString_FromString("BHE");
+   case CHAN_BHN:
+     return PyString_FromString("BHN");
+   case CHAN_OTHER:
+   default:
+     return PyString_FromString("");
+   } 
+ }
+
+
  int canonical_channel_num(char* chan_str) {
    int result = -1;
    if (strcmp("BHZ", chan_str) == 0) {
@@ -317,6 +378,78 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
    int result = canonical_channel_num(PyString_AsString(py_chan_str));
    return Py_BuildValue("n", result);
  }
+
+
+int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
+
+  // a trace object contains two members: data, a numpy array, and stats, a python dict.
+   int nd = 1;
+   npy_intp * dims = malloc(nd*sizeof(npy_intp));
+   *dims = p_signal->len;
+   PyObject * py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_signal->p_data);
+   p_signal->py_array =(PyArrayObject *) py_data;
+
+   PyObject * py_stats = PyDict_New(); 
+
+   PyObject * key = PyString_FromString("npts_processed");
+  PyObject * value = Py_BuildValue("n", p_signal->len);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+
+  key = PyString_FromString("starttime_unix");
+  value = Py_BuildValue("d", p_signal->start_time);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+
+  key = PyString_FromString("window_size");
+  value = Py_BuildValue("d", 1.0 / p_signal->hz);
+  assert(key != NULL && value != NULL);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+  key = PyString_FromString("overlap");
+  assert(key != NULL && value != NULL);
+  value = Py_BuildValue("d", 0);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+  key = PyString_FromString("sampling_rate");
+  value = Py_BuildValue("d", p_signal->hz);
+  assert(key != NULL && value != NULL);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+
+  key = PyString_FromString("siteid");
+  value = Py_BuildValue("n", p_signal->siteid);
+  assert(key != NULL && value != NULL);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+  
+  key = PyString_FromString("chanid");
+  value = Py_BuildValue("n", 0);
+  assert(key != NULL && value != NULL);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+
+  key = PyString_FromString("channel");
+  value = canonical_channel_name(p_signal->chan);
+  assert(key != NULL && value != NULL);
+  PyDict_SetItem(py_stats, key, value);
+  Py_DECREF(key);
+  Py_DECREF(value);
+
+  PyObject * args = Py_BuildValue("OO", py_data, py_stats);
+  PyObject * trace =   PyEval_CallObject(traceClass_obj, args);
+ 
+  *pp_trace = trace;
+
+  return 0;
+}
 
  int trace_to_signal(PyObject * p_trace, Signal_t * p_signal) {
 
@@ -357,7 +490,7 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
   PyObject * py_overlap = PyDict_GetItem(stats, key);
   Py_DECREF(key);
   double overlap = PyFloat_AsDouble(py_overlap);
-  p_signal->hz = 1.0 / (window_size * overlap);
+  p_signal->hz = 1.0 / (window_size * (1 - overlap));
 
 
   key = PyString_FromString("siteid");
@@ -444,7 +577,35 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
   return Py_BuildValue("n", n);
 }
 
+static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args) {
+  //PyObject * p_tracelist_obj;
+  //  if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
+  //  return NULL;
 
+  int numsegments = p_sigmodel->numsegments;
+
+  PyObject * channels = PyList_New(0);
+  
+  for (int i=0; i < numsegments; ++i) {
+
+    PyObject * chan_traces = PyList_New(0);
+    for(int j=0; j < NUM_CHANS; ++j) {
+      Signal_t *p_signal = (p_sigmodel->p_segments + i)->p_channels[j];
+      if (p_signal != NULL) {
+	PyObject * py_trace;
+	signal_to_trace(p_signal, &py_trace);
+	PyList_Append(chan_traces, py_trace);
+      }
+    }
+
+    PyList_Append(channels, chan_traces);
+
+    }
+  
+  return channels;
+}
+
+    
 int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
   
   if(!PyList_Check(det_list)) {
@@ -488,6 +649,119 @@ static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args)
   
   return Py_BuildValue("n", n);
 }
+
+
+void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_events, int numsiteids, int * p_siteids, double start_time, double end_time, double hz) {
+
+  EarthModel_t * p_earth = p_sigmodel->p_earth;
+
+  int numsites =  EarthModel_NumSites(p_earth);
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+  for (int i=0; i < numevents; ++i) {
+    Event_t * p_event = pp_events[i];
+
+    p_event->p_arrivals = calloc(numsites*numtimedefphases, sizeof(Arrival_t));
+
+    for (int j=0; j < numsiteids; ++j) {
+      int site = p_siteids[j];
+
+      for (int phase=0; phase < numtimedefphases; ++phase) {
+	Arrival_t * arr = (p_event->p_arrivals + site*numtimedefphases+phase);
+
+	// for each event, fill in arrivals at each station we care about    
+	
+	arr->time = EarthModel_ArrivalTime(p_earth, 
+					   p_event->evlon, 
+					   p_event->evlat, 
+					   p_event->evdepth, 
+					   p_event->evtime, 
+					   phase, site);
+	
+	arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior, 
+					       p_event->evmag, 
+					       p_event->evdepth, 
+					       arr->time - p_event->evtime, 
+					       site, phase);
+	
+	arr->azi = EarthModel_ArrivalAzimuth(p_earth, 
+					     p_event->evlon, 
+					     p_event->evlat, 
+					     site);
+	arr->slo = EarthModel_ArrivalSlowness(p_earth, 
+					      p_event->evlon, 
+					      p_event->evlat, 
+					      p_event->evdepth, 
+					      phase, site); 
+      }
+
+      printf("arrival info for event ");
+      print_event(p_event);
+      printf("  at site %d\n", site);
+
+    }
+  }
+
+  p_sigmodel->numsegments = numsiteids;
+  p_sigmodel->p_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
+  
+  for (int i=0; i < numsiteids; ++i) {
+    int siteid = p_siteids[i];
+    
+    ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
+
+    p_segment->start_time = start_time;
+    p_segment->hz = hz;
+
+    p_segment->siteid = siteid;
+    p_segment->len = (int) (end_time - start_time) * hz;
+
+    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  numevents,
+				  (const Event_t **)pp_events,
+				  p_segment);
+    printf("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
+  }
+
+
+}
+
+Signal_t * alloc_signal(ChannelBundle_t * p_segment) {
+  Signal_t * p_signal = (Signal_t *) malloc(sizeof(Signal_t));
+  p_signal->start_time = p_segment->start_time;
+  p_signal->len = p_segment->len;
+  p_signal->hz = p_segment->hz;
+  p_signal->siteid = p_segment->siteid;
+  return p_signal;
+}
+
+static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args) {
+  PyArrayObject * p_evlist_obj;
+  PyObject * p_stalist_obj;
+  double stime, etime, hz;
+  if (!PyArg_ParseTuple(args, "O!O!ddd", &PyArray_Type, &p_evlist_obj, &PyTuple_Type, &p_stalist_obj, &stime, &etime, &hz))
+    return NULL;
+
+  int numevents;
+  Event_t * p_events;
+  convert_eventobj_no_det(p_evlist_obj, &numevents, &p_events);
+  Event_t ** pp_events = indirect_event_list(numevents, p_events);
+
+  int numsiteids;
+  int * p_siteids;
+  
+  convert_tuple_int(p_stalist_obj, &numsiteids, &p_siteids);
+
+  synthesize_signals(p_sigmodel, numevents, pp_events, numsiteids, p_siteids, stime, etime, hz);
+
+  free(p_siteids);
+  free(pp_events);
+  free(p_events);
+  
+  return Py_BuildValue("n", 0);
+}
+
 
 
 void convert_events_to_pyobj(const EarthModel_t * p_earth,
