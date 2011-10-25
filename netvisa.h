@@ -70,26 +70,7 @@ typedef struct NetModel_t
    && (p_netmodel)->p_site_up[(siteid) * (p_netmodel)->numtime\
    + ((int) floor(((arrtime) - (p_netmodel)->start_time) / UPTIME_QUANT))])
 
-#define PI                 ((double) 3.1415926535897931)
 
-#define LAT2Z(lat) (sin((lat) * PI / 180.0))
-#define Z2LAT(z) (asin(z) * 180.0 / PI)
-
-/* event array columns */
-#define EV_LON_COL   0
-#define EV_LAT_COL   1
-#define EV_DEPTH_COL 2
-#define EV_TIME_COL  3
-#define EV_MB_COL    4
-#define EV_ORID_COL  5
-#define EV_NUM_COLS  6
-
-/* site array columns */
-#define SITE_LON_COL      0
-#define SITE_LAT_COL      1 
-#define SITE_ELEV_COL     2
-#define SITE_ISARR_COL    3        /* is the site an array station? */
-#define SITE_NUM_COLS     4
 
 /* detections array columns */
 #define DET_SITE_COL    0

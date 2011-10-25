@@ -9,8 +9,8 @@ import db
 from az_slow_corr import load_az_slow_corr
 
 # events
-EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL, EV_MB_COL, EV_ORID_COL,\
-            EV_NUM_COLS = range(6+1)
+EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL, EV_MB_COL, EV_ORID_COL, EV_SC_COL,\
+    EV_NUM_COLS = range(7+1)
 
 # detections
 DET_SITE_COL, DET_ARID_COL, DET_TIME_COL, DET_DELTIM_COL, DET_AZI_COL,\

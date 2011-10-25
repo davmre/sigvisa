@@ -77,12 +77,12 @@ static void insert_event(NetModel_t * p_netmodel,
   /* assign an origin-id to the event */
   p_event->orid = p_world->ev_orid_sequence ++; 
 
-  /* initialize the number of detections to 0 for all phases */
-  for (j = 0; j < numsites * numtimedefphases; j ++)
-    p_event->p_num_dets[j] = 0;
   
   // TODO: figure out how world scoring works with SIGVISA
   if(p_netmodel != NULL) {
+    /* initialize the number of detections to 0 for all phases */
+    for (j = 0; j < numsites * numtimedefphases; j ++)
+      p_event->p_num_dets[j] = 0;
     p_event->evscore = score_event(p_netmodel, p_event);
     p_world->world_score += p_event->evscore;
   }
@@ -290,6 +290,48 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
     insert_event(p_netmodel, p_sigmodel, p_world, pp_events[i]);
 
 }
+
+
+
+/* add events using the propose_invert proposer */
+static void add_dummy_event(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World_t * p_world)
+{
+  Event_t * pp_events[1000];     /* assume at most 1000 events init */
+  int numevents, i;
+ 
+  assert(p_netmodel == NULL || p_sigmodel == NULL);
+ 
+  /* first time init */
+  if (p_world->max_prop_evtime < p_world->low_evtime)
+    p_world->max_prop_evtime = p_world->low_evtime;
+
+  numevents = 1;
+  pp_events[0] = ALLOC_EVENT(p_netmodel, p_sigmodel)
+
+  Event_t * p_event = pp_events[0];
+  p_event->evlon = 0;
+  p_event->evlat = 0;
+  p_event->evdepth = 0;
+  p_event->evtime = 1237680500;
+  p_event->evmag = 3;
+  
+  /* cache all the newly proposed events */
+  for (i=0; i<numevents; i++)
+  {
+    Event_t * p_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
+    COPY_EVENT(p_netmodel, p_sigmodel, p_event, pp_events[i]);
+    p_world->pp_prop_events[p_world->num_prop_events ++] = p_event;
+  }
+  /* update the max time of the cached proposed events */
+  p_world->max_prop_evtime = p_world->high_evtime;
+  
+  for (i=0; i<numevents; i++)
+    insert_event(p_netmodel, p_sigmodel, p_world, pp_events[i]);
+
+}
+
+
+
 
 /* returns the number of events with -ve scores that were removed from
  * the world */
@@ -545,7 +587,7 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
                                         p_event->evlat,
                                         p_detection->site_det);
       
-    for (phaseid=0; phaseid < numtimedefphases; phaseid ++)
+    for (phaseid=0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)
     {
       int old_detnum;
       double score;
@@ -780,7 +822,7 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
   PyObject * retval;
   double maxtime;
   PyObject * eventsobj;
-  PyObject * evdetlistobj;
+  PyObject * evdetarrlistobj;
   int i;
   int numevents;
   
@@ -806,11 +848,17 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
        i++)
     numevents ++;
 
-  convert_events_to_pyobj(p_earth, 
-                          (const Event_t **) (p_world->pp_events 
-                                              + p_world->write_evnum),
-                          numevents, &eventsobj, &evdetlistobj);
-
+  if (p_netmodel != NULL) {
+    convert_events_dets_to_pyobj(p_earth, 
+			    (const Event_t **) (p_world->pp_events 
+						+ p_world->write_evnum),
+			    numevents, &eventsobj, &evdetarrlistobj);
+  } else {
+    convert_events_arrs_to_pyobj(p_sigmodel, p_earth, 
+				 (const Event_t **) (p_world->pp_events 
+						     + p_world->write_evnum),
+				 numevents, &eventsobj, &evdetarrlistobj);
+  }
   if (p_world->verbose)
   {
     for (i=0; i<numevents; i++)
@@ -828,23 +876,25 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
     retval = PyObject_CallFunction(p_world->write_events_cb, "OOOOid", 
 				   p_netmodel, 
 				   p_earth, 
-				   eventsobj, evdetlistobj,
+				   eventsobj, evdetarrlistobj,
 				   p_world->runid, maxtime);
   } else {
     retval = PyObject_CallFunction(p_world->write_events_cb, "OOOOid", 
 				   p_sigmodel, 
 				   p_earth, 
-				   eventsobj, evdetlistobj,
+				   eventsobj, evdetarrlistobj,
 				   p_world->runid, maxtime);
   }
 
   p_world->write_evnum += numevents;
   
   Py_DECREF(eventsobj);
-  Py_DECREF(evdetlistobj);
+  Py_DECREF(evdetarrlistobj);
   
-  if (!retval)
+  if (!retval) {
     printf("Warning: can't write objects\n");
+    CHECK_ERROR
+  }
   else
     Py_DECREF(retval);
 }
@@ -1089,7 +1139,7 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   infer(p_netmodel, p_world);
 
   /* convert the world to python structures */
-  convert_events_to_pyobj(p_netmodel->p_earth,
+  convert_events_dets_to_pyobj(p_netmodel->p_earth,
                           (const Event_t **)p_world->pp_events,
                           p_world->high_evnum, &eventsobj, &evdetlistobj);
   
@@ -1160,8 +1210,9 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     }
 
     printf("adding initial event proposals\n");
+    
     add_propose_invert_events(NULL, p_sigmodel, p_world);
-
+    //add_dummy_event(NULL, p_sigmodel, p_world);
 
     printf("changing arrivals\n");
     /* change the arrivals to use these new events */
@@ -1187,6 +1238,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       
       if (numdel > 0)
       {
+	printf("deleted %d events, changing arrivals...\n", numdel);
         change_arrivals(p_sigmodel, p_world);
       }
       
@@ -1196,8 +1248,10 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
                old_score - p_world->world_score, p_world->world_score);
       }
       
+      printf("changing events...\n");
       change_events(NULL, p_sigmodel, p_world, 10);
 
+      printf("changing arrivals...\n");
       change_arrivals(p_sigmodel, p_world);
     };
     
@@ -1264,7 +1318,7 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
 
   PyObject * retobj;
   PyObject * eventsobj;
-  PyObject * evdetlistobj;
+  PyObject * evarrlistobj;
   
   if (!PyArg_ParseTuple(args, "iiiiiiOiO", &runid, &numsamples, 
                         &birthsteps,
@@ -1290,17 +1344,17 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   infer_sig(p_sigmodel, p_world);
 
   /* convert the world to python structures */
-  convert_events_to_pyobj(p_sigmodel->p_earth,
-                          (const Event_t **)p_world->pp_events,
-                          p_world->high_evnum, &eventsobj, &evdetlistobj);
+  convert_events_arrs_to_pyobj(p_sigmodel, p_sigmodel->p_earth,
+			       (const Event_t **)p_world->pp_events,
+			       p_world->high_evnum, &eventsobj, &evarrlistobj);
   
   free_world(p_world);
 
-  retobj = Py_BuildValue("(OO)", eventsobj, evdetlistobj);
+  retobj = Py_BuildValue("(OO)", eventsobj, evarrlistobj);
 
   /* BuildValue increments the ref count so we need to decrement our ref */
   Py_DECREF(eventsobj);
-  Py_DECREF(evdetlistobj);
+  Py_DECREF(evarrlistobj);
   
   return retobj;  
 }

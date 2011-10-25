@@ -91,10 +91,11 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
-  
+  //printf("scoring sig event ");
+  //print_event(p_event);
 
   for (int siteid = 0; siteid < numsites; ++siteid) {
-    for (int phaseid = 0; phaseid < numtimedefphases; ++phaseid) {
+    for (int phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); ++phaseid) {
 
       pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					    p_event->evlat, p_event->evdepth,
@@ -107,14 +108,23 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
       /* check if the site is up */
       //if (!SigModel_IsSiteUp(p_sigmodel, siteid, pred_arrtime))
       //continue;
+      if (!have_signal(p_sigmodel, siteid, pred_arrtime - 5, pred_arrtime+MAX_ENVELOPE_LENGTH)) {
+	continue;
+      }
   
       Arrival_t * arr = p_event->p_arrivals +(siteid*numtimedefphases + phaseid);
+      //    printf("  scoring at site %d phase %d, arrival recvd: ", siteid, phaseid);
+      // print_arrival(arr);
+
+
+
 
       // TODO: use joint prior properly
       *p_arrtimesc += ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_joint_prior.single_prior,
 					       arr->time, pred_arrtime,
 					       0, siteid,
 					       phaseid);
+      // printf("    arrtime score %lf for arr %lf vs pred %lf\n", *p_arrtimesc, arr->time, pred_arrtime);
       
       
       double pred_az = EarthModel_ArrivalAzimuth(p_earth, 
@@ -126,6 +136,7 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
 						pred_az,
 						0,
 						siteid, phaseid);
+      // printf("    azi score %lf for azi %lf vs pred %lf\n", *p_arrazsc, arr->azi, pred_az);
       
       double pred_slo = EarthModel_ArrivalSlowness(p_earth, 
 						 p_event->evlon, 
@@ -133,10 +144,11 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
 						 p_event->evdepth, 
 						 phaseid, siteid); 
       *p_arrslosc += ArrivalSlownessPrior_LogProb(&p_sigmodel->arr_slo_prior,
-						  arr->azi, 
+						  arr->slo, 
 						  pred_slo,
 						  0,
 						  siteid, phaseid);
+      // printf("    slo score %lf for arr %lf vs pred %lf\n", *p_arrslosc, arr->slo, pred_slo);
       
       ttime = EarthModel_ArrivalTime(p_earth, p_event->evlon, p_event->evlat,
 				     p_event->evdepth, 0, phaseid, siteid);
@@ -144,13 +156,14 @@ static int score_event_int_sig(SigModel_t * p_sigmodel,
 						p_event->evmag, p_event->evdepth,
 						ttime, siteid, phaseid,
 						arr->amp);
-      if (isnan(*p_ampsc))
+      if (isnan(*p_ampsc) || *p_ampsc < -DBL_MAX)
 	{
 	  printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d phaseid %d"
-		 " amp %.2lg", p_event->evmag, p_event->evdepth,
+		 " amp %.2lg\n", p_event->evmag, p_event->evdepth,
 		 ttime, siteid, phaseid, arr->amp);
 	  exit(1);
 	}
+      //      printf("    amp score %lf for arr %lf\n", *p_ampsc, arr->amp);
     }
   }
 
@@ -179,8 +192,9 @@ int score_event_sig(SigModel_t * p_sigmodel,
 			     &arrtimesc, &arrazsc, 
 			     &arrslosc, &arrampsc, &sigsc);
 
-  p_event->evscore = arrtimesc + arrazsc + arrslosc + arrampsc + sigsc;
 
+  p_event->evscore = arrtimesc + arrazsc + arrslosc + arrampsc + sigsc;
+  //  printf("set score %lf = arrtimesc %lf + arrazsc %lf + arrslosc %lf + arrampsc %lf + sigsc %lf\n", p_event->evscore, arrtimesc, arrazsc, arrslosc, arrampsc, sigsc);
   return poss;
 }
 

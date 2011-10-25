@@ -68,6 +68,8 @@ void vector_times_scalar_inplace(int n, double * vector, double scalar) {
     *(vector++) *= scalar;
   }
 }
+
+/*
 double * vector_times_scalar_copy(int n, double * vector, double scalar) {
   double * nvector = malloc(n * sizeof(double));
   for (int i=0; i < n; ++i) {
@@ -75,7 +77,7 @@ double * vector_times_scalar_copy(int n, double * vector, double scalar) {
   }
   return nvector;
 }
-
+*/
 
 void print_vector(int n, double * vector) {
   for(int i=0; i < n; ++i) {
@@ -97,7 +99,7 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
   double lp = 0;
 
   for (int i=0; i < n; ++i) {
-    lp -= 0.5 * log(2*PI * vars[i]) + 0.5 * (x[i] - means[i])*(x[i] - means[i]) / vars[i];
+    lp -= 0.5 * log(2*PI * abs(vars[i])) + 0.5 * (x[i] - means[i])*(x[i] - means[i]) / abs(vars[i]);
   }
 
   return lp;
@@ -129,6 +131,12 @@ void phase_env(SignalPrior_t * prior,
   double step = (prior->env_decay / hz);
   int len = ceil( newmean / step );
   double * means = (double *) calloc(len, sizeof(double));
+
+  if (means == NULL) {
+    printf("error allocating memory for means in phase_env, len %d = %lf / %lf\n", len, newmean, step);
+    exit(-1);
+  }
+
   for (int i=0; i < len; ++i) {
     means[i] = newmean * component_coeff;
     newmean -= step;
@@ -165,18 +173,23 @@ void envelope_means_vars(SignalPrior_t * prior,
 			 double ** pp_means,
 			 double ** pp_vars) {
  
-
-
-
   (*p_len) = time2idx(end_time, start_time, hz);
 
   (*pp_means) = (double *) calloc(*p_len, sizeof(double));
   double *p_means = (*pp_means);
+  if (p_means == NULL) {
+    printf("error allocating memory for signal means: siteid %d, chan %d, start %lf, end %lf, hz %lf, len %ld\n", siteid, chan_num, start_time, end_time, hz, *p_len);
+    exit(-1);
+  }
 
   double *p_vars=0;
   if (pp_vars != NULL) {
     (*pp_vars) = (double *) calloc(*p_len, sizeof(double));
     p_vars = (*pp_vars);
+    if (p_vars == NULL) {
+      printf("error allocating memory for signal vars: siteid %d, chan %d, start %lf, end %lf, hz %lf, len %ld\n", siteid, chan_num, start_time, end_time, hz, *p_len);
+      exit(-1);
+    }
   }
 
   double noise_mean = (prior->p_stations + siteid)->chan_means[chan_num];
@@ -190,36 +203,33 @@ void envelope_means_vars(SignalPrior_t * prior,
     
     const Event_t * p_event = pp_events[i];
 
-    // for (int phaseid = 0; phaseid < p_earth->num_phases; ++phaseid) {    
-    int phaseid = 0; /* TODO: work with multiple phases */
+    for (int phaseid = 0; phaseid < MAX_PHASE(p_earth->numtimedefphases); ++phaseid) {    
 
-    const Arrival_t * p_arr = p_event->p_arrivals + siteid*p_earth->numtimedefphases + phaseid;
+      const Arrival_t * p_arr = p_event->p_arrivals + siteid*p_earth->numtimedefphases + phaseid;
 
-    //    printf("event %d at siteid %d, ratios n/z %lf e/z %lf\n", i, siteid, SPHERE2Y(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo), SPHERE2X(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo)   );
+      //    printf("event %d at siteid %d, ratios n/z %lf e/z %lf\n", i, siteid, SPHERE2Y(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo), SPHERE2X(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo)   );
 
-    double arrtime = p_arr->time;
-    if (arrtime < 0) continue;
+      double arrtime = p_arr->time;
+      if (arrtime < 0) continue;
     
-    long idx = time2idx(arrtime, start_time, hz);
-    if (idx < 0 - MAX_ENV_LENGTH * hz || idx >= *p_len) {
-      //      fprintf(stdout, "   skipping event w/ arrtime %lf (from st %lf) and base_t = %ld ( vs len %d) ...\n", arrtime, (*(events+i)).evtime, idx, p_signal->len);      
-      continue;
-    } else {
-      //      print_event(events+i);
-      // fprintf(stdout, "  event w/ arrtime %lf (from st %lf) and base_t = %ld\n", arrtime, (*(events+i)).evtime, idx);     
-    }
+      long idx = time2idx(arrtime, start_time, hz);
 
-    double * p_envelope;
-    int env_len;
-    phase_env(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
-    add_signals(p_means, *p_len, p_envelope, env_len, idx);
-    if (pp_vars != NULL) {
-      vector_times_scalar_inplace(*p_len, p_envelope, 0.5);
-      add_signals(p_vars, *p_len, p_envelope, env_len, idx);
-    }
+      // skip events which don't arrive during the current time period
+      if (idx < 0 - MAX_ENV_LENGTH * hz || idx >= *p_len) {
+	continue;
+      }
+
+      double * p_envelope;
+      int env_len;
+      phase_env(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
+      add_signals(p_means, *p_len, p_envelope, env_len, idx);
+      if (pp_vars != NULL) {
+	vector_times_scalar_inplace(env_len, p_envelope, 0.5);
+	add_signals(p_vars, *p_len, p_envelope, env_len, idx);
+      }
       
-    free(p_envelope);
-    //}
+      free(p_envelope);
+    }
   }
 
   
@@ -275,7 +285,7 @@ double vector_sum(int n, double * vector) {
 void evt_arrival_times(const Event_t * p_event, int siteid, int numtimedefphases, double * first_arrival, double *last_arrival) {
   *first_arrival = DBL_MAX;
   *last_arrival = DBL_MIN;
-  for (int i=0; i < numtimedefphases; ++i) {
+  for (int i=0; i < MAX_PHASE(numtimedefphases); ++i) {
     double phase_arr_time = (p_event->p_arrivals + siteid*numtimedefphases + i)->time;
     if (phase_arr_time < *first_arrival) {
       *first_arrival = phase_arr_time;
@@ -307,6 +317,8 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
 
   for (int i=0; i < p_sigmodel->numsegments; ++i) {
 
+    //    printf("    scoring signal segment %d...\n", i);
+
     /* compute the time period during which the event will affect the station */
     double first_envelope_time, last_envelope_time;
     evt_arrival_times(p_event, p_segment->siteid, numtimedefphases, &first_envelope_time, &last_envelope_time);
@@ -314,6 +326,7 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
 
     /* if this trace doesn't fall within that period, skip it */
     if (p_segment->start_time > last_envelope_time || ChannelBundle_EndTime(p_segment) < first_envelope_time) {
+      printf("     skipping signal segment %d!\n", i);
       continue;
     }
 
@@ -333,8 +346,10 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
       if (p_segment->p_channels[chan_num] == NULL) continue;
 
       envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
+
       long compare_len = MIN(len, p_segment->len - env_start_idx);
-      event_lp +=  indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+
       free(p_means);
       free(p_vars);
     }
@@ -350,10 +365,19 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
       free(p_means);
       free(p_vars);
     }
+
+
+
     score += (event_lp - background_lp);
+
+    // printf("   segment %d contributed score %lf = event_lp %lf - background_lp %lf\n", i, event_lp - background_lp, event_lp, background_lp);
 
     p_segment++;
   }
+
+
+  double tmp;
+ 
 
   return score;
 

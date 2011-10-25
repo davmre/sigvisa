@@ -56,6 +56,17 @@ create table visa_assoc (
  index (runid, orid, arid)
 ) engine = myisam;
 
+create table visa_arriv (
+ runid    int,
+ orid     int,
+ siteid	  int,
+ phase    varchar(20),
+ time    double,
+ amp	   double,
+ azi    double,
+ slo   double,
+ index (runid, orid, siteid)
+) engine = myisam;
 
 /* some utility functions */
 delimiter |
@@ -138,6 +149,7 @@ create or replace view leb_assoc_deb as select orid, phase, sta, round(timeres,1
 grant select,insert,update on visa_run to ctbt@localhost;
 grant select,insert,delete on visa_origin to ctbt@localhost;
 grant select,insert,delete on visa_assoc to ctbt@localhost;
+grant select,insert,delete on visa_arriv to ctbt@localhost;
 grant select on visa_vs_leb to ctbt@localhost;
 grant execute on ctbt3mos.* to ctbt@localhost;
 

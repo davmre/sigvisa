@@ -90,6 +90,9 @@ def print_event(netmodel, earthmodel, event, event_detlist, label):
 def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
                  detections):
   # store the events and associations
+
+  print "called write_events on events", events, ", detlist ", ev_detlist
+
   conn = database.db.connect()
   cursor = conn.cursor()
   world_score = 0.0
@@ -141,6 +144,43 @@ def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
                  "score = score + %f where runid=%d" %
                  (maxtime, world_score, runid))
   conn.commit()
+
+
+def write_events_sig(sigmodel, earthmodel, events, ev_arrlist, runid, maxtime):
+  # store the events and associations
+
+  print "called write_events on events", events, ", arrlist ", ev_arrlist
+
+  conn = database.db.connect()
+  cursor = conn.cursor()
+  world_score = 0.0
+  for evnum in range(len(events)):
+    event = events[evnum]
+    arrlist = ev_arrlist[evnum]
+
+    # TODO: replace this with a true world score; this is just an
+    # approximation.
+    world_score += event[EV_SC_COL]
+    
+    cursor.execute("insert into visa_origin (runid, orid, lon, lat, depth, "
+                   "time, mb, score) values (%d, %d, %f, %f, %f, %f, %f, %f)"%
+                   (runid, event[EV_ORID_COL], event[EV_LON_COL],
+                    event[EV_LAT_COL], event[EV_DEPTH_COL], event[EV_TIME_COL],
+                    event[EV_MB_COL], event[EV_SC_COL]))
+    
+    for evid, siteid, phaseid, arrtime, arramp, arrazi, arrslo in arrlist:
+   
+      cursor.execute("insert into visa_arriv(runid, orid, siteid, phase, time, amp, azi, slo) "
+                     "values (%d, %d, '%d', '%s', %f, %f, %f, %f)" %
+                     (runid, event[EV_ORID_COL],
+                      siteid,
+                      earthmodel.PhaseName(phaseid),
+                      arrtime, arramp, arrazi, arrslo))
+  
+  cursor.execute("update visa_run set data_end=%f, run_end=now(), "
+                 "score = score + %f where runid=%d" %
+                 (maxtime, world_score, runid))
+  conn.commit()
   
 def main(param_dirname):
   parser = OptionParser()
@@ -150,12 +190,12 @@ def main(param_dirname):
   parser.add_option("-c", "--birthsteps", dest="birthsteps", default=2,
                     type="int",
                     help = "number of steps per dimension in birth move (2)")
-  parser.add_option("-w", "--window", dest="window", default=1800,
+  parser.add_option("-w", "--window", dest="window", default=3600,
                     type="int",
-                    help = "window size in seconds (1800)")
-  parser.add_option("-t", "--step", dest="step", default=900,
+                    help = "window size in seconds (3600)")
+  parser.add_option("-t", "--step", dest="step", default=3600,
                     type="int",
-                    help = "window step-size in seconds (900)")
+                    help = "window step-size in seconds (3600)")
   parser.add_option("-r", "--hours", dest="hours", default=None,
                     type="float",
                     help = "inference on HOURS worth of data (all)")
@@ -285,9 +325,10 @@ def main(param_dirname):
       sta_low_thresholds[i] = 0.9
     print "signals set, computing fake detections"
     fake_det = fake_detections(signals, sta_high_thresholds, sta_low_thresholds)
-    print fake_det
-    return
-  
+    
+    print "setting fake detections"
+    sigmodel.set_fake_detections(fake_det)
+
     model = sigmodel
 
 ##   if options.verbose:
@@ -347,7 +388,7 @@ def main(param_dirname):
                                       propose_events,
                                       options.verbose,
                                       lambda a,b,c,d,e,f:
-                                      write_events(a,b,c,d,e,f,detections))
+                                      write_events_sig(a,b,c,d,e,f))
     print "inferred events", events
     return
   else:

@@ -66,6 +66,23 @@ typedef struct Site_t
   int    siteisarr;
 } Site_t;
 
+/* event array columns */
+#define EV_LON_COL   0
+#define EV_LAT_COL   1
+#define EV_DEPTH_COL 2
+#define EV_TIME_COL  3
+#define EV_MB_COL    4
+#define EV_ORID_COL  5
+#define EV_SCORE_COL  6
+#define EV_NUM_COLS  7
+
+/* site array columns */
+#define SITE_LON_COL      0
+#define SITE_LAT_COL      1 
+#define SITE_ELEV_COL     2
+#define SITE_ISARR_COL    3        /* is the site an array station? */
+#define SITE_NUM_COLS     4
+
 #include "netvisa.h"
 
 /* define signal channels */
@@ -151,6 +168,9 @@ typedef struct SigModel_t
 */
 } SigModel_t;
 
+int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end_time);
+
+
 #include "priors/score_sig.h"
 
 #include "priors/score.h"
@@ -161,6 +181,15 @@ typedef struct SigModel_t
 #define Event2R3Vector(event, vector) do {\
 (vector)[0] = (event)->evlon; (vector)[1] = (event)->evlat;\
 (vector)[2] = (event)->evdepth;} while(0)
+
+
+#define PI                     ((double) 3.1415926535897931)
+#define DEG2RAD                ((double) (PI / 180))
+#define RAD2DEG                ((double) (180 / PI))
+#define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
+
+#define LAT2Z(lat) (sin((lat) * PI / 180.0))
+#define Z2LAT(z) (asin(z) * 180.0 / PI)
 
 #define ARRAY3(arr,i,j,k) (*((double *)PyArray_GETPTR3(arr,i,j,k)))
 #define ARRAY2(arr,i,j) (*((double *)PyArray_GETPTR2(arr,i,j)))
@@ -201,11 +230,6 @@ typedef struct SigModel_t
 /* RAND_UNIFORM(a,b) -> random value between a and b */
 #define RAND_UNIFORM(a,b) (((double) (a)) + ((double) ((b)-(a))) * RAND_DOUBLE)
 
-#define PI                     ((double) 3.1415926535897931)
-#define DEG2RAD                ((double) (PI / 180))
-#define RAD2DEG                ((double) (180 / PI))
-#define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
-
 #define SPHERE2X(azi, incl) sin(DEG2RAD * incl)*cos(DEG2RAD * azi)
 #define SPHERE2Y(azi, incl) sin(DEG2RAD * incl)*sin(DEG2RAD * azi)
 #define SPHERE2Z(azi, incl) cos(DEG2RAD * incl)
@@ -222,7 +246,7 @@ typedef struct SigModel_t
 #define MAX_ENVELOPE_LENGTH 50  /* TODO: find a number that is not
 				  made up and actually makes sense */
 
-#define MAX_PHASE 1
+#define MAX_PHASE(ntdp) 1
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);
@@ -231,14 +255,20 @@ void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event);
 void print_event(const Event_t * p_event);
 
+void print_arrival(const Arrival_t * p_arr);
+
 
 #define ALLOC_EVENT(net, sig) (net != NULL) ? alloc_event_net(net) : alloc_event_sig(sig);
 #define COPY_EVENT(net,sig, a, b) (net != NULL) ? copy_event_net(net, a, b) : copy_event_sig(sig, a, b);
 
-void convert_events_to_pyobj(const EarthModel_t * p_earth,
+void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
                              const Event_t ** pp_events, int numevents,
                              PyObject ** pp_eventsobj,
                              PyObject ** pp_evdetlistobj);
 
-
+void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel, 
+				  const EarthModel_t * p_earth,
+				  const Event_t ** pp_events, int numevents,
+				  PyObject ** pp_eventsobj,
+				  PyObject ** pp_evarrlistobj);
 #endif // SIGVISA_INCLUDE
