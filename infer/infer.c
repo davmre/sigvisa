@@ -848,6 +848,7 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
        i++)
     numevents ++;
 
+  printf("writing %d events\n", numevents);
   if (p_netmodel != NULL) {
     convert_events_dets_to_pyobj(p_earth, 
 			    (const Event_t **) (p_world->pp_events 

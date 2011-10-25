@@ -112,8 +112,8 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
 
   Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t)); 
 
-  printf("optimizing arrivals, given %d other events, for event ", num_other_events);
-  print_event(p_event);
+  //printf("optimizing arrivals, given %d other events, for event ", num_other_events);
+  //print_event(p_event);
 
   for (int site = 0; site < numsites; ++site) {
 
@@ -154,7 +154,7 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
   end = clock();
   dif = (end - local_start) / (double)CLOCKS_PER_SEC;
   local_start = clock();
-  printf("init sites took %lf seconds.\n", dif);
+  //printf("init sites took %lf seconds.\n", dif);
 
 
 
@@ -181,7 +181,7 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
 
     double best_score = -DBL_MAX;
 
-    printf("optimizing time...\n");    
+    //printf("optimizing time...\n");    
     for (int site = 0; site < numsites; ++site) {
 
       for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
@@ -220,11 +220,11 @@ end = clock();
   dif = (end - local_start) / (double)CLOCKS_PER_SEC;
   local_start = clock();
 
-    printf("optimizing time took %lf seconds.\n", dif);
+  //printf("optimizing time took %lf seconds.\n", dif);
   
 
 
-    printf("optimizing amp...\n");
+  //printf("optimizing amp...\n");
     //scanf("%lf", &tmp);
 
     memcpy(p_event->p_arrivals, best, numarrivals * sizeof(Arrival_t));
@@ -273,7 +273,7 @@ end = clock();
     end = clock();
     dif = (end - local_start) / (double)CLOCKS_PER_SEC;
     local_start = clock();
-    printf("optimizing amp took %lf seconds.\n", dif);
+    //printf("optimizing amp took %lf seconds.\n", dif);
 
 
     // TODO: re-enable optimizing slowness and azimuth once I've actually told the signal model to care about them
@@ -290,12 +290,14 @@ end = clock();
     memcpy(base, best, numarrivals * sizeof(Arrival_t));
   }
 
-  printf("rescoring event under final arrivals\n");
+
   score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
+  //printf("rescoring event under final arrivals : final score %lf\n", p_event->evscore);  
+
 
   end = clock();
   dif = (end - start) / (double)CLOCKS_PER_SEC;
-  printf("OVERALL, optimizing arrivals took %lf seconds.\n", dif);
+  //printf("OVERALL, optimizing arrivals took %lf seconds.\n", dif);
 
   free(base);
   free(best);
@@ -670,7 +672,7 @@ void *propose_invert_step_helper(void *args)
 				    p_skip_det, 0 /* all phases */);
 	  } else {
 	    optimize_arrivals(p_sigmodel, p_event, num_other_events, pp_other_events);
-	    printf("arrivals have been optimized!!!\n");
+	    //printf("arrivals have been optimized!!!\n");
 	  }
 
 	  //Compare to the score in p_best_events with index tid (for this thread)
@@ -893,7 +895,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
       propose_best_detections(p_netmodel, p_best_event, det_low, det_high,
 			      p_skip_det, 0 /* all phases */);
     } else {
-      printf("now optimizing arrivals...\n");
+      //printf("now optimizing arrivals...\n");
       optimize_arrivals(p_sigmodel, p_best_event, numevents, 
 			(const Event_t **)pp_events);
     }

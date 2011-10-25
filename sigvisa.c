@@ -891,6 +891,9 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 
     p_event = pp_events[i];
 
+    printf(" converting to pyobj: event ");
+    print_event(p_event);
+
     /* store the current event in its row */
     convert_event_to_pyobj(p_event, p_eventsobj, i);
 

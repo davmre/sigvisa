@@ -69,6 +69,12 @@ void vector_times_scalar_inplace(int n, double * vector, double scalar) {
   }
 }
 
+void vector_abs_inplace(int n, double * vector) {
+  for (int i=0; i < n; ++i) {
+    vector[i] = fabs(vector[i]);
+  }
+}
+
 /*
 double * vector_times_scalar_copy(int n, double * vector, double scalar) {
   double * nvector = malloc(n * sizeof(double));
@@ -99,7 +105,8 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
   double lp = 0;
 
   for (int i=0; i < n; ++i) {
-    lp -= 0.5 * log(2*PI * abs(vars[i])) + 0.5 * (x[i] - means[i])*(x[i] - means[i]) / abs(vars[i]);
+    assert(vars[i] >= 0);
+    lp -= 0.5 * log(2*PI * vars[i]) + 0.5 * (x[i] - means[i])*(x[i] - means[i]) / vars[i];
   }
 
   return lp;
@@ -225,6 +232,7 @@ void envelope_means_vars(SignalPrior_t * prior,
       add_signals(p_means, *p_len, p_envelope, env_len, idx);
       if (pp_vars != NULL) {
 	vector_times_scalar_inplace(env_len, p_envelope, 0.5);
+	vector_abs_inplace(env_len, p_envelope);
 	add_signals(p_vars, *p_len, p_envelope, env_len, idx);
       }
       
@@ -348,7 +356,31 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
       envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
 
       long compare_len = MIN(len, p_segment->len - env_start_idx);
-      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+      double lp = indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+      event_lp += lp;
+      //printf(" augmented event set: channel %d contributed score %lf\n", chan_num, lp);
+      if (isnan(lp)) {
+	printf("nan nan nan!!! %ld %ld %ld\n", compare_len, len, env_start_idx);
+	printf("means:\n");
+	print_vector(compare_len, p_means);
+	printf("vars:\n");
+	print_vector(compare_len, p_vars);
+	printf("actual:\n");
+	double *x =  p_segment->p_channels[chan_num]->p_data + env_start_idx;
+	print_vector(compare_len, x);
+
+	/*	printf(" gaussian trace:\n");
+
+	double glp = 0;
+
+	for (int i=0; i < compare_len; ++i) {
+	  double iglp = 0.5 * log(2*PI * abs(p_vars[i])) + 0.5 * (x[i] - p_means[i])*(x[i] - p_means[i]) / abs(p_vars[i]);
+	  glp -= iglp;
+	  printf(" i = %d, mean = %lf, var = %lf, glp = %lf, iglp = %lf = %lf + .5 * %lf ^2 / %lf\n", i, p_means[i], p_vars[i], glp, iglp, log(2*PI * abs(p_vars[i])), (x[i] - p_means[i]), abs(p_vars[i]));
+	  }*/
+
+	exit(-1);
+      }
 
       free(p_means);
       free(p_vars);
@@ -370,14 +402,12 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
 
     score += (event_lp - background_lp);
 
-    // printf("   segment %d contributed score %lf = event_lp %lf - background_lp %lf\n", i, event_lp - background_lp, event_lp, background_lp);
+    //printf("   segment %d contributed score %lf = event_lp %lf - background_lp %lf\n", i, event_lp - background_lp, event_lp, background_lp);
 
     p_segment++;
   }
 
 
-  double tmp;
- 
 
   return score;
 

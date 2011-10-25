@@ -65,7 +65,6 @@ static inline double log_add_exp(double logval1, double logval2)
 */
 
 
-
 /* returns 0 if the event - phase is impossible to be detected at the
  * site, 1 otherwise 
  * if detected returns log probability of detection given event 
@@ -194,7 +193,13 @@ int score_event_sig(SigModel_t * p_sigmodel,
 
 
   p_event->evscore = arrtimesc + arrazsc + arrslosc + arrampsc + sigsc;
-  //  printf("set score %lf = arrtimesc %lf + arrazsc %lf + arrslosc %lf + arrampsc %lf + sigsc %lf\n", p_event->evscore, arrtimesc, arrazsc, arrslosc, arrampsc, sigsc);
+  
+  if (isnan(p_event->evscore)) {
+    printf("error: event score is nan!\n");
+    printf("set score %lf = arrtimesc %lf + arrazsc %lf + arrslosc %lf + arrampsc %lf + sigsc %lf\n", p_event->evscore, arrtimesc, arrazsc, arrslosc, arrampsc, sigsc);
+    exit(-1);
+  }
+  
   return poss;
 }
 

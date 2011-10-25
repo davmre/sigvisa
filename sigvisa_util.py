@@ -172,7 +172,7 @@ def estimate_azi_amp_slo(channel_bundle_det_window):
         l = np.take(l, reorder)
         u = np.take(u, reorder, axis=1)
 
-        amp = np.linalg.norm(l, 2)
+        amp = np.log(np.linalg.norm(l, 2))
         rect = 1 - (l[2] + l[1])/ (2 * l[0])
 
         inang1 = np.rad2deg(np.arccos(np.abs(u[bhz_num,0])))
