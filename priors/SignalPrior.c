@@ -10,6 +10,12 @@
 
 void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites) {
   
+
+  
+
+
+
+
   FILE * fp;
 
   fp = fopen(filename, "r");
@@ -26,8 +32,18 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
     exit(1);
   }
 
+ 
   prior->numsites = numsites;  
   prior->p_stations = (StationNoiseModel_t *) calloc(numsites, sizeof(StationNoiseModel_t));
+
+  for (int i=0; i < numsites; ++i) {
+    for (int j=0; j < NUM_CHANS; ++j) {
+      (prior->p_stations + i)->chan_means[j] = 0;
+      (prior->p_stations + i)->chan_vars[j] = 10;
+      printf(" set %d, %d, vars to %lf\n", i, j, (prior->p_stations + i)->chan_vars[j]);
+    }
+  }
+
   int numentries;
   if (1 != fscanf(fp, "%d\n", &numentries))
   {
@@ -200,7 +216,7 @@ void envelope_means_vars(SignalPrior_t * prior,
   }
 
   double noise_mean = (prior->p_stations + siteid)->chan_means[chan_num];
-  double noise_var = (prior->p_stations + siteid)->chan_means[chan_num];
+  double noise_var = (prior->p_stations + siteid)->chan_vars[chan_num];
   for (int i=0; i < *p_len; ++i) {
     p_means[i] = noise_mean;
     if (pp_vars != NULL) p_vars[i] = noise_var;
@@ -312,24 +328,32 @@ const Event_t ** augment_events(int numevents, const Event_t ** events, const Ev
   return augmented;
 }
 
+
+
+
 /* Return the score for this event: the ratio of signal likelihoods
    between a world where this event exists, and one where it
    doesn't. */
-double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int num_other_events, const Event_t ** pp_other_events) {
+double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events) {
 
   SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
 
   double score = 0;
-  ChannelBundle_t * p_segment = p_sigmodel->p_segments;
-  int numtimedefphases = p_sigmodel->p_earth->numtimedefphases;
+  ChannelBundle_t * p_segment;
+
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
 
   for (int i=0; i < p_sigmodel->numsegments; ++i) {
 
-    //    printf("    scoring signal segment %d...\n", i);
+    p_segment = p_sigmodel->p_segments + i;
+
+    if (p_segment->siteid != siteid)  {
+      continue;
+    }
 
     /* compute the time period during which the event will affect the station */
     double first_envelope_time, last_envelope_time;
-    evt_arrival_times(p_event, p_segment->siteid, numtimedefphases, &first_envelope_time, &last_envelope_time);
+    evt_arrival_times(p_event, siteid, numtimedefphases, &first_envelope_time, &last_envelope_time);
     last_envelope_time += MAX_ENVELOPE_LENGTH;
 
     /* if this trace doesn't fall within that period, skip it */
@@ -350,38 +374,13 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
 
     /* score augmented event set */
     double event_lp = 0;
+
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
-
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
-
+      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars);
       long compare_len = MIN(len, p_segment->len - env_start_idx);
-      double lp = indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
-      event_lp += lp;
-      //printf(" augmented event set: channel %d contributed score %lf\n", chan_num, lp);
-      if (isnan(lp)) {
-	printf("nan nan nan!!! %ld %ld %ld\n", compare_len, len, env_start_idx);
-	printf("means:\n");
-	print_vector(compare_len, p_means);
-	printf("vars:\n");
-	print_vector(compare_len, p_vars);
-	printf("actual:\n");
-	double *x =  p_segment->p_channels[chan_num]->p_data + env_start_idx;
-	print_vector(compare_len, x);
-
-	/*	printf(" gaussian trace:\n");
-
-	double glp = 0;
-
-	for (int i=0; i < compare_len; ++i) {
-	  double iglp = 0.5 * log(2*PI * abs(p_vars[i])) + 0.5 * (x[i] - p_means[i])*(x[i] - p_means[i]) / abs(p_vars[i]);
-	  glp -= iglp;
-	  printf(" i = %d, mean = %lf, var = %lf, glp = %lf, iglp = %lf = %lf + .5 * %lf ^2 / %lf\n", i, p_means[i], p_vars[i], glp, iglp, log(2*PI * abs(p_vars[i])), (x[i] - p_means[i]), abs(p_vars[i]));
-	  }*/
-
-	exit(-1);
-      }
-
+      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+      assert (!isnan(event_lp));
       free(p_means);
       free(p_vars);
     }
@@ -391,26 +390,38 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
     double background_lp = 0;
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events, pp_other_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars);
+      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events, pp_other_events, siteid, chan_num, &len, &p_means, &p_vars);
       long compare_len = MIN(len, p_segment->len - env_start_idx);
       background_lp +=  indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+      assert (!isnan(background_lp));
       free(p_means);
       free(p_vars);
     }
-
-
 
     score += (event_lp - background_lp);
 
     //printf("   segment %d contributed score %lf = event_lp %lf - background_lp %lf\n", i, event_lp - background_lp, event_lp, background_lp);
 
-    p_segment++;
   }
-
-
 
   return score;
 
+}
+
+/* Return the score for this event: the ratio of signal likelihoods
+   between a world where this event exists, and one where it
+   doesn't. */
+double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int num_other_events, const Event_t ** pp_other_events) {
+
+  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
+  int numsites = EarthModel_NumSites(p_sigmodel->p_earth);
+
+  double score = 0;
+  for (int siteid = 0; siteid < numsites; ++siteid) {
+    score += SignalPrior_Score_Event_Site(prior, p_sigmodel_v, p_event, siteid, num_other_events, pp_other_events);
+  }
+
+  return score;
 }
 
 void SignalPrior_UnInit(SignalPrior_t * prior) {

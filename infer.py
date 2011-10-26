@@ -310,8 +310,11 @@ def main(param_dirname):
                                   phasetimedef)
 
     #traces = sigvisa.load_traces(cursor, stations, start_time, end_time)
-    stalist = (25, 104, 12)
-    evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1))  )
+    stalist = (25, 104, 12, 62,52,105,100)
+#    stalist = (52,)
+    evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1) ) )
+#                         (-10, 10, 0, 1237680500, 5.0, 2),
+ #                        (10, -10, 0, 1237680500, 4.0, 3))  )
     sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
 
     signals = sigmodel.get_signals()

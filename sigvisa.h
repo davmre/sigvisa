@@ -34,6 +34,8 @@ typedef struct Arrival_t {
   double azi;
   double slo;
 
+  double score;
+
 } Arrival_t;
 
 

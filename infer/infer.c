@@ -966,6 +966,9 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
   int i;
   time_t t1;
 
+  // initialize random seed, for deterministic testing
+  srand ( 1 );
+
   /* initialize the window */
   p_world->low_evnum = 0;
   p_world->high_evnum = 0;

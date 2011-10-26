@@ -57,7 +57,11 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
       plt.subplot(len(chans), 1, chidx+1, sharex=axes)
       
     plt.ylabel(sta+" - "+chan)
-    trc = fetch_waveform(sta, chan, start_time, end_time)
+    try:
+      trc = fetch_waveform(sta, chan, start_time, end_time)
+    except:
+      plt.close()
+      raise MissingWaveformException()
     trc.filter('bandpass', freqmin=1.0, freqmax=2.0, corners=2,
                zerophase=True)
     env = sig_filter.envelope(trc.data)

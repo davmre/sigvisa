@@ -178,7 +178,19 @@ def estimate_azi_amp_slo(channel_bundle_det_window):
         inang1 = np.rad2deg(np.arccos(np.abs(u[bhz_num,0])))
         inang3 = np.rad2deg(np.arccos(np.abs(u[bhz_num,2])))
 
-        seazp = np.rad2deg(np.arctan2(u[bhn_num,0], u[bhe_num,0])) + 180
+        pc = u[:,0]
+        v =  np.dot(M.T, pc)
+        if np.median(np.array(v)) < 0:
+            pc = pc*-1
+
+# flip according to the projection onto the first principle component?
+        y = pc[bhn_num]
+        x = pc[bhe_num]
+        seazp = np.rad2deg(np.arctan2(y,x))
+        if seazp < 0:
+            seazp = seazp + 360
+        if seazp > 360:
+            seazp = seazp - 360
 
         if amp > maxamp:
             maxamp = amp
@@ -239,6 +251,7 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
                 print "adding det", det
                 detections.append(det)
                 i = i+1
+
     return detections
 
 def process_traces(traces, f, opts):

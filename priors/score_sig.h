@@ -2,6 +2,7 @@
 		       int numevents, Event_t * p_events,
 		       PyArrayObject * arrtimes,
 		       int verbose);*/
+double score_event_sta_sig(SigModel_t * p_sigmodel, const Event_t * p_event, int siteid, int num_other_events, const Event_t ** pp_other_events);
 
 int score_event_sig(SigModel_t * p_sigmodel, Event_t * p_event, int num_other_events, const Event_t ** pp_other_events);
 

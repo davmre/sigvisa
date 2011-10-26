@@ -32,7 +32,8 @@ netvisa_module = Extension('netvisa',
                                        for f in priors_sources]
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]
-                                      + ["netvisa.c"]),
+                                      + ["netvisa.c"]
+                                      + ["sigvisa.c"]),
                            extra_compile_args = extra_compile_args
                            )
 

@@ -19,6 +19,8 @@ typedef struct SignalPrior_t
 
 void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites);
 
+double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events);
+
 double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * event, int num_other_events, const Event_t ** pp_other_events);
 
 void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior, 
