@@ -17,6 +17,17 @@
 #define EARTH_PHASE_Px      16
 #define EARTH_PHASE_N       17
 
+#define MAX_PHASE_DDRANGES  5 /* maximum number of DDRanges per phase */
+
+typedef struct DDRange
+{
+  char phase[PHASENAME_MAXLEN+1];
+  double mindist;
+  double maxdist;
+  double mindepth;
+  double maxdepth;
+  double minmag;
+} DDRange;
 
 typedef struct EarthPhaseModel_t
 {
@@ -29,6 +40,9 @@ typedef struct EarthPhaseModel_t
   double * p_samples;                        /* numdepth x numdist */
   
   double surf_vel;                           /* surface velocity */
+
+  int     numddrange;                        /* number of ddranges for phase */
+  DDRange p_ddranges[MAX_PHASE_DDRANGES];
   
 } EarthPhaseModel_t;
 

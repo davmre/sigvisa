@@ -7,6 +7,51 @@
 #define PY_ARRAY_UNIQUE_SYMBOL PyArray_API
 #include "numpy/arrayobject.h"
 
+/* constants */
+#define MIN_MAGNITUDE   ((double) 2.0)
+#define MAX_MAGNITUDE   ((double) 8.0)
+
+#define MIN_DEPTH       ((double) 0.0)
+#define MAX_DEPTH       ((double) 700.0)
+
+#define MIN_SLOWNESS    ((double) 0.0)
+#define MAX_SLOWNESS    ((double) 400.0)
+
+#define LOGPROB_UNIFORM_SLOWNESS (- log(MAX_SLOWNESS - MIN_SLOWNESS))
+
+#define MIN_AZIMUTH     ((double) -180)
+#define MAX_AZIMUTH     ((double) +180)
+
+#define LOGPROB_UNIFORM_AZIMUTH (- log(MAX_AZIMUTH - MIN_AZIMUTH))
+
+#define PHASENAME_MAXLEN 6
+
+/* maximum time taken by any phase */
+#define MAX_TRAVEL_TIME ((double) 2000.0)
+
+/* the spacing between secondary detections */
+#define SECDET_INTERVAL ((double) 5.0)
+
+/* maximum number of primary + secondary detections for any phase */
+#define MAX_PHASE_DET  15
+
+/* max time residual should not be needed in a proper model but due to
+ * unexplained extremely high variance in some of the travel time residual
+ * we need to put this in place for now */
+#define MAX_TIME_RESIDUAL ((double) 6.0)
+
+#define PI                     ((double) 3.1415926535897931)
+#define DEG2RAD                ((double) (PI / 180))
+#define RAD2DEG                ((double) (180 / PI))
+#define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
+
+/* DELTA_TIME and DELTA_DIST are used in evaluating the answer */
+#define DELTA_TIME 50                        /* in seconds */
+#define DELTA_DIST 5                         /* in degrees */
+
+#define MAX_AMP 10000.0
+#define LOG_MAX_AMP 9.2103
+
 typedef struct Event_t
 {
   double evlon;
@@ -148,6 +193,7 @@ typedef struct NetModel_t
 #define DET_PER_COL    11
 #define DET_NUM_COLS   12
 
+/* MACROS */
 #define Event2R3Vector(event, vector) do {\
 (vector)[0] = (event)->evlon; (vector)[1] = (event)->evlat;\
 (vector)[2] = (event)->evdepth;} while(0)
@@ -158,37 +204,6 @@ typedef struct NetModel_t
 #define BOOLARRAY2(arr,i,j) (*((npy_bool *)PyArray_GETPTR2(arr,i,j)))
 #define BOOLARRAY1(arr,i) (*((npy_bool *)PyArray_GETPTR1(arr,i)))
 
-#define MIN_MAGNITUDE   ((double) 2.0)
-#define MAX_MAGNITUDE   ((double) 8.0)
-
-#define MIN_DEPTH       ((double) 0.0)
-#define MAX_DEPTH       ((double) 700.0)
-
-#define MIN_SLOWNESS    ((double) 0.0)
-#define MAX_SLOWNESS    ((double) 400.0)
-
-#define LOGPROB_UNIFORM_SLOWNESS (- log(MAX_SLOWNESS - MIN_SLOWNESS))
-
-#define MIN_AZIMUTH     ((double) -180)
-#define MAX_AZIMUTH     ((double) +180)
-
-#define LOGPROB_UNIFORM_AZIMUTH (- log(MAX_AZIMUTH - MIN_AZIMUTH))
-
-#define PHASENAME_MAXLEN 6
-
-/* maximum time taken by any phase */
-#define MAX_TRAVEL_TIME ((double) 2000.0)
-
-/* the spacing between secondary detections */
-#define SECDET_INTERVAL ((double) 5.0)
-
-/* maximum number of primary + secondary detections for any phase */
-#define MAX_PHASE_DET  15
-
-/* max time residual should not be needed in a proper model but due to
- * unexplained extremely high variance in some of the travel time residual
- * we need to put this in place for now */
-#define MAX_TIME_RESIDUAL ((double) 6.0)
 
 #define MIN(a,b) ((a) <= (b) ? (a) : (b))
 #define MAX(a,b) ((a) >= (b) ? (a) : (b))
@@ -198,17 +213,6 @@ typedef struct NetModel_t
 /* RAND_UNIFORM(a,b) -> random value between a and b */
 #define RAND_UNIFORM(a,b) (((double) (a)) + ((double) ((b)-(a))) * RAND_DOUBLE)
 
-#define PI                     ((double) 3.1415926535897931)
-#define DEG2RAD                ((double) (PI / 180))
-#define RAD2DEG                ((double) (180 / PI))
-#define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
-
-/* DELTA_TIME and DELTA_DIST are used in evaluating the answer */
-#define DELTA_TIME 50                        /* in seconds */
-#define DELTA_DIST 5                         /* in degrees */
-
-#define MAX_AMP 10000.0
-#define LOG_MAX_AMP 9.2103
 
 Event_t * alloc_event(NetModel_t * p_netmodel);
 void free_event(Event_t * p_event);

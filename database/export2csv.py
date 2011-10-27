@@ -52,7 +52,7 @@ def convert_table(orcl, tablename, filename, where, orderby):
   
   output.writerow([col[0] for col in curs.description])
   
-  for row_data in curs:        
+  for row_data in curs:
     output.writerow(row_data)
 
 if __name__ == "__main__":

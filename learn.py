@@ -22,7 +22,8 @@ import netvisa
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
   model = netvisa.EarthModel(sites, phasenames, phasetimedef,
-                             os.path.join(param_dirname, "ttime", "iasp91."))
+                             os.path.join(param_dirname, "ttime", "iasp91."),
+                             os.path.join(param_dirname,"GA_dist_depth_ranges"))
   return model
 
 def load_netvisa(param_dirname, start_time, end_time, detections, site_up,

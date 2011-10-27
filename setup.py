@@ -3,6 +3,7 @@ import numpy as np
 import os
 
 extra_compile_args = ['-std=c99']
+extra_link_args = ['-lpthread']
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
@@ -21,8 +22,10 @@ netvisa_module = Extension('netvisa',
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]
                                       + ["netvisa.c"]),
-                           extra_compile_args = extra_compile_args
+                           extra_compile_args = extra_compile_args,
+                           extra_link_args = extra_link_args
                            )
+
 setup (name = 'netvisa',
        version = '1.0',
        description = 'Network Vertically Integrated Seismological Processing',

@@ -14,6 +14,8 @@
 #define EARTH_SURF_P_VEL    5.8              /* surface velocity of P waves */
 #define EARTH_SURF_S_VEL    (EARTH_SURF_P_VEL / 1.73)
 
+#define MAX_NUM_DDRANGES    100              /* max distance depth ranges */
+
 /* MACROS */
 
 /* convert latitude x in radians to geocentric co-latitude in radians */
@@ -25,6 +27,8 @@
   (90.0 - (x*RAD2DEG - (0.192436*sin(x+x) - 0.000323*sin(4.0*x))))
 
 #define	SIGN(a1, a2)	((a2) >= 0 ? -(a1) : (a1))
+
+/* TYPES */
 
 static char * read_line(FILE * fp)
 {
@@ -39,6 +43,14 @@ static char * read_line(FILE * fp)
   {
     buf[pos++] = ch;
   }
+  
+  /* return NULL on EOF */
+  if (ch == EOF)
+  {
+    free(buf);
+    return NULL;
+  }
+  /* otherwise, null-terminate the line */
   buf[pos] = '\0';
 
   if (ch != '\n')
@@ -201,22 +213,67 @@ static void free_phases(int nphases, char ** p_phasenames,
   free(p_phase_time_def);
 }
 
+static DDRange * read_dist_depth_ranges(const char * fname, int * p_num_ranges)
+{
+  FILE * fp;
+  DDRange * p_ranges;
+  char * buf;
+
+  fp = fopen(fname, "r");
+  
+  if (!fp)
+  {
+    fprintf(stderr, "EarthModel: Unable to open dist-depth ranges file %s",
+            fname);
+    exit(1);
+  }
+  
+  *p_num_ranges = 0;
+  p_ranges = (DDRange *) malloc(sizeof(DDRange) * MAX_NUM_DDRANGES);
+
+  while ((buf = read_line(fp)) != NULL)
+  {
+    DDRange * p_curr = p_ranges + (*p_num_ranges);
+    
+    /* skip comments or empty lines */
+    if ((buf[0] == '#') || (strlen(buf) == 0))
+      continue;
+
+    if (sscanf(buf, "%s %lf %lf %lf %lf %lf", p_curr->phase, &p_curr->mindist,
+               &p_curr->maxdist, &p_curr->mindepth, &p_curr->maxdepth,
+               &p_curr->minmag) != 6)
+    {
+      fprintf(stderr, "incorrect number of ranges in line: %s", buf);
+      exit(1);
+    }
+    
+    (*p_num_ranges) ++;
+  }
+
+  fclose(fp);
+
+  return p_ranges;
+}
+
 int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
 {
   /* input arguments */
   PyArrayObject * sitesobj;
   PyArrayObject * phasenamesobj;
   PyArrayObject * phasetimedefobj;
-  const char * tttable_prefix;
-
-  int i;
-  char * fname;
+  const char * tttable_prefix;             /* travle time table */
+  const char * ddranges_file;              /* distance depth ranges */
   
-  if (!PyArg_ParseTuple(args, "O!O!O!s", &PyArray_Type, &sitesobj,
+  int i, j;
+  char * fname;
+  DDRange * p_ddranges;
+  int num_ddrange;
+  
+  if (!PyArg_ParseTuple(args, "O!O!O!ss", &PyArray_Type, &sitesobj,
                         &PyArray_Type, &phasenamesobj,
                         &PyArray_Type, &phasetimedefobj,
-                        &tttable_prefix) || !sitesobj || !phasenamesobj
-      || !phasetimedefobj)
+                        &tttable_prefix, &ddranges_file) 
+      || !sitesobj || !phasenamesobj || !phasetimedefobj)
     return -1;
 
   if ((2 != sitesobj->nd) || (NPY_DOUBLE != sitesobj->descr->type_num)
@@ -268,6 +325,9 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
       break;
   }
   p_earth->numtimedefphases = i;
+
+  /* read the valid distance depth ranges */
+  p_ddranges = read_dist_depth_ranges(ddranges_file, &num_ddrange);
   
   for (i=0; i<p_earth->numphases; i++)
   {
@@ -323,9 +383,33 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
                      * p_phase->numdepth);
       
       fclose(fp);
+
+      
+    }
+    
+    /* now read the distance depth ranges for this phase */
+    p_phase->numddrange = 0;
+    if (p_earth->p_phase_time_def[i])
+    {
+      for (j=0; j<num_ddrange; j++)
+      {
+        DDRange * curr_ddrange = p_ddranges + j;
+        
+        if (!strcmp(curr_ddrange->phase, p_earth->p_phasenames[i]))
+        {
+          p_phase->p_ddranges[p_phase->numddrange ++] = *curr_ddrange;
+        }
+      }
+      if (p_phase->numddrange == 0)
+      {
+        fprintf(stderr, "No distance-depth range found for phase %s\n",
+                p_earth->p_phasenames[i]);
+        exit(1);
+      }
     }
   }
   free(fname);
+  free(p_ddranges);
 
   return 0;
 }
@@ -507,7 +591,9 @@ static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
   double d_depth, d_dist;
   double slo_val1, slo_val2;
   double slo_mdist1, slo_mdist2;
-
+  int in_range;
+  int i;
+  
   /* check that the depth and distance are within the bounds for this phase */
   if ((depth < p_phase->p_depths[0]) 
       || (depth > p_phase->p_depths[p_phase->numdepth-1])
@@ -517,6 +603,24 @@ static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
     *p_trvtime = *p_slow = -1;
     return;
   }
+
+  /* check that it is within one of the ranges */
+  in_range = 0;
+  for (i=0; i<p_phase->numddrange; i++)
+  {
+    DDRange * range = p_phase->p_ddranges + i;
+    
+    if ((distance >= range->mindist) && (distance <= range->maxdist)
+        && (depth >= range->mindepth) && (depth <= range->maxdepth))
+      in_range = 1;
+  }
+  
+  if (!in_range)
+  {
+    *p_trvtime = *p_slow = -1;
+    return;
+  }
+    
   
   for (depthi = 0; (depthi < p_phase->numdepth) 
          && (depth >= p_phase->p_depths[depthi]); depthi++)
