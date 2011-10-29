@@ -153,7 +153,15 @@ void phase_env(SignalPrior_t * prior,
   //  printf("channel is %d and ratio is %lf\n", chan_num, component_coeff);
 
   double step = (prior->env_decay / hz);
-  int len = ceil( newmean / step );
+  long len = ceil( newmean / step );
+
+  if (len >= 30 * hz) {
+    printf("event lasting more than 30 seconds! env_decay = %lf, hz = %lf, step = %lf, amp = %lf, env_height = %lf, newmean = %lf, len = %ld\n", prior->env_decay, hz, step, p_arr->amp, prior->env_height, newmean, len);
+    step = newmean /(30.0 * hz);
+    len = ceil( newmean / step );
+    printf("resetting step to %lf , len to %ld\n", step, len);
+  }
+
   double * means = (double *) calloc(len, sizeof(double));
 
   if (means == NULL) {
