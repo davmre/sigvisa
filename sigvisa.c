@@ -729,6 +729,10 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     printf("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
   }
 
+  for (int i=0; i < numevents; ++i) {
+    Event_t * p_event = pp_events[i];
+    free(p_event->p_arrivals);
+  }
 
 }
 
@@ -976,7 +980,9 @@ void free_event(Event_t * p_event)
     /* if a NETVISA event */
     free(p_event->p_all_detids);
     free(p_event->p_num_dets);
-  } else {
+  } 
+
+  if (p_event->p_arrivals != NULL) {
     /* SIGVISA */
     free(p_event->p_arrivals);
   }
