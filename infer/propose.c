@@ -865,13 +865,16 @@ int propose_invert_step(NetModel_t * p_netmodel,
       if (thread_args[i].p_best_event->evscore > p_best_event->evscore)
       {
 	COPY_EVENT(p_netmodel, p_sigmodel, p_best_event, thread_args[i].p_best_event);
-        free_event(thread_args[i].p_best_event);
-        free_event(thread_args[i].p_event);
+
       } else {
 	printf("thread %d score %lf is not better than best %lf\n", i, thread_args[i].p_best_event->evscore, p_best_event->evscore);
       }
+        free_event(thread_args[i].p_best_event);
+        free_event(thread_args[i].p_event);
     }
     
+    
+
     printf("best proposed event is ");
     print_event(p_best_event);
 
