@@ -155,6 +155,10 @@ void initsigvisa(void)
   PyModule_AddObject(m, "SigModel", (PyObject *)&py_sig_model);
 
   PyObject * pmod = PyImport_ImportModule("obspy.core");
+  if (!pmod) {
+    printf("cannot load module obspy.core!\n");
+    exit(-1);
+  }
   traceClass_obj = PyObject_GetAttrString(pmod, "Trace");
   Py_DECREF(pmod);
 }

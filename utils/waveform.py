@@ -206,6 +206,7 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
   try:
     datafile = open(filename, "rb")
   except IOError, e:
+    print "cannot open file ", filename
     # the file could be compressed try .gz extension
     datafile = gzip.open(filename+".gz")
 

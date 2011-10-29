@@ -122,6 +122,7 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
 
   for (int i=0; i < n; ++i) {
     assert(vars[i] >= 0);
+    if (isnan(x[i])) continue;
     lp -= 0.5 * log(2*PI * vars[i]) + 0.5 * (x[i] - means[i])*(x[i] - means[i]) / vars[i];
   }
 
@@ -156,7 +157,7 @@ void phase_env(SignalPrior_t * prior,
   double * means = (double *) calloc(len, sizeof(double));
 
   if (means == NULL) {
-    printf("error allocating memory for means in phase_env, len %d = %lf / %lf\n", len, newmean, step);
+    printf("error allocating memory for means in phase_env, len %ld = %lf / %lf\n", len, newmean, step);
     exit(-1);
   }
 
@@ -358,7 +359,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     /* if this trace doesn't fall within that period, skip it */
     if (p_segment->start_time > last_envelope_time || ChannelBundle_EndTime(p_segment) < first_envelope_time) {
-      printf("     skipping signal segment %d!\n", i);
+      //printf("     skipping signal segment %d: first env %lf last env %lf seg start %lf seg end %lf\n", i, first_envelope_time, last_envelope_time, p_segment->start_time, ChannelBundle_EndTime(p_segment));
       continue;
     }
 
@@ -379,7 +380,20 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
       if (p_segment->p_channels[chan_num] == NULL) continue;
       envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars);
       long compare_len = MIN(len, p_segment->len - env_start_idx);
+    
+
       event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+
+      if(isnan(event_lp)) {
+	printf(" NAN clen %ld means\n", compare_len);
+	print_vector(compare_len, p_means);
+	printf(" vars\n");
+	print_vector(compare_len, p_vars);
+	printf(" data\n");
+	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx);
+	exit(-1);
+      }
+
       assert (!isnan(event_lp));
       free(p_means);
       free(p_vars);

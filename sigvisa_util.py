@@ -75,7 +75,26 @@ def load_traces(cursor, stations, start_time, end_time, small):
         last_stime = -1
         last_etime = -1
         segment_chans = []
+
+        has_bhe = False
+        has_bhn=False
+        has_bhz=False
         for (chan, stime, etime) in wfdiscs:
+            if chan == "BHE":
+                has_bhe = True
+            if chan == "BHN":
+                has_bhn = True
+            if chan == "BHZ":
+                has_bhz = True
+
+        if (not has_bhe) or (not has_bhn) or (not has_bhz):
+            continue
+
+        for (chan, stime, etime) in wfdiscs:
+
+            if chan != "BHE" and chan != "BHN" and chan != "BHZ":
+                continue
+
             if stime != last_stime or etime != last_etime:
                 if len(segment_chans) > 0:
                     traces.append(segment_chans)
@@ -86,6 +105,7 @@ def load_traces(cursor, stations, start_time, end_time, small):
             st = np.max((stime, start_time))
             et = np.min((etime, end_time))
 
+
             print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
             try:
                 trace = utils.waveform.fetch_waveform(sta, chan, int(np.ceil(st)), int(np.floor(et)))
@@ -95,6 +115,12 @@ def load_traces(cursor, stations, start_time, end_time, small):
             except (utils.waveform.MissingWaveform, IOError):
                 print " ... not found, skipping."
                 continue
+
+    for c in traces[:]:
+        if len(c) != 3:
+            print "removing segment ", c, " for improper channels"
+            traces.remove(c)
+
 
     print "fetched ", len(traces), " segments."
     return traces
@@ -206,6 +232,11 @@ def det2fake(detections):
 
 def order_channels(channel_bundle):
     nchans = len(channel_bundle)
+
+    print nchans
+
+    print channel_bundle
+    
     bhe_num = None
     bhz_num = None
     bhn_num = None
@@ -217,6 +248,8 @@ def order_channels(channel_bundle):
             bhn_num = chan_num
         elif chan.stats['channel'] == "BHZ":
             bhz_num = chan_num
+        else:
+            print "strange channel", chan.stats['channel']
     return channel_bundle[bhe_num], channel_bundle[bhn_num], channel_bundle[bhz_num]
 
 def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
@@ -245,7 +278,10 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
             
             channel_bundle_window = map(lambda c : c[trigger_start:trigger_end], channel_bundle)
 
-            det_azi, det_amp, det_slo = estimate_azi_amp_slo(channel_bundle_window)
+            try:
+                det_azi, det_amp, det_slo = estimate_azi_amp_slo(channel_bundle_window)
+            except:
+                continue
             if det_azi is not None:
                 det = (det_id, siteid, det_time, det_amp, det_azi, det_slo)
                 print "adding det", det
