@@ -137,7 +137,7 @@ void phase_env(SignalPrior_t * prior,
 	       double ** p_envelope,
 	       int * t) {
 
-  double newmean = prior->env_height * (p_arr->amp);
+  double newmean = prior->env_height * p_arr->amp;
 
   double component_coeff = 0;
   switch (chan_num) {
