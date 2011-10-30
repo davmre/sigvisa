@@ -178,9 +178,9 @@ static void py_sig_model_dealloc(SigModel_t * self)
 	if (channel->py_array != NULL) {
 	  Py_DECREF(channel->py_array);
 	}
+	free(self->p_segments[i].p_channels[j]);
       }
     }
-    //free(self->p_segments[i].p_channels);
   }
   free(self->p_segments);
 
@@ -388,9 +388,8 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
 int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
 
   // a trace object contains two members: data, a numpy array, and stats, a python dict.
-   int nd = 1;
-   npy_intp * dims = malloc(nd*sizeof(npy_intp));
-   *dims = p_signal->len;
+   npy_intp dims[1];
+   dims[0] = p_signal->len;
    PyObject * py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_signal->p_data);
    p_signal->py_array =(PyArrayObject *) py_data;
 
