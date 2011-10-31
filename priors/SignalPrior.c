@@ -164,7 +164,7 @@ void phase_env(SignalPrior_t * prior,
   }
 
   for (int i=0; i < len; ++i) {
-    means[i] = newmean * fabs(component_coeff);
+    means[i] = newmean * component_coeff;
     newmean -= step;
   }
   

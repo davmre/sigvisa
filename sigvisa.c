@@ -193,7 +193,7 @@ static void py_sig_model_dealloc(SigModel_t * self)
   free(self->p_segments);
 
   for (int i=0; i < self->numsegments; ++i) {
-    for(int j=0; j < NUM_CHANS; ++j) {
+    for(int j=0; j < NUM_CHANS; ++j)  {
       Signal_t *channel = self->p_wave_segments[i].p_channels[j];
       if (channel != NULL) {
 	if (channel->py_array != NULL) {
@@ -204,6 +204,7 @@ static void py_sig_model_dealloc(SigModel_t * self)
     }
   }
   free(self->p_wave_segments);
+
 
   EventLocationPrior_UnInit(&self->event_location_prior);
   ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
@@ -411,8 +412,14 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
   // a trace object contains two members: data, a numpy array, and stats, a python dict.
    npy_intp dims[1];
    dims[0] = p_signal->len;
-   PyObject * py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_signal->p_data);
-   p_signal->py_array =(PyArrayObject *) py_data;
+
+   PyObject * py_data;
+   if (p_signal->py_array == NULL) {
+     py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_signal->p_data);
+     p_signal->py_array = (PyArrayObject *) py_data;
+   } else {
+     py_data = (PyObject *)p_signal->py_array;
+   }
 
    PyObject * py_stats = PyDict_New(); 
 
@@ -817,6 +824,7 @@ Signal_t * alloc_signal(ChannelBundle_t * p_segment) {
   p_signal->len = p_segment->len;
   p_signal->hz = p_segment->hz;
   p_signal->siteid = p_segment->siteid;
+  p_signal->py_array = NULL;
   return p_signal;
 }
 
