@@ -10,12 +10,6 @@
 
 void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites) {
   
-
-  
-
-
-
-
   FILE * fp;
 
   fp = fopen(filename, "r");
@@ -155,12 +149,12 @@ void phase_env(SignalPrior_t * prior,
   double step = (prior->env_decay / hz);
   unsigned long len = ceil( newmean / step );
 
-  if (len >= 30 * hz) {
+  /*if (len >= 30 * hz) {
     printf("event lasting more than 30 seconds! env_decay = %lf, hz = %lf, step = %lf, amp = %lf, env_height = %lf, newmean = %lf, len = %ld\n", prior->env_decay, hz, step, p_arr->amp, prior->env_height, newmean, len);
     step = newmean /(30.0 * hz);
     len = ceil( newmean / step );
     printf("resetting step to %lf , len to %ld\n", step, len);
-  }
+    }*/
 
   double * means = (double *) calloc(len, sizeof(double));
 
@@ -170,7 +164,7 @@ void phase_env(SignalPrior_t * prior,
   }
 
   for (int i=0; i < len; ++i) {
-    means[i] = newmean * component_coeff;
+    means[i] = newmean * fabs(component_coeff);
     newmean -= step;
   }
   
@@ -203,7 +197,8 @@ void envelope_means_vars(SignalPrior_t * prior,
 			 int chan_num, 
 			 long * p_len,
 			 double ** pp_means,
-			 double ** pp_vars) {
+			 double ** pp_vars,
+			 int abs_env) {
  
   (*p_len) = time2idx(end_time, start_time, hz);
 
@@ -254,6 +249,9 @@ void envelope_means_vars(SignalPrior_t * prior,
       double * p_envelope;
       int env_len;
       phase_env(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
+      if (abs_env) {
+	vector_abs_inplace(env_len, p_envelope);
+      }
       add_signals(p_means, *p_len, p_envelope, env_len, idx);
       if (pp_vars != NULL) {
 	vector_times_scalar_inplace(env_len, p_envelope, 0.5);
@@ -272,10 +270,11 @@ void envelope_means_vars(SignalPrior_t * prior,
    three-axis station. p_segment must set start_time, hz, and
    siteid. */
 void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior, 
-				 EarthModel_t * p_earth, 
-				 int numevents, 
-				 const Event_t ** pp_events,
-				 ChannelBundle_t * p_segment) {
+				   EarthModel_t * p_earth, 
+				   int numevents, 
+				   const Event_t ** pp_events,
+				   ChannelBundle_t * p_segment,
+				   ChannelBundle_t * p_wave_segment) {
   int chan_nums[3];
   chan_nums[0] = CHAN_BHE;
   chan_nums[1] = CHAN_BHN;
@@ -290,16 +289,29 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
     p_segment->p_channels[chan_num] = alloc_signal(p_segment);
     p_segment->p_channels[chan_num]->chan = chan_num;
 
+    p_wave_segment->p_channels[chan_num] = alloc_signal(p_wave_segment);
+    p_wave_segment->p_channels[chan_num]->chan = chan_num;
+
     //printf("segment siteid is %d\n", p_segment->siteid);
 
     envelope_means_vars(prior, 
 			p_segment->hz, p_segment->start_time, end_time,
 			p_earth, numevents, pp_events, 
 			p_segment->siteid,chan_num, 
+			&(p_wave_segment->p_channels[chan_num]->len),
+			&(p_wave_segment->p_channels[chan_num]->p_data),
+			NULL,
+			0);
+    envelope_means_vars(prior, 
+			p_segment->hz, p_segment->start_time, end_time,
+			p_earth, numevents, pp_events, 
+			p_segment->siteid,chan_num, 
 			&(p_segment->p_channels[chan_num]->len),
 			&(p_segment->p_channels[chan_num]->p_data),
-			NULL);
+			NULL,
+			1);
     assert(p_segment->p_channels[chan_num]->len == p_segment->len);
+
 
     //printf("generated signal of length %ld:\n", p_segment->p_channels[chan_num]->len);
     //print_vector(p_segment->p_channels[chan_num]->len, p_segment->p_channels[chan_num]->p_data);
@@ -386,7 +398,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars);
+      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
       long compare_len = MIN(len, p_segment->len - env_start_idx);
     
 
@@ -412,7 +424,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     double background_lp = 0;
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events, pp_other_events, siteid, chan_num, &len, &p_means, &p_vars);
+      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events, pp_other_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
       long compare_len = MIN(len, p_segment->len - env_start_idx);
       background_lp +=  indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
       assert (!isnan(background_lp));

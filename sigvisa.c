@@ -7,7 +7,9 @@
 static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_set_waves(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args);
@@ -19,11 +21,17 @@ static PyMethodDef SigModel_methods[] = {
   {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
    "set_signals(traces) "
    "-> num_translated\n"},
+  {"set_waves", (PyCFunction)py_set_waves, METH_VARARGS,
+   "set_waves(traces) "
+   "-> num_translated\n"},
   {"synthesize_signals", (PyCFunction)py_synthesize_signals, METH_VARARGS,
    "synthesize_signals(evlist, stalist, start_time, end_time, hz) "
    "-> success\n"},
   {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
    "get_signals() "
+   "-> signals\n"},
+  {"get_waves", (PyCFunction)py_get_waves, METH_VARARGS,
+   "get_waves() "
    "-> signals\n"},
   {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "
@@ -183,6 +191,19 @@ static void py_sig_model_dealloc(SigModel_t * self)
     }
   }
   free(self->p_segments);
+
+  for (int i=0; i < self->numsegments; ++i) {
+    for(int j=0; j < NUM_CHANS; ++j) {
+      Signal_t *channel = self->p_wave_segments[i].p_channels[j];
+      if (channel != NULL) {
+	if (channel->py_array != NULL) {
+	  Py_DECREF(channel->py_array);
+	}
+	free(self->p_wave_segments[i].p_channels[j]);
+      }
+    }
+  }
+  free(self->p_wave_segments);
 
   EventLocationPrior_UnInit(&self->event_location_prior);
   ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
@@ -486,16 +507,24 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
   Py_DECREF(key);
   p_signal->start_time = PyFloat_AsDouble(py_start_time);
 
+  
   key = PyString_FromString("window_size");
   PyObject * py_window_size = PyDict_GetItem(stats, key);
   Py_DECREF(key);
-  double window_size = PyFloat_AsDouble(py_window_size);
-  key = PyString_FromString("overlap");
-  PyObject * py_overlap = PyDict_GetItem(stats, key);
-  Py_DECREF(key);
-  double overlap = PyFloat_AsDouble(py_overlap);
-  p_signal->hz = 1.0 / (window_size * (1 - overlap));
-
+  if (py_window_size != NULL) {
+    double window_size = PyFloat_AsDouble(py_window_size);
+    key = PyString_FromString("overlap");
+    PyObject * py_overlap = PyDict_GetItem(stats, key);
+    Py_DECREF(key);
+    double overlap = PyFloat_AsDouble(py_overlap);
+    p_signal->hz = 1.0 / (window_size * (1 - overlap));
+  } else {
+    key = PyString_FromString("sampling_rate");
+    PyObject * py_sampling_rate = PyDict_GetItem(stats, key);
+    Py_DECREF(key);
+    double sampling_rate = PyFloat_AsDouble(py_sampling_rate);
+    p_signal->hz = sampling_rate;
+  }
 
   key = PyString_FromString("siteid");
   PyObject * py_siteid = PyDict_GetItem(stats, key);
@@ -579,6 +608,46 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
   p_sigmodel->numsegments = n;
   
   return Py_BuildValue("n", n);
+}
+
+static PyObject * py_set_waves(SigModel_t *p_sigmodel, PyObject *args) {
+  PyObject * p_tracelist_obj;
+  if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
+    return NULL;
+
+  int n = trace_bundles_to_channel_bundles(p_tracelist_obj, &p_sigmodel->p_wave_segments);
+  p_sigmodel->numsegments = n;
+  
+  return Py_BuildValue("n", n);
+}
+
+
+static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args) {
+  //PyObject * p_tracelist_obj;
+  //  if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
+  //  return NULL;
+
+  int numsegments = p_sigmodel->numsegments;
+
+  PyObject * channels = PyList_New(0);
+  
+  for (int i=0; i < numsegments; ++i) {
+
+    PyObject * chan_traces = PyList_New(0);
+    for(int j=0; j < NUM_CHANS; ++j) {
+      Signal_t *p_signal = (p_sigmodel->p_wave_segments + i)->p_channels[j];
+      if (p_signal != NULL) {
+	PyObject * py_trace;
+	signal_to_trace(p_signal, &py_trace);
+	PyList_Append(chan_traces, py_trace);
+      }
+    }
+
+    PyList_Append(channels, chan_traces);
+
+    }
+  
+  return channels;
 }
 
 static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args) {
@@ -708,23 +777,30 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 
   p_sigmodel->numsegments = numsiteids;
   p_sigmodel->p_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
+  p_sigmodel->p_wave_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
   
   for (int i=0; i < numsiteids; ++i) {
     int siteid = p_siteids[i];
     
     ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
+    ChannelBundle_t * p_wave_segment = p_sigmodel->p_wave_segments + i;
 
     p_segment->start_time = start_time;
     p_segment->hz = hz;
-
     p_segment->siteid = siteid;
     p_segment->len = (int) (end_time - start_time) * hz;
+
+    p_wave_segment->start_time = start_time;
+    p_wave_segment->hz = hz;
+    p_wave_segment->siteid = siteid;
+    p_wave_segment->len = (int) (end_time - start_time) * hz;
 
     SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
 				  p_sigmodel->p_earth,
 				  numevents,
 				  (const Event_t **)pp_events,
-				  p_segment);
+				  p_segment,
+				  p_wave_segment);
     printf("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
   }
 

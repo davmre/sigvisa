@@ -143,6 +143,7 @@ typedef struct SigModel_t
 
   int numsegments;
   ChannelBundle_t * p_segments;
+  ChannelBundle_t * p_wave_segments;
 
   EarthModel_t * p_earth;
 

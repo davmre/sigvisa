@@ -341,7 +341,11 @@ def main(param_dirname):
       sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
     else:
       energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
+      print "loaded, setting waves"
+      sigmodel.set_waves(traces)
+      print "loaded, setting energies"
       sigmodel.set_signals(energies)
+
       
 
     if options.det_propose:
@@ -349,7 +353,9 @@ def main(param_dirname):
       fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
       print "using %d detections" % len(fake_det)
     else:
-      signals = sigmodel.get_signals()
+      print "getting waves"
+      signals = sigmodel.get_waves()
+      print "got waves"
       sta_high_thresholds = dict()
       sta_low_thresholds = dict()
       for i in range(200):

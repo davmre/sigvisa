@@ -27,6 +27,7 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
 				   EarthModel_t * p_earth, 
 				   int numevents, 
 				   const Event_t ** pp_events,
-				   ChannelBundle_t * p_segment);
+				   ChannelBundle_t * p_segment,
+				   ChannelBundle_t * p_wave_segment);
 
 void SignalPrior_UnInit(SignalPrior_t * prior);
