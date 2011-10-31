@@ -9,6 +9,9 @@ from results.compare import *
 from utils.geog import dist_km, degdiff
 from utils.waveform import *
 from sigvisa_util import *
+import ast
+
+FDET_ARID_COL, FDET_SITEID_COL, FDET_TIME_COL, FDET_AMP_COL, FDET_AZI_COL, FDET_SLO_COL, FDET_NUM_COLS = range(6+1)
 
 def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
                 sel3_events, sel3_evlist):
@@ -145,7 +148,6 @@ def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
                  (maxtime, world_score, runid))
   conn.commit()
 
-
 def write_events_sig(sigmodel, earthmodel, events, ev_arrlist, runid, maxtime):
   # store the events and associations
 
@@ -181,7 +183,17 @@ def write_events_sig(sigmodel, earthmodel, events, ev_arrlist, runid, maxtime):
                  "score = score + %f where runid=%d" %
                  (maxtime, world_score, runid))
   conn.commit()
-  
+
+def real_to_fake_det(det):
+  return (det[DET_ARID_COL], det[DET_SITE_COL], det[DET_TIME_COL], det[DET_AMP_COL], det[DET_AZI_COL], det[DET_SLO_COL])
+
+def tryeval(val):
+  try:
+    val = ast.literal_eval(val)
+  except ValueError:
+    pass
+  return val
+
 def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-n", "--numsamples", dest="numsamples", default=10,
@@ -227,7 +239,13 @@ def main(param_dirname):
                     help = "arrival table to use for inferring on")
   parser.add_option("-y", "--noarrays", dest="noarrays", default=False,
                     action="store_true",
-                    help = "omit data from array stations (used for sigvisa testing)")
+                    help = "omit data from array stations, used for sigvisa testing (False)")
+  parser.add_option("--synthetic", dest="synthetic", default=False,
+                    action="store_true", help = "generate synthetic signals based on hard-coded events, used for sigvisa testing (False)")
+  parser.add_option("--det-propose", dest="det_propose", default=False,
+                    action="store_true", help = "use idcx_arrivals detections for event proposals used for sigvisa testing (False)")
+  parser.add_option("--siteids", dest="siteids", default=None,
+                    type = str, help = "limit SIGVISA inference to a specific set of stations, used for sigvisa testing. ('')")
   parser.add_option("-z", "--threads", dest="threads", default=1,
                     type="int",
                     help = "number of threads (1)")
@@ -273,7 +291,7 @@ def main(param_dirname):
     
     # read the detections and uptime
     detections, arid2num = read_detections(cursor, start_time, end_time,
-                                 options.arrival_table, options.noarrays)[0]
+                                 options.arrival_table, options.noarrays)
     site_up = read_uptime(cursor, start_time, end_time,
                           options.arrival_table)
     # read the rest of the static data
@@ -309,25 +327,43 @@ def main(param_dirname):
                                   site_up, sites, phasenames,
                                   phasetimedef)
 
-    #traces = sigvisa.load_traces(cursor, stations, start_time, end_time)
- #   stalist = (25, 104, 12, 62,52,105,100)
-    stalist = (52,)
-    evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1) ) )
-#                         (-10, 10, 0, 1237680500, 5.0, 2),
- #                        (10, -10, 0, 1237680500, 4.0, 3))  )
-    sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
 
-    signals = sigmodel.get_signals()
-    print "got signals"
-    print signals
+    if options.siteids is None:
+      stalist = siteids
+    else:
+      stalist = [tryeval(x) for x in options.siteids.split(',')]
+    stalist = tuple(stalist)
 
-    sta_high_thresholds = dict()
-    sta_low_thresholds = dict()
-    for i in range(200):
-      sta_high_thresholds[i] = 4
-      sta_low_thresholds[i] = 0.9
-    print "signals set, computing fake detections"
-    fake_det = fake_detections(signals, sta_high_thresholds, sta_low_thresholds)
+    if options.synthetic:
+      evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1),
+                           (-10, 10, 0, 1237680500, 5.0, 2),
+                           (10, -10, 0, 1237680500, 4.0, 3))  )
+      sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
+    else:
+      energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
+      sigmodel.set_signals(energies)
+      
+
+    if options.det_propose:
+      fake_det = [real_to_fake_det(x) for x in detections]
+      fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
+      print "using %d detections" % len(fake_det)
+    else:
+      signals = sigmodel.get_signals()
+      sta_high_thresholds = dict()
+      sta_low_thresholds = dict()
+      for i in range(200):
+        sta_high_thresholds[i] = 1.6
+        sta_low_thresholds[i] = 0.8
+      print "signals set, computing fake detections"
+      fake_det = fake_detections(signals, sta_high_thresholds, sta_low_thresholds)
+
+      print "real dets"
+      real_det = [real_to_fake_det(x) for x in detections]
+      real_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, real_det) 
+      for det in real_det:
+        print det
+
     
     print "setting fake detections"
     sigmodel.set_fake_detections(fake_det)

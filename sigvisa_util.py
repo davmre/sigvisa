@@ -61,16 +61,16 @@ def window_energies(trace, window_size=1, overlap=0.5):
   
   return windows
 
-def load_traces(cursor, stations, start_time, end_time, small):
+def load_traces(cursor, stations, start_time, end_time):
     traces = []
 
     for (idx, sta) in enumerate(stations):
-        if (small and idx > 2):
-            break
 
         sql = "select chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
         cursor.execute(sql)
         wfdiscs = cursor.fetchall()
+
+        print "trying ", wfdiscs
 
         last_stime = -1
         last_etime = -1
@@ -80,9 +80,9 @@ def load_traces(cursor, stations, start_time, end_time, small):
         has_bhn=False
         has_bhz=False
         for (chan, stime, etime) in wfdiscs:
-            if chan == "BHE":
+            if chan == "BHE" or chan == "BH1":
                 has_bhe = True
-            if chan == "BHN":
+            if chan == "BHN" or chan == "BH2":
                 has_bhn = True
             if chan == "BHZ":
                 has_bhz = True
@@ -92,16 +92,15 @@ def load_traces(cursor, stations, start_time, end_time, small):
 
         for (chan, stime, etime) in wfdiscs:
 
-            if chan != "BHE" and chan != "BHN" and chan != "BHZ":
+            if chan != "BHE" and chan != "BH1" and chan != "BHN" and chan != "BH2" and chan != "BHZ":
                 continue
 
             if stime != last_stime or etime != last_etime:
-                if len(segment_chans) > 0:
+                if len(segment_chans) == 3:
                     traces.append(segment_chans)
+                    segment_chans = []
                 last_stime = stime
                 last_etime = etime
-                segment_chans = []
-
             st = np.max((stime, start_time))
             et = np.min((etime, end_time))
 
@@ -109,12 +108,19 @@ def load_traces(cursor, stations, start_time, end_time, small):
             print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
             try:
                 trace = utils.waveform.fetch_waveform(sta, chan, int(np.ceil(st)), int(np.floor(et)))
+                if chan == "BH1":
+                    trace.stats['channel'] = "BHE"
+                if chan == "BH2":
+                    trace.stats['channel'] = "BHN"
                 trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
                 segment_chans.append(trace)
                 print " ... successfully loaded."
             except (utils.waveform.MissingWaveform, IOError):
                 print " ... not found, skipping."
                 continue
+
+        if len(segment_chans) == 3:
+            traces.append(segment_chans)
 
     for c in traces[:]:
         if len(c) != 3:
@@ -127,15 +133,20 @@ def load_traces(cursor, stations, start_time, end_time, small):
 
 def max_over_channels(channel_bundle):
     max_data = []
+
+    maxlen = -1
+    maxidx = None
+    for (idx, channel) in enumerate(channel_bundle):
+        if len(channel) > maxlen:
+            maxlen = len(channel)
+            maxidx = idx
+    max_data = np.copy(channel_bundle[maxidx])
+
     for channel in channel_bundle:
-        if len(max_data) == 0:
-            max_data = np.copy(channel.data)
-            continue
-        for i in range(len(channel.data)):
+        chanlen = len(channel.data)
+        for i in range(chanlen):
             max_data[i] = np.max((max_data[i], channel.data[i]))
     return max_data
-
-
 
 def enframe(x, win, inc):
     """
@@ -198,7 +209,7 @@ def estimate_azi_amp_slo(channel_bundle_det_window):
         l = np.take(l, reorder)
         u = np.take(u, reorder, axis=1)
 
-        amp = np.log(np.linalg.norm(l, 2))
+        amp = np.linalg.norm(l, 2)
         rect = 1 - (l[2] + l[1])/ (2 * l[0])
 
         inang1 = np.rad2deg(np.arccos(np.abs(u[bhz_num,0])))
@@ -233,10 +244,6 @@ def det2fake(detections):
 def order_channels(channel_bundle):
     nchans = len(channel_bundle)
 
-    print nchans
-
-    print channel_bundle
-    
     bhe_num = None
     bhz_num = None
     bhn_num = None
@@ -306,12 +313,20 @@ def process_traces(traces, f, opts):
         processed_traces.append(processed_traces_sta)
     return processed_traces
 
-def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, small=False):
-    cursor.execute("select sta, id from static_siteid where statype='ss'")
-    stations = np.array(cursor.fetchall())
-    stations = stations[:,0]
+def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=None):
+    if stalist is None:
+        cursor.execute("select sta, id from static_siteid where statype='ss'")
+        stations = np.array(cursor.fetchall())
+        stations = stations[:,0]
+    else:
+        stations = []
+        for siteid in stalist:
+            cursor.execute("select sta, id from static_siteid where statype='ss' and id=%d" % (siteid))
+            station = np.array(cursor.fetchone())[0]
+            stations.append(station)
+        print "loading traces from stations", stations
 
-    traces = load_traces(cursor, stations, start_time, end_time, small)
+    traces = load_traces(cursor, stations, start_time, end_time)
     f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
     opts = dict(window_size=window_size, overlap=overlap)
     energies = process_traces(traces, f, opts)
