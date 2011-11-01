@@ -274,4 +274,6 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 				  const Event_t ** pp_events, int numevents,
 				  PyObject ** pp_eventsobj,
 				  PyObject ** pp_evarrlistobj);
+
+PyObject * channel_bundle_to_trace_bundle(ChannelBundle_t * p_segment);
 #endif // SIGVISA_INCLUDE

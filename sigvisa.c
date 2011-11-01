@@ -44,7 +44,7 @@ static PyMethodDef SigModel_methods[] = {
    "-> log probability\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
-   "write_cb)\n -> events, ev_detlist"},/*
+   "write_cb, log_cb)\n -> events, ev_detlist"},/*
   {"propose", (PyCFunction)py_propose, METH_VARARGS,
    "propose(time_low, time_high, det_low, det_high, degree_step, num_step)\n"
    " -> events, ev_detlist"},*/
@@ -628,6 +628,19 @@ static PyObject * py_set_waves(SigModel_t *p_sigmodel, PyObject *args) {
   return Py_BuildValue("n", n);
 }
 
+PyObject * channel_bundle_to_trace_bundle(ChannelBundle_t * p_segment) {
+
+  PyObject * chan_traces = PyList_New(0);
+  for(int j=0; j < NUM_CHANS; ++j) {
+    Signal_t *p_signal = (p_segment)->p_channels[j];
+    if (p_signal != NULL) {
+      PyObject * py_trace;
+      signal_to_trace(p_signal, &py_trace);
+      PyList_Append(chan_traces, py_trace);
+    }
+  }
+  return chan_traces;
+}
 
 static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args) {
   //PyObject * p_tracelist_obj;
@@ -637,22 +650,10 @@ static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args) {
   int numsegments = p_sigmodel->numsegments;
 
   PyObject * channels = PyList_New(0);
-  
   for (int i=0; i < numsegments; ++i) {
-
-    PyObject * chan_traces = PyList_New(0);
-    for(int j=0; j < NUM_CHANS; ++j) {
-      Signal_t *p_signal = (p_sigmodel->p_wave_segments + i)->p_channels[j];
-      if (p_signal != NULL) {
-	PyObject * py_trace;
-	signal_to_trace(p_signal, &py_trace);
-	PyList_Append(chan_traces, py_trace);
-      }
-    }
-
+    PyObject * chan_traces = channel_bundle_to_trace_bundle(p_sigmodel->p_wave_segments + i);
     PyList_Append(channels, chan_traces);
-
-    }
+  }
   
   return channels;
 }
@@ -665,26 +666,13 @@ static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args) {
   int numsegments = p_sigmodel->numsegments;
 
   PyObject * channels = PyList_New(0);
-  
   for (int i=0; i < numsegments; ++i) {
-
-    PyObject * chan_traces = PyList_New(0);
-    for(int j=0; j < NUM_CHANS; ++j) {
-      Signal_t *p_signal = (p_sigmodel->p_segments + i)->p_channels[j];
-      if (p_signal != NULL) {
-	PyObject * py_trace;
-	signal_to_trace(p_signal, &py_trace);
-	PyList_Append(chan_traces, py_trace);
-      }
-    }
-
+    PyObject * chan_traces = channel_bundle_to_trace_bundle(p_sigmodel->p_segments + i);
     PyList_Append(channels, chan_traces);
-
-    }
+  }
   
   return channels;
 }
-
     
 int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
   

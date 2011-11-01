@@ -85,13 +85,15 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
     
     #st.plot(color='k')
 
-def plot_segment(channel_traces, all_det_times=None):
+def plot_segment(channel_traces, fname, format, title=None, all_det_times=None):
   plt.figure()
   plt.xlabel("Time (s)")
 
   for chidx, trc in enumerate(channel_traces):
     if chidx == 0:
       axes = plt.subplot(len(channel_traces), 1, 1)
+      if title is not None:
+        plt.title(title)
     else:
       plt.subplot(len(channel_traces), 1, chidx+1, sharex=axes)
       
@@ -105,7 +107,8 @@ def plot_segment(channel_traces, all_det_times=None):
     else:
       srate = trc.stats.sampling_rate
       npts = trc.stats.npts
-    timevals = np.arange(0, npts/srate, 1.0 /srate)
+    stime = trc.stats["starttime_unix"]
+    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)
 
     plt.plot(timevals, trc, 'k:')
 
@@ -113,7 +116,7 @@ def plot_segment(channel_traces, all_det_times=None):
       maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
       plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
               width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
-  plt.show()
+  plt.savefig(fname, format=format)
 
 def fetch_array_elements(siteid):
   cursor = database.db.connect().cursor()

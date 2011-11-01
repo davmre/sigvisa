@@ -78,6 +78,7 @@ typedef struct World_t
   PyObject * propose_eventobj;
   int verbose;
   PyObject * write_events_cb;
+  PyObject * log_segment_cb;
 } World_t;
 
 PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);

@@ -288,20 +288,6 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
     
     p_segment->p_channels[chan_num] = alloc_signal(p_segment);
     p_segment->p_channels[chan_num]->chan = chan_num;
-
-    p_wave_segment->p_channels[chan_num] = alloc_signal(p_wave_segment);
-    p_wave_segment->p_channels[chan_num]->chan = chan_num;
-
-    //printf("segment siteid is %d\n", p_segment->siteid);
-
-    envelope_means_vars(prior, 
-			p_segment->hz, p_segment->start_time, end_time,
-			p_earth, numevents, pp_events, 
-			p_segment->siteid,chan_num, 
-			&(p_wave_segment->p_channels[chan_num]->len),
-			&(p_wave_segment->p_channels[chan_num]->p_data),
-			NULL,
-			0);
     envelope_means_vars(prior, 
 			p_segment->hz, p_segment->start_time, end_time,
 			p_earth, numevents, pp_events, 
@@ -311,6 +297,22 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
 			NULL,
 			1);
     assert(p_segment->p_channels[chan_num]->len == p_segment->len);
+
+    //printf("segment siteid is %d\n", p_segment->siteid);
+
+    if (p_wave_segment != NULL) {
+      p_wave_segment->p_channels[chan_num] = alloc_signal(p_wave_segment);
+      p_wave_segment->p_channels[chan_num]->chan = chan_num;
+      envelope_means_vars(prior, 
+			  p_segment->hz, p_segment->start_time, end_time,
+			  p_earth, numevents, pp_events, 
+			  p_segment->siteid,chan_num, 
+			  &(p_wave_segment->p_channels[chan_num]->len),
+			  &(p_wave_segment->p_channels[chan_num]->p_data),
+			  NULL,
+			  0);
+    }
+
 
 
     //printf("generated signal of length %ld:\n", p_segment->p_channels[chan_num]->len);

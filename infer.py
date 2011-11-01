@@ -1,6 +1,9 @@
 import os, sys, time
 import numpy as np
 from optparse import OptionParser
+import matplotlib
+matplotlib.use('PDF')
+from matplotlib.backends.backend_pdf import PdfPages
 
 from database.dataset import *
 import database.db
@@ -184,6 +187,30 @@ def write_events_sig(sigmodel, earthmodel, events, ev_arrlist, runid, maxtime):
                  (maxtime, world_score, runid))
   conn.commit()
 
+
+
+def log_envelope_plot(pp, runid, events, evarrlist, real_env, pred_env):
+  
+  siteid = real_env[0].stats["siteid"]
+  
+  arrtimes = []
+  for ev_l in evarrlist:
+    for sta_l in ev_l:
+      if int(sta_l[1]) == siteid:
+        arrtimes.append(sta_l[3])
+
+  print "python log envelope at ", siteid
+
+  print "arrtimes ", arrtimes
+
+  text = "REAL ENVELOPE: siteid %d" % siteid
+  plot_segment(real_env, pp, "pdf", title = text, all_det_times = arrtimes)
+
+  text = "PRED ENVELOPE: siteid %d" % siteid
+  plot_segment(pred_env, pp, "pdf", title= text, all_det_times = arrtimes)
+
+  return True
+
 def real_to_fake_det(det):
   return (det[DET_ARID_COL], det[DET_SITE_COL], det[DET_TIME_COL], det[DET_AMP_COL], det[DET_AZI_COL], det[DET_SLO_COL])
 
@@ -335,9 +362,9 @@ def main(param_dirname):
     stalist = tuple(stalist)
 
     if options.synthetic:
-      evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1),
-                           (-10, 10, 0, 1237680500, 5.0, 2),
-                           (10, -10, 0, 1237680500, 4.0, 3))  )
+      evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1)))
+#                           (-10, 10, 0, 1237680500, 5.0, 2),
+#                           (10, -10, 0, 1237680500, 4.0, 3))  )
       sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
     else:
       energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
@@ -426,14 +453,19 @@ def main(param_dirname):
     propose_events = None
 
   if options.sigvisa:
+    pp = PdfPages('logs/signals_%d.pdf' % (runid))
+
     events = sigmodel.infer(runid, options.numsamples,
                                       options.birthsteps,
                                       options.window, options.step,
                                       options.threads,
                                       propose_events,
                                       options.verbose,
-                                      lambda a,b,c,d,e,f:
-                                      write_events_sig(a,b,c,d,e,f))
+                            lambda a,b,c,d,e,f:
+                                      write_events_sig(a,b,c,d,e,f),
+                            lambda a,b,c,d,e:
+                                      log_envelope_plot(pp,a,b,c,d,e))
+    pp.close()
     print "inferred events", events
     return
   else:

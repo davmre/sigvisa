@@ -293,7 +293,7 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
 
 
 
-/* add events using the propose_invert proposer */
+/* propose a dummy event, for debugging purposes */
 static void add_dummy_event(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World_t * p_world)
 {
   Event_t * pp_events[1000];     /* assume at most 1000 events init */
@@ -900,6 +900,84 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
     Py_DECREF(retval);
 }
 
+
+static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)
+{
+  PyObject * retval;
+  double maxtime;
+  PyObject * eventsobj;
+  PyObject * evarrlistobj;
+  int i;
+  int numevents;
+  
+  double end_time = p_sigmodel->end_time;
+  double start_time = p_sigmodel->start_time;
+
+  if (p_world->high_evtime < end_time)
+    maxtime = MAX(p_world->low_evtime - MAX_TRAVEL_TIME,
+                  start_time);
+  else
+    maxtime = p_world->high_evtime;
+  numevents = 0;
+  for (i=p_world->write_evnum;
+       (i<p_world->high_evnum) && p_world->pp_events[i]->evtime < maxtime;
+       i++)
+    numevents ++;
+
+  convert_events_arrs_to_pyobj(p_sigmodel, p_sigmodel->p_earth, 
+				 (const Event_t **) (p_world->pp_events 
+						     + p_world->write_evnum),
+			       numevents, &eventsobj, &evarrlistobj);
+  
+  for (i = 0; i < p_sigmodel->numsegments; ++i) {
+    printf("logging segment %d\n", i);
+
+    ChannelBundle_t * p_real_segment = p_sigmodel->p_segments + i;
+    if (p_real_segment->start_time > maxtime + MAX_TRAVEL_TIME) {
+      continue;
+    }
+
+    ChannelBundle_t * p_pred_segment = calloc(1, sizeof(ChannelBundle_t));
+    memcpy(p_pred_segment, p_real_segment, sizeof(ChannelBundle_t));
+
+    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  numevents,
+				  (const Event_t **) p_world->pp_events + p_world->write_evnum,
+				  p_pred_segment,
+				  NULL);
+
+
+    PyObject * real_trace, * pred_trace;
+    real_trace = channel_bundle_to_trace_bundle(p_real_segment);
+    pred_trace = channel_bundle_to_trace_bundle(p_pred_segment);
+    printf("calling log_segment\n");
+    retval = PyObject_CallFunction(p_world->log_segment_cb, "iOOOO", 
+				   p_world->runid,
+				   eventsobj, evarrlistobj,
+				   real_trace,
+				   pred_trace);
+
+    if (!retval) {
+      printf("log_segment_cb call failed!\n");
+      CHECK_ERROR;
+    } else {
+      Py_DECREF(retval);
+    }
+
+    Py_DECREF(real_trace);
+    Py_DECREF(pred_trace);
+  }
+ 
+  
+
+  p_world->write_evnum += numevents;
+  
+  Py_DECREF(eventsobj);
+  Py_DECREF(evarrlistobj);
+  
+}
+
 static World_t * alloc_world(NetModel_t * p_netmodel)
 {
   World_t * p_world;
@@ -1285,6 +1363,10 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     p_world->low_evtime += p_world->step;
 
     /* write out any inferred events */
+
+    printf("logging segments\n");
+    log_segments(p_sigmodel, p_world);
+    printf("writing events\n");
     write_events(NULL, p_sigmodel, p_world);
     
   } while (p_world->high_evtime < p_sigmodel->end_time);
@@ -1319,16 +1401,17 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   int verbose;
   PyObject * propose_eventobj;
   PyObject * write_events_cb;
+  PyObject * log_segment_cb;
 
   PyObject * retobj;
   PyObject * eventsobj;
   PyObject * evarrlistobj;
   
-  if (!PyArg_ParseTuple(args, "iiiiiiOiO", &runid, &numsamples, 
+  if (!PyArg_ParseTuple(args, "iiiiiiOiOO", &runid, &numsamples, 
                         &birthsteps,
                         &window, &step, &numthreads,
                         &propose_eventobj,
-                        &verbose, &write_events_cb))
+                        &verbose, &write_events_cb, &log_segment_cb))
     return NULL;
 
   /* allocate the world and initialize the user arguments */
@@ -1342,6 +1425,7 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   p_world->propose_eventobj = propose_eventobj;
   p_world->verbose = verbose;
   p_world->write_events_cb = write_events_cb;
+  p_world->log_segment_cb = log_segment_cb;
   
   // TODO: write inference
   printf("created world, calling inference...\n");
