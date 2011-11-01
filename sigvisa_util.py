@@ -191,7 +191,8 @@ def estimate_azi_amp_slo(channel_bundle_det_window):
     bhz_num = 2
 
     # first dim is channel, second is frame, third is idx
-    frames = np.array(map(lambda chan : enframe(chan, obspy.signal.invsim.cosTaper(FRAME_LEN, .1), FRAME_INC)[0], channel_bundle_det_window))
+    #frames = np.array(map(lambda chan : enframe(chan, obspy.signal.invsim.cosTaper(FRAME_LEN, .1), FRAME_INC)[0], channel_bundle_det_window))
+    frames = np.array(map(lambda chan : enframe(chan, np.ones((FRAME_LEN, 1)), FRAME_INC)[0], channel_bundle_det_window))
 
     maxamp = -1
     maxamp_azi = None
@@ -216,9 +217,13 @@ def estimate_azi_amp_slo(channel_bundle_det_window):
         inang3 = np.rad2deg(np.arccos(np.abs(u[bhz_num,2])))
 
         pc = u[:,0]
-        v =  np.dot(M.T, pc)
+
+        v =  np.dot(A.T, pc)
+        #print "v is ", v
         if np.median(np.array(v)) < 0:
             pc = pc*-1
+
+        #print "pc is ", pc, " means are ", np.mean(A,axis=1), " amp is ", amp
 
 # flip according to the projection onto the first principle component?
         y = pc[bhn_num]

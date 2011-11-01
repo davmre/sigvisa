@@ -362,9 +362,9 @@ def main(param_dirname):
     stalist = tuple(stalist)
 
     if options.synthetic:
-      evlist = np.matrix( ((0, 0, 0, 1237680500, 3.0, 1)))
-#                           (-10, 10, 0, 1237680500, 5.0, 2),
-#                           (10, -10, 0, 1237680500, 4.0, 3))  )
+      evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1),
+                           (-10, 10, 0, 1237681000, 3.0, 2),
+                           (10, -10, 0, 1237681500, 3.0, 3))  )
       sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
     else:
       energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
@@ -386,7 +386,7 @@ def main(param_dirname):
       sta_high_thresholds = dict()
       sta_low_thresholds = dict()
       for i in range(200):
-        sta_high_thresholds[i] = 1.6
+        sta_high_thresholds[i] = 2
         sta_low_thresholds[i] = 0.8
       print "signals set, computing fake detections"
       fake_det = fake_detections(signals, sta_high_thresholds, sta_low_thresholds)
@@ -396,7 +396,7 @@ def main(param_dirname):
       real_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, real_det) 
       for det in real_det:
         print det
-
+      
     
     print "setting fake detections"
     sigmodel.set_fake_detections(fake_det)
