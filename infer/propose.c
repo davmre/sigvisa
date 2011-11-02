@@ -631,6 +631,8 @@ void *propose_invert_step_helper(void *args)
   int inv_detnum, lonidx, latidx;
   double lon, lat, mag;
 
+
+
   /* Loop increments by NUM_THREADS to ensure that each thread gets a
    * different datum */
   for (inv_detnum = det_low+tid; inv_detnum < det_high; 
@@ -638,6 +640,9 @@ void *propose_invert_step_helper(void *args)
   {
     Detection_t * p_inv_det;
     int det_off = inv_detnum - det_low;
+
+    Event_t * p_best_nonzero_event = calloc(1, sizeof(Event_t));
+    p_best_nonzero_event->evscore = -1 * DBL_MAX;
 
     if (p_skip_inv[det_off])
       continue;
@@ -700,23 +705,37 @@ void *propose_invert_step_helper(void *args)
             printf("CURR BEST: ");
             print_event(params->p_best_event);
           }
+
+	  if (p_event->evscore > p_best_nonzero_event->evscore)
+          {
+
+	    COPY_EVENT(p_netmodel, p_sigmodel, p_best_nonzero_event, p_event);
+          }
         }
       }
 
       
-      if (p_sigmodel != NULL && log_segment_cb != NULL) {
+      
+
+    }
+    
+    if (p_sigmodel != NULL && log_segment_cb != NULL) {
 	printf("writing signal logs\n");
 	char txt[50];
-	snprintf(txt, 50, "inverted %d score %lf", inv_detnum, p_event->evscore);
+	printf("best event ");
+	print_event(p_best_nonzero_event);
+	snprintf(txt, 50, "inverted %d score %lf", inv_detnum, p_best_nonzero_event->evscore);
 	log_segments_events(p_sigmodel, log_segment_cb, 1, (const Event_t **) &p_event, DBL_MAX, Py_BuildValue("s", txt));
 	}
 
-    }
+      free(p_best_nonzero_event);
 
     clock_t end = clock();
     printf("finished inverting detection %d, best score %lf. time elapsed : %lf seconds \n ", inv_detnum, params->p_best_event->evscore, (end-start) / (double)CLOCKS_PER_SEC);
 
   }
+
+  
   return NULL;
 }
 
