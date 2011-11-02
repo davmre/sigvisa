@@ -62,6 +62,11 @@ for ev in events:
             
             if find_detection(detections, siteid, expected_time):
                 print "matching detection found for site %d at time %f" % (siteid, expected_time)
+                
+            else:
+                missed = (ev[EV_ORID_COL], siteid, expected_time, expected_amp  )
+                print " missed: ", missed
+                missing.append( missed  )
                 try:
                     utils.waveform.plot_ss_waveforms(siteid, expected_time - 30, expected_time + 30, detections, earthmodel, ev)
                     plt.title("event %d" % ev[EV_ORID_COL])
@@ -69,11 +74,6 @@ for ev in events:
                     maxplots = maxplots - 1
                 except:
                     continue
-            else:
-                missed = (ev[EV_ORID_COL], siteid, expected_time, expected_amp  )
-                print " missed: ", missed
-                missing.append( missed  )
-                
 
 pp.close();
 
