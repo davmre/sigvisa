@@ -387,9 +387,9 @@ PyObject* canonical_channel_name(int num) {
    int result = -1;
    if (strcmp("BHZ", chan_str) == 0) {
      result = CHAN_BHZ;
-   } else if (strcmp("BHE", chan_str) == 0) {
+   } else if (strcmp("BHE", chan_str) == 0 || strcmp("BH1", chan_str) == 0) {
      result = CHAN_BHE;
-   } else if (strcmp("BHN", chan_str) == 0) {
+   } else if (strcmp("BHN", chan_str) == 0 || strcmp("BH2", chan_str) == 0) {
      result = CHAN_BHN;
    } else {
      result = CHAN_OTHER;
