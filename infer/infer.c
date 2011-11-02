@@ -903,13 +903,16 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
 }
 
 
-void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int runid, int numevents, const Event_t ** pp_events, double max_start_time)
+void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int numevents, const Event_t ** pp_events, double max_start_time, PyObject *py_text)
 {
   PyObject * retval;
   PyObject * eventsobj;
   PyObject * evarrlistobj;
   int i;
   
+  if(py_text == NULL) {
+    py_text = Py_BuildValue("s", "");
+  }
 
   convert_events_arrs_to_pyobj(p_sigmodel, p_sigmodel->p_earth, 
 			       pp_events,numevents, 
@@ -941,11 +944,11 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
     real_trace = channel_bundle_to_trace_bundle(p_real_segment);
     pred_trace = channel_bundle_to_trace_bundle(p_pred_segment);
     printf("calling log_segment\n");
-    retval = PyObject_CallFunction(log_segment_cb, "iOOOO", 
-				   runid,
+    retval = PyObject_CallFunction(log_segment_cb, "OOOOO", 
 				   eventsobj, evarrlistobj,
 				   real_trace,
-				   pred_trace);
+				   pred_trace,
+				   py_text);
 
     if (!retval) {
       printf("log_segment_cb call failed!\n");
@@ -982,7 +985,7 @@ static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)
        i++)
     numevents ++;
 
-  log_segments_events(p_sigmodel, p_world->log_segment_cb, p_world->runid, numevents, (const Event_t **) p_world->pp_events + p_world->write_evnum, maxtime + MAX_TRAVEL_TIME);
+  log_segments_events(p_sigmodel, p_world->log_segment_cb, numevents, (const Event_t **) p_world->pp_events + p_world->write_evnum, maxtime + MAX_TRAVEL_TIME, NULL);
 
   p_world->write_evnum += numevents;
 

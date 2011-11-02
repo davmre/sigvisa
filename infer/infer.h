@@ -84,4 +84,4 @@ typedef struct World_t
 PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
 PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args);
 
-void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int runid, int numevents, const Event_t ** pp_events, double max_start_time);
+void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb,int numevents, const Event_t ** pp_events, double max_start_time, PyObject * text);

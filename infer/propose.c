@@ -75,6 +75,7 @@ struct thread_data {
   
   int num_other_events;
   const Event_t ** pp_other_events;
+  PyObject * log_segment_cb;
 
   int N;
   double scale;
@@ -161,8 +162,8 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 
   /* then try a grid search over arrival info */
   
-  const double time_step = 0.5;
-  const double num_time_steps = 2;
+  const double time_step = 2.5;
+  const double num_time_steps = 8;
   const double amp_step = 0.3;
   const double num_amp_steps = 2;
   //const double azi_step = 5;
@@ -615,6 +616,7 @@ void *propose_invert_step_helper(void *args)
 
   int num_other_events = params->num_other_events;
   const Event_t ** pp_other_events = params->pp_other_events;
+  PyObject * log_segment_cb = params->log_segment_cb;
 
   NetModel_t * p_netmodel = params->p_netmodel;
   SigModel_t * p_sigmodel = params->p_sigmodel;
@@ -700,6 +702,15 @@ void *propose_invert_step_helper(void *args)
           }
         }
       }
+
+      
+      if (p_sigmodel != NULL && log_segment_cb != NULL) {
+	printf("writing signal logs\n");
+	char txt[50];
+	snprintf(txt, 50, "inverted %d score %lf", inv_detnum, p_event->evscore);
+	log_segments_events(p_sigmodel, log_segment_cb, 1, (const Event_t **) &p_event, DBL_MAX, Py_BuildValue("s", txt));
+	}
+
     }
 
     clock_t end = clock();
@@ -820,6 +831,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
 	thread_args[i].p_sigmodel = p_sigmodel;
 	thread_args[i].num_other_events = numevents;
 	thread_args[i].pp_other_events = (const Event_t **)pp_events;
+	thread_args[i].log_segment_cb = log_segment_cb;
 	thread_args[i].p_inv_events = p_inv_events;
 	thread_args[i].p_earth = p_earth;
 	thread_args[i].tid = i;
@@ -949,10 +961,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     /* add the best event to the list of events */
     pp_events[numevents ++] = p_best_event;
 
-    if (p_sigmodel != NULL && log_segment_cb != NULL) {
-      printf("writing signal logs\n");
-      log_segments_events(p_sigmodel, log_segment_cb, runid, numevents, (const Event_t **) pp_events, DBL_MAX);
-    }
+    
     
   } while (1);
   

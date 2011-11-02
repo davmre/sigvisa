@@ -189,7 +189,7 @@ def write_events_sig(sigmodel, earthmodel, events, ev_arrlist, runid, maxtime):
 
 
 
-def log_envelope_plot(pp, runid, events, evarrlist, real_env, pred_env):
+def log_envelope_plot(pp, events, evarrlist, real_env, pred_env, text=""):
   
   siteid = real_env[0].stats["siteid"]
   
@@ -203,10 +203,10 @@ def log_envelope_plot(pp, runid, events, evarrlist, real_env, pred_env):
 
   print "arrtimes ", arrtimes
 
-  text = "REAL ENVELOPE: siteid %d" % siteid
+  text = "REAL ENVELOPE: siteid %d %s" % (siteid, text)
   plot_segment(real_env, pp, "pdf", title = text, all_det_times = arrtimes)
 
-  text = "PRED ENVELOPE: siteid %d" % siteid
+  text = "PRED ENVELOPE: siteid %d %s" % (siteid, text)
   plot_segment(pred_env, pp, "pdf", title= text, all_det_times = arrtimes)
 
   return True
@@ -463,8 +463,8 @@ def main(param_dirname):
                                       options.verbose,
                             lambda a,b,c,d,e,f:
                                       write_events_sig(a,b,c,d,e,f),
-                            lambda a,b,c,d,e:
-                                      log_envelope_plot(pp,a,b,c,d,e))
+                            lambda b,c,d,e,f:
+                                      log_envelope_plot(pp,b,c,d,e,f))
     pp.close()
     print "inferred events", events
     return
