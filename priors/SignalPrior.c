@@ -116,7 +116,7 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
 
   for (int i=0; i < n; ++i) {
     assert(vars[i] >= 0);
-    if (isnan(x[i])) continue;
+    if (isnan(x[i]) || x[i] < 0) continue;
     lp -= 0.5 * log(2*PI * vars[i]) + 0.5 * (x[i] - means[i])*(x[i] - means[i]) / vars[i];
   }
 
@@ -387,6 +387,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     /* index within this trace at which the event arrives */
     long env_start_idx = time2idx(first_envelope_time, p_segment->start_time, p_segment->hz);
+    long compare_start_idx = (env_start_idx < 0) ? 0 : env_start_idx;
     
     /* we compute scores for the background event set, and for an
        augmented event set which includes the specified event. */
@@ -401,18 +402,18 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
       envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
-      long compare_len = MIN(len, p_segment->len - env_start_idx);
+      long compare_len = MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
     
 
-      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx, p_means, p_vars);
 
-      if(isnan(event_lp)) {
+      if(isnan(event_lp) || event_lp < -1 * DBL_MAX) {
 	printf(" NAN clen %ld means\n", compare_len);
 	print_vector(compare_len, p_means);
 	printf(" vars\n");
 	print_vector(compare_len, p_vars);
-	printf(" data\n");
-	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx);
+	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, compare_start_idx, first_envelope_time);
+	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx);
 	exit(-1);
       }
 
@@ -427,8 +428,21 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
       envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events, pp_other_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
-      long compare_len = MIN(len, p_segment->len - env_start_idx);
-      background_lp +=  indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + env_start_idx, p_means, p_vars);
+ long compare_len = MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
+    
+
+      background_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx, p_means, p_vars);
+
+      if(isnan(background_lp) || background_lp < -1 * DBL_MAX) {
+	printf(" NAN clen %ld means\n", compare_len);
+	print_vector(compare_len, p_means);
+	printf(" vars\n");
+	print_vector(compare_len, p_vars);
+	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, compare_start_idx, first_envelope_time);
+	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx);
+	exit(-1);
+      }
+
       assert (!isnan(background_lp));
       free(p_means);
       free(p_vars);
