@@ -232,7 +232,9 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
                                     p_world->low_detnum,
                                     p_world->high_detnum,
                                     2.5, p_world->birthsteps,
-                                    p_world->numthreads);
+                                    p_world->numthreads,
+				    p_world->runid,
+				    p_world->log_segment_cb);
     printf("propose_invert_step proposed %d events\n", numevents);
   }
 
@@ -901,39 +903,23 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
 }
 
 
-static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)
+void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int runid, int numevents, const Event_t ** pp_events, double max_start_time)
 {
   PyObject * retval;
-  double maxtime;
   PyObject * eventsobj;
   PyObject * evarrlistobj;
   int i;
-  int numevents;
   
-  double end_time = p_sigmodel->end_time;
-  double start_time = p_sigmodel->start_time;
-
-  if (p_world->high_evtime < end_time)
-    maxtime = MAX(p_world->low_evtime - MAX_TRAVEL_TIME,
-                  start_time);
-  else
-    maxtime = p_world->high_evtime;
-  numevents = 0;
-  for (i=p_world->write_evnum;
-       (i<p_world->high_evnum) && p_world->pp_events[i]->evtime < maxtime;
-       i++)
-    numevents ++;
 
   convert_events_arrs_to_pyobj(p_sigmodel, p_sigmodel->p_earth, 
-				 (const Event_t **) (p_world->pp_events 
-						     + p_world->write_evnum),
-			       numevents, &eventsobj, &evarrlistobj);
+			       pp_events,numevents, 
+			       &eventsobj, &evarrlistobj);
   
   for (i = 0; i < p_sigmodel->numsegments; ++i) {
     printf("logging segment %d\n", i);
 
     ChannelBundle_t * p_real_segment = p_sigmodel->p_segments + i;
-    if (p_real_segment->start_time > maxtime + MAX_TRAVEL_TIME) {
+    if (p_real_segment->start_time > max_start_time) {
       continue;
     }
 
@@ -943,17 +929,20 @@ static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)
     SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
 				  p_sigmodel->p_earth,
 				  numevents,
-				  (const Event_t **) p_world->pp_events + p_world->write_evnum,
+				  pp_events,
 				  p_pred_segment,
 				  NULL);
 
+    printf("real st %lf pred st %lf real sig st %lf %lf %lf\n", p_real_segment->start_time, p_pred_segment->start_time, p_real_segment->p_channels[0]->start_time, p_real_segment->p_channels[1]->start_time, p_real_segment->p_channels[2]->start_time);
+    printf("real len %ld pred len %ld real sig len %ld %ld %ld\n", p_real_segment->len, p_pred_segment->len, p_real_segment->p_channels[0]->len, p_real_segment->p_channels[1]->len, p_real_segment->p_channels[2]->len);
+    printf("real hz %lf pred hz %lf real sig hz %lf %lf %lf\n", p_real_segment->hz, p_pred_segment->hz, p_real_segment->p_channels[0]->hz, p_real_segment->p_channels[1]->hz, p_real_segment->p_channels[2]->hz);
 
     PyObject * real_trace, * pred_trace;
     real_trace = channel_bundle_to_trace_bundle(p_real_segment);
     pred_trace = channel_bundle_to_trace_bundle(p_pred_segment);
     printf("calling log_segment\n");
-    retval = PyObject_CallFunction(p_world->log_segment_cb, "iOOOO", 
-				   p_world->runid,
+    retval = PyObject_CallFunction(log_segment_cb, "iOOOO", 
+				   runid,
 				   eventsobj, evarrlistobj,
 				   real_trace,
 				   pred_trace);
@@ -969,13 +958,34 @@ static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)
     Py_DECREF(pred_trace);
   }
  
-  
-
-  p_world->write_evnum += numevents;
-  
   Py_DECREF(eventsobj);
   Py_DECREF(evarrlistobj);
   
+}
+
+static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)
+{
+  int numevents, i;
+  double maxtime;
+  double end_time = p_sigmodel->end_time;
+  double start_time = p_sigmodel->start_time;
+
+  if (p_world->high_evtime < end_time)
+    maxtime = MAX(p_world->low_evtime - MAX_TRAVEL_TIME,
+                  start_time);
+  else
+    maxtime = p_world->high_evtime;
+
+  numevents = 0;
+  for (i=p_world->write_evnum;
+       (i<p_world->high_evnum) && p_world->pp_events[i]->evtime < maxtime;
+       i++)
+    numevents ++;
+
+  log_segments_events(p_sigmodel, p_world->log_segment_cb, p_world->runid, numevents, (const Event_t **) p_world->pp_events + p_world->write_evnum, maxtime + MAX_TRAVEL_TIME);
+
+  p_world->write_evnum += numevents;
+
 }
 
 static World_t * alloc_world(NetModel_t * p_netmodel)

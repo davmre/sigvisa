@@ -1215,9 +1215,10 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
   dist = invert_slowness(p_phase, p_event->evdepth, p_det->slo_det);
   
   /* we don't want to propose an event smack on top of a station! */
-  if (dist < 1e-3)
+  if (dist < 1e-3) {
+    printf("invert failed, too close to station\n");
     return -1;
-
+  }
   p_site = p_earth->p_sites + p_det->site_det;
   
   invert_dist_azimuth(p_site->sitelon, p_site->sitelat, dist,
@@ -1247,8 +1248,10 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
                                    p_event->evdepth, 0 /* evtime */,
                                    phaseid, p_det->site_det);
   
-  if (arrtime < 0)
+  if (arrtime < 0) {
+    printf("invert failed, couldn't compute arrtime from lon %lf lat %lf dep %lf\n", p_event->evlon, p_event->evlat, p_event->evdepth);
     return -1;
+  }
   
   p_event->evtime = p_det->time_det - arrtime;
   

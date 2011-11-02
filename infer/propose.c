@@ -525,7 +525,7 @@ static void propose_best_event(NetModel_t * p_netmodel,
   Event_t * p_curr_event;
   
   // TODO: make it feasible to set this back to 1000
-  const int N = 100;
+  const int N = 10;
   
   assert(p_netmodel == NULL || p_sigmodel == NULL);
 
@@ -720,7 +720,8 @@ int propose_invert_step(NetModel_t * p_netmodel,
 			Event_t **pp_events,
                         double time_low, double time_high, int det_low,
                         int det_high, double degree_step, int num_step,
-                        int numthreads)
+                        int numthreads, 
+			int runid, PyObject * log_segment_cb)
 {
   EarthModel_t * p_earth;
   int numsites;
@@ -947,6 +948,11 @@ int propose_invert_step(NetModel_t * p_netmodel,
     printf("adding best event, and the cycle repeats!\n");
     /* add the best event to the list of events */
     pp_events[numevents ++] = p_best_event;
+
+    if (p_sigmodel == NULL && log_segment_cb != NULL) {
+      printf("writing signal logs\n");
+      log_segments_events(p_sigmodel, log_segment_cb, runid, numevents, (const Event_t **) pp_events, DBL_MAX);
+    }
     
   } while (1);
   
@@ -986,7 +992,7 @@ PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
 
   numevents = propose_invert_step(p_netmodel, NULL, pp_events, 
 				  time_low, time_high, det_low, det_high,
-				  degree_delta, num_step,1);
+				  degree_delta, num_step,1, 0, NULL);
 
   if (numevents < 0)
   {
