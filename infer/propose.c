@@ -185,7 +185,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->time = time;
 	      
-	  //	  printf("scoring arrival time at %d for phase %d is %lf\n", site, phase, time);
+	  //printf("scoring arrival time at %d for phase %d is %lf\n", siteid, phase, time);
 
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
 	  
@@ -703,7 +703,7 @@ void *propose_invert_step_helper(void *args)
     }
 
     clock_t end = clock();
-    printf("finished inverting detection %d! time elapsed : %lf seconds \n ", inv_detnum, (end-start) / (double)CLOCKS_PER_SEC);
+    printf("finished inverting detection %d, best score %lf. time elapsed : %lf seconds \n ", inv_detnum, params->p_best_event->evscore, (end-start) / (double)CLOCKS_PER_SEC);
 
   }
   return NULL;
@@ -949,7 +949,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     /* add the best event to the list of events */
     pp_events[numevents ++] = p_best_event;
 
-    if (p_sigmodel == NULL && log_segment_cb != NULL) {
+    if (p_sigmodel != NULL && log_segment_cb != NULL) {
       printf("writing signal logs\n");
       log_segments_events(p_sigmodel, log_segment_cb, runid, numevents, (const Event_t **) pp_events, DBL_MAX);
     }
