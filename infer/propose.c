@@ -725,7 +725,7 @@ void *propose_invert_step_helper(void *args)
 	printf("best event ");
 	print_event(p_best_nonzero_event);
 	snprintf(txt, 50, "inverted %d score %lf", inv_detnum, p_best_nonzero_event->evscore);
-	log_segments_events(p_sigmodel, log_segment_cb, 1, (const Event_t **) &p_event, DBL_MAX, Py_BuildValue("s", txt));
+	log_segments_events(p_sigmodel, log_segment_cb, 1, (const Event_t **) &p_best_nonzero_event, DBL_MAX, Py_BuildValue("s", txt));
     }
 
     free(p_best_nonzero_event);
