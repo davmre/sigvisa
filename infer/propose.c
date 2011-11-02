@@ -641,7 +641,7 @@ void *propose_invert_step_helper(void *args)
     Detection_t * p_inv_det;
     int det_off = inv_detnum - det_low;
 
-    Event_t * p_best_nonzero_event = calloc(1, sizeof(Event_t));
+    Event_t * p_best_nonzero_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
     p_best_nonzero_event->evscore = -1 * DBL_MAX;
 
     if (p_skip_inv[det_off])
@@ -726,9 +726,9 @@ void *propose_invert_step_helper(void *args)
 	print_event(p_best_nonzero_event);
 	snprintf(txt, 50, "inverted %d score %lf", inv_detnum, p_best_nonzero_event->evscore);
 	log_segments_events(p_sigmodel, log_segment_cb, 1, (const Event_t **) &p_event, DBL_MAX, Py_BuildValue("s", txt));
-	}
+    }
 
-      free(p_best_nonzero_event);
+    free(p_best_nonzero_event);
 
     clock_t end = clock();
     printf("finished inverting detection %d, best score %lf. time elapsed : %lf seconds \n ", inv_detnum, params->p_best_event->evscore, (end-start) / (double)CLOCKS_PER_SEC);
