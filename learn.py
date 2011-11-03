@@ -72,11 +72,18 @@ def main(param_dirname):
   parser.add_option("-s", "--silent", dest="verbose", default=True,
                     action = "store_false",
                     help = "silent, i.e. no output (False)")
+  parser.add_option("-1", "--type1", dest="type1", default=False,
+                    action = "store_true",
+                    help = "Type 1 fonts (False)")
   parser.add_option("-i", "--visa_leb_runid", dest="visa_leb_runid",
                     default=None, help = "Visa runid to be treated as leb",
                     metavar="RUNID")
   (options, args) = parser.parse_args()
 
+  # use Type 1 fonts by invoking latex
+  if options.type1:
+    plt.rcParams['text.usetex'] = True
+    
   if options.quick:
     hours = 100
   else:
@@ -103,7 +110,7 @@ def main(param_dirname):
   
   priors.EventMagPrior.learn(os.path.join(param_dirname,
                                           "EventMagPrior.txt"),
-                             leb_events)
+                             options, leb_events)
 
   if not options.nodet:
     priors.EventDetectionPrior.learn(os.path.join(param_dirname,

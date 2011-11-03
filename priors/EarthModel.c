@@ -614,13 +614,16 @@ static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
         && (depth >= range->mindepth) && (depth <= range->maxdepth))
       in_range = 1;
   }
-  
+
+  /* SKIP check for in-range as it hurts performance. TODO needs more work
+
   if (!in_range)
   {
     *p_trvtime = *p_slow = -1;
     return;
   }
-    
+  
+  */
   
   for (depthi = 0; (depthi < p_phase->numdepth) 
          && (depth >= p_phase->p_depths[depthi]); depthi++)
