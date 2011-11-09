@@ -61,7 +61,8 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
       trc = fetch_waveform(sta, chan, start_time, end_time)
     except:
       plt.close()
-      raise MissingWaveformException()
+      raise MissingWaveform("Can't find signal for sta %s chan %s time %f - %f"
+                            % (sta, chan, start_time, end_time))
     trc.filter('bandpass', freqmin=1.0, freqmax=2.0, corners=2,
                zerophase=True)
     env = sig_filter.envelope(trc.data)
@@ -269,7 +270,10 @@ def fetch_waveform(station, chan, stime, etime):
                             % (station, chan, stime))
 
     cursor.execute("select id from static_siteid where sta = '%s'" % (station))
-    siteid = cursor.fetchone()['id']
+    try:
+      siteid = cursor.fetchone()['id']
+    except:
+      raise MissingWaveform("couldn't get siteid for station %s" % (station))
     
     # check the samprate is consistent for all waveforms in this interval
     assert(samprate is None or samprate == waveform['samprate'])
@@ -418,6 +422,7 @@ def main(param_dirname):
   # find the travel-time of the event to all the stations that are up
   all_site_arrtimes = []
   for siteid, site in enumerate(sites):
+
     arrtime = earthmodel.ArrivalTime(event[ EV_LON_COL],
                                      event[ EV_LAT_COL],
                                      event[ EV_DEPTH_COL],
