@@ -335,6 +335,7 @@ def main(param_dirname):
 
     # load sigvisa stuff
   if options.sigvisa:
+
     #print "loading traces for SIGVISA..."
     cursor.execute("select sta, id from static_siteid where statype='ss'")
     stations = np.array(cursor.fetchall())
@@ -362,9 +363,9 @@ def main(param_dirname):
     stalist = tuple(stalist)
 
     if options.synthetic:
-      evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1),
-                           (-10, 10, 0, 1237681000, 3.0, 2),
-                           (10, -10, 0, 1237681500, 3.0, 3))  )
+      evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1)))
+#                           (-10, 10, 0, 123761000, 3.0, 2),
+#                           (-10, -10, 0, 1237681500, 3.0, 3))  )
       sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
     else:
       energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
@@ -383,6 +384,12 @@ def main(param_dirname):
       print "getting waves"
       signals = sigmodel.get_waves()
       print "got waves"
+      #pp = PdfPages('logs/signals_gen.pdf')
+      #for seg in signals:
+      #  plot_segment(seg, pp, "pdf", "Generated at " + str(seg[0].stats["siteid"]), all_det_times = None)
+      #pp.close()
+      #return
+
       sta_high_thresholds = dict()
       sta_low_thresholds = dict()
       for i in range(200):
@@ -453,8 +460,8 @@ def main(param_dirname):
     propose_events = None
 
   if options.sigvisa:
-    pp = PdfPages('logs/signals_%d.pdf' % (runid))
 
+    pp = PdfPages('logs/signals_%d.pdf' % (runid))
     events = sigmodel.infer(runid, options.numsamples,
                                       options.birthsteps,
                                       options.window, options.step,

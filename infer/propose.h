@@ -11,3 +11,6 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
 		       Event_t * p_event,
 		       int num_other_events,
 		       const Event_t ** pp_other_events);
+
+void initialize_mean_arrivals(SigModel_t * p_sigmodel,
+			      Event_t * p_event);

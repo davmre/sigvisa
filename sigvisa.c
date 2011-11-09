@@ -797,6 +797,9 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 				  p_segment,
 				  p_wave_segment);
     printf("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
+
+    printf("scoring event...\n");
+    score_event_sig(p_sigmodel, pp_events[0], 0, NULL);
   }
 
   for (int i=0; i < numevents; ++i) {
