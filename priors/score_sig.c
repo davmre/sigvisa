@@ -88,6 +88,10 @@ EarthModel_t * p_earth;
 					  siteid-1);
     if (pred_arrtime < 0)
       continue;
+
+    if (!have_signal(p_sigmodel, siteid, pred_arrtime - 5, pred_arrtime+MAX_ENVELOPE_LENGTH)) {
+      continue;
+    }
     
     Arrival_t * arr = p_event->p_arrivals +((siteid-1)*numtimedefphases + phaseid);
     //    printf("  scoring arrival for siteid %d phaseid %d: ", siteid, phaseid);
@@ -109,7 +113,7 @@ EarthModel_t * p_earth;
 						p_event->evlon, 
 						p_event->evlat, 
 						p_event->evdepth, 
-						phaseid-1, siteid); 
+						phaseid, siteid-1); 
    arrslosc = ArrivalSlownessPrior_LogProb(&p_sigmodel->arr_slo_prior,
 					   arr->slo, 
 					   pred_slo,
@@ -125,7 +129,7 @@ EarthModel_t * p_earth;
      printf("nan arr-amp mb %.2lf, dep %.2lf ttime %.2lf siteid %d phaseid %d"
 	    " amp %.2lf\n", p_event->evmag, p_event->evdepth,
 	    ttime, siteid, phaseid, arr->amp);
-     exit(1);
+     //exit(1);
    }
 
    arr->score = arrtimesc + arrazsc + arrslosc + arrampsc;
