@@ -169,7 +169,7 @@ def ttimes_from_assoc(evlist, events, detections, arid2num):
     return ttimes
 
 def __reverse_conv(num, xxx2num):
-    for (xxx, n) in xxx2num.viewitems():
+    for (xxx, n) in xxx2num.items():
         if n == num:
             return xxx
     return None
