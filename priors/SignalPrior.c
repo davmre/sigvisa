@@ -306,7 +306,7 @@ void envelope_means_vars(SignalPrior_t * prior,
 
     for (int phaseid = 0; phaseid < MAX_PHASE(p_earth->numtimedefphases); ++phaseid) {    
 
-      const Arrival_t * p_arr = p_event->p_arrivals + siteid*p_earth->numtimedefphases + phaseid;
+      const Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*p_earth->numtimedefphases + phaseid;
 
       //    printf("event %d at siteid %d, ratios n/z %lf e/z %lf\n", i, siteid, SPHERE2Y(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo), SPHERE2X(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo)   );
 
@@ -410,7 +410,7 @@ void evt_arrival_times(const Event_t * p_event, int siteid, int numtimedefphases
   *first_arrival = DBL_MAX;
   *last_arrival = DBL_MIN;
   for (int i=0; i < MAX_PHASE(numtimedefphases); ++i) {
-    double phase_arr_time = (p_event->p_arrivals + siteid*numtimedefphases + i)->time;
+    double phase_arr_time = (p_event->p_arrivals + (siteid-1)*numtimedefphases + i)->time;
     if (phase_arr_time < 0) continue;
     if (phase_arr_time < *first_arrival) {
       *first_arrival = phase_arr_time;
@@ -547,7 +547,7 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
   int numsites = EarthModel_NumSites(p_sigmodel->p_earth);
 
   double score = 0;
-  for (int siteid = 0; siteid < numsites; ++siteid) {
+  for (int siteid = 1; siteid <= numsites; ++siteid) {
     score += SignalPrior_Score_Event_Site(prior, p_sigmodel_v, p_event, siteid, num_other_events, pp_other_events);
   }
 

@@ -96,13 +96,17 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
   int numsites = EarthModel_NumSites(p_earth);
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
+  
 
-  for (int siteid = 0; siteid < numsites; ++siteid) {
+  for (int siteid = 1; siteid <= numsites; ++siteid) {
 
-    double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+    
+    for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
+      
+double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 						 p_event->evlat, p_event->evdepth,
-						 p_event->evtime, 0,
-						 siteid);
+						 p_event->evtime, phase,
+						 siteid-1);
     /* check if the site is in the shadow zone for the event - phase */
     if (pred_arrtime < 0)
       continue;
@@ -114,31 +118,33 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
       continue;
     }
 
-    for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-      
+
+
       Arrival_t * p_arr = p_event->p_arrivals + 
-	siteid*numtimedefphases + phase;
+	(siteid-1)*numtimedefphases + phase;
       
       p_arr->time = EarthModel_ArrivalTime(p_earth, 
 					   p_event->evlon, 
 					   p_event->evlat, 
 					   p_event->evdepth, 
 					   p_event->evtime, 
-					   phase, siteid);
+					   phase, siteid-1);
       
+      printf("got arrival time %lf for evtime %lf phase %d siteid %d\n", p_arr->time, p_event->evtime, phase, siteid);
+
       p_arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior,    p_event->evmag, 
 					       p_event->evdepth, 
 					       p_arr->time - p_event->evtime, 
-					       siteid, phase);
+					       siteid-1, phase);
       p_arr->azi = EarthModel_ArrivalAzimuth(p_earth, 
 					     p_event->evlon, 
 					     p_event->evlat, 
-					     siteid);
+					     siteid-1);
       p_arr->slo = EarthModel_ArrivalSlowness(p_earth, 
 					      p_event->evlon, 
 					      p_event->evlat, 
 					      p_event->evdepth, 
-					      phase, siteid); 
+					      phase, siteid-1); 
       
     }
   }
@@ -171,7 +177,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 
   /* for each site and phase, estimate arrival info from the relevant priors */
 
-  Arrival_t * sta_arrivals = p_event->p_arrivals + siteid*numtimedefphases;
+  Arrival_t * sta_arrivals = p_event->p_arrivals + (siteid-1)*numtimedefphases;
 
   Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t)); 
   memcpy(base, sta_arrivals, numarrivals * sizeof(Arrival_t));
@@ -323,12 +329,12 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
   */
   double evscore = 0;
 
-  for (int siteid = 0; siteid < numsites; ++siteid) {
+  for (int siteid = 1; siteid <= numsites; ++siteid) {
 
     double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					    p_event->evlat, p_event->evdepth,
 					    p_event->evtime, 0,
-					    siteid);
+					    siteid-1);
     /* check if the site is in the shadow zone for the event - phase */
     if (pred_arrtime < 0)
       continue;
@@ -427,8 +433,8 @@ static void propose_best_detections(NetModel_t * p_netmodel,
       if (P_phase_only && (phase > 0))
         continue;
       
-      p_event->p_num_dets[siteid * numtimedefphases + phase] = 1;
-      p_event->p_all_detids[(siteid * numtimedefphases + phase)*MAX_PHASE_DET]
+      p_event->p_num_dets[(siteid-1) * numtimedefphases + phase] = 1;
+      p_event->p_all_detids[((siteid-1) * numtimedefphases + phase)*MAX_PHASE_DET]
         = detnum;
       
       poss = score_event_site_phase(p_netmodel, p_event, siteid, phase,
@@ -445,15 +451,15 @@ static void propose_best_detections(NetModel_t * p_netmodel,
     /* check if this detection-phase is the best detection for this phase at
      * the site */
     if ((-1 != best_phase)
-        && ((-1 == p_event_best_detids[siteid * numtimedefphases 
+        && ((-1 == p_event_best_detids[(siteid-1) * numtimedefphases 
                                        + best_phase])
             || (best_phase_score 
-                > p_event_best_score[siteid * numtimedefphases 
+                > p_event_best_score[(siteid-1)  * numtimedefphases 
                                      + best_phase])))
     {
-      p_event_best_detids[siteid * numtimedefphases + best_phase] 
+      p_event_best_detids[(siteid-1)  * numtimedefphases + best_phase] 
         = detnum;
-      p_event_best_score[siteid * numtimedefphases + best_phase] 
+      p_event_best_score[(siteid-1)  * numtimedefphases + best_phase] 
         = best_phase_score;
     }
   }
@@ -710,7 +716,7 @@ void *propose_invert_step_helper(void *args)
 
           trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
                                            p_event->evlat, p_event->evdepth,0,
-                                           EARTH_PHASE_P, p_inv_det->site_det);
+                                           EARTH_PHASE_P, p_inv_det->site_det-1);
           if (trvtime < 0)
             continue;
 
@@ -1002,8 +1008,8 @@ int propose_invert_step(NetModel_t * p_netmodel,
        */
       for (siteid = 0; siteid < numsites; siteid ++) {
 	for (phase = 0; phase < MAX_PHASE(numtimedefphases); phase ++) {
-	  if (p_best_event->p_num_dets[siteid * numtimedefphases + phase] > 0) {
-	    detnum = p_best_event->p_all_detids[(siteid * numtimedefphases
+	  if (p_best_event->p_num_dets[(siteid-1) * numtimedefphases + phase] > 0) {
+	    detnum = p_best_event->p_all_detids[((siteid-1) * numtimedefphases
 						 + phase)*MAX_PHASE_DET];
 	    p_skip_det[detnum] = 1;
 	  }

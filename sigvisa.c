@@ -736,7 +736,7 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
       int site = p_siteids[j];
 
       for (int phase=0; phase < numtimedefphases; ++phase) {
-	Arrival_t * arr = (p_event->p_arrivals + site*numtimedefphases+phase);
+	Arrival_t * arr = (p_event->p_arrivals + (site-1)*numtimedefphases+phase);
 
 	// for each event, fill in arrivals at each station we care about    
 	
@@ -745,23 +745,23 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 					   p_event->evlat, 
 					   p_event->evdepth, 
 					   p_event->evtime, 
-					   phase, site);
+					   phase, site-1);
 	
 	arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior, 
 					       p_event->evmag, 
 					       p_event->evdepth, 
 					       arr->time - p_event->evtime, 
-					       site, phase);
+					       site-1, phase);
 	
 	arr->azi = EarthModel_ArrivalAzimuth(p_earth, 
 					     p_event->evlon, 
 					     p_event->evlat, 
-					     site);
+					     site-1);
 	arr->slo = EarthModel_ArrivalSlowness(p_earth, 
 					      p_event->evlon, 
 					      p_event->evlat, 
 					      p_event->evdepth, 
-					      phase, site); 
+					      phase, site-1); 
       }
 
       printf("arrival info for event ");
@@ -902,7 +902,7 @@ void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
 	for (phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)  {
 	  int numdet;
 	      
-	  numdet = p_event->p_num_dets[siteid * numtimedefphases + phaseid];
+	  numdet = p_event->p_num_dets[(siteid-1) * numtimedefphases + phaseid];
 	      
 	  if (numdet > 0) {
 	    int pos;
@@ -916,7 +916,7 @@ void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
 	    
 	    for (pos=0; pos<numdet; pos++) {
 	      int detnum;
-	      detnum = p_event->p_all_detids[siteid * numtimedefphases 
+	      detnum = p_event->p_all_detids[(siteid-1) * numtimedefphases 
 					     * MAX_PHASE_DET 
 					     + phaseid * MAX_PHASE_DET + pos];
 	      
@@ -992,7 +992,7 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
       for (phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)  {
 
 	Arrival_t * p_arr = p_event->p_arrivals 
-	  + siteid*numtimedefphases + phaseid;
+	  + (siteid-1)*numtimedefphases + phaseid;
 
 	if (!have_signal(p_sigmodel, siteid, p_arr->time - 5, p_arr->time+MAX_ENVELOPE_LENGTH)) {
 	  continue;

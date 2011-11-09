@@ -85,41 +85,41 @@ EarthModel_t * p_earth;
     pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					  p_event->evlat, p_event->evdepth,
 					  p_event->evtime, phaseid,
-					  siteid);
+					  siteid-1);
     if (pred_arrtime < 0)
       continue;
     
-    Arrival_t * arr = p_event->p_arrivals +(siteid*numtimedefphases + phaseid);
+    Arrival_t * arr = p_event->p_arrivals +((siteid-1)*numtimedefphases + phaseid);
     //    printf("  scoring arrival for siteid %d phaseid %d: ", siteid, phaseid);
     //    print_arrival(arr);
     
-    arrtimesc = ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_joint_prior.single_prior, arr->time, pred_arrtime, 0, siteid, phaseid);
+    arrtimesc = ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_joint_prior.single_prior, arr->time, pred_arrtime, 0, siteid-1, phaseid);
     
     double pred_az = EarthModel_ArrivalAzimuth(p_earth, 
 					       p_event->evlon, 
 					       p_event->evlat, 
-					       siteid);
+					       siteid-1);
     arrazsc = ArrivalAzimuthPrior_LogProb(&p_sigmodel->arr_az_prior,
 					  arr->azi, 
 					  pred_az,
 					  0,
-					  siteid, phaseid);
+					  siteid-1, phaseid);
     
    double pred_slo = EarthModel_ArrivalSlowness(p_earth, 
 						p_event->evlon, 
 						p_event->evlat, 
 						p_event->evdepth, 
-						phaseid, siteid); 
+						phaseid-1, siteid); 
    arrslosc = ArrivalSlownessPrior_LogProb(&p_sigmodel->arr_slo_prior,
 					   arr->slo, 
 					   pred_slo,
 					   0,
-					   siteid, phaseid);
+					   siteid-1, phaseid);
    
    ttime = pred_arrtime - p_event->evtime;
    arrampsc = ArrivalAmplitudePrior_LogProb(&p_sigmodel->arr_amp_prior,
 					    p_event->evmag, p_event->evdepth,
-					    ttime, siteid, phaseid,
+					    ttime, siteid-1, phaseid,
 					    arr->amp);
    if (isnan(arrampsc) || arrampsc < -DBL_MAX) {
      printf("nan arr-amp mb %.2lf, dep %.2lf ttime %.2lf siteid %d phaseid %d"
@@ -184,12 +184,12 @@ double score_event_prior(SigModel_t * p_sigmodel, Event_t * p_event) {
 
   double score = score_event_evprior(p_sigmodel, p_event);
 
-  for (int siteid = 0; siteid < numsites; ++siteid) {
+  for (int siteid = 1; siteid <= numsites; ++siteid) {
     
     pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					  p_event->evlat, p_event->evdepth,
 					  p_event->evtime, 0,
-					  siteid);
+					  siteid-1);
     /* check if the site is in the shadow zone for the event - phase */
     if (pred_arrtime < 0)
       continue;
@@ -230,12 +230,12 @@ int score_event_sig(SigModel_t * p_sigmodel,
     
   p_event->evscore = score_event_evprior(p_sigmodel, p_event);
  
-  for (int siteid = 0; siteid < numsites; ++siteid) {
+  for (int siteid = 1; siteid <= numsites; ++siteid) {
     
       pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					    p_event->evlat, p_event->evdepth,
 					    p_event->evtime, 0,
-					    siteid);
+					    siteid-1);
       /* check if the site is in the shadow zone for the event - phase */
       if (pred_arrtime < 0)
 	continue;

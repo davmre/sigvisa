@@ -311,11 +311,11 @@ static void add_dummy_event(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, Wo
   pp_events[0] = ALLOC_EVENT(p_netmodel, p_sigmodel)
 
   Event_t * p_event = pp_events[0];
-  p_event->evlon = 0;
-  p_event->evlat = 0;
-  p_event->evdepth = 0;
-  p_event->evtime = 1237680500;
-  p_event->evmag = 3;
+  p_event->evlon = -178.69;
+  p_event->evlat = -33.5;
+  p_event->evdepth = 33;
+  p_event->evtime = 1237726470.9;
+  p_event->evmag = 4.39;
   
   /* cache all the newly proposed events */
   for (i=0; i<numevents; i++)
@@ -590,7 +590,7 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       
     pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
                                         p_event->evlat,
-                                        p_detection->site_det);
+                                        p_detection->site_det-1);
       
     for (phaseid=0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)
     {
@@ -600,18 +600,18 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       double score_delta;
       int poss;
 
-      if (p_event->p_num_dets[p_detection->site_det * numtimedefphases
+      if (p_event->p_num_dets[(p_detection->site_det-1) * numtimedefphases
                               + phaseid] > 0)
-        old_detnum = p_event->p_all_detids[p_detection->site_det 
+        old_detnum = p_event->p_all_detids[(p_detection->site_det-1) 
                                            * numtimedefphases * MAX_PHASE_DET
                                            + phaseid * MAX_PHASE_DET + 0];
       else
         old_detnum = -1;
 
       /* change the detection of this phase and measure the score */
-      p_event->p_num_dets[p_detection->site_det * numtimedefphases
+      p_event->p_num_dets[(p_detection->site_det-1) * numtimedefphases
                           + phaseid] = 1;
-      p_event->p_all_detids[p_detection->site_det 
+      p_event->p_all_detids[(p_detection->site_det -1)
                             * numtimedefphases * MAX_PHASE_DET
                             + phaseid * MAX_PHASE_DET + 0] = detnum;
 
@@ -652,10 +652,10 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       {
         double old_score;
         
-        p_event->p_num_dets[p_detection->site_det * numtimedefphases
+        p_event->p_num_dets[(p_detection->site_det-1) * numtimedefphases
                             + phaseid] = 1;
         
-        p_event->p_all_detids[p_detection->site_det 
+        p_event->p_all_detids[(p_detection->site_det -1)
                               * numtimedefphases * MAX_PHASE_DET
                               + phaseid * MAX_PHASE_DET + 0] = old_detnum;
         
@@ -691,18 +691,18 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
            p_event->evscore, p_event->evscore + best_score_delta);
 #endif
     
-    if (p_event->p_num_dets[p_detection->site_det * numtimedefphases
+    if (p_event->p_num_dets[(p_detection->site_det-1) * numtimedefphases
                             + best_phaseid] > 0)
-      replaced_detnum = p_event->p_all_detids[p_detection->site_det 
+      replaced_detnum = p_event->p_all_detids[(p_detection->site_det -1)
                                               * numtimedefphases * MAX_PHASE_DET
                                               + best_phaseid 
                                               * MAX_PHASE_DET + 0];
     else
       replaced_detnum = -1;
 
-    p_event->p_num_dets[p_detection->site_det * numtimedefphases
+    p_event->p_num_dets[(p_detection->site_det-1) * numtimedefphases
                         + best_phaseid] = 1;
-    p_event->p_all_detids[p_detection->site_det 
+    p_event->p_all_detids[(p_detection->site_det -1)
                           * numtimedefphases * MAX_PHASE_DET
                           + best_phaseid 
                           * MAX_PHASE_DET + 0] = detnum;
@@ -1257,6 +1257,11 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
 
 static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 {
+
+  int numsites = EarthModel_NumSites(p_sigmodel->p_earth);
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
+
+
   int i;
   time_t t1;
 
@@ -1309,9 +1314,21 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 
     printf("adding initial event proposals\n");
     
-    add_propose_invert_events(NULL, p_sigmodel, p_world);
-    //add_dummy_event(NULL, p_sigmodel, p_world);
-    //initialize_mean_arrivals(p_sigmodel, p_world->pp_events[0]);
+    //add_propose_invert_events(NULL, p_sigmodel, p_world);
+    add_dummy_event(NULL, p_sigmodel, p_world);
+    initialize_mean_arrivals(p_sigmodel, p_world->pp_events[0]);
+    Event_t * p_event = p_world->pp_events[0];
+    for(int i=1; i <= numsites; ++i) {
+      for(int j=0; j < numtimedefphases; ++j) {
+	Arrival_t * p_arr = p_event->p_arrivals + (i-1)*numtimedefphases+j;
+	if (p_arr && p_arr->time) {
+	  printf(" arrival at station %d phase %d: ", i, j);
+	  print_arrival(p_arr);
+	}
+      }
+    }
+    log_segments(p_sigmodel, p_world);
+    return;
     //score_event_sig(p_sigmodel, p_world->pp_events[0], 0, NULL);
 
     printf("changing arrivals\n");
