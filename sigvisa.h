@@ -249,7 +249,7 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 #define MAX_ENVELOPE_LENGTH 50  /* TODO: find a number that is not
 				  made up and actually makes sense */
 
-#define MAX_PHASE(ntdp) 1
+#define MAX_PHASE(ntdp) ntdp
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);

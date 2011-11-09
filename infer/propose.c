@@ -87,7 +87,62 @@ struct thread_data {
 };
 
 
+void initialize_mean_arrivals(SigModel_t * p_sigmodel,
+			      Event_t * p_event) {
 
+
+  EarthModel_t * p_earth = p_sigmodel->p_earth;
+
+  int numsites = EarthModel_NumSites(p_earth);
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+
+  for (int siteid = 0; siteid < numsites; ++siteid) {
+
+    double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+						 p_event->evlat, p_event->evdepth,
+						 p_event->evtime, 0,
+						 siteid);
+    /* check if the site is in the shadow zone for the event - phase */
+    if (pred_arrtime < 0)
+      continue;
+    
+    /* check if the site is up */
+    //if (!SigModel_IsSiteUp(p_sigmodel, siteid, pred_arrtime))
+    //continue;
+    if (!have_signal(p_sigmodel, siteid, pred_arrtime - 5, pred_arrtime+MAX_ENVELOPE_LENGTH)) {
+      continue;
+    }
+
+    for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
+      
+      Arrival_t * p_arr = p_event->p_arrivals + 
+	siteid*numtimedefphases + phase;
+      
+      p_arr->time = EarthModel_ArrivalTime(p_earth, 
+					   p_event->evlon, 
+					   p_event->evlat, 
+					   p_event->evdepth, 
+					   p_event->evtime, 
+					   phase, siteid);
+      
+      p_arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior,    p_event->evmag, 
+					       p_event->evdepth, 
+					       p_arr->time - p_event->evtime, 
+					       siteid, phase);
+      p_arr->azi = EarthModel_ArrivalAzimuth(p_earth, 
+					     p_event->evlon, 
+					     p_event->evlat, 
+					     siteid);
+      p_arr->slo = EarthModel_ArrivalSlowness(p_earth, 
+					      p_event->evlon, 
+					      p_event->evlat, 
+					      p_event->evdepth, 
+					      phase, siteid); 
+      
+    }
+  }
+}
 
 
 
@@ -119,51 +174,26 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   Arrival_t * sta_arrivals = p_event->p_arrivals + siteid*numtimedefphases;
 
   Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t)); 
+  memcpy(base, sta_arrivals, numarrivals * sizeof(Arrival_t));
 
-  //printf("optimizing arrivals, given %d other events, for event ", num_other_events);
+  //printf("    optimizing arrivals at site %d, given %d other events, for event ", siteid, num_other_events);
   //print_event(p_event);
 
-  for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-
-    (base+phase)->time = EarthModel_ArrivalTime(p_earth, 
-					      p_event->evlon, 
-					      p_event->evlat, 
-					      p_event->evdepth, 
-					      p_event->evtime, 
-					      phase, siteid);
-
-    (base+phase)->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior,    p_event->evmag, 
-						    p_event->evdepth, 
-						    (base+phase)->time - p_event->evtime, 
-						    siteid, phase);
-      (base+phase)->azi = EarthModel_ArrivalAzimuth(p_earth, 
-						  p_event->evlon, 
-						  p_event->evlat, 
-						  siteid);
-      (base+phase)->slo = EarthModel_ArrivalSlowness(p_earth, 
-						     p_event->evlon, 
-						     p_event->evlat, 
-						     p_event->evdepth, 
-						     phase, siteid); 
-  }
-    
-
-  end = clock();
-  dif = (end - local_start) / (double)CLOCKS_PER_SEC;
-  local_start = clock();
-  //printf("init sites took %lf seconds.\n", dif);
 
 
-  memcpy(sta_arrivals, base, numarrivals * sizeof(Arrival_t));
+  //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
+  //printf("    naive score is %lf\n", p_event->evscore);
+  
 
-  Arrival_t * best = malloc(numarrivals * sizeof(Arrival_t));
+  Arrival_t * best = calloc(numarrivals, sizeof(Arrival_t));
   memcpy(best, base, numarrivals * sizeof(Arrival_t));
 
-
+  double best_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+  //printf("    naive sta score is %lf\n", best_score);
   /* then try a grid search over arrival info */
   
-  const double time_step = 2.5;
-  const double num_time_steps = 8;
+  const double time_step = .4;
+  const double num_time_steps = 5;
   const double amp_step = 0.3;
   const double num_amp_steps = 2;
   //const double azi_step = 5;
@@ -171,9 +201,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   //const double slo_step = 2;
   //const double num_slo_steps = 2;
 
-  double best_score = -DBL_MAX;
-
-  for (int i=0; i < 3; ++i) {
+  for (int i=0; i < 1; ++i) {
 
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
 
@@ -186,11 +214,12 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->time = time;
 	      
-	  //printf("scoring arrival time at %d for phase %d is %lf\n", siteid, phase, time);
+	  
 
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
 	  
 	  if (ev_sta_score > best_score) {
+	    //printf("new arrival time %lf at %d for phase %d has score %lf better than best %lf\n", time, siteid, phase, ev_sta_score, best_score);
 	    best_score = ev_sta_score;
 	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
 	  }
@@ -245,11 +274,16 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
     memcpy(base, best, numarrivals * sizeof(Arrival_t));
   }
 
+  
 
   end = clock();
   dif = (end - start) / (double)CLOCKS_PER_SEC;
 
+  
   double final_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+  //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
+  //printf("    final score is %lf\n", p_event->evscore);
+  
 
   if (isnan(final_score)) {
     printf("score is nan! %lf %lf\n", final_score, best_score);
@@ -278,6 +312,15 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
   p_earth = p_sigmodel->p_earth;
   numsites = EarthModel_NumSites(p_earth);
 
+  /*  if (p_event->evscore != 0) {
+    score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
+    printf("pre-optimize score is %lf\n", p_event->evscore);
+    }*/
+
+  initialize_mean_arrivals(p_sigmodel, p_event);
+  /*score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
+  printf("mean-arrivals score is %lf\n", p_event->evscore);
+  */
   double evscore = 0;
 
   for (int siteid = 0; siteid < numsites; ++siteid) {
@@ -302,23 +345,14 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
     assert(!isnan(site_score));
 
     evscore += site_score;
-    //if (site_score) printf("site %d contributed score %lf\n", siteid, site_score);
   }
 
-  double numsc, locsc, magsc;
-  
-  numsc = NumEventPrior_LogTimeRate(&p_sigmodel->num_event_prior);
-  
-  locsc = EventLocationPrior_LogProb(&p_sigmodel->event_location_prior,
-				     p_event->evlon, p_event->evlat,
-				     p_event->evdepth);
-  
-  magsc = EventMagPrior_LogProb(&p_sigmodel->event_mag_prior,
-				p_event->evmag, 0);
-  
-  evscore += numsc + locsc + magsc;
-
+  evscore += score_event_evprior(p_sigmodel, p_event);
+ 
+  //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
   p_event->evscore = evscore;
+  //printf("post-optimize score is %lf\n", p_event->evscore);
+  
 
 }
 
@@ -693,6 +727,8 @@ void *propose_invert_step_helper(void *args)
 	    propose_best_detections(p_netmodel, p_event, det_low, det_high,
 				    p_skip_det, 0 /* all phases */);
 	  } else {
+	    printf("optimizing arrivals for ");
+	    print_event(p_event);
 	    optimize_arrivals(p_sigmodel, p_event, num_other_events, pp_other_events);
 	  }
 
@@ -719,14 +755,14 @@ void *propose_invert_step_helper(void *args)
 
     }
     
-    if (p_sigmodel != NULL && log_segment_cb != NULL) {
+        if (p_sigmodel != NULL && log_segment_cb != NULL) {
 	printf("writing signal logs\n");
 	char txt[50];
 	printf("best event ");
 	print_event(p_best_nonzero_event);
 	snprintf(txt, 50, "inverted %d score %lf", inv_detnum, p_best_nonzero_event->evscore);
 	log_segments_events(p_sigmodel, log_segment_cb, 1, (const Event_t **) &p_best_nonzero_event, DBL_MAX, Py_BuildValue("s", txt));
-    }
+	}
 
     free(p_best_nonzero_event);
 

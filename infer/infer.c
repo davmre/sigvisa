@@ -443,16 +443,18 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
 
     /* the existing event is initially the best event */
     best_event = *p_event;
+    //printf("init update_events with best_event score %lf\n", best_event.evscore);
 
 #define UPDATE_BEST                                                 \
     do {                                                            \
       if (p_netmodel != NULL )                                      \
 	curr_event.evscore = score_event(p_netmodel, &curr_event);  \
       else                                                          \
-	score_event_sig(p_sigmodel, &curr_event, num_other_events, pp_other_events); \
-      if (curr_event.evscore > best_event.evscore)		    \
-        best_event = curr_event;                                    \
-    } while (0)
+	score_event_prior(p_sigmodel, &curr_event); \
+      if (curr_event.evscore > best_event.evscore){			\
+        best_event = curr_event;					\
+      }									\
+    } while (0)								
 
     /* first try to change all the dimensions simultaneously */
     curr_event = best_event;
@@ -523,6 +525,7 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
       UPDATE_BEST;
     }
 
+    score_event_sig(p_sigmodel, &best_event, num_other_events, pp_other_events);
     /* set the event to the best so far */
     if (best_event.evscore > p_event->evscore)
     {
@@ -1308,6 +1311,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     
     add_propose_invert_events(NULL, p_sigmodel, p_world);
     //add_dummy_event(NULL, p_sigmodel, p_world);
+    //initialize_mean_arrivals(p_sigmodel, p_world->pp_events[0]);
+    //score_event_sig(p_sigmodel, p_world->pp_events[0], 0, NULL);
 
     printf("changing arrivals\n");
     /* change the arrivals to use these new events */
@@ -1342,12 +1347,20 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
         printf("after death: world score has gone down by %.3f -> %.3f\n", 
                old_score - p_world->world_score, p_world->world_score);
       }
-      
+
+      printf("events[0] is ");
+      print_event(p_world->pp_events[0]);
       printf("changing events...\n");
       change_events(NULL, p_sigmodel, p_world, 10);
 
+      printf("events[0] is ");
+      print_event(p_world->pp_events[0]);
+
       printf("changing arrivals...\n");
       change_arrivals(p_sigmodel, p_world);
+
+      printf("events[0] is ");
+      print_event(p_world->pp_events[0]);
     };
     
     /* only remove negative events if numsamples > 0. This allows a
@@ -1378,7 +1391,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     /* write out any inferred events */
 
     printf("logging segments\n");
-    log_segments(p_sigmodel, p_world);
+    //log_segments(p_sigmodel, p_world);
     printf("writing events\n");
     write_events(NULL, p_sigmodel, p_world);
     

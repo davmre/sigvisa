@@ -295,7 +295,7 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
             except:
                 continue
             if det_azi is not None:
-                det = (det_id, siteid, det_time, det_amp, det_azi, det_slo)
+                det = (det_id, siteid, det_time, det_amp, det_azi, det_slo, 0)
                 print "adding det", det
                 detections.append(det)
                 i = i+1

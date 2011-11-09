@@ -699,6 +699,7 @@ int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
     (*pp_detections)[i].amp_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 3));
     (*pp_detections)[i].azi_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 4));
     (*pp_detections)[i].slo_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 5));
+    (*pp_detections)[i].phase_det = (int)PyInt_AsLong(PyTuple_GetItem(p_fakedet, 6));
 
     (*pp_detections)[i].sigvisa_fake = 1;
   }
@@ -797,6 +798,9 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 				  p_segment,
 				  p_wave_segment);
     printf("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
+
+    printf("scoring event...\n");
+    score_event_sig(p_sigmodel, pp_events[0], 0, NULL);
   }
 
   for (int i=0; i < numevents; ++i) {
