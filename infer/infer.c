@@ -311,12 +311,30 @@ static void add_dummy_event(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, Wo
   pp_events[0] = ALLOC_EVENT(p_netmodel, p_sigmodel)
 
   Event_t * p_event = pp_events[0];
+  
+  // 5288718, args -k 12.8 -r 0.5 --siteids=2,91,109 --det-propose
   p_event->evlon = -178.69;
   p_event->evlat = -33.5;
   p_event->evdepth = 33;
   p_event->evtime = 1237726470.9;
   p_event->evmag = 4.39;
   
+
+  //5295646, args -k 1.75 -r 0.5 --siteids=2,23,86,91,109 --det-propose 
+  /*p_event->evlon = -174.66811;
+  p_event->evlat = -22.93;
+  p_event->evdepth = 0;
+  p_event->evtime = 1237686882.4;
+  p_event->evmag = 3.94;*/
+
+  // 5297348, args -k 14.75 -r 0.5 --siteids=45,47 --det-propose 
+  /*p_event->evlon = 128.496;
+  p_event->evlat = 26.097;
+  p_event->evdepth = 0;
+  p_event->evtime = 1237733144.38;
+  p_event->evmag = 4.43;*/
+
+
   /* cache all the newly proposed events */
   for (i=0; i<numevents; i++)
   {
@@ -1314,22 +1332,20 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 
     printf("adding initial event proposals\n");
     
-    //add_propose_invert_events(NULL, p_sigmodel, p_world);
-    add_dummy_event(NULL, p_sigmodel, p_world);
+    add_propose_invert_events(NULL, p_sigmodel, p_world);
+    /*add_dummy_event(NULL, p_sigmodel, p_world);
     initialize_mean_arrivals(p_sigmodel, p_world->pp_events[0]);
-    Event_t * p_event = p_world->pp_events[0];
-    for(int i=1; i <= numsites; ++i) {
-      for(int j=0; j < numtimedefphases; ++j) {
-	Arrival_t * p_arr = p_event->p_arrivals + (i-1)*numtimedefphases+j;
-	if (p_arr && p_arr->time) {
-	  printf(" arrival at station %d phase %d: ", i, j);
-	  print_arrival(p_arr);
-	}
+    for (int i=0; i < numsites; ++i) {
+      if (i != 2 && i != 91 && i != 109) continue;
+      for (int j=0; j < numtimedefphases; ++j) {
+	printf("arrival at station %d phase %d ", i, j);
+	print_arrival(p_world->pp_events[0]->p_arrivals + (i-1)*numtimedefphases + j);
       }
     }
     log_segments(p_sigmodel, p_world);
-    return;
-    //score_event_sig(p_sigmodel, p_world->pp_events[0], 0, NULL);
+    return;*/
+//score_event_sig(p_sigmodel, p_world->pp_events[0], 0, NULL);
+    
 
     printf("changing arrivals\n");
     /* change the arrivals to use these new events */
@@ -1408,7 +1424,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     /* write out any inferred events */
 
     printf("logging segments\n");
-    //log_segments(p_sigmodel, p_world);
+    log_segments(p_sigmodel, p_world);
     printf("writing events\n");
     write_events(NULL, p_sigmodel, p_world);
     
