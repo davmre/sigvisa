@@ -110,13 +110,29 @@ long time2idx(double t, double start_time, double hz) {
   return result;
 }
 
+int test_identity(int n, double * x, double * means) {
+
+  for (int i=0; i < n; ++i) {
+    double diff = fabs(x[i] - means[i]);
+    if (diff > 0.0001) {
+      printf("NOT IDENTICAL: discrepancy at %d\n", i);
+      print_vector(n, means);
+      printf("NOT IDENTICAL: discrepancy at %d\n", i);
+      print_vector(n, x);
+      exit(0);
+    }
+  }
+  printf("identity check passed!\n");
+  return 1;
+}
+
 double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) {
 
   double lp = 0;
 
   for (int i=0; i < n; ++i) {
     assert(vars[i] >= 0);
-    if (isnan(x[i]) || x[i] < 0) continue;
+    if (isnan(x[i]) || x[i] < 0) continue;    
     lp -= 0.5 * log(2*PI * vars[i]) + 0.5 * (x[i] - means[i])*(x[i] - means[i]) / vars[i];
   }
 
@@ -200,7 +216,14 @@ void envelope_means_vars(SignalPrior_t * prior,
 			 double ** pp_vars,
 			 int abs_env) {
  
+  // force our samples to align with second boundaries
+
+  start_time = ((long) (start_time * hz))/hz;
+
+
   (*p_len) = time2idx(end_time, start_time, hz);
+
+
 
   (*pp_means) = (double *) calloc(*p_len, sizeof(double));
   double *p_means = (*pp_means);
@@ -243,12 +266,15 @@ void envelope_means_vars(SignalPrior_t * prior,
 
       // skip events which don't arrive during the current time period
       if (idx < 0 - MAX_ENV_LENGTH * hz || idx >= *p_len) {
+	printf("skipping event arrival at time %lf vs start_time %lf idx %ld\n", arrtime, start_time, idx);
 	continue;
       }
 
       double * p_envelope;
       int env_len;
       phase_env(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
+      // printf("got envelope of len %d (idx = %ld)\n", env_len, idx);
+
       if (abs_env) {
 	vector_abs_inplace(env_len, p_envelope);
       }
@@ -263,7 +289,6 @@ void envelope_means_vars(SignalPrior_t * prior,
     }
   }
 
-  
 }
 
 /* Fills in the signal envelope for a set of event arrivals at a
@@ -288,6 +313,7 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
     
     p_segment->p_channels[chan_num] = alloc_signal(p_segment);
     p_segment->p_channels[chan_num]->chan = chan_num;
+    // printf("tae calling envelope_means_vars(%lf, %lf, %lf, %d, %d, %d)\n", p_segment->hz, p_segment->start_time, end_time, numevents, p_segment->siteid, chan_num);
     envelope_means_vars(prior, 
 			p_segment->hz, p_segment->start_time, end_time,
 			p_earth, numevents, pp_events, 
@@ -334,6 +360,7 @@ void evt_arrival_times(const Event_t * p_event, int siteid, int numtimedefphases
   *last_arrival = DBL_MIN;
   for (int i=0; i < MAX_PHASE(numtimedefphases); ++i) {
     double phase_arr_time = (p_event->p_arrivals + siteid*numtimedefphases + i)->time;
+    if (phase_arr_time < 0) continue;
     if (phase_arr_time < *first_arrival) {
       *first_arrival = phase_arr_time;
     }
@@ -386,8 +413,8 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     }
 
     /* index within this trace at which the event arrives */
-    long env_start_idx = time2idx(first_envelope_time, p_segment->start_time, p_segment->hz);
-    long compare_start_idx = (env_start_idx < 0) ? 0 : env_start_idx;
+    //long env_start_idx = time2idx(first_envelope_time, p_segment->start_time, p_segment->hz);
+    //long compare_start_idx = (env_start_idx < 0) ? 0 : env_start_idx;
     
     /* we compute scores for the background event set, and for an
        augmented event set which includes the specified event. */
@@ -401,19 +428,21 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
-      long compare_len = MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
+      // printf("calling envelope_means_vars(%lf, %lf, %lf, %d, %d, %d)\n", p_segment->hz, first_envelope_time, last_envelope_time, num_other_events+1, siteid, chan_num);
+      envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
+      long compare_len = len; // MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
     
+      //int is_identical = test_identity(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx, p_means);
 
-      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx, p_means, p_vars);
+      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
 
       if(isnan(event_lp) || event_lp < -1 * DBL_MAX) {
 	printf(" NAN clen %ld means\n", compare_len);
 	print_vector(compare_len, p_means);
 	printf(" vars\n");
 	print_vector(compare_len, p_vars);
-	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, compare_start_idx, first_envelope_time);
-	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx);
+	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, 0l, first_envelope_time);
+	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data);
 	exit(-1);
       }
 
@@ -427,19 +456,19 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     double background_lp = 0;
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
-      envelope_means_vars(prior, p_segment->hz, first_envelope_time, last_envelope_time, p_sigmodel->p_earth, num_other_events, pp_other_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
- long compare_len = MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
+      envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_other_events, pp_other_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
+      long compare_len = len; // MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
     
 
-      background_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx, p_means, p_vars);
+      background_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
 
       if(isnan(background_lp) || background_lp < -1 * DBL_MAX) {
 	printf(" NAN clen %ld means\n", compare_len);
 	print_vector(compare_len, p_means);
 	printf(" vars\n");
 	print_vector(compare_len, p_vars);
-	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, compare_start_idx, first_envelope_time);
-	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx);
+	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, 0l, first_envelope_time);
+	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data);
 	exit(-1);
       }
 
