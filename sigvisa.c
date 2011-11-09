@@ -699,6 +699,7 @@ int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
     (*pp_detections)[i].amp_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 3));
     (*pp_detections)[i].azi_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 4));
     (*pp_detections)[i].slo_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 5));
+    (*pp_detections)[i].phase_det = (int)PyInt_AsLong(PyTuple_GetItem(p_fakedet, 6));
 
     (*pp_detections)[i].sigvisa_fake = 1;
   }

@@ -14,7 +14,7 @@ from utils.waveform import *
 from sigvisa_util import *
 import ast
 
-FDET_ARID_COL, FDET_SITEID_COL, FDET_TIME_COL, FDET_AMP_COL, FDET_AZI_COL, FDET_SLO_COL, FDET_NUM_COLS = range(6+1)
+FDET_ARID_COL, FDET_SITEID_COL, FDET_TIME_COL, FDET_AMP_COL, FDET_AZI_COL, FDET_SLO_COL, FDET_PHASE_COL, FDET_NUM_COLS = range(7+1)
 
 def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
                 sel3_events, sel3_evlist):
@@ -212,7 +212,7 @@ def log_envelope_plot(pp, events, evarrlist, real_env, pred_env, text=""):
   return True
 
 def real_to_fake_det(det):
-  return (det[DET_ARID_COL], det[DET_SITE_COL], det[DET_TIME_COL], det[DET_AMP_COL], det[DET_AZI_COL], det[DET_SLO_COL])
+  return (det[DET_ARID_COL], det[DET_SITE_COL], det[DET_TIME_COL], det[DET_AMP_COL], det[DET_AZI_COL], det[DET_SLO_COL], det[DET_PHASE_COL])
 
 def tryeval(val):
   try:
