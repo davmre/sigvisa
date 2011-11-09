@@ -151,6 +151,11 @@ void phase_env_doubleexp(SignalPrior_t * prior,
   long peak_idx = (long) (log(peak_height) / prior->env_onset * hz);
   long end_idx = peak_idx + (long)(log(peak_height)/prior->env_decay * hz);
 
+  if (peak_idx < 0 || end_idx <=0) {
+    peak_idx = 0;
+    end_idx = 1;
+  }
+
   //printf("double-exp height %lf peak_idx %ld end_idx %ld\n", peak_height, peak_idx, end_idx);
 
   double component_coeff = 0;
@@ -317,7 +322,7 @@ void envelope_means_vars(SignalPrior_t * prior,
 
       // skip events which don't arrive during the current time period
       if (idx < 0 - MAX_ENV_LENGTH * hz || idx >= *p_len) {
-	printf("skipping event arrival at time %lf vs start_time %lf idx %ld\n", arrtime, start_time, idx);
+	//printf("skipping event arrival at time %lf vs start_time %lf idx %ld\n", arrtime, start_time, idx);
 	continue;
       }
 
@@ -409,6 +414,8 @@ double vector_sum(int n, double * vector) {
 void evt_arrival_times(const Event_t * p_event, int siteid, int numtimedefphases, double * first_arrival, double *last_arrival) {
   *first_arrival = DBL_MAX;
   *last_arrival = DBL_MIN;
+  //  printf("called with siteid %d\n", siteid);
+  fflush(stdout);
   for (int i=0; i < MAX_PHASE(numtimedefphases); ++i) {
     double phase_arr_time = (p_event->p_arrivals + (siteid-1)*numtimedefphases + i)->time;
     if (phase_arr_time < 0) continue;
@@ -436,7 +443,6 @@ const Event_t ** augment_events(int numevents, const Event_t ** events, const Ev
    between a world where this event exists, and one where it
    doesn't. */
 double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events) {
-
   SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
 
   double score = 0;
@@ -451,7 +457,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     if (p_segment->siteid != siteid)  {
       continue;
     }
-
+    //printf("scoring event at siteid %d...\n", siteid);
     /* compute the time period during which the event will affect the station */
     double first_envelope_time, last_envelope_time;
     evt_arrival_times(p_event, siteid, numtimedefphases, &first_envelope_time, &last_envelope_time);
@@ -476,7 +482,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     /* score augmented event set */
     double event_lp = 0;
-
+    //    printf("scoring augmented...\n");
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
       if (p_segment->p_channels[chan_num] == NULL) continue;
       // printf("calling envelope_means_vars(%lf, %lf, %lf, %d, %d, %d)\n", p_segment->hz, first_envelope_time, last_envelope_time, num_other_events+1, siteid, chan_num);
@@ -503,6 +509,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     }
     free(augmented_events);
     
+    //printf("scoring background...\n");
     /* score background event set */
     double background_lp = 0;
     for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
