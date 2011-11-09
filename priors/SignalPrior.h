@@ -13,6 +13,7 @@ typedef struct SignalPrior_t
   StationNoiseModel_t * p_stations;
 
   double env_height;
+  double env_onset; 
   double env_decay; 
 
 } SignalPrior_t;

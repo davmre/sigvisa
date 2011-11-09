@@ -20,7 +20,7 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
     exit(1);
   }
 
-  if (2 != fscanf(fp, "%lf %lf\n", &prior->env_height, &prior->env_decay))
+  if (3 != fscanf(fp, "%lf %lf %lf\n", &prior->env_height, &prior->env_decay, &prior->env_onset))
     {
     fprintf(stderr, "error reading envelope coefficients from %s\n", filename);
     exit(1);
@@ -140,7 +140,58 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
 }
 
 
-void phase_env(SignalPrior_t * prior, 
+void phase_env_doubleexp(SignalPrior_t * prior, 
+	       const Arrival_t * p_arr, 
+	       double hz,
+	       int chan_num,
+	       double ** p_envelope,
+	       int * t) {
+
+  double peak_height = prior->env_height * p_arr->amp;
+  long peak_idx = (long) (log(peak_height) / prior->env_onset * hz);
+  long end_idx = peak_idx + (long)(log(peak_height)/prior->env_decay * hz);
+
+  //printf("double-exp height %lf peak_idx %ld end_idx %ld\n", peak_height, peak_idx, end_idx);
+
+  double component_coeff = 0;
+  switch (chan_num) {
+  case CHAN_BHE:
+    component_coeff = SPHERE2X(p_arr->azi, p_arr->slo); break;
+  case CHAN_BHN:
+    component_coeff = SPHERE2Y(p_arr->azi, p_arr->slo); break;
+  case CHAN_BHZ:
+    component_coeff = SPHERE2Z(p_arr->azi, p_arr->slo); break;
+  }
+
+  //  printf("generating event signal with arrival azi %lf and slo %lf\n", p_arr->azi, p_arr->slo);
+  //  printf("channel is %d and ratio is %lf\n", chan_num, component_coeff);
+
+  /*if (len >= 30 * hz) {
+    printf("event lasting more than 30 seconds! env_decay = %lf, hz = %lf, step = %lf, amp = %lf, env_height = %lf, newmean = %lf, len = %ld\n", prior->env_decay, hz, step, p_arr->amp, prior->env_height, newmean, len);
+    step = newmean /(30.0 * hz);
+    len = ceil( newmean / step );
+    printf("resetting step to %lf , len to %ld\n", step, len);
+    }*/
+  long len = end_idx;
+  double * means = (double *) calloc(len, sizeof(double));
+
+  if (means == NULL) {
+    printf("error allocating memory for means in phase_env, len %ld\n", len);
+    exit(-1);
+  }
+
+  for (int i=0; i < peak_idx; ++i) {
+    means[i] = exp(prior->env_onset * (i/hz)) * component_coeff;
+  }
+  for (int i=peak_idx; i < end_idx; ++i) {
+    means[i] = exp(prior->env_decay * ((end_idx - i)/hz)) * component_coeff;
+  }
+  
+  *p_envelope = means;
+  *t = len;
+}
+
+void phase_env_triangle(SignalPrior_t * prior, 
 	       const Arrival_t * p_arr, 
 	       double hz,
 	       int chan_num,
@@ -272,7 +323,7 @@ void envelope_means_vars(SignalPrior_t * prior,
 
       double * p_envelope;
       int env_len;
-      phase_env(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
+      phase_env_doubleexp(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
       // printf("got envelope of len %d (idx = %ld)\n", env_len, idx);
 
       if (abs_env) {

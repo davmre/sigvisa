@@ -16,7 +16,7 @@ def learn(filename, earthmodel, traces, events, leb_evlist, detections, arid2num
     ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
 
     f = open(filename, 'w')
-    f.write("5000 500\n")
+    f.write("5000 500 500\n")
 
     sta_noise_means, sta_noise_vars = learn_noise_params(f, traces, events, ttimes)
     # learn_envelope_params(f, traces, events, ttimes)
