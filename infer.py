@@ -187,17 +187,26 @@ def write_events_sig(sigmodel, earthmodel, events, ev_arrlist, runid, maxtime):
                  (maxtime, world_score, runid))
   conn.commit()
 
-
-
 def log_envelope_plot(pp, events, evarrlist, real_env, pred_env, text=""):
   
-  siteid = real_env[0].stats["siteid"]
-  
+  trc = real_env[0]
+
+  siteid = trc.stats["siteid"]
+  start_time = trc.stats["starttime_unix"]
+  if trc.stats["window_size"] is not None:
+    srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
+    npts = trc.stats.npts_processed
+  else:
+    srate = trc.stats.sampling_rate
+    npts = trc.stats.npts
+  end_time = start_time + npts/srate
+
   arrtimes = []
   for ev_l in evarrlist:
     for sta_l in ev_l:
       if int(sta_l[1]) == siteid:
-        arrtimes.append(sta_l[3])
+        if sta_l[3] >= start_time and sta_l[3] <= end_time:
+          arrtimes.append(sta_l[3])
 
   print "python log envelope at ", siteid
 
