@@ -280,6 +280,8 @@ def main(param_dirname):
                     action="store_true", help = "generate synthetic signals based on hard-coded events, used for sigvisa testing (False)")
   parser.add_option("--det-propose", dest="det_propose", default=False,
                     action="store_true", help = "use idcx_arrivals detections for event proposals used for sigvisa testing (False)")
+  parser.add_option("--dummy-propose", dest="dummy_propose", default=None,
+                    type=str, help = "use the specified list of orids as event proposals; used for sigvisa testing ()")
   parser.add_option("--siteids", dest="siteids", default=None,
                     type = str, help = "limit SIGVISA inference to a specific set of stations, used for sigvisa testing. ('')")
   parser.add_option("-z", "--threads", dest="threads", default=1,
@@ -384,38 +386,39 @@ def main(param_dirname):
       sigmodel.set_signals(energies)
 
       
-
-    if options.det_propose:
-      fake_det = [real_to_fake_det(x) for x in detections]
-      fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
-      print "using %d detections" % len(fake_det)
+    if options.dummy_propose is not None:
+      prop_ids = map(lambda x : int(x), options.dummy_propose.split(','))
+      prop_events = read_events(cursor, start_time, end_time, "leb")[0]
+      f = lambda e : e[EV_ORID_COL] in prop_ids
+      propose_events = filter(f, prop_events)
+      propose_events.sort(cmp=lambda x,y: cmp(x[EV_TIME_COL], y[EV_TIME_COL]))
+      propose_events = np.array(propose_events)
     else:
-      print "getting waves"
-      signals = sigmodel.get_waves()
-      print "got waves"
-      #pp = PdfPages('logs/signals_gen.pdf')
-      #for seg in signals:
-      #  plot_segment(seg, pp, "pdf", "Generated at " + str(seg[0].stats["siteid"]), all_det_times = None)
-      #pp.close()
-      #return
+      if options.det_propose:
+        fake_det = [real_to_fake_det(x) for x in detections]
+        fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
+        print "using %d detections" % len(fake_det)
+        
+      else: 
+        print "getting waves"
+        signals = sigmodel.get_waves()
+        print "got waves"
+        sta_high_thresholds = dict()
+        sta_low_thresholds = dict()
+        for i in range(200):
+          sta_high_thresholds[i] = 2
+          sta_low_thresholds[i] = 0.8
+        print "signals set, computing fake detections"
+        fake_det = fake_detections(signals, sta_high_thresholds, sta_low_thresholds)
 
-      sta_high_thresholds = dict()
-      sta_low_thresholds = dict()
-      for i in range(200):
-        sta_high_thresholds[i] = 2
-        sta_low_thresholds[i] = 0.8
-      print "signals set, computing fake detections"
-      fake_det = fake_detections(signals, sta_high_thresholds, sta_low_thresholds)
+        print "real dets"
+        real_det = [real_to_fake_det(x) for x in detections]
+        real_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, real_det) 
+        for det in real_det:
+          print det
 
-      print "real dets"
-      real_det = [real_to_fake_det(x) for x in detections]
-      real_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, real_det) 
-      for det in real_det:
-        print det
-      
-    
-    print "setting fake detections"
-    sigmodel.set_fake_detections(fake_det)
+      print "setting fake detections"
+      sigmodel.set_fake_detections(fake_det)
 
     model = sigmodel
 
@@ -464,8 +467,7 @@ def main(param_dirname):
     propose_events.sort(cmp=lambda x,y: cmp(x[EV_TIME_COL], y[EV_TIME_COL]))
     propose_events = np.array(propose_events)
     print "Using %d events as birth proposer" % len(propose_events)
-
-  else:
+  elif options.dummy_propose is None:
     propose_events = None
 
   if options.sigvisa:

@@ -189,6 +189,10 @@ static int propose_from_eventobj(NetModel_t * p_netmodel,
       p_event->evtime = evtime;
       p_event->evmag = ARRAY2(propose_eventobj, i, EV_MB_COL);
      
+      if (p_sigmodel) {
+	initialize_mean_arrivals(p_sigmodel, p_event);
+      }
+
       p_p_events[numevents ++] = p_event;
     }
   }
@@ -1333,9 +1337,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     printf("adding initial event proposals\n");
     
     add_propose_invert_events(NULL, p_sigmodel, p_world);
-    /*add_dummy_event(NULL, p_sigmodel, p_world);
-    initialize_mean_arrivals(p_sigmodel, p_world->pp_events[0]);
-    for (int i=0; i < numsites; ++i) {
+    /*    for (int i=0; i < numsites; ++i) {
       if (i != 2 && i != 91 && i != 109) continue;
       for (int j=0; j < numtimedefphases; ++j) {
 	printf("arrival at station %d phase %d ", i, j);
@@ -1381,19 +1383,12 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
                old_score - p_world->world_score, p_world->world_score);
       }
 
-      printf("events[0] is ");
-      print_event(p_world->pp_events[0]);
       printf("changing events...\n");
       change_events(NULL, p_sigmodel, p_world, 10);
-
-      printf("events[0] is ");
-      print_event(p_world->pp_events[0]);
 
       printf("changing arrivals...\n");
       change_arrivals(p_sigmodel, p_world);
 
-      printf("events[0] is ");
-      print_event(p_world->pp_events[0]);
     };
     
     /* only remove negative events if numsamples > 0. This allows a
