@@ -3,7 +3,8 @@ Integrated Seismological Analysis.
 
 - numpy and scipy are required. To test them, run:
   python -m utils.LogisticModel
-  Also, matplotlib and Basemap are required for the visualization
+  Also, matplotlib and Basemap are required for the visualization, and 
+  liblogger (http://liblogger.sourceforge.net/) for logging.  
 
 - Load the data in a mysql database:
   copy all the csv files into the database directory

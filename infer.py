@@ -208,10 +208,6 @@ def log_envelope_plot(pp, events, evarrlist, real_env, pred_env, text=""):
         if sta_l[3] >= start_time and sta_l[3] <= end_time:
           arrtimes.append(sta_l[3])
 
-  print "python log envelope at ", siteid
-
-  print "arrtimes ", arrtimes
-
   text = "REAL ENVELOPE: siteid %d %s" % (siteid, text)
   plot_segment(real_env, pp, "pdf", title = text, all_det_times = arrtimes)
 
@@ -281,7 +277,7 @@ def main(param_dirname):
   parser.add_option("--det-propose", dest="det_propose", default=False,
                     action="store_true", help = "use idcx_arrivals detections for event proposals used for sigvisa testing (False)")
   parser.add_option("--dummy-propose", dest="dummy_propose", default=None,
-                    type=str, help = "use the specified list of orids as event proposals; used for sigvisa testing ()")
+                    type=str, help = "use the specified list of LEB orids as event proposals; used for sigvisa testing ()")
   parser.add_option("--siteids", dest="siteids", default=None,
                     type = str, help = "limit SIGVISA inference to a specific set of stations, used for sigvisa testing. ('')")
   parser.add_option("-z", "--threads", dest="threads", default=1,

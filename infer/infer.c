@@ -226,7 +226,7 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
                                       p_world->max_prop_evtime, 
                                       p_world->high_evtime,
                                   (PyArrayObject * )p_world->propose_eventobj);
-    printf("propose_from_eventobj proposed %d events\n", numevents);
+    LogDebug("propose_from_eventobj proposed %d events", numevents);
   }
   else
   {
@@ -239,7 +239,7 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
                                     p_world->numthreads,
 				    p_world->runid,
 				    p_world->log_segment_cb);
-    printf("propose_invert_step proposed %d events\n", numevents);
+    LogDebug("propose_invert_step proposed %d events", numevents);
   }
 
   
@@ -274,7 +274,7 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
 
   if (p_world->verbose)
   {
-    printf("initial window: %d events ela %ds\n", numevents, (int) t1);
+    LogInfo("initial window: %d events ela %ds", numevents, (int) t1);
 
     for (i=0; i<numevents; i++)
     {
@@ -287,8 +287,9 @@ static void add_propose_invert_events(NetModel_t * p_netmodel, SigModel_t * p_si
        * real orid and clear out any detections */
       p_event->orid = p_world->ev_orid_sequence + i;
 
-      printf("init+inv: ");
-      print_event(p_event);
+      char * es = event_str(p_event);
+      LogInfo("init+inv: %s", es);
+      free(es);
     }
   }
 
@@ -465,7 +466,7 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
 
     /* the existing event is initially the best event */
     best_event = *p_event;
-    //printf("init update_events with best_event score %lf\n", best_event.evscore);
+    LogTrace("init update_events with best_event score %lf", best_event.evscore);
 
 #define UPDATE_BEST                                                 \
     do {                                                            \
@@ -552,10 +553,9 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
     if (best_event.evscore > p_event->evscore)
     {
 
-#ifdef DEBUG2
-      printf("change_events: orid %d score %.1f -> %.1f\n", p_event->orid,
+      LogTrace("change_events: orid %d score %.1f -> %.1f", p_event->orid,
              p_event->evscore, best_event.evscore);
-#endif
+
       
       p_world->world_score += best_event.evscore - p_event->evscore;
       *p_event = best_event;
@@ -875,7 +875,7 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
        i++)
     numevents ++;
 
-  printf("writing %d events\n", numevents);
+  LogInfo("writing %d events", numevents);
   if (p_netmodel != NULL) {
     convert_events_dets_to_pyobj(p_earth, 
 			    (const Event_t **) (p_world->pp_events 
@@ -895,8 +895,9 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
       
       p_event = p_world->pp_events[p_world->write_evnum + i];
       
-      printf("Write: ");
-      print_event(p_event);
+      char * es = event_str(p_event);
+      LogInfo("Write: %s", es);
+      free(es);
     }
   }
   
@@ -920,7 +921,7 @@ static void write_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel, World
   Py_DECREF(evdetarrlistobj);
   
   if (!retval) {
-    printf("Warning: can't write objects\n");
+    LogError("Warning: can't write objects");
     CHECK_ERROR
   }
   else
@@ -944,7 +945,7 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
 			       &eventsobj, &evarrlistobj);
   
   for (i = 0; i < p_sigmodel->numsegments; ++i) {
-    printf("logging segment %d\n", i);
+    LogTrace("logging segment %d", i);
 
     ChannelBundle_t * p_real_segment = p_sigmodel->p_segments + i;
     if (p_real_segment->start_time > max_start_time) {
@@ -961,14 +962,9 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
 				  p_pred_segment,
 				  NULL);
 
-    printf("real st %lf pred st %lf real sig st %lf %lf %lf\n", p_real_segment->start_time, p_pred_segment->start_time, p_real_segment->p_channels[0]->start_time, p_real_segment->p_channels[1]->start_time, p_real_segment->p_channels[2]->start_time);
-    printf("real len %ld pred len %ld real sig len %ld %ld %ld\n", p_real_segment->len, p_pred_segment->len, p_real_segment->p_channels[0]->len, p_real_segment->p_channels[1]->len, p_real_segment->p_channels[2]->len);
-    printf("real hz %lf pred hz %lf real sig hz %lf %lf %lf\n", p_real_segment->hz, p_pred_segment->hz, p_real_segment->p_channels[0]->hz, p_real_segment->p_channels[1]->hz, p_real_segment->p_channels[2]->hz);
-
     PyObject * real_trace, * pred_trace;
     real_trace = channel_bundle_to_trace_bundle(p_real_segment);
     pred_trace = channel_bundle_to_trace_bundle(p_pred_segment);
-    printf("calling log_segment\n");
     retval = PyObject_CallFunction(log_segment_cb, "OOOOO", 
 				   eventsobj, evarrlistobj,
 				   real_trace,
@@ -976,7 +972,7 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
 				   py_text);
 
     if (!retval) {
-      printf("log_segment_cb call failed!\n");
+      LogError("log_segment_cb call failed!");
       CHECK_ERROR;
     } else {
       Py_DECREF(retval);
@@ -1165,7 +1161,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       
       if (p_world->world_score < (old_score - 1e-6))
       {
-        printf("after death: world score has gone down by %.3f -> %.3f\n", 
+        LogInfo("after death: world score has gone down by %.3f -> %.3f", 
                old_score - p_world->world_score, p_world->world_score);
       }
       
@@ -1188,7 +1184,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     
     if (p_world->verbose)
     {
-      printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela %ds score=%.1f\n",
+      LogInfo("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela %ds score=%.1f",
              p_world->low_evnum, p_world->high_evnum,
              p_world->low_evtime, p_world->high_evtime,
              p_world->low_detnum, p_world->high_detnum, (int) t1,
@@ -1213,10 +1209,10 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     
       p_event = p_world->pp_events[i];
 
-      printf("orid %d - score %.1f computed score %.1f\n", p_event->orid, 
+      LogInfo("orid %d - score %.1f computed score %.1f", p_event->orid, 
              p_event->evscore, score_event(p_netmodel, p_event));
     }
-    printf("World Score %.1f\n", p_world->world_score);
+    LogInfo("World Score %.1f", p_world->world_score);
   }
 }
 
@@ -1334,7 +1330,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
         break;
     }
 
-    printf("adding initial event proposals\n");
+    LogInfo("adding initial event proposals");
     
     add_propose_invert_events(NULL, p_sigmodel, p_world);
     /*    for (int i=0; i < numsites; ++i) {
@@ -1349,7 +1345,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 //score_event_sig(p_sigmodel, p_world->pp_events[0], 0, NULL);
     
 
-    printf("changing arrivals\n");
+    LogInfo("changing arrivals");
     /* change the arrivals to use these new events */
     change_arrivals(p_sigmodel, p_world);
 
@@ -1373,20 +1369,20 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       
       if (numdel > 0)
       {
-	printf("deleted %d events, changing arrivals...\n", numdel);
+	LogInfo("deleted %d events, changing arrivals...", numdel);
         change_arrivals(p_sigmodel, p_world);
       }
       
       if (p_world->world_score < (old_score - 1e-6))
       {
-        printf("after death: world score has gone down by %.3f -> %.3f\n", 
+        LogInfo("after death: world score has gone down by %.3f -> %.3f", 
                old_score - p_world->world_score, p_world->world_score);
       }
 
-      printf("changing events...\n");
+      LogInfo("changing events...");
       change_events(NULL, p_sigmodel, p_world, 10);
 
-      printf("changing arrivals...\n");
+      LogInfo("changing arrivals...");
       change_arrivals(p_sigmodel, p_world);
 
     };
@@ -1405,7 +1401,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     
     //    if (p_world->verbose)
     //{
-      printf("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela %ds score=%.1f\n",
+      LogInfo("evnum %d-%d evtime %.0f-%.0f detnum %d-%d ela %ds score=%.1f",
              p_world->low_evnum, p_world->high_evnum,
              p_world->low_evtime, p_world->high_evtime,
              p_world->low_detnum, p_world->high_detnum, (int) t1,
@@ -1418,9 +1414,9 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 
     /* write out any inferred events */
 
-    printf("logging segments\n");
+    LogDebug("logging segments");
     log_segments(p_sigmodel, p_world);
-    printf("writing events\n");
+    LogInfo("writing events");
     write_events(NULL, p_sigmodel, p_world);
     
   } while (p_world->high_evtime < p_sigmodel->end_time);
@@ -1434,10 +1430,10 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     
       p_event = p_world->pp_events[i];
 
-      printf("orid %d - score %.1f\n", p_event->orid, 
+      LogDebug("orid %d - score %.1f", p_event->orid, 
              p_event->evscore);
     }
-    printf("World Score %.1f\n", p_world->world_score);
+    LogDebug("World Score %.1f", p_world->world_score);
   }
 }
 
@@ -1482,7 +1478,7 @@ PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args)
   p_world->log_segment_cb = log_segment_cb;
   
   // TODO: write inference
-  printf("created world, calling inference...\n");
+  LogDebug("created world, calling inference...");
   infer_sig(p_sigmodel, p_world);
 
   /* convert the world to python structures */

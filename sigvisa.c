@@ -164,11 +164,14 @@ void initsigvisa(void)
 
   PyObject * pmod = PyImport_ImportModule("obspy.core");
   if (!pmod) {
-    printf("cannot load module obspy.core!\n");
+    LogFatal("cannot load module obspy.core!\n");
     exit(-1);
   }
   traceClass_obj = PyObject_GetAttrString(pmod, "Trace");
   Py_DECREF(pmod);
+
+  InitLogger(LogToConsole, stdout);
+
 }
 
 static void py_sig_model_dealloc(SigModel_t * self)
@@ -220,13 +223,13 @@ static PyArrayObject * convert_arrtimes(SigModel_t *p_sigmodel, PyObject * p_arr
   PyArrayObject * array = (PyArrayObject *) PyArray_ContiguousFromAny(p_arrtime_array,
 							 NPY_DOUBLE, 3, 3);
   if (array == NULL) {
-    fprintf(stderr, "arrtimes: argument cannot be interpreted as a " \
+    LogFatal("arrtimes: argument cannot be interpreted as a " \
 	    "three-dimensional numpy array\n");
     exit(1);
   }
 
  if (array->dimensions[0] != p_sigmodel->p_earth->numsites) {
-   fprintf(stderr, "arrtimes: first dimension %d does not match the number of sites (%d)\n", (int) (array->dimensions[0]), p_sigmodel->p_earth->numsites);
+   LogFatal("arrtimes: first dimension %d does not match the number of sites (%d)\n", (int) (array->dimensions[0]), p_sigmodel->p_earth->numsites);
     exit(1);
  }
 
@@ -356,14 +359,21 @@ static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args)
           NPY_DOUBLE, 1,2);
   }
 
+char * signal_str(Signal_t * signal) {
+  char * str = malloc(200*sizeof(char));
+  snprintf(str, 200, "Signal: at station %d, sampling rate %f, samples %ld, start time %f, end time %f\n", 
+	   signal->siteid, 
+	   signal->hz, 
+	   signal->len, 
+	   signal->start_time, 
+	   signal->start_time + (signal->len)/(signal->hz));
+  return str;
+}
 
 int print_signal(Signal_t * signal) {
-  int result = fprintf(stdout, "Signal: at station %d, sampling rate %f, samples %ld, start time %f, end time %f\n", 
-		       signal->siteid, 
-		       signal->hz, 
-		       signal->len, 
-		       signal->start_time, 
-		       signal->start_time + (signal->len)/(signal->hz));
+  char * s = signal_str(signal);
+  int result = fputs(s, stdout);
+  free(s);
   return result;
 }
 
@@ -488,7 +498,7 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
   // a trace object contains two members: data, a numpy array, and stats, a python dict.
   PyObject * py_data =  PyObject_GetAttrString(p_trace, "data");
   if (py_data == NULL) {
-    fprintf(stderr, "error: py_data is null!\n");
+    LogFatal("error: py_data is null!\n");
     exit(1);
   }
 
@@ -557,7 +567,7 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
 
 int trace_bundle_to_channel_bundle(PyObject * trace_bundle, ChannelBundle_t * pp_channel_bundle) {
   if(!PyList_Check(trace_bundle)) {
-    fprintf(stderr, "trace_bundle_to_signal_bundle: expected Python list!\n");
+    LogFatal("trace_bundle_to_signal_bundle: expected Python list!\n");
     exit(1);
   }
   int n = PyList_Size(trace_bundle);
@@ -589,7 +599,7 @@ int trace_bundle_to_channel_bundle(PyObject * trace_bundle, ChannelBundle_t * pp
 int trace_bundles_to_channel_bundles(PyObject * trace_bundle_list, ChannelBundle_t ** pp_channel_bundles) {
   
   if(!PyList_Check(trace_bundle_list)) {
-    fprintf(stderr, "trace_bundles_to_signal_bundles: expected Python list!\n");
+    LogFatal("trace_bundles_to_signal_bundles: expected Python list!\n");
     exit(1);
   }
 
@@ -677,7 +687,7 @@ static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args) {
 int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
   
   if(!PyList_Check(det_list)) {
-    fprintf(stderr, "convert_fake_detections: expected Python list!\n");
+    LogFatal("convert_fake_detections: expected Python list!\n");
     exit(1);
   }
 
@@ -689,7 +699,7 @@ int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
     PyObject * p_fakedet = PyList_GetItem(det_list, i);
 
     if (!PyTuple_Check(p_fakedet)) {
-      fprintf(stderr, "convert_fake_detections: expected Python tuple!\n");
+      LogFatal("convert_fake_detections: expected Python tuple!\n");
       exit(1);
     }
 
@@ -763,11 +773,10 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 					      p_event->evdepth, 
 					      phase, site-1); 
       }
-
-      printf("arrival info for event ");
-      print_event(p_event);
-      printf("  at site %d\n", site);
-
+      
+      char * estr = event_str(p_event);
+      LogTrace("arrival info for event %s at site %d\n", estr, site);
+      free(estr);
     }
   }
 
@@ -797,9 +806,9 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 				  (const Event_t **)pp_events,
 				  p_segment,
 				  p_wave_segment);
-    printf("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
+    LogTrace("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
 
-    printf("scoring event...\n");
+    LogTrace("scoring event...\n");
     score_event_sig(p_sigmodel, pp_events[0], 0, NULL);
   }
 
@@ -974,8 +983,9 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 
     p_event = pp_events[i];
 
-    printf(" converting to pyobj: event ");
-    print_event(p_event);
+    char * estr = event_str(p_event);
+    LogDebug(" converting to pyobj: event %s", estr);
+    free(estr);
 
     /* store the current event in its row */
     convert_event_to_pyobj(p_event, p_eventsobj, i);
@@ -1088,17 +1098,34 @@ void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
          numsites * numtimedefphases * sizeof(*p_src_event->p_arrivals));
 }
 
-void print_arrival(const Arrival_t * p_arr) {
-  printf("time %.4lf amp %.4lf azi %.4lf slo %.4lf\n",
+char * arrival_str(const Arrival_t * p_arr) {
+  char * str = malloc(100*sizeof(char));
+  snprintf(str, 100, "time %.4lf amp %.4lf azi %.4lf slo %.4lf",
          p_arr->time, p_arr->amp, p_arr->azi, p_arr->slo);
+  return str;
+}
+
+void print_arrival(const Arrival_t * p_arr) {
+  char *s = arrival_str(p_arr);
+  puts(s);
+  free(s);
+}
+
+char * event_str(const Event_t * p_event) {
+  char * str = malloc(100*sizeof(char));
+  snprintf(str, 100, 
+	   "%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d",
+	   p_event->evlon, p_event->evlat, p_event->evdepth,
+	   p_event->evtime, p_event->evmag, p_event->evscore,
+	   p_event->orid);
+  return str;
 }
 
 void print_event(const Event_t * p_event)
 {
-  printf("%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d\n",
-         p_event->evlon, p_event->evlat, p_event->evdepth,
-         p_event->evtime, p_event->evmag, p_event->evscore,
-         p_event->orid);
+  char *s = event_str(p_event);
+  puts(s);
+  free(s);
 }
 
 

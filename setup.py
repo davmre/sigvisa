@@ -2,7 +2,8 @@ from distutils.core import setup, Extension
 import numpy as np
 import os
 
-extra_compile_args = ['-std=c99', '-g', '-O0']
+extra_compile_args = ['-std=c99', '-g', '-O0', '-llogger']
+extra_link_args = ['-llogger']
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
@@ -24,7 +25,8 @@ sigvisa_module = Extension('sigvisa',
                                          for f in infer_sources]
                                       + ["netvisa.c"]
                                       + ["sigvisa.c"]),
-                           extra_compile_args = extra_compile_args
+                           extra_compile_args = extra_compile_args,
+                           extra_link_args = extra_link_args,
                            )
 
 netvisa_module = Extension('netvisa',
@@ -40,5 +42,5 @@ netvisa_module = Extension('netvisa',
 setup (name = 'sigvisa',
        version = '1.0',
        description = 'Signal-Based Vertically Integrated Seismological Processing',
-       include_dirs = [np.get_include()],
+       include_dirs = [np.get_include(), '/usr/local/include/'],
        ext_modules = [sigvisa_module])
