@@ -6,7 +6,11 @@
 #include <float.h>
 #include <assert.h>
 
-
+#include <liblogger/liblogger_levels.h>
+// possible log levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL 
+#define LOG_LEVEL LOG_LEVEL_DEBUG
+#define LOG_MODULE_NAME "sigvisa"
+#include <liblogger/liblogger.h>
 
 typedef struct Detection_t
 {
@@ -131,6 +135,7 @@ double ChannelBundle_EndTime(ChannelBundle_t * b);
 #include "priors/ArrivalTimeJointPrior.h"
 #include "priors/SignalPrior.h"
 
+char * signal_str(Signal_t * signal);
 int print_signal(Signal_t * signal);
 Signal_t * alloc_signal(ChannelBundle_t * p_segment);
 
@@ -256,8 +261,9 @@ void free_event(Event_t * p_event);
 void free_events(int numevents, Event_t * p_events);
 void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event);
+char * event_str(const Event_t * p_event);
 void print_event(const Event_t * p_event);
-
+char * arrival_str(const Arrival_t * p_arr);
 void print_arrival(const Arrival_t * p_arr);
 
 

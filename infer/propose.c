@@ -130,7 +130,7 @@ double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					   p_event->evtime, 
 					   phase, siteid-1);
       
-      printf("got arrival time %lf for evtime %lf phase %d siteid %d\n", p_arr->time, p_event->evtime, phase, siteid);
+      LogTrace("got arrival time %lf for evtime %lf phase %d siteid %d", p_arr->time, p_event->evtime, phase, siteid);
 
       p_arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior,    p_event->evmag, 
 					       p_event->evdepth, 
@@ -182,9 +182,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t)); 
   memcpy(base, sta_arrivals, numarrivals * sizeof(Arrival_t));
 
-  //printf("    optimizing arrivals at site %d, given %d other events, for event ", siteid, num_other_events);
-  //print_event(p_event);
-
+  LogTrace("    optimizing arrivals at site %d, given %d other events, for event %s ", siteid, num_other_events, event_str(p_event));
 
 
   //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
@@ -195,7 +193,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   memcpy(best, base, numarrivals * sizeof(Arrival_t));
 
   double best_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
-  //printf("    naive sta score is %lf\n", best_score);
+  LogDebug("    naive sta score is %lf", best_score);
   /* then try a grid search over arrival info */
   
   const double time_step = .4;
@@ -225,7 +223,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
 	  
 	  if (ev_sta_score > best_score) {
-	    //printf("new arrival time %lf at %d for phase %d has score %lf better than best %lf\n", time, siteid, phase, ev_sta_score, best_score);
+	    LogTrace("new arrival time %lf at %d for phase %d has score %lf better than best %lf", time, siteid, phase, ev_sta_score, best_score);
 	    best_score = ev_sta_score;
 	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
 	  }
@@ -292,7 +290,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   
 
   if (isnan(final_score)) {
-    printf("score is nan! %lf %lf\n", final_score, best_score);
+    LogError("score is nan! %lf %lf\n", final_score, best_score);
     exit(-1);
   }
 
@@ -357,7 +355,7 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
  
   //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
   p_event->evscore = evscore;
-  //printf("post-optimize score is %lf\n", p_event->evscore);
+  LogTrace("post-optimize score is %lf", p_event->evscore);
   
 
 }
@@ -532,7 +530,7 @@ void *propose_best_event_helper(void *args)
 
     /* maintain the overall best event */
     if (p_event->evscore > params->p_best_event->evscore) {
-      printf(" new score %lf is better than old best score %lf\n", p_event->evscore, params->p_best_event->evscore);
+      LogTrace(" new score %lf is better than old best score %lf", p_event->evscore, params->p_best_event->evscore);
       COPY_EVENT(p_netmodel, p_sigmodel, params->p_best_event, p_event);
     }
 
@@ -733,8 +731,7 @@ void *propose_invert_step_helper(void *args)
 	    propose_best_detections(p_netmodel, p_event, det_low, det_high,
 				    p_skip_det, 0 /* all phases */);
 	  } else {
-	    printf("optimizing arrivals for ");
-	    print_event(p_event);
+	    LogTrace("optimizing arrivals for %s", event_str(p_event));
 	    optimize_arrivals(p_sigmodel, p_event, num_other_events, pp_other_events);
 	  }
 
@@ -744,8 +741,7 @@ void *propose_invert_step_helper(void *args)
 
 	    COPY_EVENT(p_netmodel, p_sigmodel, params->p_best_event, p_event);
 
-            printf("CURR BEST: ");
-            print_event(params->p_best_event);
+            LogDebug("CURR BEST: %s", event_str(params->p_best_event));
           }
 
 	  if (p_event->evscore > p_best_nonzero_event->evscore)
@@ -760,7 +756,7 @@ void *propose_invert_step_helper(void *args)
       
 
     }
-    
+    /*
         if (p_sigmodel != NULL && log_segment_cb != NULL) {
 	printf("writing signal logs\n");
 	char txt[50];
@@ -768,12 +764,12 @@ void *propose_invert_step_helper(void *args)
 	print_event(p_best_nonzero_event);
 	snprintf(txt, 50, "inverted %d score %lf", inv_detnum, p_best_nonzero_event->evscore);
 	log_segments_events(p_sigmodel, log_segment_cb, 1, (const Event_t **) &p_best_nonzero_event, DBL_MAX, Py_BuildValue("s", txt));
-	}
+	}*/
 
     free(p_best_nonzero_event);
 
     clock_t end = clock();
-    printf("finished inverting detection %d, best score %lf. time elapsed : %lf seconds \n ", inv_detnum, params->p_best_event->evscore, (end-start) / (double)CLOCKS_PER_SEC);
+    LogInfo("finished inverting detection %d, best score %lf. time elapsed : %lf seconds ", inv_detnum, params->p_best_event->evscore, (end-start) / (double)CLOCKS_PER_SEC);
 
   }
 
@@ -855,8 +851,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     inv_status = invert_detection(p_earth, p_inv_det, p_event,
                                   0 /* don't perturb */);
 
-    printf("inverted detection to ");
-    print_event(p_event);
+    LogInfo("inverted detection to %s", event_str(p_event));
 
     /* if the detection can't be inverted or the inverted event time is
      * outside the bounds of the desired window then skip it */
@@ -908,7 +903,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     int siteid;
     int phase;
 
-    printf("spawning %d proposal threads\n", numthreads);
+    LogInfo("spawning %d proposal threads", numthreads);
 
     /* Initialize what will be the overall best event */
     p_best_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
@@ -931,7 +926,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
       pthread_join(threads[i], NULL);
     }
 
-    printf("all proposal threads have finished!\n");
+    LogInfo("all proposal threads have finished!");
 	
     /* Get the best event from all threads combined */
     for (int i = 0; i < numthreads; ++i)
@@ -941,7 +936,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
 	COPY_EVENT(p_netmodel, p_sigmodel, p_best_event, thread_args[i].p_best_event);
 
       } else {
-	printf("thread %d score %lf is not better than best %lf\n", i, thread_args[i].p_best_event->evscore, p_best_event->evscore);
+	LogTrace("thread %d score %lf is not better than best %lf", i, thread_args[i].p_best_event->evscore, p_best_event->evscore);
       }
         free_event(thread_args[i].p_best_event);
         free_event(thread_args[i].p_event);
@@ -949,8 +944,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     
     
 
-    printf("best proposed event is ");
-    print_event(p_best_event);
+    LogDebug("best proposed event is %s", event_str(p_best_event));
 
     /* finished inverting all detections and trying events in a ball around
      * them now let's see if we got something good */
@@ -962,7 +956,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     
     /* now, improve this event to take advantage of its detections */
 
-    printf("now improving this event ...\n");
+    LogDebug("now improving this event ...");
       
     clock_t improve_start = clock();
 
@@ -971,8 +965,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
 		       det_low, det_high,
 			 p_skip_det, time_low, time_high, 1, numthreads);
     
-    printf("improvement round 1 done, time %lf, resulting best event ", (clock() - improve_start) / (double)CLOCKS_PER_SEC);
-    print_event(p_best_event);
+    LogDebug("improvement round 1 done, time %lf, resulting best event %s", (clock() - improve_start) / (double)CLOCKS_PER_SEC, event_str(p_best_event));
     improve_start = clock();
 
     propose_best_event(p_netmodel, p_sigmodel, p_best_event, 
@@ -980,8 +973,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
 		       det_low, det_high,
 			 p_skip_det, time_low, time_high, .1, numthreads);
 
-    printf("improvement round 2 done, time %lf, resulting best event ", (clock() - improve_start) / (double)CLOCKS_PER_SEC);
-    print_event(p_best_event);
+    LogDebug("improvement round 2 done, time %lf, resulting best event %s", (clock() - improve_start) / (double)CLOCKS_PER_SEC, event_str(p_best_event));
 
     if (p_netmodel != NULL) {
       /* and, once more find the best detections for this event */
@@ -994,8 +986,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     }
     
     
-    printf("BEST:");
-    print_event(p_best_event);
+    LogInfo("BEST: %s", event_str(p_best_event));
     
     if (p_netmodel != NULL) {
       printf("Best detections ");
@@ -1018,7 +1009,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
     }
     
     
-    printf("adding best event, and the cycle repeats!\n");
+    LogDebug("adding best event, and the cycle repeats!\n");
     /* add the best event to the list of events */
     pp_events[numevents ++] = p_best_event;
 

@@ -34,14 +34,14 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
     for (int j=0; j < NUM_CHANS; ++j) {
       (prior->p_stations + i)->chan_means[j] = 0;
       (prior->p_stations + i)->chan_vars[j] = 10;
-      printf(" set %d, %d, vars to %lf\n", i, j, (prior->p_stations + i)->chan_vars[j]);
+      LogTrace(" set %d, %d, vars to %lf", i, j, (prior->p_stations + i)->chan_vars[j]);
     }
   }
 
   int numentries;
   if (1 != fscanf(fp, "%d\n", &numentries))
   {
-    fprintf(stderr, "error reading num entries from %s\n", filename);
+    LogFatal("error reading num entries from %s\n", filename);
     exit(1);
   }
 
@@ -50,7 +50,7 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
     int siteid;
     int num_chans;
     if (2 != fscanf(fp, "%d %d", &siteid, &num_chans)) {
-      fprintf(stderr, "error reading siteid and num_chans from station line %d of %s\n", i, filename);
+      LogFatal("error reading siteid and num_chans from station line %d of %s\n", i, filename);
       exit(1);
     }
 
@@ -59,11 +59,11 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
       double mean, var;
       if (3 != fscanf(fp, " %d %lf %lf", &chan_num, &mean, &var))
 	{
-	  fprintf(stderr, "error reading mean and variance for site %d from %s\n", i, filename);
+	  LogFatal("error reading mean and variance for site %d from %s\n", i, filename);
 	  exit(1);
 	}
     
-      fprintf(stdout, "%d: loaded %d %d %lf %lf\n", i, siteid, chan_num, mean, var);
+      LogTrace("%d: loaded %d %d %lf %lf", i, siteid, chan_num, mean, var);
       (prior->p_stations + siteid)->chan_means[chan_num] = mean;
       (prior->p_stations + siteid)->chan_vars[chan_num] = var;
     }
@@ -106,7 +106,6 @@ long time2idx(double t, double start_time, double hz) {
   double delta_t = t - start_time;
   long result = lround(delta_t * hz);
 
-  //fprintf(stdout, "time2idx: %lf %lf %lf = %ld\n", t, start_time, hz, result);
   return result;
 }
 
