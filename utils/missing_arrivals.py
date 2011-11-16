@@ -18,8 +18,8 @@ def find_detection(detections, siteid, expected_time):
 
 AMP_THRESHOLD = 5
 
-start_time = 1237683600 + 3600*4
-end_time = start_time + 3600*32
+start_time = 1237680000 + 3600*0
+end_time = start_time + 3600*16
 
 cursor = database.db.connect().cursor()
 detections, arid2num = read_detections(cursor, start_time, end_time, arrival_table="leb_arrival", noarrays=False)
