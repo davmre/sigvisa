@@ -41,4 +41,4 @@ setup (name = 'sigvisa',
        version = '1.0',
        description = 'Signal-Based Vertically Integrated Seismological Processing',
        include_dirs = [np.get_include()],
-       ext_modules = [sigvisa_module])
+       ext_modules = [sigvisa_module, netvisa_module])
