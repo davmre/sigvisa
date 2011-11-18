@@ -15,6 +15,10 @@ static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_arramp_zval_logprob_cdf(NetModel_t * p_netmodel,
+                                             PyObject *args);
+static PyObject * py_falseamp_logprob_cdf(NetModel_t * p_netmodel,
+                                          PyObject *args);
 static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
@@ -49,6 +53,12 @@ static PyMethodDef NetModel_methods[] = {
   {"detection_logprob", (PyCFunction)py_detection_logprob, METH_VARARGS,
    "detection_logprob(isdet, evdepth, evmag, dist, siteid, phaseid)"
    " -> log probability"},
+  {"arramp_zval_logprob_cdf", (PyCFunction)py_arramp_zval_logprob_cdf, 
+   METH_VARARGS,
+   "arramp_zval_logprob_cdf(mb, depth, ttime, siteid, phaseid, amp)\n"
+   " -> zval, log prob, cdf"},
+  {"falseamp_logprob_cdf", (PyCFunction)py_falseamp_logprob_cdf, METH_VARARGS,
+   "falseamp_logprob_cdf(siteid, amp) -> log prob, cdf"},
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
    "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid, phaseid)"
    " -> log probability"},
@@ -163,6 +173,13 @@ static PyMethodDef EarthModel_methods[] = {
     },
     {"PhaseRange", (PyCFunction)py_EarthModel_PhaseRange,
      METH_VARARGS, "PhaseRange(phaseid) -> (min distance, max distance)",
+    },
+    {"QFVC", (PyCFunction)py_EarthModel_QFVC,
+     METH_VARARGS, "QFVC(depth, distance) -> q-factor",
+    },
+    {"TravelTime", (PyCFunction)py_EarthModel_TravelTime, METH_VARARGS,
+     "travel time for a give phase of an event a given depth and distance\n"
+     "TravelTime(phaseid, depth, dist) -> travel time"
     },
     {NULL}  /* Sentinel */
 };
@@ -880,6 +897,71 @@ static PyObject * py_detection_logprob(NetModel_t * p_netmodel,
                                                    ->event_det_prior,
                                                    isdet, evdepth, evmag,
                                                    dist, siteid, phaseid));
+}
+
+static PyObject * py_arramp_zval_logprob_cdf(NetModel_t * p_netmodel,
+                                             PyObject * args)
+{
+  double mb, depth, ttime, amp;
+  int siteid, phaseid;
+
+  double zval, logprob, cdf;
+  
+  if (!PyArg_ParseTuple(args, "dddiid", &mb, &depth, &ttime,
+                        &siteid, &phaseid, &amp))
+    return NULL;
+  
+  /* a -1 amplitude indicates that the amplitude was not observed */
+  if (-1 != amp)
+  {
+    zval = ArrivalAmplitudePrior_zval(&p_netmodel->arr_amp_prior,
+                                      mb, depth, ttime, siteid,
+                                      phaseid, amp);
+    
+    logprob = ArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                            mb, depth, ttime, siteid,
+                                            phaseid, amp);
+  
+    cdf = ArrivalAmplitudePrior_cdf(&p_netmodel->arr_amp_prior,
+                                    mb, depth, ttime, siteid,
+                                    phaseid, amp);
+    
+    return Py_BuildValue("ddd", zval, logprob, cdf);
+  }
+  else
+  {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }  
+}
+
+static PyObject * py_falseamp_logprob_cdf(NetModel_t * p_netmodel,
+                                          PyObject * args)
+{
+  double amp;
+  int siteid;
+
+  double logprob, cdf;
+  
+  if (!PyArg_ParseTuple(args, "id", &siteid, &amp))
+    return NULL;
+  
+  /* a -1 amplitude indicates that the amplitude was not observed */
+  if (-1 != amp)
+  {
+    logprob = FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                                 siteid, amp);
+  
+    cdf = FalseArrivalAmplitudePrior_cdf(&p_netmodel->arr_amp_prior,
+                                         siteid, amp);
+  
+    return Py_BuildValue("dd", logprob, cdf);
+  }
+  else
+  {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }  
 }
 
 static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,

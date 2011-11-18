@@ -33,10 +33,11 @@
 static char * read_line(FILE * fp)
 {
   char * buf;
-  buf = (char *)malloc((MAX_LINE+1) * sizeof(*buf));
   int pos;
   int ch;
   
+  buf = (char *)malloc((MAX_LINE+1) * sizeof(*buf));
+
   /* read till the end of the line or the file */
   pos = 0;
   while (((ch = fgetc(fp)) != '\n') && (ch != EOF) && (pos < MAX_LINE))
@@ -237,7 +238,10 @@ static DDRange * read_dist_depth_ranges(const char * fname, int * p_num_ranges)
     
     /* skip comments or empty lines */
     if ((buf[0] == '#') || (strlen(buf) == 0))
+    {
+      free(buf);
       continue;
+    }
 
     if (sscanf(buf, "%s %lf %lf %lf %lf %lf", p_curr->phase, &p_curr->mindist,
                &p_curr->maxdist, &p_curr->mindepth, &p_curr->maxdepth,
@@ -247,6 +251,8 @@ static DDRange * read_dist_depth_ranges(const char * fname, int * p_num_ranges)
       exit(1);
     }
     
+    free(buf);
+    
     (*p_num_ranges) ++;
   }
 
@@ -254,6 +260,43 @@ static DDRange * read_dist_depth_ranges(const char * fname, int * p_num_ranges)
 
   return p_ranges;
 }
+
+static void read_qfvc(const char * fname, QFactorModel_t * p_qfvc)
+{
+  FILE * fp;
+  
+  fp = fopen(fname, "r");
+  
+  if (!fp)
+  {
+    fprintf(stderr, "EarthModel: Unable to open qfvc file %s",
+            fname);
+    exit(1);
+  }
+
+  /* skip the first line */
+  free(read_line(fp));
+
+  /* read depths */
+  p_qfvc->numdepth = read_first_int(fp);
+  p_qfvc->p_depths = (double *) calloc(p_qfvc->numdepth,
+                                       sizeof(*p_qfvc->p_depths));
+  read_n_doubles(fp, p_qfvc->p_depths, p_qfvc->numdepth);
+  
+  /* read distances */
+  p_qfvc->numdist = read_first_int(fp);
+  p_qfvc->p_dists = (double *) calloc(p_qfvc->numdist,
+                                      sizeof(*p_qfvc->p_dists));
+  read_n_doubles(fp, p_qfvc->p_dists, p_qfvc->numdist);
+  
+  /* read all the samples */
+  p_qfvc->p_samples = (double *) calloc(p_qfvc->numdepth * p_qfvc->numdist,
+                                        sizeof(*p_qfvc->p_samples));
+  read_n_doubles(fp, p_qfvc->p_samples, p_qfvc->numdepth * p_qfvc->numdist);
+  
+  fclose(fp);
+}
+
 
 int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
 {
@@ -263,16 +306,18 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
   PyArrayObject * phasetimedefobj;
   const char * tttable_prefix;             /* travle time table */
   const char * ddranges_file;              /* distance depth ranges */
+  const char * qfvc_file;                  /* Q-Factor Veith Clawson */
   
   int i, j;
   char * fname;
   DDRange * p_ddranges;
   int num_ddrange;
   
-  if (!PyArg_ParseTuple(args, "O!O!O!ss", &PyArray_Type, &sitesobj,
+  if (!PyArg_ParseTuple(args, "O!O!O!sss", &PyArray_Type, &sitesobj,
                         &PyArray_Type, &phasenamesobj,
                         &PyArray_Type, &phasetimedefobj,
-                        &tttable_prefix, &ddranges_file) 
+                        &tttable_prefix, &ddranges_file,
+                        &qfvc_file)
       || !sitesobj || !phasenamesobj || !phasetimedefobj)
     return -1;
 
@@ -411,6 +456,8 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
   free(fname);
   free(p_ddranges);
 
+  read_qfvc(qfvc_file, &p_earth->qfvc);
+  
   return 0;
 }
 
@@ -914,6 +961,41 @@ static double ellipticity_corr (double delta, double esaz, double ecolat,
   return (ellip_corr);
 }
 
+PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
+                                    PyObject * args)
+{
+  int phaseid;
+  double depth, dist, ttime, slow;
+  EarthPhaseModel_t * p_phase;
+  
+  if (!PyArg_ParseTuple(args, "idd", &phaseid, &depth, &dist))
+    return NULL;
+  
+  if ((phaseid < 0) || (phaseid > p_earth->numphases))
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid");
+    return NULL;
+  }
+
+  if (!p_earth->p_phase_time_def[phaseid])
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: phaseid is not time-def");
+    return NULL;
+  }
+
+  p_phase = p_earth->p_phases + phaseid;
+  
+  travel_time(p_phase, depth, dist, &ttime, &slow);
+  
+  if (ttime < 0)
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: ttime is not defined");
+    return NULL;
+  }
+  
+  return Py_BuildValue("d", ttime);
+}
+
 PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args)
 {
   double lon, lat, depth, evtime;
@@ -1390,3 +1472,107 @@ PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args)
                        p_phase->p_dists[p_phase->numdist-1]);
 }
 
+double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double distance)
+{
+  QFactorModel_t * p_qfvc = &p_earth->qfvc;
+  double qfactor;
+  int depthi, disti, depthi2, disti2;
+  double val11, val12, val21, val22;
+  double d_depth, d_dist;
+  double mdist11, mdist12, mdist21, mdist22;
+  
+  /* check that the depth and distance are within the bounds for this phase */
+  if ((depth < p_qfvc->p_depths[0])
+      || (depth > p_qfvc->p_depths[p_qfvc->numdepth-1])
+      || (distance < p_qfvc->p_dists[0])
+      || (distance > p_qfvc->p_dists[p_qfvc->numdist-1]))
+  {
+    fprintf(stderr, "QFVC: Illegal depth %f distance %f", depth, distance);
+    exit(1);
+  }
+  
+  for (depthi = 0; (depthi < p_qfvc->numdepth) 
+         && (depth >= p_qfvc->p_depths[depthi]); depthi++)
+    ;
+  depthi --;
+
+  if (depthi < (p_qfvc->numdepth-1))
+    depthi2 = depthi + 1;
+  else
+  {
+    depthi = p_qfvc->numdepth-2;
+    depthi2 = p_qfvc->numdepth-1;
+  }
+  
+  for (disti = 0; (disti < p_qfvc->numdist) 
+         && (distance >= p_qfvc->p_dists[disti]); disti++)
+    ;
+  disti --;
+
+  if (disti < (p_qfvc->numdist-1))
+    disti2 = disti + 1;
+  else
+  {
+    disti = p_qfvc->numdist-2;
+    disti2 = p_qfvc->numdist-1;
+  }
+  /* the four points are as follows :
+   *    1,1   1,2
+   *    2,1   2,2
+   */
+  val11 = EarthQFactorModel_GetSample(p_qfvc, depthi, disti);
+  val12 = EarthQFactorModel_GetSample(p_qfvc, depthi, disti2);
+  val21 = EarthQFactorModel_GetSample(p_qfvc, depthi2, disti);
+  val22 = EarthQFactorModel_GetSample(p_qfvc, depthi2, disti2);
+
+  d_depth = p_qfvc->p_depths[depthi2] - p_qfvc->p_depths[depthi];
+  d_dist = p_qfvc->p_dists[disti2] - p_qfvc->p_dists[disti];
+  
+  /* compute the scaled manhattan distance to the four corners */
+  mdist11 = (depth - p_qfvc->p_depths[depthi]) / d_depth 
+    + (distance - p_qfvc->p_dists[disti]) / d_dist;
+
+  mdist12 = (depth - p_qfvc->p_depths[depthi]) / d_depth
+    + (p_qfvc->p_dists[disti2] - distance) / d_dist;
+
+  mdist21 = (p_qfvc->p_depths[depthi2] - depth) / d_depth
+    + (distance - p_qfvc->p_dists[disti]) / d_dist;
+
+  mdist22 = (p_qfvc->p_depths[depthi2] - depth) / d_depth
+    + (p_qfvc->p_dists[disti2] - distance) / d_dist;
+
+  /* compute the Q-Factor */
+  if (!mdist11)
+    qfactor = val11;
+
+  else if (!mdist12)
+    qfactor = val12;
+
+  else if (!mdist21)
+    qfactor = val21;
+
+  else if (!mdist22)
+    qfactor = val22;
+  
+  else
+  {
+    assert((mdist11 > 0) && (mdist12 > 0) && (mdist21 > 0) && (mdist22 > 0));
+
+    qfactor = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21 
+                  + val22 / mdist22)
+      / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
+  }
+
+  return qfactor;
+}
+
+PyObject * py_EarthModel_QFVC(EarthModel_t * p_earth, PyObject * args)
+{
+  double depth;
+  double dist;
+  
+  if (!PyArg_ParseTuple(args, "dd", &depth, &dist))
+    return NULL;
+
+  return Py_BuildValue("d", EarthModel_QFVC(p_earth, depth, dist));
+}

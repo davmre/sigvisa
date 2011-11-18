@@ -4,7 +4,7 @@ from database.dataset import *
 import utils.GMM, utils.LinearModel
 import math
 
-NUM_PRIOR = 100                          # number of prior points
+NUM_PRIOR = 100                         # number of prior points
 
 def gtf(val, m, s):
   return math.exp(- float(val - m) ** 2 / (2.0 * float(s) ** 2)) \
@@ -41,15 +41,15 @@ def learn_amp_model(data):
   
   model = utils.LinearModel.LinearModel("logamp", ["mb", "depth", "ttime"],
 #                                                   "ttime0", "ttime50",
-#                                                   "ttime100", "mb_ttime"],
+#                                                   "ttime100", "mb_ttime",
                                         [mb_list, depth_list, ttime_list],
 #                                         ttime0_list, ttime50_list,
-#                                         ttime100_list, mb_ttime_list],
+#                                         ttime100_list, mb_ttime_list,
                                         logamp_list)
   logamp_pred = [model[a,b,c] for a,b,c \
                  in zip(mb_list, depth_list,ttime_list)
                  #, ttime0_list, ttime50_list,
-                 #       ttime100_list, mb_ttime_list)
+                 #       ttime100_list, mb_ttime_list
                  ]
   
   std = np.sqrt(float(sum((y1-y2) ** 2 for y1, y2
@@ -70,7 +70,8 @@ def predict_amp_model(coeffs, mb, depth, ttime):
 
 def learn(param_filename, options, earthmodel, detections, leb_events,
           leb_evlist):
-
+  np.seterr(divide = 'raise')
+  
   fp = open(param_filename, "w")
 
   print >>fp, earthmodel.NumSites(), earthmodel.NumTimeDefPhases()
@@ -92,7 +93,14 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   for evnum, detlist in enumerate(leb_evlist):
     for phase, detnum in detlist:
       true_dets.add(detnum)
+      
+      # -1 => amplitude not observed
+      if -1 == detections[detnum, DET_AMP_COL]:
+        continue
+      
       sitenum = int(detections[detnum, DET_SITE_COL])
+      dist = earthmodel.Delta(leb_events[evnum, EV_LON_COL],
+                              leb_events[evnum, EV_LAT_COL], sitenum)
       datum = (leb_events[evnum, EV_MB_COL], leb_events[evnum, EV_DEPTH_COL],
                detections[detnum, DET_TIME_COL] - leb_events[evnum,EV_TIME_COL],
                np.log(detections[detnum, DET_AMP_COL]))
@@ -103,6 +111,10 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
 
   # next, the false detections
   for detnum in range(len(detections)):
+    
+    if -1 == detections[detnum, DET_AMP_COL]:
+      continue
+    
     if detnum not in true_dets:
       sitenum = detections[detnum, DET_SITE_COL]
       datum = np.log(detections[detnum, DET_AMP_COL])
@@ -130,13 +142,14 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     plt.hist(false_logamps, bins, label="data", alpha=.5)
     plt.plot(bins, [utils.GMM.evaluate(false_wts, false_means, false_stds,
                                        x+STEP/2)
-                    * STEP * len(false_logamps) for x in bins], label="model")
+                    * STEP * len(false_logamps) for x in bins], label="model",
+             linewidth=3)
 
     plt.xlabel("log(amp)")
     plt.ylabel("frequency")
     plt.legend()
 
-  # sample some points from the overal false detection empirical distribution
+  # sample some points from the overall false detection empirical distribution
   false_prior = [false_logamps[np.random.randint(len(false_logamps))] for
                  i in range(NUM_PRIOR)]
 
@@ -176,7 +189,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       plt.hist(data, bins, label="data", alpha=.5)
       plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
                       * STEP * len(data) for x in bins], label="model",
-               )
+               linewidth=3)
       plt.xlabel("log(amp)")
       plt.ylabel("frequency")
       plt.legend()

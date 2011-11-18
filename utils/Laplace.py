@@ -33,7 +33,7 @@ def estimate_laplace_uniform_dist(vals, low, high):
   return prob_laplace, location, scale
 
 def ldensity(location, scale, val):
-  return - np.log(2 * scale) - abs(val-location) / scale
+  return - np.log(2 * scale) - np.abs(val-location) / scale
 
 def ldensity_uniform(low, high):
   return - np.log(high - low)
@@ -58,7 +58,7 @@ def ldensity_laplace_uniform_dist(prob_laplace, location, scale, low, high,
   """
   A mixture of a Laplace and a uniform distribution
   """
-  return np.log((prob_laplace * np.exp(-abs(val-location)/scale) / (2*scale))
+  return np.log((prob_laplace * np.exp(-np.abs(val-location)/scale) / (2*scale))
              + ((1-prob_laplace) / (high - low)))
 
 def lprob_laplace_uniform_dist(prob_laplace, location, scale, low, high,

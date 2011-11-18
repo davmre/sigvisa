@@ -49,6 +49,21 @@ typedef struct EarthPhaseModel_t
 #define EarthPhaseModel_GetSample(p_phase, depthi, disti) \
 ((p_phase)->p_samples[(depthi) * (p_phase)->numdist + (disti)])
 
+typedef struct QFactorModel_t
+{
+  int numdepth;
+  int numdist;
+  
+  double * p_depths;                         /* numdepth */
+  double * p_dists;                          /* numdist */
+
+  double * p_samples;                        /* numdepth x numdist */
+  
+} QFactorModel_t;
+
+#define EarthQFactorModel_GetSample(p_qfvc, depthi, disti) \
+((p_qfvc)->p_samples[(depthi) * (p_qfvc)->numdist + (disti)])
+
 typedef struct EarthModel_t
 {
   PyObject_HEAD
@@ -64,7 +79,8 @@ typedef struct EarthModel_t
   int * p_phase_time_def;
 
   EarthPhaseModel_t * p_phases;
-  
+
+  QFactorModel_t qfvc;
 } EarthModel_t;
 
 #define EarthModel_IsTimeDefPhase(p_earth, phaseid)\
@@ -101,6 +117,9 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
 
 PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
                                            PyObject * args);
+
+PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
+                                    PyObject * args);
 
 double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon, 
                                     double lat, double depth, double evtime, 
@@ -147,3 +166,8 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
                      Event_t * p_event, int perturb);
 
 PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args);
+
+PyObject * py_EarthModel_QFVC(EarthModel_t * p_earth, PyObject * args);
+
+double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double dist);
+

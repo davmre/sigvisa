@@ -34,7 +34,6 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
 {
   EarthModel_t * p_earth;
   double pred_arrtime;
-  double ttime;
   int detnum;
   int numtimedefphases;
 
@@ -117,31 +116,35 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
     *p_snrsc -= FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
                                              det->site_det, det->snr_det);
 #endif
-
-    ttime = EarthModel_ArrivalTime(p_earth, p_event->evlon, p_event->evlat,
-                                   p_event->evdepth, 0, phaseid, siteid);
     
-    *p_ampsc += ArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
-                                              p_event->evmag, p_event->evdepth,
-                                              ttime, siteid, phaseid,
-                                              det->amp_det);
-    
-    if (isnan(*p_ampsc))
+    /* a -1 amplitude suggests that the amplitude has not been observed */
+    if (-1 != det->amp_det)
     {
-      printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d phaseid %d"
-             " amp %.2lg", p_event->evmag, p_event->evdepth,
-             ttime, siteid, phaseid, det->amp_det);
-      exit(1);
-    }
+      double ttime;
+      ttime = EarthModel_ArrivalTime(p_earth, p_event->evlon, p_event->evlat,
+                                     p_event->evdepth, 0, phaseid, siteid);
     
-    *p_ampsc -= FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
-                                                   siteid, det->amp_det);
-    if (isnan(*p_ampsc))
-    {
-      printf("nan false-amp siteid %d amp %.2lg", siteid, det->amp_det);
-      exit(1);
+      *p_ampsc += ArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                                p_event->evmag,p_event->evdepth,
+                                                ttime, siteid, phaseid,
+                                                det->amp_det);
+    
+      if (isnan(*p_ampsc))
+      {
+        printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d "
+               "phaseid %d amp %.2lg", p_event->evmag, p_event->evdepth,
+               ttime, siteid, phaseid, det->amp_det);
+        exit(1);
+      }
+    
+      *p_ampsc -= FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                                     siteid, det->amp_det);
+      if (isnan(*p_ampsc))
+      {
+        printf("nan false-amp siteid %d amp %.2lg", siteid, det->amp_det);
+        exit(1);
+      }
     }
-
   }
 
   *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
@@ -453,17 +456,21 @@ double logprob_false(NetModel_t * p_netmodel, int numdets, int * p_detids,
 
     int siteid = p_det->site_det;
     
-    logprob = FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
-                                                 siteid,
-                                                 p_det->amp_det);
-
-    p_sum_site_amp[siteid] += logprob;
-    p_cnt_site[siteid] ++;
-
-    sum_logprob += logprob;
-
-    if (logprob < worst_amp)
-      worst_amp = logprob;
+    /* a -1 amplitude signifies that the amplitude was not observed */
+    if (-1 != p_det->amp_det)
+    {
+      logprob = FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                                   siteid,
+                                                   p_det->amp_det);
+      
+      p_sum_site_amp[siteid] += logprob;
+      p_cnt_site[siteid] ++;
+      
+      sum_logprob += logprob;
+      
+      if (logprob < worst_amp)
+        worst_amp = logprob;
+    }
   }
 
   if (verbose)

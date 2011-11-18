@@ -1,36 +1,67 @@
 import numpy as np
+
+def test_gmm():
+  seed = np.random.randint(10000)+1
+  print "seed", seed
+  np.random.seed(seed)
+
+  # generate some data from two distributions
+  data = np.hstack([np.random.standard_normal(1000)*.1,
+                    np.random.standard_normal(500)*.2 + 0.4])
+  probs, means, stds = estimate(2, data)
+
+  print "probs", probs
+  print "means", means
+  print "stds", stds
+  
 # estimate a gaussian mixture model, 3 arrays:
-# -- array of mixture weights (probabilities)
+# -- array of mixture probabilities
 # -- array of means
 # -- array of standard deviations
-def estimate(n, vals, iters = 10):
-  # convert values to a numpy array
-  vals = np.array(vals)
-  # indicator variable for each value
-  ind = np.random.randint(0, n, len(vals))
-  # initialize wts, means and std.
-  wts = np.ndarray(n, float)
+def estimate(n, data, iters=10, tol = 1e-3):
+  # convert the data to a numpy array if needed
+  if type(data) is not np.ndarray:
+    data = np.array(data)
+  # TODO: in future handle multivariate data as well
+  assert(len(data.shape) == 1)
   means = np.ndarray(n, float)
   stds = np.ndarray(n, float)
   
-  for i in range(iters):
-    for j in range(n):
-      means[j] = np.average(vals[ind == j])
-      stds[j] = np.std(vals[ind == j])
+  # create an index for the cluster parameters and the data
+  paridx, datidx = np.mgrid[0:n, 0:len(data)]
+  
+  # initialize the weights uniformly at random
+  wts = np.random.uniform(size=(n, len(data)))
+  # compute the probability that each data point belongs to a given cluster
+  dataprobs = wts / wts.sum(axis=0)
+  # and the probability of each cluster
+  clusprobs = dataprobs.sum(axis=1) / dataprobs.shape[1]
 
-    for k in range(len(vals)):
-      ind[k] = np.argmin((vals[k] - means) ** 2 / stds)
-
-    # if none of the points are assigned to a cluster then randomly
-    # select a point for that cluster
-    for j in range(n):
-      if sum(ind == j) == 0:
-        ind[np.random.randint(len(ind))] = j
-        
-  for j in range(n):
-    wts[j] = float(sum(ind == j)) / len(ind)
-
-  return wts, means, stds
+  old_wts_sum = 0
+  wts_sum = tol
+  
+  while abs(wts_sum - old_wts_sum) >= tol:
+    old_wts_sum = wts_sum
+    # compute the cluster parameters
+    means = (data[datidx] * dataprobs).sum(axis=1) / dataprobs.sum(axis=1)
+    stds = np.sqrt(((data[datidx] - means[paridx])**2 * dataprobs).sum(axis=1)
+                   / dataprobs.sum(axis=1))
+    # re-compute the weights
+    # TODO: handle under-flow by using log weights
+    #logwts = np.log(clusprobs[paridx]) - np.log(stds[paridx]) \
+    #         - 0.5 * ((data[datidx] - means[paridx])**2 \
+    #                  / stds[paridx] ** 2)
+    wts = (clusprobs[paridx] / stds[paridx] ) \
+          * np.exp(- 0.5 * ((data[datidx] - means[paridx])**2 \
+                            / stds[paridx] ** 2))
+    wts_sum = wts.sum()
+    
+    # compute the probability that each data point belongs to a given cluster
+    dataprobs = wts / wts.sum(axis=0)
+    # and the probability of each cluster
+    clusprobs = dataprobs.sum(axis=1) / dataprobs.shape[1]
+                                       
+  return clusprobs, means, stds
 
 def gaussian(m, s, val):
   return np.exp(- float(val - m) ** 2 / (2.0 * float(s) ** 2)) \
@@ -44,3 +75,17 @@ def sample(wts, means, stds):
   idx = np.where(np.random.multinomial(1, wts) == 1)[0][0]
   return means[idx] + stds[idx] * np.random.normal()
 
+def _test():
+  np.seterr(divide = 'raise')
+  test_gmm()
+
+if __name__ == "__main__":
+  try:
+    _test()
+  except SystemExit:
+    raise
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    pdb.post_mortem(sys.exc_traceback)
+    raise

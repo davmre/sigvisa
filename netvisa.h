@@ -49,8 +49,12 @@
 #define DELTA_TIME 50                        /* in seconds */
 #define DELTA_DIST 5                         /* in degrees */
 
+#define MIN_AMP 0.01
+#define LOG_MIN_AMP -4.6052
+#define LOG10_MIN_AMP -2
 #define MAX_AMP 10000.0
-#define LOG_MAX_AMP 9.2103
+#define LOG_MAX_AMP 9.2103404
+#define LOG10_MAX_AMP 4.0
 
 typedef struct Event_t
 {

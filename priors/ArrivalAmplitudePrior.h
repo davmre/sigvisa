@@ -41,4 +41,15 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
 double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * 
                                           prior, int siteid, double amplitude);
 
+double ArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * prior,
+                                 double mb, double depth, double ttime,
+                                 int siteid, int phaseid, double amp);
+
+double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 
+                                      prior, int siteid, double amplitude);
+
+double ArrivalAmplitudePrior_zval(const ArrivalAmplitudePrior_t * prior,
+                                  double mb, double depth, double ttime,
+                                  int siteid, int phaseid, double amp);
+
 void ArrivalAmplitudePrior_UnInit(ArrivalAmplitudePrior_t * prior);
