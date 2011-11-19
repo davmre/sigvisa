@@ -20,7 +20,6 @@ static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_mean_amplitude(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
-static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
@@ -218,6 +217,7 @@ static PyMethodDef netvisaMethods[] = {
     "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
 };
+
 
 void initnetvisa(void)
 {
@@ -997,19 +997,7 @@ static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,
   return Py_BuildValue("d", logprob);
 }
 
-static PyObject * py_srand(PyObject * self, PyObject * args)
-{
-  int seed;
-  
-  if (!PyArg_ParseTuple(args, "i", &seed))
-    return NULL;
-  
-  srand(seed);
 
-  Py_INCREF(Py_None);
-  
-  return Py_None;
-}
 
 Event_t * alloc_event_net(NetModel_t * p_netmodel)
 {

@@ -287,8 +287,12 @@ def main(param_dirname):
 
   if options.seed == 0:
     options.seed = int(time.time())
-  
-  netvisa.srand(options.seed)
+
+  if options.sigvisa:
+    sigvisa.srand(options.seed)  
+  else:
+    netvisa.srand(options.seed)
+
 
   # connect to database
   conn = database.db.connect()
