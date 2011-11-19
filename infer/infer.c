@@ -451,6 +451,8 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
     Event_t * p_event;
     Event_t curr_event;
     Event_t best_event;
+    double best_prior_score;
+    double curr_prior_score;
     int choice;
     
     p_event = p_world->pp_events[evnum];
@@ -466,6 +468,7 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
 
     /* the existing event is initially the best event */
     best_event = *p_event;
+    best_prior_score = score_event_prior(p_sigmodel, &best_event);
     LogTrace("init update_events with best_event score %lf", best_event.evscore);
 
 #define UPDATE_BEST                                                 \
@@ -473,9 +476,12 @@ static void change_events(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
       if (p_netmodel != NULL )                                      \
 	curr_event.evscore = score_event(p_netmodel, &curr_event);  \
       else                                                          \
-	score_event_prior(p_sigmodel, &curr_event); \
-      if (curr_event.evscore > best_event.evscore){			\
+	curr_prior_score = score_event_prior(p_sigmodel, &curr_event); \
+      if (curr_prior_score > best_prior_score){			\
+	LogTrace("    updating best event to %s", event_str(&curr_event)); \
         best_event = curr_event;					\
+      }	else { 								\
+	LogTrace("not updating, score %lf vs %lf for %s", best_prior_score, curr_prior_score, event_str(&curr_event)); \
       }									\
     } while (0)								
 
@@ -1008,8 +1014,6 @@ static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)
 
   log_segments_events(p_sigmodel, p_world->log_segment_cb, numevents, (const Event_t **) p_world->pp_events + p_world->write_evnum, maxtime + MAX_TRAVEL_TIME, NULL);
 
-  p_world->write_evnum += numevents;
-
 }
 
 static World_t * alloc_world(NetModel_t * p_netmodel)
@@ -1271,7 +1275,12 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
 }
 
 
-
+static void log_events(World_t * p_world) {
+  LogDebug("events:");
+  for(int i=p_world->low_evnum; i < p_world->high_evnum; ++i) {
+    LogDebug(event_str(p_world->pp_events[i]));
+  }
+}
 
 static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 {
@@ -1333,6 +1342,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     LogInfo("adding initial event proposals");
     
     add_propose_invert_events(NULL, p_sigmodel, p_world);
+    LogDebug("logging segment proposals");
+    log_segments(p_sigmodel, p_world);
     /*    for (int i=0; i < numsites; ++i) {
       if (i != 2 && i != 91 && i != 109) continue;
       for (int j=0; j < numtimedefphases; ++j) {
@@ -1348,6 +1359,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     LogInfo("changing arrivals");
     /* change the arrivals to use these new events */
     change_arrivals(p_sigmodel, p_world);
+    log_events(p_world);
+
 
     /* keep track of whether or not we have wrapped around inverting
      * detections this will trigger further inverts to perturb around
@@ -1365,7 +1378,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       old_score = p_world->world_score;
       
       /* remove some obvious events */
-      numdel = remove_negative_events(p_world);
+      //      numdel = remove_negative_events(p_world);
       
       if (numdel > 0)
       {
@@ -1384,13 +1397,13 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 
       LogInfo("changing arrivals...");
       change_arrivals(p_sigmodel, p_world);
-
+      log_events(p_world);
     };
     
     /* only remove negative events if numsamples > 0. This allows a
      * numsamples=0 run to save all the proposed events */
     if (p_world->numsamples)
-      remove_negative_events(p_world);
+      //remove_negative_events(p_world);
     
 /*
     change_events(p_sigmodel, p_world, 2);
