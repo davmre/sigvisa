@@ -109,9 +109,6 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arramp_fname;
   const char * sig_fname;
   
-  assert(0);
-
-
   if (!PyArg_ParseTuple(args, "Oddssssssss", &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname))
     return -1;
   
@@ -149,6 +146,13 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 
 static PyObject * traceClass_obj;
 
+static PyMethodDef sigvisaMethods[] = {
+  {"srand", py_srand, METH_VARARGS,
+    "srand(seed) : sets the random number generator seed"},
+  {NULL, NULL}
+};
+
+
 void initsigvisa(void)
 {
   PyObject * m;
@@ -158,7 +162,7 @@ void initsigvisa(void)
     return;
 
 
-  m = Py_InitModule3("sigvisa", SigModel_methods,
+  m = Py_InitModule3("sigvisa", sigvisaMethods,
                      "Signal-Based Vertically Integrated Seismological Processing");
   import_array();/* Must be present for NumPy. Called first after above line.*/
 
@@ -175,6 +179,20 @@ void initsigvisa(void)
 
   InitLogger(LogToConsole, stdout);
 
+}
+
+PyObject * py_srand(PyObject * self, PyObject * args)
+{
+  int seed;
+  
+  if (!PyArg_ParseTuple(args, "i", &seed))
+    return NULL;
+  
+  srand(seed);
+
+  Py_INCREF(Py_None);
+  
+  return Py_None;
 }
 
 static void py_sig_model_dealloc(SigModel_t * self)
