@@ -19,7 +19,7 @@ def find_detection(detections, siteid, expected_time):
 AMP_THRESHOLD = 5
 
 start_time = 1237680000 + 3600*0
-end_time = start_time + 3600*16
+end_time = start_time + 3600*32
 
 cursor = database.db.connect().cursor()
 detections, arid2num = read_detections(cursor, start_time, end_time, arrival_table="leb_arrival", noarrays=False)
@@ -38,7 +38,7 @@ netmodel = learn.load_netvisa("parameters", start_time, end_time, detections, si
 
 missing = []
 
-maxplots = 40
+maxplots = 80
 
 pp = PdfPages('logs/missing_detections.pdf')
 for ev in events:
@@ -62,18 +62,18 @@ for ev in events:
             
             if find_detection(detections, siteid, expected_time):
                 print "matching detection found for site %d at time %f" % (siteid, expected_time)
+                try:
+                    utils.waveform.plot_ss_waveforms(siteid, expected_time - 30, expected_time + 30, detections, earthmodel, ev)
+                    plt.title("event %d start %f end %f" % (ev[EV_ORID_COL], expected_time - 30, expected_time + 30))
+                    pp.savefig()
+                    maxplots = maxplots - 1
+                except:
+                    continue
                 
             else:
                 missed = (ev[EV_ORID_COL], siteid, expected_time, expected_amp  )
                 print " missed: ", missed
                 missing.append( missed  )
-                try:
-                    utils.waveform.plot_ss_waveforms(siteid, expected_time - 30, expected_time + 30, detections, earthmodel, ev)
-                    plt.title("event %d" % ev[EV_ORID_COL])
-                    pp.savefig()
-                    maxplots = maxplots - 1
-                except:
-                    continue
 
 pp.close();
 

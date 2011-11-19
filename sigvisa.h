@@ -4,6 +4,8 @@
 #include <Python.h>
 #include <math.h>
 #include <float.h>
+
+#undef NDEBUG
 #include <assert.h>
 
 #include <liblogger/liblogger_levels.h>

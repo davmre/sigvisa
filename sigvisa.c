@@ -109,6 +109,9 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arramp_fname;
   const char * sig_fname;
   
+  assert(0);
+
+
   if (!PyArg_ParseTuple(args, "Oddssssssss", &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname))
     return -1;
   

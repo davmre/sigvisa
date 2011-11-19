@@ -103,21 +103,25 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
     
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
       
-double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
-						 p_event->evlat, p_event->evdepth,
-						 p_event->evtime, phase,
-						 siteid-1);
-    /* check if the site is in the shadow zone for the event - phase */
-    if (pred_arrtime < 0)
-      continue;
-    
+      double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+						   p_event->evlat, p_event->evdepth,
+						   p_event->evtime, phase,
+						   siteid-1);
+
+
+      /* check if the site is in the shadow zone for the event - phase */
+      if (pred_arrtime < 0) {
+	continue;
+      }
+      
+
+
     /* check if the site is up */
     //if (!SigModel_IsSiteUp(p_sigmodel, siteid, pred_arrtime))
     //continue;
     if (!have_signal(p_sigmodel, siteid, pred_arrtime - 5, pred_arrtime+MAX_ENVELOPE_LENGTH)) {
       continue;
     }
-
 
 
       Arrival_t * p_arr = p_event->p_arrivals + 
@@ -130,12 +134,12 @@ double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					   p_event->evtime, 
 					   phase, siteid-1);
       
-      LogTrace("got arrival time %lf for evtime %lf phase %d siteid %d", p_arr->time, p_event->evtime, phase, siteid);
-
-      p_arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior,    p_event->evmag, 
+      p_arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior,
+					       p_event->evmag, 
 					       p_event->evdepth, 
 					       p_arr->time - p_event->evtime, 
 					       siteid-1, phase);
+
       p_arr->azi = EarthModel_ArrivalAzimuth(p_earth, 
 					     p_event->evlon, 
 					     p_event->evlat, 
@@ -145,7 +149,7 @@ double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					      p_event->evlat, 
 					      p_event->evdepth, 
 					      phase, siteid-1); 
-      
+      LogTrace("got arrival time %lf amp %lf azi %lf slo %lf for evtime %lf phase %d siteid %d", p_arr->time,  p_arr->amp,  p_arr->azi,  p_arr->slo, p_event->evtime, phase, siteid);      
     }
   }
 }
@@ -193,17 +197,17 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   memcpy(best, base, numarrivals * sizeof(Arrival_t));
 
   double best_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
-  LogDebug("    naive sta score is %lf", best_score);
+  LogTrace("    naive sta score is %lf", best_score);
   /* then try a grid search over arrival info */
   
   const double time_step = .4;
   const double num_time_steps = 5;
   const double amp_step = 0.3;
   const double num_amp_steps = 2;
-  //const double azi_step = 5;
-  //const double num_azi_steps = 2;
-  //const double slo_step = 2;
-  //const double num_slo_steps = 2;
+  const double azi_step = 3;
+  const double num_azi_steps = 2;
+  const double slo_step = 2;
+  const double num_slo_steps = 2;
 
   for (int i=0; i < 1; ++i) {
 
@@ -264,6 +268,62 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
     
     }
  
+for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
+	
+	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
+	  continue;
+	}
+	
+	double min_azi = (base+phase)->azi-azi_step*num_azi_steps;
+	double max_azi = (base+phase)->azi+azi_step*num_azi_steps;
+
+	for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
+	  Arrival_t * p_arr = sta_arrivals + phase;
+	  p_arr->azi = azi;
+
+	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+	  
+	  if (ev_sta_score > best_score) {
+	    best_score = ev_sta_score;
+	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
+	  }
+  
+	}
+
+	// use the best arrival time for this phase/station while searching at the next
+	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
+    
+    }
+
+for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
+	
+	//	printf("starting w/ arrival amp %lf at %d for phase %d\n", (base+idx)->amp, site, phase);
+
+	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
+	  continue;
+	}
+	
+	double min_slo = (base+phase)->slo-slo_step*num_slo_steps;
+	double max_slo = (base+phase)->slo+slo_step*num_slo_steps;
+
+	for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
+	  Arrival_t * p_arr = sta_arrivals + phase;
+	  p_arr->slo = slo;
+
+	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+	  
+	  if (ev_sta_score > best_score) {
+	    best_score = ev_sta_score;
+	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
+	  }
+  
+	}
+
+	// use the best arrival time for this phase/station while searching at the next
+	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
+    
+    }
+
     // TODO: re-enable optimizing slowness and azimuth once I've actually told the signal model to care about them
     /*
     for (int site = 0; site < numsites; ++site) {

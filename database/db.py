@@ -12,7 +12,7 @@ def connect(unix_socket=None):
       if unix_socket is not None:
         dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket=unix_socket)
       else:
-        dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
+        dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket="/home/dmoore/mysql/tmp/mysql.sock")
     elif os.name in ['nt']:
       # on windows we can use named pipes
       try:
