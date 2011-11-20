@@ -61,6 +61,96 @@ def window_energies(trace, window_size=1, overlap=0.5):
   
   return windows
 
+# return the fraction of the timespan of the first segment, which is overlapped by the second
+def seconds_overlap(seg1, seg2):
+
+    s1 = seg1[0][1]
+    e1 = seg1[0][2]
+    s2 = seg2[0][1]
+    e2 = seg2[0][2]
+
+    assert s1 <= s2
+
+    if s2 >= e1:
+        overlap=0
+    else:
+        overlap=min(e1,e2)-s2
+
+    return overlap,s1,e1,s2,e2
+
+def set_start_end(segment):
+    for chan in segment:
+        chan[1] = start
+        chan[2] = end
+
+def getchans(segment):
+    return map(lambda x : x[0], segment)
+
+def buildsegment(chans, start_time, end_time):
+    segment = [(chan, start_time, end_time) for chan in chans]
+    return segment
+
+def insert_sorted(segments, segment, start=0):
+    for i in range(start, len(segments)):
+        if segment[0][1] < segments[i][0][1]:
+            segments.insert(i, segment)
+            return
+    segments.append(segment)
+
+def aggregate_segments(segments):
+    aggregate_threshold = 1
+    cutoff_threshold = 10
+    
+    changed = True
+    
+    while changed:
+        changed = False
+        for i in range(len(segments)-1):
+            if i >= len(segments)-1:
+                break
+            for j in range(i+1, min(i+4, len(segments))):
+                if j >= len(segments):
+                    break
+                overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
+                
+
+                if overlap > aggregate_threshold:
+
+                    chans1 = getchans(segments[i])
+                    chans2 = getchans(segments[j])
+
+                    assert len(set(chans1).intersection(set(chans2))) == 0
+
+                    agg_start = max(s1,s2)
+                    agg_end = min(e1,e2)
+
+                    del segments[j]
+                    del segments[i]
+
+                    agg = buildsegment(chans1 + chans2, agg_start, agg_end)
+
+                    
+                    if np.abs(agg_start - s1) > cutoff_threshold:
+                        pre_agg = buildsegment(chans1, s1, agg_start)
+                        insert_sorted(segments, pre_agg, i)
+
+                    insert_sorted(segments, agg, i)
+                    
+                    post_agg = None
+                    if np.abs(e1 - agg_end) > cutoff_threshold:
+                        post_agg = buildsegment(chans1, agg_end, e1)
+                    elif np.abs(e2 - agg_end) > cutoff_threshold:
+                        post_agg = buildsegment(chans2, agg_end, e2)
+                    if post_agg is not None:
+                        insert_sorted(segments, post_agg, i)
+                
+                    changed = True
+    return segments
+
+def print_segments(segments):
+    for seg in segments:
+        print seg
+
 def load_traces(cursor, stations, start_time, end_time):
     traces = []
 
@@ -69,64 +159,37 @@ def load_traces(cursor, stations, start_time, end_time):
         sql = "select chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
         cursor.execute(sql)
         wfdiscs = cursor.fetchall()
+        wfdiscs = filter(lambda x: x[0] in ["BHE", "BHN", "BHZ", "BH1", "BH2"], wfdiscs)
 
-        print "trying ", wfdiscs
-
-        last_stime = -1
-        last_etime = -1
-        segment_chans = []
-
-        has_bhe = False
-        has_bhn=False
-        has_bhz=False
-        for (chan, stime, etime) in wfdiscs:
-            if chan == "BHE" or chan == "BH1":
-                has_bhe = True
-            if chan == "BHN" or chan == "BH2":
-                has_bhn = True
-            if chan == "BHZ":
-                has_bhz = True
-
-        if (not has_bhe) or (not has_bhn) or (not has_bhz):
+        if len(wfdiscs) == 0:
             continue
 
-        for (chan, stime, etime) in wfdiscs:
+        segments = map(lambda x: [x], wfdiscs)
+        segments = aggregate_segments(segments)
+        print "aggregated to "
+        print_segments(segments)
 
-            if chan != "BHE" and chan != "BH1" and chan != "BHN" and chan != "BH2" and chan != "BHZ":
-                continue
+        print "trying ", segments
 
-            if stime != last_stime or etime != last_etime:
-                if len(segment_chans) == 3:
-                    traces.append(segment_chans)
-                    segment_chans = []
-                last_stime = stime
-                last_etime = etime
-            st = np.max((stime, start_time))
-            et = np.min((etime, end_time))
+        for segment in segments:
+            segment_chans = []
+            for (chan, st, et) in segment:
 
+                print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
+                try:
+                    trace = utils.waveform.fetch_waveform(sta, chan, st, et)
+                    if chan == "BH1":
+                        trace.stats['channel'] = "BHE"
+                    if chan == "BH2":
+                        trace.stats['channel'] = "BHN"
+                    trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
+                    segment_chans.append(trace)
+                    print " ... successfully loaded."
+                except (utils.waveform.MissingWaveform, IOError):
+                    print " ... not found, skipping."
+                    continue
 
-            print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
-            try:
-                trace = utils.waveform.fetch_waveform(sta, chan, int(np.ceil(st)), int(np.floor(et)))
-                if chan == "BH1":
-                    trace.stats['channel'] = "BHE"
-                if chan == "BH2":
-                    trace.stats['channel'] = "BHN"
-                trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
-                segment_chans.append(trace)
-                print " ... successfully loaded."
-            except (utils.waveform.MissingWaveform, IOError):
-                print " ... not found, skipping."
-                continue
-
-        if len(segment_chans) == 3:
             traces.append(segment_chans)
-
-    for c in traces[:]:
-        if len(c) != 3:
-            print "removing segment ", c, " for improper channels"
-            traces.remove(c)
-
 
     print "fetched ", len(traces), " segments."
     return traces
@@ -327,8 +390,9 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
         stations = []
         for siteid in stalist:
             cursor.execute("select sta, id from static_siteid where statype='ss' and id=%d" % (siteid))
-            station = np.array(cursor.fetchone())[0]
-            stations.append(station)
+            a = cursor.fetchone()
+            if a is not None:
+                stations.append(np.array(a)[0])
         print "loading traces from stations", stations
 
     traces = load_traces(cursor, stations, start_time, end_time)
