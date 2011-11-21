@@ -133,6 +133,11 @@ static PyMethodDef EarthModel_methods[] = {
      "Compute the arrival azimuth of an event at a site\n"
      "ArrivalAzimuth(evlon, evlat, siteid) -> seaz",
     },
+    {"ArrivalIncidentAngle", (PyCFunction)py_EarthModel_ArrivalIncidentAngle,
+     METH_VARARGS,
+     "Compute the incident angle of an event at a site\n"
+     "IncidentAngle(evlon, evlat, evdepth, int phaseid, siteid) -> iangle"
+    },
     {"ArrivalSlowness", (PyCFunction)py_EarthModel_ArrivalSlowness,
      METH_VARARGS,
      "Compute the arrival slowness of an event at a site\n"

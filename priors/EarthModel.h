@@ -26,14 +26,17 @@ typedef struct EarthPhaseModel_t
   double * p_depths;
   double * p_dists;
   
-  double * p_samples;                        /* numdepth x numdist */
+  double * p_ttsamples;                        /* numdepth x numdist */
+  double * p_iasamples;                        /* numdepth x numdist */
   
   double surf_vel;                           /* surface velocity */
   
 } EarthPhaseModel_t;
 
-#define EarthPhaseModel_GetSample(p_phase, depthi, disti) \
-((p_phase)->p_samples[(depthi) * (p_phase)->numdist + (disti)])
+#define EarthPhaseModel_GetTTSample(p_phase, depthi, disti) \
+((p_phase)->p_ttsamples[(depthi) * (p_phase)->numdist + (disti)])
+#define EarthPhaseModel_GetIASample(p_phase, depthi, disti) \
+((p_phase)->p_iasamples[(depthi) * (p_phase)->numdist + (disti)])
 
 typedef struct EarthModel_t
 {
@@ -98,6 +101,9 @@ PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth,
 
 double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
                                  double lat, int siteid);
+
+PyObject * py_EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth, 
+                                         PyObject * args);
 
 PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth, 
                                          PyObject * args);
