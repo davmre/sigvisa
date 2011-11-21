@@ -15,19 +15,6 @@ import utils.waveform
 import netvisa, learn
 import sys
 
-def arrtime_point_matrix(numsites, events, numphases, earthmodel):
-    arrtimes = np.zeros((numsites, len(events), numphases))
-        
-    for siteid in range(numsites):
-        for (eventid, event) in enumerate(events):
-            lat = event[0]
-            lon = event[1]
-            depth = event[2]
-            evtime = event[3]
-
-            for phaseid in range(numphases):
-                arrtimes[siteid,eventid,phaseid] = earthmodel.ArrivalTime(lat, lon, depth, evtime, phaseid, siteid)
-    return arrtimes
     
 def window_energies(trace, window_size=1, overlap=0.5):
   """
@@ -491,33 +478,6 @@ def main():
     # read associations, as training data for learning
     evlist = dataset.read_assoc(cursor, earliest_event_time, options.end_time, orid2num, arid2num, options.event_set, options.runid)
     print "loaded associations for ", len(events), " events."
-
-    # calculate likelihood
-    arrtimes = arrtime_point_matrix(len(sites), events, 1, earthmodel)
-#   assoc_ttimes = sm.ttimes_from_assoc(evlist, events, detections, arid2num)
-
-    #sm.learn(energies, events, assoc_ttimes)
-    #print "scoring world!"
-    #print arrtimes[0, 0, 0]
-    #ll = sm.score_world(events, arrtimes)
-    #print "log-likelihood is ", ll
-
-    #print "learning params..."
-
-    #sm.set_fake_detections(det2fake(detections))
-
-    
-    
-
-    if options.gui is not None:
-        for trace in energies:   
-            siteid = siteids[trace.stats["station"]]       
-            if options.gui == "all" or trace.stats["station"] in options.gui:
-                (means, variances) = sm.all_envelopes(trace.stats, events, ttimes[siteid])
-                sm.plot_envelope(trace, means, variances)
-        plt.show()
-
-
 
 
 if __name__ == "__main__":
