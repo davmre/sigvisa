@@ -1,0 +1,57 @@
+diff -r -c src//main/java/edu/sc/seis/TauP/TauP_Table.java ../TauP-2.0-modified/src//main/java/edu/sc/seis/TauP/TauP_Table.java
+*** src//main/java/edu/sc/seis/TauP/TauP_Table.java	2011-06-03 07:33:18.000000000 -0700
+--- ../TauP-2.0-modified/src//main/java/edu/sc/seis/TauP/TauP_Table.java	2011-11-20 19:05:39.299967936 -0800
+***************
+*** 52,57 ****
+--- 52,59 ----
+  
+      protected int outputType = TauP_Table.GENERIC;
+  
++     protected boolean outputIncidentAngles = false;
++ 
+      protected String headerFile;
+  
+      protected double[] depths = {0.00f,
+***************
+*** 478,484 ****
+                              && (arrival.getName().endsWith("diff"))) {
+                          continue;
+                      } else {
+!                         outString = float15_4.form(arrival.getTime())+ "    " + arrival.getName() + "\n";
+                          break;
+                      }
+                  }
+--- 480,490 ----
+                              && (arrival.getName().endsWith("diff"))) {
+                          continue;
+                      } else {
+! 			if (outputIncidentAngles) {
+! 			    outString = float15_4.form(arrival.getIncidentAngle())+ "    " + arrival.getName() + "\n";
+! 			} else {
+! 			    outString = float15_4.form(arrival.getTime())+ "    " + arrival.getName() + "\n";
+! 			}
+                          break;
+                      }
+                  }
+***************
+*** 498,503 ****
+--- 504,510 ----
+                  + "                      from a LOCSAT style file.");
+          System.out.println("-generic           -- outputs a \"generic\" ascii table\n");
+          System.out.println("-locsat            -- outputs a \"locsat\" style ascii table\n");
++         System.out.println("-iangle            -- outputs incidence angles instead of travel times (locsat only)\n");
+          printStdUsageTail();
+      }
+  
+***************
+*** 516,521 ****
+--- 523,530 ----
+                  outputType = LOCSAT;
+              } else if(leftOverArgs[i].equals("-generic")) {
+                  outputType = GENERIC;
++             } else if(leftOverArgs[i].equals("-iangle")) {
++                 outputIncidentAngles = true;
+              } else if(leftOverArgs[i].equals("-help") || leftOverArgs[i].equals("--help")) {
+                  noComprendoArgs[numNoComprendoArgs++] = leftOverArgs[i];
+              } else {
+Only in ../TauP-2.0-modified/src//main/java/edu/sc/seis/TauP: TauP_Table.java~

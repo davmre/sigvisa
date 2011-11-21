@@ -1,0 +1,175 @@
+n # PKP travel-time tables for iasp91 structure. (From TauP_Table)
+14     # number of depth samples
+   0.00  15.00  35.00  50.00  75.00 100.00 150.00 200.00 250.00 300.00
+ 400.00 500.00 600.00 700.00
+11     # number of distances
+ 145.00 146.00 147.00 148.00 149.00 150.00 151.00 152.00 153.00 154.00
+ 155.00
+#  Travel time for z =    0.0
+         9.8308    PKP
+         9.1937    PKP
+         8.7357    PKP
+         8.3508    PKP
+         8.0045    PKP
+         7.6865    PKP
+         7.3957    PKP
+         7.1056    PKP
+         6.8358    PKP
+         6.5771    PKP
+         6.3229    PKP
+#  Travel time for z =    15.0
+         9.8199    PKP
+         9.1833    PKP
+         8.7267    PKP
+         8.3444    PKP
+         7.9983    PKP
+         7.6809    PKP
+         7.3903    PKP
+         7.1009    PKP
+         6.8315    PKP
+         6.5730    PKP
+         6.3191    PKP
+#  Travel time for z =    35.0
+         9.8039    PKP
+         9.1682    PKP
+         8.7135    PKP
+         8.3351    PKP
+         7.9891    PKP
+         7.6728    PKP
+         7.3824    PKP
+         7.0940    PKP
+         6.8252    PKP
+         6.5670    PKP
+         6.3137    PKP
+#  Travel time for z =    50.0
+         9.7829    PKP
+         9.1536    PKP
+         8.7008    PKP
+         8.3261    PKP
+         7.9803    PKP
+         7.6650    PKP
+         7.3748    PKP
+         7.0874    PKP
+         6.8192    PKP
+         6.5613    PKP
+         6.3085    PKP
+#  Travel time for z =    75.0
+         9.7371    PKP
+         9.1292    PKP
+         8.6796    PKP
+         8.3111    PKP
+         7.9655    PKP
+         7.6519    PKP
+         7.3621    PKP
+         7.0763    PKP
+         6.8091    PKP
+         6.5516    PKP
+         6.2998    PKP
+#  Travel time for z =    100.0
+         9.6914    PKP
+         9.1047    PKP
+         8.6598    PKP
+         8.2960    PKP
+         7.9507    PKP
+         7.6388    PKP
+         7.3493    PKP
+         7.0652    PKP
+         6.7990    PKP
+         6.5419    PKP
+         6.2910    PKP
+#  Travel time for z =    150.0
+         9.5999    PKP
+         9.0554    PKP
+         8.6217    PKP
+         8.2655    PKP
+         7.9208    PKP
+         7.6122    PKP
+         7.3235    PKP
+         7.0428    PKP
+         6.7785    PKP
+         6.5223    PKP
+         6.2732    PKP
+#  Travel time for z =    200.0
+         9.5187    PKP
+         9.0036    PKP
+         8.5826    PKP
+         8.2309    PKP
+         7.8901    PKP
+         7.5849    PKP
+         7.2970    PKP
+         7.0197    PKP
+         6.7574    PKP
+         6.5022    PKP
+         6.2550    PKP
+#  Travel time for z =    250.0
+         9.4514    PKP
+         8.9495    PKP
+         8.5425    PKP
+         8.1931    PKP
+         7.8586    PKP
+         7.5569    PKP
+         7.2702    PKP
+         6.9964    PKP
+         6.7357    PKP
+         6.4814    PKP
+         6.2362    PKP
+#  Travel time for z =    300.0
+         9.3824    PKP
+         8.9008    PKP
+         8.5013    PKP
+         8.1542    PKP
+         7.8260    PKP
+         7.5319    PKP
+         7.2447    PKP
+         6.9731    PKP
+         6.7184    PKP
+         6.4604    PKP
+         6.2168    PKP
+#  Travel time for z =    400.0
+         9.2417    PKP
+         8.7992    PKP
+         8.4151    PKP
+         8.0768    PKP
+         7.7629    PKP
+         7.4816    PKP
+         7.1913    PKP
+         6.9242    PKP
+         6.6717    PKP
+         6.4180    PKP
+        12.9670    PKP
+#  Travel time for z =    500.0
+         9.1151    PKP
+         8.6886    PKP
+         8.3313    PKP
+         7.9990    PKP
+         7.6937    PKP
+         7.4143    PKP
+         7.1327    PKP
+         6.8706    PKP
+         6.6203    PKP
+         6.3715    PKP
+        12.9894    PKP
+#  Travel time for z =    600.0
+         8.9794    PKP
+         8.5830    PKP
+         8.2467    PKP
+         7.9169    PKP
+         7.6206    PKP
+         7.3432    PKP
+         7.0706    PKP
+         6.8138    PKP
+         6.5660    PKP
+         6.3222    PKP
+        13.0139    PKP
+#  Travel time for z =    700.0
+         8.8459    PKP
+         8.4716    PKP
+         8.1415    PKP
+         7.8286    PKP
+         7.5430    PKP
+         7.2673    PKP
+         7.0037    PKP
+         6.7524    PKP
+         6.5072    PKP
+         6.2689    PKP
+        13.0393    PKP

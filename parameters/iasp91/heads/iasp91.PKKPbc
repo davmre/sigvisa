@@ -1,0 +1,8 @@
+n # IASPEI travel-time table for phase: PKKPbc  
+ 14 #  Number of depth samples at the following depths (km):
+    0.00   15.00   35.00   50.00   75.00  100.00  150.00  200.00  250.00  300.00
+  400.00  500.00  600.00  700.00
+ 27 #  Number of distance samples at the following distances (deg):
+   73.00   75.00   77.00   79.00   81.00   83.00   85.00   87.00   89.00   91.00
+   93.00   95.00   97.00   99.00  101.00  103.00  105.00  107.00  109.00  111.00
+  113.00  115.00  117.00  119.00  121.00  123.00  125.00
