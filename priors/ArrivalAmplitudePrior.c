@@ -5,7 +5,7 @@
 
 #include "../netvisa.h"
 
-#define UNIF_FALSE 0.1          /* uniform prior on false amplitude */
+#define UNIF_FALSE 0.13         /* uniform prior on false amplitude */
 
 void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
                                        const char * filename)
