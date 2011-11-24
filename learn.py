@@ -64,9 +64,6 @@ def main(param_dirname):
   parser.add_option("-q", "--quick", dest="quick", default=False,
                     action = "store_true",
                     help = "quick training on a subset of data (False)")
-  parser.add_option("-n", "--nodet", dest="nodet", default=False,
-                    action = "store_true",
-                    help = "no detection prior training (False)")
   parser.add_option("-x", "--text", dest="gui", default=True,
                     action = "store_false",
                     help = "text only output (False)")
@@ -79,6 +76,10 @@ def main(param_dirname):
   parser.add_option("-i", "--visa_leb_runid", dest="visa_leb_runid",
                     default=None, help = "Visa runid to be treated as leb",
                     metavar="RUNID")
+  parser.add_option("-m", "--model", dest="model",
+                    default=None, help = "Which model(s) to learn (all)")
+  parser.add_option("-w", "--writefig", dest="writefig",
+                    default=None, help = "Directory to save figures (None)")
   (options, args) = parser.parse_args()
 
   # use Type 1 fonts by invoking latex
@@ -89,6 +90,12 @@ def main(param_dirname):
     hours = 100
   else:
     hours = None
+
+  if options.model is not None:
+    options.model = set(m for m in options.model.split(","))
+
+  if options.gui:
+    options.plt = plt
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
@@ -99,62 +106,73 @@ def main(param_dirname):
   leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
                                        leb_evlist)
 
-  priors.NumSecDetPrior.learn(os.path.join(param_dirname, "NumSecDetPrior.txt"),
-                              leb_seclist)
+  if options.model is None or "NumSecDet" in options.model:
+    priors.NumSecDetPrior.learn(os.path.join(param_dirname,
+                                             "NumSecDetPrior.txt"),
+                                leb_seclist)
 
-  priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
-                             start_time, end_time, leb_events)
+  if options.model is None or "NumEvent" in options.model:
+    priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
+                               options, start_time, end_time, leb_events)
   
-  priors.EventLocationPrior.learn(os.path.join(param_dirname,
-                                               "EventLocationPrior.txt"),
-                                  leb_events)
+  if options.model is None or "EventLocation" in options.model:
+    priors.EventLocationPrior.learn(os.path.join(param_dirname,
+                                                 "EventLocationPrior.txt"),
+                                    options, leb_events)
   
-  priors.EventMagPrior.learn(os.path.join(param_dirname,
-                                          "EventMagPrior.txt"),
-                             options, leb_events)
+  if options.model is None or "EventMag" in options.model:
+    priors.EventMagPrior.learn(os.path.join(param_dirname,
+                                            "EventMagPrior.txt"),
+                               options, leb_events)
 
-  if not options.nodet:
+  if options.model is None or "EventDetection" in options.model:
     priors.EventDetectionPrior.learn(os.path.join(param_dirname,
                                                   "EventDetectionPrior.txt"),
                                      earthmodel, start_time, end_time,
                                      detections, leb_events, leb_evlist,
                                      site_up)
 
-  priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
-                                             "NumFalseDetPrior.txt"),
-                                earthmodel, start_time, end_time,
-                                detections, leb_events, leb_evlist,
-                                site_up)
+  if options.model is None or "NumFalseDet" in options.model:
+    priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
+                                               "NumFalseDetPrior.txt"),
+                                  earthmodel, start_time, end_time,
+                                  detections, leb_events, leb_evlist,
+                                  site_up)
 
-  priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
-                                             "ArrivalTimePrior.txt"),
-                                earthmodel, detections, leb_events,
-                                leb_evlist)
+  if options.model is None or "ArrivalTime" in options.model:
+    priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
+                                               "ArrivalTimePrior.txt"),
+                                  earthmodel, detections, leb_events,
+                                  leb_evlist)
 
-  priors.ArrivalAzimuthPrior.learn(os.path.join(param_dirname,
-                                                "ArrivalAzimuthPrior.txt"),
-                                   earthmodel, detections, leb_events,
-                                   leb_evlist)
+  if options.model is None or "ArrivalAzimuth" in options.model:
+    priors.ArrivalAzimuthPrior.learn(os.path.join(param_dirname,
+                                                  "ArrivalAzimuthPrior.txt"),
+                                     earthmodel, detections, leb_events,
+                                     leb_evlist)
   
-  priors.ArrivalSlownessPrior.learn(os.path.join(param_dirname,
-                                                 "ArrivalSlownessPrior.txt"),
-                                    earthmodel, detections, leb_events,
-                                    leb_evlist)
+  if options.model is None or "ArrivalSlowness" in options.model:
+    priors.ArrivalSlownessPrior.learn(os.path.join(param_dirname,
+                                                   "ArrivalSlownessPrior.txt"),
+                                      earthmodel, detections, leb_events,
+                                      leb_evlist)
 
-  priors.ArrivalPhasePrior.learn(os.path.join(param_dirname,
-                                              "ArrivalPhasePrior.txt"),
-                                 options, earthmodel, detections, leb_events,
-                                 leb_evlist)
+  if options.model is None or "ArrivalPhase" in options.model:
+    priors.ArrivalPhasePrior.learn(os.path.join(param_dirname,
+                                                "ArrivalPhasePrior.txt"),
+                                   options, earthmodel, detections, leb_events,
+                                   leb_evlist)
 
-  priors.ArrivalSNR.learn(os.path.join(param_dirname,
-                                       "ArrivalSNR.txt"),
-                          options, earthmodel, detections, leb_events,
-                          leb_evlist)
+  if options.model is None or "ArrivalSNR" in options.model:
+    priors.ArrivalSNR.learn(os.path.join(param_dirname,
+                                         "ArrivalSNR.txt"),
+                            options, earthmodel, detections, leb_events,
+                            leb_evlist)
 
-  priors.ArrivalAmplitudePrior.learn(os.path.join(param_dirname,
-                                                  "ArrivalAmplitudePrior.txt"),
-                                     options, earthmodel, detections,
-                                     leb_events, leb_evlist)
+  if options.model is None or "ArrivalAmplitude" in options.model:
+    priors.ArrivalAmplitudePrior.learn(
+      os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
+      options, earthmodel, detections, leb_events, leb_evlist)
 
   if options.gui:
     plt.show()
