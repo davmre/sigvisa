@@ -15,6 +15,8 @@ import utils.waveform
 import netvisa, learn
 import sys
 
+class MissingChannel(Exception):
+  pass
     
 def window_energies(trace, window_size=1, overlap=0.5):
   """
@@ -153,16 +155,16 @@ def load_traces(cursor, stations, start_time, end_time):
 
         segments = map(lambda x: [x], wfdiscs)
         segments = aggregate_segments(segments)
-        print "aggregated to "
-        print_segments(segments)
+#        print "aggregated to "
+#        print_segments(segments)
 
-        print "trying ", segments
+#        print "trying ", segments
 
         for segment in segments:
             segment_chans = []
             for (chan, st, et) in segment:
 
-                print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
+                #print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
                 try:
                     trace = utils.waveform.fetch_waveform(sta, chan, st, et)
                     if chan == "BH1":
@@ -171,14 +173,14 @@ def load_traces(cursor, stations, start_time, end_time):
                         trace.stats['channel'] = "BHN"
                     trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
                     segment_chans.append(trace)
-                    print " ... successfully loaded."
+                 #   print " ... successfully loaded."
                 except (utils.waveform.MissingWaveform, IOError):
                     print " ... not found, skipping."
                     continue
 
             traces.append(segment_chans)
 
-    print "fetched ", len(traces), " segments."
+   # print "fetched ", len(traces), " segments."
     return traces
 
 def max_over_channels(channel_bundle):
@@ -236,17 +238,28 @@ def estimate_azi_amp_slo(channel_bundle_det_window):
     FRAME_LEN = 20
     FRAME_INC = 5
 
-    bhe_num = 0
-    bhn_num = 1
-    bhz_num = 2
+    bhe_num = None
+    bhn_num = None
+    bhz_num = None
+    for (idx, chan) in enumerate(channel_bundle_det_window):
+        if chan.stats["channel"] in ["BHE", "BH1"]:
+            bhe_num = idx
+        if chan.stats["channel"] in ["BHN", "BH2"]:
+            bhn_num = idx
+        if chan.stats["channel"] in ["BHZ"]:
+            bhz_num = idx
+    if bhe_num is None or bhn_num is None or bhz_num is None:
+        raise MissingChannel("can't do polarization analysis without all three channels present")
 
     # first dim is channel, second is frame, third is idx
-    #frames = np.array(map(lambda chan : enframe(chan, obspy.signal.invsim.cosTaper(FRAME_LEN, .1), FRAME_INC)[0], channel_bundle_det_window))
-    frames = np.array(map(lambda chan : enframe(chan, np.ones((FRAME_LEN, 1)), FRAME_INC)[0], channel_bundle_det_window))
+    frames = np.array(map(lambda chan : enframe(chan, obspy.signal.invsim.cosTaper(FRAME_LEN, .1), FRAME_INC)[0], channel_bundle_det_window))
+    #frames = np.array(map(lambda chan : enframe(chan, np.ones((FRAME_LEN, 1)), FRAME_INC)[0], channel_bundle_det_window))
 
-    maxamp = -1
-    maxamp_azi = None
-    maxamp_slo = None
+
+    maxrect = -1
+    maxrect_amp = -1
+    maxrect_azi = None
+    maxrect_iangle = None
     nframes = frames.shape[1]
     for frameno in range(nframes):
         A = np.matrix(frames[:,frameno,:]).squeeze()
@@ -284,12 +297,13 @@ def estimate_azi_amp_slo(channel_bundle_det_window):
         if seazp > 360:
             seazp = seazp - 360
 
-        if amp > maxamp:
-            maxamp = amp
-            maxamp_azi = seazp
-            maxamp_slo = inang1
+        if rect > maxrect:
+            maxrect = rect
+            maxrect_amp = amp
+            maxrect_azi = seazp
+            maxrect_iangle = inang1
 
-    return maxamp_azi, maxamp, maxamp_slo
+    return maxrect_azi, maxrect_amp, maxrect_iangle
 
 def det2fake(detections):
     fake = []

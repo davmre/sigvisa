@@ -532,7 +532,6 @@ double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
   
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
                &delta, &esaz, &seaz);
-  LogInfo("site %lf %lf event %lf %lf delta %lf", p_site->sitelon, p_site->sitelat, lon, lat, delta);
   return delta;
 }
 

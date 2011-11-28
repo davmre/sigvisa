@@ -157,14 +157,17 @@ void phase_env_doubleexp(SignalPrior_t * prior,
 
   //printf("double-exp height %lf peak_idx %ld end_idx %ld\n", peak_height, peak_idx, end_idx);
 
+
   double component_coeff = 0;
+  double iangle = asin(0.05215*p_arr->slo);
+  LogTrace("iangle %lf slowness %lf", iangle, p_arr->slo);
   switch (chan_num) {
   case CHAN_BHE:
-    component_coeff = SPHERE2X(p_arr->azi, p_arr->slo); break;
+    component_coeff = SPHERE2X(p_arr->azi, iangle); break;
   case CHAN_BHN:
-    component_coeff = SPHERE2Y(p_arr->azi, p_arr->slo); break;
+    component_coeff = SPHERE2Y(p_arr->azi, iangle); break;
   case CHAN_BHZ:
-    component_coeff = SPHERE2Z(p_arr->azi, p_arr->slo); break;
+    component_coeff = SPHERE2Z(p_arr->azi, iangle); break;
   }
 
   //  printf("generating event signal with arrival azi %lf and slo %lf\n", p_arr->azi, p_arr->slo);
