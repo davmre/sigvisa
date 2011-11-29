@@ -205,6 +205,10 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 #define ARRAY2(arr,i,j) (*((double *)PyArray_GETPTR2(arr,i,j)))
 #define ARRAY1(arr,i) (*((double *)PyArray_GETPTR1(arr,i)))
 
+#define SETARRAY3(arr,i,j,k,v) (*((double *)PyArray_GETPTR3(arr,i,j,k)))
+#define SETARRAY2(arr,i,j,v) (*((double *)PyArray_GETPTR2(arr,i,j)))
+#define SETARRAY1(arr,i,v) (*((double *)PyArray_GETPTR1(arr,i)))
+
 #define BOOLARRAY2(arr,i,j) (*((npy_bool *)PyArray_GETPTR2(arr,i,j)))
 #define BOOLARRAY1(arr,i) (*((npy_bool *)PyArray_GETPTR1(arr,i)))
 
@@ -257,6 +261,8 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 				  made up and actually makes sense */
 
 #define MAX_PHASE(ntdp) ntdp
+
+#define CHECK_ALLOC(x) if(x == NULL) {LogFatal("memory allocation failed!"); exit(1);}
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);

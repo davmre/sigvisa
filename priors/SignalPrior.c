@@ -438,6 +438,245 @@ const Event_t ** augment_events(int numevents, const Event_t ** events, const Ev
   return augmented;
 }
 
+double **ptrvector(long n)  {
+  double **v;
+  v=(double **)malloc((size_t) (n*sizeof(double)));
+  if (!v)   {
+    printf("In **ptrvector. Allocation of memory for double array failed.");
+    exit(0);  }
+  return v;
+}
+void free_Carrayptrs(double **v)  {
+  free((char*) v);
+}
+double *pyvector_to_Carrayptrs(PyArrayObject *arrayin)  {
+     int n;
+     n=arrayin->dimensions[0];
+     return (double *) arrayin->data;  /* pointer to arrayin data as double */
+}
+double **pymatrix_to_Carrayptrs(PyArrayObject *arrayin)  {
+      double **c, *a;
+      int i,n,m;
+      
+      n=arrayin->dimensions[0];
+      m=arrayin->dimensions[1];
+      c=ptrvector(n);
+      a=(double *) arrayin->data;  /* pointer to arrayin data as double */
+      for ( i=0; i<n; i++)  {
+          c[i]=a+i*m;  }
+      return c;
+}
+
+int AR_add_arrival(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, int n) {
+
+  int arridx = 0;
+
+  if (*pp_means == NULL || *pp_covars == NULL) {
+
+    npy_intp mean_dims[1];
+    mean_dims[0] = n;
+    *pp_means = PyArray_GETCONTIGUOUS(PyArray_ZEROS(1, mean_dims, NPY_DOUBLE, 0));
+
+    npy_intp covar_dims[2];
+    covar_dims[0] = n;
+    covar_dims[1] = n;
+    *pp_covars = PyArray_GETCONTIGUOUS(PyArray_ZEROS(2, covar_dims, NPY_DOUBLE, 0));
+    double **covars = pymatrix_to_Carrayptrs(*pp_covars);
+    for (int i=0; i < n; ++i) {
+      covars[i][i] = 1;
+    }
+    free_Carrayptrs(covars);
+  } else {
+
+    int ndim = PyArray_NDIM(*pp_means);
+    assert(ndim==1);
+    PyArray_Dims newdims;
+    newdims.len=ndim;
+    newdims.ptr = calloc(ndim, sizeof(npy_intp));
+    CHECK_ALLOC(newdims.ptr);
+    npy_intp *mean_dims = PyArray_DIMS(*pp_means);
+    arridx = mean_dims[0]/n;
+    newdims.ptr[0] = mean_dims[0]+n;
+    *pp_means=(PyArrayObject*)PyArray_Resize(*pp_means, &newdims, 1, 0);
+    free(newdims.ptr);
+
+    ndim = PyArray_NDIM(*pp_covars);
+    assert(ndim==2);
+    newdims.len=ndim;
+    newdims.ptr = calloc(ndim, sizeof(npy_intp));
+    CHECK_ALLOC(newdims.ptr);
+    npy_intp *covar_dims = PyArray_DIMS(*pp_covars);
+    assert(covar_dims[0] == covar_dims[1]);
+    newdims.ptr[0] = covar_dims[0]+n;
+    newdims.ptr[1] = covar_dims[1]+n;
+    *pp_covars=(PyArrayObject*)PyArray_Resize(*pp_covars, &newdims, 1, 0);
+    free(newdims.ptr);
+    double **covars = pymatrix_to_Carrayptrs(*pp_covars);
+    for (int i=covar_dims[0]-n; i < covar_dims[0]; ++i) {
+      covars[i][i] = 1;
+    }
+    free_Carrayptrs(covars);
+  }
+  return arridx;
+}
+
+void AR_remove_arrival(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, int n, int arridx) {
+  if (*pp_means == NULL || *pp_covars == NULL) {
+    return;
+  } 
+
+  int ndim = PyArray_NDIM(*pp_means);
+  assert(ndim==1);
+  npy_intp *mean_dims = PyArray_DIMS(*pp_means);
+  if (mean_dims[0] == n) {
+    Py_DECREF(*pp_means);
+    Py_DECREF(*pp_covars);
+    *pp_means = NULL;
+    *pp_covars = NULL;
+  } else {
+
+    PyArrayObject * p_means = PyArray_GETCONTIGUOUS(*pp_means);
+    PyArrayObject * p_covars = PyArray_GETCONTIGUOUS(*pp_covars);
+
+    double * means = pyvector_to_Carrayptrs(p_means);
+    for(int i=(arridx+1)*n; i < mean_dims[0]; ++i) {
+      means[i-n] = means[i]; 
+    }
+    PyArray_Dims newdims;
+    newdims.len=ndim;
+    newdims.ptr = calloc(ndim, sizeof(npy_intp));
+    CHECK_ALLOC(newdims.ptr);
+    newdims.ptr[0] = mean_dims[0]-n;
+    *pp_means=(PyArrayObject*)PyArray_Resize(p_means, &newdims, 1, 0);
+    free(newdims.ptr);    
+    free(means);
+
+    ndim = PyArray_NDIM(p_covars);
+    assert(ndim==2);
+    npy_intp *covar_dims = PyArray_DIMS(p_covars);
+    assert(covar_dims[0] == covar_dims[1]);
+    double **covars = pymatrix_to_Carrayptrs(p_covars);
+    // move everything up by n rows
+    for (int i=(arridx+1)*n; i < covar_dims[0]; ++i) {
+      for(int j=0; j < covar_dims[1]; ++j) {
+	covars[i-n][j] = covars[i][j];
+      }
+    }
+
+    // move everything in by n columns
+    for (int i=0; i < covar_dims[0]; ++i) {
+      for(int j=(arridx+1)*n; j < covar_dims[1]; ++j) {
+	covars[i][j-n] = covars[i][j];
+      }
+    }
+
+    newdims.len=ndim;
+    newdims.ptr = calloc(ndim, sizeof(npy_intp));
+    CHECK_ALLOC(newdims.ptr);
+    newdims.ptr[0] = covar_dims[0]-n;
+    newdims.ptr[1] = covar_dims[1]-n;
+    *pp_covars=(PyArrayObject*)PyArray_Resize(p_covars, &newdims, 1, 0);
+    free(newdims.ptr);
+    free_Carrayptrs(covars);
+  }
+}
+
+
+
+void AR_predict(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, PyArrayObject * p_transition, PyArrayObject * p_transition_T, double noise_sigma2, int n) {
+  PyArrayObject * p_new_means = PyArray_MatrixProduct((PyObject*)p_transition, (PyObject*)*pp_means);
+  PyArrayObject * p_new_covars = PyArray_MatrixProduct((PyObject*)p_transition, PyArray_MatrixProduct((PyObject*)*pp_covars, (PyObject*)p_transition_T));
+  
+  int ndim = PyArray_NDIM(*pp_covars);
+  assert(ndim==2);
+  npy_intp *covar_dims = PyArray_DIMS(*pp_covars);
+  assert(covar_dims[0]==covar_dims[1]);
+  assert(covar_dims[0]%n==0);
+  npy_intp num_arrs = covar_dims[0]/n;
+
+  double ** ptr;
+  PyArray_AsCArray((PyObject **) pp_covars, (void *)&ptr, covar_dims, ndim, PyArray_DescrFromType(NPY_DOUBLE));
+  for(int i=0; i < num_arrs; ++i) {
+    int idx = i*n-1;
+    ptr[idx][idx] = ptr[idx][idx]+noise_sigma2;
+  }
+
+
+  Py_DECREF(*pp_means);
+  Py_DECREF(*pp_covars);
+  *pp_means = p_new_means;
+  *pp_covars = p_new_covars;
+}
+
+/*
+  Return the likelihood of the given signal segment (three channels at
+  some station over some time period), under the envelope + AR(n)
+  wiggles + Gaussian iid noise signal model.
+ */
+double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, ChannelBundle_t * p_segment, int num_events, const Event_t ** pp_events) {
+
+  double * p_means, * p_vars;
+  long len;
+
+  
+
+  double event_lp = 0;
+  for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
+    if (p_segment->p_channels[chan_num] == NULL) continue;
+    envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_events, pp_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars, 1);
+    
+    event_lp += indep_Gaussian_LogProb(len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
+
+    if(isnan(event_lp) || event_lp < -1 * DBL_MAX) {
+      printf(" NAN clen %ld means\n", len);
+      print_vector(len, p_means);
+      printf(" vars\n");
+      print_vector(len, p_vars);
+      printf(" data from seg  (siteid %d chan %d) starting at idx %ld\n", p_segment->siteid, chan_num, 0l);
+      print_vector(len, p_segment->p_channels[chan_num]->p_data);
+      exit(-1);
+    }
+    
+    assert (!isnan(event_lp));
+    free(p_means);
+    free(p_vars);
+  }
+  return event_lp;
+}
+
+/*
+  Return the likelihood of the given signal segment (three channels at
+  some station over some time period), under the envelope + Gaussian
+  iid wiggles + Gaussian iid noise signal model.
+ */
+double segment_likelihood_iid(SigModel_t * p_sigmodel, SignalPrior_t * prior, ChannelBundle_t * p_segment, int num_events, const Event_t ** pp_events) {
+
+  double * p_means, * p_vars;
+  long len;
+
+  double event_lp = 0;
+  for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
+    if (p_segment->p_channels[chan_num] == NULL) continue;
+    envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_events, pp_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars, 1);
+    
+    event_lp += indep_Gaussian_LogProb(len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
+
+    if(isnan(event_lp) || event_lp < -1 * DBL_MAX) {
+      printf(" NAN clen %ld means\n", len);
+      print_vector(len, p_means);
+      printf(" vars\n");
+      print_vector(len, p_vars);
+      printf(" data from seg (siteid %d chan %d) starting at idx %ld\n", p_segment->siteid, chan_num, 0l);
+      print_vector(len, p_segment->p_channels[chan_num]->p_data);
+      exit(-1);
+    }
+    
+    assert (!isnan(event_lp));
+    free(p_means);
+    free(p_vars);
+  }
+  return event_lp;
+}
 
 
 
@@ -471,72 +710,13 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
       continue;
     }
 
-    /* index within this trace at which the event arrives */
-    //long env_start_idx = time2idx(first_envelope_time, p_segment->start_time, p_segment->hz);
-    //long compare_start_idx = (env_start_idx < 0) ? 0 : env_start_idx;
-    
     /* we compute scores for the background event set, and for an
        augmented event set which includes the specified event. */
     const Event_t ** augmented_events = augment_events(num_other_events, pp_other_events, p_event);
-    
-    double * p_means, * p_vars;
-    long len;
-
-    /* score augmented event set */
-    double event_lp = 0;
-    //    printf("scoring augmented...\n");
-    for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
-      if (p_segment->p_channels[chan_num] == NULL) continue;
-      // printf("calling envelope_means_vars(%lf, %lf, %lf, %d, %d, %d)\n", p_segment->hz, first_envelope_time, last_envelope_time, num_other_events+1, siteid, chan_num);
-      envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_other_events+1, augmented_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
-      long compare_len = len; // MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
-    
-      //int is_identical = test_identity(compare_len, p_segment->p_channels[chan_num]->p_data + compare_start_idx, p_means);
-
-      event_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
-
-      if(isnan(event_lp) || event_lp < -1 * DBL_MAX) {
-	printf(" NAN clen %ld means\n", compare_len);
-	print_vector(compare_len, p_means);
-	printf(" vars\n");
-	print_vector(compare_len, p_vars);
-	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, 0l, first_envelope_time);
-	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data);
-	exit(-1);
-      }
-
-      assert (!isnan(event_lp));
-      free(p_means);
-      free(p_vars);
-    }
+    double event_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
     free(augmented_events);
-    
-    //printf("scoring background...\n");
-    /* score background event set */
-    double background_lp = 0;
-    for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
-      if (p_segment->p_channels[chan_num] == NULL) continue;
-      envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_other_events, pp_other_events, siteid, chan_num, &len, &p_means, &p_vars, 1);
-      long compare_len = len; // MIN(len + env_start_idx - compare_start_idx, p_segment->len - compare_start_idx);
-    
 
-      background_lp += indep_Gaussian_LogProb(compare_len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
-
-      if(isnan(background_lp) || background_lp < -1 * DBL_MAX) {
-	printf(" NAN clen %ld means\n", compare_len);
-	print_vector(compare_len, p_means);
-	printf(" vars\n");
-	print_vector(compare_len, p_vars);
-	printf(" data from seg %d (siteid %d chan %d) starting at idx %ld corresponding to time %lf\n", i, siteid, chan_num, 0l, first_envelope_time);
-	print_vector(compare_len, p_segment->p_channels[chan_num]->p_data);
-	exit(-1);
-      }
-
-      assert (!isnan(background_lp));
-      free(p_means);
-      free(p_vars);
-    }
-
+    double background_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
     score += (event_lp - background_lp);
 
     //printf("   segment %d contributed score %lf = event_lp %lf - background_lp %lf\n", i, event_lp - background_lp, event_lp, background_lp);
