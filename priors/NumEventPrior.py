@@ -11,7 +11,7 @@ def learn(param_fname, options, start_time, end_time, leb_events):
     hrly_rate = rate * 60 * 60
     num_hrs = int((end_time - start_time) / (60 * 60))
     bins = np.arange(0, num_hrs+1)
-    options.plt.figure()
+    options.plt.figure(figsize=(8,4.8))
     if not options.type1:
       options.plt.title("Event Rate per hour")
     options.plt.hist((leb_events[:, EV_TIME_COL] - start_time) / (60*60),

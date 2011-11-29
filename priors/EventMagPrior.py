@@ -47,24 +47,51 @@ def learn(param_fname, options, leb_events):
   print "Truncated rate", rate_trunc
   
   if options.gui:
-    plt.figure()
-    plt.title("Event mb")
+    plt.figure(figsize=(8,4.8))
+    if not options.type1:    
+      plt.title("Event mb")
     plt.xlim(MIN_MAGNITUDE, MAX_MAGNITUDE)
-    plt.bar(bins, counts / counts.sum(), STEP, color="blue", label="data")
+    plt.bar(bins, counts / counts.sum(), STEP, color="blue", label="data",
+            alpha=0.5)
     plt.plot(bins, [rate * np.exp(- rate * (m-MIN_MAGNITUDE)) * STEP
                     for m in bins],
              "black", label="MLE", linewidth=3, linestyle=":")
-    plt.legend()
-
-    plt.figure()
-    plt.title("Event mb")
+    plt.legend(loc="upper left")
+    if options.type1:
+      plt.xlabel(r'$m_{b}$')
+    else:
+      plt.xlabel('mb')
+    plt.ylabel("probability")
+    # save the figure
+    if options.writefig is not None:
+      basename = os.path.join(options.writefig, "EventMagOrig")
+      if options.type1:
+        plt.savefig(basename+".pdf")
+      else:
+        plt.savefig(basename+".png")
+    
+    plt.figure(figsize=(8,4.8))
+    if not options.type1:
+      plt.title("Event mb")
     plt.xlim(MIN_MAGNITUDE, MAX_MAGNITUDE)
     plt.bar(bins_trunc, counts_trunc / counts_trunc.sum(), STEP,
-            color="blue", label="data trunc")
+            color="blue", label="data trunc", alpha=0.5)
     plt.plot(bins_trunc, [rate_trunc * np.exp(- rate_trunc * (m-peak_mb))
                           * STEP for m in bins_trunc],
              "black", label="MLE trunc", linewidth=3, linestyle="-")
-    plt.legend()
+    plt.legend(loc="upper left")
+    if options.type1:
+      plt.xlabel(r'$m_{b}$')
+    else:
+      plt.xlabel('mb')
+    plt.ylabel("probability")
+    # save the figure
+    if options.writefig is not None:
+      basename = os.path.join(options.writefig, "EventMagTrunc")
+      if options.type1:
+        plt.savefig(basename+".pdf")
+      else:
+        plt.savefig(basename+".png")
   
   fp = open(param_fname, "w")
   

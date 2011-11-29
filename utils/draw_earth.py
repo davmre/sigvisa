@@ -123,7 +123,8 @@ def draw_vectors(bmap, vectors, scale, **args):
     plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
     
 def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
-                 nolines = False):
+                 nolines = False, colorbar_orientation="vertical",
+                 colorbar_shrink = 0.9):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
   
@@ -140,7 +141,8 @@ def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
                                                           plt.cm.jet.N))
 
   if colorbar:
-    plt.colorbar(cs2, orientation="vertical", drawedges=True)
+    plt.colorbar(cs2, orientation=colorbar_orientation, drawedges=True,
+                 shrink = colorbar_shrink)
 
 def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
   """

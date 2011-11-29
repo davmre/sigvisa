@@ -95,7 +95,7 @@ def learn(param_fname, options, leb_events):
   print "best bandwidth", best_bandw
 
   if options.gui:
-    plt.figure()
+    plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Leave-One-Out Avg. Log Likelihood")
     plt.scatter(all_bandw, all_loglike)
@@ -121,7 +121,8 @@ def learn(param_fname, options, leb_events):
       title = "Event Location Log Density (b=%.2f)" % best_bandw
     
     bmap = draw_earth(title)
-    draw_density(bmap, lon_arr, lat_arr, log(density))
+    draw_density(bmap, lon_arr, lat_arr, log(density),
+                 colorbar_orientation="horizontal", colorbar_shrink=0.75)
     if options.writefig is not None:
       basename = os.path.join(options.writefig, "EventLocationPrior")
       # a .pdf file would be too huge
