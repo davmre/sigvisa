@@ -89,6 +89,8 @@ def insert_sorted(segments, segment, start=0):
 def aggregate_segments(segments):
     aggregate_threshold = 1
     cutoff_threshold = 10
+
+    min_len = 1
     
     changed = True
     
@@ -123,7 +125,8 @@ def aggregate_segments(segments):
                         pre_agg = buildsegment(chans1, s1, agg_start)
                         insert_sorted(segments, pre_agg, i)
 
-                    insert_sorted(segments, agg, i)
+                    if agg_end-agg_start > min_len:
+                      insert_sorted(segments, agg, i)
                     
                     post_agg = None
                     if np.abs(e1 - agg_end) > cutoff_threshold:
@@ -163,21 +166,21 @@ def load_traces(cursor, stations, start_time, end_time):
         for segment in segments:
             segment_chans = []
             for (chan, st, et) in segment:
+              print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
+              try:
+                trace = utils.waveform.fetch_waveform(sta, chan, st, et)
 
-                #print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
-                try:
-                    trace = utils.waveform.fetch_waveform(sta, chan, st, et)
-                    if chan == "BH1":
-                        trace.stats['channel'] = "BHE"
-                    if chan == "BH2":
-                        trace.stats['channel'] = "BHN"
-                    trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
-                    segment_chans.append(trace)
-                 #   print " ... successfully loaded."
-                except (utils.waveform.MissingWaveform, IOError):
-                    print " ... not found, skipping."
-                    continue
-
+                if chan == "BH1":
+                  trace.stats['channel'] = "BHE"
+                if chan == "BH2":
+                  trace.stats['channel'] = "BHN"
+                trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
+                segment_chans.append(trace)
+                print " ... successfully loaded."
+              except (utils.waveform.MissingWaveform, IOError):
+                print " ... not found, skipping."
+                continue
+ 
             traces.append(segment_chans)
 
    # print "fetched ", len(traces), " segments."

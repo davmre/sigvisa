@@ -28,7 +28,7 @@ sigvisa_module = Extension('sigvisa',
                                          for f in infer_sources]
                                       + ["netvisa.c"]
                                       + ["sigvisa.c"]),
-                           libraries = ['logger'],
+                           libraries = ['logger', 'gsl', 'gslcblas'],
                            library_dirs = [liblogger_library],
                            runtime_library_dirs = [liblogger_library],
                            extra_compile_args = extra_compile_args,
@@ -42,7 +42,7 @@ netvisa_module = Extension('netvisa',
                                          for f in infer_sources]
                                       + ["netvisa.c"]
                                       + ["sigvisa.c"]),
-                           libraries = ['logger'],
+                           libraries = ['logger', 'gsl', 'gslcblas'],
                            library_dirs = [liblogger_library],
                            runtime_library_dirs = [liblogger_library],
                            extra_compile_args = extra_compile_args

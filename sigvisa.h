@@ -158,6 +158,7 @@ typedef struct SigModel_t
   Detection_t * p_detections;
 
   SignalPrior_t sig_prior;
+  int ar_perturbation;
 
   NumEventPrior_t num_event_prior;
   EventLocationPrior_t event_location_prior;
@@ -271,7 +272,7 @@ char * event_str(const Event_t * p_event);
 void print_event(const Event_t * p_event);
 char * arrival_str(const Arrival_t * p_arr);
 void print_arrival(const Arrival_t * p_arr);
-
+int print_signal(Signal_t * signal);
 
 #define ALLOC_EVENT(net, sig) (net != NULL) ? alloc_event_net(net) : alloc_event_sig(sig);
 #define COPY_EVENT(net,sig, a, b) (net != NULL) ? copy_event_net(net, a, b) : copy_event_sig(sig, a, b);

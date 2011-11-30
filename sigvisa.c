@@ -99,6 +99,7 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   //PyObject * siteid;
   double start_time;
   double end_time;
+  int ar_perturbation;
 
   const char * numevent_fname;
   const char * evloc_fname;
@@ -108,8 +109,10 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arrslo_fname;
   const char * arramp_fname;
   const char * sig_fname;
+
+
   
-  if (!PyArg_ParseTuple(args, "Oddssssssss", &p_earth, &start_time, &end_time, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname))
+  if (!PyArg_ParseTuple(args, "Odddssssssss", &p_earth, &start_time, &end_time, &ar_perturbation, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname))
     return -1;
   
   if (end_time <= start_time)
@@ -126,6 +129,8 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 
   self->p_earth = p_earth;
   Py_INCREF((PyObject *)self->p_earth);
+
+  self->ar_perturbation = ar_perturbation;
 
   //self->siteid = siteid;
   //Py_INCREF((PyObject *)self->siteid);

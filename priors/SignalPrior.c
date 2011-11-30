@@ -29,6 +29,22 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
     exit(1);
   }
 
+
+  if (1 != fscanf(fp, "%d", &prior->ar_n)) {
+    fprintf(stderr, "error reading AR_n from %s\n", filename);
+    exit(1);
+  }
+  prior->p_ar_coeffs = calloc(prior->ar_n, sizeof(double));
+  for(int i=0; i < prior->ar_n; ++i) {
+    if (1 != fscanf(fp, "%lf", prior->p_ar_coeffs+i)) {
+      fprintf(stderr, "error reading AR coefficient %d of %d from %s\n", i, prior->ar_n, filename);
+      exit(1);
+    }
+  }
+  if (1 != fscanf(fp, "%lf\n", &prior->ar_noise_sigma2)) {
+    fprintf(stderr, "error reading AR_noise_sigma2 from %s\n", filename);
+    exit(1);
+  }
  
   prior->numsites = numsites;  
   prior->p_stations = (StationNoiseModel_t *) calloc(numsites, sizeof(StationNoiseModel_t));
@@ -107,7 +123,7 @@ void print_vector(int n, double * vector) {
 
 long time2idx(double t, double start_time, double hz) {
   double delta_t = t - start_time;
-  long result = lround(delta_t * hz);
+  long result = floorl(delta_t * hz);
 
   return result;
 }
@@ -937,10 +953,16 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     /* we compute scores for the background event set, and for an
        augmented event set which includes the specified event. */
     const Event_t ** augmented_events = augment_events(num_other_events, pp_other_events, p_event);
-    double event_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
+    double event_lp , background_lp;
+    if (p_sigmodel->ar_perturbation) {
+      event_lp = segment_likelihood_AR(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
+      event_lp = segment_likelihood_AR(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
+    } else {
+      event_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
+      background_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
+    }
     free(augmented_events);
 
-    double background_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
     score += (event_lp - background_lp);
 
     //printf("   segment %d contributed score %lf = event_lp %lf - background_lp %lf\n", i, event_lp - background_lp, event_lp, background_lp);
@@ -961,7 +983,9 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
 
   double score = 0;
   for (int siteid = 1; siteid <= numsites; ++siteid) {
-    score += SignalPrior_Score_Event_Site(prior, p_sigmodel_v, p_event, siteid, num_other_events, pp_other_events);
+    score += SignalPrior_Score_Event_Site(prior, p_sigmodel_v, p_event, 
+					  siteid, num_other_events, 
+					  pp_other_events);
   }
 
   return score;
@@ -969,4 +993,5 @@ double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const
 
 void SignalPrior_UnInit(SignalPrior_t * prior) {
   free(prior->p_stations);
+  free(prior->p_ar_coeffs);
 }

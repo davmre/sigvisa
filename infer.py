@@ -272,6 +272,8 @@ def main(param_dirname):
   parser.add_option("-y", "--noarrays", dest="noarrays", default=False,
                     action="store_true",
                     help = "omit data from array stations, used for sigvisa testing (False)")
+  parser.add_option("--ar-perturb", dest="ar_perturb", default=False,
+                    action="store_true", help = "use autoregressive perturbation model for signals (False)")
   parser.add_option("--synthetic", dest="synthetic", default=False,
                     action="store_true", help = "generate synthetic signals based on hard-coded events, used for sigvisa testing (False)")
   parser.add_option("--det-propose", dest="det_propose", default=False,
@@ -362,7 +364,7 @@ def main(param_dirname):
 
     print "creating sigvisa model..."
     sigmodel = learn.load_sigvisa("parameters",
-                                  start_time, end_time,
+                                  start_time, end_time, 1 if options.ar_perturb else 0,
                                   site_up, sites, phasenames,
                                   phasetimedef)
 
