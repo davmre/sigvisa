@@ -182,10 +182,10 @@ void phase_env_doubleexp(SignalPrior_t * prior,
   double iangle;
   int res = slowness_to_iangle(p_arr->slo, phaseid, &iangle);
   if (!res) {
-    LogTrace("iangle conversion failed, setting default 45");
+    //    LogTrace("iangle conversion failed, setting default 45");
     iangle=45;
   }
-  LogTrace("iangle %lf slowness %lf phase %d", iangle, p_arr->slo, phaseid);
+  //  LogTrace("iangle %lf slowness %lf phase %d", iangle, p_arr->slo, phaseid);
   switch (chan_num) {
   case CHAN_BHE:
     component_coeff = SPHERE2X(p_arr->azi, iangle); break;
@@ -483,14 +483,20 @@ void AR_remove_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n, i
     }
     // move everything up by n rows
     for (int i=(arridx+1)*n; i < l; ++i) {
-      for(int j=0; j < l; ++j) {
+      for(int j=0; j < (arridx+1)*n; ++j) {
 	gsl_matrix_set(new_covars, i-n, j, gsl_matrix_get(*pp_covars, i, j));
       }
     }
     // move everything in by n columns
-    for (int i=0; i < l; ++i) {
+    for (int i=0; i < (arridx+1)*n; ++i) {
       for(int j=(arridx+1)*n; j < l; ++j) {
 	gsl_matrix_set(new_covars, i, j-n, gsl_matrix_get(*pp_covars, i, j));
+      }
+    }
+    // move everything in by n columns
+    for (int i=i=(arridx+1)*n; i < l; ++i) {
+      for(int j=(arridx+1)*n; j < l; ++j) {
+	gsl_matrix_set(new_covars, i-n, j-n, gsl_matrix_get(*pp_covars, i, j));
       }
     }
     gsl_matrix_free(*pp_covars);
@@ -502,13 +508,21 @@ void AR_remove_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n, i
 void AR_transitions(int n, double * ar_coeffs, int n_arrs, 
 		    gsl_matrix ** pp_transition, 
 		    gsl_vector ** pp_obs) {
-  if (*pp_transition == NULL) {
-    *pp_transition = gsl_matrix_alloc(n*n_arrs, n*n_arrs);
+  if (*pp_transition != NULL) {
+    gsl_matrix_free(*pp_transition);
   } 
-  if (*pp_obs == NULL) {
-    *pp_obs = gsl_vector_alloc(n*n_arrs);
+  if (*pp_obs != NULL) {
+    gsl_vector_free(*pp_obs);
   }
 
+  if (n_arrs == 0) {
+    *pp_transition = NULL;
+    *pp_obs = NULL;
+    return;
+  } 
+
+  *pp_transition = gsl_matrix_alloc(n*n_arrs, n*n_arrs);
+  *pp_obs = gsl_vector_alloc(n*n_arrs);
   gsl_matrix_set_zero(*pp_transition);
   gsl_vector_set_zero(*pp_obs);
   for (int arr=0; arr < n_arrs; ++arr) {
@@ -529,7 +543,7 @@ void AR_predict(gsl_vector * p_means, gsl_matrix * p_covars, gsl_matrix * p_tran
   gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, p_covars);
   gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_transition, p_covars, 0, p_covars);
   for(int i=0; i < num_arrs; ++i) {
-    int idx = i*n-1;
+    int idx = (i+1)*n-1;
     gsl_matrix_set(p_covars, idx, idx, gsl_matrix_get(p_covars, idx, idx) + noise_sigma2);
   }
 }
@@ -726,6 +740,8 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
       const Event_t * p_event = *(pp_events + ev);
       Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + phase;
       
+      if (p_arr->amp == 0 || p_arr->time <= 0) continue;
+
       ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
       w->start_time = p_arr->time;
       w->idx = 0;
@@ -734,7 +750,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
 
       double iangle;
       if(!slowness_to_iangle(p_arr->slo, phase, &iangle)) {
-	LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
+	//LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
 	iangle = 45;
       }
       w->bhe_coeff = SPHERE2X(p_arr->azi, iangle);
@@ -742,26 +758,28 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
       w->bhz_coeff = SPHERE2Z(p_arr->azi, iangle);
 
       st_arrivals = insert_st(st_arrivals, w);
-      et_arrivals = insert_st(et_arrivals, w);
+      et_arrivals = insert_et(et_arrivals, w);
+
     }
   }
 
 
-  gsl_vector * p_means;
-  gsl_matrix * p_covars;
-  gsl_matrix * p_transition;
-  gsl_vector * p_observation;
+  gsl_vector * p_means = NULL;
+  gsl_matrix * p_covars = NULL;
+  gsl_matrix * p_transition = NULL;
+  gsl_vector * p_observation = NULL;
 
   ArrivalWaveform_t * starting_next = st_arrivals;
   ArrivalWaveform_t * ending_next = et_arrivals;
-  ArrivalWaveform_t * active_arrivals;
+  ArrivalWaveform_t * active_arrivals = NULL;
   int n_active = 0;
 
   for (int t = 0; t < p_segment->len; ++t) {
     double time = p_segment->start_time + t*p_segment->hz;
 
     // activate the next event, if needed
-    while (time >= starting_next->start_time) {
+    while (starting_next != NULL && time >= starting_next->start_time) {
+      LogTrace(" activating arrivalwaveform w/ st %lf at time %lf", starting_next->start_time, time);
       active_arrivals = append_active(active_arrivals, starting_next);
       n_active++;
       AR_transitions(n, prior->p_ar_coeffs, n_active, 
@@ -771,12 +789,19 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
     }
     
     // clean up any events that have finished
-    while (time >= ending_next->end_time) {
+    while (ending_next != NULL && time >= ending_next->end_time) {
+      LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", ending_next->end_time, time);
       active_arrivals = remove_active(active_arrivals, ending_next);
       n_active--;
       AR_transitions(n, prior->p_ar_coeffs, n_active, 
 		     &p_transition, &p_observation);
       AR_remove_arrival(&p_means, &p_covars, n, ending_next->active_id);
+      for (ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
+	if (a->active_id > ending_next->active_id) {
+	  LogTrace(" remove arridx %d, decrementing %d", ending_next->active_id, a->active_id);
+	  a->active_id--;
+	}
+      }
       ending_next = ending_next->next_end;
     }
 
@@ -790,7 +815,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
       env_bhe += a->p_envelope[a->idx] * a->bhe_coeff;
       a->idx++;
     }
-
+    
 
     /* here the obs_bhe, etc. are indep observations of the
        perturbations from the predicted envelope. Our model says that
@@ -822,14 +847,16 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
     }
     obs_perturb_mean /= obs_perturb_n;
     obs_perturb_var /= obs_perturb_n*obs_perturb_n;
-    
+    LogTrace(" perturb mean %lf var %lf n %d", obs_perturb_mean, obs_perturb_var, obs_perturb_n);
     
     double residual = obs_perturb_mean;
     if (n_active > 0) {
       AR_predict(p_means, p_covars, p_transition, prior->ar_noise_sigma2, n);
       residual = AR_update(p_means, p_covars, p_observation, obs_perturb_mean, obs_perturb_var, n);
     } 
-    ll -= 0.5 * log(2*PI * obs_perturb_var) + 0.5 * residual*residual / obs_perturb_var;
+    double thisll = 0.5 * log(2*PI * obs_perturb_var) + 0.5 * residual*residual / obs_perturb_var;
+    ll -= thisll;
+    LogTrace(" ll minus %lf is %lf (residual %lf)", thisll, ll, residual);
 
   }
 
@@ -918,7 +945,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     double event_lp , background_lp;
     if (p_sigmodel->ar_perturbation) {
       event_lp = segment_likelihood_AR(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
-      event_lp = segment_likelihood_AR(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
+      background_lp = segment_likelihood_AR(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
     } else {
       event_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
       background_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
@@ -927,7 +954,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     score += (event_lp - background_lp);
 
-    //printf("   segment %d contributed score %lf = event_lp %lf - background_lp %lf\n", i, event_lp - background_lp, event_lp, background_lp);
+    LogTrace("   segment %d contributed score %lf = event_lp %lf - background_lp %lf (perturb %d)", i, event_lp - background_lp, event_lp, background_lp, p_sigmodel->ar_perturbation);
 
   }
 
