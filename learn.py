@@ -24,8 +24,10 @@ import priors.ArrivalAmplitudePrior
 import netvisa, sigvisa, sigvisa_util
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
+#  model = netvisa.EarthModel(sites, phasenames, phasetimedef,
+#                             os.path.join(param_dirname, "iasp91", "ttimes", "iasp91."), os.path.join(param_dirname, "iasp91", "iangles", "iasp91."))
   model = netvisa.EarthModel(sites, phasenames, phasetimedef,
-                             os.path.join(param_dirname, "iasp91", "ttimes", "iasp91."), os.path.join(param_dirname, "iasp91", "iangles", "iasp91."))
+                             os.path.join(param_dirname, "ttime", "iasp91."), "")
   return model
 
 def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
@@ -60,12 +62,12 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
   
   return model
 
-def load_sigvisa(param_dirname, start_time, end_time, site_up,
+def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
                  sites, phasenames, phasetimedef):
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
   sigmodel = sigvisa.SigModel(earthmodel, 
-                              start_time, end_time,
+                              start_time, end_time, ar_perturb,
                               os.path.join(param_dirname, "NumEventPrior.txt"),
                               os.path.join(param_dirname, "EventLocationPrior.txt"),
                               os.path.join(param_dirname, "EventMagPrior.txt"),

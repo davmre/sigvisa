@@ -545,7 +545,7 @@ PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args)
 
   if ((siteid < 0) || (siteid > p_earth->numsites))
   {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: invalide siteid");
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid siteid");
     return NULL;
   }
 
@@ -558,7 +558,7 @@ static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
 {
   int depthi, disti, depthi2, disti2;
   double val11, val12, val21, val22;
-  double iaval11, iaval12, iaval21, iaval22;
+  double iaval11=0, iaval12=0, iaval21=0, iaval22=0;
   double mdist11, mdist12, mdist21, mdist22;
   double d_depth, d_dist;
   double slo_val1, slo_val2;
@@ -608,10 +608,12 @@ static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
   val21 = EarthPhaseModel_GetTTSample(p_phase, depthi2, disti);
   val22 = EarthPhaseModel_GetTTSample(p_phase, depthi2, disti2);
 
-  iaval11 = EarthPhaseModel_GetIASample(p_phase, depthi, disti);
-  iaval12 = EarthPhaseModel_GetIASample(p_phase, depthi, disti2);
-  iaval21 = EarthPhaseModel_GetIASample(p_phase, depthi2, disti);
-  iaval22 = EarthPhaseModel_GetIASample(p_phase, depthi2, disti2);
+  if(p_phase->p_iasamples != NULL) {
+    iaval11 = EarthPhaseModel_GetIASample(p_phase, depthi, disti);
+    iaval12 = EarthPhaseModel_GetIASample(p_phase, depthi, disti2);
+    iaval21 = EarthPhaseModel_GetIASample(p_phase, depthi2, disti);
+    iaval22 = EarthPhaseModel_GetIASample(p_phase, depthi2, disti2);
+  }
 
   if ((val11 < 0) || (val12 < 0) || (val21 < 0) || (val22 < 0))
   {
