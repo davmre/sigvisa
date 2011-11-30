@@ -397,6 +397,7 @@ def main(param_dirname):
         stalist2 = [tryeval(d[0])+1 for d in clean_dets]
         stalist = tuple(stalist2)
         print "stalist", stalist
+        print "fake_det", fake_det
       else: 
         print "getting waves"
         signals = sigmodel.get_waves()
@@ -414,11 +415,11 @@ def main(param_dirname):
         real_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, real_det) 
         for det in real_det:
           print det
-
+      
+      print "fake_det", fake_det
       print "setting fake detections"
       sigmodel.set_fake_detections(fake_det)
 
-    
 
     if options.synthetic:
       evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1)))
