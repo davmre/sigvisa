@@ -278,6 +278,8 @@ def main(param_dirname):
                     action="store_true", help = "generate synthetic signals based on hard-coded events, used for sigvisa testing (False)")
   parser.add_option("--det-propose", dest="det_propose", default=False,
                     action="store_true", help = "use idcx_arrivals detections for event proposals used for sigvisa testing (False)")
+  parser.add_option("--clean-det-propose", dest="clean_det_propose", default=None,
+                    type=str, help = "propose using only detections associated with the specified event ()")
   parser.add_option("--dummy-propose", dest="dummy_propose", default=None,
                     type=str, help = "use the specified list of LEB orids as event proposals; used for sigvisa testing ()")
   parser.add_option("--siteids", dest="siteids", default=None,
@@ -400,7 +402,12 @@ def main(param_dirname):
         fake_det = [real_to_fake_det(x) for x in detections]
         fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
         print "using %d detections" % len(fake_det)
-        
+      elif options.clean_det_propose:
+        cursor.execute("select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per FROM leb_arrival iarr, leb_assoc la, static_siteid site, static_phaseid ph where iarr.arid=la.arid and la.orid=5397597 and la.sta=site.sta and site.statype='ss' and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase)")
+        clean_dets = np.array(cursor.fetchall())
+        fake_det = [real_to_fake_det(x) for x in clean_dets]
+        fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
+        print "using %d detections" % len(fake_det)
       else: 
         print "getting waves"
         signals = sigmodel.get_waves()
