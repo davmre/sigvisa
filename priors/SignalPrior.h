@@ -16,6 +16,9 @@ typedef struct SignalPrior_t
   double env_onset; 
   double env_decay; 
 
+  int ar_n;
+  double * p_ar_coeffs;
+  double ar_noise_sigma2;
 } SignalPrior_t;
 
 void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites);
