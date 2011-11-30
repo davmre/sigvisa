@@ -370,26 +370,12 @@ def main(param_dirname):
                                   site_up, sites, phasenames,
                                   phasetimedef)
 
-
     if options.siteids is None:
       stalist = siteids
     else:
       stalist = [tryeval(x) for x in options.siteids.split(',')]
     stalist = tuple(stalist)
 
-    if options.synthetic:
-      evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1)))
-#                           (-10, 10, 0, 123761000, 3.0, 2),
-#                           (-10, -10, 0, 1237681500, 3.0, 3))  )
-      sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
-    else:
-      energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
-      print "loaded, setting waves"
-      sigmodel.set_waves(traces)
-      print "loaded, setting energies"
-      sigmodel.set_signals(energies)
-
-      
     if options.dummy_propose is not None:
       prop_ids = map(lambda x : int(x), options.dummy_propose.split(','))
       prop_events = read_events(cursor, start_time, end_time, "leb")[0]
@@ -408,6 +394,9 @@ def main(param_dirname):
         fake_det = [real_to_fake_det(x) for x in clean_dets]
         fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
         print "using %d detections" % len(fake_det)
+        stalist2 = [tryeval(d[0])+1 for d in clean_dets]
+        stalist = tuple(stalist2)
+        print "stalist", stalist
       else: 
         print "getting waves"
         signals = sigmodel.get_waves()
@@ -428,6 +417,22 @@ def main(param_dirname):
 
       print "setting fake detections"
       sigmodel.set_fake_detections(fake_det)
+
+    
+
+    if options.synthetic:
+      evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1)))
+#                           (-10, 10, 0, 123761000, 3.0, 2),
+#                           (-10, -10, 0, 1237681500, 3.0, 3))  )
+      sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
+    else:
+      energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
+      print "loaded, setting waves"
+      sigmodel.set_waves(traces)
+      print "loaded, setting energies"
+      sigmodel.set_signals(energies)
+
+      
 
     model = sigmodel
 
