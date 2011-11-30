@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_blas.h>
 
 #include "../sigvisa.h"
 
@@ -493,7 +496,7 @@ int AR_add_arrival(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, int n)
     PyArray_Dims newdims;
     newdims.len=ndim;
     newdims.ptr = calloc(ndim, sizeof(npy_intp));
-    CHECK_ALLOC(newdims.ptr);
+    CHECK_PTR(newdims.ptr);
     npy_intp *mean_dims = PyArray_DIMS(*pp_means);
     arridx = mean_dims[0]/n;
     newdims.ptr[0] = mean_dims[0]+n;
@@ -504,7 +507,7 @@ int AR_add_arrival(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, int n)
     assert(ndim==2);
     newdims.len=ndim;
     newdims.ptr = calloc(ndim, sizeof(npy_intp));
-    CHECK_ALLOC(newdims.ptr);
+    CHECK_PTR(newdims.ptr);
     npy_intp *covar_dims = PyArray_DIMS(*pp_covars);
     assert(covar_dims[0] == covar_dims[1]);
     newdims.ptr[0] = covar_dims[0]+n;
@@ -545,7 +548,7 @@ void AR_remove_arrival(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, in
     PyArray_Dims newdims;
     newdims.len=ndim;
     newdims.ptr = calloc(ndim, sizeof(npy_intp));
-    CHECK_ALLOC(newdims.ptr);
+    CHECK_PTR(newdims.ptr);
     newdims.ptr[0] = mean_dims[0]-n;
     *pp_means=(PyArrayObject*)PyArray_Resize(p_means, &newdims, 1, 0);
     free(newdims.ptr);    
@@ -572,7 +575,7 @@ void AR_remove_arrival(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, in
 
     newdims.len=ndim;
     newdims.ptr = calloc(ndim, sizeof(npy_intp));
-    CHECK_ALLOC(newdims.ptr);
+    CHECK_PTR(newdims.ptr);
     newdims.ptr[0] = covar_dims[0]-n;
     newdims.ptr[1] = covar_dims[1]-n;
     *pp_covars=(PyArrayObject*)PyArray_Resize(p_covars, &newdims, 1, 0);
@@ -581,11 +584,53 @@ void AR_remove_arrival(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, in
   }
 }
 
+void AR_transitions(int n, double * ar_coeffs, int n_arrs, 
+		    PyArrayObject ** pp_transition, 
+		    PyArrayObject ** pp_transition_T,
+		    PyArrayObject ** pp_observation) {
+  if (*pp_transition != NULL) {
+    Py_DECREF(*pp_transition);
+  } 
+  if (*pp_transition_T != NULL) {
+    Py_DECREF(*pp_transition_T);
+  }
+  if (*pp_observation != NULL) {
+    Py_DECREF(*pp_observation);
+  }
 
+  npy_intp dims[2];
+  dims[0] = n_arrs*n;
+  dims[1] = n_arrs*n;
+  *pp_transition = PyArray_ZEROS(2, dims, NPY_DOUBLE, 0);
 
-void AR_predict(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, PyArrayObject * p_transition, PyArrayObject * p_transition_T, double noise_sigma2, int n) {
-  PyArrayObject * p_new_means = PyArray_MatrixProduct((PyObject*)p_transition, (PyObject*)*pp_means);
-  PyArrayObject * p_new_covars = PyArray_MatrixProduct((PyObject*)p_transition, PyArray_MatrixProduct((PyObject*)*pp_covars, (PyObject*)p_transition_T));
+  double ** ptr;
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) pp_transition, (void *)&ptr, dims, 
+			       2, PyArray_DescrFromType(NPY_DOUBLE)));
+
+  for (int arr=0; arr < n_arrs; ++arr) {
+    ptr[arr*n+n-1][arr*n] = ar_coeffs[0];
+    for (int i=1; i < n; ++i) {
+      ptr[arr*n+i-1][arr*n+i] = 1;
+      ptr[arr*n+n-1][arr*n+i] = ar_coeffs[i];
+    }
+  }
+  *pp_transition_T = (PyArrayObject*)PyArray_CopyAndTranspose((PyObject*)*pp_transition);
+
+  npy_intp obs_dims[1];
+  dims[0] = n_arrs*n;
+  *pp_observation = PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+
+  double * ptr;
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) pp_observation, (void *)&ptr, obs_dims, 
+			       1, PyArray_DescrFromType(NPY_DOUBLE)));
+  for (int arr=0; arr < n_arrs; ++arr) {
+    ptr[arr*n+n-1] = 1;
+  }
+}
+
+double AR_predict(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, PyArrayObject * p_transition, PyArrayObject * p_transition_T, double noise_sigma2, int n) {
+  PyArrayObject * p_new_means = (PyArrayObject *)PyArray_MatrixProduct((PyObject*)p_transition, (PyObject*)*pp_means);
+  PyArrayObject * p_new_covars = (PyArrayObject *)PyArray_MatrixProduct((PyObject*)p_transition, PyArray_MatrixProduct((PyObject*)*pp_covars, (PyObject*)p_transition_T));
   
   int ndim = PyArray_NDIM(*pp_covars);
   assert(ndim==2);
@@ -595,7 +640,8 @@ void AR_predict(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, PyArrayOb
   npy_intp num_arrs = covar_dims[0]/n;
 
   double ** ptr;
-  PyArray_AsCArray((PyObject **) pp_covars, (void *)&ptr, covar_dims, ndim, PyArray_DescrFromType(NPY_DOUBLE));
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) pp_covars, (void *)&ptr, covar_dims, 
+			       ndim, PyArray_DescrFromType(NPY_DOUBLE)));
   for(int i=0; i < num_arrs; ++i) {
     int idx = i*n-1;
     ptr[idx][idx] = ptr[idx][idx]+noise_sigma2;
@@ -608,6 +654,224 @@ void AR_predict(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, PyArrayOb
   *pp_covars = p_new_covars;
 }
 
+
+
+
+typedef struct ArrivalWaveform {
+  double start_time;
+  int idx;
+  double end_time;
+  int len;
+  double * p_envelope;
+
+  struct ArrivalWaveform * next_start;
+  struct ArrivalWaveform * next_end;
+  struct ArrivalWaveform * next_active;
+  int active_id;
+
+  double bhe_coeff;
+  double bhn_coeff;
+  double bhz_coeff;
+} ArrivalWaveform_t;
+
+ArrivalWaveform_t * append_active(ArrivalWaveform_t * p_head, 
+				  ArrivalWaveform_t * p_arr) {
+  ArrivalWaveform_t * p_new_head;
+  p_arr->next_active=NULL;
+  if (p_head == NULL) {
+    p_new_head = p_arr;
+  } else if (p_head->next_active == NULL) {
+    // if at the end of the list, add to the end
+    p_head->next_active = p_arr;
+    p_new_head = p_head;
+  } else {
+    // otherwise, insert recursively
+    p_head->next_active = append_active(p_head->next_active, p_arr);
+    p_new_head = p_head;
+  }
+  return p_new_head;
+}
+
+ArrivalWaveform_t * remove_active(ArrivalWaveform_t * p_head, 
+				  ArrivalWaveform_t * p_arr) {
+  ArrivalWaveform_t * p_new_head;
+  p_arr->next_active=NULL;
+  if (p_head == NULL) {
+    p_new_head = NULL;
+  } else if (p_head == p_arr) {
+    p_new_head = p_arr->next_active;
+  } else if (p_head->next_active == NULL) {
+    p_new_head = p_head;
+  } else {
+    // otherwise, delete recursively
+    p_head->next_active = remove_active(p_head->next_active, p_arr);
+    p_new_head = p_head;
+  }
+  return p_new_head;
+}
+
+ArrivalWaveform_t * insert_st(ArrivalWaveform_t * p_head, 
+			      ArrivalWaveform_t * p_arr) {
+  ArrivalWaveform_t * p_new_head;
+  p_arr->next_start=NULL;
+  if (p_head == NULL) {
+    p_new_head = p_arr;
+  } else if (p_head->start_time > p_arr->start_time ) {
+    // if the new addition comes before the head, make it the new head
+    p_arr->next_start = p_head;
+    p_new_head = p_arr;
+  } else if (p_head->next_start == NULL) {
+    // if at the end of the list, add to the end
+    p_head->next_start = p_arr;
+    p_new_head = p_head;
+  } else {
+    // otherwise, insert recursively
+    p_head->next_start = insert_st(p_head->next_start, p_arr);
+    p_new_head = p_head;
+  }
+  return p_new_head;
+}
+
+ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head, 
+				 ArrivalWaveform_t * p_arr) {
+  ArrivalWaveform_t * p_new_head;
+  p_arr->next_end=NULL;
+  if (p_head == NULL) {
+    p_new_head = p_arr;
+  } else if (p_head->end_time > p_arr->end_time ) {
+    // if the new addition comes before the head, make it the new head
+    p_arr->next_end = p_head;
+    p_new_head = p_arr;
+  } else if (p_head->next_end == NULL) {
+    // if at the end of the list, add to the end
+    p_head->next_end = p_arr;
+    p_new_head = p_head;
+  } else {
+    // otherwise, insert recursively
+    p_head->next_end = insert_et(p_head->next_end, p_arr);
+    p_new_head = p_head;
+  }
+  return p_new_head;
+}
+
+void multiply_vector_scalar(PyArrayObject ** pp_v, double x) {
+  int ndim = PyArray_NDIM(*pp_v);
+  assert(ndim==1);
+  npy_intp *dims = PyArray_DIMS(*pp_v);
+  double * ptr;
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) p_v, (void *)&ptr, dims, 
+			       ndim, PyArray_DescrFromType(NPY_DOUBLE)));
+  for (int i=0; i < dims[0]; ++i) {
+    ptr[i] *= x;
+  }
+  return;
+}
+
+
+gsl_vector * PyArrayToGSLVector(PyArrayObject ** pp_array) {
+  int ndim = PyArray_NDIM(*pp_array);
+  assert(ndim==1);
+  npy_intp *dims = PyArray_DIMS(*pp_array);
+  gsl_vector * v = gsl_vector_alloc (dims[0]);
+  double * ptr;
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) pp_array, (void *)&ptr, dims, 
+			       ndim, PyArray_DescrFromType(NPY_DOUBLE)));
+  for (int i=0; i < dims[0]; ++i) {
+    gsl_vector_set(v, i, ptr[i]);
+  }
+  return v;
+}
+
+gsl_matrix * PyArrayToGSLMatrix(PyArrayObject ** pp_array) {
+  int ndim = PyArray_NDIM(*pp_array);
+  assert(ndim==2);
+  npy_intp *dims = PyArray_DIMS(*pp_array);
+  gsl_matrix * m = gsl_matrix_alloc (dims[0], dims[1]);
+  double ** ptr;
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) pp_array, (void *)&ptr, dims, 
+			       ndim, PyArray_DescrFromType(NPY_DOUBLE)));
+  for (int i=0; i < dims[0]; ++i) {
+    for (int j=0; j < dims[0]; ++j) {
+      gsl_matrix_set(m, i, j, ptr[i][j]);
+    }
+  }
+  return m;
+}
+
+void GSLVectorToPyArray(gsl_vector * v, PyArrayObject ** pp_array) {
+  int ndim = PyArray_NDIM(*pp_array);
+  assert(ndim==1);
+  npy_intp *dims = PyArray_DIMS(*pp_array);
+  double * ptr;
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) pp_array, (void *)&ptr, dims, 
+			       ndim, PyArray_DescrFromType(NPY_DOUBLE)));
+  for (int i=0; i < dims[0]; ++i) {
+    ptr[i] = gsl_vector_get(v, i);
+  }
+}
+
+void GSLMatrixToPyArray(gsl_matrix * m, PyArrayObject ** pp_array) {
+  int ndim = PyArray_NDIM(*pp_array);
+  assert(ndim==2);
+  npy_intp *dims = PyArray_DIMS(*pp_array);
+  double ** ptr;
+  CHECK_FATAL(PyArray_AsCArray((PyObject **) pp_array, (void *)&ptr, dims, 
+			       ndim, PyArray_DescrFromType(NPY_DOUBLE)));
+  for (int i=0; i < dims[0]; ++i) {
+    for (int j=0; j < dims[0]; ++j) {
+      ptr[i][j] = gsl_matrix_get(m, i, j);
+    }
+  }
+}
+
+void AR_update(PyArrayObject ** pp_means, PyArrayObject ** pp_covars, 
+	       PyArrayObject * p_observation, double obs_perturb_mean, 
+	       double obs_perturb_var, int n) {
+
+  gsl_vector * gobs = PyArrayToGSLVector(&p_observation);
+  gsl_vector * gmeans = PyArrayToGSLVector(pp_means);
+  gsl_matrix * gcovars = PyArrayToGSLMatrix(pp_covars);
+
+  double pred_obs_perturb;
+  gsl_blas_ddot (gobs, gmeans, &pred_obs_perturb);
+  double residual = obs_perturb_mean - pred_obs_perturb;
+  
+  gsl_vector * k = gsl_vector_alloc(gmeans->size);
+  gsl_blas_dgemv (CblasNoTrans, 1, gcovars, gobs, 0, k);
+  double residual_var;
+  gsl_blas_ddot (gobs, k, &residual_var);
+  residual_var += obs_perturb_var;
+  gsl_vector_scale (k, 1/residual_var);
+
+  gsl_blas_daxpy (residual, k, gmeans);
+
+  gsl_matrix * km = gsl_matrix_alloc(gmeans->size, 1);
+  gsl_matrix_set_col (km, 0, k);
+
+  gsl_matrix * hm = gsl_matrix_alloc(1, gmeans->size);
+  gsl_matrix_set_row (hm, 0, gobs);
+
+  gsl_matrix * I = gsl_matrix_alloc(gmeans->size, gmeans->size);
+  gsl_matrix_set_identity (I);
+
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, km, hm, 1, I);
+
+  gsl_matrix * new_covar = gsl_matrix_alloc(gmeans->size, gmeans->size);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, I, gcovar, double beta, new_covar);
+
+  GSLMatrixToPyArray(pp_covars, new_covar);
+  GSLVectorToPyArray(pp_means, gmeans);
+
+  gsl_vector_free(gobs);
+  gsl_vector_free(gmeans);
+  gsl_vector_free(k);
+  gsl_matrix_free(gcovars);
+  gsl_matrix_free(km);
+  gsl_matrix_free(hm);
+  gsl_matrix_free(I);
+  gsl_matrix_free(new_covar);
+}
+
 /*
   Return the likelihood of the given signal segment (three channels at
   some station over some time period), under the envelope + AR(n)
@@ -617,31 +881,128 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
 
   double * p_means, * p_vars;
   long len;
-
-  
+  int siteid = p_segment->siteid;
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_segment->p_earthmodel);
 
   double event_lp = 0;
-  for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
-    if (p_segment->p_channels[chan_num] == NULL) continue;
-    envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_events, pp_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars, 1);
-    
-    event_lp += indep_Gaussian_LogProb(len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
 
-    if(isnan(event_lp) || event_lp < -1 * DBL_MAX) {
-      printf(" NAN clen %ld means\n", len);
-      print_vector(len, p_means);
-      printf(" vars\n");
-      print_vector(len, p_vars);
-      printf(" data from seg  (siteid %d chan %d) starting at idx %ld\n", p_segment->siteid, chan_num, 0l);
-      print_vector(len, p_segment->p_channels[chan_num]->p_data);
-      exit(-1);
+  ArrivalWaveform_t * st_arrivals = NULL;
+  ArrivalWaveform_t * et_arrivals = NULL;
+
+  /* populate two linked lists, storing waveform info sorted by
+     start_time and end_time respectively */
+  for (int ev=0; ev < num_events; ++ev) {
+    for (int phase=0; phase < MAX_PHASE(numtimedefphases); ++phase) {
+      Event_t * p_event = *(pp_events + ev);
+      Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + phase;
+      
+      ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
+      w->start_time = p_arr->time;
+      w->idx = 0;
+      abstract_env(&w->p_envelope, &w->len);
+      w->end_time = w->start_time + (double) w->len / p_segment->hz;
+
+      double iangle = asin(0.05215*p_arr->slo);
+      w->bhe_coeff = SPHERE2X(p_arr->azi, iangle);
+      w->bhn_coeff = SPHERE2Y(p_arr->azi, iangle);
+      w->bhz_coeff = SPHERE2Z(p_arr->azi, iangle);
+
+      st_arrivals = insert_st(st_arrivals);
+      et_arrivals = insert_st(et_arrivals);
+    }
+  }
+
+
+  PyArrayObject * p_means;
+  PyArrayObject * p_covars;
+  PyArrayObject * p_transition;
+  PyArrayObject * p_transition_T;
+  PyArrayObject * p_observation;
+
+  ArrivalWaveform_t * starting_next = st_arrivals;
+  ArrivalWaveform_t * ending_next = et_arrivals;
+  ArrivalWaveform_t * active_arrivals;
+  int n_active = 0;
+
+  for (int t = 0; t < p_segment->len; ++t) {
+    double time = p_segment->start_time + t*p_segment->hz;
+
+    // activate the next event, if needed
+    while (time >= starting_next->start_time) {
+      active_arrivals = append_active(active_arrivals, starting_next);
+      n_active++;
+      AR_transitions(n, ar_coeffs, n_active, 
+		     &p_transition, &p_transition_T, &p_observation);
+      starting_next->active_id = AR_add_arrival(&p_means, &p_covars, n);
+      starting_next = starting_next->next_start;
     }
     
-    assert (!isnan(event_lp));
-    free(p_means);
-    free(p_vars);
+    // clean up any events that have finished
+    while (time >= ending_next->end_time) {
+      active_arrivals = remove_active(active_arrivals, ending_next);
+      n_active--;
+      AR_transitions(n, ar_coeffs, n_active, &p_transition, &p_transition_T);
+      AR_remove_arrival(&p_means, &p_covars, n, ending_next->active_id);
+      ending_next = ending_next->next_end;
+    }
+
+    double env_bhz = prior->p_stations[siteid-1]->chan_means[CHAN_BHZ];
+    double env_bhe = prior->p_stations[siteid-1]->chan_means[CHAN_BHE];
+    double env_bhn = prior->p_stations[siteid-1]->chan_means[CHAN_BHN];
+    for(ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
+      env_bhz += a->envelope[a->idx] * a->bhz_coeff;
+      env_bhn += a->envelope[a->idx] * a->bhn_coeff;
+      env_bhe += a->envelope[a->idx] * a->bhe_coeff;
+      a->idx++;
+    }
+
+
+    /* here the obs_bhe, etc. are indep observations of the
+       perturbations from the predicted envelope. Our model says that
+       each observation is sampled indep from a gaussian around the
+       true perturbation, with variance given by the channel noise
+       model. We combine them into a single observation, given by
+       their mean, with correspondingly lower variance. */
+    double obs_bhz, obs_bhe, obs_bhn;
+    double obs_perturb_mean = 0;
+    double obs_perturb_var = 0;
+    int obs_perturb_n = 0;
+    if (p_segment->p_channels[CHAN_BHZ] != NULL) {
+	 obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_data[t] - env_bhz;
+	 obs_perturb_mean += obs_bhz;
+	 obs_perturb_var += prior->p_stations[siteid-1]->chan_vars[CHAN_BHZ];;
+	 obs_perturb_n++;
+    }
+    if (p_segment->p_channels[CHAN_BHE] != NULL) {
+	 obs_bhe = p_segment->p_channels[CHAN_BHE]->p_data[t] - env_bhe;
+	 obs_perturb_mean += obs_bhe;
+	 obs_perturb_var += prior->p_stations[siteid-1]->chan_vars[CHAN_BHE];;
+	 obs_perturb_n++;
+    }
+    if (p_segment->p_channels[CHAN_BHN] != NULL) {
+	 obs_bhn = p_segment->p_channels[CHAN_BHN]->p_data[t] - env_bhn;
+	 obs_perturb_mean += obs_bhn;
+	 obs_perturb_var += prior->p_stations[siteid-1]->chan_vars[CHAN_BHN];;
+	 obs_perturb_n++;
+    }
+    obs_perturb_mean /= obs_perturb_n;
+    obs_perturb_var /= obs_perturb_n*obs_perturb_n;
+    
+    
+    double pred_obs = 0;
+    if (n_active > 0) {
+      pred_obs = AR_predict(&p_means, &p_covars, p_transition, p_transition_T, noise_sigma2, n);
+      AR_update(&p_means, &p_covars, p_observation, obs_perturb_mean, obs_perturb_var, n);
+    } 
+    ll -= 0.5 * log(2*PI * obs_perturb_var) + 0.5 * (pred_obs - obs_perturb_mean)*(pred_obs - obs_perturb_mean) / obs_perturb_var;
+
+
+    /*
+      we should make sure to only do the heavy AR stuff when there's actually an event ... the rest of the time, we're just Gaussian iid'ing.
+     */
+
   }
-  return event_lp;
+
 }
 
 /*

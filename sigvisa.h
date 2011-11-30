@@ -101,8 +101,8 @@ typedef struct Site_t
 #define CHAN_OTHER  3
 
 #define CHECK_ERROR if(PyErr_Occurred()) { PyErr_Print(); exit(1); }
-#define CHECK_PTR(p) if (p == NULL) { printf("null pointer detected!"); exit(1);}
-
+#define CHECK_PTR(p) if (p == NULL) { LogFatal("memory allocation failed, or null pointer detected!"); exit(1);}
+#define CHECK_FATAL(x) if(x < 0) { CHECK_ERROR; LogFatal("fatal error!"); exit(1);}
 
 typedef struct Signal_t
 {
@@ -261,8 +261,6 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 				  made up and actually makes sense */
 
 #define MAX_PHASE(ntdp) ntdp
-
-#define CHECK_ALLOC(x) if(x == NULL) {LogFatal("memory allocation failed!"); exit(1);}
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);
