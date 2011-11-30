@@ -552,6 +552,36 @@ PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args)
   return Py_BuildValue("d", EarthModel_Delta(p_earth, lon, lat, siteid));
 }
 
+int slowness_to_iangle(double slowness, int phase, double * iangle) {
+  double c;
+  int success = 1;
+  switch (phase) {
+  case 0:
+  case 1:
+  case 2:
+  case 5:
+  case 6:
+  case 7:
+  case 8:
+  case 10:
+  case 12:
+    c = 0.052;
+    break;
+  case 11:
+    c = -0.052;
+    break;
+  case 3:
+  case 4:
+    c = 0.0302;
+    break;
+  default:
+    success = 0;
+  }
+  *iangle = asin(c * slowness);
+  if (isnan(*iangle)) success = 0;
+  return success;
+}
+
 static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
                         distance, double * p_trvtime, double * p_slow,
 			double * p_iangle)
@@ -565,6 +595,7 @@ static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
   double slo_mdist1, slo_mdist2;
 
   /* check that the depth and distance are within the bounds for this phase */
+
   if ((depth < p_phase->p_depths[0]) 
       || (depth > p_phase->p_depths[p_phase->numdepth-1])
       || (distance < p_phase->p_dists[0]) 

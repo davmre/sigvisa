@@ -159,11 +159,12 @@ double indep_Gaussian_LogProb(int n, double * x, double * means, double * vars) 
 
 
 void phase_env_doubleexp(SignalPrior_t * prior, 
-	       const Arrival_t * p_arr, 
-	       double hz,
-	       int chan_num,
-	       double ** p_envelope,
-	       int * t) {
+			 const Arrival_t * p_arr, 
+			 double hz,
+			 int chan_num,
+			 int phaseid,
+			 double ** p_envelope,
+			 int * t) {
 
   double peak_height = prior->env_height * p_arr->amp;
   long peak_idx = (long) (log(peak_height) / prior->env_onset * hz);
@@ -178,8 +179,13 @@ void phase_env_doubleexp(SignalPrior_t * prior,
 
 
   double component_coeff = 0;
-  double iangle = asin(0.05215*p_arr->slo);
-  LogTrace("iangle %lf slowness %lf", iangle, p_arr->slo);
+  double iangle;
+  int res = slowness_to_iangle(p_arr->slo, phaseid, &iangle);
+  if (!res) {
+    LogTrace("iangle conversion failed, setting default 45");
+    iangle=45;
+  }
+  LogTrace("iangle %lf slowness %lf phase %d", iangle, p_arr->slo, phaseid);
   switch (chan_num) {
   case CHAN_BHE:
     component_coeff = SPHERE2X(p_arr->azi, iangle); break;
@@ -211,54 +217,6 @@ void phase_env_doubleexp(SignalPrior_t * prior,
   }
   for (int i=peak_idx; i < end_idx; ++i) {
     means[i] = exp(prior->env_decay * ((end_idx - i)/hz)) * component_coeff;
-  }
-  
-  *p_envelope = means;
-  *t = len;
-}
-
-void phase_env_triangle(SignalPrior_t * prior, 
-	       const Arrival_t * p_arr, 
-	       double hz,
-	       int chan_num,
-	       double ** p_envelope,
-	       int * t) {
-
-  double newmean = prior->env_height * p_arr->amp;
-
-  double component_coeff = 0;
-  switch (chan_num) {
-  case CHAN_BHE:
-    component_coeff = SPHERE2X(p_arr->azi, p_arr->slo); break;
-  case CHAN_BHN:
-    component_coeff = SPHERE2Y(p_arr->azi, p_arr->slo); break;
-  case CHAN_BHZ:
-    component_coeff = SPHERE2Z(p_arr->azi, p_arr->slo); break;
-  }
-
-  //  printf("generating event signal with arrival azi %lf and slo %lf\n", p_arr->azi, p_arr->slo);
-  //  printf("channel is %d and ratio is %lf\n", chan_num, component_coeff);
-
-  double step = (prior->env_decay / hz);
-  unsigned long len = ceil( newmean / step );
-
-  /*if (len >= 30 * hz) {
-    printf("event lasting more than 30 seconds! env_decay = %lf, hz = %lf, step = %lf, amp = %lf, env_height = %lf, newmean = %lf, len = %ld\n", prior->env_decay, hz, step, p_arr->amp, prior->env_height, newmean, len);
-    step = newmean /(30.0 * hz);
-    len = ceil( newmean / step );
-    printf("resetting step to %lf , len to %ld\n", step, len);
-    }*/
-
-  double * means = (double *) calloc(len, sizeof(double));
-
-  if (means == NULL) {
-    printf("error allocating memory for means in phase_env, len %ld = %lf / %lf\n", len, newmean, step);
-    exit(-1);
-  }
-
-  for (int i=0; i < len; ++i) {
-    means[i] = newmean * component_coeff;
-    newmean -= step;
   }
   
   *p_envelope = means;
@@ -349,7 +307,7 @@ void envelope_means_vars(SignalPrior_t * prior,
 
       double * p_envelope;
       int env_len;
-      phase_env_doubleexp(prior, p_arr, hz, chan_num, &p_envelope, &env_len);
+      phase_env_doubleexp(prior, p_arr, hz, chan_num, phaseid, &p_envelope, &env_len);
       // printf("got envelope of len %d (idx = %ld)\n", env_len, idx);
 
       if (abs_env) {
@@ -774,7 +732,11 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
       abstract_env(prior, p_arr, p_segment->hz, &w->p_envelope, &w->len);
       w->end_time = w->start_time + (double) w->len / p_segment->hz;
 
-      double iangle = asin(0.05215*p_arr->slo);
+      double iangle;
+      if(!slowness_to_iangle(p_arr->slo, phase, &iangle)) {
+	LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
+	iangle = 45;
+      }
       w->bhe_coeff = SPHERE2X(p_arr->azi, iangle);
       w->bhn_coeff = SPHERE2Y(p_arr->azi, iangle);
       w->bhz_coeff = SPHERE2Z(p_arr->azi, iangle);

@@ -139,3 +139,5 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
                      Event_t * p_event, int perturb);
 
 PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args);
+
+int slowness_to_iangle(double slowness, int phase, double * iangle);
