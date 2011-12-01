@@ -10,7 +10,7 @@
 
 #include <liblogger/liblogger_levels.h>
 // possible log levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL 
-#define LOG_LEVEL LOG_LEVEL_TRACE
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 #define LOG_MODULE_NAME "sigvisa"
 #include <liblogger/liblogger.h>
 
@@ -198,6 +198,7 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 #define DEG2RAD                ((double) (PI / 180))
 #define RAD2DEG                ((double) (180 / PI))
 #define AVG_EARTH_RADIUS_KM    ((double) 6371) /* when modeled as a sphere */
+#define AVG_EARTH_CIRCUMFERENCE_KM ((double) 40008)
 
 #define LAT2Z(lat) (sin((lat) * PI / 180.0))
 #define Z2LAT(z) (asin(z) * 180.0 / PI)

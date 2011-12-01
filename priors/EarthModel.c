@@ -552,9 +552,12 @@ PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args)
   return Py_BuildValue("d", EarthModel_Delta(p_earth, lon, lat, siteid));
 }
 
+
+// convert an arriving slowness (seconds/degree) to incidence angle
 int slowness_to_iangle(double slowness, int phase, double * iangle) {
-  double c;
-  int success = 1;
+ int success = 1;
+
+  double v; // phase-specific velocity in deg/sec
   switch (phase) {
   case 0:
   case 1:
@@ -565,19 +568,25 @@ int slowness_to_iangle(double slowness, int phase, double * iangle) {
   case 8:
   case 10:
   case 12:
-    c = 0.052;
+  case 13:
+    /* these are essentially all of the P-wave phases, except for ScP
+       which is backwards for some reason */
+    v = EARTH_SURF_P_VEL * 360/AVG_EARTH_CIRCUMFERENCE_KM;
     break;
   case 11:
-    c = -0.052;
+    /* ScP */
+    v = -1 * EARTH_SURF_P_VEL * 360/AVG_EARTH_CIRCUMFERENCE_KM;
     break;
   case 3:
   case 4:
-    c = 0.0302;
+    /* S-wave phases */
+    v = EARTH_SURF_S_VEL * 360/AVG_EARTH_CIRCUMFERENCE_KM;
     break;
   default:
+    /* I don't currently have numbers for Love or Raleigh waves */
     success = 0;
   }
-  *iangle = asin(c * slowness) * RAD2DEG;
+  *iangle = asin(v * slowness) * RAD2DEG;
   if (isnan(*iangle)) success = 0;
   return success;
 }
