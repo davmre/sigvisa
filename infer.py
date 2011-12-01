@@ -216,9 +216,6 @@ def log_envelope_plot(pp, events, evarrlist, real_env, pred_env, text=""):
 
   return True
 
-def real_to_fake_det(det):
-  return (det[DET_ARID_COL], det[DET_SITE_COL], det[DET_TIME_COL], det[DET_AMP_COL], det[DET_AZI_COL], det[DET_SLO_COL], det[DET_PHASE_COL])
-
 def tryeval(val):
   try:
     val = ast.literal_eval(val)

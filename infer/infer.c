@@ -1339,8 +1339,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     LogInfo("adding initial event proposals");
     
     add_propose_invert_events(NULL, p_sigmodel, p_world);
-    LogDebug("logging segment proposals");
-    log_segments(p_sigmodel, p_world);
+    //LogDebug("logging segment proposals");
+    //log_segments(p_sigmodel, p_world);
     /*    for (int i=0; i < numsites; ++i) {
       if (i != 2 && i != 91 && i != 109) continue;
       for (int j=0; j < numtimedefphases; ++j) {
@@ -1369,7 +1369,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 
     for (i=0; i<p_world->numsamples; i++)
     {
-      int numdel;
+      int numdel=0;
       double old_score;
 
       old_score = p_world->world_score;

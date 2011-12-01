@@ -40,6 +40,7 @@ typedef struct Arrival_t {
   double azi;
   double slo;
 
+  int phase;
   double score;
 
 } Arrival_t;

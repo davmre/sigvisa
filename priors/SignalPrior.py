@@ -8,7 +8,7 @@ import sigvisa
 
 
 
-def learn(filename, earthmodel, traces, events, leb_evlist, detections, arid2num):
+def learn(filename, sigmodel, earthmodel, traces, events, leb_evlist, detections, arid2num):
     """
     Find maximum-likelhood parameter estimates 
     """
@@ -19,21 +19,26 @@ def learn(filename, earthmodel, traces, events, leb_evlist, detections, arid2num
     f.write("5000 500 500\n")
     f.write("2 .2 .7 10\n")
 
-    sta_noise_means, sta_noise_vars = learn_noise_params(f, traces, events, ttimes)
-    # learn_envelope_params(f, traces, events, ttimes)
-    
+    print "learning envelope params"
+    xopt = learn_envelope_params(sigmodel)
+    sta_noise_means, sta_noise_vars = learn_noise_params(f, sigmodel, traces, events, ttimes)
+
     f.close()
 
     return sta_noise_means, sta_noise_vars
 
 
-def learn_envelope_params(traces, events, ttimes):
-    ll = lambda (peak, decay): -1 * log_likelihood_complete(traces, events, ttimes, peak, decay)
-    xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((5000, 1)), full_output=True)
+def learn_envelope_params(sigmodel):
+    ll = lambda (height, decay, onset): -1 * sigmodel.detection_likelihood(height, decay, onset)
+
+    print "starting the optimizer"
+    #xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((1.5, .08, .4)), full_output=True)
+
+    ranges = ((0.05, 3), (0.01, 0.5), (0.05, 1))
+    xopt  = scipy.optimize.brute(ll, ranges, Ns=15, full_output=0)
     print "learned params: ", xopt
-    print "give likelihood ", fopt
-    self.envelope_peak_coeff = xopt[0]
-    self.envelope_decay_coeff = xopt[1]
+    print "give likelihood ", ll(xopt)
+    return xopt
     
 
 def expectation_over_noise(fn, traces, events, ttimes):
@@ -89,7 +94,7 @@ def expectation_over_noise(fn, traces, events, ttimes):
             results[siteid][chan] = results[siteid][chan] / normalizer[siteid][chan]
     return results
 
-def learn_noise_params(filehandle, traces, events, ttimes):
+def learn_noise_params(filehandle, sigmodel, traces, events, ttimes):
     expectation_f = lambda x, siteid, chan: x
     sta_noise_means = expectation_over_noise(expectation_f, traces, events, ttimes)
         
@@ -100,7 +105,7 @@ def learn_noise_params(filehandle, traces, events, ttimes):
     for siteid in sta_noise_means.keys():
         filehandle.write(str(siteid) + " " + str(len(sta_noise_means[siteid].keys())))
         for chan in sta_noise_means[siteid].keys():
-            chan_num = sigvisa.canonical_channel_num(chan)
+            chan_num = sigmodel.canonical_channel_num(chan)
             filehandle.write(" " + str(chan_num) + " " + str(sta_noise_means[siteid][chan]) + " " + str(sta_noise_vars[siteid][chan]))
         filehandle.write("\n")
     return sta_noise_means, sta_noise_vars

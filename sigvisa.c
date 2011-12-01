@@ -14,6 +14,7 @@ static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args)
 static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
+PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 
 extern PyTypeObject py_EarthModel;
 
@@ -42,6 +43,9 @@ static PyMethodDef SigModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
    "score_world(events, arrtimes, verbose) "
    "-> log probability\n"},
+  {"detection_likelihood", (PyCFunction)py_det_likelihood, METH_VARARGS,
+   "detection_likelihood(env_height, env_decay, env_offset)"
+   "-> log likelihood\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
    "write_cb, log_cb)\n -> events, ev_detlist"},/*
@@ -442,6 +446,16 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
    return Py_BuildValue("n", result);
  }
 
+PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
+
+  double env_height, env_decay, env_onset;
+
+  if (!PyArg_ParseTuple(args, "ddd", &env_height, &env_decay, &env_onset))
+    return NULL;
+
+  double ll = det_likelihood((void *)p_sigmodel, env_height, env_decay, env_onset);
+  return Py_BuildValue("d", ll);
+}
 
 int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
 
@@ -1081,6 +1095,11 @@ Event_t * alloc_event_sig(SigModel_t * p_sigmodel)
 
   p_event->p_arrivals = (Arrival_t *) calloc(numsites * numtimedefphases,
                                        sizeof(*p_event->p_arrivals));
+  for (int i=0; i < numsites; ++i) {
+    for(int j=0; j < numtimedefphases; ++j) {
+      (p_event->p_arrivals + i*numtimedefphases + j)->phase = j;
+    }
+  }
   return p_event;
 }
 

@@ -80,7 +80,7 @@ def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
   return sigmodel
 
 
-def learn_signal(param_dirname, earthmodel):
+def learn_signal(param_dirname, earthmodel, site_up, sites, phasenames, phasetimedef):
   hours=1
   print "learning signal parameters from %d hour of data" % (hours)
 
@@ -89,8 +89,10 @@ def learn_signal(param_dirname, earthmodel):
   end_time = start_time + hours*3600
   earliest_event_time = start_time - MAX_TRAVEL_TIME
   cursor = db.connect().cursor()
-  
-  detections, arid2num = read_detections(cursor, start_time, end_time, "idcx_arrival", 1)
+
+  leb_detections, leb_arid2num = read_detections(cursor, start_time, end_time, "leb_arrival", 1)  
+  idcx_detections, arid2num = read_detections(cursor, start_time, end_time, "idcx_arrival", 1)
+
   
   print start_time, earliest_event_time
   events, orid2num = read_events(cursor, earliest_event_time, end_time, "leb", None)
@@ -100,11 +102,21 @@ def learn_signal(param_dirname, earthmodel):
   evlist = read_assoc(cursor, earliest_event_time, end_time, orid2num, arid2num, "leb", None)
   print "loaded associations for ", len(events), " events."
 
-
+  sigmodel = load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
+                 sites, phasenames, phasetimedef)
+  
   energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time=1237680000, end_time=1237683600, window_size=1, overlap=0.5)
-  return priors.SignalPrior.learn(os.path.join(param_dirname,
-                                               "SignalPrior.txt"),
-                                  earthmodel, energies, events, evlist, detections, arid2num)
+
+  sigmodel.set_waves(traces)
+  sigmodel.set_signals(energies)
+
+  fake_det = [sigvisa_util.real_to_fake_det(x) for x in leb_detections]
+  sigmodel.set_fake_detections(fake_det)
+  print "set detections", fake_det
+
+  return priors.SignalPrior.learn(os.path.join(param_dirname, "SignalPrior.txt"),
+                                  sigmodel, earthmodel, energies, events, evlist, 
+                                  idcx_detections, arid2num)
   
 
 def main(param_dirname):
@@ -147,7 +159,7 @@ def main(param_dirname):
                                        leb_evlist)
 
   if options.sigvisa:
-    learn_signal(param_dirname, earthmodel)
+    learn_signal(param_dirname, earthmodel, site_up, sites, phasenames, phasetimedef)
     return
 
   priors.NumSecDetPrior.learn(os.path.join(param_dirname, "NumSecDetPrior.txt"),

@@ -18,6 +18,10 @@ import sys
 class MissingChannel(Exception):
   pass
     
+def real_to_fake_det(det):
+  return (det[dataset.DET_ARID_COL], det[dataset.DET_SITE_COL], det[dataset.DET_TIME_COL], det[dataset.DET_AMP_COL], det[dataset.DET_AZI_COL], det[dataset.DET_SLO_COL], det[dataset.DET_PHASE_COL])
+
+
 def window_energies(trace, window_size=1, overlap=0.5):
   """
   Returns a vector giving the signal energy in each of many

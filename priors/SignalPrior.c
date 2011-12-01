@@ -128,6 +128,25 @@ long time2idx(double t, double start_time, double hz) {
   return result;
 }
 
+
+
+void arrival_list(EarthModel_t * p_earth, int siteid, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals) {
+  
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+  *num_arrivals = 0;
+  *ppp_arrivals = calloc(num_events*MAX_PHASE(numtimedefphases), sizeof(Arrival_t *));
+
+  for (int i=0; i < num_events; ++i) {
+    const Event_t * p_event = *(pp_events+i);
+    for (int j=0; j < MAX_PHASE(numtimedefphases); ++j) {
+      Arrival_t * p_arr = p_event->p_arrivals + siteid*numtimedefphases + j;
+      if (p_arr->amp == 0 || p_arr->time <= 0) continue;
+      *(*ppp_arrivals + (*num_arrivals)++) = p_arr;
+    }
+  }
+}
+
 int test_identity(int n, double * x, double * means) {
 
   for (int i=0; i < n; ++i) {
@@ -242,8 +261,8 @@ void envelope_means_vars(SignalPrior_t * prior,
 			 double start_time,
 			 double end_time,
 			 EarthModel_t * p_earth, 
-			 int numevents, 
-			 const Event_t ** pp_events, 
+			 int num_arrivals,
+			 const Arrival_t ** pp_arrivals,
 			 int siteid,
 			 int chan_num, 
 			 long * p_len,
@@ -284,15 +303,11 @@ void envelope_means_vars(SignalPrior_t * prior,
     if (pp_vars != NULL) p_vars[i] = noise_var;
   }
 
-  for (int i=0; i < numevents; ++i) {
+  for (int i=0; i < num_arrivals; ++i) {
     
-    const Event_t * p_event = pp_events[i];
+    const Arrival_t * p_arr = *(pp_arrivals+i);
 
-    for (int phaseid = 0; phaseid < MAX_PHASE(p_earth->numtimedefphases); ++phaseid) {    
-
-      const Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*p_earth->numtimedefphases + phaseid;
-
-      //    printf("event %d at siteid %d, ratios n/z %lf e/z %lf\n", i, siteid, SPHERE2Y(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo), SPHERE2X(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo)   );
+    //    printf("event %d at siteid %d, ratios n/z %lf e/z %lf\n", i, siteid, SPHERE2Y(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo), SPHERE2X(p_arr->azi, p_arr->slo)/SPHERE2Z(p_arr->azi, p_arr->slo)   );
 
       double arrtime = p_arr->time;
       if (arrtime < 0) continue;
@@ -307,7 +322,7 @@ void envelope_means_vars(SignalPrior_t * prior,
 
       double * p_envelope;
       int env_len;
-      phase_env_doubleexp(prior, p_arr, hz, chan_num, phaseid, &p_envelope, &env_len);
+      phase_env_doubleexp(prior, p_arr, hz, chan_num, p_arr->phase, &p_envelope, &env_len);
       // printf("got envelope of len %d (idx = %ld)\n", env_len, idx);
 
       if (abs_env) {
@@ -321,7 +336,7 @@ void envelope_means_vars(SignalPrior_t * prior,
       }
       
       free(p_envelope);
-    }
+    
   }
 
 }
@@ -349,9 +364,15 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
     p_segment->p_channels[chan_num] = alloc_signal(p_segment);
     p_segment->p_channels[chan_num]->chan = chan_num;
     // printf("tae calling envelope_means_vars(%lf, %lf, %lf, %d, %d, %d)\n", p_segment->hz, p_segment->start_time, end_time, numevents, p_segment->siteid, chan_num);
+
+
+    int num_arrivals;
+    Arrival_t ** pp_arrivals;
+    arrival_list(p_earth, p_segment->siteid, numevents, pp_events, &num_arrivals, &pp_arrivals);
+
     envelope_means_vars(prior, 
 			p_segment->hz, p_segment->start_time, end_time,
-			p_earth, numevents, pp_events, 
+			p_earth, num_arrivals, (const Arrival_t **)pp_arrivals, 
 			p_segment->siteid,chan_num, 
 			&(p_segment->p_channels[chan_num]->len),
 			&(p_segment->p_channels[chan_num]->p_data),
@@ -366,7 +387,7 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
       p_wave_segment->p_channels[chan_num]->chan = chan_num;
       envelope_means_vars(prior, 
 			  p_segment->hz, p_segment->start_time, end_time,
-			  p_earth, numevents, pp_events, 
+			  p_earth, num_arrivals, (const Arrival_t **)pp_arrivals, 
 			  p_segment->siteid,chan_num, 
 			  &(p_wave_segment->p_channels[chan_num]->len),
 			  &(p_wave_segment->p_channels[chan_num]->p_data),
@@ -374,7 +395,7 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
 			  0);
     }
 
-
+    free(pp_arrivals);
 
     //printf("generated signal of length %ld:\n", p_segment->p_channels[chan_num]->len);
     //print_vector(p_segment->p_channels[chan_num]->len, p_segment->p_channels[chan_num]->p_data);
@@ -433,6 +454,7 @@ int AR_add_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n) {
     int l = (*pp_means)->size;
     arridx = l/n;
     gsl_vector * new_means = gsl_vector_alloc(l + n);
+    gsl_vector_set_zero(new_means);
     for(int i=0; i < l; ++i) {
       gsl_vector_set(new_means, i,  gsl_vector_get(*pp_means, i));
     }
@@ -440,7 +462,7 @@ int AR_add_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n) {
     *pp_means = new_means;
 
     gsl_matrix * new_covars = gsl_matrix_alloc(l + n, l + n);
-
+    gsl_matrix_set_identity(new_covars);
     for (int i=0; i < l; ++i) {
       for(int j=0; j < l; ++j) {
 	gsl_matrix_set(new_covars, i, j, gsl_matrix_get(*pp_covars, i, j));
@@ -545,8 +567,9 @@ void AR_predict(gsl_vector * p_means, gsl_matrix * p_covars, gsl_matrix * p_tran
   gsl_vector_free(tmp);
 
   gsl_matrix * mtmp = gsl_matrix_alloc(p_covars->size1, p_covars->size2);
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, mtmp);
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, mtmp);  
   gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_transition, mtmp, 0, p_covars);
+  
   gsl_matrix_free(mtmp);
   for(int i=0; i < num_arrs; ++i) {
     int idx = (i+1)*n-1;
@@ -566,10 +589,20 @@ void AR_update(gsl_vector * p_means, gsl_matrix * p_covars,
   *residual = obs_perturb_mean - pred_obs_perturb;
   
   gsl_vector * k = gsl_vector_alloc(p_means->size);
+  //  printf("obs: \n");
+  //gsl_vector_fprintf(stdout, p_obs, "%lf");
+  //printf("covars: \n");
+  //gsl_matrix_fprintf(stdout, p_covars, "%lf");
   gsl_blas_dgemv (CblasNoTrans, 1, p_covars, p_obs, 0, k);
+  //printf("k: \n");
+  //gsl_vector_fprintf(stdout, k, "%lf");
   gsl_blas_ddot (p_obs, k, residual_var);
+  //printf("r %lf, rv %lf\n", *residual, *residual_var);
+
   *residual_var += obs_perturb_var;
   gsl_vector_scale (k, 1/(*residual_var));
+  //printf("newk: \n");
+  //gsl_vector_fprintf(stdout, k, "%lf");
 
   gsl_blas_daxpy (*residual, k, p_means);
 
@@ -692,7 +725,7 @@ ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head,
 }
 
 
-void abstract_env(SignalPrior_t * prior, Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
+void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
 
   double peak_height = prior->env_height * p_arr->amp;
   long peak_idx = (long) (log(peak_height) / prior->env_onset * hz);
@@ -726,10 +759,12 @@ void abstract_env(SignalPrior_t * prior, Arrival_t * p_arr, double hz, double **
   some station over some time period), under the envelope + AR(n)
   wiggles + Gaussian iid noise signal model.
  */
-double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, ChannelBundle_t * p_segment, int num_events, const Event_t ** pp_events) {
+double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
 
   int siteid = p_segment->siteid;
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
+
+  SignalPrior_t * prior = &p_sigmodel->sig_prior;
 
   double ll = 0;
 
@@ -740,32 +775,30 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
 
   /* populate two linked lists, storing waveform info sorted by
      start_time and end_time respectively */
-  for (int ev=0; ev < num_events; ++ev) {
-    for (int phase=0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-      const Event_t * p_event = *(pp_events + ev);
-      Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + phase;
+  for (int i=0; i < num_arrivals; ++i) {
+
+    const Arrival_t * p_arr = *(pp_arrivals + i);
       
-      if (p_arr->amp == 0 || p_arr->time <= 0) continue;
+    if (p_arr->amp == 0 || p_arr->time <= 0) continue;
 
-      ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
-      w->start_time = p_arr->time;
-      w->idx = 0;
-      abstract_env(prior, p_arr, p_segment->hz, &w->p_envelope, &w->len);
-      w->end_time = w->start_time + (double) w->len / p_segment->hz;
+    ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
+    w->start_time = p_arr->time;
+    w->idx = 0;
+    abstract_env(prior, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+    w->end_time = w->start_time + (double) w->len / p_segment->hz;
 
-      double iangle;
-      if(!slowness_to_iangle(p_arr->slo, phase, &iangle)) {
-	//LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
-	iangle = 45;
-      }
-      w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle));
-      w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle));
-      w->bhz_coeff = fabs(SPHERE2Z(p_arr->azi, iangle));
-
-      st_arrivals = insert_st(st_arrivals, w);
-      et_arrivals = insert_et(et_arrivals, w);
-
+    double iangle;
+    if(!slowness_to_iangle(p_arr->slo, p_arr->phase, &iangle)) {
+      //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
+      iangle = 45;
     }
+    w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle));
+    w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle));
+    w->bhz_coeff = fabs(SPHERE2Z(p_arr->azi, iangle));
+
+    st_arrivals = insert_st(st_arrivals, w);
+    et_arrivals = insert_et(et_arrivals, w);
+
   }
 
 
@@ -868,6 +901,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
       AR_update(p_means, p_covars, p_observation, obs_perturb_mean, obs_perturb_var, n, &residual, &rvar);
     } 
     double thisll = 0.5 * log(2*PI * rvar) + 0.5 * residual*residual / rvar;
+    assert(!isnan(thisll) && thisll > -1*DBL_MAX);
     ll -= thisll;
     //LogTrace(" ll minus %lf is %lf (residual %lf var %lf)", thisll, ll, residual, rvar);
 
@@ -891,15 +925,16 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, SignalPrior_t * prior, Cha
   some station over some time period), under the envelope + Gaussian
   iid wiggles + Gaussian iid noise signal model.
  */
-double segment_likelihood_iid(SigModel_t * p_sigmodel, SignalPrior_t * prior, ChannelBundle_t * p_segment, int num_events, const Event_t ** pp_events) {
+double segment_likelihood_iid(SigModel_t * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
 
   double * p_means, * p_vars;
   long len;
+  SignalPrior_t * prior = &p_sigmodel->sig_prior;
 
   double event_lp = 0;
   for (int chan_num = 0; chan_num < NUM_CHANS; ++chan_num) {
     if (p_segment->p_channels[chan_num] == NULL) continue;
-    envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_events, pp_events, p_segment->siteid, chan_num, &len, &p_means, &p_vars, 1);
+    envelope_means_vars(prior, p_segment->hz, p_segment->start_time, ChannelBundle_EndTime(p_segment), p_sigmodel->p_earth, num_arrivals, pp_arrivals, p_segment->siteid, chan_num, &len, &p_means, &p_vars, 1);
     
     event_lp += indep_Gaussian_LogProb(len, p_segment->p_channels[chan_num]->p_data, p_means, p_vars);
 
@@ -918,6 +953,74 @@ double segment_likelihood_iid(SigModel_t * p_sigmodel, SignalPrior_t * prior, Ch
     free(p_vars);
   }
   return event_lp;
+}
+
+
+
+double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, double env_offset) {
+
+  LogInfo("called dl with %lf %lf %lf", env_height, env_decay, env_offset);
+
+  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
+
+  double backup_env_height = p_sigmodel->sig_prior.env_height;
+  double backup_env_decay = p_sigmodel->sig_prior.env_decay;
+  double backup_env_onset = p_sigmodel->sig_prior.env_onset;
+
+  p_sigmodel->sig_prior.env_height = env_height;
+  p_sigmodel->sig_prior.env_height = env_decay;
+  p_sigmodel->sig_prior.env_height = env_offset;
+
+  double ll = 0;
+
+  for (int i=0; i < p_sigmodel->numsegments; ++i) {
+    
+    ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
+
+    // for each segment, compute a list of arrivals
+    int num_arrivals=0;
+    int num_alloced = 20;
+    Arrival_t ** pp_arrivals = calloc(num_alloced, sizeof(Arrival_t *));
+    CHECK_PTR(pp_arrivals);
+
+    for (int d = 0; d < p_sigmodel->numdetections; ++d) {
+      Detection_t * p_det = p_sigmodel->p_detections + d;
+
+      if (p_det->site_det != p_segment->siteid-1) continue;
+      if (p_det->time_det + MAX_ENVELOPE_LENGTH < p_segment->start_time) continue;
+      if (p_det->time_det > ChannelBundle_EndTime(p_segment)) continue;
+
+      if (++num_arrivals > num_alloced) {
+	num_alloced *= 2;
+	pp_arrivals = realloc(pp_arrivals, num_alloced * sizeof(Arrival_t *));
+	CHECK_PTR(pp_arrivals);
+      }
+
+      Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
+      *(pp_arrivals+num_arrivals-1) = p_arr;
+      p_arr->time = p_det->time_det;
+      p_arr->amp = p_det->amp_det;
+      p_arr->azi = p_det->azi_det;
+      p_arr->slo = p_det->slo_det;
+      p_arr->phase = p_det->phase_det;
+    }
+
+    double seg_ll = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
+    assert(!isnan(seg_ll) && seg_ll > -1*DBL_MAX);
+    ll += seg_ll;
+
+    for(int i=0; i < num_arrivals; ++i) {
+      free(*(pp_arrivals+i));
+    }
+    free(pp_arrivals);
+  }
+
+  p_sigmodel->sig_prior.env_height = backup_env_height;
+  p_sigmodel->sig_prior.env_decay = backup_env_decay;
+  p_sigmodel->sig_prior.env_onset = backup_env_onset;
+
+  printf("returning %lf\n", ll);
+  return ll;
 }
 
 
@@ -954,16 +1057,26 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     /* we compute scores for the background event set, and for an
        augmented event set which includes the specified event. */
+    
+    int num_basic_arrivals, num_augmented_arrivals;
+    Arrival_t ** pp_basic_arrivals;
+    Arrival_t ** pp_augmented_arrivals;
+    arrival_list(p_sigmodel->p_earth, siteid, num_other_events, pp_other_events, &num_basic_arrivals, &pp_basic_arrivals);
+
     const Event_t ** augmented_events = augment_events(num_other_events, pp_other_events, p_event);
+    arrival_list(p_sigmodel->p_earth, siteid, num_other_events+1, augmented_events, &num_augmented_arrivals, &pp_augmented_arrivals);
+
     double event_lp , background_lp;
     if (p_sigmodel->ar_perturbation) {
-      event_lp = segment_likelihood_AR(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
-      background_lp = segment_likelihood_AR(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
+      event_lp = segment_likelihood_AR(p_sigmodel, p_segment, num_augmented_arrivals, (const Arrival_t **)pp_augmented_arrivals);
+      background_lp = segment_likelihood_AR(p_sigmodel, p_segment, num_basic_arrivals, (const Arrival_t **)pp_basic_arrivals);
     } else {
-      event_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events+1, augmented_events);
-      background_lp = segment_likelihood_iid(p_sigmodel, prior, p_segment, num_other_events, pp_other_events);
+      event_lp = segment_likelihood_iid(p_sigmodel, p_segment, num_augmented_arrivals, (const Arrival_t **)pp_augmented_arrivals);
+      background_lp = segment_likelihood_iid(p_sigmodel, p_segment, num_basic_arrivals, (const Arrival_t **)pp_basic_arrivals);
     }
     free(augmented_events);
+    free(pp_basic_arrivals);
+    free(pp_augmented_arrivals);
 
     score += (event_lp - background_lp);
 

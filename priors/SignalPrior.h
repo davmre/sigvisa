@@ -1,5 +1,5 @@
 
-
+#include <Python.h>
 
 
 typedef struct StationNoiseModel_t {
@@ -22,6 +22,8 @@ typedef struct SignalPrior_t
 } SignalPrior_t;
 
 void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites);
+
+double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, double env_offset);
 
 double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events);
 
