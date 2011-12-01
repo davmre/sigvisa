@@ -577,7 +577,7 @@ int slowness_to_iangle(double slowness, int phase, double * iangle) {
   default:
     success = 0;
   }
-  *iangle = asin(c * slowness);
+  *iangle = asin(c * slowness) * RAD2DEG;
   if (isnan(*iangle)) success = 0;
   return success;
 }
