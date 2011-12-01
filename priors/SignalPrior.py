@@ -25,13 +25,15 @@ def learn(filename, earthmodel, traces, events, leb_evlist, detections, arid2num
     f.close()
 
     return sta_noise_means, sta_noise_vars
-#def learn_envelope_params(traces, events, ttimes):
-#    ll = lambda (peak, decay): -1 * log_likelihood_complete(traces, events, ttimes, peak, decay)
-#    xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((5000, 1)), full_output=True)
-#    print "learned params: ", xopt
-#    print "give likelihood ", fopt
-#    self.envelope_peak_coeff = xopt[0]
-#    self.envelope_decay_coeff = xopt[1]
+
+
+def learn_envelope_params(traces, events, ttimes):
+    ll = lambda (peak, decay): -1 * log_likelihood_complete(traces, events, ttimes, peak, decay)
+    xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((5000, 1)), full_output=True)
+    print "learned params: ", xopt
+    print "give likelihood ", fopt
+    self.envelope_peak_coeff = xopt[0]
+    self.envelope_decay_coeff = xopt[1]
     
 
 def expectation_over_noise(fn, traces, events, ttimes):
