@@ -9,8 +9,6 @@
 
 #include "../sigvisa.h"
 
-#define MAX_ENV_LENGTH 100
-
 void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites) {
   
   FILE * fp;
@@ -130,7 +128,7 @@ long time2idx(double t, double start_time, double hz) {
 
 
 
-void arrival_list(EarthModel_t * p_earth, int siteid, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals) {
+void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double max_time, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals) {
   
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
@@ -140,8 +138,13 @@ void arrival_list(EarthModel_t * p_earth, int siteid, int num_events, const Even
   for (int i=0; i < num_events; ++i) {
     const Event_t * p_event = *(pp_events+i);
     for (int j=0; j < MAX_PHASE(numtimedefphases); ++j) {
-      Arrival_t * p_arr = p_event->p_arrivals + siteid*numtimedefphases + j;
-      if (p_arr->amp == 0 || p_arr->time <= 0) continue;
+      Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + j;
+      if (p_arr->amp == 0 || p_arr->time <= 0) {
+	continue;
+      }
+      if (p_arr->time < min_time - MAX_ENVELOPE_LENGTH && p_arr->time > max_time) {
+	continue;
+      }
       *(*ppp_arrivals + (*num_arrivals)++) = p_arr;
     }
   }
@@ -194,7 +197,7 @@ void phase_env_doubleexp(SignalPrior_t * prior,
     end_idx = 1;
   }
 
-  //printf("double-exp height %lf peak_idx %ld end_idx %ld\n", peak_height, peak_idx, end_idx);
+  printf("double-exp height %lf peak_idx %ld end_idx %ld\n", peak_height, peak_idx, end_idx);
 
 
   double component_coeff = 0;
@@ -204,7 +207,7 @@ void phase_env_doubleexp(SignalPrior_t * prior,
     //    LogTrace("iangle conversion failed, setting default 45");
     iangle=45;
   }
-  //  LogTrace("iangle %lf slowness %lf phase %d", iangle, p_arr->slo, phaseid);
+  LogInfo("iangle %lf slowness %lf amp %lf phase %d ", iangle, p_arr->slo, p_arr->amp, phaseid);
   switch (chan_num) {
   case CHAN_BHE:
     component_coeff = SPHERE2X(p_arr->azi, iangle)/SPHERE2Z(p_arr->azi, iangle); break;
@@ -315,7 +318,7 @@ void envelope_means_vars(SignalPrior_t * prior,
       long idx = time2idx(arrtime, start_time, hz);
 
       // skip events which don't arrive during the current time period
-      if (idx < 0 - MAX_ENV_LENGTH * hz || idx >= *p_len) {
+      if (idx < 0 - MAX_ENVELOPE_LENGTH * hz || idx >= *p_len) {
 	//printf("skipping event arrival at time %lf vs start_time %lf idx %ld\n", arrtime, start_time, idx);
 	continue;
       }
@@ -357,6 +360,11 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
 
   double end_time = p_segment->start_time + p_segment->len / p_segment->hz;
 
+
+    int num_arrivals;
+    Arrival_t ** pp_arrivals;
+    arrival_list(p_earth, p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents, pp_events, &num_arrivals, &pp_arrivals);
+    LogInfo("generating signal, numarrivals %d", num_arrivals);
   for (int i=0; i < 3; ++i) {
     
     int chan_num = chan_nums[i];
@@ -365,10 +373,6 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
     p_segment->p_channels[chan_num]->chan = chan_num;
     // printf("tae calling envelope_means_vars(%lf, %lf, %lf, %d, %d, %d)\n", p_segment->hz, p_segment->start_time, end_time, numevents, p_segment->siteid, chan_num);
 
-
-    int num_arrivals;
-    Arrival_t ** pp_arrivals;
-    arrival_list(p_earth, p_segment->siteid, numevents, pp_events, &num_arrivals, &pp_arrivals);
 
     envelope_means_vars(prior, 
 			p_segment->hz, p_segment->start_time, end_time,
@@ -380,7 +384,7 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
 			1);
     assert(p_segment->p_channels[chan_num]->len == p_segment->len);
 
-    //printf("segment siteid is %d\n", p_segment->siteid);
+
 
     if (p_wave_segment != NULL) {
       p_wave_segment->p_channels[chan_num] = alloc_signal(p_wave_segment);
@@ -395,11 +399,13 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
 			  0);
     }
 
-    free(pp_arrivals);
+
 
     //printf("generated signal of length %ld:\n", p_segment->p_channels[chan_num]->len);
     //print_vector(p_segment->p_channels[chan_num]->len, p_segment->p_channels[chan_num]->p_data);
   }
+
+  free(pp_arrivals);
 
 }
 
@@ -1073,10 +1079,10 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
     int num_basic_arrivals, num_augmented_arrivals;
     Arrival_t ** pp_basic_arrivals;
     Arrival_t ** pp_augmented_arrivals;
-    arrival_list(p_sigmodel->p_earth, siteid, num_other_events, pp_other_events, &num_basic_arrivals, &pp_basic_arrivals);
+    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), num_other_events, pp_other_events, &num_basic_arrivals, &pp_basic_arrivals);
 
     const Event_t ** augmented_events = augment_events(num_other_events, pp_other_events, p_event);
-    arrival_list(p_sigmodel->p_earth, siteid, num_other_events+1, augmented_events, &num_augmented_arrivals, &pp_augmented_arrivals);
+    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), num_other_events+1, augmented_events, &num_augmented_arrivals, &pp_augmented_arrivals);
 
     double event_lp , background_lp;
     if (p_sigmodel->ar_perturbation) {
