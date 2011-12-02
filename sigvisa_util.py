@@ -22,6 +22,15 @@ def real_to_fake_det(det):
   return (det[dataset.DET_ARID_COL], det[dataset.DET_SITE_COL], det[dataset.DET_TIME_COL], det[dataset.DET_AMP_COL], det[dataset.DET_AZI_COL], det[dataset.DET_SLO_COL], det[dataset.DET_PHASE_COL])
 
 
+def process_trace(trace, f, opts):
+  new_header = trace.stats.copy()
+
+  new_header["npts_processed"] = len(trace)
+  new_header.update(opts)
+
+  processed_trace = Trace(f(trace), header=new_header)
+  return processed_trace
+
 def window_energies(trace, window_size=1, overlap=0.5):
   """
   Returns a vector giving the signal energy in each of many
@@ -51,7 +60,7 @@ def window_energies(trace, window_size=1, overlap=0.5):
     #print "window ", i, " runs from ", wstart, '-', wstop
     window = data[wstart:wstop]
     windows[i] = np.linalg.norm(window, 2)
-  
+
   return windows
 
 # return the fraction of the timespan of the first segment, which is overlapped by the second
@@ -147,8 +156,9 @@ def print_segments(segments):
     for seg in segments:
         print seg
 
-def load_traces(cursor, stations, start_time, end_time):
+def load_traces(cursor, stations, start_time, end_time, process=None):
     traces = []
+    traces_processed = []
 
     for (idx, sta) in enumerate(stations):
 
@@ -169,6 +179,7 @@ def load_traces(cursor, stations, start_time, end_time):
 
         for segment in segments:
             segment_chans = []
+            segment_chans_processed = []
             for (chan, st, et) in segment:
               print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
               try:
@@ -178,17 +189,24 @@ def load_traces(cursor, stations, start_time, end_time):
                   trace.stats['channel'] = "BHE"
                 if chan == "BH2":
                   trace.stats['channel'] = "BHN"
+
                 trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
+
+                if process is not None:
+                  trace_processed = process(trace)
+                  segment_chans_processed.append(trace_processed)
                 segment_chans.append(trace)
                 print " ... successfully loaded."
               except (utils.waveform.MissingWaveform, IOError):
                 print " ... not found, skipping."
                 continue
  
+            if process is not None:
+              traces_processed.append(segment_chans_processed)
             traces.append(segment_chans)
 
    # print "fetched ", len(traces), " segments."
-    return traces
+    return traces, traces_processed
 
 def max_over_channels(channel_bundle):
     max_data = []
@@ -373,22 +391,6 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
 
     return detections
 
-def process_traces(traces, f, opts):
-    # process each trace to yield a representation suitable for inference.
-    # currently, that means computing energies within overlapping windows
-    processed_traces = []
-    for sta_traces in traces:
-        processed_traces_sta = []
-        for trace in sta_traces:
-            processed_data = f(trace)
-            new_header = trace.stats.copy()
-            new_header.update(opts)
-            new_header["npts_processed"] = len(processed_data)
-            processed_trace = Trace(processed_data, header=new_header)
-            processed_traces_sta.append(processed_trace)    
-        processed_traces.append(processed_traces_sta)
-    return processed_traces
-
 def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=None):
     if stalist is None:
         cursor.execute("select sta, id from static_siteid where statype='ss'")
@@ -402,11 +404,11 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
             if a is not None:
                 stations.append(np.array(a)[0])
         print "loading traces from stations", stations
-
-    traces = load_traces(cursor, stations, start_time, end_time)
+    opts = dict(window_size=window_size, overlap=overlap)  
     f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
-    opts = dict(window_size=window_size, overlap=overlap)
-    energies = process_traces(traces, f, opts)
+    pr = lambda trace: process_trace(trace, f=f, opts=opts)
+    traces, energies = load_traces(cursor, stations, start_time, end_time, process=pr)
+
     return energies, traces
 
 def print_trace(trace):
