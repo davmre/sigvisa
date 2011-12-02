@@ -83,8 +83,8 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
 	}
     
       LogTrace("%d: loaded %d %d %lf %lf", i, siteid, chan_num, mean, var);
-      (prior->p_stations + siteid)->chan_means[chan_num] = mean;
-      (prior->p_stations + siteid)->chan_vars[chan_num] = var;
+      (prior->p_stations + siteid-1)->chan_means[chan_num] = mean;
+      (prior->p_stations + siteid-1)->chan_vars[chan_num] = var;
     }
   }
 
@@ -296,8 +296,8 @@ void envelope_means_vars(SignalPrior_t * prior,
     }
   }
 
-  double noise_mean = (prior->p_stations + siteid)->chan_means[chan_num];
-  double noise_var = (prior->p_stations + siteid)->chan_vars[chan_num];
+  double noise_mean = (prior->p_stations + siteid-1)->chan_means[chan_num];
+  double noise_var = (prior->p_stations + siteid-1)->chan_vars[chan_num];
   for (int i=0; i < *p_len; ++i) {
     p_means[i] = noise_mean;
     if (pp_vars != NULL) p_vars[i] = noise_var;
@@ -767,6 +767,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   SignalPrior_t * prior = &p_sigmodel->sig_prior;
 
   double ll = 0;
+  double iidll = 0;
 
   int n = prior->ar_n;
 
@@ -855,7 +856,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       env_bhn += a->p_envelope[a->idx] * a->bhn_coeff;
       env_bhe += a->p_envelope[a->idx] * a->bhe_coeff;
       a->idx++;
-      //LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff);
+      LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff);
     }
     
 
@@ -872,27 +873,28 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
     if (p_segment->p_channels[CHAN_BHZ] != NULL) {
 	 obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_data[t] - env_bhz;
 	 obs_perturb_mean += obs_bhz;
-	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHZ];;
+	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHZ];
+	 
 	 obs_perturb_n++;
-	 //LogTrace("chan bhz env %lf actual %lf diff %lf", env_bhz, p_segment->p_channels[CHAN_BHZ]->p_data[t], obs_bhz);
+	 LogTrace("chan bhz env %lf actual %lf diff %lf", env_bhz, p_segment->p_channels[CHAN_BHZ]->p_data[t], obs_bhz);
     }
     if (p_segment->p_channels[CHAN_BHE] != NULL) {
 	 obs_bhe = p_segment->p_channels[CHAN_BHE]->p_data[t] - env_bhe;
 	 obs_perturb_mean += obs_bhe;
-	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHE];;
+	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHE];
 	 obs_perturb_n++;
-	 //LogTrace("chan bhe env %lf actual %lf diff %lf", env_bhe, p_segment->p_channels[CHAN_BHE]->p_data[t], obs_bhe);
+	 LogTrace("chan bhe env %lf actual %lf diff %lf", env_bhe, p_segment->p_channels[CHAN_BHE]->p_data[t], obs_bhe);
     }
     if (p_segment->p_channels[CHAN_BHN] != NULL) {
 	 obs_bhn = p_segment->p_channels[CHAN_BHN]->p_data[t] - env_bhn;
 	 obs_perturb_mean += obs_bhn;
-	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHN];;
+	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHN];
 	 obs_perturb_n++;
-	 //LogTrace("chan bhn env %lf actual %lf diff %lf", env_bhn, p_segment->p_channels[CHAN_BHN]->p_data[t], obs_bhn);
+	 LogTrace("chan bhn env %lf actual %lf diff %lf", env_bhn, p_segment->p_channels[CHAN_BHN]->p_data[t], obs_bhn);
     }
     obs_perturb_mean /= obs_perturb_n;
     obs_perturb_var /= obs_perturb_n*obs_perturb_n;
-    //LogTrace(" perturb mean %lf var %lf n %d", obs_perturb_mean, obs_perturb_var, obs_perturb_n);
+    LogTrace(" perturb mean %lf var %lf n %d", obs_perturb_mean, obs_perturb_var, obs_perturb_n);
     
     double residual = obs_perturb_mean;
     double rvar = obs_perturb_var;
@@ -901,9 +903,11 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       AR_update(p_means, p_covars, p_observation, obs_perturb_mean, obs_perturb_var, n, &residual, &rvar);
     } 
     double thisll = 0.5 * log(2*PI * rvar) + 0.5 * residual*residual / rvar;
+    double thisiidll =  0.5 * log(2*PI * obs_perturb_var) + 0.5 * obs_perturb_mean*obs_perturb_mean / obs_perturb_var;
     assert(!isnan(thisll) && thisll > -1*DBL_MAX);
     ll -= thisll;
-    //LogTrace(" ll minus %lf is %lf (residual %lf var %lf)", thisll, ll, residual, rvar);
+    iidll -= thisiidll;
+    LogTrace(" ll minus %lf is %lf (residual %lf var %lf)", thisll, ll, residual, rvar);
 
   }
 
@@ -916,6 +920,8 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   if (p_covars != NULL) gsl_matrix_free(p_covars);
   if (p_transition != NULL) gsl_matrix_free(p_transition);
   if (p_observation != NULL) gsl_vector_free(p_observation);
+
+  LogTrace ("returning ar ll %lf vs iid ll %lf", ll, iidll);
 
   return ll;
 }
@@ -959,7 +965,7 @@ double segment_likelihood_iid(SigModel_t * p_sigmodel, ChannelBundle_t * p_segme
 
 double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, double env_offset) {
 
-  LogInfo("called dl with %lf %lf %lf", env_height, env_decay, env_offset);
+  LogDebug("called dl with %lf %lf %lf", env_height, env_decay, env_offset);
 
   SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
 
@@ -1005,8 +1011,12 @@ double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, 
       p_arr->phase = p_det->phase_det;
     }
 
-    double seg_ll = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
+    double seg_ll = segment_likelihood_AR(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
+    double seg_ll_iid = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
     assert(!isnan(seg_ll) && seg_ll > -1*DBL_MAX);
+
+    LogTrace("segment site %d start %lf contributed ll %lf iidll %lf from %d arrivals", p_segment->siteid, p_segment->start_time, seg_ll, seg_ll_iid,  num_arrivals);
+
     ll += seg_ll;
 
     for(int i=0; i < num_arrivals; ++i) {
