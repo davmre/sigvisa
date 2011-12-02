@@ -80,8 +80,7 @@ def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
   return sigmodel
 
 
-def learn_signal(param_dirname, earthmodel, site_up, sites, phasenames, phasetimedef):
-  hours=1
+def learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, phasetimedef):
   print "learning signal parameters from %d hour of data" % (hours)
 
   MAX_TRAVEL_TIME = 2000
@@ -105,7 +104,7 @@ def learn_signal(param_dirname, earthmodel, site_up, sites, phasenames, phasetim
   sigmodel = load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
                  sites, phasenames, phasetimedef)
   
-  energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time=1237680000, end_time=1237683600, window_size=1, overlap=0.5)
+  energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5)
 
   sigmodel.set_waves(traces)
   sigmodel.set_signals(energies)
@@ -130,6 +129,8 @@ def main(param_dirname):
   parser.add_option("-x", "--text", dest="gui", default=True,
                     action = "store_false",
                     help = "text only output (False)")
+  parser.add_option("--hours", dest="hours", type=int, default=1,
+                    help = "hours of waveform data to use for sigvisa training (1)")
   parser.add_option("-s", "--silent", dest="verbose", default=True,
                     action = "store_false",
                     help = "silent, i.e. no output (False)")
@@ -147,7 +148,7 @@ def main(param_dirname):
     hours = None
   
   if options.sigvisa:
-    hours = 1
+    hours = options.hours
 
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
@@ -159,7 +160,7 @@ def main(param_dirname):
                                        leb_evlist)
 
   if options.sigvisa:
-    learn_signal(param_dirname, earthmodel, site_up, sites, phasenames, phasetimedef)
+    learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, phasetimedef)
     return
 
   priors.NumSecDetPrior.learn(os.path.join(param_dirname, "NumSecDetPrior.txt"),
