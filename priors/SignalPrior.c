@@ -207,11 +207,11 @@ void phase_env_doubleexp(SignalPrior_t * prior,
   //  LogTrace("iangle %lf slowness %lf phase %d", iangle, p_arr->slo, phaseid);
   switch (chan_num) {
   case CHAN_BHE:
-    component_coeff = SPHERE2X(p_arr->azi, iangle); break;
+    component_coeff = SPHERE2X(p_arr->azi, iangle)/SPHERE2Z(p_arr->azi, iangle); break;
   case CHAN_BHN:
-    component_coeff = SPHERE2Y(p_arr->azi, iangle); break;
+    component_coeff = SPHERE2Y(p_arr->azi, iangle)/SPHERE2Z(p_arr->azi, iangle); break;
   case CHAN_BHZ:
-    component_coeff = SPHERE2Z(p_arr->azi, iangle); break;
+    component_coeff = 1; break;
   }
   
   //  printf("generating event signal with arrival azi %lf and slo %lf\n", p_arr->azi, p_arr->slo);
@@ -793,9 +793,10 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
       iangle = 45;
     }
-    w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle));
-    w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle));
-    w->bhz_coeff = fabs(SPHERE2Z(p_arr->azi, iangle));
+    
+    w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
+    w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
+    w->bhz_coeff = 1;
 
     st_arrivals = insert_st(st_arrivals, w);
     et_arrivals = insert_et(et_arrivals, w);
@@ -852,11 +853,12 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
     double env_bhe = prior->p_stations[siteid-1].chan_means[CHAN_BHE];
     double env_bhn = prior->p_stations[siteid-1].chan_means[CHAN_BHN];
     for(ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
+      if (a->idx >= a->len) continue;
       env_bhz += a->p_envelope[a->idx] * a->bhz_coeff;
       env_bhn += a->p_envelope[a->idx] * a->bhn_coeff;
       env_bhe += a->p_envelope[a->idx] * a->bhe_coeff;
       a->idx++;
-      LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff);
+      LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
     }
     
 

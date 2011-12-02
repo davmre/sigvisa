@@ -29,12 +29,12 @@ def learn(filename, sigmodel, earthmodel, traces, events, leb_evlist, detections
 
 
 def learn_envelope_params(sigmodel):
-    ll = lambda (height, decay, onset): -1 * sigmodel.detection_likelihood(height, decay, onset)
+    ll = lambda (decay, onset): -1 * sigmodel.detection_likelihood(1, decay, onset)
 
     print "starting the optimizer"
     #xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((1.5, .08, .4)), full_output=True)
 
-    ranges = ((0.05, 3), (0.01, 0.5), (0.05, 1))
+    ranges = ((0.01, 0.5), (0.05, 5))
     xopt  = scipy.optimize.brute(ll, ranges, Ns=15, full_output=0)
     print "learned params: ", xopt
     print "give likelihood ", ll(xopt)
