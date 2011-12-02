@@ -126,8 +126,8 @@ EarthModel_t * p_earth;
 					    ttime, siteid-1, phaseid,
 					    arr->amp);
    if (isnan(arrampsc) || arrampsc < -DBL_MAX) {
-     printf("nan arr-amp mb %.2lf, dep %.2lf ttime %.2lf siteid %d phaseid %d"
-	    " amp %.2lf\n", p_event->evmag, p_event->evdepth,
+     LogTrace("nan arr-amp mb %.2lf, dep %.2lf ttime %.2lf siteid %d phaseid %d"
+	    " amp %.2lf", p_event->evmag, p_event->evdepth,
 	    ttime, siteid, phaseid, arr->amp);
      //exit(1);
    }
