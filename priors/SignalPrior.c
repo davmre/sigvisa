@@ -6,6 +6,8 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_linalg.h>
 
 #include "../sigvisa.h"
 
@@ -364,7 +366,7 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
     int num_arrivals;
     Arrival_t ** pp_arrivals;
     arrival_list(p_earth, p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents, pp_events, &num_arrivals, &pp_arrivals);
-    LogInfo("generating signal, numarrivals %d", num_arrivals);
+    //LogTrace("generating signal, numarrivals %d", num_arrivals);
   for (int i=0; i < 3; ++i) {
     
     int chan_num = chan_nums[i];
@@ -443,195 +445,6 @@ const Event_t ** augment_events(int numevents, const Event_t ** events, const Ev
 }
 
 
-int AR_add_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n) {
-
-  int arridx = 0;
-
-  if (*pp_means == NULL || *pp_covars == NULL) {
-
-    *pp_means = gsl_vector_alloc(n);
-    gsl_vector_set_zero(*pp_means);
-
-    *pp_covars = gsl_matrix_alloc(n,n);
-    gsl_matrix_set_identity(*pp_covars);
-
-  } else {
-    
-    int l = (*pp_means)->size;
-    arridx = l/n;
-    gsl_vector * new_means = gsl_vector_alloc(l + n);
-    gsl_vector_set_zero(new_means);
-    for(int i=0; i < l; ++i) {
-      gsl_vector_set(new_means, i,  gsl_vector_get(*pp_means, i));
-    }
-    gsl_vector_free(*pp_means);
-    *pp_means = new_means;
-
-    gsl_matrix * new_covars = gsl_matrix_alloc(l + n, l + n);
-    gsl_matrix_set_identity(new_covars);
-    for (int i=0; i < l; ++i) {
-      for(int j=0; j < l; ++j) {
-	gsl_matrix_set(new_covars, i, j, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    gsl_matrix_free(*pp_covars);
-    *pp_covars = new_covars;
-  }
-  return arridx;
-}
-
-void AR_remove_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n, int arridx) {
-  if (*pp_means == NULL || *pp_covars == NULL) {
-    return;
-  } 
-
-  int l = (*pp_means)->size;
-  if (l == n) {
-    gsl_vector_free(*pp_means);
-    gsl_matrix_free(*pp_covars);
-    *pp_means = NULL;
-    *pp_covars = NULL;
-  } else {
-    gsl_vector * new_means = gsl_vector_alloc(l - n);
-    for(int i=0; i < arridx*n; ++i) {
-      gsl_vector_set(new_means, i,  gsl_vector_get(*pp_means, i));
-    }
-    for(int i=(arridx+1)*n; i < l; ++i) {
-      gsl_vector_set(new_means, i-n,  gsl_vector_get(*pp_means, i));
-    }
-    gsl_vector_free(*pp_means);
-    *pp_means = new_means;
-
-    gsl_matrix * new_covars = gsl_matrix_alloc(l - n, l - n);
-
-    for (int i=0; i < arridx*n; ++i) {
-      for(int j=0; j < arridx*n; ++j) {
-	gsl_matrix_set(new_covars, i, j, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    // move everything up by n rows
-    for (int i=(arridx+1)*n; i < l; ++i) {
-      for(int j=0; j < (arridx+1)*n; ++j) {
-	gsl_matrix_set(new_covars, i-n, j, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    // move everything in by n columns
-    for (int i=0; i < (arridx+1)*n; ++i) {
-      for(int j=(arridx+1)*n; j < l; ++j) {
-	gsl_matrix_set(new_covars, i, j-n, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    // move everything in by n columns
-    for (int i=i=(arridx+1)*n; i < l; ++i) {
-      for(int j=(arridx+1)*n; j < l; ++j) {
-	gsl_matrix_set(new_covars, i-n, j-n, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    gsl_matrix_free(*pp_covars);
-    *pp_covars = new_covars;
-
-  }
-}
-
-void AR_transitions(int n, double * ar_coeffs, int n_arrs, 
-		    gsl_matrix ** pp_transition, 
-		    gsl_vector ** pp_obs) {
-  if (*pp_transition != NULL) {
-    gsl_matrix_free(*pp_transition);
-  } 
-  if (*pp_obs != NULL) {
-    gsl_vector_free(*pp_obs);
-  }
-
-  if (n_arrs == 0) {
-    *pp_transition = NULL;
-    *pp_obs = NULL;
-    return;
-  } 
-
-  *pp_transition = gsl_matrix_alloc(n*n_arrs, n*n_arrs);
-  *pp_obs = gsl_vector_alloc(n*n_arrs);
-  gsl_matrix_set_zero(*pp_transition);
-  gsl_vector_set_zero(*pp_obs);
-  for (int arr=0; arr < n_arrs; ++arr) {
-    gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n, ar_coeffs[0]);
-    for (int i=1; i < n; ++i) {
-      gsl_matrix_set(*pp_transition, arr*n+i-1, arr*n+i, 1);
-      gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n+i, ar_coeffs[i]);
-    }
-    gsl_vector_set(*pp_obs, arr*n+n-1, 1);
-  }
-
-}
-
-void AR_predict(gsl_vector * p_means, gsl_matrix * p_covars, gsl_matrix * p_transition, double noise_sigma2, int n) {
-  int num_arrs = p_means->size/n;
-  
-  gsl_vector * tmp = gsl_vector_alloc(p_means->size);
-  gsl_blas_dgemv (CblasNoTrans, 1, p_transition, p_means, 0, tmp);
-  gsl_vector_memcpy(p_means, tmp);
-  gsl_vector_free(tmp);
-
-  gsl_matrix * mtmp = gsl_matrix_alloc(p_covars->size1, p_covars->size2);
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, mtmp);  
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_transition, mtmp, 0, p_covars);
-  
-  gsl_matrix_free(mtmp);
-  for(int i=0; i < num_arrs; ++i) {
-    int idx = (i+1)*n-1;
-    gsl_matrix_set(p_covars, idx, idx, gsl_matrix_get(p_covars, idx, idx) + noise_sigma2);
-  }
-}
-
-
-void AR_update(gsl_vector * p_means, gsl_matrix * p_covars, 
-	       gsl_vector * p_obs, double obs_perturb_mean, 
-		 double obs_perturb_var, int n,
-		 double *residual, double *residual_var) {
-
-  double pred_obs_perturb;
-  gsl_blas_ddot (p_obs, p_means, &pred_obs_perturb);
-  //LogTrace("predicted perturb %lf versus obs %lf",  pred_obs_perturb, obs_perturb_mean);
-  *residual = obs_perturb_mean - pred_obs_perturb;
-  
-  gsl_vector * k = gsl_vector_alloc(p_means->size);
-  //  printf("obs: \n");
-  //gsl_vector_fprintf(stdout, p_obs, "%lf");
-  //printf("covars: \n");
-  //gsl_matrix_fprintf(stdout, p_covars, "%lf");
-  gsl_blas_dgemv (CblasNoTrans, 1, p_covars, p_obs, 0, k);
-  //printf("k: \n");
-  //gsl_vector_fprintf(stdout, k, "%lf");
-  gsl_blas_ddot (p_obs, k, residual_var);
-  //printf("r %lf, rv %lf\n", *residual, *residual_var);
-
-  *residual_var += obs_perturb_var;
-  gsl_vector_scale (k, 1/(*residual_var));
-  //printf("newk: \n");
-  //gsl_vector_fprintf(stdout, k, "%lf");
-
-  gsl_blas_daxpy (*residual, k, p_means);
-
-  gsl_matrix * km = gsl_matrix_alloc(p_means->size, 1);
-  gsl_matrix_set_col (km, 0, k);
-
-  gsl_matrix * hm = gsl_matrix_alloc(1, p_means->size);
-  gsl_matrix_set_row (hm, 0, p_obs);
-
-  gsl_matrix * I = gsl_matrix_alloc(p_means->size, p_means->size);
-  gsl_matrix_set_identity (I);
-
-  gsl_matrix * new_covar = gsl_matrix_alloc(p_means->size, p_means->size);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, km, hm, 1, I);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, I, p_covars, 0, new_covar);
-  gsl_matrix_memcpy(p_covars, new_covar);
-
-  gsl_vector_free(k);
-  gsl_matrix_free(km);
-  gsl_matrix_free(hm);
-  gsl_matrix_free(I);
-  gsl_matrix_free(new_covar);
-}
 
 
 typedef struct ArrivalWaveform {
@@ -760,6 +573,224 @@ void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, dou
   *pp_envelope = means;
 }
 
+int AR_add_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n) {
+
+  int arridx = 0;
+
+  if (*pp_means == NULL || *pp_covars == NULL) {
+
+    *pp_means = gsl_vector_alloc(n);
+    gsl_vector_set_zero(*pp_means);
+
+    *pp_covars = gsl_matrix_alloc(n,n);
+    gsl_matrix_set_identity(*pp_covars);
+
+  } else {
+    
+    int l = (*pp_means)->size;
+    arridx = l/n;
+    gsl_vector * new_means = gsl_vector_alloc(l + n);
+    gsl_vector_set_zero(new_means);
+    for(int i=0; i < l; ++i) {
+      gsl_vector_set(new_means, i,  gsl_vector_get(*pp_means, i));
+    }
+    gsl_vector_free(*pp_means);
+    *pp_means = new_means;
+
+    gsl_matrix * new_covars = gsl_matrix_alloc(l + n, l + n);
+    gsl_matrix_set_identity(new_covars);
+    for (int i=0; i < l; ++i) {
+      for(int j=0; j < l; ++j) {
+	gsl_matrix_set(new_covars, i, j, gsl_matrix_get(*pp_covars, i, j));
+      }
+    }
+    gsl_matrix_free(*pp_covars);
+    *pp_covars = new_covars;
+  }
+  return arridx;
+}
+
+void AR_remove_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n, int arridx) {
+  if (*pp_means == NULL || *pp_covars == NULL) {
+    return;
+  } 
+
+  int l = (*pp_means)->size;
+  if (l == n) {
+    gsl_vector_free(*pp_means);
+    gsl_matrix_free(*pp_covars);
+    *pp_means = NULL;
+    *pp_covars = NULL;
+  } else {
+    gsl_vector * new_means = gsl_vector_alloc(l - n);
+    for(int i=0; i < arridx*n; ++i) {
+      gsl_vector_set(new_means, i,  gsl_vector_get(*pp_means, i));
+    }
+    for(int i=(arridx+1)*n; i < l; ++i) {
+      gsl_vector_set(new_means, i-n,  gsl_vector_get(*pp_means, i));
+    }
+    gsl_vector_free(*pp_means);
+    *pp_means = new_means;
+
+    gsl_matrix * new_covars = gsl_matrix_alloc(l - n, l - n);
+
+    for (int i=0; i < arridx*n; ++i) {
+      for(int j=0; j < arridx*n; ++j) {
+	gsl_matrix_set(new_covars, i, j, gsl_matrix_get(*pp_covars, i, j));
+      }
+    }
+    // move everything up by n rows
+    for (int i=(arridx+1)*n; i < l; ++i) {
+      for(int j=0; j < (arridx+1)*n; ++j) {
+	gsl_matrix_set(new_covars, i-n, j, gsl_matrix_get(*pp_covars, i, j));
+      }
+    }
+    // move everything in by n columns
+    for (int i=0; i < (arridx+1)*n; ++i) {
+      for(int j=(arridx+1)*n; j < l; ++j) {
+	gsl_matrix_set(new_covars, i, j-n, gsl_matrix_get(*pp_covars, i, j));
+      }
+    }
+    // move everything in by n columns
+    for (int i=i=(arridx+1)*n; i < l; ++i) {
+      for(int j=(arridx+1)*n; j < l; ++j) {
+	gsl_matrix_set(new_covars, i-n, j-n, gsl_matrix_get(*pp_covars, i, j));
+      }
+    }
+    gsl_matrix_free(*pp_covars);
+    *pp_covars = new_covars;
+
+  }
+}
+
+void AR_transitions(int n, int k, double * ar_coeffs, 
+		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
+		    ChannelBundle_t * p_segment,
+		    gsl_matrix ** pp_transition, 
+		    gsl_matrix ** pp_obs) {
+  if (*pp_transition != NULL) {
+    gsl_matrix_free(*pp_transition);
+  } 
+  if (*pp_obs != NULL) {
+    gsl_matrix_free(*pp_obs);
+  }
+
+  if (n_arrs == 0) {
+    *pp_transition = NULL;
+    *pp_obs = NULL;
+    return;
+  } 
+
+  *pp_transition = gsl_matrix_alloc(n*n_arrs, n*n_arrs);
+  *pp_obs = gsl_matrix_alloc(k, n*n_arrs);
+  gsl_matrix_set_zero(*pp_transition);
+  gsl_matrix_set_zero(*pp_obs);
+  for (int arr=0; arr < n_arrs; ++arr) {
+    gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n, ar_coeffs[0]);
+    for (int i=1; i < n; ++i) {
+      gsl_matrix_set(*pp_transition, arr*n+i-1, arr*n+i, 1);
+      gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n+i, ar_coeffs[i]);
+    }
+
+    int curr_chan=0;
+    for (int i=0; i < NUM_CHANS; ++i) {
+      if (p_segment->p_channels[i] != NULL) {
+	switch (i) {
+	case CHAN_BHZ:
+	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, active_arrivals->bhz_coeff); 
+	  break;
+	case CHAN_BHN:
+	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, active_arrivals->bhn_coeff); 
+	  break;
+	case CHAN_BHE:
+	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, active_arrivals->bhe_coeff); 
+	  break;
+	}
+	curr_chan++;
+      }
+    }
+
+    active_arrivals=active_arrivals->next_active;
+  }
+
+}
+
+void AR_predict(gsl_vector * p_means, gsl_matrix * p_covars, gsl_matrix * p_transition, double noise_sigma2, int n) {
+  int num_arrs = p_means->size/n;
+  
+  gsl_vector * tmp = gsl_vector_alloc(p_means->size);
+  gsl_blas_dgemv (CblasNoTrans, 1, p_transition, p_means, 0, tmp);
+  gsl_vector_memcpy(p_means, tmp);
+  gsl_vector_free(tmp);
+
+  gsl_matrix * mtmp = gsl_matrix_alloc(p_covars->size1, p_covars->size2);
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, mtmp);  
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_transition, mtmp, 0, p_covars);
+  
+  gsl_matrix_free(mtmp);
+  for(int i=0; i < num_arrs; ++i) {
+    int idx = (i+1)*n-1;
+    gsl_matrix_set(p_covars, idx, idx, gsl_matrix_get(p_covars, idx, idx) + noise_sigma2);
+  }
+}
+
+double matrix_inv_det(gsl_matrix * A, gsl_matrix * invA) {
+  gsl_matrix * LU = gsl_matrix_alloc(A->size1,A->size2);
+  gsl_permutation *p = gsl_permutation_alloc(A->size1);
+  int signum;
+  gsl_matrix_memcpy(LU, A);
+  gsl_linalg_LU_decomp(LU, p, &signum);
+  gsl_linalg_LU_invert(LU, p, invA);
+
+  double det = gsl_linalg_LU_det (LU, signum);
+
+  gsl_matrix_free(LU);
+  gsl_permutation_free(p);
+  return det;
+}
+
+void AR_update(gsl_vector * p_means, gsl_matrix * p_covars, 
+	       gsl_matrix * p_obs, gsl_vector * obs_perturb, 
+	       gsl_matrix * obs_covar, int n, int k, 
+	       gsl_vector * y, gsl_matrix * S) {
+
+  gsl_blas_dgemv (CblasNoTrans, 1, p_obs, p_means, 0, y);
+  //LogTrace("predicted perturb %lf versus obs %lf",  pred_obs_perturb, obs_perturb_mean);
+  gsl_vector_sub(y, obs_perturb);
+  gsl_vector_scale(y, -1);
+
+
+  gsl_matrix * Sinv = gsl_matrix_alloc(k,k);
+  gsl_matrix * PHt = gsl_matrix_alloc(p_means->size, k);
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_obs, 0, PHt);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_obs, PHt, 0, S);
+  gsl_matrix_add (S, obs_covar);
+  matrix_inv_det(S, Sinv);
+
+  gsl_matrix * K = gsl_matrix_alloc(p_means->size, k);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, PHt, Sinv, 0, K);
+
+  gsl_vector *mean_update = gsl_vector_alloc(p_means->size);
+  gsl_blas_dgemv(CblasNoTrans, 1, K, y, 0, mean_update);
+  gsl_vector_add(p_means, mean_update);
+
+  gsl_matrix * I = gsl_matrix_alloc(p_means->size, p_means->size);
+  gsl_matrix_set_identity (I);
+
+  gsl_matrix * new_covar = gsl_matrix_alloc(p_means->size, p_means->size);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, K, p_obs, 1, I);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, I, p_covars, 0, new_covar);
+  gsl_matrix_memcpy(p_covars, new_covar);
+
+  gsl_matrix_free(Sinv);
+  gsl_matrix_free(PHt);
+  gsl_matrix_free(K);
+  gsl_vector_free(mean_update);
+  gsl_matrix_free(I);
+  gsl_matrix_free(new_covar);
+}
+
+
 /*
   Return the likelihood of the given signal segment (three channels at
   some station over some time period), under the envelope + AR(n)
@@ -780,6 +811,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   ArrivalWaveform_t * st_arrivals = NULL;
   ArrivalWaveform_t * et_arrivals = NULL;
 
+  /*
   Signal_t filtered_waveform;
   filtered_waveform.p_data = calloc(p_segment->len, sizeof(double));
   filtered_waveform.len = p_segment->len;
@@ -805,7 +837,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   noise.hz = p_segment->hz;
   noise.siteid = p_segment->siteid;
   noise.py_array=NULL;
-  noise.chan=CHAN_BHZ;
+  noise.chan=CHAN_BHZ;*/
 
   /* populate two linked lists, storing waveform info sorted by
      start_time and end_time respectively */
@@ -840,12 +872,32 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   gsl_vector * p_means = NULL;
   gsl_matrix * p_covars = NULL;
   gsl_matrix * p_transition = NULL;
-  gsl_vector * p_observation = NULL;
+  gsl_matrix * p_observation = NULL;
 
   ArrivalWaveform_t * starting_next = st_arrivals;
   ArrivalWaveform_t * ending_next = et_arrivals;
   ArrivalWaveform_t * active_arrivals = NULL;
   int n_active = 0;
+
+  // k = number of channels we will be observing
+  int k=0;
+  for(int i=0; i < NUM_CHANS; ++i) {
+    if (p_segment->p_channels[i] != NULL) {
+      k++;
+    }
+  }
+  gsl_vector * obs_perturb = gsl_vector_alloc(k);
+  gsl_matrix * obs_covar = gsl_matrix_alloc(k,k);
+  gsl_matrix_set_identity(obs_covar);
+  for(int i=0; i < NUM_CHANS; ++i) {
+    if (p_segment->p_channels[i] != NULL) {
+      gsl_matrix_set(obs_covar, i,i, prior->p_stations[siteid-1].chan_vars[i]);
+    }
+  }
+  gsl_vector * residuals = gsl_vector_alloc(k);
+  gsl_vector * residuals_tmp = gsl_vector_alloc(k);
+  gsl_matrix * residual_covars = gsl_matrix_alloc(k,k);
+  gsl_matrix * residual_covars_inv = gsl_matrix_alloc(k,k);
 
   for (int t = 0; t < p_segment->len; ++t) {
     double time = p_segment->start_time + t/p_segment->hz;
@@ -855,7 +907,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       //LogTrace(" activating arrivalwaveform w/ st %lf at time %lf t %d", starting_next->start_time, time, t);
       active_arrivals = append_active(active_arrivals, starting_next);
       n_active++;
-      AR_transitions(n, prior->p_ar_coeffs, n_active, 
+      AR_transitions(n, k, prior->p_ar_coeffs, n_active, active_arrivals, p_segment, 
 		     &p_transition, &p_observation);
       starting_next->active_id = AR_add_arrival(&p_means, &p_covars, n);
       starting_next = starting_next->next_start;
@@ -866,7 +918,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       //LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", ending_next->end_time, time);
       active_arrivals = remove_active(active_arrivals, ending_next);
       n_active--;
-      AR_transitions(n, prior->p_ar_coeffs, n_active, 
+      AR_transitions(n, k, prior->p_ar_coeffs, n_active, active_arrivals, p_segment,
 		     &p_transition, &p_observation);
       AR_remove_arrival(&p_means, &p_covars, n, ending_next->active_id);
       for (ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
@@ -893,67 +945,45 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       a->idx++;
       LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
     }
-    
 
-    /* here the obs_bhe, etc. are indep observations of the
-       perturbations from the predicted envelope. Our model says that
-       each observation is sampled indep from a gaussian around the
-       true perturbation, with variance given by the channel noise
-       model. We combine them into a single observation, given by
-       their mean, with correspondingly lower variance. */
     double obs_bhz, obs_bhe, obs_bhn;
-    double obs_perturb_mean = 0;
-    double obs_perturb_var = 0;
     int obs_perturb_n = 0;
     if (p_segment->p_channels[CHAN_BHZ] != NULL) {
 	 obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_data[t] - env_bhz;
-	 obs_perturb_mean += obs_bhz;
-	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHZ];
-	 
-	 obs_perturb_n++;
-	 LogTrace("chan bhz env %lf actual %lf diff %lf", env_bhz, p_segment->p_channels[CHAN_BHZ]->p_data[t], obs_bhz);
+	 gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhz);
     }
     if (p_segment->p_channels[CHAN_BHE] != NULL) {
 	 obs_bhe = p_segment->p_channels[CHAN_BHE]->p_data[t] - env_bhe;
-	 obs_perturb_mean += obs_bhe;
-	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHE];
-	 obs_perturb_n++;
-	 LogTrace("chan bhe env %lf actual %lf diff %lf", env_bhe, p_segment->p_channels[CHAN_BHE]->p_data[t], obs_bhe);
+	 gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhe);
     }
     if (p_segment->p_channels[CHAN_BHN] != NULL) {
 	 obs_bhn = p_segment->p_channels[CHAN_BHN]->p_data[t] - env_bhn;
-	 obs_perturb_mean += obs_bhn;
-	 obs_perturb_var += prior->p_stations[siteid-1].chan_vars[CHAN_BHN];
-	 obs_perturb_n++;
-	 LogTrace("chan bhn env %lf actual %lf diff %lf", env_bhn, p_segment->p_channels[CHAN_BHN]->p_data[t], obs_bhn);
+	 gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhn);
     }
-    obs_perturb_mean /= obs_perturb_n;
-    obs_perturb_var /= obs_perturb_n*obs_perturb_n;
-    LogTrace(" perturb mean %lf var %lf n %d", obs_perturb_mean, obs_perturb_var, obs_perturb_n);
-    
-    double residual = obs_perturb_mean;
-    double rvar = obs_perturb_var;
+
+
     if (n_active > 0) {
       AR_predict(p_means, p_covars, p_transition, prior->ar_noise_sigma2, n);
-      AR_update(p_means, p_covars, p_observation, obs_perturb_mean, obs_perturb_var, n, &residual, &rvar);
-    } 
-    double thisll = 0.5 * log(2*PI * rvar) + 0.5 * residual*residual / rvar;
-    double thisiidll =  0.5 * log(2*PI * obs_perturb_var) + 0.5 * obs_perturb_mean*obs_perturb_mean / obs_perturb_var;
+      AR_update(p_means, p_covars, p_observation, obs_perturb, obs_covar, n, k, residuals, residual_covars);
+    LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
+    } else {
+      gsl_vector_memcpy(residuals, obs_perturb);
+      gsl_matrix_memcpy(residual_covars, obs_covar);
+    }
+
+    double det = matrix_inv_det(residual_covars, residual_covars_inv);
+    gsl_blas_dgemv(CblasNoTrans, 1, residual_covars_inv, residuals, 0, residuals_tmp);
+    double ex;
+
+    gsl_blas_ddot(residuals, residuals_tmp, &ex);
+    double thisll = 0.5 * k*log(2*PI) + .5 * log(det) + 0.5 * ex;
     assert(!isnan(thisll) && thisll > -1*DBL_MAX);
     ll -= thisll;
-    iidll -= thisiidll;
-    LogTrace(" ll minus %lf is %lf (residual %lf var %lf tiidll %lf iidll %lf)", thisll, ll, residual, rvar, thisiidll, iidll);
+    LogTrace(" ll minus %lf is %lf", thisll, ll);
 
-
-    /* obs perturb mean is avg distance from envelope 
-       residual is difference between that, and predicted perturbation.
-       so obs-residual gives predicted perturbation
-       whereas residual gives noise, plus perturb model error
- */
-
-    filtered_perturbs.p_data[t] = obs_perturb_mean-residual;
-    filtered_waveform.p_data[t] = env_bhz + obs_perturb_mean-residual;
-    noise.p_data[t] = residual;
+    //filtered_perturbs.p_data[t] = obs_perturb_mean-residual;
+    //filtered_waveform.p_data[t] = env_bhz + obs_perturb_mean-residual;
+    //noise.p_data[t] = residual;
 
   }
 
@@ -965,16 +995,23 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   if (p_means != NULL) gsl_vector_free(p_means);
   if (p_covars != NULL) gsl_matrix_free(p_covars);
   if (p_transition != NULL) gsl_matrix_free(p_transition);
-  if (p_observation != NULL) gsl_vector_free(p_observation);
+  if (p_observation != NULL) gsl_matrix_free(p_observation);
+  gsl_vector_free(obs_perturb);
+  gsl_matrix_free(obs_covar);
+  gsl_vector_free (residuals);
+  gsl_vector_free (residuals_tmp);
+  gsl_matrix_free (residual_covars);
+  gsl_matrix_free (residual_covars_inv);
 
-  save_pdf_plot(p_sigmodel, &filtered_perturbs, "filtered_perturbs");
+  /*  save_pdf_plot(p_sigmodel, &filtered_perturbs, "filtered_perturbs");
   save_pdf_plot(p_sigmodel, &filtered_waveform, "filtered_waveform");
   save_pdf_plot(p_sigmodel, &noise, "noise");
 
   free(filtered_perturbs.p_data);
-  free(filtered_waveform.p_data);
+  free(filtered_waveform.p_data);*/
 
-  LogTrace ("returning ar ll %lf vs iid ll %lf", ll, iidll);
+
+  LogTrace ("returning ar ll %lf", ll);
 
   return ll;
 }
