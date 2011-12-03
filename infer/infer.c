@@ -622,6 +622,8 @@ static void change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
       
     for (phaseid=0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)
     {
+      if (!USE_PHASE(phaseid)) continue;
+
       int old_detnum;
       double score;
       double not_det_prob;
@@ -1339,8 +1341,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     LogInfo("adding initial event proposals");
     
     add_propose_invert_events(NULL, p_sigmodel, p_world);
-    //LogDebug("logging segment proposals");
-    //log_segments(p_sigmodel, p_world);
+    LogDebug("logging segment proposals");
+    log_segments(p_sigmodel, p_world);
     /*    for (int i=0; i < numsites; ++i) {
       if (i != 2 && i != 91 && i != 109) continue;
       for (int j=0; j < numtimedefphases; ++j) {
@@ -1352,12 +1354,32 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     return;*/
 //score_event_sig(p_sigmodel, p_world->pp_events[0], 0, NULL);
     
+    for (int i=0; i < numsites; ++i) {
+      for (int j=0; j < numtimedefphases; ++j) {
+	Arrival_t * p_arr = p_world->pp_events[0]->p_arrivals + (i-1)*numtimedefphases + j;
+	if (p_arr->amp == 0) continue;
+	printf("arrival at station %d phase %d ", i, j);
+	print_arrival(p_arr);
+      }
+    }
 
-    LogInfo("changing arrivals");
+
     /* change the arrivals to use these new events */
+    LogInfo("changing arrivals");
     change_arrivals(p_sigmodel, p_world);
-    log_events(p_world);
 
+    for (int i=0; i < numsites; ++i) {
+      for (int j=0; j < numtimedefphases; ++j) {
+	Arrival_t * p_arr = p_world->pp_events[0]->p_arrivals + (i-1)*numtimedefphases + j;
+	if (p_arr->amp == 0) continue;
+	printf("arrival at station %d phase %d ", i, j);
+	print_arrival(p_arr);
+      }
+    }
+    log_events(p_world);
+    LogDebug("logging arrivals");
+    log_segments(p_sigmodel, p_world);
+    return;
 
     /* keep track of whether or not we have wrapped around inverting
      * detections this will trigger further inverts to perturb around

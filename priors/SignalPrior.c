@@ -140,6 +140,7 @@ void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double ma
   for (int i=0; i < num_events; ++i) {
     const Event_t * p_event = *(pp_events+i);
     for (int j=0; j < MAX_PHASE(numtimedefphases); ++j) {
+      if (!USE_PHASE(j)) continue;
       Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + j;
       if (p_arr->amp == 0 || p_arr->time <= 0) {
 	continue;
@@ -425,6 +426,7 @@ void evt_arrival_times(const Event_t * p_event, int siteid, int numtimedefphases
   //  printf("called with siteid %d\n", siteid);
   fflush(stdout);
   for (int i=0; i < MAX_PHASE(numtimedefphases); ++i) {
+    if (!USE_PHASE(i)) continue;
     double phase_arr_time = (p_event->p_arrivals + (siteid-1)*numtimedefphases + i)->time;
     if (phase_arr_time <= 0) continue;
     if (phase_arr_time < *first_arrival) {

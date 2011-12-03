@@ -975,6 +975,7 @@ void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
 
       for (siteid = 0; siteid < numsites; siteid ++) {
 	for (phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)  {
+	  if (!USE_PHASE(phaseid)) continue;
 	  int numdet;
 	      
 	  numdet = p_event->p_num_dets[(siteid-1) * numtimedefphases + phaseid];
@@ -1066,7 +1067,7 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 
     for (siteid = 0; siteid < numsites; siteid ++) {
       for (phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)  {
-
+	if (!USE_PHASE(phaseid)) continue;
 	Arrival_t * p_arr = p_event->p_arrivals 
 	  + (siteid-1)*numtimedefphases + phaseid;
 
