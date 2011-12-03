@@ -1,7 +1,10 @@
 
 import time
 import sys, MySQLdb,struct
+import matplotlib
+matplotlib.use('PDF')
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import scipy.optimize
 
@@ -13,7 +16,7 @@ from obspy.signal.trigger import triggerOnset
 from database import db, dataset
 import utils.waveform
 import netvisa, learn
-import sys
+import sys, os
 
 class MissingChannel(Exception):
   pass
@@ -21,6 +24,35 @@ class MissingChannel(Exception):
 def real_to_fake_det(det):
   return (det[dataset.DET_ARID_COL], det[dataset.DET_SITE_COL], det[dataset.DET_TIME_COL], det[dataset.DET_AMP_COL], det[dataset.DET_AZI_COL], det[dataset.DET_SLO_COL], det[dataset.DET_PHASE_COL])
 
+
+def log_trace(trc, filename):
+
+  real_fn = 'logs/%s.pdf' % (filename)
+  
+  while (os.path.exists(real_fn)):
+    real_fn = real_fn + "_"
+
+  print "logging to file", real_fn 
+  
+  pp = PdfPages(real_fn)
+
+  siteid = trc.stats["siteid"]
+  start_time = trc.stats["starttime_unix"]
+  if trc.stats["window_size"] is not None:
+    srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
+    npts = trc.stats.npts_processed
+  else:
+    srate = trc.stats.sampling_rate
+    npts = trc.stats.npts
+  end_time = start_time + npts/srate
+
+  text = "%s: siteid %d" % (filename, siteid)
+  print text
+  utils.waveform.plot_trace(trc, pp, title = text)
+
+  pp.close()
+
+  return True
 
 def process_trace(trace, f, opts):
   new_header = trace.stats.copy()
@@ -184,6 +216,7 @@ def load_traces(cursor, stations, start_time, end_time, process=None):
               print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
               try:
                 trace = utils.waveform.fetch_waveform(sta, chan, st, et)
+                
 
                 if chan == "BH1":
                   trace.stats['channel'] = "BHE"

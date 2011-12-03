@@ -113,10 +113,9 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arrslo_fname;
   const char * arramp_fname;
   const char * sig_fname;
+  PyObject * log_trace_cb;
 
-
-  
-  if (!PyArg_ParseTuple(args, "Oddissssssss", &p_earth, &start_time, &end_time, &ar_perturbation, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname))
+    if (!PyArg_ParseTuple(args, "OddissssssssO", &p_earth, &start_time, &end_time, &ar_perturbation, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname, &log_trace_cb))
     return -1;
   
   if (end_time <= start_time)
@@ -149,6 +148,10 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 
   SignalPrior_Init_Params(&self->sig_prior, sig_fname, p_earth->numsites);
   fflush(stdout);
+
+  self->log_trace_cb = log_trace_cb;
+  Py_INCREF(log_trace_cb);
+
 
   return 0;
 }
@@ -212,6 +215,14 @@ static void py_sig_model_dealloc(SigModel_t * self)
     self->p_earth = NULL;
   }
   
+  if (self->log_trace_cb)
+  {
+    Py_DECREF((PyObject *)self->log_trace_cb);
+    self->log_trace_cb = NULL;
+  }
+  
+  
+
   for (int i=0; i < self->numsegments; ++i) {
     for(int j=0; j < NUM_CHANS; ++j) {
       Signal_t *channel = self->p_segments[i].p_channels[j];
@@ -532,6 +543,21 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
 
   return 0;
 }
+
+
+int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename) {
+
+  PyObject * p_trace;
+
+  signal_to_trace(p_signal, &p_trace);
+  PyObject * py_text = py_text = Py_BuildValue("s", filename);
+
+  int retval = PyObject_CallFunction(p_sigmodel->log_trace_cb, "OO", 
+				   p_trace,
+				   py_text);
+  return retval;
+}
+
 
  int trace_to_signal(PyObject * p_trace, Signal_t * p_signal) {
 

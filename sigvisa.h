@@ -10,7 +10,7 @@
 
 #include <liblogger/liblogger_levels.h>
 // possible log levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL 
-#define LOG_LEVEL LOG_LEVEL_DEBUG
+#define LOG_LEVEL LOG_LEVEL_TRACE
 #define LOG_MODULE_NAME "sigvisa"
 #include <liblogger/liblogger.h>
 
@@ -178,6 +178,9 @@ typedef struct SigModel_t
   ArrivalPhasePrior_t arr_phase_prior;
   ArrivalSNRPrior_t arr_snr_prior;
 */
+  
+  PyObject * log_trace_cb;
+
 } SigModel_t;
 
 int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end_time);
@@ -263,7 +266,7 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 #define MAX_ENVELOPE_LENGTH 50  /* TODO: find a number that is not
 				  made up and actually makes sense */
 
-#define MAX_PHASE(ntdp) ntdp
+#define MAX_PHASE(ntdp) 1
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);
@@ -275,6 +278,8 @@ void print_event(const Event_t * p_event);
 char * arrival_str(const Arrival_t * p_arr);
 void print_arrival(const Arrival_t * p_arr);
 int print_signal(Signal_t * signal);
+
+int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename);
 
 #define ALLOC_EVENT(net, sig) (net != NULL) ? alloc_event_net(net) : alloc_event_sig(sig);
 #define COPY_EVENT(net,sig, a, b) (net != NULL) ? copy_event_net(net, a, b) : copy_event_sig(sig, a, b);

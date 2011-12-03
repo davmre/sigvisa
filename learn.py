@@ -75,7 +75,8 @@ def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
                               os.path.join(param_dirname, "ArrivalAzimuthPrior.txt"),
                               os.path.join(param_dirname, "ArrivalSlownessPrior.txt"),
                               os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
-                              os.path.join(param_dirname, "SignalPrior.txt")
+                              os.path.join(param_dirname, "SignalPrior.txt"),
+                              sigvisa_util.log_trace
                               )
   return sigmodel
 
