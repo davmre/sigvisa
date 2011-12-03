@@ -197,7 +197,7 @@ void phase_env_doubleexp(SignalPrior_t * prior,
     end_idx = 1;
   }
 
-  printf("double-exp height %lf peak_idx %ld end_idx %ld\n", peak_height, peak_idx, end_idx);
+  //printf("double-exp height %lf peak_idx %ld end_idx %ld\n", peak_height, peak_idx, end_idx);
 
 
   double component_coeff = 0;
@@ -207,7 +207,7 @@ void phase_env_doubleexp(SignalPrior_t * prior,
     //    LogTrace("iangle conversion failed, setting default 45");
     iangle=45;
   }
-  LogInfo("iangle %lf slowness %lf amp %lf phase %d ", iangle, p_arr->slo, p_arr->amp, phaseid);
+  //LogInfo("iangle %lf slowness %lf amp %lf phase %d ", iangle, p_arr->slo, p_arr->amp, phaseid);
   switch (chan_num) {
   case CHAN_BHE:
     component_coeff = SPHERE2X(p_arr->azi, iangle)/SPHERE2Z(p_arr->azi, iangle); break;
@@ -780,6 +780,33 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   ArrivalWaveform_t * st_arrivals = NULL;
   ArrivalWaveform_t * et_arrivals = NULL;
 
+  Signal_t filtered_waveform;
+  filtered_waveform.p_data = calloc(p_segment->len, sizeof(double));
+  filtered_waveform.len = p_segment->len;
+  filtered_waveform.start_time = p_segment->start_time;
+  filtered_waveform.hz = p_segment->hz;
+  filtered_waveform.siteid = p_segment->siteid;
+  filtered_waveform.py_array=NULL;
+  filtered_waveform.chan=CHAN_BHZ;
+
+  Signal_t filtered_perturbs;
+  filtered_perturbs.p_data = calloc(p_segment->len, sizeof(double));
+  filtered_perturbs.len = p_segment->len;
+  filtered_perturbs.start_time = p_segment->start_time;
+  filtered_perturbs.hz = p_segment->hz;
+  filtered_perturbs.siteid = p_segment->siteid;
+  filtered_perturbs.py_array=NULL;
+  filtered_perturbs.chan=CHAN_BHZ;
+
+  Signal_t noise;
+  noise.p_data = calloc(p_segment->len, sizeof(double));
+  noise.len = p_segment->len;
+  noise.start_time = p_segment->start_time;
+  noise.hz = p_segment->hz;
+  noise.siteid = p_segment->siteid;
+  noise.py_array=NULL;
+  noise.chan=CHAN_BHZ;
+
   /* populate two linked lists, storing waveform info sorted by
      start_time and end_time respectively */
   for (int i=0; i < num_arrivals; ++i) {
@@ -915,7 +942,18 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
     assert(!isnan(thisll) && thisll > -1*DBL_MAX);
     ll -= thisll;
     iidll -= thisiidll;
-    LogTrace(" ll minus %lf is %lf (residual %lf var %lf)", thisll, ll, residual, rvar);
+    LogTrace(" ll minus %lf is %lf (residual %lf var %lf tiidll %lf iidll %lf)", thisll, ll, residual, rvar, thisiidll, iidll);
+
+
+    /* obs perturb mean is avg distance from envelope 
+       residual is difference between that, and predicted perturbation.
+       so obs-residual gives predicted perturbation
+       whereas residual gives noise, plus perturb model error
+ */
+
+    filtered_perturbs.p_data[t] = obs_perturb_mean-residual;
+    filtered_waveform.p_data[t] = env_bhz + obs_perturb_mean-residual;
+    noise.p_data[t] = residual;
 
   }
 
@@ -928,6 +966,13 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   if (p_covars != NULL) gsl_matrix_free(p_covars);
   if (p_transition != NULL) gsl_matrix_free(p_transition);
   if (p_observation != NULL) gsl_vector_free(p_observation);
+
+  save_pdf_plot(p_sigmodel, &filtered_perturbs, "filtered_perturbs");
+  save_pdf_plot(p_sigmodel, &filtered_waveform, "filtered_waveform");
+  save_pdf_plot(p_sigmodel, &noise, "noise");
+
+  free(filtered_perturbs.p_data);
+  free(filtered_waveform.p_data);
 
   LogTrace ("returning ar ll %lf vs iid ll %lf", ll, iidll);
 
