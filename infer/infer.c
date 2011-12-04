@@ -963,11 +963,18 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
     ChannelBundle_t * p_pred_segment = calloc(1, sizeof(ChannelBundle_t));
     memcpy(p_pred_segment, p_real_segment, sizeof(ChannelBundle_t));
 
+
+    int num_arrivals;
+    Arrival_t ** pp_arrivals;
+    arrival_list(p_sigmodel->p_earth, p_pred_segment->siteid, p_pred_segment->start_time, ChannelBundle_EndTime(p_pred_segment), numevents, pp_events, &num_arrivals, &pp_arrivals);
+
+
     SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
 				  p_sigmodel->p_earth,
-				  numevents, 0, 0,
-				  pp_events,
+				  0, 0,
+				  num_arrivals, pp_arrivals,
 				  p_pred_segment);
+    free(pp_arrivals);
 
     PyObject * real_trace, * pred_trace;
     real_trace = channel_bundle_to_trace_bundle(p_real_segment);

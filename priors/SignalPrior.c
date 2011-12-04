@@ -1060,18 +1060,12 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
    siteid. */
 void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior, 
 				   EarthModel_t * p_earth, 
-				   int numevents, 
 				   int samplePerturb,
 				   int sampleNoise,
-				   const Event_t ** pp_events,
+				   int num_arrivals, 
+				   const Arrival_t ** pp_arrivals,
 				   ChannelBundle_t * p_segment) {
   double end_time = p_segment->start_time + p_segment->len / p_segment->hz;
-
-
-  int num_arrivals;
-  Arrival_t ** pp_arrivals;
-  arrival_list(p_earth, p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents, pp_events, &num_arrivals, &pp_arrivals);
-
 
 
   p_segment->p_channels[CHAN_BHZ] = alloc_signal(p_segment);
@@ -1220,8 +1214,6 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
 
   gsl_rng_free(r);
 
-  free(pp_arrivals);
-
 }
 
 
@@ -1261,11 +1253,44 @@ double segment_likelihood_iid(SigModel_t * p_sigmodel, ChannelBundle_t * p_segme
   return event_lp;
 }
 
+void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals) {
+  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
 
+  // for each segment, compute a list of arrivals
 
-double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, double env_offset) {
+  *num_arrivals = 0;
+  int num_alloced = 20;
+  *ppp_arrivals = calloc(num_alloced, sizeof(Arrival_t *));
+  CHECK_PTR(*ppp_arrivals);
+  
+  for (int d = 0; d < p_sigmodel->numdetections; ++d) {
+    Detection_t * p_det = p_sigmodel->p_detections + d;
+    
+    if (p_segment != NULL) {
+      if (p_det->site_det != p_segment->siteid-1) continue;
+      if (p_det->time_det + MAX_ENVELOPE_LENGTH < p_segment->start_time) continue;
+      if (p_det->time_det > ChannelBundle_EndTime(p_segment)) continue;
+    }
+    
+    if (++(*num_arrivals) > num_alloced) {
+      num_alloced *= 2;
+      *ppp_arrivals = realloc(*ppp_arrivals, num_alloced * sizeof(Arrival_t *));
+      CHECK_PTR(*ppp_arrivals);
+    }
+    
+    Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
+    *(*ppp_arrivals+*num_arrivals-1) = p_arr;
+    p_arr->time = p_det->time_det;
+    p_arr->amp = p_det->amp_det;
+    p_arr->azi = p_det->azi_det;
+    p_arr->slo = p_det->slo_det;
+    p_arr->phase = p_det->phase_det;
+  }
+}
 
-  LogDebug("called dl with %lf %lf %lf", env_height, env_decay, env_offset);
+double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, double env_onset) {
+
+  LogDebug("called dl with %lf %lf %lf", env_height, env_decay, env_onset);
 
   SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
 
@@ -1274,42 +1299,46 @@ double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, 
   double backup_env_onset = p_sigmodel->sig_prior.env_onset;
 
   p_sigmodel->sig_prior.env_height = env_height;
-  p_sigmodel->sig_prior.env_height = env_decay;
-  p_sigmodel->sig_prior.env_height = env_offset;
+  p_sigmodel->sig_prior.env_decay = env_decay;
+  p_sigmodel->sig_prior.env_onset = env_onset;
 
   double ll = 0;
+
+
+  // goal: save pdf plots of real signal for each segment, and of generated signals w/ given params
 
   for (int i=0; i < p_sigmodel->numsegments; ++i) {
     
     ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
 
+
     // for each segment, compute a list of arrivals
     int num_arrivals=0;
-    int num_alloced = 20;
-    Arrival_t ** pp_arrivals = calloc(num_alloced, sizeof(Arrival_t *));
-    CHECK_PTR(pp_arrivals);
+    Arrival_t ** pp_arrivals;
+    det_arrivals(p_sigmodel_v, p_segment, &num_arrivals, &pp_arrivals);
 
-    for (int d = 0; d < p_sigmodel->numdetections; ++d) {
-      Detection_t * p_det = p_sigmodel->p_detections + d;
 
-      if (p_det->site_det != p_segment->siteid-1) continue;
-      if (p_det->time_det + MAX_ENVELOPE_LENGTH < p_segment->start_time) continue;
-      if (p_det->time_det > ChannelBundle_EndTime(p_segment)) continue;
+    /* ------------ begin logging ------ */
 
-      if (++num_arrivals > num_alloced) {
-	num_alloced *= 2;
-	pp_arrivals = realloc(pp_arrivals, num_alloced * sizeof(Arrival_t *));
-	CHECK_PTR(pp_arrivals);
-      }
+    
+     char desc[50];
+    snprintf(desc, 50, "real_signal_%d", i);
+    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc);
+    ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
+    pred_segment->start_time = p_segment->start_time;
+    pred_segment->hz = p_segment->hz;
+    pred_segment->siteid = p_segment->siteid;
+    pred_segment->len = p_segment->len;
+    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  0, 0,
+				  num_arrivals, (const Arrival_t **)pp_arrivals,
+				  pred_segment);
+    snprintf(desc, 50, "pred_signal_%d_%.4lf_%.4lf", i, env_decay, env_onset);
+    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc);
+    
+    /* ------------ end logging ------ */
 
-      Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
-      *(pp_arrivals+num_arrivals-1) = p_arr;
-      p_arr->time = p_det->time_det;
-      p_arr->amp = p_det->amp_det;
-      p_arr->azi = p_det->azi_det;
-      p_arr->slo = p_det->slo_det;
-      p_arr->phase = p_det->phase_det;
-    }
 
     double seg_ll = segment_likelihood_AR(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
     double seg_ll_iid = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
