@@ -81,7 +81,7 @@ EarthModel_t * p_earth;
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
   
   for (int phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); ++phaseid) {
-
+    if (!USE_PHASE(phaseid)) continue;
     pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 					  p_event->evlat, p_event->evdepth,
 					  p_event->evtime, phaseid,

@@ -13,7 +13,7 @@ def learn(filename, sigmodel, earthmodel, traces, events, leb_evlist, detections
     Find maximum-likelhood parameter estimates 
     """
 
-    ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
+    #ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
 
     f = open(filename, 'w')
     f.write("5000 500 500\n")
@@ -21,11 +21,11 @@ def learn(filename, sigmodel, earthmodel, traces, events, leb_evlist, detections
 
     print "learning envelope params"
     xopt = learn_envelope_params(sigmodel)
-    sta_noise_means, sta_noise_vars = learn_noise_params(f, sigmodel, traces, events, ttimes)
+    #sta_noise_means, sta_noise_vars = learn_noise_params(f, sigmodel, traces, events, ttimes)
 
     f.close()
 
-    return sta_noise_means, sta_noise_vars
+    #return sta_noise_means, sta_noise_vars
 
 
 def learn_envelope_params(sigmodel):
@@ -36,6 +36,7 @@ def learn_envelope_params(sigmodel):
 
     ranges = ((0.01, 0.5), (0.05, 5))
     xopt  = scipy.optimize.brute(ll, ranges, Ns=15, full_output=0)
+
     print "learned params: ", xopt
     print "give likelihood ", ll(xopt)
     return xopt

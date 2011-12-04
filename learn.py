@@ -75,13 +75,14 @@ def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
                               os.path.join(param_dirname, "ArrivalAzimuthPrior.txt"),
                               os.path.join(param_dirname, "ArrivalSlownessPrior.txt"),
                               os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
-                              os.path.join(param_dirname, "SignalPrior.txt")
+                              os.path.join(param_dirname, "SignalPrior.txt"),
+                              sigvisa_util.log_trace
                               )
   return sigmodel
 
 
 def learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, phasetimedef):
-  print "learning signal parameters from %d hour of data" % (hours)
+  print "learning signal parameters from %f hour of data" % (hours)
 
   MAX_TRAVEL_TIME = 2000
   start_time = 1237680000
@@ -101,18 +102,26 @@ def learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, p
   evlist = read_assoc(cursor, earliest_event_time, end_time, orid2num, arid2num, "leb", None)
   print "loaded associations for ", len(events), " events."
 
-  sigmodel = load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
-                 sites, phasenames, phasetimedef)
-  
-  energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5)
 
-  sigmodel.set_waves(traces)
-  sigmodel.set_signals(energies)
+  sigmodel = load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
+                          sites, phasenames, phasetimedef)
 
   fake_det = [sigvisa_util.real_to_fake_det(x) for x in leb_detections]
   sigmodel.set_fake_detections(fake_det)
   print "set detections", fake_det
 
+
+  #cursor.execute("select lon, lat, depth, time, mb, orid from leb_origin where orid=5297348")
+  #events = np.array(cursor.fetchall())
+  # stalist = (48,)
+  #sigmodel.synthesize_signals_det(stalist, start_time, end_time, 2, 0, 0)
+  #energies = sigmodel.get_signals()  
+  
+  energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5)
+  sigmodel.set_waves(traces)
+  sigmodel.set_signals(energies)
+
+ 
   return priors.SignalPrior.learn(os.path.join(param_dirname, "SignalPrior.txt"),
                                   sigmodel, earthmodel, energies, events, evlist, 
                                   idcx_detections, arid2num)
@@ -129,7 +138,7 @@ def main(param_dirname):
   parser.add_option("-x", "--text", dest="gui", default=True,
                     action = "store_false",
                     help = "text only output (False)")
-  parser.add_option("--hours", dest="hours", type=int, default=1,
+  parser.add_option("--hours", dest="hours", type=float, default=1,
                     help = "hours of waveform data to use for sigvisa training (1)")
   parser.add_option("-s", "--silent", dest="verbose", default=True,
                     action = "store_false",

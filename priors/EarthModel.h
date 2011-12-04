@@ -69,6 +69,8 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args);
 
 void py_EarthModel_UnInit(EarthModel_t * p_earth);
 
+PyObject * py_EarthModel_InvertDetection(const EarthModel_t * p_earth, PyObject * args);
+
 PyObject * py_EarthModel_InRange(EarthModel_t * p_earth, PyObject * args);
 
 int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
@@ -141,3 +143,4 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
 PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args);
 
 int slowness_to_iangle(double slowness, int phase, double * iangle);
+int iangle_to_slowness(double iangle, int phase, double * slowness);

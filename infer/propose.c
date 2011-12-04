@@ -102,7 +102,7 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
 
     
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-      
+      if (!USE_PHASE(phase)) continue;
       double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
 						   p_event->evlat, p_event->evdepth,
 						   p_event->evtime, phase,
@@ -154,7 +154,141 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
   }
 }
 
+/* find the best set of detection from the available ones to build the
+ * event and find its best possible score */
+double optimize_arrivals_sta_grid(SigModel_t * p_sigmodel,
+				  Event_t * p_event,
+				  int siteid,
+				  int num_other_events,
+				  const Event_t ** pp_other_events)
+{
+  EarthModel_t * p_earth;
+  int numsites;
+  int numtimedefphases;
+  int numarrivals;
+  
+  clock_t start, local_start, end;
+  double dif;
+  start = local_start = clock();
 
+  p_earth = p_sigmodel->p_earth;
+
+  numsites = EarthModel_NumSites(p_earth);
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+  numarrivals = numtimedefphases;  
+
+  /* for each site and phase, estimate arrival info from the relevant priors */
+
+  Arrival_t * sta_arrivals = p_event->p_arrivals + (siteid-1)*numtimedefphases;
+
+  Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t)); 
+  memcpy(base, sta_arrivals, numarrivals * sizeof(Arrival_t));
+
+  LogTrace("    optimizing arrivals at site %d, given %d other events, for event %s ", siteid, num_other_events, event_str(p_event));
+
+
+  //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
+  //printf("    naive score is %lf\n", p_event->evscore);
+  
+
+  Arrival_t * best = calloc(numarrivals, sizeof(Arrival_t));
+  memcpy(best, base, numarrivals * sizeof(Arrival_t));
+
+  double best_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+  LogTrace("    naive sta score is %lf", best_score);
+  /* then try a grid search over arrival info */
+  
+  const double time_step = .5;
+  const double num_time_steps = 10;
+  const double amp_step = 0.3;
+  const double num_amp_steps = 5;
+  //const double azi_step = 8;
+  //const double num_azi_steps = 10;
+  //const double slo_step = 1;
+  //const double num_slo_steps = 2;
+
+  for (int i=0; i < 10; ++i) {
+
+    for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
+      if (!USE_PHASE(phase)) continue;
+	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
+	  continue;
+	}
+
+	for (double time = (base+phase)->time - time_step * num_time_steps; time < (base+phase)->time + time_step * num_time_steps; time += time_step) { 
+
+	  double min_amp = MAX((base+phase)->amp-amp_step*num_amp_steps, 0.05);
+	double max_amp = MAX((base+phase)->amp+amp_step*num_amp_steps, 0.1);
+
+	for (double amp = min_amp; amp <= max_amp; amp += amp_step) { 
+
+	double min_azi = 0;
+	double max_azi = 360;
+	double azi_step = 36;
+
+	for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
+
+	double min_slo = 0;
+	double max_slo;
+	iangle_to_slowness(90, phase, &max_slo);
+	double slo_step = 5;
+
+	for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
+
+
+	  Arrival_t * p_arr = sta_arrivals + phase;
+	  p_arr->time = time;	      
+	  p_arr->amp = amp;	      
+	  p_arr->azi = azi;	      
+	  p_arr->slo = slo;	      
+	  
+
+	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+	  
+	  LogTrace("phase %d time %lf amp %lf azi %lf slo %lf score %lf", phase, time, amp, azi, slo, ev_sta_score);
+
+	  if (ev_sta_score > best_score) {
+	    LogTrace("new arrival time %lf at %d for phase %d has score %lf better than best %lf", time, siteid, phase, ev_sta_score, best_score);
+	    best_score = ev_sta_score;
+	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
+	  }
+	}
+
+	}
+	}
+	}
+
+	// use the best arrival time for this phase/station while searching at the next
+	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
+    
+   
+    }
+    memcpy(base, best, numarrivals * sizeof(Arrival_t));
+  }
+
+  
+
+  end = clock();
+  dif = (end - start) / (double)CLOCKS_PER_SEC;
+
+  
+  double final_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+  //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
+  //printf("    final score is %lf\n", p_event->evscore);
+  
+
+  if (isnan(final_score)) {
+    LogError("score is nan! %lf %lf\n", final_score, best_score);
+    exit(-1);
+  }
+
+  assert(fabs(final_score - best_score) < 0.01 );
+
+  free(base);
+  free(best);
+
+  return final_score;
+}
 
 /* find the best set of detection from the available ones to build the
  * event and find its best possible score */
@@ -200,19 +334,19 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   LogTrace("    naive sta score is %lf", best_score);
   /* then try a grid search over arrival info */
   
-  const double time_step = .4;
-  const double num_time_steps = 5;
-  const double amp_step = 0.3;
-  const double num_amp_steps = 2;
-  const double azi_step = 3;
-  const double num_azi_steps = 2;
-  const double slo_step = 2;
-  const double num_slo_steps = 2;
+  const double time_step = .5;
+  const double num_time_steps = 10;
+  const double amp_step = 1.5;
+  const double num_amp_steps = 5;
+  //const double azi_step = 8;
+  //const double num_azi_steps = 10;
+  //const double slo_step = 1;
+  //const double num_slo_steps = 2;
 
-  for (int i=0; i < 1; ++i) {
+  for (int i=0; i < 10; ++i) {
 
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-
+      if (!USE_PHASE(phase)) continue;
 	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
 	  continue;
 	}
@@ -222,8 +356,6 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->time = time;
 	      
-	  
-
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
 	  
 	  if (ev_sta_score > best_score) {
@@ -240,17 +372,19 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
     }
 
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-	
+      if (!USE_PHASE(phase)) continue;
 	//	printf("starting w/ arrival amp %lf at %d for phase %d\n", (base+idx)->amp, site, phase);
 
 	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
 	  continue;
 	}
-	
-	double min_amp = MAX((base+phase)->amp-amp_step*num_amp_steps, 0.05);
-	double max_amp = MAX((base+phase)->amp+amp_step*num_amp_steps, 0.1);
 
-	for (double amp = min_amp; amp <= max_amp; amp += amp_step) { 
+	
+
+	double min_amp = MAX((base+phase)->amp*pow(amp_step, -1*num_amp_steps), 0.05);
+	double max_amp = MAX((base+phase)->amp*pow(amp_step, num_amp_steps), 0.1);
+
+	for (double amp = min_amp; amp <= max_amp; amp *= amp_step) { 
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->amp = amp;
 
@@ -269,13 +403,16 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
     }
  
 for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-	
+  if (!USE_PHASE(phase)) continue;
 	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
 	  continue;
 	}
 	
-	double min_azi = (base+phase)->azi-azi_step*num_azi_steps;
-	double max_azi = (base+phase)->azi+azi_step*num_azi_steps;
+	//double min_azi = (base+phase)->azi-azi_step*num_azi_steps;
+	//double max_azi = (base+phase)->azi+azi_step*num_azi_steps;
+	double min_azi = 0;
+	double max_azi = 360;
+	double azi_step = 36;
 
 	for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
 	  Arrival_t * p_arr = sta_arrivals + phase;
@@ -296,15 +433,19 @@ for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
     }
 
 for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
-	
+  if (!USE_PHASE(phase)) continue;
 	//	printf("starting w/ arrival amp %lf at %d for phase %d\n", (base+idx)->amp, site, phase);
 
 	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
 	  continue;
 	}
 	
-	double min_slo = (base+phase)->slo-slo_step*num_slo_steps;
-	double max_slo = (base+phase)->slo+slo_step*num_slo_steps;
+	//double min_slo = (base+phase)->slo-slo_step*num_slo_steps;
+	//double max_slo = (base+phase)->slo+slo_step*num_slo_steps;
+	double min_slo = 0;
+	double max_slo;
+	iangle_to_slowness(90, phase, &max_slo);
+	double slo_step = 5;
 
 	for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
 	  Arrival_t * p_arr = sta_arrivals + phase;
@@ -1059,6 +1200,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
        */
       for (siteid = 0; siteid < numsites; siteid ++) {
 	for (phase = 0; phase < MAX_PHASE(numtimedefphases); phase ++) {
+	  if (!USE_PHASE(phase)) continue;
 	  if (p_best_event->p_num_dets[(siteid-1) * numtimedefphases + phase] > 0) {
 	    detnum = p_best_event->p_all_detids[((siteid-1) * numtimedefphases
 						 + phase)*MAX_PHASE_DET];

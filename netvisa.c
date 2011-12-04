@@ -143,6 +143,11 @@ static PyMethodDef EarthModel_methods[] = {
      "Compute the arrival slowness of an event at a site\n"
      "ArrivalSlowness(evlon, evlat, evdepth, int phaseid, siteid) -> slowness"
     },
+    {"InvertDetection", (PyCFunction)py_EarthModel_InvertDetection,
+     METH_VARARGS,
+     "Invert a detection\n"
+     "InvertDetection(siteid, azi, slo, time) -> (lon, lat, depth, time)",
+    },
     {"IsTimeDefPhase", (PyCFunction)py_EarthModel_IsTimeDefPhase,
      METH_VARARGS,
      "Determine whether a phaseid is time-defining or not\n"

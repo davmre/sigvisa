@@ -591,6 +591,46 @@ int slowness_to_iangle(double slowness, int phase, double * iangle) {
   return success;
 }
 
+
+// convert an arriving slowness (seconds/degree) to incidence angle
+int iangle_to_slowness(double iangle, int phase, double * slowness) {
+ int success = 1;
+
+  double v; // phase-specific velocity in deg/sec
+  switch (phase) {
+  case 0:
+  case 1:
+  case 2:
+  case 5:
+  case 6:
+  case 7:
+  case 8:
+  case 10:
+  case 12:
+  case 13:
+    /* these are essentially all of the P-wave phases, except for ScP
+       which is backwards for some reason */
+    v = EARTH_SURF_P_VEL * 360/AVG_EARTH_CIRCUMFERENCE_KM;
+    break;
+  case 11:
+    /* ScP */
+    v = -1 * EARTH_SURF_P_VEL * 360/AVG_EARTH_CIRCUMFERENCE_KM;
+    break;
+  case 3:
+  case 4:
+    /* S-wave phases */
+    v = EARTH_SURF_S_VEL * 360/AVG_EARTH_CIRCUMFERENCE_KM;
+    break;
+  default:
+    /* I don't currently have numbers for Love or Raleigh waves */
+    success = 0;
+  }
+  
+  *slowness = sin(iangle*DEG2RAD)/v;
+  if (isnan(*slowness)) success = 0;
+  return success;
+}
+
 static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
                         distance, double * p_trvtime, double * p_slow,
 			double * p_iangle)
@@ -1430,6 +1470,27 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
   
   return 0;
 }
+
+PyObject * py_EarthModel_InvertDetection(const EarthModel_t * p_earth, PyObject * args) {
+  int siteid;
+  double azi, slo, time;
+  
+  if (!PyArg_ParseTuple(args, "iddd", &siteid, &azi, &slo, &time))
+    return NULL;
+
+  Detection_t d;
+  d.site_det = siteid-1;
+  d.time_det = time;
+  d.azi_det = azi;
+  d.slo_det = slo;
+
+  Event_t ev;
+  
+  invert_detection(p_earth, &d, &ev, 0);
+
+  return Py_BuildValue("dddd", ev.evlon, ev.evlat, ev.evdepth, ev.evtime);
+}
+
 
 PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args)
 {

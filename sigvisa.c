@@ -12,6 +12,7 @@ static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args);
@@ -26,7 +27,10 @@ static PyMethodDef SigModel_methods[] = {
    "set_waves(traces) "
    "-> num_translated\n"},
   {"synthesize_signals", (PyCFunction)py_synthesize_signals, METH_VARARGS,
-   "synthesize_signals(evlist, stalist, start_time, end_time, hz) "
+   "synthesize_signals(evlist, stalist, start_time, end_time, hz, samplePerturb, sampleNoise) "
+   "-> success\n"},
+  {"synthesize_signals_det", (PyCFunction)py_synthesize_signals_det, METH_VARARGS,
+   "synthesize_signals(stalist, start_time, end_time, hz, samplePerturb, sampleNoise) "
    "-> success\n"},
   {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
    "get_signals() "
@@ -113,10 +117,9 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arrslo_fname;
   const char * arramp_fname;
   const char * sig_fname;
+  PyObject * log_trace_cb;
 
-
-  
-  if (!PyArg_ParseTuple(args, "Oddissssssss", &p_earth, &start_time, &end_time, &ar_perturbation, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname))
+    if (!PyArg_ParseTuple(args, "OddissssssssO", &p_earth, &start_time, &end_time, &ar_perturbation, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname, &log_trace_cb))
     return -1;
   
   if (end_time <= start_time)
@@ -149,6 +152,10 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 
   SignalPrior_Init_Params(&self->sig_prior, sig_fname, p_earth->numsites);
   fflush(stdout);
+
+  self->log_trace_cb = log_trace_cb;
+  Py_INCREF(log_trace_cb);
+
 
   return 0;
 }
@@ -212,6 +219,14 @@ static void py_sig_model_dealloc(SigModel_t * self)
     self->p_earth = NULL;
   }
   
+  if (self->log_trace_cb)
+  {
+    Py_DECREF((PyObject *)self->log_trace_cb);
+    self->log_trace_cb = NULL;
+  }
+  
+  
+
   for (int i=0; i < self->numsegments; ++i) {
     for(int j=0; j < NUM_CHANS; ++j) {
       Signal_t *channel = self->p_segments[i].p_channels[j];
@@ -533,6 +548,21 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
   return 0;
 }
 
+
+int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename) {
+
+  PyObject * p_trace;
+
+  signal_to_trace(p_signal, &p_trace);
+  PyObject * py_text = py_text = Py_BuildValue("s", filename);
+
+  int retval = PyObject_CallFunction(p_sigmodel->log_trace_cb, "OO", 
+				   p_trace,
+				   py_text);
+  return retval;
+}
+
+
  int trace_to_signal(PyObject * p_trace, Signal_t * p_signal) {
 
   // a trace object contains two members: data, a numpy array, and stats, a python dict.
@@ -770,55 +800,10 @@ static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args)
 }
 
 
-void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_events, int numsiteids, int * p_siteids, double start_time, double end_time, double hz) {
+void synthesize_signals_dets(SigModel_t *p_sigmodel, int numsiteids, int * p_siteids, double start_time, double end_time, double hz, int samplePerturb, int sampleNoise) {
 
   EarthModel_t * p_earth = p_sigmodel->p_earth;
 
-  int numsites =  EarthModel_NumSites(p_earth);
-  int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-
-  for (int i=0; i < numevents; ++i) {
-    Event_t * p_event = pp_events[i];
-
-    p_event->p_arrivals = calloc(numsites*numtimedefphases, sizeof(Arrival_t));
-
-    for (int j=0; j < numsiteids; ++j) {
-      int site = p_siteids[j];
-
-      for (int phase=0; phase < numtimedefphases; ++phase) {
-	Arrival_t * arr = (p_event->p_arrivals + (site-1)*numtimedefphases+phase);
-
-	// for each event, fill in arrivals at each station we care about    
-	
-	arr->time = EarthModel_ArrivalTime(p_earth, 
-					   p_event->evlon, 
-					   p_event->evlat, 
-					   p_event->evdepth, 
-					   p_event->evtime, 
-					   phase, site-1);
-	
-	arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior, 
-					       p_event->evmag, 
-					       p_event->evdepth, 
-					       arr->time - p_event->evtime, 
-					       site-1, phase);
-	
-	arr->azi = EarthModel_ArrivalAzimuth(p_earth, 
-					     p_event->evlon, 
-					     p_event->evlat, 
-					     site-1);
-	arr->slo = EarthModel_ArrivalSlowness(p_earth, 
-					      p_event->evlon, 
-					      p_event->evlat, 
-					      p_event->evdepth, 
-					      phase, site-1); 
-      }
-      
-      char * estr = event_str(p_event);
-      LogTrace("arrival info for event %s at site %d\n", estr, site);
-      free(estr);
-    }
-  }
 
   p_sigmodel->numsegments = numsiteids;
   p_sigmodel->p_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
@@ -840,23 +825,94 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     p_wave_segment->siteid = siteid;
     p_wave_segment->len = (int) (end_time - start_time) * hz;
 
-    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
+    /*    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
 				  p_sigmodel->p_earth,
 				  numevents,
 				  (const Event_t **)pp_events,
 				  p_segment,
-				  p_wave_segment);
+				  p_wave_segment);*/
+    int num_arrivals;
+    Arrival_t ** pp_arrivals;
+    
+    det_arrivals((void *)p_sigmodel, p_segment, &num_arrivals, &pp_arrivals);
+    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  samplePerturb, sampleNoise,
+				  num_arrivals, (const Arrival_t **)pp_arrivals,
+				  p_segment);
+    for (int i=0; i < num_arrivals; ++i) {
+      free(pp_arrivals[i]);
+    }
+    free(pp_arrivals);	 
+
     LogTrace("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
 
-    LogTrace("scoring event...\n");
-    score_event_sig(p_sigmodel, pp_events[0], 0, NULL);
   }
+}
+
+void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_events, int numsiteids, int * p_siteids, double start_time, double end_time, double hz, int samplePerturb, int sampleNoise) {
+
+  EarthModel_t * p_earth = p_sigmodel->p_earth;
+
+  int numsites =  EarthModel_NumSites(p_sigmodel->p_earth);
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
+
+
+  p_sigmodel->numsegments = numsiteids;
+  p_sigmodel->p_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
+  p_sigmodel->p_wave_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
+
 
   for (int i=0; i < numevents; ++i) {
     Event_t * p_event = pp_events[i];
-    free(p_event->p_arrivals);
+    
+    p_event->p_arrivals = calloc(numsites*numtimedefphases, sizeof(Arrival_t));
+    initialize_mean_arrivals(p_sigmodel,  p_event);
   }
+  
 
+  for (int i=0; i < numsiteids; ++i) {
+    int siteid = p_siteids[i];
+    
+    
+
+    ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
+    ChannelBundle_t * p_wave_segment = p_sigmodel->p_wave_segments + i;
+
+    p_segment->start_time = start_time;
+    p_segment->hz = hz;
+    p_segment->siteid = siteid;
+    p_segment->len = (int) (end_time - start_time) * hz;
+
+    p_wave_segment->start_time = start_time;
+    p_wave_segment->hz = hz;
+    p_wave_segment->siteid = siteid;
+    p_wave_segment->len = (int) (end_time - start_time) * hz;
+
+    /*    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  numevents,
+				  (const Event_t **)pp_events,
+				  p_segment,
+				  p_wave_segment);*/
+
+    int num_arrivals;
+    Arrival_t ** pp_arrivals;
+    arrival_list(p_sigmodel->p_earth, p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents, (const Event_t **)pp_events, &num_arrivals, &pp_arrivals);    
+    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  samplePerturb, sampleNoise,
+				  num_arrivals, (const Arrival_t **) pp_arrivals,
+				  p_segment);
+
+    for (int i=0; i < num_arrivals; ++i) {
+      free(pp_arrivals[i]);
+    }
+    free(pp_arrivals);
+				 
+    LogTrace("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
+
+  }
 }
 
 Signal_t * alloc_signal(ChannelBundle_t * p_segment) {
@@ -873,7 +929,8 @@ static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args) 
   PyArrayObject * p_evlist_obj;
   PyObject * p_stalist_obj;
   double stime, etime, hz;
-  if (!PyArg_ParseTuple(args, "O!O!ddd", &PyArray_Type, &p_evlist_obj, &PyTuple_Type, &p_stalist_obj, &stime, &etime, &hz))
+  int samplePerturb, sampleNoise;
+  if (!PyArg_ParseTuple(args, "O!O!dddii", &PyArray_Type, &p_evlist_obj, &PyTuple_Type, &p_stalist_obj, &stime, &etime, &hz, &samplePerturb, &sampleNoise))
     return NULL;
 
   int numevents;
@@ -886,11 +943,34 @@ static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args) 
   
   convert_tuple_int(p_stalist_obj, &numsiteids, &p_siteids);
 
-  synthesize_signals(p_sigmodel, numevents, pp_events, numsiteids, p_siteids, stime, etime, hz);
+  synthesize_signals(p_sigmodel, numevents, pp_events, numsiteids, p_siteids, stime, etime, hz, samplePerturb, sampleNoise);
 
   free(p_siteids);
   free(pp_events);
   free(p_events);
+  
+  return Py_BuildValue("n", 0);
+}
+
+
+static PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args) {
+  PyArrayObject * p_evlist_obj;
+  PyObject * p_stalist_obj;
+  double stime, etime, hz;
+  int samplePerturb, sampleNoise;
+
+  if (!PyArg_ParseTuple(args, "O!dddii", &PyTuple_Type, &p_stalist_obj, &stime, &etime, &hz,&samplePerturb, &sampleNoise))
+    return NULL;
+
+  int numsiteids;
+  int * p_siteids;
+  
+  convert_tuple_int(p_stalist_obj, &numsiteids, &p_siteids);
+
+  synthesize_signals_dets(p_sigmodel, numsiteids, p_siteids, stime, etime, hz, samplePerturb, sampleNoise);
+
+  free(p_siteids);
+
   
   return Py_BuildValue("n", 0);
 }
@@ -949,6 +1029,7 @@ void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
 
       for (siteid = 0; siteid < numsites; siteid ++) {
 	for (phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)  {
+	  if (!USE_PHASE(phaseid)) continue;
 	  int numdet;
 	      
 	  numdet = p_event->p_num_dets[(siteid-1) * numtimedefphases + phaseid];
@@ -1040,7 +1121,7 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 
     for (siteid = 0; siteid < numsites; siteid ++) {
       for (phaseid = 0; phaseid < MAX_PHASE(numtimedefphases); phaseid ++)  {
-
+	if (!USE_PHASE(phaseid)) continue;
 	Arrival_t * p_arr = p_event->p_arrivals 
 	  + (siteid-1)*numtimedefphases + phaseid;
 
