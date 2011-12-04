@@ -8,6 +8,8 @@
 #include <gsl/gsl_blas.h>
 #include <gsl/gsl_permutation.h>
 #include <gsl/gsl_linalg.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
 
 #include "../sigvisa.h"
 
@@ -464,6 +466,10 @@ typedef struct ArrivalWaveform {
   double bhe_coeff;
   double bhn_coeff;
   double bhz_coeff;
+
+  // used for sampling
+  double * last_perturbs;
+
 } ArrivalWaveform_t;
 
 ArrivalWaveform_t * append_active(ArrivalWaveform_t * p_head, 
@@ -666,46 +672,64 @@ void AR_remove_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n, i
 }
 
 void AR_transitions(int n, int k, double * ar_coeffs, 
-		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
-		    ChannelBundle_t * p_segment,
-		    gsl_matrix ** pp_transition, 
-		    gsl_matrix ** pp_obs) {
+		    int n_arrs, 
+		    gsl_matrix ** pp_transition) {
   if (*pp_transition != NULL) {
     gsl_matrix_free(*pp_transition);
   } 
-  if (*pp_obs != NULL) {
-    gsl_matrix_free(*pp_obs);
-  }
+  
 
   if (n_arrs == 0) {
     *pp_transition = NULL;
-    *pp_obs = NULL;
     return;
   } 
 
   *pp_transition = gsl_matrix_alloc(n*n_arrs, n*n_arrs);
-  *pp_obs = gsl_matrix_alloc(k, n*n_arrs);
+
   gsl_matrix_set_zero(*pp_transition);
-  gsl_matrix_set_zero(*pp_obs);
+
   for (int arr=0; arr < n_arrs; ++arr) {
     gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n, ar_coeffs[0]);
     for (int i=1; i < n; ++i) {
       gsl_matrix_set(*pp_transition, arr*n+i-1, arr*n+i, 1);
       gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n+i, ar_coeffs[i]);
     }
+   
+  }
 
-    int curr_chan=0;
+}
+
+void AR_observation(int n, int k, 
+		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
+		    ChannelBundle_t * p_segment,
+		    gsl_matrix ** pp_obs) {
+  if (*pp_obs != NULL) {
+    gsl_matrix_free(*pp_obs);
+  }
+  
+  if (n_arrs == 0) {
+    *pp_obs = NULL;
+    return;
+  } 
+
+  *pp_obs = gsl_matrix_alloc(k, n*n_arrs);
+  gsl_matrix_set_zero(*pp_obs);
+
+
+  for (int arr=0; arr < n_arrs; ++arr) {
+    ArrivalWaveform_t * p_a = active_arrivals;
+   int curr_chan=0;
     for (int i=0; i < NUM_CHANS; ++i) {
       if (p_segment->p_channels[i] != NULL) {
 	switch (i) {
 	case CHAN_BHZ:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, active_arrivals->bhz_coeff); 
+	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]); 
 	  break;
 	case CHAN_BHN:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, active_arrivals->bhn_coeff); 
+	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]); 
 	  break;
 	case CHAN_BHE:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, active_arrivals->bhe_coeff); 
+	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]); 
 	  break;
 	}
 	curr_chan++;
@@ -714,6 +738,7 @@ void AR_transitions(int n, int k, double * ar_coeffs,
 
     active_arrivals=active_arrivals->next_active;
   }
+
 
 }
 
@@ -891,10 +916,13 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   gsl_vector * obs_perturb = gsl_vector_alloc(k);
   gsl_matrix * obs_covar = gsl_matrix_alloc(k,k);
   gsl_matrix_set_identity(obs_covar);
+  int curr_chan=0;
   for(int i=0; i < NUM_CHANS; ++i) {
     if (p_segment->p_channels[i] != NULL) {
-      gsl_matrix_set(obs_covar, i,i, prior->p_stations[siteid-1].chan_vars[i]);
+      gsl_matrix_set(obs_covar, curr_chan, curr_chan, prior->p_stations[siteid-1].chan_vars[i]);
+      curr_chan++;
     }
+
   }
   gsl_vector * residuals = gsl_vector_alloc(k);
   gsl_vector * residuals_tmp = gsl_vector_alloc(k);
@@ -909,19 +937,19 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       //LogTrace(" activating arrivalwaveform w/ st %lf at time %lf t %d", starting_next->start_time, time, t);
       active_arrivals = append_active(active_arrivals, starting_next);
       n_active++;
-      AR_transitions(n, k, prior->p_ar_coeffs, n_active, active_arrivals, p_segment, 
-		     &p_transition, &p_observation);
+      AR_transitions(n, k, prior->p_ar_coeffs, n_active, &p_transition);
       starting_next->active_id = AR_add_arrival(&p_means, &p_covars, n);
       starting_next = starting_next->next_start;
     }
+
+
 
     // clean up any events that have finished
     while (ending_next != NULL && time >= ending_next->end_time) {
       //LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", ending_next->end_time, time);
       active_arrivals = remove_active(active_arrivals, ending_next);
       n_active--;
-      AR_transitions(n, k, prior->p_ar_coeffs, n_active, active_arrivals, p_segment,
-		     &p_transition, &p_observation);
+      AR_transitions(n, k, prior->p_ar_coeffs, n_active, &p_transition);
       AR_remove_arrival(&p_means, &p_covars, n, ending_next->active_id);
       for (ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
 	if (a->active_id > ending_next->active_id) {
@@ -934,11 +962,14 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       ending_next = ending_next->next_end;
     }
 
+    AR_observation(n, k, n_active, active_arrivals, p_segment, &p_observation);
 
     // compute the predicted envelope for each component
-    double env_bhz = prior->p_stations[siteid-1].chan_means[CHAN_BHZ];
-    double env_bhe = prior->p_stations[siteid-1].chan_means[CHAN_BHE];
-    double env_bhn = prior->p_stations[siteid-1].chan_means[CHAN_BHN];
+
+    double env_bhz = 0;
+    double env_bhe = 0;
+    double env_bhn = 0;
+
     for(ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
       if (a->idx >= a->len) continue;
       env_bhz += a->p_envelope[a->idx] * a->bhz_coeff;
@@ -948,26 +979,30 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
     }
 
+    double pred_bhz = prior->p_stations[siteid-1].chan_means[CHAN_BHZ] + env_bhz;
+    double pred_bhe = prior->p_stations[siteid-1].chan_means[CHAN_BHE] + env_bhe;
+    double pred_bhn = prior->p_stations[siteid-1].chan_means[CHAN_BHN] + env_bhn;
+
     double obs_bhz, obs_bhe, obs_bhn;
     int obs_perturb_n = 0;
     if (p_segment->p_channels[CHAN_BHZ] != NULL) {
-	 obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_data[t] - env_bhz;
-	 gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhz);
+      obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_data[t] - pred_bhz;
+      gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhz);
     }
     if (p_segment->p_channels[CHAN_BHE] != NULL) {
-	 obs_bhe = p_segment->p_channels[CHAN_BHE]->p_data[t] - env_bhe;
-	 gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhe);
+      obs_bhe = p_segment->p_channels[CHAN_BHE]->p_data[t] - pred_bhe;
+      gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhe);
     }
     if (p_segment->p_channels[CHAN_BHN] != NULL) {
-	 obs_bhn = p_segment->p_channels[CHAN_BHN]->p_data[t] - env_bhn;
-	 gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhn);
+      obs_bhn = p_segment->p_channels[CHAN_BHN]->p_data[t] - pred_bhn;
+      gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhn);
     }
 
 
     if (n_active > 0) {
       AR_predict(p_means, p_covars, p_transition, prior->ar_noise_sigma2, n);
       AR_update(p_means, p_covars, p_observation, obs_perturb, obs_covar, n, k, residuals, residual_covars);
-    LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
+      //LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
     } else {
       gsl_vector_memcpy(residuals, obs_perturb);
       gsl_matrix_memcpy(residual_covars, obs_covar);
@@ -1017,6 +1052,179 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
 
   return ll;
 }
+
+
+
+/* Fills in the signal envelope for a set of event arrivals at a
+   three-axis station. p_segment must set start_time, hz, and
+   siteid. */
+void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior, 
+				   EarthModel_t * p_earth, 
+				   int numevents, 
+				   int samplePerturb,
+				   int sampleNoise,
+				   const Event_t ** pp_events,
+				   ChannelBundle_t * p_segment) {
+  double end_time = p_segment->start_time + p_segment->len / p_segment->hz;
+
+
+  int num_arrivals;
+  Arrival_t ** pp_arrivals;
+  arrival_list(p_earth, p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents, pp_events, &num_arrivals, &pp_arrivals);
+
+
+
+  p_segment->p_channels[CHAN_BHZ] = alloc_signal(p_segment);
+  p_segment->p_channels[CHAN_BHZ]->chan = CHAN_BHZ;
+  p_segment->p_channels[CHAN_BHZ]->p_data = calloc(p_segment->len, sizeof(double));
+  p_segment->p_channels[CHAN_BHN] = alloc_signal(p_segment);
+  p_segment->p_channels[CHAN_BHN]->chan = CHAN_BHN;
+  p_segment->p_channels[CHAN_BHN]->p_data = calloc(p_segment->len, sizeof(double));
+  p_segment->p_channels[CHAN_BHE] = alloc_signal(p_segment);
+  p_segment->p_channels[CHAN_BHE]->chan = CHAN_BHE;
+  p_segment->p_channels[CHAN_BHE]->p_data = calloc(p_segment->len, sizeof(double));
+    
+  int siteid = p_segment->siteid;
+  int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+
+  int n = prior->ar_n;
+
+  ArrivalWaveform_t * st_arrivals = NULL;
+  ArrivalWaveform_t * et_arrivals = NULL;
+
+  // initialize random number generator
+  const gsl_rng_type * T;
+  gsl_rng * r;   
+  gsl_rng_env_setup();
+  T = gsl_rng_default;
+  r = gsl_rng_alloc (T);
+
+  double stddev = sqrt(prior->ar_noise_sigma2);
+
+  /* populate two linked lists, storing waveform info sorted by
+     start_time and end_time respectively */
+  for (int i=0; i < num_arrivals; ++i) {
+
+    const Arrival_t * p_arr = *(pp_arrivals + i);
+      
+    if (p_arr->amp == 0 || p_arr->time <= 0) continue;
+
+    ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
+    w->start_time = p_arr->time;
+    w->idx = 0;
+
+    abstract_env(prior, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+
+    if (samplePerturb) {
+      w->last_perturbs = calloc(prior->ar_n, sizeof(double));
+      for(int t=0; t < w->len; ++t) {
+	double newperturb=0;
+	for(int j=0; j < prior->ar_n; ++j) {
+	  newperturb += w->last_perturbs[j] * prior->p_ar_coeffs[j]; 
+	  //printf("inc newperturb by %lf * %lf = %lf to %lf\n", w->last_perturbs[j], prior->p_ar_coeffs[j] , w->last_perturbs[j] * prior->p_ar_coeffs[j], newperturb);
+	  if (j > 0) w->last_perturbs[j-1] = w->last_perturbs[j];
+	}
+	double epsilon = gsl_ran_gaussian(r, stddev);
+	newperturb += epsilon;
+      
+	w->last_perturbs[prior->ar_n-1] = newperturb;
+	newperturb *= w->p_envelope[t];
+	w->p_envelope[t] = w->p_envelope[t] + newperturb;
+      }
+      free(w->last_perturbs);
+    }
+    w->end_time = w->start_time + (double) w->len / p_segment->hz;
+
+    double iangle;
+    if(!slowness_to_iangle(p_arr->slo, p_arr->phase, &iangle)) {
+      //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
+      iangle = 45;
+    }
+    
+    w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
+    w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
+    w->bhz_coeff = 1;
+
+    LogTrace("azi %lf slo %lf iangle %lf bhe %lf bhn %lf bhz %lf", p_arr->azi, p_arr->slo, iangle, w->bhe_coeff, w->bhn_coeff, w->bhz_coeff);
+
+    st_arrivals = insert_st(st_arrivals, w);
+    et_arrivals = insert_et(et_arrivals, w);
+
+  }
+
+
+
+  ArrivalWaveform_t * starting_next = st_arrivals;
+  ArrivalWaveform_t * ending_next = et_arrivals;
+  ArrivalWaveform_t * active_arrivals = NULL;
+  int n_active = 0;
+
+  for (int t = 0; t < p_segment->len; ++t) {
+    double time = p_segment->start_time + t/p_segment->hz;
+
+    // activate the next event, if needed
+    while (starting_next != NULL && time >= starting_next->start_time) {
+      //LogTrace(" activating arrivalwaveform w/ st %lf at time %lf t %d", starting_next->start_time, time, t);
+      active_arrivals = append_active(active_arrivals, starting_next);
+      starting_next->active_id = n_active++;
+      starting_next = starting_next->next_start;
+    }
+
+    // clean up any events that have finished
+    while (ending_next != NULL && time >= ending_next->end_time) {
+      //LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", ending_next->end_time, time);
+      active_arrivals = remove_active(active_arrivals, ending_next);
+      n_active--;
+      for (ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
+	if (a->active_id > ending_next->active_id) {
+	  a->active_id--;
+	} else {
+	}
+      }
+      ending_next = ending_next->next_end;
+    }
+
+    
+    // compute the predicted envelope for each component
+    double env_bhz = prior->p_stations[siteid-1].chan_means[CHAN_BHZ];
+    double env_bhe = prior->p_stations[siteid-1].chan_means[CHAN_BHE];
+    double env_bhn = prior->p_stations[siteid-1].chan_means[CHAN_BHN];
+    for(ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
+      if (a->idx >= a->len) continue;
+      env_bhz += a->p_envelope[a->idx] * a->bhz_coeff;
+      env_bhn += a->p_envelope[a->idx] * a->bhn_coeff;
+      env_bhe += a->p_envelope[a->idx] * a->bhe_coeff;
+      a->idx++;
+      LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
+    }
+    p_segment->p_channels[CHAN_BHZ]->p_data[t] = env_bhz; 
+    p_segment->p_channels[CHAN_BHE]->p_data[t] = env_bhe;
+    p_segment->p_channels[CHAN_BHN]->p_data[t] = env_bhn;
+									   
+    if(sampleNoise) {
+      p_segment->p_channels[CHAN_BHZ]->p_data[t] += 
+	gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_means[CHAN_BHZ])); 
+      p_segment->p_channels[CHAN_BHE]->p_data[t] += 
+	gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_means[CHAN_BHE])); 
+      p_segment->p_channels[CHAN_BHN]->p_data[t] += 
+	gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_means[CHAN_BHN])); 
+    }
+
+  }
+
+
+  for(ArrivalWaveform_t * a = st_arrivals; a != NULL; a = a->next_start) {
+    free(a->p_envelope);
+    free(a);
+  }
+
+  gsl_rng_free(r);
+
+  free(pp_arrivals);
+
+}
+
+
 
 /*
   Return the likelihood of the given signal segment (three channels at

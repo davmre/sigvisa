@@ -812,6 +812,7 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
       int site = p_siteids[j];
 
       for (int phase=0; phase < numtimedefphases; ++phase) {
+	if(!USE_PHASE(phase)) continue;
 	Arrival_t * arr = (p_event->p_arrivals + (site-1)*numtimedefphases+phase);
 
 	// for each event, fill in arrivals at each station we care about    
@@ -837,7 +838,10 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 					      p_event->evlon, 
 					      p_event->evlat, 
 					      p_event->evdepth, 
-					      phase, site-1); 
+					      phase, site-1);  
+	arr->phase = phase;
+
+	LogInfo("set arrivals for site %d phase %d: %s", site, phase, arrival_str(arr));
       }
       
       char * estr = event_str(p_event);
@@ -866,12 +870,19 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     p_wave_segment->siteid = siteid;
     p_wave_segment->len = (int) (end_time - start_time) * hz;
 
-    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
+    /*    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
 				  p_sigmodel->p_earth,
 				  numevents,
 				  (const Event_t **)pp_events,
 				  p_segment,
-				  p_wave_segment);
+				  p_wave_segment);*/
+    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  numevents,
+				  1, 0,
+				  (const Event_t **)pp_events,
+				  p_segment);
+				 
     LogTrace("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
 
     LogTrace("scoring event...\n");

@@ -963,12 +963,11 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
     ChannelBundle_t * p_pred_segment = calloc(1, sizeof(ChannelBundle_t));
     memcpy(p_pred_segment, p_real_segment, sizeof(ChannelBundle_t));
 
-    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
+    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
 				  p_sigmodel->p_earth,
-				  numevents,
+				  numevents, 0, 0,
 				  pp_events,
-				  p_pred_segment,
-				  NULL);
+				  p_pred_segment);
 
     PyObject * real_trace, * pred_trace;
     real_trace = channel_bundle_to_trace_bundle(p_real_segment);
@@ -1363,6 +1362,39 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       }
     }
 
+    /*for (int i=0; i < numsites; ++i) {
+      for (int j=0; j < numtimedefphases; ++j) {
+	Arrival_t * p_arr = p_world->pp_events[0]->p_arrivals + (i-1)*numtimedefphases + j;
+	if (p_arr->amp == 0) continue;
+	p_arr->time = 1237733169.4053;
+	p_arr->amp = 506.4235;
+	p_arr->azi = 164.7380;
+	p_arr->slo = 33.0914;
+	p_arr->phase = j;
+      }
+    }
+
+    double score1 = score_event_sta_sig(p_sigmodel, p_world->pp_events[0], 48, 0, NULL);
+	 
+
+    for (int i=0; i < numsites; ++i) {
+      for (int j=0; j < numtimedefphases; ++j) {
+	Arrival_t * p_arr = p_world->pp_events[0]->p_arrivals + (i-1)*numtimedefphases + j;
+	if (p_arr->amp == 0) continue;
+	printf("arrival at station %d phase %d ", i, j);
+	print_arrival(p_arr);
+	p_arr->time = 1237733171.4053;
+	p_arr->amp = 337.6157;
+	p_arr->azi = 180.0000;
+	p_arr->slo = 33.0914;
+	p_arr->phase = j;
+      }
+    }
+
+    double score2 = score_event_sta_sig(p_sigmodel, p_world->pp_events[0], 48, 0, NULL);
+
+    LogInfo("score1 %lf score2 %lf", score1, score2);
+    return;*/
 
     /* change the arrivals to use these new events */
     LogInfo("changing arrivals");

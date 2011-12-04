@@ -36,4 +36,12 @@ void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior,
 				   ChannelBundle_t * p_segment,
 				   ChannelBundle_t * p_wave_segment);
 
+void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior, 
+				   EarthModel_t * p_earth, 
+				   int numevents, 
+				   int samplePerturb,
+				   int sampleNoise,
+				   const Event_t ** pp_events,
+				   ChannelBundle_t * p_segment);
+
 void SignalPrior_UnInit(SignalPrior_t * prior);
