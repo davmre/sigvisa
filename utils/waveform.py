@@ -86,7 +86,8 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
     
     #st.plot(color='k')
 
-def plot_segment(channel_traces, fname, format, title=None, all_det_times=None):
+# does not save for you - you need to call savefig() yourself!
+def plot_segment(channel_traces, title=None, all_det_times=None):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -117,7 +118,6 @@ def plot_segment(channel_traces, fname, format, title=None, all_det_times=None):
       maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
       plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
               width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
-  plt.savefig(fname, format=format)
 
 
 def plot_trace(trc, pp, title=None, all_det_times=None):

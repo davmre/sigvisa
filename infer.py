@@ -209,10 +209,12 @@ def log_envelope_plot(pp, events, evarrlist, real_env, pred_env, text=""):
           arrtimes.append(sta_l[3])
 
   text = "REAL ENVELOPE: siteid %d %s" % (siteid, text)
-  plot_segment(real_env, pp, "pdf", title = text, all_det_times = arrtimes)
+  plot_segment(real_env, title = text, all_det_times = arrtimes)
+  pp.savefig()
 
   text = "PRED ENVELOPE: siteid %d %s" % (siteid, text)
-  plot_segment(pred_env, pp, "pdf", title= text, all_det_times = arrtimes)
+  plot_segment(pred_env, title= text, all_det_times = arrtimes)
+  pp.savefig()
 
   return True
 
@@ -419,10 +421,12 @@ def main(param_dirname):
 
 
     if options.synthetic:
-      evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1)))
+      cursor.execute("select lon, lat, depth, time, mb, orid from leb_origin where orid=5297348")
+      evlist = np.array(cursor.fetchall())
+#      evlist = np.matrix( ( (0, 0, 0, 1237680500, 3.0, 1)))
 #                           (-10, 10, 0, 123761000, 3.0, 2),
 #                           (-10, -10, 0, 1237681500, 3.0, 3))  )
-      sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 40)
+      sigmodel.synthesize_signals(evlist, stalist, start_time, end_time, 2)
     else:
       energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
       print "loaded, setting waves"
