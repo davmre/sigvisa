@@ -29,8 +29,8 @@ def log_trace(trc, filename):
 
   real_fn = 'logs/%s.pdf' % (filename)
   
-  while (os.path.exists(real_fn)):
-    real_fn = real_fn + "_"
+#  while (os.path.exists(real_fn)):
+#    real_fn = real_fn + "_"
 
   print "logging to file", real_fn 
   
