@@ -390,11 +390,12 @@ def main(param_dirname):
       elif options.clean_det_propose:
         cursor.execute("select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per FROM leb_arrival iarr, leb_assoc la, static_siteid site, static_phaseid ph where iarr.arid=la.arid and la.orid=5397597 and la.sta=site.sta and site.statype='ss' and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase)")
         clean_dets = np.array(cursor.fetchall())
-        fake_det = [real_to_fake_det(x) for x in clean_dets]
-        #fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
+        fake_det = [real_to_fake_det(x) for x in clean_dets]        
         print "using %d detections" % len(fake_det)
-        stalist2 = [tryeval(d[0])+1 for d in clean_dets]
-        stalist = tuple(stalist2)
+        if stalist == siteids:
+          stalist2 = [tryeval(d[0])+1 for d in clean_dets]
+          stalist = tuple(stalist2)
+        fake_det = filter(lambda x : x[FDET_SITEID_COL]+1 in stalist, fake_det) 
         print "stalist", stalist
         print "fake_det", fake_det
       else: 

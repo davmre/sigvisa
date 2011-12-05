@@ -82,12 +82,16 @@ def window_energies(trace, window_size=1, overlap=0.5):
   nsamples_window = window_size * samprate
   offset = nsamples_window * (1-overlap)
   nwindows = int((len(data) - nsamples_window) / offset)
+
+  if (nwindows <= 0):
+    nwindows = 1
+
   #print 'computing windows on data on length ', len(data)
   windows = np.zeros((nwindows, 1))
 
   for i in range(nwindows):
     wstart = offset*i
-    wstop = wstart+window_size
+    wstop = np.max(wstart+window_size, len(data))
     
     #print "window ", i, " runs from ", wstart, '-', wstop
     window = data[wstart:wstop]
