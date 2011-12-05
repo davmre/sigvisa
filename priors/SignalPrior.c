@@ -913,6 +913,10 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       k++;
     }
   }
+  if( k == 0 ) {
+    return 0;
+  }
+
   gsl_vector * obs_perturb = gsl_vector_alloc(k);
   gsl_matrix * obs_covar = gsl_matrix_alloc(k,k);
   gsl_matrix_set_identity(obs_covar);
@@ -1288,19 +1292,9 @@ void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_ar
   }
 }
 
-double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, double env_onset) {
-
-  LogDebug("called dl with %lf %lf %lf", env_height, env_decay, env_onset);
+double det_likelihood(void * p_sigmodel_v) {
 
   SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
-
-  double backup_env_height = p_sigmodel->sig_prior.env_height;
-  double backup_env_decay = p_sigmodel->sig_prior.env_decay;
-  double backup_env_onset = p_sigmodel->sig_prior.env_onset;
-
-  p_sigmodel->sig_prior.env_height = env_height;
-  p_sigmodel->sig_prior.env_decay = env_decay;
-  p_sigmodel->sig_prior.env_onset = env_onset;
 
   double ll = 0;
 
@@ -1320,7 +1314,7 @@ double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, 
 
     /* ------------ begin logging ------ */
 
-    
+    /*
      char desc[50];
     snprintf(desc, 50, "real_signal_%d", i);
     save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc);
@@ -1336,7 +1330,7 @@ double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, 
 				  pred_segment);
     snprintf(desc, 50, "pred_signal_%d_%.4lf_%.4lf", i, env_decay, env_onset);
     save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc);
-    
+    */
     /* ------------ end logging ------ */
 
 
@@ -1354,11 +1348,6 @@ double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, 
     free(pp_arrivals);
   }
 
-  p_sigmodel->sig_prior.env_height = backup_env_height;
-  p_sigmodel->sig_prior.env_decay = backup_env_decay;
-  p_sigmodel->sig_prior.env_onset = backup_env_onset;
-
-  printf("returning %lf\n", ll);
   return ll;
 }
 

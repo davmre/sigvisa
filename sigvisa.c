@@ -15,7 +15,8 @@ static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
-PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args);
+PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args);
+PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args);
 
 extern PyTypeObject py_EarthModel;
 
@@ -47,8 +48,11 @@ static PyMethodDef SigModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
    "score_world(events, arrtimes, verbose) "
    "-> log probability\n"},
-  {"detection_likelihood", (PyCFunction)py_det_likelihood, METH_VARARGS,
+  {"detection_likelihood_env", (PyCFunction)py_det_likelihood_env, METH_VARARGS,
    "detection_likelihood(env_height, env_decay, env_offset)"
+   "-> log likelihood\n"},
+  {"detection_likelihood_ar", (PyCFunction)py_det_likelihood_ar, METH_VARARGS,
+   "detection_likelihood(ar_order, ar_coeff_tuple, ar_noise_variance)"
    "-> log likelihood\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
@@ -461,16 +465,67 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
    return Py_BuildValue("n", result);
  }
 
-PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
+PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args) {
 
   double env_height, env_decay, env_onset;
-
   if (!PyArg_ParseTuple(args, "ddd", &env_height, &env_decay, &env_onset))
     return NULL;
 
-  double ll = det_likelihood((void *)p_sigmodel, env_height, env_decay, env_onset);
+
+  double backup_env_height = p_sigmodel->sig_prior.env_height;
+  double backup_env_decay = p_sigmodel->sig_prior.env_decay;
+  double backup_env_onset = p_sigmodel->sig_prior.env_onset;
+
+  p_sigmodel->sig_prior.env_height = env_height;
+  p_sigmodel->sig_prior.env_decay = env_decay;
+  p_sigmodel->sig_prior.env_onset = env_onset;
+
+
+  double ll = det_likelihood((void *)p_sigmodel);
+  p_sigmodel->sig_prior.env_height = backup_env_height;
+  p_sigmodel->sig_prior.env_decay = backup_env_decay;
+  p_sigmodel->sig_prior.env_onset = backup_env_onset;
+
+
   return Py_BuildValue("d", ll);
 }
+
+
+PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args) {
+
+  int ar_n;
+  PyObject * py_ar_coeffs;
+  double noise_sigma2;
+
+  int backup_ar_n = p_sigmodel->sig_prior.ar_n;
+  double * backup_ar_coeffs = p_sigmodel->sig_prior.p_ar_coeffs;
+  double backup_noise_sigma2 = p_sigmodel->sig_prior.ar_noise_sigma2;
+
+  if (!PyArg_ParseTuple(args, "iOd", &ar_n, &py_ar_coeffs, &noise_sigma2))
+    return NULL;
+
+  double * ar_coeffs = calloc(ar_n, sizeof(double));
+  for(int i=0; i < ar_n; ++i) {
+    ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_ar_coeffs, i));
+  }
+
+  p_sigmodel->sig_prior.ar_n = ar_n;
+  p_sigmodel->sig_prior.p_ar_coeffs = ar_coeffs;
+  p_sigmodel->sig_prior.ar_noise_sigma2 = noise_sigma2;
+
+  double ll = det_likelihood((void *)p_sigmodel);
+
+  LogInfo("order %d c %lf v %lf gives ll %lf", ar_n, ar_coeffs[0], noise_sigma2, ll);
+
+  p_sigmodel->sig_prior.ar_n = backup_ar_n;
+  p_sigmodel->sig_prior.p_ar_coeffs = backup_ar_coeffs;
+  p_sigmodel->sig_prior.ar_noise_sigma2 = backup_noise_sigma2;
+
+  free(ar_coeffs);
+
+  return Py_BuildValue("d", ll);
+}
+
 
 int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
 

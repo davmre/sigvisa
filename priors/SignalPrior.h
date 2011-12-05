@@ -28,7 +28,7 @@ void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double ma
 void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals);
 
 
-double det_likelihood(void * p_sigmodel_v, double env_height, double env_decay, double env_offset);
+double det_likelihood(void * p_sigmodel_v);
 
 double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events);
 
