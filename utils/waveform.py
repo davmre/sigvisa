@@ -120,7 +120,7 @@ def plot_segment(channel_traces, title=None, all_det_times=None):
               width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
 
 
-def plot_trace(trc, pp, title=None, all_det_times=None):
+def plot_trace(trc, title=None, all_det_times=None, format="k:"):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -140,13 +140,13 @@ def plot_trace(trc, pp, title=None, all_det_times=None):
   stime = trc.stats["starttime_unix"]
   timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)
 
-  plt.plot(timevals, trc, 'k:')
+  plt.plot(timevals, trc, format)
 
   if all_det_times is not None:
     maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
     plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
             width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
-  pp.savefig()
+
 
 
 def fetch_array_elements(siteid):
