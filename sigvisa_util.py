@@ -25,7 +25,7 @@ def real_to_fake_det(det):
   return (det[dataset.DET_ARID_COL], det[dataset.DET_SITE_COL], det[dataset.DET_TIME_COL], det[dataset.DET_AMP_COL], det[dataset.DET_AZI_COL], det[dataset.DET_SLO_COL], det[dataset.DET_PHASE_COL])
 
 
-def log_trace(trc, filename):
+def log_trace(trc, filename, format):
 
   real_fn = 'logs/%s.pdf' % (filename)
   
@@ -48,8 +48,8 @@ def log_trace(trc, filename):
 
   text = "%s: siteid %d" % (filename, siteid)
   print text
-  utils.waveform.plot_trace(trc, pp, title = text)
-
+  utils.waveform.plot_trace(trc, title = text, format=format)
+  pp.savefig()
   pp.close()
 
   return True

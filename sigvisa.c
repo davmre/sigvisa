@@ -17,6 +17,7 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
 static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args);
+PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 
 extern PyTypeObject py_EarthModel;
 
@@ -52,7 +53,9 @@ static PyMethodDef SigModel_methods[] = {
    "detection_likelihood(env_height, env_decay, env_offset)"
    "-> log likelihood\n"},
   {"detection_likelihood_ar", (PyCFunction)py_det_likelihood_ar, METH_VARARGS,
-   "detection_likelihood(ar_order, ar_coeff_tuple, ar_noise_variance)"
+   "detection_likelihood(ar_order, ar_coeff_tuple, ar_noise_variance)"},
+  {"arrival_likelihood", (PyCFunction)py_arr_likelihood, METH_VARARGS,
+   "arrival_likelihood(arrtime, arramp, arrazi, arrslo)"
    "-> log likelihood\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
@@ -468,7 +471,9 @@ static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * a
 PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args) {
 
   double env_height, env_decay, env_onset;
-  if (!PyArg_ParseTuple(args, "ddd", &env_height, &env_decay, &env_onset))
+  int write_log;
+
+  if (!PyArg_ParseTuple(args, "dddi", &env_height, &env_decay, &env_onset, &write_log))
     return NULL;
 
 
@@ -481,11 +486,10 @@ PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args) {
   p_sigmodel->sig_prior.env_onset = env_onset;
 
 
-  double ll = det_likelihood((void *)p_sigmodel);
+  double ll = det_likelihood((void *)p_sigmodel, write_log);
   p_sigmodel->sig_prior.env_height = backup_env_height;
   p_sigmodel->sig_prior.env_decay = backup_env_decay;
   p_sigmodel->sig_prior.env_onset = backup_env_onset;
-
 
   return Py_BuildValue("d", ll);
 }
@@ -497,11 +501,13 @@ PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args) {
   PyObject * py_ar_coeffs;
   double noise_sigma2;
 
+  int write_log;
+
   int backup_ar_n = p_sigmodel->sig_prior.ar_n;
   double * backup_ar_coeffs = p_sigmodel->sig_prior.p_ar_coeffs;
   double backup_noise_sigma2 = p_sigmodel->sig_prior.ar_noise_sigma2;
 
-  if (!PyArg_ParseTuple(args, "iOd", &ar_n, &py_ar_coeffs, &noise_sigma2))
+  if (!PyArg_ParseTuple(args, "iOdi", &ar_n, &py_ar_coeffs, &noise_sigma2, &write_log))
     return NULL;
 
   double * ar_coeffs = calloc(ar_n, sizeof(double));
@@ -513,7 +519,7 @@ PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args) {
   p_sigmodel->sig_prior.p_ar_coeffs = ar_coeffs;
   p_sigmodel->sig_prior.ar_noise_sigma2 = noise_sigma2;
 
-  double ll = det_likelihood((void *)p_sigmodel);
+  double ll = det_likelihood((void *)p_sigmodel, write_log);
 
   LogInfo("order %d c %lf v %lf gives ll %lf", ar_n, ar_coeffs[0], noise_sigma2, ll);
 
@@ -604,17 +610,130 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
 }
 
 
-int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename) {
+int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename, char * format) {
 
   PyObject * p_trace;
 
   signal_to_trace(p_signal, &p_trace);
-  PyObject * py_text = py_text = Py_BuildValue("s", filename);
+  PyObject * py_text = Py_BuildValue("s", filename);
+  PyObject * py_format = Py_BuildValue("s", format);
 
-  int retval = PyObject_CallFunction(p_sigmodel->log_trace_cb, "OO", 
+  int retval = PyObject_CallFunction(p_sigmodel->log_trace_cb, "OOO", 
 				   p_trace,
-				   py_text);
+				     py_text, py_format);
   return retval;
+}
+
+
+
+PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
+
+  double arrtime, arramp, arrazi, arrslo;
+  int write_log;
+  if (!PyArg_ParseTuple(args, "ddddi", &arrtime, &arramp, &arrazi, &arrslo, &write_log))
+    return NULL;
+
+  // goal: save pdf plots of real signal for each segment, and of generated signals w/ given params
+
+
+  ChannelBundle_t * p_segment = p_sigmodel->p_segments;
+
+
+
+
+  Arrival_t * p_best = calloc(1, sizeof(Arrival_t));
+  p_best->time = arrtime;
+  p_best->amp = arramp;
+  p_best->azi = arrazi;
+  p_best->azi = arrslo;
+
+
+  Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
+  p_arr->time = arrtime;
+  p_arr->amp = arramp;
+  p_arr->azi = arrazi;
+  p_arr->azi = arrslo;
+
+  double best_score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_best);
+
+  for (int i=0; i < 5; ++i) {
+
+    const double amp_step = 1.5;
+    const double num_amp_steps = 7;
+
+  double min_amp = MAX(arramp*pow(amp_step, -1*num_amp_steps), 0.05);
+  double max_amp = MAX(arramp*pow(amp_step, num_amp_steps), 0.1);
+  for (double amp = min_amp; amp <= max_amp; amp *= amp_step) { 
+    p_arr->amp = amp;
+    double score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_arr);
+    LogInfo("score %lf vs best %lf arrival %s", score, best_score, p_arr);
+    if (score > best_score) {
+      best_score = score;
+      memcpy(p_best, p_arr, sizeof(Arrival_t));
+    } 
+  }
+  memcpy(p_arr, p_best, sizeof(Arrival_t));
+  
+ 
+  double min_azi = 0;
+  double max_azi = 360;
+  double azi_step = 36;
+  for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
+    p_arr->azi = azi;
+    double score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_arr);
+    if (score > best_score) {
+      best_score = score;
+      memcpy(p_best, p_arr, sizeof(Arrival_t));
+    } 
+  }
+  memcpy(p_arr, p_best, sizeof(Arrival_t));
+
+
+  double min_slo = 0;
+  double max_slo;
+  iangle_to_slowness(90, 0, &max_slo);
+  double slo_step = 5;
+  for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
+    p_arr->slo = slo;
+    double score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_arr);
+    if (score > best_score) {
+      best_score = score;
+      memcpy(p_best, p_arr, sizeof(Arrival_t));
+    } 
+  }
+  memcpy(p_arr, p_best, sizeof(Arrival_t));
+
+  }
+
+
+
+    /* ------------ begin logging ------ */
+
+    if(write_log) {
+     char desc[50];
+    snprintf(desc, 50, "real_signal");
+    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "g-");
+    ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
+    pred_segment->start_time = p_segment->start_time;
+    pred_segment->hz = p_segment->hz;
+    pred_segment->siteid = p_segment->siteid;
+    pred_segment->len = p_segment->len;
+    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
+				  p_sigmodel->p_earth,
+				  0, 0,
+				  1, &p_best,
+				  pred_segment);
+    snprintf(desc, 50, "pred_signal_%.3lf_%.3lf_%.3lf_%.3lf", p_best->time, p_best->amp, p_best->azi, p_best->slo);
+    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-");
+    }
+    /* ------------ end logging ------ */
+
+
+  free(p_arr);
+  free(p_best);
+
+  printf("returning %lf\n", best_score);
+  return Py_BuildValue("d", best_score);
 }
 
 
@@ -954,16 +1073,18 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     int num_arrivals;
     Arrival_t ** pp_arrivals;
     arrival_list(p_sigmodel->p_earth, p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents, (const Event_t **)pp_events, &num_arrivals, &pp_arrivals);    
+
+    LogInfo("sampling siteid %d with %d arrivals", siteid, num_arrivals);
     SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
 				  p_sigmodel->p_earth,
 				  samplePerturb, sampleNoise,
 				  num_arrivals, (const Arrival_t **) pp_arrivals,
 				  p_segment);
 
-    for (int i=0; i < num_arrivals; ++i) {
+    /*for (int i=0; i < num_arrivals; ++i) {
       free(pp_arrivals[i]);
     }
-    free(pp_arrivals);
+    free(pp_arrivals);*/
 				 
     LogTrace("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
 

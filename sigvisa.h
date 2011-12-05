@@ -281,7 +281,7 @@ char * arrival_str(const Arrival_t * p_arr);
 void print_arrival(const Arrival_t * p_arr);
 int print_signal(Signal_t * signal);
 
-int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename);
+int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename, char * format);
 
 #define ALLOC_EVENT(net, sig) (net != NULL) ? alloc_event_net(net) : alloc_event_sig(sig);
 #define COPY_EVENT(net,sig, a, b) (net != NULL) ? copy_event_net(net, a, b) : copy_event_sig(sig, a, b);

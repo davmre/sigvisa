@@ -144,6 +144,7 @@ void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double ma
     for (int j=0; j < MAX_PHASE(numtimedefphases); ++j) {
       if (!USE_PHASE(j)) continue;
       Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + j;
+
       if (p_arr->amp == 0 || p_arr->time <= 0) {
 	continue;
       }
@@ -1292,7 +1293,9 @@ void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_ar
   }
 }
 
-double det_likelihood(void * p_sigmodel_v) {
+
+double det_likelihood(void * p_sigmodel_v, int write_log) {
+
 
   SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
 
@@ -1314,10 +1317,14 @@ double det_likelihood(void * p_sigmodel_v) {
 
     /* ------------ begin logging ------ */
 
-    /*
+
+    
+
+    if(write_log) {
+
      char desc[50];
     snprintf(desc, 50, "real_signal_%d", i);
-    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc);
+    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "g-");
     ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
     pred_segment->start_time = p_segment->start_time;
     pred_segment->hz = p_segment->hz;
@@ -1328,9 +1335,10 @@ double det_likelihood(void * p_sigmodel_v) {
 				  0, 0,
 				  num_arrivals, (const Arrival_t **)pp_arrivals,
 				  pred_segment);
-    snprintf(desc, 50, "pred_signal_%d_%.4lf_%.4lf", i, env_decay, env_onset);
-    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc);
-    */
+    snprintf(desc, 50, "pred_signal_%d", i);
+    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-"); 
+    }
+
     /* ------------ end logging ------ */
 
 
