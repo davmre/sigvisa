@@ -12,51 +12,39 @@ from database.db import connect
 import netvisa, learn
 import utils.Laplace as Laplace
 
-def open_word_iter(filename):
-  """
-  Iterate a file word by word, ignoring whitespace and comments
-  """
-  filep = open(filename)
-  lines = filep.readlines()
-  for line in lines:
-    for word in line.split():
-      if word.isspace():
-        continue
-      elif word[0] == '#':
-        break
-      else:
-        yield word
-  filep.close()
-
-def load_qfvc(filename):
-  qfvc_file = open_word_iter(filename)
-  qfvc_file.next()                      # skip first word
-  
-  numdep = int(qfvc_file.next())
-  depths = np.array([float(qfvc_file.next()) for _ in range(numdep)])
-  
-  numdist = int(qfvc_file.next())
-  dists = np.array([float(qfvc_file.next()) for _ in range(numdist)])
-  
-  table = np.ndarray((numdep, numdist), float)
-  
-  for dep in range(numdep):
-    for dist in range(numdist):
-      table[dep, dist] = float(qfvc_file.next())
-  
-  return RectBivariateSpline(depths, dists, table)
-
+class NoTextPlot:
+  def __init__(self, real_plot, type1):
+    self._plot = real_plot
+    self._type1 = type1
+    
+  def plot(self, *args, **kwargs):
+    self._plot.plot(*args, **kwargs)
+    
+  def title(self, *args, **kwargs):
+    if not self._type1:
+      self._plot.title(*args, **kwargs)
+    
+  def xlabel(self, *args, **kwargs):
+    self._plot.xlabel(*args, **kwargs)
+    
+  def ylabel(self, *args, **kwargs):
+    self._plot.ylabel(*args, **kwargs)
+    
+  def text(self, *args, **kwargs):
+    # latex requires a $ around mathematical formulas
+    if self._type1 and len(args) >= 3:
+      args = args[:2] + (r'$' + args[2] + r'$',) + args[3:]
+    
+    self._plot.text(*args, **kwargs)
+    
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-r", "--hours", dest="hours", default=None,
-                    type="float",
-                    help = "inference on HOURS worth of data (all)")
-  parser.add_option("-k", "--skip", dest="skip", default=0,
-                    type="float",
-                    help = "skip the first HOURS of data (0)")
   parser.add_option("-1", "--type1", dest="type1", default=False,
                     action = "store_true",
                     help = "Type 1 fonts (False)")
+  parser.add_option("-n", "--numbins", dest="numbins", default=50,
+                    type = "int",
+                    help = "number of histogram bins (50)")
   parser.add_option("-p", "--phase", dest="phase", default="P",
                     help = "data on the specified phase or "" for all (P)")
   
@@ -65,128 +53,85 @@ def main(param_dirname):
   # use Type 1 fonts by invoking latex
   if options.type1:
     plt.rcParams['text.usetex'] = True
+    file_suffix = ".pdf"
+  else:
+    file_suffix = ".png"
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data("training", hours=options.hours, skip=options.skip)
+         = read_data("validation", hours=None, skip=0)
 
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
+  netmodel = learn.load_netvisa(param_dirname,
+                                start_time, end_time,
+                                detections, site_up, sites, phasenames,
+                                phasetimedef)
 
-  qfvc = load_qfvc(os.path.join(param_dirname, "qfvc.mb"))
-
-
-  overall_q_err = []
-  overall_snr = []
-  overall_mb = []
-  sta_q_err = dict((s,[]) for s in range(len(sites)))
+  all_zvals = []
   
   for evnum, event in enumerate(leb_events):
-    if event[EV_MB_COL] <= 2:
-      continue
-    
     evlist = leb_evlist[evnum]
-
+    
     for phaseid, detnum in evlist:
+      # restrict to the requested phase
       if len(options.phase) and options.phase != phasenames[phaseid]:
         continue
       
       det = detections[detnum]
       siteid = int(det[DET_SITE_COL])
-      dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
-
-      if len(leb_events) < 10:
-        print "mb %f log(a/t) %f qf %f" % (event[EV_MB_COL],
-                                    np.log10(det[DET_AMP_COL]/det[DET_PER_COL]),
-                                    float(qfvc(event[EV_DEPTH_COL], dist)))
       
-      obs_q = event[EV_MB_COL] - np.log10(det[DET_AMP_COL] / det[DET_PER_COL])
-      calc_q = float(qfvc(event[EV_DEPTH_COL], dist))
-      
-      overall_q_err.append(obs_q - calc_q)
-      sta_q_err[siteid].append(obs_q - calc_q)
+      ttime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
+                                     event[EV_DEPTH_COL], 0, phaseid, siteid)
 
-      overall_snr.append(det[DET_SNR_COL])
-      overall_mb.append(event[EV_MB_COL])
-
-  def plot_q_factor(title, data):
-    plt.figure()
-    plt.title(title)
-    n, bins, patches = plt.hist(data, 100, normed=True, facecolor='blue',
-                                alpha=1.0, label="data")
-    
-    mu, sigma = np.average(data), np.std(data)
-    gauss_pdf = mlab.normpdf(bins, mu, sigma)
-    plt.plot(bins, gauss_pdf, 'r--', linewidth=3, label="Gauss")
-    
-    print title, "mu", mu, "sigma", sigma, "avg. logpdf", \
-          norm.logpdf(data, mu, sigma).sum()/len(data)
-    
-    loc, scale = Laplace.estimate(data)
-    lap_pdf = np.exp(Laplace.ldensity(loc, scale, bins))
-    plt.plot(bins, lap_pdf, 'k-', linewidth=3, label="Laplace")
-
-    print title, "loc", loc, "scale", scale, "avg. logpdf", \
-          laplace.logpdf(data, loc, scale).sum()/len(data)
-    
-    ## prob, loc, scale = Laplace.estimate_laplace_uniform_dist(data, -8, 4)
-    ## lapu_pdf = np.exp(Laplace.ldensity_laplace_uniform_dist(prob, loc, scale,
-    ##                                                         -8, 4, bins))
-    ## plt.plot(bins, lapu_pdf, 'g-', linewidth=3, label="Laplace+Unif")
-    
-    plt.xlabel("Obs Q - Calc Q")
-    plt.legend()
-    
-    # draw Q-Q plots of the residuals
-    plt.figure()
-    probplot(data, (mu, sigma), dist='norm', fit=False, plot=plt)
-    plt.title("Normal distribution Probability Plot")
-    
-    plt.figure()
-    probplot(data, (loc, scale), dist='laplace', fit=False, plot=plt)
-    plt.title("Laplace distribution Probability Plot")
+      if ttime > 0:
+        zval, logprob, cdf = netmodel.arramp_zval_logprob_cdf(event[EV_MB_COL],
+                                         event[EV_DEPTH_COL],
+                                         ttime, siteid, phaseid,
+                                         det[DET_AMP_COL])
+        
+        all_zvals.append(zval)
   
-  # plot overall Q factors
-  plot_q_factor("Error in Q Factor, %s phase, all sites" % options.phase,
-                overall_q_err)
-
-  # array vs 3-C Q factors
-  plot_q_factor("Error in Q Factor, %s phase, all arrays" % options.phase,
-                sum([sta_q_err[siteid] for siteid, site in enumerate(sites)
-                     if site[SITE_IS_ARRAY]], []))
+  # histogram of Z vals
+  plt.figure(figsize=(8,4.8))
+  if not options.type1:
+    if len(options.phase):
+      plt.title("%s phase amplitude z vals, all sites" % options.phase)
+    else:
+      plt.title("all phase amplitude z vals, all sites")
   
-  plot_q_factor("Error in Q Factor, %s phase, all 3-C" % options.phase,
-                sum([sta_q_err[siteid] for siteid, site in enumerate(sites)
-                     if not site[SITE_IS_ARRAY]], []))
+  n, bins, patches = plt.hist(all_zvals, options.numbins,
+                              normed=True, alpha=0.5,
+                              facecolor="blue",
+                              label="validation z vals")
+  stdnorm_pdf = mlab.normpdf(bins, 0, 1)
+  plt.plot(bins, stdnorm_pdf, 'k--', linewidth=3, label="Standard Normal")
+  plt.ylim(0, .6)
+  plt.xlabel("z val")
+  plt.ylabel("probability")
+  plt.legend(loc="upper left")
+  plt.savefig(os.path.join("output", "amp-%s-zvals%s"
+                           % (options.phase, file_suffix)))
   
-  # top sites
-  sorted_siteids = range(len(sites))
-  sorted_siteids.sort(cmp=lambda x,y: cmp(len(sta_q_err[x]), len(sta_q_err[y])),
-                      reverse=True)
   
-  for siteid in sorted_siteids[:4]:
-    plot_q_factor("Error in Q Factor, %s phase, site %d" % (options.phase,
-                                                            siteid),
-                  sta_q_err[siteid])
+  # Q-Q plot of Z vals
+  plt.figure(figsize=(8,4.8))
+  probplot(all_zvals, (0, 1), dist='norm', fit=False,
+           plot=NoTextPlot(plt, options.type1))
+  if not options.type1:
+    plt.title("Amplitude Z-vals phase=%s Probability Plot" % options.phase)
+  plt.savefig(os.path.join("output", "amp-%s-zvals-qq%s"
+                           % (options.phase, file_suffix)))
   
-  plt.figure()
-  plt.title("%s phase" % options.phase)
-  plt.scatter(overall_q_err, overall_snr, s=1)
-  plt.xlabel("Obs Q - Calc Q")
-  plt.ylabel("SNR")
-  
-  plt.figure()
-  plt.title("%s phase" % options.phase)
-  plt.scatter(overall_q_err, overall_mb, s=1)
-  plt.xlabel("Obs Q - Calc Q")
-  plt.ylabel(r'$m_b$')
-  
-  plt.figure()
-  plt.title("%s phase" % options.phase)
-  plt.scatter(overall_mb, overall_snr, s=1)
-  plt.xlabel(r'$m_b$')
-  plt.ylabel("SNR")
   
   plt.show()
 
 if __name__ == "__main__":
-  main("parameters")
+  try:
+    main("parameters")
+  except SystemExit:
+    raise
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    pdb.post_mortem(sys.exc_traceback)
+    raise

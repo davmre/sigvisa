@@ -341,3 +341,8 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   else:
     return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
            sel3_evlist, site_up, sites, phasenames, phasetimedef
+
+def compute_arid2num(detections):
+  return dict((det[DET_ARID_COL], detnum) for detnum, det
+              in enumerate(detections))
+

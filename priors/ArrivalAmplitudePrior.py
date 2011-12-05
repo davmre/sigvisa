@@ -137,17 +137,24 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   STEP = .1
   bins = np.arange(-7, 8, STEP)
   if options.gui:  
-    plt.figure()
-    plt.title("log(amp) for false detections -- all sites")
+    plt.figure(figsize=(8,4.8))
+    if not options.type1:
+      plt.title("log(amp) for false detections -- all sites")
     plt.hist(false_logamps, bins, label="data", alpha=.5)
     plt.plot(bins, [utils.GMM.evaluate(false_wts, false_means, false_stds,
                                        x+STEP/2)
                     * STEP * len(false_logamps) for x in bins], label="model",
-             linewidth=3)
-
+             linewidth=3, color="black")
+    
     plt.xlabel("log(amp)")
     plt.ylabel("frequency")
-    plt.legend()
+    plt.legend(loc="upper left")
+    if options.writefig is not None:
+      basename = os.path.join(options.writefig, "ArrivalAmplitudeFalseAllSites")
+      if options.type1:
+        plt.savefig(basename+".pdf")
+      else:
+        plt.savefig(basename+".png")
 
   # sample some points from the overall false detection empirical distribution
   false_prior = [false_logamps[np.random.randint(len(false_logamps))] for
@@ -184,15 +191,23 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       print_2gmm(wts, means, stds)
     
     if sitenum in [6, 113] and options.gui:
-      plt.figure()
-      plt.title("log(amp) for false detections -- %d" % sitenum)
+      plt.figure(figsize=(8,4.8))
+      if not options.type1:
+        plt.title("log(amp) for false detections -- %d" % sitenum)
       plt.hist(data, bins, label="data", alpha=.5)
       plt.plot(bins, [utils.GMM.evaluate(wts, means, stds, x+STEP/2)
                       * STEP * len(data) for x in bins], label="model",
-               linewidth=3)
+               linewidth=3, color="black")
       plt.xlabel("log(amp)")
       plt.ylabel("frequency")
-      plt.legend()
+      plt.legend(loc="upper left")
+      if options.writefig is not None:
+        basename = os.path.join(options.writefig, "ArrivalAmplitudeFalseSite%d"
+                                % sitenum)
+        if options.type1:
+          plt.savefig(basename+".pdf")
+        else:
+          plt.savefig(basename+".png")
 
     for phase in range(earthmodel.NumTimeDefPhases()):
       data = site_phase_logamps[sitenum][phase] + phase_prior[phase]
