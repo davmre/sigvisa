@@ -27,7 +27,7 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
 void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double max_time, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals);
 void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals);
 
-
+double segment_likelihood_AR_outside(void * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
 
 double det_likelihood(void * p_sigmodel_v, int write_log);
 
