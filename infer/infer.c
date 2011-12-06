@@ -1344,11 +1344,11 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
         break;
     }
 
-    LogInfo("adding initial event proposals");
+    //LogInfo("adding initial event proposals");
     
     add_propose_invert_events(NULL, p_sigmodel, p_world);
-    LogDebug("logging segment proposals");
-    log_segments(p_sigmodel, p_world);
+    //LogDebug("logging segment proposals");
+    //log_segments(p_sigmodel, p_world);
     /*    for (int i=0; i < numsites; ++i) {
       if (i != 2 && i != 91 && i != 109) continue;
       for (int j=0; j < numtimedefphases; ++j) {
@@ -1416,8 +1416,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       }
     }
     log_events(p_world);
-    LogDebug("logging arrivals");
-    log_segments(p_sigmodel, p_world);
+    //LogDebug("logging arrivals");
+    //log_segments(p_sigmodel, p_world);
 
     /* keep track of whether or not we have wrapped around inverting
      * detections this will trigger further inverts to perturb around
@@ -1484,8 +1484,8 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 
     /* write out any inferred events */
 
-    LogDebug("logging segments");
-    log_segments(p_sigmodel, p_world);
+    //LogDebug("logging segments");
+    //log_segments(p_sigmodel, p_world);
     LogInfo("writing events");
     write_events(NULL, p_sigmodel, p_world);
     

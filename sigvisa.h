@@ -10,7 +10,7 @@
 
 #include <liblogger/liblogger_levels.h>
 // possible log levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL 
-#define LOG_LEVEL LOG_LEVEL_DEBUG
+#define LOG_LEVEL LOG_LEVEL_INFO
 #define LOG_MODULE_NAME "sigvisa"
 #include <liblogger/liblogger.h>
 
