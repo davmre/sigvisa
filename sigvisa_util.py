@@ -91,7 +91,7 @@ def window_energies(trace, window_size=1, overlap=0.5):
 
   for i in range(nwindows):
     wstart = offset*i
-    wstop = np.max(wstart+window_size, len(data))
+    wstop = min(wstart+window_size, len(data))
     
     #print "window ", i, " runs from ", wstart, '-', wstop
     window = data[wstart:wstop]
@@ -218,10 +218,8 @@ def load_traces(cursor, stations, start_time, end_time, process=None):
             for (chan, st, et) in segment:
 
               stm = max(st, float(start_time))
-              print stm, st, start_time
               
               etm = min(et, float(end_time))
-              print etm, et, end_time
 
               print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}", 
               try:
