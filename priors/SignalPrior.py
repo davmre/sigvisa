@@ -13,23 +13,23 @@ def learn(filename, sigmodel, earthmodel, traces, events, leb_evlist, detections
     Find maximum-likelhood parameter estimates 
     """
 
-    #ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
+    ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
 
     f = open(filename, 'w')
     f.write("5000 500 500\n")
     f.write("2 .2 .7 10\n")
 
-    print "learning envelope params"
-    xopt = learn_envelope_params(sigmodel)
-    #sta_noise_means, sta_noise_vars = learn_noise_params(f, sigmodel, traces, events, ttimes)
+    #print "learning envelope params"
+    #xopt = learn_ar_params(sigmodel)
+    sta_noise_means, sta_noise_vars = learn_noise_params(f, sigmodel, traces, events, ttimes)
 
     f.close()
 
-    #return sta_noise_means, sta_noise_vars
+    return sta_noise_means, sta_noise_vars
 
 
 def learn_envelope_params(sigmodel):
-    ll = lambda (decay, onset): -1 * sigmodel.detection_likelihood(1, decay, onset)
+    ll = lambda (decay, onset): -1 * sigmodel.detection_likelihood_env(1, decay, onset)
 
     print "starting the optimizer"
     #xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((1.5, .08, .4)), full_output=True)
@@ -41,7 +41,19 @@ def learn_envelope_params(sigmodel):
     print "give likelihood ", ll(xopt)
     return xopt
     
+def learn_ar_params(sigmodel):
+    ll = lambda (p1, e): -1 * sigmodel.detection_likelihood_ar(1, (p1,), e)
 
+    print "starting the optimizer"
+    #xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((1.5, .08, .4)), full_output=True)
+
+    ranges = ((0, .99), (0.01, 0.15))
+    xopt  = scipy.optimize.brute(ll, ranges, Ns=10, full_output=0)
+    
+    print "learned params: ", xopt
+    print "give likelihood ", ll(xopt)
+    return xopt
+    
 def expectation_over_noise(fn, traces, events, ttimes):
     MAX_EVENT_LENGTH = 50 # seconds
     
