@@ -1418,7 +1418,6 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     log_events(p_world);
     LogDebug("logging arrivals");
     log_segments(p_sigmodel, p_world);
-    return;
 
     /* keep track of whether or not we have wrapped around inverting
      * detections this will trigger further inverts to perturb around
@@ -1436,7 +1435,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
       old_score = p_world->world_score;
       
       /* remove some obvious events */
-      //      numdel = remove_negative_events(p_world);
+            numdel = remove_negative_events(p_world);
       
       if (numdel > 0)
       {
@@ -1461,7 +1460,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
     /* only remove negative events if numsamples > 0. This allows a
      * numsamples=0 run to save all the proposed events */
     if (p_world->numsamples)
-      //remove_negative_events(p_world);
+      remove_negative_events(p_world);
     
 /*
     change_events(p_sigmodel, p_world, 2);
