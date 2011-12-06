@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 #include <float.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
@@ -145,6 +146,7 @@ void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double ma
       if (!USE_PHASE(j)) continue;
       Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + j;
 
+      //LogInfo("testing arrival %s", arrival_str(p_arr));
       if (p_arr->amp == 0 || p_arr->time <= 0) {
 	continue;
       }
@@ -564,7 +566,7 @@ void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, dou
     end_idx = 1;
   }
 
-  *len = end_idx;
+  *len = end_idx+15*hz;
   double * means = (double *) calloc(*len, sizeof(double));
 
   if (means == NULL) {
@@ -575,7 +577,7 @@ void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, dou
   for (int i=0; i < peak_idx; ++i) {
     means[i] = exp(prior->env_onset * (i/hz));
   }
-  for (int i=peak_idx; i < end_idx; ++i) {
+  for (int i=peak_idx; i < *len; ++i) {
     means[i] = exp(prior->env_decay * ((end_idx - i)/hz));
   }
   
@@ -1097,6 +1099,7 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
   gsl_rng_env_setup();
   T = gsl_rng_default;
   r = gsl_rng_alloc (T);
+  gsl_rng_set(r, time(NULL));
 
   double stddev = sqrt(prior->ar_noise_sigma2);
 
@@ -1201,12 +1204,13 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
     p_segment->p_channels[CHAN_BHN]->p_data[t] = env_bhn;
 									   
     if(sampleNoise) {
+      printf("sampling gaussian noise with var %lf\n", prior->p_stations[siteid-1].chan_vars[CHAN_BHZ]);
       p_segment->p_channels[CHAN_BHZ]->p_data[t] += 
-	gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_means[CHAN_BHZ])); 
+	fabs(gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_vars[CHAN_BHZ]))); 
       p_segment->p_channels[CHAN_BHE]->p_data[t] += 
-	gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_means[CHAN_BHE])); 
+	fabs(gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_vars[CHAN_BHE]))); 
       p_segment->p_channels[CHAN_BHN]->p_data[t] += 
-	gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_means[CHAN_BHN])); 
+	fabs(gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_vars[CHAN_BHN]))); 
     }
 
   }
@@ -1220,6 +1224,13 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
   gsl_rng_free(r);
 
 }
+
+
+double segment_likelihood_AR_outside(void * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
+  SigModel_t * p_sm = (SigModel_t *) p_sigmodel;
+  return segment_likelihood_AR(p_sm, p_segment, num_arrivals, pp_arrivals);
+}
+
 
 
 
