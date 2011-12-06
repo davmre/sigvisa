@@ -13,13 +13,14 @@ Integrated Seismological Analysis.
 
 - Next, compile the sources by calling "python setup.py build_ext --inplace"
 
-- Now, train the priors by calling "python learn.py"
+- Now, train the priors by calling "python learn.py" and "python
+  learn.py --sigvisa"
 
 - To test your model run "python score.py"
 
 - To do inference and store the results into the database
 
-  call "python infer.py -r 1" (to do inference on 1 hour)
+  call "python infer.py --sigvisa -r 1" (to do inference on 1 hour)
 
   For longer inference you might want to use the handy utility bgjob
   to run jobs in the background, for example:
@@ -43,7 +44,7 @@ Integrated Seismological Analysis.
 Directory Layout
 ================
 
-netvisa/
+sigvisa/
 
   README.txt
   netvisa.blog                      -- describes the model in the BLOG language
