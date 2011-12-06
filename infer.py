@@ -271,8 +271,8 @@ def main(param_dirname):
   parser.add_option("-y", "--noarrays", dest="noarrays", default=False,
                     action="store_true",
                     help = "omit data from array stations, used for sigvisa testing (False)")
-  parser.add_option("--ar-perturb", dest="ar_perturb", default=False,
-                    action="store_true", help = "use autoregressive perturbation model for signals (False)")
+  parser.add_option("--no-ar-perturb", dest="ar_perturb", default=True,
+                    action="store_false", help = "don't use autoregressive perturbation model for signals (False)")
   parser.add_option("--synthetic", dest="synthetic", default=False,
                     action="store_true", help = "generate synthetic signals based on hard-coded events, used for sigvisa testing (False)")
   parser.add_option("--det-propose", dest="det_propose", default=False,
