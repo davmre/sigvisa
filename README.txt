@@ -1,10 +1,11 @@
 This package contains the SIG-VISA implementation. Signal-based Vertically
 Integrated Seismological Analysis.
 
-- numpy and scipy are required. To test them, run:
-  python -m utils.LogisticModel
-  Also, matplotlib and Basemap are required for the visualization, and 
-  liblogger (http://liblogger.sourceforge.net/) for logging.  
+- numpy and scipy are required. To test them, run: python -m
+  utils.LogisticModel Also, matplotlib and Basemap are required for
+  the visualization, liblogger (http://liblogger.sourceforge.net/) for
+  logging, and the GNU scientific library (GSL) for numerical
+  computation.
 
 - Load the data in a mysql database:
   copy all the csv files into the database directory
