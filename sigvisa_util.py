@@ -197,7 +197,6 @@ def load_traces(cursor, stations, start_time, end_time, process=None):
     traces_processed = []
 
     for (idx, sta) in enumerate(stations):
-
         sql = "select chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
         cursor.execute(sql)
         wfdiscs = cursor.fetchall()
@@ -217,10 +216,17 @@ def load_traces(cursor, stations, start_time, end_time, process=None):
             segment_chans = []
             segment_chans_processed = []
             for (chan, st, et) in segment:
-              print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", st, ", end_time: ", et, "}", 
+
+              stm = max(st, float(start_time))
+              print stm, st, start_time
+              
+              etm = min(et, float(end_time))
+              print etm, et, end_time
+
+              print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}", 
               try:
-                trace = utils.waveform.fetch_waveform(sta, chan, st, et)
-                
+                trace = utils.waveform.fetch_waveform(sta, chan, stm, etm)
+            
 
                 if chan == "BH1":
                   trace.stats['channel'] = "BHE"
@@ -436,7 +442,7 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
     else:
         stations = []
         for siteid in stalist:
-            cursor.execute("select sta, id from static_siteid where statype='ss' and id=%d" % (siteid))
+            cursor.execute("select sta, id from static_siteid where id=%d" % (siteid))
             a = cursor.fetchone()
             if a is not None:
                 stations.append(np.array(a)[0])
