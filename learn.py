@@ -103,13 +103,7 @@ def learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, p
   print "loaded associations for ", len(events), " events."
 
 
-  sigmodel = load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
-                          sites, phasenames, phasetimedef)
-
   fake_det = [sigvisa_util.real_to_fake_det(x) for x in leb_detections]
-  sigmodel.set_fake_detections(fake_det)
-  print "set detections", fake_det
-
 
   #cursor.execute("select lon, lat, depth, time, mb, orid from leb_origin where orid=5297348")
   #events = np.array(cursor.fetchall())
@@ -118,13 +112,12 @@ def learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, p
   #energies = sigmodel.get_signals()  
   
   energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5)
-  sigmodel.set_waves(traces)
-  sigmodel.set_signals(energies)
 
  
   return priors.SignalPrior.learn(os.path.join(param_dirname, "SignalPrior.txt"),
-                                  sigmodel, earthmodel, energies, events, evlist, 
-                                  idcx_detections, arid2num)
+                                  earthmodel, energies, events, evlist, 
+                                  idcx_detections, arid2num, energies, param_dirname, start_time, 
+                                  end_time, site_up, sites, phasenames, phasetimedef, fake_det)
   
 
 def main(param_dirname):

@@ -13,12 +13,13 @@ static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args);
-static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args);
+
+static PyObject * py_canonical_channel_num(PyObject * self, PyObject * args);
 
 extern PyTypeObject py_EarthModel;
 
@@ -44,9 +45,6 @@ static PyMethodDef SigModel_methods[] = {
   {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "
    "-> num_translated\n"},
-  {"canonical_channel_num", (PyCFunction)py_canonical_channel_num, METH_VARARGS,
-   "canonical_channel_num(chan_name) "
-   "-> channel_num\n"},
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
    "score_world(events, arrtimes, verbose) "
    "-> log probability\n"},
@@ -174,6 +172,9 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 static PyObject * traceClass_obj;
 
 static PyMethodDef sigvisaMethods[] = {
+  {"canonical_channel_num", (PyCFunction)py_canonical_channel_num, METH_VARARGS,
+   "canonical_channel_num(chan_name) "
+   "-> channel_num\n"},
   {"srand", py_srand, METH_VARARGS,
     "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
@@ -239,33 +240,35 @@ static void py_sig_model_dealloc(SigModel_t * self)
   }
   
   
-
-  for (int i=0; i < self->numsegments; ++i) {
-    for(int j=0; j < NUM_CHANS; ++j) {
-      Signal_t *channel = self->p_segments[i].p_channels[j];
-      if (channel != NULL) {
-	if (channel->py_array != NULL) {
-	  Py_DECREF(channel->py_array);
+  if(self->p_segments) {
+    for (int i=0; i < self->numsegments; ++i) {
+      for(int j=0; j < NUM_CHANS; ++j) {
+	Signal_t *channel = self->p_segments[i].p_channels[j];
+	if (channel != NULL) {
+	  if (channel->py_array != NULL) {
+	    Py_DECREF(channel->py_array);
+	  }
+	  free(self->p_segments[i].p_channels[j]);
 	}
-	free(self->p_segments[i].p_channels[j]);
       }
     }
+    free(self->p_segments);
   }
-  free(self->p_segments);
 
-  for (int i=0; i < self->numsegments; ++i) {
-    for(int j=0; j < NUM_CHANS; ++j)  {
-      Signal_t *channel = self->p_wave_segments[i].p_channels[j];
-      if (channel != NULL) {
-	if (channel->py_array != NULL) {
-	  Py_DECREF(channel->py_array);
+  if(self->p_wave_segments) {
+    for (int i=0; i < self->numsegments; ++i) {
+      for(int j=0; j < NUM_CHANS; ++j)  {
+	Signal_t *channel = self->p_wave_segments[i].p_channels[j];
+	if (channel != NULL) {
+	  if (channel->py_array != NULL) {
+	    Py_DECREF(channel->py_array);
+	  }
+	  free(self->p_wave_segments[i].p_channels[j]);
 	}
-	free(self->p_wave_segments[i].p_channels[j]);
       }
     }
+    free(self->p_wave_segments);
   }
-  free(self->p_wave_segments);
-
 
   EventLocationPrior_UnInit(&self->event_location_prior);
   ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
@@ -465,7 +468,7 @@ PyObject* canonical_channel_name(int num) {
    return result;
  }
 
-static PyObject * py_canonical_channel_num(SigModel_t * p_sigmodel, PyObject * args) {
+static PyObject * py_canonical_channel_num(PyObject * self, PyObject * args) {
   PyObject * py_chan_str;
   if (!PyArg_ParseTuple(args, "O!", &PyString_Type, &py_chan_str))
     return NULL;
