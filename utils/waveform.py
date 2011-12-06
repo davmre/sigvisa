@@ -87,7 +87,7 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
     #st.plot(color='k')
 
 # does not save for you - you need to call savefig() yourself!
-def plot_segment(channel_traces, title=None, all_det_times=None):
+def plot_segment(channel_traces, title=None, all_det_times=None, format = "k:"):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -112,7 +112,7 @@ def plot_segment(channel_traces, title=None, all_det_times=None):
     stime = trc.stats["starttime_unix"]
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)
 
-    plt.plot(timevals, trc, 'k:')
+    plt.plot(timevals, trc, format)
 
     if all_det_times is not None:
       maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
@@ -290,10 +290,9 @@ def fetch_waveform(station, chan, stime, etime):
   data = []
   
   while True:
-    cursor.execute("select * from idcx_wfdisc where sta = '%s' and chan ='%s' "
-                   "and time <= %f and %f < endtime" %
-                   (station, chan, stime, stime))
-    
+
+    sql = "select * from idcx_wfdisc where sta = '%s' and chan ='%s' and time <= %f and %f < endtime" % (station, chan, stime, stime)
+    cursor.execute(sql)
     waveform = cursor.fetchone()
     if waveform is None:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
