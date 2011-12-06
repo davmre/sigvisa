@@ -18,6 +18,7 @@ static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args);
+PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 
 extern PyTypeObject py_EarthModel;
 
@@ -56,6 +57,9 @@ static PyMethodDef SigModel_methods[] = {
    "detection_likelihood(ar_order, ar_coeff_tuple, ar_noise_variance)"},
   {"arrival_likelihood", (PyCFunction)py_arr_likelihood, METH_VARARGS,
    "arrival_likelihood(arrtime, arramp, arrazi, arrslo)"
+   "-> log likelihood\n"},
+  {"event_likelihood", (PyCFunction)py_event_likelihood, METH_VARARGS,
+   "event_likelihood(time, lon, lat, depth, mb)"
    "-> log likelihood\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
@@ -211,6 +215,8 @@ PyObject * py_srand(PyObject * self, PyObject * args)
   if (!PyArg_ParseTuple(args, "i", &seed))
     return NULL;
   
+  printf("set seed %i\n", seed);
+
   srand(seed);
 
   Py_INCREF(Py_None);
@@ -624,7 +630,32 @@ int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename,
   return retval;
 }
 
+PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
+  LogInfo ("hello!");
+  double time, lon, lat, depth, mb;
+  if (!PyArg_ParseTuple(args, "ddddd", &time, &lon, &lat, &depth, &mb))
+    return NULL;
+
+  Event_t * p_event = ALLOC_EVENT(NULL, p_sigmodel);
+
+    p_event->evtime = time;
+    p_event->evlon = lon;
+    p_event->evlat = lat;
+    p_event->evdepth = depth;
+    p_event->evmag = mb;
+
+    LogInfo("optimizing...");
+    optimize_arrivals(p_sigmodel, p_event, 0, NULL);
+    LogInfo("scoring...");
+    score_event_sig(p_sigmodel, p_event, 0, NULL);
+    LogInfo("score %lf",p_event->evscore);
+    double score = p_event->evscore;
+
+    free(p_event); 
+
+    return Py_BuildValue("d", score); 
+}
 
 PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
@@ -637,9 +668,6 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
 
   ChannelBundle_t * p_segment = p_sigmodel->p_segments;
-
-
-
 
   Arrival_t * p_best = calloc(1, sizeof(Arrival_t));
   p_best->time = arrtime;
@@ -654,7 +682,7 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   p_arr->azi = arrazi;
   p_arr->azi = arrslo;
 
-  double best_score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_best);
+  double best_score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_best);
 
   for (int i=0; i < 5; ++i) {
 
@@ -665,8 +693,7 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   double max_amp = MAX(arramp*pow(amp_step, num_amp_steps), 0.1);
   for (double amp = min_amp; amp <= max_amp; amp *= amp_step) { 
     p_arr->amp = amp;
-    double score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_arr);
-    LogInfo("score %lf vs best %lf arrival %s", score, best_score, p_arr);
+    double score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_arr);
     if (score > best_score) {
       best_score = score;
       memcpy(p_best, p_arr, sizeof(Arrival_t));
@@ -680,7 +707,7 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   double azi_step = 36;
   for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
     p_arr->azi = azi;
-    double score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_arr);
+    double score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_arr);
     if (score > best_score) {
       best_score = score;
       memcpy(p_best, p_arr, sizeof(Arrival_t));
@@ -695,7 +722,7 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   double slo_step = 5;
   for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
     p_arr->slo = slo;
-    double score = segment_likelihood_AR(p_sigmodel, p_segment, 1, &p_arr);
+    double score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_arr);
     if (score > best_score) {
       best_score = score;
       memcpy(p_best, p_arr, sizeof(Arrival_t));
@@ -706,13 +733,14 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   }
 
 
+  LogInfo("best arrival %s", arrival_str(p_best));
 
     /* ------------ begin logging ------ */
 
     if(write_log) {
-     char desc[50];
-    snprintf(desc, 50, "real_signal");
-    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "g-");
+      char desc[50];
+      snprintf(desc, 50, "real_signal");
+    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "r-");
     ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
     pred_segment->start_time = p_segment->start_time;
     pred_segment->hz = p_segment->hz;
@@ -723,10 +751,12 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 				  0, 0,
 				  1, &p_best,
 				  pred_segment);
-    snprintf(desc, 50, "pred_signal_%.3lf_%.3lf_%.3lf_%.3lf", p_best->time, p_best->amp, p_best->azi, p_best->slo);
+    snprintf(desc, 50, "pred_signal", p_best->time, p_best->amp, p_best->azi, p_best->slo);
     save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-");
     }
     /* ------------ end logging ------ */
+
+
 
 
   free(p_arr);
@@ -1073,6 +1103,8 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     int num_arrivals;
     Arrival_t ** pp_arrivals;
     arrival_list(p_sigmodel->p_earth, p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents, (const Event_t **)pp_events, &num_arrivals, &pp_arrivals);    
+
+    LogInfo("siteid %d time %lf end %lf events %d", p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents);
 
     LogInfo("sampling siteid %d with %d arrivals", siteid, num_arrivals);
     SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
