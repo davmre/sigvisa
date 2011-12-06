@@ -119,9 +119,9 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
     /* check if the site is up */
     //if (!SigModel_IsSiteUp(p_sigmodel, siteid, pred_arrtime))
     //continue;
-    if (!have_signal(p_sigmodel, siteid, pred_arrtime - 5, pred_arrtime+MAX_ENVELOPE_LENGTH)) {
+    /*if (!have_signal(p_sigmodel, siteid, pred_arrtime - 5, pred_arrtime+MAX_ENVELOPE_LENGTH)) {
       continue;
-    }
+      }*/
 
 
       Arrival_t * p_arr = p_event->p_arrivals + 
@@ -334,16 +334,16 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   LogTrace("    naive sta score is %lf", best_score);
   /* then try a grid search over arrival info */
   
-  const double time_step = .5;
-  const double num_time_steps = 10;
+  const double time_step = 1;
+  const double num_time_steps = 8;
   const double amp_step = 1.5;
-  const double num_amp_steps = 5;
+  const double num_amp_steps = 7;
   //const double azi_step = 8;
   //const double num_azi_steps = 10;
   //const double slo_step = 1;
   //const double num_slo_steps = 2;
 
-  for (int i=0; i < 10; ++i) {
+  for (int i=0; i < 4; ++i) {
 
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
       if (!USE_PHASE(phase)) continue;
@@ -896,6 +896,8 @@ void *propose_invert_step_helper(void *args)
     /* fix the depth to 0 */
     p_event->evdepth = 0;
 
+    LogDebug("starting to invert %s", event_str(p_inv_events + det_off));
+
     clock_t start = clock();
 
     for (mag=3; mag <4.1; mag+=1)
@@ -913,9 +915,13 @@ void *propose_invert_step_helper(void *args)
           p_event->evlat = lat + latidx * degree_step;
           FIXUP_EVLAT(p_event);
 
-          trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+	  for (int phase = 0; phase < EarthModel_NumTimeDefPhases(p_sigmodel->p_earth); ++phase) {
+	    if(!USE_PHASE(phase)) continue;
+	    
+
+	    trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
                                            p_event->evlat, p_event->evdepth,0,
-                                           EARTH_PHASE_P, p_inv_det->site_det-1);
+                                           phase, p_inv_det->site_det);
           if (trvtime < 0)
             continue;
 
@@ -923,6 +929,7 @@ void *propose_invert_step_helper(void *args)
 
           if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
           {
+	    LogDebug("continuing time %lf dtime %lf ttime %lf low %lf high %lf", p_event->evtime, p_inv_det->time_det, trvtime, time_low, time_high);
             continue;
           }
 
@@ -932,7 +939,7 @@ void *propose_invert_step_helper(void *args)
 	    propose_best_detections(p_netmodel, p_event, det_low, det_high,
 				    p_skip_det, 0 /* all phases */);
 	  } else {
-	    LogTrace("optimizing arrivals for %s", event_str(p_event));
+	    LogDebug("optimizing arrivals for %s", event_str(p_event));
 	    optimize_arrivals(p_sigmodel, p_event, num_other_events, pp_other_events);
 	  }
 
@@ -943,7 +950,9 @@ void *propose_invert_step_helper(void *args)
 	    COPY_EVENT(p_netmodel, p_sigmodel, params->p_best_event, p_event);
 
             LogDebug("CURR BEST: %s", event_str(params->p_best_event));
-          }
+          } else {
+	    LogDebug("score %lf not better than %lf", p_event->evscore, params->p_best_event->evscore);
+	  }
 
 	  if (p_event->evscore > p_best_nonzero_event->evscore)
           {
@@ -952,7 +961,7 @@ void *propose_invert_step_helper(void *args)
           }
         }
       }
-
+      }
       
       
 
