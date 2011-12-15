@@ -16,7 +16,8 @@ typedef struct PhaseAmp_t
   double mb_coeff;
   double depth_coeff;
   double ttime_coeff;
-
+  double ttime0_coeff;
+  
   double std;                                /* standard deviation */
   
 } PhaseAmp_t;

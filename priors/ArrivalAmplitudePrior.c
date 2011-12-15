@@ -54,9 +54,10 @@ void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
       
       p_phase = prior->p_site_phase_amp + siteid * prior->numphases + phaseid;
     
-      if (5 != fscanf(fp, "%lg %lg %lg %lg %lg\n", &p_phase->intercept,
+      if (6 != fscanf(fp, "%lg %lg %lg %lg %lg %lg\n", &p_phase->intercept,
                       &p_phase->mb_coeff, &p_phase->depth_coeff,
-                      &p_phase->ttime_coeff, &p_phase->std))
+                      &p_phase->ttime_coeff, &p_phase->ttime0_coeff, 
+                      &p_phase->std))
       {
         fprintf(stderr, "Error reading amp model for site %d phase %d\n", 
                 siteid, phaseid);
@@ -90,7 +91,9 @@ double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
 
   return Gaussian_logprob(logamp, p_phase->intercept + p_phase->mb_coeff * mb
                           + p_phase->depth_coeff * depth
-                          + p_phase->ttime_coeff * ttime, p_phase->std);
+                          + p_phase->ttime_coeff * ttime
+                          + p_phase->ttime0_coeff * exp(-ttime/50.0), 
+                          p_phase->std);
 }
 
 double FalseArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * 
@@ -143,7 +146,9 @@ double ArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * prior,
 
   return Gaussian_cdf(logamp, p_phase->intercept + p_phase->mb_coeff * mb
                       + p_phase->depth_coeff * depth
-                      + p_phase->ttime_coeff * ttime, p_phase->std);
+                      + p_phase->ttime_coeff * ttime
+                      + p_phase->ttime0_coeff * exp(-ttime/50.0), 
+                      p_phase->std);
 }
 
 double ArrivalAmplitudePrior_zval(const ArrivalAmplitudePrior_t * prior,
@@ -168,7 +173,8 @@ double ArrivalAmplitudePrior_zval(const ArrivalAmplitudePrior_t * prior,
 
   return (logamp - (p_phase->intercept + p_phase->mb_coeff * mb
                     + p_phase->depth_coeff * depth
-                    + p_phase->ttime_coeff * ttime)) /  p_phase->std;
+                    + p_phase->ttime_coeff * ttime
+                    + p_phase->ttime0_coeff * exp(-ttime/50.0))) / p_phase->std;
 }
 
 double FalseArrivalAmplitudePrior_cdf(const ArrivalAmplitudePrior_t * 

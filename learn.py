@@ -79,7 +79,12 @@ def main(param_dirname):
   parser.add_option("-m", "--model", dest="model",
                     default=None, help = "Which model(s) to learn (all)")
   parser.add_option("-w", "--writefig", dest="writefig",
-                    default=None, help = "Directory to save figures (None)")
+                    default=None, help = "Directory to save figures (None)",
+                    metavar="DIR")
+  parser.add_option("-d", "--datadir", dest="datadir",
+                    default=None, help = "Directory to save data (None)",
+                    metavar="DIR")
+  
   (options, args) = parser.parse_args()
 
   # use Type 1 fonts by invoking latex
