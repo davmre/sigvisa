@@ -85,7 +85,6 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     writer.writerow(["SITEID", "PHASEID", "MB", "DEPTH", "TTIME", "LOGAMP"])
   # create a dataset for each site, phase and for all sites, each phase
   false_logamps = []
-  all_phase_logamps = []
   phase_logamps = dict((phase, [])
                        for phase in range(earthmodel.NumTimeDefPhases()))
   site_false_logamps = dict((sitenum, []) for sitenum in
@@ -111,7 +110,6 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
                detections[detnum, DET_TIME_COL] - leb_events[evnum,EV_TIME_COL],
                np.log(detections[detnum, DET_AMP_COL]))
 
-      all_phase_logamps.append(datum)
       phase_logamps[phase].append(datum)
       site_phase_logamps[sitenum][phase].append(datum)
 
@@ -175,22 +173,15 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   # sample some points from the overall false detection empirical distribution
   false_prior = [false_logamps[np.random.randint(len(false_logamps))] for
                  i in range(NUM_PRIOR)]
-
+  
   # learn the overall log(amp) model for each phase
-  all_phase_prior = [all_phase_logamps[
-    np.random.randint(len(all_phase_logamps))] for i in range(NUM_PRIOR)]
-  phase_prior = {}
-  for phase in range(earthmodel.NumTimeDefPhases()):
-    data = phase_logamps[phase] + all_phase_prior
-    phase_prior[phase] = [data[np.random.randint(len(data))]
-                          for i in range(NUM_PRIOR)]
-    coeffs = learn_amp_model(data)
-    #print_list(fp, coeffs)
-    #print >> fp
-
-    if options.verbose:
-      print "Overall phase %d amplitude coeffs:\n" % phase, coeffs
-
+  phase_coeffs = dict((phase, learn_amp_model(phase_logamps[phase]))
+                       for phase in range(earthmodel.NumTimeDefPhases()))
+  
+  if options.verbose:
+    for phase in range(earthmodel.NumTimeDefPhases()):
+      print "Overall phase %d amplitude coeffs:\n" % phase, phase_coeffs[phase]
+  
   if options.gui:
     all_pred, all_res = [], []
   
@@ -229,8 +220,11 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
           plt.savefig(basename+".png")
 
     for phase in range(earthmodel.NumTimeDefPhases()):
-      data = site_phase_logamps[sitenum][phase] + phase_prior[phase]
-      coeffs = learn_amp_model(data)
+      data = site_phase_logamps[sitenum][phase]
+      if len(data) < 10:
+        coeffs = phase_coeffs[phase]
+      else:
+        coeffs = learn_amp_model(data)
       print_list(fp, coeffs)
       print >> fp
       
