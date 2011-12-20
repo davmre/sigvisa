@@ -268,7 +268,7 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 
 #define MAX_PHASE(ntdp) ntdp
 
-#define USE_PHASE(phase) (phase == 0 || phase == 4)
+#define USE_PHASE(phase) (phase == 0)
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);
