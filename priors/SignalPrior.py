@@ -6,59 +6,67 @@ import time
 from obspy.core import Trace, Stream, UTCDateTime
 import learn as l,sigvisa
 
-
+LEARN_NOISE = False
+LEARN_SHAPE = True
+LEARN_PERTURB = False
+WRITE_LEARNED = LEARN_NOISE and LEARN_SHAPE and LEARN_PERTURB
 
 def learn(filename, earthmodel, traces, events, leb_evlist, detections, arid2num, energies, param_dirname, start_time, end_time, site_up, sites, phasenames, phasetimedef, fake_det):
     """
     Find maximum-likelhood parameter estimates. 
     """
 
+    if LEARN_NOISE:
+        print "learning noise params"
+        ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
+        sta_noise_means, sta_noise_vars = learn_noise_params(traces, events, ttimes)
 
-    ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
+        if WRITE_LEARNED:
+            f = open(filename, 'w')
+        # begin with dummy envelope and AR params, then bootstrap
+            f.write("1 0.04 0.8\n")
+            f.write("1 0.8 0.05\n")
+            write_noise_params(f, sta_noise_means, sta_noise_vars)
+            f.close()
+        else:
+            print "learned noise params:"
+            write_noise_params(sys.stdout, sta_noise_means, sta_noise_vars)
 
-    f = open(filename, 'w')
-
-    # begin with dummy envelope and AR params, then bootstrap
-    f.write("1 0.04 0.8\n")
-    f.write("1 0.8 0.05\n")
-
-    print "learning noise params"
-    sta_noise_means, sta_noise_vars = learn_noise_params(traces, events, ttimes)
-    write_noise_params(f, sta_noise_means, sta_noise_vars)
-
-    f.close()
-
-    sigmodel = l.load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
+    if LEARN_SHAPE:
+        sigmodel = l.load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
                             sites, phasenames, phasetimedef)
-    sigmodel.set_signals(energies)
-    sigmodel.set_fake_detections(fake_det)
+        sigmodel.set_signals(energies)
+        sigmodel.set_fake_detections(fake_det)
+        print "learning envelope params"
+        env_params = learn_envelope_params(sigmodel)
+        print "learned ", env_params
 
     #xopt = learn_ar_params(sigmodel)
 
-    f = open(filename, 'w')
+        if WRITE_LEARNED:
+            f = open(filename, 'w')
+            f.write("1 " + str(env_params[0]) + " " + str(env_params[1])  + "\n")
+            f.write("1 0.8 0.05\n")
+            write_noise_params(f, sta_noise_means, sta_noise_vars)
+            f.close()
 
-    print "learning envelope params"
-    env_params = learn_envelope_params(sigmodel)
-    f.write("1 " + str(env_params[0]) + " " + str(env_params[1])  + "\n")
-    f.write("1 0.8 0.05\n")
-    write_noise_params(f, sta_noise_means, sta_noise_vars)
-    f.close()
+    if LEARN_PERTURB:
+        sigmodel = l.load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
+                                  sites, phasenames, phasetimedef)
+        sigmodel.set_signals(energies)
+        sigmodel.set_fake_detections(fake_det)
+        print "learning AR params"
+        ar_params = learn_ar_params(sigmodel)
+        print "learned ", ar_params
+
+        if WRITE_LEARNED:
+            f = open(filename, 'w')
+            f.write("1 " + str(env_params[0]) + " " + str(env_params[1]) + "\n")
 
 
-    sigmodel = l.load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
-                            sites, phasenames, phasetimedef)
-    sigmodel.set_signals(energies)
-    sigmodel.set_fake_detections(fake_det)
-
-    f = open(filename, 'w')
-    f.write("1 " + str(env_params[0]) + " " + str(env_params[1]) + "\n")
-    print "learning AR params"
-    ar_params = learn_ar_params(sigmodel)
-    f.write("1 " + str(ar_params[0]) + " " + str(ar_params[1]) + "\n" )
-    write_noise_params(f, sta_noise_means, sta_noise_vars)
-    f.close()
-
-    return sta_noise_means, sta_noise_vars
+            f.write("1 " + str(ar_params[0]) + " " + str(ar_params[1]) + "\n" )
+            write_noise_params(f, sta_noise_means, sta_noise_vars)
+            f.close()
 
 
 def learn_envelope_params(sigmodel):

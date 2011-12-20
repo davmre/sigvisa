@@ -1313,8 +1313,6 @@ double det_likelihood(void * p_sigmodel_v, int write_log) {
   double ll = 0;
 
 
-  // goal: save pdf plots of real signal for each segment, and of generated signals w/ given params
-
   for (int i=0; i < p_sigmodel->numsegments; ++i) {
     
     ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
@@ -1327,10 +1325,6 @@ double det_likelihood(void * p_sigmodel_v, int write_log) {
 
 
     /* ------------ begin logging ------ */
-
-
-    
-
     if(write_log) {
 
      char desc[50];
@@ -1352,6 +1346,8 @@ double det_likelihood(void * p_sigmodel_v, int write_log) {
 
     /* ------------ end logging ------ */
 
+
+    
 
     double seg_ll = segment_likelihood_AR(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
     double seg_ll_iid = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
