@@ -12,7 +12,7 @@ def connect(unix_socket=None):
       # on linux we don't use named pipes
       if unix_socket is not None:
         dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket=unix_socket)
-      elif "VISA_SOCKET" in os.environ::
+      elif "VISA_SOCKET" in os.environ:
         dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket=os.environ["VISA_SOCKET"])
       else:
         dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
