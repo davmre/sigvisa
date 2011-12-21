@@ -927,7 +927,6 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
       }
     }
     free(p_sigmodel->p_segments);
-
   }
 
   int n = trace_bundles_to_channel_bundles(p_tracelist_obj, &p_sigmodel->p_segments);
@@ -940,6 +939,8 @@ static PyObject * py_set_waves(SigModel_t *p_sigmodel, PyObject *args) {
   PyObject * p_tracelist_obj;
   if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
     return NULL;
+
+  // TODO: memory leak if this is called multiple times. Not fixing because there's a bigger problem, which is that I don't think storing waves and signals separately is a good idea. 
 
   int n = trace_bundles_to_channel_bundles(p_tracelist_obj, &p_sigmodel->p_wave_segments);
   p_sigmodel->numsegments = n;

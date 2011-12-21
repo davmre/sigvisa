@@ -1,4 +1,3 @@
-# python imports
 import numpy as np
 from time import strftime, gmtime
 from math import ceil
@@ -171,7 +170,7 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
 def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
   cursor.execute("select count(*) from static_siteid")
   numsites, = cursor.fetchone()
-  
+
   uptime = np.zeros((numsites,
                      int(ceil((end_time - start_time) / UPTIME_QUANT))),
                     bool)
@@ -184,6 +183,9 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
                  (start_time, arrival_table, start_time, end_time))
   
   for (siteidx, timeidx, cnt) in cursor.fetchall():
+    if timeidx >= int(ceil((end_time - start_time) / UPTIME_QUANT)):
+      continue
+
     uptime[siteidx, timeidx] = True
   
   return uptime

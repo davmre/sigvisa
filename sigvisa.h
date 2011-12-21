@@ -271,7 +271,7 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 
 #define MAX_PHASE(ntdp) ntdp
 
-#define USE_PHASE(phase) (phase == 0 || phase == 4)
+#define USE_PHASE(phase) (phase == 0)
 
 #define IS_S_PHASE(phase) (phase == 3 || phase == 4 || phase == 10)
 #define IS_P_PHASE(phase) (phase == 0 || phase == 1 || phase == 2 || phase == 5 || phase == 6 || phase == 7 || phase == 9 || phase == 11 || phase == 12)

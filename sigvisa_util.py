@@ -275,6 +275,10 @@ def load_traces(cursor, stations, start_time, end_time, process=None):
               
               etm = min(et, float(end_time))
 
+              # TODO: figure out why this happens
+              if etm <= stm:
+                continue
+
               print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}", 
               try:
                 trace = utils.waveform.fetch_waveform(sta, chan, stm, etm)
