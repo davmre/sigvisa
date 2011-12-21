@@ -26,13 +26,6 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
     exit(1);
   }
 
-  if (3 != fscanf(fp, "%lf %lf %lf\n", &prior->env_height, &prior->env_decay, &prior->env_onset))
-    {
-    fprintf(stderr, "error reading envelope coefficients from %s\n", filename);
-    exit(1);
-  }
-
-
   if (1 != fscanf(fp, "%d", &prior->ar_n)) {
     fprintf(stderr, "error reading AR_n from %s\n", filename);
     exit(1);
@@ -50,7 +43,7 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
   }
  
   prior->numsites = numsites;  
-  prior->p_stations = (StationNoiseModel_t *) calloc(numsites, sizeof(StationNoiseModel_t));
+  prior->p_stations = (StationModel_t *) calloc(numsites, sizeof(StationModel_t));
 
   for (int i=0; i < numsites; ++i) {
     for (int j=0; j < NUM_CHANS; ++j) {
@@ -89,6 +82,17 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
       (prior->p_stations + siteid-1)->chan_means[chan_num] = mean;
       (prior->p_stations + siteid-1)->chan_vars[chan_num] = var;
     }
+
+    double p_decay, p_onset, s_decay, s_onset;
+    if (4 != fscanf(fp, "%lf %lf %lf %lf\n", &p_decay, &p_onset, &s_decay, &s_onset))
+    {
+      LogFatal("error reading envelope coefficients for site %d from %s\n", i, filename);
+      exit(1);
+    }
+    (prior->p_stations + siteid-1)->env_p_onset = p_onset;
+    (prior->p_stations + siteid-1)->env_p_decay = p_decay;
+    (prior->p_stations + siteid-1)->env_s_onset = s_onset;
+    (prior->p_stations + siteid-1)->env_s_decay = s_decay;
   }
 
   fclose(fp);
@@ -196,9 +200,20 @@ void phase_env_doubleexp(SignalPrior_t * prior,
 			 double ** p_envelope,
 			 int * t) {
 
-  double peak_height = prior->env_height * p_arr->amp;
-  long peak_idx = (long) (log(peak_height) / prior->env_onset * hz);
-  long end_idx = peak_idx + (long)(log(peak_height)/prior->env_decay * hz);
+  StationModel_t * sta = prior->p_stations + p_arr->siteid-1;
+
+  double env_onset, env_decay;
+  if (IS_S_PHASE(p_arr->phase)) {
+    env_onset = sta->env_s_onset;
+    env_decay = sta->env_s_decay;
+  } else {
+    env_onset = sta->env_p_onset;
+    env_decay = sta->env_p_decay;
+  }
+  double peak_height = sta->env_height * p_arr->amp;
+  long peak_idx = (long) (log(peak_height) / env_onset * hz);
+  long end_idx = peak_idx + (long)(log(peak_height)/env_decay * hz);
+
 
   if (peak_idx < 0 || end_idx <=0) {
     peak_idx = 0;
@@ -225,15 +240,6 @@ void phase_env_doubleexp(SignalPrior_t * prior,
     component_coeff = 1; break;
   }
   
-  //  printf("generating event signal with arrival azi %lf and slo %lf\n", p_arr->azi, p_arr->slo);
-  //  printf("channel is %d and ratio is %lf\n", chan_num, component_coeff);
-
-  /*if (len >= 30 * hz) {
-    printf("event lasting more than 30 seconds! env_decay = %lf, hz = %lf, step = %lf, amp = %lf, env_height = %lf, newmean = %lf, len = %ld\n", prior->env_decay, hz, step, p_arr->amp, prior->env_height, newmean, len);
-    step = newmean /(30.0 * hz);
-    len = ceil( newmean / step );
-    printf("resetting step to %lf , len to %ld\n", step, len);
-    }*/
   long len = end_idx;
   double * means = (double *) calloc(len, sizeof(double));
 
@@ -243,10 +249,10 @@ void phase_env_doubleexp(SignalPrior_t * prior,
   }
 
   for (int i=0; i < peak_idx; ++i) {
-    means[i] = exp(prior->env_onset * (i/hz)) * component_coeff;
+    means[i] = exp(env_onset * (i/hz)) * component_coeff;
   }
   for (int i=peak_idx; i < end_idx; ++i) {
-    means[i] = exp(prior->env_decay * ((end_idx - i)/hz)) * component_coeff;
+    means[i] = exp(env_decay * ((end_idx - i)/hz)) * component_coeff;
   }
   
   *p_envelope = means;
@@ -557,16 +563,28 @@ ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head,
 
 void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
 
-  double peak_height = prior->env_height * p_arr->amp;
-  long peak_idx = (long) (log(peak_height) / prior->env_onset * hz);
-  long end_idx = peak_idx + (long)(log(peak_height)/prior->env_decay * hz);
+  StationModel_t * sta = prior->p_stations + p_arr->siteid-1;
+
+  double env_onset, env_decay;
+  if (IS_S_PHASE(p_arr->phase)) {
+    env_onset = sta->env_s_onset;
+    env_decay = sta->env_s_decay;
+  } else {
+    env_onset = sta->env_p_onset;
+    env_decay = sta->env_p_decay;
+  }
+  // LogInfo("env for siteid %d phase %d onset %lf decay %lf", p_arr->siteid, p_arr->phase, env_onset, env_decay);
+
+  double peak_height = sta->env_height * p_arr->amp;
+  long peak_idx = (long) (log(peak_height) / env_onset * hz);
+  long end_idx = peak_idx + (long)(log(peak_height)/env_decay * hz);
 
   if (peak_idx < 0 || end_idx <=0) {
     peak_idx = 0;
     end_idx = 1;
   }
-
-  *len = end_idx+15*hz;
+  
+  *len = MIN(end_idx+15*hz, 3600*hz);
   double * means = (double *) calloc(*len, sizeof(double));
 
   if (means == NULL) {
@@ -575,10 +593,10 @@ void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, dou
   }
 
   for (int i=0; i < peak_idx; ++i) {
-    means[i] = exp(prior->env_onset * (i/hz));
+    means[i] = exp(env_onset * (i/hz));
   }
   for (int i=peak_idx; i < *len; ++i) {
-    means[i] = exp(prior->env_decay * ((end_idx - i)/hz));
+    means[i] = exp(env_decay * ((end_idx - i)/hz));
   }
   
   *pp_envelope = means;
@@ -1301,6 +1319,7 @@ void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_ar
     p_arr->azi = p_det->azi_det;
     p_arr->slo = p_det->slo_det;
     p_arr->phase = p_det->phase_det;
+    p_arr->siteid = p_det->site_det+1;
   }
 }
 
@@ -1350,10 +1369,10 @@ double det_likelihood(void * p_sigmodel_v, int write_log) {
     
 
     double seg_ll = segment_likelihood_AR(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
-    double seg_ll_iid = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
+    // double seg_ll_iid = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
     assert(!isnan(seg_ll) && seg_ll > -1*DBL_MAX);
 
-    LogTrace("segment site %d start %lf contributed ll %lf iidll %lf from %d arrivals", p_segment->siteid, p_segment->start_time, seg_ll, seg_ll_iid,  num_arrivals);
+    LogTrace("segment site %d start %lf contributed ll %lf iidll %lf from %d arrivals", p_segment->siteid, p_segment->start_time, seg_ll, -1,  num_arrivals);
 
     ll += seg_ll;
 

@@ -192,6 +192,60 @@ def print_segments(segments):
     for seg in segments:
         print seg
 
+
+def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None):
+    traces = []
+    traces_processed = []
+
+    if stations is not None:
+      stalist_str = str(stations).replace('[', '(').replace(']', ')')
+      sta_cmd = "site.id in " + stalist_str
+    else:
+      sta_cmd = "site.statype='ss'"
+
+    # get all arrivals for the specified events, at the given stations
+    # (or at all non-array stations if not specified).
+    sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per, site.sta from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" %  (evtype, evtype, evtype, evid, sta_cmd)
+    print "executing query ", sql_query
+    cursor.execute(sql_query)
+
+    arrivals = np.array(cursor.fetchall())
+
+    for (idx, arr) in enumerate(arrivals):
+      sta = arr[12]
+      stm = arr[2] - 4
+      etm = arr[2] +30
+      
+      segment_chans_processed = []
+      segment_chans = []
+
+      for chan in ("BHZ", "BHN", "BHE", "BH1", "BH2"):
+        print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}", 
+        try:
+          trace = utils.waveform.fetch_waveform(sta, chan, stm, etm)
+          if chan == "BH1":
+            trace.stats['channel'] = "BHE"
+          if chan == "BH2":
+            trace.stats['channel'] = "BHN"
+
+          trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
+
+          if process is not None:
+            trace_processed = process(trace)
+            segment_chans_processed.append(trace_processed)
+            segment_chans.append(trace)
+            print " ... successfully loaded."
+        except (utils.waveform.MissingWaveform, IOError):
+          print " ... not found, skipping."
+          continue
+ 
+      if len(segment_chans) > 0:
+        if process is not None:
+          traces_processed.append(segment_chans_processed)
+        traces.append(segment_chans)      
+
+    return traces, traces_processed
+
 def load_traces(cursor, stations, start_time, end_time, process=None):
     traces = []
     traces_processed = []
@@ -433,6 +487,8 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
     return detections
 
 def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=None):
+    print window_size, overlap, stalist
+
     if stalist is None:
         cursor.execute("select sta, id from static_siteid where statype='ss'")
         stations = np.array(cursor.fetchall())
@@ -449,6 +505,14 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
     f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
     pr = lambda trace: process_trace(trace, f=f, opts=opts)
     traces, energies = load_traces(cursor, stations, start_time, end_time, process=pr)
+
+    return energies, traces
+
+def load_and_process_event_traces(cursor, evids, evtype="leb", window_size=1, overlap=0.5, stations=None):
+    opts = dict(window_size=window_size, overlap=overlap)  
+    f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
+    pr = lambda trace: process_trace(trace, f=f, opts=opts)
+    traces, energies = load_event_traces(cursor, evids, evtype, stations=stations, process=pr)
 
     return energies, traces
 

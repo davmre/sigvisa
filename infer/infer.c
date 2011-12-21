@@ -1378,6 +1378,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 	p_arr->azi = 164.7380;
 	p_arr->slo = 33.0914;
 	p_arr->phase = j;
+	p_arr->siteid = i;
       }
     }
 
@@ -1395,6 +1396,7 @@ static void infer_sig(SigModel_t * p_sigmodel, World_t * p_world)
 	p_arr->azi = 180.0000;
 	p_arr->slo = 33.0914;
 	p_arr->phase = j;
+	p_arr->siteid = i;
       }
     }
 

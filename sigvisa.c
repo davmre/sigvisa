@@ -49,7 +49,7 @@ static PyMethodDef SigModel_methods[] = {
    "score_world(events, arrtimes, verbose) "
    "-> log probability\n"},
   {"detection_likelihood_env", (PyCFunction)py_det_likelihood_env, METH_VARARGS,
-   "detection_likelihood(env_height, env_decay, env_offset)"
+   "detection_likelihood(env_height, env_p_decay, env_p_offset, env_s_decay, env_s_offset, siteid, write_log)"
    "-> log likelihood\n"},
   {"detection_likelihood_ar", (PyCFunction)py_det_likelihood_ar, METH_VARARGS,
    "detection_likelihood(ar_order, ar_coeff_tuple, ar_noise_variance)"},
@@ -479,26 +479,35 @@ static PyObject * py_canonical_channel_num(PyObject * self, PyObject * args) {
 
 PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args) {
 
-  double env_height, env_decay, env_onset;
-  int write_log;
+  double env_height, env_p_decay, env_p_onset, env_s_decay, env_s_onset;
+  int siteid, write_log;
 
-  if (!PyArg_ParseTuple(args, "dddi", &env_height, &env_decay, &env_onset, &write_log))
+  if (!PyArg_ParseTuple(args, "dddddii", &env_height, &env_p_decay, &env_p_onset, &env_s_decay, &env_s_onset, &siteid, &write_log))
     return NULL;
 
+  StationModel_t * sta = p_sigmodel->sig_prior.p_stations + siteid - 1;
 
-  double backup_env_height = p_sigmodel->sig_prior.env_height;
-  double backup_env_decay = p_sigmodel->sig_prior.env_decay;
-  double backup_env_onset = p_sigmodel->sig_prior.env_onset;
+  double backup_env_height = sta->env_height;
+  double backup_env_p_decay = sta->env_p_decay;
+  double backup_env_p_onset = sta->env_p_onset;
+  double backup_env_s_decay = sta->env_s_decay;
+  double backup_env_s_onset = sta->env_s_onset;
 
-  p_sigmodel->sig_prior.env_height = env_height;
-  p_sigmodel->sig_prior.env_decay = env_decay;
-  p_sigmodel->sig_prior.env_onset = env_onset;
+  sta->env_height = env_height;
+  sta->env_p_decay = BOUND(env_p_decay, 0.01, 10);
+  sta->env_p_onset = BOUND(env_p_onset, 0.01, 10);
+  sta->env_s_decay = BOUND(env_s_decay, 0.01, 10);
+  sta->env_s_onset = BOUND(env_s_onset, 0.01, 10);
 
 
   double ll = det_likelihood((void *)p_sigmodel, write_log);
-  p_sigmodel->sig_prior.env_height = backup_env_height;
-  p_sigmodel->sig_prior.env_decay = backup_env_decay;
-  p_sigmodel->sig_prior.env_onset = backup_env_onset;
+  // LogInfo("%lf %lf %lf %lf %lf %d = %lf", env_height, env_p_decay, env_p_onset, env_s_decay, env_s_onset, siteid, ll);
+
+  sta->env_height = backup_env_height;
+  sta->env_p_decay = backup_env_p_decay;
+  sta->env_p_onset = backup_env_p_onset;
+  sta->env_s_decay = backup_env_s_decay;
+  sta->env_s_onset = backup_env_s_onset;
 
   return Py_BuildValue("d", ll);
 }
@@ -660,11 +669,14 @@ PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
     return Py_BuildValue("d", score); 
 }
 
+/* return the score of a single, given, arrival, with respect to a
+   single signal segment (assumed to have already been set). */
 PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
   double arrtime, arramp, arrazi, arrslo;
+  int arrphase, arrsiteid;
   int write_log;
-  if (!PyArg_ParseTuple(args, "ddddi", &arrtime, &arramp, &arrazi, &arrslo, &write_log))
+  if (!PyArg_ParseTuple(args, "ddddiii", &arrtime, &arramp, &arrazi, &arrslo, &arrphase,  &arrsiteid, &write_log))
     return NULL;
 
   // goal: save pdf plots of real signal for each segment, and of generated signals w/ given params
@@ -677,13 +689,16 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   p_best->amp = arramp;
   p_best->azi = arrazi;
   p_best->azi = arrslo;
-
+  p_best->phase = arrphase;
+  p_best->siteid = arrsiteid;
 
   Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
   p_arr->time = arrtime;
   p_arr->amp = arramp;
   p_arr->azi = arrazi;
   p_arr->azi = arrslo;
+  p_arr->phase = arrphase;
+  p_arr->siteid = arrsiteid;
 
   double best_score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_best);
 
@@ -897,6 +912,23 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
   PyObject * p_tracelist_obj;
   if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
     return NULL;
+
+  if (p_sigmodel->numsegments != 0) {
+    
+    for (int i=0; i < p_sigmodel->numsegments; ++i) {
+      for(int j=0; j < NUM_CHANS; ++j) {
+	Signal_t *channel = p_sigmodel->p_segments[i].p_channels[j];
+	if (channel != NULL) {
+	  if (channel->py_array != NULL) {
+	    Py_DECREF(channel->py_array);
+	  }
+	  free(p_sigmodel->p_segments[i].p_channels[j]);
+	}
+      }
+    }
+    free(p_sigmodel->p_segments);
+
+  }
 
   int n = trace_bundles_to_channel_bundles(p_tracelist_obj, &p_sigmodel->p_segments);
   p_sigmodel->numsegments = n;
@@ -1390,6 +1422,7 @@ Event_t * alloc_event_sig(SigModel_t * p_sigmodel)
   for (int i=0; i < numsites; ++i) {
     for(int j=0; j < numtimedefphases; ++j) {
       (p_event->p_arrivals + i*numtimedefphases + j)->phase = j;
+      (p_event->p_arrivals + i*numtimedefphases + j)->siteid = i;
     }
   }
   return p_event;
@@ -1437,8 +1470,9 @@ void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
 
 char * arrival_str(const Arrival_t * p_arr) {
   char * str = malloc(100*sizeof(char));
-  snprintf(str, 100, "time %.4lf amp %.4lf azi %.4lf slo %.4lf",
-         p_arr->time, p_arr->amp, p_arr->azi, p_arr->slo);
+  snprintf(str, 100, "time %.4lf amp %.4lf azi %.4lf slo %.4lf %d %d",
+	   p_arr->time, p_arr->amp, p_arr->azi, p_arr->slo, 
+	   p_arr->phase, p_arr->siteid);
   return str;
 }
 

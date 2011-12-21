@@ -2,20 +2,27 @@
 #include <Python.h>
 
 
-typedef struct StationNoiseModel_t {
+typedef struct StationModel_t {
   double chan_means[NUM_CHANS];
   double chan_vars[NUM_CHANS];
-} StationNoiseModel_t;
+
+
+  // TODO: make distance-dependent
+  double env_height;
+  double env_p_onset;
+  double env_p_decay;
+  double env_s_onset;
+  double env_s_decay;
+
+} StationModel_t;
 
 typedef struct SignalPrior_t
 {
   int numsites;
-  StationNoiseModel_t * p_stations;
+  StationModel_t * p_stations;
 
-  double env_height;
-  double env_onset; 
-  double env_decay; 
 
+  // TODO: make AR model distance-dependent
   int ar_n;
   double * p_ar_coeffs;
   double ar_noise_sigma2;

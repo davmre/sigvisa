@@ -126,6 +126,9 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
 
       Arrival_t * p_arr = p_event->p_arrivals + 
 	(siteid-1)*numtimedefphases + phase;
+
+      p_arr->phase = phase;
+      p_arr->siteid = siteid-1;
       
       p_arr->time = EarthModel_ArrivalTime(p_earth, 
 					   p_event->evlon, 
@@ -149,6 +152,7 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
 					      p_event->evlat, 
 					      p_event->evdepth, 
 					      phase, siteid-1); 
+
       LogTrace("got arrival time %lf amp %lf azi %lf slo %lf for evtime %lf phase %d siteid %d", p_arr->time,  p_arr->amp,  p_arr->azi,  p_arr->slo, p_event->evtime, phase, siteid);      
     }
   }

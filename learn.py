@@ -66,8 +66,7 @@ def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
                  sites, phasenames, phasetimedef):
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
-  sigmodel = sigvisa.SigModel(earthmodel, 
-                              start_time, end_time, ar_perturb,
+  sigmodel = sigvisa.SigModel(earthmodel, start_time, end_time, ar_perturb,
                               os.path.join(param_dirname, "NumEventPrior.txt"),
                               os.path.join(param_dirname, "EventLocationPrior.txt"),
                               os.path.join(param_dirname, "EventMagPrior.txt"),
@@ -76,8 +75,7 @@ def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
                               os.path.join(param_dirname, "ArrivalSlownessPrior.txt"),
                               os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
                               os.path.join(param_dirname, "SignalPrior.txt"),
-                              sigvisa_util.log_trace
-                              )
+                              sigvisa_util.log_trace)
   return sigmodel
 
 
@@ -111,13 +109,15 @@ def learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, p
   #sigmodel.synthesize_signals_det(stalist, start_time, end_time, 2, 0, 0)
   #energies = sigmodel.get_signals()  
   
-  energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5)
+
 
  
-  return priors.SignalPrior.learn(os.path.join(param_dirname, "SignalPrior.txt"),
-                                  earthmodel, energies, events, evlist, 
-                                  idcx_detections, arid2num, energies, param_dirname, start_time, 
-                                  end_time, site_up, sites, phasenames, phasetimedef, fake_det)
+  return priors.SignalPrior.learn(cursor, 
+                                  os.path.join(param_dirname, "SignalPrior.txt"),
+                                  earthmodel, events, evlist, 
+                                  idcx_detections, arid2num, param_dirname, 
+                                  start_time, end_time, fake_det, site_up,
+                                  sites, phasenames, phasetimedef)
   
 
 def main(param_dirname):

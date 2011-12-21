@@ -41,6 +41,8 @@ typedef struct Arrival_t {
   double slo;
 
   int phase;
+  int siteid;
+
   double score;
 
 } Arrival_t;
@@ -244,6 +246,7 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 
 #define MIN(a,b) ((a) <= (b) ? (a) : (b))
 #define MAX(a,b) ((a) >= (b) ? (a) : (b))
+#define BOUND(x, low, high) MIN(high, MAX(x, low))
 
 /* RAND_DOUBLE -> random number between 0 and 1 (exclusive) */
 #define RAND_DOUBLE ( ((double) rand() + 1.0) / ((double) RAND_MAX + 2.0) )
@@ -269,6 +272,9 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 #define MAX_PHASE(ntdp) ntdp
 
 #define USE_PHASE(phase) (phase == 0 || phase == 4)
+
+#define IS_S_PHASE(phase) (phase == 3 || phase == 4 || phase == 10)
+#define IS_P_PHASE(phase) (phase == 0 || phase == 1 || phase == 2 || phase == 5 || phase == 6 || phase == 7 || phase == 9 || phase == 11 || phase == 12)
 
 Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
 void free_event(Event_t * p_event);
