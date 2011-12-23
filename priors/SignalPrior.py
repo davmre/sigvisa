@@ -23,7 +23,7 @@ def learn(cursor, filename, earthmodel, events, leb_evlist, detections, arid2num
     env_params = [(.04, .8, .04, .8) for site in sites]
 
     if LEARN_NOISE:
-        energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5)
+        energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time)
 
         print "learning noise params"
         ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
@@ -50,7 +50,7 @@ def learn(cursor, filename, earthmodel, events, leb_evlist, detections, arid2num
 
             siteid = id_minus1 + 1
 
-            energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=[siteid, ])
+            energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, stalist=[siteid, ])
             sigmodel.set_signals(energies)
             sigmodel.set_fake_detections(fake_det)
             print "learning envelope params"
@@ -214,8 +214,8 @@ def learn_noise_params(traces, events, ttimes):
 def plot_envelope(trace, means, variances):
     sta = trace.stats["station"]
     chan = trace.stats["channel"]
-    npts = trace.stats["npts_processed"]
-    samprate = 1 / (trace.stats["window_size"]*trace.stats["overlap"])
+    npts = trace.stats["npts"]
+    samprate = trace.stats["sampling_rate"]
     siteid = trace.stats["siteid"]
 
     start_time = trace.stats['starttime'].getTimeStamp()
@@ -283,7 +283,8 @@ def __reverse_conv(num, xxx2num):
     return None
 
 def __samprate(stats):
-    return 1 / (stats["window_size"]*stats["overlap"])
+    return stats["sampling_rate"]
+#    return 1 / (stats["window_size"]*stats["overlap"])
 
 def __nanlist(n):
     l = np.empty((n, 1))

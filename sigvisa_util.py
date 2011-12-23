@@ -512,8 +512,8 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
             if a is not None:
                 stations.append(np.array(a)[0])
         print "loading traces from stations", stations
-    opts = dict(window_size=window_size, overlap=overlap)  
-    f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
+    opts = dict()
+    f = lambda trace: obspy.signal.filter.envelope(trace.data)
     pr = lambda trace: process_trace(trace, f=f, opts=opts)
     traces, energies = load_traces(cursor, stations, start_time, end_time, process=pr, downsample_factor = downsample_factor)
 
