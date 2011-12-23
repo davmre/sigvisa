@@ -95,7 +95,7 @@ sigmodel = learn.load_sigvisa("parameters", start_time, end_time, ar_perturb,
 sigvisa.srand(int((time.time()*100) % 1000 ))
 
 print "synth", events, stalist, start_time, end_time, 2
-sigmodel.synthesize_signals(events, tuple(stalist), start_time, end_time, 2, 0, 0)
+sigmodel.synthesize_signals(events, tuple(stalist), start_time, end_time, 5, 0, 0)
 
 sim_signals = sigmodel.get_signals()
 
@@ -110,7 +110,18 @@ for real_segment in energies:
     print sim_segment
     print sim_segment[0], sim_segment[0].stats
     title = "evid " + str(evid) + " station " + str(real_segment[0].stats['siteid']) + " time " + str(real_segment[0].stats['starttime_unix'])
-    utils.waveform.plot_segment(real_segment, title="real envelope: " + title, format="r-")
+
+
+    
+    start_time = real_segment[0].stats["starttime_unix"]
+    srate = real_segment[0].stats.sampling_rate
+    npts = real_segment[0].stats.npts
+    end_time = start_time + npts/srate
+
+    site_dets = filter(lambda x: x[DET_SITE_COL]+1 == int(real_segment[0].stats['siteid']) and x[DET_TIME_COL] < end_time and x[DET_TIME_COL] > start_time, detections)
+    site_det_times = map(lambda x: x[DET_TIME_COL], site_dets)
+    print "all det times", site_det_times
+    utils.waveform.plot_segment(real_segment, title="real envelope: " + title, format="r-", all_det_times=site_det_times)
     pp.savefig()
 
     if sim_segment is not None:
