@@ -42,13 +42,6 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
 double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * event, int num_other_events, const Event_t ** pp_other_events);
 
-void SignalPrior_ThreeAxisEnvelope(SignalPrior_t * prior, 
-				   EarthModel_t * p_earth, 
-				   int numevents, 
-				   const Event_t ** pp_events,
-				   ChannelBundle_t * p_segment,
-				   ChannelBundle_t * p_wave_segment);
-
 void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior, 
 				   EarthModel_t * p_earth, 
 				   int samplePerturb,
