@@ -11,30 +11,31 @@ import time
 import sys
 
 def get_analagous_segment(t, segments):
-    siteid = t.stats['siteid']
-    start_time = t.stats['starttime_unix']
-    if t.stats["window_size"] is not None:
-        srate = 1/ ( t.stats.window_size * (1- t.stats.overlap) )
-        npts = t.stats.npts_processed
+    siteid = t[0].stats['siteid']
+    start_time = t[0].stats['starttime_unix']
+    if "window_size" in t[0].stats:
+        srate = 1/ ( t[0].stats.window_size * (1- t[0].stats.overlap) )
+        npts = t[0].stats.npts_processed
     else:
-        srate = t.stats.sampling_rate
-        npts = t.stats.npts
+        srate = t[0].stats.sampling_rate
+        npts = t[0].stats.npts
     end_time = start_time + npts/srate
 
     for s in segments:
-        if s.stats['siteid'] != siteid:
+        if s[0].stats['siteid'] != siteid:
             continue
 
-        sstart_time = s.stats['starttime_unix']
+
+        sstart_time = s[0].stats['starttime_unix']
         if sstart_time > start_time:
             continue
         
-        if s.stats["window_size"] is not None:
-            srate = 1/ ( s.stats.window_size * (1- s.stats.overlap) )
-            npts = s.stats.npts_processed
+        if "window_size" in s[0].stats:
+            srate = 1/ ( s[0].stats.window_size * (1- s[0].stats.overlap) )
+            npts = s[0].stats.npts_processed
         else:
-            srate = s.stats.sampling_rate
-            npts = s.stats.npts
+            srate = s[0].stats.sampling_rate
+            npts = s[0].stats.npts
         s_end_time = sstart_time + npts/srate
         if s_end_time < end_time:
             continue
@@ -42,12 +43,15 @@ def get_analagous_segment(t, segments):
         start_idx = int((start_time-sstart_time)*srate)
         end_idx = int((end_time-start_time)*srate + start_idx)
 
-        new_data = s.data[start_idx:end_idx]
+        new_seg = []
+        for c in s:
+            new_data = c.data[start_idx:end_idx]
 
-        new_header = s.stats.copy()
-        new_header["npts_processed"] = len(new_data)
-        new_header["starttime_unix"] = start_time
-        new_seg = Trace(new_data, new_header)
+            new_header = c.stats.copy()
+            new_header["npts_processed"] = len(new_data)
+            new_header["starttime_unix"] = start_time
+            new_c = Trace(new_data, new_header)
+            new_seg.append(new_c)
         return new_seg
     return None
 
@@ -91,18 +95,21 @@ sigmodel = learn.load_sigvisa("parameters", start_time, end_time, ar_perturb,
 sigvisa.srand(int((time.time()*100) % 1000 ))
 
 print "synth", events, stalist, start_time, end_time, 2
-sigmodel.synthesize_signals(events, tuple(stalist), start_time, end_time, 2, 1, 1)
+sigmodel.synthesize_signals(events, tuple(stalist), start_time, end_time, 2, 0, 0)
 
 sim_signals = sigmodel.get_signals()
 
 
-energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=stalist)
+energies, traces = sigvisa_util.load_and_process_event_traces(cursor, [evid,], stations=stalist)
 
-pp = PdfPages('logs/sample_ar.pdf')
+pp = PdfPages('logs/event_log.pdf')
 for real_segment in energies:
     print real_segment
+    print real_segment[0], real_segment[0].stats
     sim_segment = get_analagous_segment(real_segment, sim_signals)
-    title = "evid " + str(evid) + " station " + str(real_segment.stats['siteid']) + " time " + real_segment.stats['start_time']
+    print sim_segment
+    print sim_segment[0], sim_segment[0].stats
+    title = "evid " + str(evid) + " station " + str(real_segment[0].stats['siteid']) + " time " + str(real_segment[0].stats['starttime_unix'])
     utils.waveform.plot_segment(real_segment, title="real envelope: " + title, format="r-")
     pp.savefig()
 

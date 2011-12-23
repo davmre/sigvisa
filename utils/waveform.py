@@ -103,7 +103,7 @@ def plot_segment(channel_traces, title=None, all_det_times=None, format = "k:"):
 
     plt.ylabel(chan_name)
 
-    if trc.stats["window_size"] is not None:
+    if "window_size" in trc.stats:
       srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
       npts = trc.stats.npts_processed
     else:

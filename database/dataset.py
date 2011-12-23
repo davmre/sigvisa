@@ -2,6 +2,7 @@ import numpy as np
 from time import strftime, gmtime
 from math import ceil
 import os
+from obspy.core import Trace, Stream, UTCDateTime
 
 # local imports
 import db

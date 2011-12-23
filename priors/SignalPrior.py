@@ -9,9 +9,9 @@ from obspy.core import Trace, Stream, UTCDateTime
 import learn as l, sigvisa_util
 import sigvisa
 
-LEARN_NOISE = False
+LEARN_NOISE = True
 LEARN_SHAPE = True
-LEARN_PERTURB = False
+LEARN_PERTURB = True
 WRITE_LEARNED = LEARN_NOISE and LEARN_SHAPE and LEARN_PERTURB
 
 def learn(cursor, filename, earthmodel, events, leb_evlist, detections, arid2num, param_dirname, start_time, end_time, fake_det, site_up,

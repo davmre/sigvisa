@@ -225,6 +225,18 @@ PyObject * py_srand(PyObject * self, PyObject * args)
   return Py_None;
 }
 
+void segment_dealloc(ChannelBundle_t * p_segment) {
+  for(int j=0; j < NUM_CHANS; ++j) {
+    Signal_t *channel = p_segment->p_channels[j];
+    if (channel != NULL) {
+      if (channel->py_array != NULL) {
+	Py_DECREF(channel->py_array);
+      }
+      free(p_segment->p_channels[j]);
+    }
+  }
+}
+
 static void py_sig_model_dealloc(SigModel_t * self)
 {
   if (self->p_earth)
@@ -242,30 +254,14 @@ static void py_sig_model_dealloc(SigModel_t * self)
   
   if(self->p_segments) {
     for (int i=0; i < self->numsegments; ++i) {
-      for(int j=0; j < NUM_CHANS; ++j) {
-	Signal_t *channel = self->p_segments[i].p_channels[j];
-	if (channel != NULL) {
-	  if (channel->py_array != NULL) {
-	    Py_DECREF(channel->py_array);
-	  }
-	  free(self->p_segments[i].p_channels[j]);
-	}
-      }
+      segment_dealloc(self->p_segments + i);
     }
     free(self->p_segments);
   }
 
   if(self->p_wave_segments) {
     for (int i=0; i < self->numsegments; ++i) {
-      for(int j=0; j < NUM_CHANS; ++j)  {
-	Signal_t *channel = self->p_wave_segments[i].p_channels[j];
-	if (channel != NULL) {
-	  if (channel->py_array != NULL) {
-	    Py_DECREF(channel->py_array);
-	  }
-	  free(self->p_wave_segments[i].p_channels[j]);
-	}
-      }
+      segment_dealloc(self->p_wave_segments + i);
     }
     free(self->p_wave_segments);
   }
@@ -888,7 +884,7 @@ int trace_bundle_to_channel_bundle(PyObject * trace_bundle, ChannelBundle_t * pp
   return i;
 }
 
-int trace_bundles_to_channel_bundles(PyObject * trace_bundle_list, ChannelBundle_t ** pp_channel_bundles) {
+int trace_bundles_to_channel_bundles(SigModel_t * p_sigmodel, PyObject * trace_bundle_list, ChannelBundle_t ** pp_channel_bundles) {
   
   if(!PyList_Check(trace_bundle_list)) {
     LogFatal("trace_bundles_to_signal_bundles: expected Python list!\n");
@@ -898,13 +894,37 @@ int trace_bundles_to_channel_bundles(PyObject * trace_bundle_list, ChannelBundle
   int n = PyList_Size(trace_bundle_list);
   (*pp_channel_bundles) = calloc(n, sizeof(ChannelBundle_t));
 
-  int i;
-  for (i=0; i < n; ++i) {
+
+  
+  int idx = 0;
+  for (int i=0; i < n; ++i) {
     PyObject * p_trace_bundle = PyList_GetItem(trace_bundle_list, i);
-    trace_bundle_to_channel_bundle(p_trace_bundle, (*pp_channel_bundles) + i);
+
+    ChannelBundle_t * new_segment = calloc(1, sizeof(ChannelBundle_t));
+    trace_bundle_to_channel_bundle(p_trace_bundle, new_segment);
+
+    int skip = 0;
+    for(int chan=0; chan < NUM_CHANS; ++chan) {
+      if (new_segment->p_channels[chan] != NULL) {
+	if (p_sigmodel->sig_prior.p_stations[new_segment->siteid-1].chan_vars[chan] < 0) {
+	  LogInfo("no signal model available for siteid %d chan %d, skipping segment...", new_segment->siteid, chan);
+	  skip = 1;
+	  break;
+	}
+      }
+    }
+
+    if (!skip) {
+      memcpy((*pp_channel_bundles) + idx++, new_segment, sizeof(ChannelBundle_t));
+      free(new_segment);
+    } else {
+      segment_dealloc(new_segment);
+    }
+
   }
 
-  return i;
+  *pp_channel_bundles = realloc(*pp_channel_bundles, idx*sizeof(ChannelBundle_t));
+  return idx;
 }
 
 
@@ -913,23 +933,15 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
   if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
     return NULL;
 
-  if (p_sigmodel->numsegments != 0) {
+  if (p_sigmodel->numsegments != 0 && p_sigmodel->p_segments != NULL) {
     
     for (int i=0; i < p_sigmodel->numsegments; ++i) {
-      for(int j=0; j < NUM_CHANS; ++j) {
-	Signal_t *channel = p_sigmodel->p_segments[i].p_channels[j];
-	if (channel != NULL) {
-	  if (channel->py_array != NULL) {
-	    Py_DECREF(channel->py_array);
-	  }
-	  free(p_sigmodel->p_segments[i].p_channels[j]);
-	}
-      }
+      segment_dealloc(p_sigmodel->p_segments + i);
     }
     free(p_sigmodel->p_segments);
   }
 
-  int n = trace_bundles_to_channel_bundles(p_tracelist_obj, &p_sigmodel->p_segments);
+  int n = trace_bundles_to_channel_bundles(p_sigmodel, p_tracelist_obj, &p_sigmodel->p_segments);
   p_sigmodel->numsegments = n;
   
   return Py_BuildValue("n", n);
@@ -942,7 +954,7 @@ static PyObject * py_set_waves(SigModel_t *p_sigmodel, PyObject *args) {
 
   // TODO: memory leak if this is called multiple times. Not fixing because there's a bigger problem, which is that I don't think storing waves and signals separately is a good idea. 
 
-  int n = trace_bundles_to_channel_bundles(p_tracelist_obj, &p_sigmodel->p_wave_segments);
+  int n = trace_bundles_to_channel_bundles(p_sigmodel, p_tracelist_obj, &p_sigmodel->p_wave_segments);
   p_sigmodel->numsegments = n;
   
   return Py_BuildValue("n", n);
@@ -1113,7 +1125,7 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 
   for (int i=0; i < numsiteids; ++i) {
     int siteid = p_siteids[i];
-    
+    LogInfo("synthing for %d", siteid);
     
 
     ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
@@ -1423,7 +1435,7 @@ Event_t * alloc_event_sig(SigModel_t * p_sigmodel)
   for (int i=0; i < numsites; ++i) {
     for(int j=0; j < numtimedefphases; ++j) {
       (p_event->p_arrivals + i*numtimedefphases + j)->phase = j;
-      (p_event->p_arrivals + i*numtimedefphases + j)->siteid = i;
+      (p_event->p_arrivals + i*numtimedefphases + j)->siteid = i+1;
     }
   }
   return p_event;

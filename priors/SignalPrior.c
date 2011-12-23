@@ -47,9 +47,8 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
 
   for (int i=0; i < numsites; ++i) {
     for (int j=0; j < NUM_CHANS; ++j) {
-      (prior->p_stations + i)->chan_means[j] = 0;
-      (prior->p_stations + i)->chan_vars[j] = 10;
-      LogTrace(" set %d, %d, vars to %lf", i, j, (prior->p_stations + i)->chan_vars[j]);
+      (prior->p_stations + i)->chan_means[j] = -1;
+      (prior->p_stations + i)->chan_vars[j] = -1;
     }
   }
 
@@ -89,6 +88,7 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
       LogFatal("error reading envelope coefficients for site %d from %s\n", i, filename);
       exit(1);
     }
+    (prior->p_stations + siteid-1)->env_height = 1;
     (prior->p_stations + siteid-1)->env_p_onset = p_onset;
     (prior->p_stations + siteid-1)->env_p_decay = p_decay;
     (prior->p_stations + siteid-1)->env_s_onset = s_onset;
@@ -150,7 +150,7 @@ void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double ma
       if (!USE_PHASE(j)) continue;
       Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + j;
 
-      //LogInfo("testing arrival %s", arrival_str(p_arr));
+      //      LogInfo("testing arrival %s", arrival_str(p_arr));
       if (p_arr->amp == 0 || p_arr->time <= 0) {
 	continue;
       }
@@ -573,7 +573,7 @@ void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, dou
     env_onset = sta->env_p_onset;
     env_decay = sta->env_p_decay;
   }
-  // LogInfo("env for siteid %d phase %d onset %lf decay %lf", p_arr->siteid, p_arr->phase, env_onset, env_decay);
+  // LogInfo("env for siteid %d phase %d height %lf onset %lf decay %lf", p_arr->siteid, p_arr->phase, sta->env_height, env_onset, env_decay);
 
   double peak_height = sta->env_height * p_arr->amp;
   long peak_idx = (long) (log(peak_height) / env_onset * hz);
@@ -597,6 +597,7 @@ void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, dou
   }
   for (int i=peak_idx; i < *len; ++i) {
     means[i] = exp(env_decay * ((end_idx - i)/hz));
+    // LogInfo("%d %d %d %lf %d %lf %lf", i, peak_idx, *len, env_decay, end_idx, hz, means[i]);
   }
   
   *pp_envelope = means;
@@ -1442,7 +1443,7 @@ double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, 
 
     score += (event_lp - background_lp);
 
-    LogTrace("   segment %d contributed score %lf = event_lp %lf - background_lp %lf (perturb %d)", i, event_lp - background_lp, event_lp, background_lp, p_sigmodel->ar_perturbation);
+    //LogInfo("   segment %d siteid %d contributed score %lf = event_lp %lf - background_lp %lf (perturb %d)", i, p_segment->siteid, event_lp - background_lp, event_lp, background_lp, p_sigmodel->ar_perturbation);
 
   }
 

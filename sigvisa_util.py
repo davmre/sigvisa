@@ -57,10 +57,12 @@ def log_trace(trc, filename, format):
 def process_trace(trace, f, opts):
   new_header = trace.stats.copy()
 
-  new_header["npts_processed"] = len(trace)
+  processed_data = f(trace)
+
+  new_header["npts_processed"] = len(processed_data)
   new_header.update(opts)
 
-  processed_trace = Trace(f(trace), header=new_header)
+  processed_trace = Trace(processed_data, header=new_header)
   return processed_trace
 
 def window_energies(trace, window_size=1, overlap=0.5):
@@ -193,7 +195,7 @@ def print_segments(segments):
         print seg
 
 
-def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None):
+def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, downsample_factor = 8):
     traces = []
     traces_processed = []
 
@@ -205,16 +207,17 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None):
 
     # get all arrivals for the specified events, at the given stations
     # (or at all non-array stations if not specified).
-    sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per, site.sta from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" %  (evtype, evtype, evtype, evid, sta_cmd)
+    format_strings = ','.join(['%s'] * len(evids))
+    evid_list_str = str(evids).replace('[', '(').replace(']', ')')
+    sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per, site.sta from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid in %s and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" %  (evtype, evtype, evtype, evid_list_str, sta_cmd)
     print "executing query ", sql_query
     cursor.execute(sql_query)
-
-    arrivals = np.array(cursor.fetchall())
+    arrivals = cursor.fetchall()
 
     for (idx, arr) in enumerate(arrivals):
       sta = arr[12]
-      stm = arr[2] - 4
-      etm = arr[2] +30
+      stm = float(arr[2]) - 4
+      etm = float(arr[2]) +30
       
       segment_chans_processed = []
       segment_chans = []
@@ -232,9 +235,11 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None):
 
           if process is not None:
             trace_processed = process(trace)
+            trace_processed.downsample(downsample_factor)
             segment_chans_processed.append(trace_processed)
-            segment_chans.append(trace)
-            print " ... successfully loaded."
+          trace.downsample(downsample_factor)
+          segment_chans.append(trace)
+          print " ... successfully loaded."
         except (utils.waveform.MissingWaveform, IOError):
           print " ... not found, skipping."
           continue
@@ -246,7 +251,7 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None):
 
     return traces, traces_processed
 
-def load_traces(cursor, stations, start_time, end_time, process=None):
+def load_traces(cursor, stations, start_time, end_time, process=None, downsample_factor = 8):
     traces = []
     traces_processed = []
 
@@ -293,7 +298,9 @@ def load_traces(cursor, stations, start_time, end_time, process=None):
 
                 if process is not None:
                   trace_processed = process(trace)
+                  trace_processed.downsample(downsample_factor)
                   segment_chans_processed.append(trace_processed)
+                trace.downsample(downsample_factor)
                 segment_chans.append(trace)
                 print " ... successfully loaded."
               except (utils.waveform.MissingWaveform, IOError):
@@ -490,7 +497,7 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
 
     return detections
 
-def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=None):
+def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=None, downsample_factor=8):
     print window_size, overlap, stalist
 
     if stalist is None:
@@ -508,15 +515,14 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
     opts = dict(window_size=window_size, overlap=overlap)  
     f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
     pr = lambda trace: process_trace(trace, f=f, opts=opts)
-    traces, energies = load_traces(cursor, stations, start_time, end_time, process=pr)
+    traces, energies = load_traces(cursor, stations, start_time, end_time, process=pr, downsample_factor = downsample_factor)
 
     return energies, traces
 
-def load_and_process_event_traces(cursor, evids, evtype="leb", window_size=1, overlap=0.5, stations=None):
-    opts = dict(window_size=window_size, overlap=overlap)  
-    f = lambda trace: window_energies(trace, window_size=window_size, overlap=overlap)
-    pr = lambda trace: process_trace(trace, f=f, opts=opts)
-    traces, energies = load_event_traces(cursor, evids, evtype, stations=stations, process=pr)
+def load_and_process_event_traces(cursor, evids, evtype="leb", window_size=1, overlap=0.5, stations=None, downsample_factor=8):
+    f = lambda trace: obspy.signal.filter.envelope(trace.data)
+    pr = lambda trace: process_trace(trace, f=f, opts=dict())
+    traces, energies = load_event_traces(cursor, evids, evtype, stations=stations, process=pr, downsample_factor=downsample_factor)
 
     return energies, traces
 

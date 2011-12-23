@@ -128,7 +128,7 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
 	(siteid-1)*numtimedefphases + phase;
 
       p_arr->phase = phase;
-      p_arr->siteid = siteid-1;
+      p_arr->siteid = siteid;
       
       p_arr->time = EarthModel_ArrivalTime(p_earth, 
 					   p_event->evlon, 
