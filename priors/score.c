@@ -104,18 +104,17 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                ->arr_phase_prior,
                                                det->phase_det,
                                                phaseid);
-          
+    
     *p_detphasesc -= FalseArrivalPhasePrior_LogProb(&p_netmodel
                                                     ->arr_phase_prior,
                                                     det->phase_det);
-
-#ifdef VISA_SCORE_SNR
+    
     *p_snrsc += ArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
-                                        det->site_det, det->snr_det);
+                                        det->site_det, phaseid,
+                                        det->snr_det);
     
     *p_snrsc -= FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
                                              det->site_det, det->snr_det);
-#endif
     
     /* a -1 amplitude suggests that the amplitude has not been observed */
     if (-1 != det->amp_det)

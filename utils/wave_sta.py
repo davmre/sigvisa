@@ -12,11 +12,12 @@ from database import db, wave
 
 
 def main(param_dirname):
-  if len(sys.argv) != 4:
-    print "Usage: python wave_sta.py <sta> <start time> <end time>"
+  if len(sys.argv) != 6:
+    print "Usage: python wave_sta.py <sta> <start time> <end time>"\
+          " <low frequency> <high frequency>"
     sys.exit(1)
   
-  sta, start_time, end_time = sys.argv[1],float(sys.argv[2]),float(sys.argv[3])
+  sta, start_time, end_time, lowf, highf = sys.argv[1],float(sys.argv[2]),float(sys.argv[3]), float(sys.argv[4]), float(sys.argv[5])
   cursor = db.connect().cursor()
   cursor.execute("select distinct chan from idcx_wfdisc where sta='%s'" % sta)
   chans = [x for x, in cursor.fetchall()]
@@ -30,8 +31,9 @@ def main(param_dirname):
     
   print "Channels:", chans
   for chan in chans:
-    data, samprate = wave.fetch_waveform(sta, chan, start_time, end_time)
-    filtered_data = obspy.signal.filter.bandpass(data,1,4,samprate)
+    # read 100 extra second to get the STA/LTA working
+    data, samprate = wave.fetch_waveform(sta, chan, start_time-100, end_time)
+    filtered_data = obspy.signal.filter.bandpass(data, lowf, highf, samprate)
     cft_data = obspy.signal.recStalta(filtered_data, int(1.5 * samprate),
                                       int(60 * samprate))
     timerange = np.arange(start_time, end_time, 1.0/samprate)
@@ -43,11 +45,19 @@ def main(param_dirname):
     # remove the low-frequency noise
     #plt.plot(timerange, wave.highpass_filter(data, samprate, 0.5))
 
-    axes = plt.subplot(2, 1, 1)
-    plt.plot(timerange, filtered_data)
+    axes = plt.subplot(3, 1, 1)
+    plt.plot(timerange, filtered_data[100*samprate:])
+    plt.ylabel("Raw %.1f - %.1f Hz" % (lowf, highf))
+    plt.grid(True)
 
-    plt.subplot(2, 1, 2, sharex=axes)
-    plt.plot(timerange, cft_data)
+    plt.subplot(3, 1, 2, sharex=axes)
+    plt.plot(timerange,
+             obspy.signal.filter.envelope(filtered_data)[100*samprate:])
+    plt.ylabel("Envelope")
+    plt.grid(True)
+    
+    plt.subplot(3, 1, 3, sharex=axes)
+    plt.plot(timerange, cft_data[100*samprate:])
     plt.ylabel("STA/LTA")
 
   plt.show()

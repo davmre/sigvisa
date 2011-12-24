@@ -10,3 +10,6 @@ check_miss -- check statistics of missed events from a run
 
 check_qfvc -- check correlation between log(a/t) and m_b vs Q-Factor
               Veith Clawson
+
+wave_sta   -- see the waveform at a station
+              Example: python -m utils.wave_sta AFI 1237680500 1237680600
