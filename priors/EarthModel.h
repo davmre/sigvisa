@@ -81,6 +81,8 @@ typedef struct EarthModel_t
   EarthPhaseModel_t * p_phases;
 
   QFactorModel_t qfvc;
+
+  int enforce_ddrange;
 } EarthModel_t;
 
 #define EarthModel_IsTimeDefPhase(p_earth, phaseid)\

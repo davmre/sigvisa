@@ -87,6 +87,18 @@ def print_event(netmodel, earthmodel, event, event_detlist, label):
 
 def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
                  detections):
+  try:
+    write_events2(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
+                  detections)
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    
+
+def write_events2(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
+                 detections):
+  #print "python: write_events: %d events upto maxtime %.1f" \
+  #      % (len(events), maxtime)
   # store the events and associations
   conn = database.db.connect()
   cursor = conn.cursor()
