@@ -363,7 +363,7 @@ void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, dou
     exit(-1);
   }
 
-  for (int i=0; i < peak_idx; ++i) {
+  for (int i=0; i < MIN(peak_idx, *len); ++i) {
     means[i] = exp(env_onset * (i/hz));
   }
   for (int i=peak_idx; i < *len; ++i) {
@@ -731,7 +731,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
 
     // activate the next event, if needed
     while (starting_next != NULL && time >= starting_next->start_time) {
-      //LogTrace(" activating arrivalwaveform w/ st %lf at time %lf t %d", starting_next->start_time, time, t);
+      LogTrace(" activating arrivalwaveform w/ st %lf at time %lf t %d", starting_next->start_time, time, t);
       active_arrivals = append_active(active_arrivals, starting_next);
       n_active++;
       AR_transitions(n, k, prior->p_ar_coeffs, n_active, &p_transition);
@@ -743,17 +743,17 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
 
     // clean up any events that have finished
     while (ending_next != NULL && time >= ending_next->end_time) {
-      //LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", ending_next->end_time, time);
+      LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", ending_next->end_time, time);
       active_arrivals = remove_active(active_arrivals, ending_next);
       n_active--;
       AR_transitions(n, k, prior->p_ar_coeffs, n_active, &p_transition);
       AR_remove_arrival(&p_means, &p_covars, n, ending_next->active_id);
       for (ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
 	if (a->active_id > ending_next->active_id) {
-	  //LogTrace(" remove arridx %d, decrementing %d", ending_next->active_id, a->active_id);
+	  LogTrace(" remove arridx %d, decrementing %d", ending_next->active_id, a->active_id);
 	  a->active_id--;
 	} else {
-	  //LogTrace(" remove arridx %d, not decrementing %d", ending_next->active_id, a->active_id);
+	  LogTrace(" remove arridx %d, not decrementing %d", ending_next->active_id, a->active_id);
 	}
       }
       ending_next = ending_next->next_end;
@@ -799,7 +799,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
     if (n_active > 0) {
       AR_predict(p_means, p_covars, p_transition, prior->ar_noise_sigma2, n);
       AR_update(p_means, p_covars, p_observation, obs_perturb, obs_covar, n, k, residuals, residual_covars);
-      //LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
+      LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
     } else {
       gsl_vector_memcpy(residuals, obs_perturb);
       gsl_matrix_memcpy(residual_covars, obs_covar);
@@ -821,9 +821,11 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
 
   }
 
-  for(ArrivalWaveform_t * a = st_arrivals; a != NULL; a = a->next_start) {
+  for(ArrivalWaveform_t * a = st_arrivals; a != NULL; ) {
     free(a->p_envelope);
+    ArrivalWaveform_t * next_a = a->next_start;
     free(a);
+    a = next_a;
   }
 
   if (p_means != NULL) gsl_vector_free(p_means);
