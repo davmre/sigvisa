@@ -120,7 +120,18 @@ class AWSAuthConnection(object):
         params = self.pathlist("ZoneName", zoneNames)
         return DescribeAvailabilityZonesResponse(self.make_request("DescribeAvailabilityZones", params))
 
+    def create_image(self, name, instanceId, description=None):
+        """Makes a C{CreateImage} call.
 
+        @param name: The name of the new image
+        @param instanceId: The instance id to make the image from
+        @param description: The description of the new image
+        """
+        params = {"Name": name, "InstanceId" : instanceId}
+        if description is not None:
+            params["Description"] = description
+        return CreateImageResponse(self.make_request("CreateImage", params))
+    
     def register_image(self, imageLocation):
         """Makes a C{RegisterImage} call.
 
@@ -603,6 +614,13 @@ class DescribeImagesResponse(Response):
                           ])
         return lines
 
+
+class CreateImageResponse(Response):
+    """Response parser class for C{CreateImage} API call."""
+    ELEMENT_XPATH = "imageId"
+    def parse(self):
+        doc = ET.XML(self.http_xml)
+        return [["IMAGE", self.findtext(doc, self.ELEMENT_XPATH)]]
 
 class RegisterImageResponse(Response):
     """Response parser class for C{RegisterImage} API call."""

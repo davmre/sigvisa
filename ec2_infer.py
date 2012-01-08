@@ -14,6 +14,17 @@ from database.dataset import *
 import MySQLdb
 from ec2_start import locate_keyname
 
+# unbuffer stdout
+class Unbuffered:
+  def __init__(self, stream):
+    self.stream = stream
+  def write(self, data):
+    self.stream.write(data)
+    self.stream.flush()
+  def __getattr__(self, attr):
+    return getattr(self.stream, attr)
+sys.stdout=Unbuffered(sys.stdout)
+
 def main():
 
   args = sys.argv[1:]
@@ -69,7 +80,8 @@ def main():
   hostconns = []
   for hostidx, hostname in enumerate(hostnames):
     # open a tunnel to the host in the background
-    ssh_tunnel(hostname, ec2keyname, 3307 + hostidx, 3306)
+    while ssh_tunnel(hostname, ec2keyname, 3307 + hostidx, 3306):
+      print "Retrying ssh_tunnel to hostidx %d host %s" % (hostidx, hostname)
     # start inference on the host also in the background
     ssh_cmd(hostname, ec2keyname, "cd netvisa; utils/bgjob python -u "
             "infer.py %s -n 0 -l %s -k %f -r %f"
@@ -108,6 +120,7 @@ def main():
   # and shutdown the host, also record the cpu time used
   pending_hostidcs = set(range(len(hostnames)))
   num_prop_origin = 0
+  propose_start = time.time()
   while len(pending_hostidcs):
     for hostidx, hostconn in enumerate(hostconns):
       if hostidx in pending_hostidcs:
@@ -134,12 +147,10 @@ def main():
                            "orid, runid) values (%f, %f, %f, %f, %f, %d, %d)"
                            % (row[0], row[1], row[2], row[3], row[4],
                               num_prop_origin, proprunid))
-
+          
           # compute the amount of time spent by this host
-          hostcursor.execute("select run_end - run_start from visa_run"
-                             " where runid=%d" % runid)
-          host_cpu = hostcursor.fetchone()[0]
-          print "Host %d used %f cpu seconds" % (hostidx, host_cpu)
+          host_cpu = time.time() - propose_start
+          print "Host %d used %.1f cpu seconds" % (hostidx, host_cpu)
           host_cpus.append(host_cpu)
           
           cursor.execute("update visa_run set run_end = now() where runid=%d"
@@ -169,7 +180,7 @@ def main():
 def ssh_tunnel(host, keyname, localport, remoteport):
   keypath = os.path.join(os.getenv("HOME"), keyname)
   t1 = time.time()
-  retcode = exec_cmd("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey -i %s.pem -fNg -L %d:127.0.0.1:%d ubuntu@%s"
+  retcode = exec_cmd("ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey -i %s.pem -fNg -L %d:127.0.0.1:%d ubuntu@%s"
                      % (keypath, keypath, localport, remoteport, host))
   print "ssh_tunnel took %.1f s" % (time.time() - t1)
   return retcode
@@ -177,7 +188,7 @@ def ssh_tunnel(host, keyname, localport, remoteport):
 def ssh_cmd(host, keyname, cmd):
   keypath = os.path.join(os.getenv("HOME"), keyname)
   t1 = time.time()
-  retcode = exec_cmd("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey -i %s.pem ubuntu@%s '%s'"
+  retcode = exec_cmd("ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey -i %s.pem ubuntu@%s '%s'"
                      % (keypath, keypath, host, cmd))
   print "ssh_cmd took %.1f s" % (time.time() - t1)
   return retcode

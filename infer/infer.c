@@ -276,10 +276,6 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
                                       p_world->high_evtime,
                                   (PyArrayObject * )p_world->propose_eventobj);
   else
-  {
-    /* we want to propose events more freely !! */
-    p_netmodel->p_earth->enforce_ddrange = 0;
-    
     numevents = propose_invert_step(p_netmodel, pp_events,
                                     p_world->max_prop_evtime,
                                     p_world->high_evtime,
@@ -287,10 +283,6 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
                                     p_world->high_detnum,
                                     2.5, p_world->birthsteps,
                                     p_world->numthreads);
-    
-    /* we do want to restrict events to obey distance depth ranges otherwise */
-    p_netmodel->p_earth->enforce_ddrange = 1;
-  }
   
   t1 = time(NULL) - t1;
   

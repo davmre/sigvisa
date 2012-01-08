@@ -26,18 +26,20 @@ def main():
   
   # find all the running instances with the keypair ..
   hostnames = []
+  instids = []
   for desc in ec2conn.describe_instances().structure:
     if desc[0] == "INSTANCE" and desc[6] == ec2keyname \
            and desc[14] == "running":
+      instids.append(desc[1])
       hostnames.append(desc[3])
   
   if not len(hostnames):
     print "Error: no running host found for key", ec2keyname
   
-  if len(command):
-    for hostidx, hostname in enumerate(hostnames):
-      print "%d/%d %s" % (hostidx+1, len(hostnames), hostname)
-      ssh_cmd(hostname, ec2keyname, command)
+  for hostidx, hostname in enumerate(hostnames):
+    print "%d/%d %s %s" % (hostidx+1, len(hostnames), hostname,
+                           instids[hostidx])
+    ssh_cmd(hostname, ec2keyname, command)
   
   # check if any files have to be copied
   if len(file_list):

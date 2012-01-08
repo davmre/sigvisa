@@ -35,6 +35,17 @@ import csv, sys, time, subprocess, os, shlex, socket
 
 from utils import EC2
 
+# unbuffer stdout
+class Unbuffered:
+  def __init__(self, stream):
+    self.stream = stream
+  def write(self, data):
+    self.stream.write(data)
+    self.stream.flush()
+  def __getattr__(self, attr):
+    return getattr(self.stream, attr)
+sys.stdout=Unbuffered(sys.stdout)
+
 def main(param_dirname):
   # parse command line arguments
   if len(sys.argv) != 8:
@@ -233,7 +244,7 @@ def is_ssh_up(host):
   return True
   
 def ssh_cmd(host, keyname, cmd):
-  cmd = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey "\
+  cmd = "ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey "\
         "-i %s.pem ubuntu@%s '%s'" % (keyname, keyname, host, cmd)
   #print cmd
   retcode = exec_cmd(cmd)

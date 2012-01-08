@@ -457,8 +457,8 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
   free(p_ddranges);
 
   read_qfvc(qfvc_file, &p_earth->qfvc);
-
-  p_earth->enforce_ddrange = 1;
+  
+  p_earth->enforce_ddrange = 0;              /* TODO: ddrange disabled */
   
   return 0;
 }
