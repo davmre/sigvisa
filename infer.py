@@ -85,18 +85,18 @@ def print_event(netmodel, earthmodel, event, event_detlist, label):
                                             event[ EV_DEPTH_COL]))
   return score
 
-def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
+def write_events(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
                  detections):
   try:
-    write_events2(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
+    write_events2(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
                   detections)
   except:
     import pdb, traceback, sys
     traceback.print_exc(file=sys.stdout)
     
 
-def write_events2(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
-                 detections):
+def write_events2(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
+                  detections):
   #print "python: write_events: %d events upto maxtime %.1f" \
   #      % (len(events), maxtime)
   # store the events and associations
@@ -105,8 +105,8 @@ def write_events2(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
   world_score = 0.0
   for evnum in range(len(events)):
     event = events[evnum]
-    detlist = ev_detlist[evnum]
-    evscore = netmodel.score_event(event, detlist)
+    seclist = ev_seclist[evnum]
+    evscore = netmodel.score_event(event, seclist)
     world_score += evscore
     
     cursor.execute("insert into visa_origin (runid, orid, lon, lat, depth, "
@@ -114,38 +114,58 @@ def write_events2(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
                    (runid, event[EV_ORID_COL], event[EV_LON_COL],
                     event[EV_LAT_COL], event[EV_DEPTH_COL], event[EV_TIME_COL],
                     event[EV_MB_COL], evscore))
+
+    # first we have the score of the bare event by itself, so we can then
+    # compute the incremental contribution of each detection
+    bare_score = netmodel.score_event(event, [])
     
-    for phaseid, detnum in detlist:
+    for phaseid_detnums in seclist:
+      phaseid = phaseid_detnums[0]
+      detnums = phaseid_detnums[1:]
+      
+      # compute the incremental score of each detection
+      incscores = [netmodel.score_event(event, [phaseid_detnums[:detpos+2]])
+                   for detpos in range(len(detnums))]
+      detscores, detphases = [], []
+      for detpos in range(len(detnums)):
+        score = netmodel.score_event(event, [phaseid_detnums[:detpos+2]])
+        if detpos == 0:
+          detscores.append(incscores[detpos] - bare_score)
+          detphases.append(earthmodel.PhaseName(phaseid))
+        else:
+          detscores.append(incscores[detpos] - incscores[detpos-1])
+          detphases.append("tx")
+      
+      siteid = int(detections[detnums[0], DET_SITE_COL])
       arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
                                        event[EV_DEPTH_COL], event[EV_TIME_COL],
-                                       phaseid,
-                                       int(detections[detnum, DET_SITE_COL]))
+                                       phaseid, siteid)
       if arrtime < 0:
         print "Warning: visa orid %d impossible at site %d with phase %d"\
               % (event[EV_ORID_COL], int(detections[detnum, DET_SITE_COL]),
                  phaseid)
         continue
 
-      timeres = detections[detnum, DET_TIME_COL] - arrtime
-      
       seaz = earthmodel.ArrivalAzimuth(event[EV_LON_COL], event[EV_LAT_COL],
-                                       int(detections[detnum, DET_SITE_COL]))
-      azres = degdiff(seaz, detections[detnum, DET_AZI_COL])
-
-      arrslo = earthmodel.ArrivalSlowness(event[EV_LON_COL], event[EV_LAT_COL],
+                                       siteid)
+      
+      arrslo = earthmodel.ArrivalSlowness(event[EV_LON_COL],event[EV_LAT_COL],
                                           event[EV_DEPTH_COL], phaseid,
-                                       int(detections[detnum, DET_SITE_COL]))
-      
-      slores = detections[detnum, DET_SLO_COL] - arrslo
-      
-      cursor.execute("insert into visa_assoc(runid, orid, phase, arid, score, "
-                     "timeres, azres, slores) "
-                     "values (%d, %d, '%s', %d, %f, %f, %f, %f)" %
-                     (runid, event[EV_ORID_COL],
-                      earthmodel.PhaseName(phaseid),
-                      detections[detnum, DET_ARID_COL],
-                      netmodel.score_event_det(event, phaseid, detnum),
-                      timeres, azres, slores))
+                                          siteid)
+        
+      for detpos, detnum in enumerate(detnums):
+        timeres = detections[detnum, DET_TIME_COL] - arrtime
+        
+        azres = degdiff(seaz, detections[detnum, DET_AZI_COL])
+        
+        slores = detections[detnum, DET_SLO_COL] - arrslo
+        
+        cursor.execute("insert into visa_assoc(runid, orid, phase, arid, "
+                       "score, timeres, azres, slores) "
+                       "values (%d, %d, '%s', %d, %f, %f, %f, %f)" %
+                       (runid, int(event[EV_ORID_COL]), detphases[detpos],
+                        int(detections[detnum, DET_ARID_COL]),
+                        detscores[detpos], timeres, azres, slores))
   
   cursor.execute("update visa_run set data_end=%f, run_end=now(), "
                  "score = score + %f where runid=%d" %

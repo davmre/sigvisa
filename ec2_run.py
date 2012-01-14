@@ -4,6 +4,12 @@
 # python ec2_run.py visa-credentials.csv nimarclus 'cd netvisa; python analyze.pys -s'
 # python ec2_run.py visa-credentials.csv nimarclus 'cd netvisa; python -m utils.saverun 32 temp.tar' 'netvisa/temp.tar,.'
 #
+# one can run this in an infinite loop
+# WINDOWS:
+# for /L %i in (0,0,0) do @python ec2_run.py credential key "cd netvisa; python analyze.py" "" & ping -n 60 127.0.0.1>NUL
+# BASH:
+# for ((;;)) do python ec2_run.py credential key 'cd netvisa; python analyze.py' '' ; sleep 60; done
+#
 import warnings
 warnings.filterwarnings("ignore")
 

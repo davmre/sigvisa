@@ -329,7 +329,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   double end_time;
   PyArrayObject * detectionsobj;
   PyArrayObject * siteupobj;
-  const char * numsecdet_fname;
+  const char * secdet_fname;
   const char * numevent_fname;
   const char * evloc_fname;
   const char * evmag_fname;
@@ -345,7 +345,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   if (!PyArg_ParseTuple(args, "O!ddO!O!ssssssssssss", &py_EarthModel, &p_earth,
                         &start_time, &end_time, 
                         &PyArray_Type, &detectionsobj,
-                        &PyArray_Type, &siteupobj, &numsecdet_fname,
+                        &PyArray_Type, &siteupobj, &secdet_fname,
                         &numevent_fname, &evloc_fname, &evmag_fname, 
                         &evdet_fname, &arrtime_fname, &numfalse_fname,
                         &arraz_fname, &arrslo_fname, &arrphase_fname,
@@ -387,7 +387,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
 
   alloc_site_up(siteupobj, &self->numsites, &self->numtime, &self->p_site_up);
   
-  NumSecDetPrior_Init_Params(&self->num_secdet_prior, numsecdet_fname);
+  SecDetPrior_Init_Params(&self->sec_det_prior, secdet_fname);
 
   NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
   
@@ -427,6 +427,8 @@ static void py_net_model_dealloc(NetModel_t * self)
 
   free_site_up(self->numsites, self->numtime, self->p_site_up);
   self->p_site_up = NULL;
+  
+  SecDetPrior_UnInit(&self->sec_det_prior);
   
   EventLocationPrior_UnInit(&self->event_location_prior);
 

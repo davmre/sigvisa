@@ -18,16 +18,18 @@
 #
 # EXAMPLE:
 #
-# python -u ec2_start.py visa-credentials.csv baseline-194-clus30 revision-194 30 c1.xlarge 'ec2_infer.py,netvisa/' 'cd netvisa; python -u ec2_infer.py -z 8'
+# python ec2_start.py visa-credentials.csv baseline-194-clus30 revision-194 30 c1.xlarge 'ec2_infer.py,netvisa/' 'cd netvisa; python ec2_infer.py -z 8'
+#
+#  python ec2_start.py visa-credentials.csv revision-197-learn revision-196 1 m1.large '' 'cd netvisa; svn update .; python setup.py build_ext --inplace; python -u learn.py -x; python -u score.py -x'
 #
 # if you need to kill the instances try:
 #   python ec2-kill.py <credentials-file> <key-name>
 #
 # Common instance types
-#  c1.xlarge -> 8 core 64-bit  $.68/hr
-#  m1.large  -> 2 core 64-bit  $.34/hr
-#  m1.small  -> 1 core 32-bit  $.085/hr
-#  t1.micro  -> 1-2 core 32/64 but $.02/hr
+#  c1.xlarge -> 8 core   64-bit    $.68/hr
+#  m1.large  -> 2 core   64-bit    $.34/hr
+#  m1.small  -> 1 core   32-bit    $.085/hr
+#  t1.micro  -> 1-2 core 32/64 bit $.02/hr
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -83,7 +85,7 @@ def main(param_dirname):
     ssh_cmd(inst_names[master], ec2keyname,
             'netvisa/utils/bgjob "%s"' % (command,))
   else:
-    print "Warning: no commands to send to master"
+    ssh_cmd(inst_names[master], ec2keyname, "")
   
   # reconnect since our original connection has probably timed out
   #ec2conn = EC2.AWSAuthConnection(ec2accesskey, ec2secretkey)

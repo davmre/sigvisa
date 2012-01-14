@@ -155,18 +155,17 @@ def gui(options, leb_events, sel3_events, events):
   #
   # draw and the leb, sel3 and predicted events
   #
-  
-  bmap = draw_earth("LEB(yellow), SEL3(red) and NET-VISA(blue)")
-  draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="o", ms=8, mfc="none", mec="red", mew=1)
-  draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="s", ms=8, mfc="none", mec="blue", mew=1)
-  draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
-              marker="*", ms=8, mfc="yellow")
-  if options.write:
-    plt.savefig("output/run_%d_events.png" % (options.runid))
-
   if options.events:
+    bmap = draw_earth("LEB(yellow), SEL3(red) and NET-VISA(blue)")
+    draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="o", ms=8, mfc="none", mec="red", mew=1)
+    draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="s", ms=8, mfc="none", mec="blue", mew=1)
+    draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
+                marker="*", ms=8, mfc="yellow")
+    if options.write:
+      plt.savefig("output/run_%d_events.png" % (options.runid))
+
     bmap = draw_earth("LEB(yellow) and SEL3(red)")
     draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=8, mfc="none", mec="red", mew=1)
@@ -328,7 +327,7 @@ def match_sel3_prec(visa_events, visa_scores, leb_events, sel3_events):
   
   return events, compute_orid2num(events)
     
-def suppress_duplicates(events, evscores):
+def suppress_duplicates(events, evscores, verbose=False):
   # we'll figure out which events to keep, initially we decide to keep
   # everything
   keep_event = np.ones(len(events), bool)
@@ -355,8 +354,14 @@ def suppress_duplicates(events, evscores):
         if (evscores[int(events[evnum1, EV_ORID_COL])] >
             evscores[int(events[evnum2, EV_ORID_COL])]):
           keep_event[evnum2] = False
+          if verbose:
+            print "Discarding %d due to %d" % (int(events[evnum2, EV_ORID_COL]),
+                                               int(events[evnum1, EV_ORID_COL]))
         else:
           keep_event[evnum1] = False
+          if verbose:
+            print "Discarding %d due to %d" % (int(events[evnum1, EV_ORID_COL]),
+                                               int(events[evnum2, EV_ORID_COL]))
           break
   
   events = events[keep_event]
@@ -919,5 +924,14 @@ def main():
     gui(options, leb_events, sel3_events, visa_events)
 
 if __name__ == "__main__":
-  main()
+  try:
+    main()
+  except SystemExit:
+    raise
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    pdb.post_mortem(sys.exc_traceback)
+    raise
+
 

@@ -1,10 +1,84 @@
-import sys, MySQLdb,struct
+import sys, MySQLdb,struct, time
 import numpy as np
 
 import database.db
 
 class MissingWaveform(Exception):
   pass
+
+class MissingSite(Exception):
+  pass
+
+def read_site(cursor, sta, epoch):
+  """
+  reads the static site table for this station around the epoch time
+  raises MissingSite
+  """
+  epochtime = time.gmtime(epoch)
+  yrday = epochtime.tm_year * 1000 + epochtime.tm_yday
+  rowcnt = cursor.execute("select lon, lat, elev, statype, refsta, "
+                          "dnorth, deast, staname from static_site where "
+                          "((%d <= offdate and %d >= ondate) "
+                          " or (offdate=-1 and %d >= ondate))"
+                          "and sta='%s' order by ondate"
+                          % (yrday, yrday, yrday, sta))
+  if not rowcnt:
+    raise MissingSite()
+
+  lon, lat, elev, statype, refsta, dnorth, deast, staname = cursor.fetchone()
+
+  return {"lon":lon, "lat":lat, "elev":elev, "statype": statype,
+          "refsta":refsta, "dnorth":dnorth, "deast":deast, "staname":staname}
+
+def read_site_ss(cursor, refsta, epoch):
+  """
+  reads the all the static site records for single station sites
+  which have this refsta around the epoch
+  
+  raises MissingSite
+  """
+  epochtime = time.gmtime(epoch)
+  yrday = epochtime.tm_year * 1000 + epochtime.tm_yday
+  rowcnt = cursor.execute("select lon, lat, elev, sta, "
+                          "dnorth, deast, staname from static_site where "
+                          "((%d <= offdate and %d >= ondate) "
+                          " or (offdate=-1 and %d >= ondate))"
+                          "and refsta='%s' and statype='ss' order by ondate"
+                          % (yrday, yrday, yrday, refsta))
+  if not rowcnt:
+    raise MissingSite()
+
+  seen_sta = set()
+  retval = []
+  for lon, lat, elev, sta, dnorth, deast, staname in cursor.fetchall():
+    if sta not in seen_sta:
+      seen_sta.add(sta)
+      retval.append({"lon":lon, "lat":lat, "elev":elev,
+                     "sta":sta, "dnorth":dnorth, "deast":deast,
+                     "staname":staname})
+  return retval
+
+def read_sitechan(cursor, sta, epoch):
+  """
+  returns all the static sitechan table for this station around the epoch time
+  """
+  epochtime = time.gmtime(epoch)
+  yrday = epochtime.tm_year * 1000 + epochtime.tm_yday
+  rowcnt = cursor.execute("select chan, ctype, edepth, hang, vang, descrip "
+                          "from static_sitechan where sta='%s' and "
+                          "((%d <= offdate and %d >= ondate) "
+                          " or (offdate=-1 and %d >= ondate))"
+                          " order by ondate"
+                          % (sta, yrday, yrday, yrday))
+  seen_chan = set()
+  retval = []
+  for chan, ctype, edepth, hang, vang, descrip in cursor.fetchall():
+    if chan not in seen_chan:
+      seen_chan.add(chan)
+      retval.append({"chan":chan, "ctype":ctype, "edepth":edepth, "hang":hang,
+                     "vang":vang, "descrip":descrip})
+
+  return retval
 
 def _read_waveform_from_file(waveform, skip_samples, read_samples):
   """

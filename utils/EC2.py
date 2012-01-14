@@ -20,11 +20,15 @@ try:
     from xml.etree import ElementTree as ET
 except ImportError:
     from elementtree import ElementTree as ET
+import csv
 
 DEFAULT_HOST = 'ec2.amazonaws.com'
 PORTS_BY_SECURITY = { True: 443, False: 80 }
 API_VERSION = '2011-12-15'
 RELEASE_VERSION = "1"
+
+class InstanceNotFound(Exception):
+    pass
 
 class AWSAuthConnection(object):
 
@@ -305,7 +309,14 @@ class AWSAuthConnection(object):
             params['Tag.%d.Value' % i] = tags[key]
 
         return CreateTagsResponse(self.make_request("CreateTags", params))
-        
+
+    def describe_tags(self, resourceId):
+        params = {}
+        params['Filter.1.Name'] = 'resource-id'
+        params['Filter.1.Value'] = resourceId
+
+        return DescribeTagsResponse(self.make_request("DescribeTags", params))
+    
     def get_console_output(self, instanceId):
         """Makes a C{GetConsoleOutput} call.
 
@@ -331,7 +342,28 @@ class AWSAuthConnection(object):
 
         """
         params = self.pathlist("InstanceId", instanceIds)
-        return TerminateInstancesResponse(self.make_request("TerminateInstances", params))
+        return InstancesStatusResponse(self.make_request("TerminateInstances",
+                                                         params))
+
+    def stop_instances(self, instanceIds):
+        """Makes a C{StopInstances} call.
+
+        @param instanceIds: List of instances to terminate.
+
+        """
+        params = self.pathlist("InstanceId", instanceIds)
+        return InstancesStatusResponse(self.make_request("StopInstances",
+                                                         params))
+
+    def start_instances(self, instanceIds):
+        """Makes a C{StartInstances} call.
+
+        @param instanceIds: List of instances to terminate.
+
+        """
+        params = self.pathlist("InstanceId", instanceIds)
+        return InstancesStatusResponse(self.make_request("StartInstances",
+                                                         params))
 
     def create_securitygroup(self, groupName, groupDescription):
         """Makes a C{CreateSecurityGroup} call.
@@ -727,7 +759,7 @@ class GetConsoleOutputResponse(Response):
                  [self.findtext(doc, "output")] ]
 
 
-class TerminateInstancesResponse(Response):
+class InstancesStatusResponse(Response):
     """Response parser class for C{TerminateInstances} API call."""
     ELEMENT_XPATH = "instancesSet/item"
     def parse(self):
@@ -923,10 +955,19 @@ class CreateTagsResponse(Response):
         doc = ET.XML(self.http_xml)
         return [[self.findtext(doc, "return")]]
 
+class DescribeTagsResponse(Response):
+    """Response parser class for C{DescribeTags} API call."""
+    ELEMENT_XPATH = "tagSet/item"
+    def parse(self):
+        doc = ET.XML(self.http_xml)
+        lines = []
+        for element in self.findall(doc, self.ELEMENT_XPATH):
+            key = self.findtext(element, "key")
+            value = self.findtext(element, "value")
+            lines.append(["tagSet", key, value])
+        return lines
 
 # some utilities
-
-import csv
 
 def connect_with_credfile(cred_fname):
     """
@@ -940,3 +981,13 @@ def connect_with_credfile(cred_fname):
     ec2conn = AWSAuthConnection(ec2accesskey, ec2secretkey)
     
     return ec2conn
+
+def find_instid(ec2conn, instid):
+    ec2insts =  ec2conn.describe_instances([instid])
+  
+    for inst in ec2insts.structure:
+        if inst[0] == 'INSTANCE' and inst[1] == instid:
+            return inst
+    
+    raise InstanceNotFound()
+

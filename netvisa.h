@@ -29,9 +29,6 @@
 /* maximum time taken by any phase */
 #define MAX_TRAVEL_TIME ((double) 2000.0)
 
-/* the spacing between secondary detections */
-#define SECDET_INTERVAL ((double) 5.0)
-
 /* maximum number of primary + secondary detections for any phase */
 #define MAX_PHASE_DET  15
 
@@ -99,7 +96,7 @@ typedef struct Detection_t
 } Detection_t;
 
 
-#include "priors/NumSecDetPrior.h"
+#include "priors/SecDetPrior.h"
 #include "priors/NumEventPrior.h"
 #include "priors/EventLocationPrior.h"
 #include "priors/EventMagPrior.h"
@@ -135,7 +132,7 @@ typedef struct NetModel_t
 
   EarthModel_t * p_earth;
   
-  NumSecDetPrior_t num_secdet_prior;
+  SecDetPrior_t sec_det_prior;
   NumEventPrior_t num_event_prior;
   EventLocationPrior_t event_location_prior;
   EventMagPrior_t event_mag_prior;

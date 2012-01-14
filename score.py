@@ -7,6 +7,7 @@ from database.dataset import *
 import netvisa, learn
 from results.compare import *
 from utils.kstest import kstest
+from priors.SecDetPrior import compute_secondary_dets
 
 def prune_detections(netmodel, events, event_detlists):
   for evnum, event in enumerate(events):
@@ -19,14 +20,15 @@ def prune_detections(netmodel, events, event_detlists):
       evdetnum = dellist.pop()
       event_detlists[evnum].pop(evdetnum)
 
-def extract_false_detections(numdets, leb_evlist):
+def extract_false_detections(numdets, leb_seclist):
   """
   Returns a list of false detnums
   """
   falsedets = set(range(numdets))
-  for evlist in leb_evlist:
-    for phaseid, detid in evlist:
-      falsedets.remove(detid)
+  for seclist in leb_seclist:
+    for phaseid_detlist in seclist:
+      for detnum in phaseid_detlist[1:]:
+        falsedets.remove(detnum)
   falsedets = list(falsedets)
   falsedets.sort()
   return falsedets
@@ -60,17 +62,21 @@ def main(param_dirname):
 
   prune_detections(netmodel, leb_events, leb_evlist)
   prune_detections(netmodel, sel3_events, sel3_evlist)
-  
-  print "LEB:"
-  netmodel.score_world(leb_events, leb_evlist, 1)
 
-  falsedets = extract_false_detections(len(detections), leb_evlist)
+  leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
+                                       leb_evlist)
+  sel3_seclist = compute_secondary_dets(earthmodel, detections, sel3_events,
+                                        sel3_evlist)
+  print "LEB:"
+  netmodel.score_world(leb_events, leb_seclist, 1)
+
+  falsedets = extract_false_detections(len(detections), leb_seclist)
 
   print "FALSE:"
   netmodel.logprob_false(falsedets, 1)
   
   print "SEL3:"
-  netmodel.score_world(sel3_events, sel3_evlist, 1)
+  netmodel.score_world(sel3_events, sel3_seclist, 1)
   
   # separate the SEL3 events into true and false events
   true_sel3_idx, false_sel3_idx, mat_idx = find_true_false_guess(leb_events,
@@ -83,7 +89,7 @@ def main(param_dirname):
   
   print "TRUE SEL3"
   netmodel.score_world(sel3_events[true_sel3_idx,:],
-                       [sel3_evlist[i] for i in true_sel3_idx], 1)
+                       [sel3_seclist[i] for i in true_sel3_idx], 1)
   
   #idx = true_sel3_idx[0]
   #print "Testing on one event:"
@@ -93,7 +99,7 @@ def main(param_dirname):
   
   print "FALSE SEL3"
   netmodel.score_world(sel3_events[false_sel3_idx,:],
-                       [sel3_evlist[i] for i in false_sel3_idx], 1)
+                       [sel3_seclist[i] for i in false_sel3_idx], 1)
   
   if options.writefile is not None:
     fp = open(options.writefile, "w")
@@ -115,20 +121,20 @@ def main(param_dirname):
           print 1,
         else:
           print 0,
-        print prob, netmodel.score_event(event, sel3_evlist[evnum])
+        print prob, netmodel.score_event(event, sel3_seclist[evnum])
         
       else:
-        print >>fp, netmodel.score_event(event, sel3_evlist[evnum])
+        print >>fp, netmodel.score_event(event, sel3_seclist[evnum])
       
     fp.close()
     
-  leb_scores = [netmodel.score_event(leb_events[i], leb_evlist[i])
+  leb_scores = [netmodel.score_event(leb_events[i], leb_seclist[i])
                 for i in range(len(leb_events))]
 
-  true_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+  true_sel3 = [netmodel.score_event(sel3_events[i], sel3_seclist[i])
                for i in true_sel3_idx]
     
-  false_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+  false_sel3 = [netmodel.score_event(sel3_events[i], sel3_seclist[i])
                 for i in false_sel3_idx]
 
 

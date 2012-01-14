@@ -12,4 +12,10 @@ check_qfvc -- check correlation between log(a/t) and m_b vs Q-Factor
               Veith Clawson
 
 wave_sta   -- see the waveform at a station
-              Example: python -m utils.wave_sta AFI 1237680500 1237680600
+              Example: python -m utils.wave_sta AFI 1237680500 100
+
+check_prune -- try out various pruning strategies
+
+check_sec   -- report statistics on secondary detections
+
+check_noise -- reports the noise level

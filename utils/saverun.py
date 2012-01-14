@@ -10,9 +10,6 @@ def export(curs, tablename, runid, filename):
   curs.execute("select * from %s where runid=%d" % (tablename, runid))
   rows = curs.fetchall()
 
-  if len(rows) == 0:
-    return 0
-  
   output = csv.writer(open(filename, "wb"))
   
   output.writerow([col[0] for col in curs.description])

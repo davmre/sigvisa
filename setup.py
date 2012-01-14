@@ -12,7 +12,7 @@ priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'ArrivalPhasePrior.c', 'ArrivalSNRPrior.c',
                   'ArrivalAmplitudePrior.c',
                   'Poisson.c', 'score.c', 'Gaussian.c', 'Gamma.c',
-                  'NumSecDetPrior.c']
+                  'SecDetPrior.c']
 
 infer_sources = ['infer.c', 'propose.c', 'quickselect.c']
 

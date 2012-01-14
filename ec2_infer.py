@@ -44,6 +44,8 @@ def main():
   # remove any description and replace it with the key name
   parse_remove(args, "-d", "--descrip", None)
   args.extend(["-d", ec2keyname])
+
+  email = parse_remove(args, None, "--email", None)
   
   print "key", ec2keyname
   print "numsamples", numsamples
@@ -109,7 +111,7 @@ def main():
   # create a new run for storing the proposal
   cursor.execute ("insert into visa_run(run_start, run_end, "
                   "data_start, data_end, descrip, numsamples, window, step) "
-                  "values (now(), now(), %f, %f, '%s', 0, 0, 0)" %
+                  "values (now(), now(), %f, %f, '%s-propose', 0, 0, 0)" %
                   (data_start, data_end, ec2keyname))
   localconn.commit()
   cursor.execute("select max(runid) from visa_run")
@@ -172,10 +174,19 @@ def main():
   # now we will do a run on the local host using the aggregated events as the
   # proposal run
   exec_cmd("python -u infer.py %s -n %d -l %s -k %f -r %f -p %d"
-           " -d '%s propose-hrs sum=%.1f max=%.1f'"
+           " -d '%s (#nodes=%d node-hrs: sum=%.1f max=%.1f)'"
            % (" ".join(args), numsamples, label, data_start, data_end,
-              proprunid, ec2keyname, sum(host_cpus) / 3600.,
+              proprunid, ec2keyname, len(hostnames), sum(host_cpus) / 3600.,
               max(host_cpus)/3600.))
+
+  # next we will save the results in a tar file
+  exec_cmd("python -m utils.saverun %d %s.tar" %(proprunid+1, ec2keyname))
+
+  # if the user has requested email then send it out and shutdown
+  if email is not None:
+    exec_cmd("echo | mutt -s %s -a %s.tar -- %s" % (ec2keyname, ec2keyname,
+                                                    email))
+    exec_cmd("sudo /sbin/shutdown -h now")
 
 def ssh_tunnel(host, keyname, localport, remoteport):
   keypath = os.path.join(os.getenv("HOME"), keyname)

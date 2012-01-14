@@ -6,6 +6,8 @@ def connect():
     import cx_Oracle
     dbconn = cx_Oracle.connect(os.getenv("VISA_ORA_USER"))
   else:
+    import warnings
+    warnings.filterwarnings("ignore")
     import MySQLdb
     if os.name in ['posix']:
       # on linux we don't use named pipes
