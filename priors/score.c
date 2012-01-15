@@ -152,10 +152,14 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
     *p_detphasesc -= FalseArrivalPhasePrior_LogProb(&p_netmodel
                                                     ->arr_phase_prior,
                                                     det->phase_det);
-    
-    *p_snrsc += ArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
-                                        det->site_det, phaseid,
-                                        det->snr_det);
+
+    if (!detpos)
+      *p_snrsc += ArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
+                                          det->site_det, phaseid,
+                                          det->snr_det);
+    else
+      *p_snrsc += SecDetPrior_SNR_LogProb(&p_netmodel->sec_det_prior,
+                                          det->snr_det, prev_det->snr_det);
     
     *p_snrsc -= FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
                                              det->site_det, det->snr_det);

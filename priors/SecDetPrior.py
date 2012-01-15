@@ -1,12 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import gamma
+from scipy.stats import laplace
 
-from utils import Laplace
 from utils.geog import degdiff
 from database.dataset import *
 
 # maximum time that a secondary detection can occur after the primary
-MAX_SECDET_DELAY = 10.0
+MAX_SECDET_DELAY = 30.0
 MIN_SECDET_DELAY = 4.0
 
 # the maximum number of primary + secondary detections for any phase
@@ -24,12 +25,16 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   - The log-amp diff
   - The secondary phase
   """
-  time_data, az_data, slo_data, logamp_data = [], [], [], []
+  time_data, az_data, slo_data, logamp_data, snr_data = [], [], [], [], []
   sec_phase = np.zeros(earthmodel.NumPhases())
 
   HIGH_AMP, STEP_AMP = 500, 20
   amp_det, amp_tot = np.zeros(HIGH_AMP/STEP_AMP), np.zeros(HIGH_AMP/STEP_AMP)
 
+  HIGH_SNR, STEP_SNR = 200, 1
+  snr_det, snr_tot = np.zeros(HIGH_SNR/STEP_SNR), np.zeros(HIGH_SNR/STEP_SNR)
+  
+  
   # we will compute the probability of a secondary detection at each position
   # i.e. first secondary, second secondary etc.
   pos_det, pos_tot = np.zeros(MAX_PHASE_DET), np.zeros(MAX_PHASE_DET)
@@ -45,6 +50,9 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         if det[DET_AMP_COL] < HIGH_AMP:
           amp_tot[ det[DET_AMP_COL] // STEP_AMP ] += 1
 
+        if det[DET_SNR_COL] < HIGH_SNR:
+          snr_tot[ det[DET_SNR_COL] // STEP_SNR ] += 1
+
         pos_tot[pos] += 1
         totcnt += 1
         
@@ -58,25 +66,54 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
           slo_data.append(secdet[DET_SLO_COL] - det[DET_SLO_COL])
           logamp_data.append(np.log(secdet[DET_AMP_COL])
                              - np.log(det[DET_AMP_COL]))
+          snr_data.append(secdet[DET_SNR_COL] - det[DET_SNR_COL])
           sec_phase[int(secdet[DET_PHASE_COL])] += 1
 
           if det[DET_AMP_COL] < HIGH_AMP:
             amp_det[ det[DET_AMP_COL] // STEP_AMP ] += 1
 
+          if det[DET_SNR_COL] < HIGH_SNR:
+            snr_det[ det[DET_SNR_COL] // STEP_SNR ] += 1
+
           pos_det[pos] += 1
           detcnt += 1
 
   detprob = float(detcnt) / totcnt
-  az_loc, az_scale = Laplace.estimate(az_data)
-  slo_loc, slo_scale = Laplace.estimate(slo_data)
-  logamp_loc, logamp_scale = Laplace.estimate(logamp_data)
+  time_shape, _, time_scale = gamma.fit(time_data, loc=MIN_SECDET_DELAY-.1)
+  az_loc, az_scale = laplace.fit(az_data)
+  slo_loc, slo_scale = laplace.fit(slo_data)
+  logamp_loc, logamp_scale = laplace.fit(logamp_data)
 
+  # fit the SNR as two exponential distribution around 0
+  pos_snr_data = [x for x in snr_data if x >= 0 and x < 20]
+  neg_snr_data = [-x for x in snr_data if x < 0 and x > -20]
+  snr_prob_plus = float(len(pos_snr_data)) / (len(pos_snr_data)
+                                              + len(neg_snr_data))
+  snr_lambda_plus = 1.0 / np.average(pos_snr_data)
+  snr_lambda_minus = 1.0 / np.average(neg_snr_data)
+  
   sec_phase += 1.0
   sec_phase /= sec_phase.sum()
   
   amp_tot += .0001
 
+  snr_tot += .0001
+  
   pos_tot += .0001
+
+  print "Secondary Detection :"
+  print "Probability", detprob
+  print "Time", time_shape, MIN_SECDET_DELAY, time_scale, MAX_SECDET_DELAY
+  print "Time lost probability mass:", \
+        gamma.sf(MAX_SECDET_DELAY, time_shape, MIN_SECDET_DELAY, time_scale)
+  print "Azimuth", az_loc, az_scale
+  print "Slowness", slo_loc, slo_scale
+  print "Logamp", logamp_loc, logamp_scale
+  print "SNR", snr_prob_plus, snr_lambda_plus, snr_lambda_minus
+  print "Phase:",
+  for s in sec_phase:
+    print s,
+  print
   
   if options.gui:
     plt.figure(figsize=(8,4.8))
@@ -103,13 +140,27 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
       else:
         plt.savefig(basename+".png")
 
+    plt.figure(figsize=(8,4.8))
+    if not options.type1:
+      plt.title("Secondary detection probability vs primary detection SNR")
+    plt.bar(np.arange(0, HIGH_SNR, STEP_SNR), snr_det / snr_tot, STEP_SNR)
+    plt.ylabel("probability")
+    if options.writefig is not None:
+      basename = os.path.join(options.writefig, "SecDetProbSNR")
+      if options.type1:
+        plt.savefig(basename+".pdf")
+      else:
+        plt.savefig(basename+".png")
         
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Secondary detection time delay")
-    plt.hist(time_data, 100)
+    _,xpts,_ = plt.hist(time_data, 100, normed=True, label="data", alpha=.5)
+    plt.plot(xpts, gamma.pdf(xpts, time_shape, MIN_SECDET_DELAY, time_scale),
+             linewidth=3, label="model")
     plt.xlabel("seconds")
     plt.ylabel("frequency")
+    plt.legend(loc="upper left")
     if options.writefig is not None:
       basename = os.path.join(options.writefig, "SecDetTime")
       if options.type1:
@@ -120,9 +171,12 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Secondary detection azimuth difference")
-    plt.hist(az_data, 100)
+    _,xpts,_ = plt.hist(az_data, 100, normed=True, label="data", alpha=.5)
+    plt.plot(xpts, laplace.pdf(xpts, az_loc, az_scale),
+             linewidth=3, label="model")
     plt.xlabel("degrees")
     plt.ylabel("frequency")
+    plt.legend(loc="upper left")
     if options.writefig is not None:
       basename = os.path.join(options.writefig, "SecDetAzimuth")
       if options.type1:
@@ -133,9 +187,12 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Secondary detection slowness difference")
-    plt.hist(slo_data, 100)
+    _,xpts,_ = plt.hist(slo_data, 100, normed=True, label="data", alpha=.5)
+    plt.plot(xpts, laplace.pdf(xpts, slo_loc, slo_scale),
+             linewidth=3, label="model")
     plt.xlabel("seconds per degree")
     plt.ylabel("frequency")
+    plt.legend(loc="upper left")
     if options.writefig is not None:
       basename = os.path.join(options.writefig, "SecDetSlowness")
       if options.type1:
@@ -146,14 +203,42 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Secondary detection logamp difference")
-    plt.hist(slo_data, 100)
+    _,xpts,_ = plt.hist(logamp_data, 100, normed=True, label="data", alpha=.5)
+    plt.plot(xpts, laplace.pdf(xpts, logamp_loc, logamp_scale), linewidth=3,
+             label="model")
     plt.ylabel("frequency")
+    plt.legend(loc="upper left")
     if options.writefig is not None:
       basename = os.path.join(options.writefig, "SecDetLogamp")
       if options.type1:
         plt.savefig(basename+".pdf")
       else:
         plt.savefig(basename+".png")
+
+    plt.figure(figsize=(8,4.8))
+    if not options.type1:
+      plt.title("Secondary detection SNR difference")
+    _,xpts,_ = plt.hist(snr_data, np.arange(- 4/snr_lambda_minus,
+                                            + 4/snr_lambda_plus, STEP_SNR),
+                        normed=True, label="data", alpha=.5)
+    def double_exp_pdf(x, prob_plus, lambda_plus, lambda_minus):
+      if x >= 0:
+        return prob_plus * lambda_plus * np.exp(- lambda_plus * x)
+      else:
+        return (1-prob_plus) * lambda_minus * np.exp(lambda_minus * x)
+    
+    plt.plot(xpts, [double_exp_pdf(x, snr_prob_plus, snr_lambda_plus,
+                                   snr_lambda_minus) for x in xpts],
+             linewidth=3, label="model")
+    plt.ylabel("frequency")
+    plt.legend(loc="upper left")    
+    if options.writefig is not None:
+      basename = os.path.join(options.writefig, "SecDetSNR")
+      if options.type1:
+        plt.savefig(basename+".pdf")
+      else:
+        plt.savefig(basename+".png")
+
 
     plt.figure(figsize=(8,4.8))
     if not options.type1:
@@ -175,10 +260,12 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   fp = open(param_fname, "w")
   
   print >> fp, detprob
-  print >> fp, MIN_SECDET_DELAY, MAX_SECDET_DELAY
+  # we need the location of the Gamma to not be at exactly zero
+  print >> fp, time_shape, MIN_SECDET_DELAY-.1, time_scale, MAX_SECDET_DELAY
   print >> fp, az_loc, az_scale
   print >> fp, slo_loc, slo_scale
   print >> fp, logamp_loc, logamp_scale
+  print >> fp, snr_prob_plus, snr_lambda_plus, snr_lambda_minus
   print >> fp, len(sec_phase)
   for s in sec_phase:
     print >> fp, s,

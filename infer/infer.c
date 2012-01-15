@@ -448,6 +448,20 @@ static void change_events(NetModel_t * p_netmodel, World_t * p_world,
       UPDATE_BEST;
     }
     
+    /* change the depth and time simultaneously to try and account for
+     * depth-time ambiguity */
+    curr_event = best_event;
+    for (choice=0; choice < numchoices; choice ++)
+    {
+      curr_event.evdepth = RAND_UNIFORM(MIN_DEPTH, MAX_DEPTH);
+      /* for each 10 km of depth the event time moves forward by 1 second */
+      curr_event.evtime = p_event->evtime \
+        + (curr_event.evdepth - p_event->evdepth)/10;
+      curr_event.evtime += RAND_UNIFORM(-5, 5);
+      FIXUP_EVTIME(p_world, &curr_event);
+      
+      UPDATE_BEST;
+    }
     
     /* find the best longitude */
     curr_event = best_event;
@@ -599,7 +613,7 @@ detnum_found:
 /* greedily find the best event-phase for a detection 
 * returns 0 if not change else 1 */
 static int change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
-  int detnum)
+                                int detnum, int maxscore_mode)
 {
   EarthModel_t * p_earth = p_netmodel->p_earth;
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
@@ -683,8 +697,15 @@ static int change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
                             + phaseid * MAX_PHASE_DET + 0] = old_detnum;
       
       /* did we improve the score ? */
+      /* note that the .001 in maxscore mode is because floating point
+       * addition/subtraction is not associative and we could get into loops
+       * otherwise */
       if ((score > 0) && (score_delta > 0) 
-          && ((best_evnum == -1) || (score_delta > best_score_delta)))
+          && ((best_evnum == -1)
+              || ((maxscore_mode && ((p_event->evscore + score_delta)
+                                     > (best_score + .001)))
+                  || 
+                  (!maxscore_mode && (score_delta > best_score_delta)))))
       {
         best_evnum = evnum;
         best_phaseid = phaseid;
@@ -735,7 +756,11 @@ static int change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
           
           /* did we improve the score ? */
           if ((score > 0) && (score_delta > 0) 
-              && ((best_evnum == -1) || (score_delta > best_score_delta)))
+              && ((best_evnum == -1) 
+                  || ((maxscore_mode && ((p_event->evscore + score_delta)
+                                         > (best_score + .001)))
+                      ||
+                      (!maxscore_mode &&(score_delta > best_score_delta)))))
           {
             best_evnum = evnum;
             best_phaseid = phaseid;
@@ -784,7 +809,7 @@ static int change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
   /* note: we are only interested in redoing the earlier detections if we
    * changed the head of a detlist, the rest of the detlist is always redone
    * in any case */
-  if ((best_pos > 0)
+  if ((best_pos > 0) || (best_evnum == -1)
       || ((best_evnum == prev_evnum) && (best_phaseid == prev_phaseid)
           && (best_pos == prev_pos)))
     return 0;
@@ -792,7 +817,8 @@ static int change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
     return 1;
 }
 
-static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
+static void change_detections(NetModel_t * p_netmodel, World_t * p_world,
+                              int maxscore_mode)
 {
   int detnum;
   int cnt;
@@ -805,7 +831,8 @@ static void change_detections(NetModel_t * p_netmodel, World_t * p_world)
     for (detnum = p_world->low_detnum; detnum < p_world->high_detnum;
          detnum ++)
     {
-      cnt += change_one_detection(p_netmodel, p_world, detnum);
+      cnt += change_one_detection(p_netmodel, p_world, detnum,
+                                  maxscore_mode);
     }
 #ifdef DEBUG2
     printf("change_detections_loop: %d\n", cnt);
@@ -1050,7 +1077,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     add_propose_invert_events(p_netmodel, p_world);
 
     /* change the detections to use these new events */
-    change_detections(p_netmodel, p_world);
+    change_detections(p_netmodel, p_world, 0);
 
     /* keep track of whether or not we have wrapped around inverting
      * detections this will trigger further inverts to perturb around
@@ -1072,13 +1099,13 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       /* birth move */
       p_new_event = add_event(p_netmodel, p_world);
 
-      change_detections(p_netmodel, p_world);
+      change_detections(p_netmodel, p_world, 0);
 
       if (p_world->world_score < old_score)
       {
         delete_event(p_world, p_new_event);
         free_event(p_new_event);
-        change_detections(p_netmodel, p_world);
+        change_detections(p_netmodel, p_world, 0);
       }
       else if (p_world->verbose)
       {
@@ -1102,7 +1129,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       
       if (numdel > 0)
       {
-        change_detections(p_netmodel, p_world);
+        change_detections(p_netmodel, p_world, 0);
       }
       
       if (p_world->world_score < (old_score - 1e-6))
@@ -1113,15 +1140,17 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       
       change_events(p_netmodel, p_world, 10);
 
-      change_detections(p_netmodel, p_world);
+      change_detections(p_netmodel, p_world, 0);
     };
 
     /* only remove events if numsamples > 0. This allows a
      * numsamples=0 run to save all the proposed events */
     if (p_world->numsamples)
     {
+      int numdel;
+      
       if (remove_negative_events(p_world))
-        change_detections(p_netmodel, p_world);
+        change_detections(p_netmodel, p_world, 0);
 
       /* now for one round try to delete each event and see if that improves
        * the world score, but we only want to delete events with 
@@ -1141,12 +1170,12 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       
         delete_event(p_world, p_old_event);
       
-        change_detections(p_netmodel, p_world);
+        change_detections(p_netmodel, p_world, 0);
       
         if (p_world->world_score < old_score)
         {
           insert_event(p_netmodel, p_world, p_old_event);
-          change_detections(p_netmodel, p_world);
+          change_detections(p_netmodel, p_world, 0);
         }
         else
         {
@@ -1158,12 +1187,34 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
           free_event(p_old_event);
         }
       }
+
+      /* now try and change the detections to go to the event with the
+       * highest score rather than the best place for the detection. This
+       * might get rid of some spurious events */
+      change_detections(p_netmodel, p_world, 1);
+      
+      numdel = remove_negative_events(p_world);
+      if ((numdel > 0) && p_world->verbose)
+      {
+        printf("maxscore mode killed %d events\n", numdel);
+      }
+      
+      /* restore the detections in normal mode */
+      change_detections(p_netmodel, p_world, 0);
+      
+      /* if we freed up some detections and hence reassociated then we need
+       * to relocate/reassociate again */
+      if (numdel > 0)
+      {
+        change_events(p_netmodel, p_world, 10);
+        change_detections(p_netmodel, p_world, 0);
+      }
     }
     
 /*
     change_events(p_netmodel, p_world, 2);
     
-    change_detections(p_netmodel, p_world);
+    change_detections(p_netmodel, p_world, 0);
 */
     t1 = time(NULL) - t1;
     

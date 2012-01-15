@@ -875,7 +875,7 @@ void *propose_invert_step_helper(void *args)
 
   int tid = params->tid;
 
-  int inv_detnum, lonidx, latidx;
+  int inv_detnum, lonidx, latidx, depth;
   double lon, lat, mag;
 
   /* Loop increments by NUM_THREADS to ensure that each thread gets a
@@ -895,9 +895,6 @@ void *propose_invert_step_helper(void *args)
     lon = (p_inv_events + det_off)->evlon;
     lat = (p_inv_events + det_off)->evlat;
 
-    /* fix the depth to 0 */
-    p_event->evdepth = 0;
-
     for (mag=3; mag <4.1; mag+=1)
     {
       p_event->evmag = mag;
@@ -909,43 +906,51 @@ void *propose_invert_step_helper(void *args)
 
         for (latidx=-num_step; latidx<=num_step; latidx ++)
         {
-          double trvtime;
           p_event->evlat = lat + latidx * degree_step;
           FIXUP_EVLAT(p_event);
 
-          trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
-                                           p_event->evlat, p_event->evdepth,0,
-                                           EARTH_PHASE_P, p_inv_det->site_det);
-          if (trvtime < 0)
-            continue;
-
-          p_event->evtime = p_inv_det->time_det - trvtime;
-
-          if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
+          for (depth=0; depth<MAX_DEPTH; depth+=300)
           {
-            continue;
-          }
+            double trvtime;
+            p_event->evdepth = depth;
 
-          /* score this event using the best detections available */
-          propose_best_detections(p_netmodel, p_event, det_low, det_high,
-                                  p_skip_det, 0 /* all phases */);
+            
+            trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
+                                             p_event->evlat, p_event->evdepth,0,
+                                             EARTH_PHASE_P,p_inv_det->site_det);
+            if (trvtime < 0)
+              continue;
+
+            p_event->evtime = p_inv_det->time_det - trvtime;
+
+            if ((p_event->evtime < time_low) || (p_event->evtime > time_high))
+            {
+              continue;
+            }
+
+            /* score this event using the best detections available */
+            propose_best_detections(p_netmodel, p_event, det_low, det_high,
+                                    p_skip_det, 0 /* all phases */);
 
 #ifdef VERBOSE
-          if ((!lonidx) && (!latidx))
-          {
-            printf("detnum %d: ", inv_detnum);
-            print_event(p_event);
-            print_event_detections(p_earth, p_event);
-          }
-#endif    //Compare to the score in p_best_events with index tid (for this thread)
-          if (p_event->evscore > params->p_best_event->evscore)
-          {
-            copy_event(p_netmodel, params->p_best_event, p_event);
+            if ((!lonidx) && (!latidx))
+            {
+              printf("detnum %d: ", inv_detnum);
+              print_event(p_event);
+              print_event_detections(p_earth, p_event);
+            }
+#endif
+            /* Compare to the score in p_best_events with index tid
+             * (for this thread) */
+            if (p_event->evscore > params->p_best_event->evscore)
+            {
+              copy_event(p_netmodel, params->p_best_event, p_event);
 
 #ifdef NEVER
-            printf("CURR BEST: ");
-            print_event(params->p_best_event);
+              printf("CURR BEST: ");
+              print_event(params->p_best_event);
 #endif
+            }
           }
         }
       }
@@ -1100,9 +1105,9 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
       {
         copy_event(p_netmodel, p_best_event, thread_args[i].p_best_event);
       }
-        free_event(thread_args[i].p_best_event);
-        free_event(thread_args[i].p_event);
-      }
+      free_event(thread_args[i].p_best_event);
+      free_event(thread_args[i].p_event);
+    }
     
     /* finished inverting all detections and trying events in a ball around
      * them now let's see if we got something good */

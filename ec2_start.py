@@ -3,11 +3,9 @@
 # PREREQUISITES:
 # - create access keys (under the IAM tab) and download the credentials.csv file
 # - create a disk image and give it a descriptive name
-#   The image must, at a minimum, have ~/netvisa/utils/bgjob compiled (from
-#   bgjob.c)
 #
 # USAGE
-# python ec2_start.py <cred> <key> <image> <num-instances> <instance-type> <file-copy> <command>
+# python ec2_start.py <cred> <key> <image> <num-instances> <instance-type> <file-copy> <slave-command> <master-command> <monitor-command>
 #
 # This creates a number of instances, copies the files to them, and
 # then runs the command on the master.
@@ -18,9 +16,9 @@
 #
 # EXAMPLE:
 #
-# python ec2_start.py visa-credentials.csv baseline-194-clus30 revision-194 30 c1.xlarge 'ec2_infer.py,netvisa/' 'cd netvisa; python ec2_infer.py -z 8'
+# python ec2_start.py visa-credentials.csv baseline-194-clus30 revision-194 30 c1.xlarge 'ec2_infer.py,netvisa/' '' 'cd netvisa; python ec2_infer.py -z 8' ''
 #
-#  python ec2_start.py visa-credentials.csv revision-197-learn revision-196 1 m1.large '' 'cd netvisa; svn update .; python setup.py build_ext --inplace; python -u learn.py -x; python -u score.py -x'
+#  python ec2_start.py visa-credentials.csv revision-197-learn revision-196 1 m1.large '' '' 'cd netvisa; svn update .; python setup.py build_ext --inplace; python -u learn.py -x; python -u score.py -x' ''
 #
 # if you need to kill the instances try:
 #   python ec2-kill.py <credentials-file> <key-name>
@@ -50,14 +48,15 @@ sys.stdout=Unbuffered(sys.stdout)
 
 def main(param_dirname):
   # parse command line arguments
-  if len(sys.argv) != 8:
+  if len(sys.argv) != 10:
     print "Usage: python ec2_start.py <credentials-file> <key-name> "\
           "<image-name> <number-of-instances> <instance-type> "\
-          "<file-copy-list> <command>"
+          "<file-copy-list> <slave-command> <master-command> "\
+          "<monitor-command>"
     sys.exit(1)
   
-  cred_fname, ec2keyname, ec2imgname, numinst, insttype, file_list, command \
-              = sys.argv[1:]
+  cred_fname, ec2keyname, ec2imgname, numinst, insttype, file_list,\
+              slave_command, master_command, monitor_command = sys.argv[1:]
 
   # read the credentials file
   ec2conn = EC2.connect_with_credfile(cred_fname)
@@ -78,15 +77,33 @@ def main(param_dirname):
         scp_to(pubname, ec2keyname, filenames[idx], filenames[idx+1])
         print ".",
       print "done"
-      
+
+  # send the slave commands
+  if len(slave_command):
+    print "Sending command to slaves"
+    for instid, pubname in inst_names.iteritems():
+      print pubname, instid, ":"
+      ssh_cmd(pubname, ec2keyname, slave_command)
+  
   # now send the commands to the master
-  if len(command):
-    print "Sending commands to master:"
+  if len(master_command):
+    print "Sending command to master:"
     ssh_cmd(inst_names[master], ec2keyname,
-            'netvisa/utils/bgjob "%s"' % (command,))
+            'nohup sh -c "%s" &> /home/ubuntu/%s.out &'
+            % (master_command, ec2keyname))
   else:
     ssh_cmd(inst_names[master], ec2keyname, "")
-  
+
+  if len(monitor_command):
+    print "Monitoring:"
+    try:
+      while True:
+        print inst_names[master], master
+        ssh_cmd(inst_names[master], ec2keyname, monitor_command)
+        time.sleep(60)
+    except KeyboardInterrupt:
+      pass
+    
   # reconnect since our original connection has probably timed out
   #ec2conn = EC2.AWSAuthConnection(ec2accesskey, ec2secretkey)
   
@@ -226,11 +243,23 @@ def destroy_instances(ec2conn, ec2keyname, inst_names):
   print ec2keys
 
 def scp_to(host, keyname, srcfile, destfile):
+  while scp_to_once(host, keyname, srcfile, destfile):
+    print "retrying ",
+    time.sleep(1)
+  return 0
+
+def scp_to_once(host, keyname, srcfile, destfile):
   retcode = exec_cmd("scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey -i %s.pem %s ubuntu@%s:%s"
                      % (keyname, keyname, srcfile, host, destfile))
   return retcode
 
 def scp_from(host, keyname, srcfile, destfile):
+  while scp_from_once(host, keyname, srcfile, destfile):
+    print "retrying ",
+    time.sleep(1)
+  return 0
+
+def scp_from_once(host, keyname, srcfile, destfile):
   retcode = exec_cmd("scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey -i %s.pem ubuntu@%s:%s %s"
                      % (keyname, keyname, host, srcfile, destfile))
   return retcode

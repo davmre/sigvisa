@@ -5,6 +5,7 @@
 
 #include "SecDetPrior.h"
 #include "Laplace.h"
+#include "Gamma.h"
 
 #define READPARAM(cnt, fncall, name)\
   do {                              \
@@ -63,14 +64,18 @@ void SecDetPrior_Init_Params(SecDetPrior_t * prior, const char * filename)
   }
 
   READPARAM(1, fscanf(fp, "%lg\n", &prior->detprob), "detection probability");
-  READPARAM(2, fscanf(fp, "%lg %lg\n", &prior->min_delay, &prior->max_delay), 
-            "minimum and maximum delay");
+  READPARAM(4, fscanf(fp, "%lg %lg %lg %lg\n", &prior->time_shape,
+                      &prior->min_delay, &prior->time_scale, &prior->max_delay),
+            "time shape, location, scale, maximum");
   READPARAM(2, fscanf(fp, "%lg %lg\n", &prior->az_loc, &prior->az_scale),
             "azimuth location and scale");
   READPARAM(2, fscanf(fp, "%lg %lg\n", &prior->slo_loc, &prior->slo_scale),
             "slowness location and scale");
   READPARAM(2, fscanf(fp, "%lg %lg\n", &prior->logamp_loc,&prior->logamp_scale),
             "logamp location and scale");
+  READPARAM(3, fscanf(fp, "%lg %lg %lg\n", &prior->snr_pos_prob,
+                      &prior->snr_pos_lambda, &prior->snr_neg_lambda),
+            "SNR location and scale");
   READPARAM(1, fscanf(fp, "%d\n", &prior->numphases), "number of phases");
 
   prior->phaseprob = (double *)malloc(prior->numphases 
@@ -106,11 +111,11 @@ int SecDetPrior_Time_Possible(const SecDetPrior_t * prior, double sec_time,
 double SecDetPrior_Time_LogProb(const SecDetPrior_t * prior, double sec_time,
                                 double prim_time)
 {
-#ifdef DEBUG
   double delta = sec_time - prim_time;
   assert((delta <= prior->max_delay) && (delta >= prior->min_delay));
-#endif
-  return - log(prior->max_delay - prior->min_delay);
+  
+  return Gamma_logprob(delta - prior->min_delay, prior->time_shape,
+                       prior->time_scale);
 }
 
 double SecDetPrior_Slow_LogProb(const SecDetPrior_t * prior, double sec_slow,
@@ -139,5 +144,18 @@ double SecDetPrior_Amp_LogProb(const SecDetPrior_t * prior, double sec_amp,
 {
   return Laplace_ldensity(prior->logamp_loc, prior->logamp_scale, log(sec_amp)
                           - log(prim_amp));
+}
+
+double SecDetPrior_SNR_LogProb(const SecDetPrior_t * prior, double sec_snr,
+                               double prim_snr)
+{
+  double delta = sec_snr - prim_snr;
+  
+  if (delta >= 0)
+    return prior->snr_pos_prob * prior->snr_pos_lambda 
+      * exp( - prior->snr_pos_lambda * delta);
+  else
+    return (1-prior->snr_pos_prob) * prior->snr_neg_lambda
+      * exp(prior->snr_neg_lambda * delta);
 }
 
