@@ -1,6 +1,9 @@
 typedef struct SecDetPrior_t
 {
-  double detprob;
+  int num_logamp_bins;
+  double low_logamp;
+  double step_logamp;
+  double * p_detprob;                        /* X num_logamp_bins */
   double time_shape;
   double min_delay;
   double time_scale;
@@ -26,7 +29,8 @@ void SecDetPrior_UnInit(SecDetPrior_t * prior);
 int SecDetPrior_Time_Possible(const SecDetPrior_t * prior, double sec_time,
                               double prim_time);
 
-double SecDetPrior_Det_LogProb(const SecDetPrior_t * prior, int is_det);
+double SecDetPrior_Det_LogProb(const SecDetPrior_t * prior, int is_det,
+                               double prim_amp);
 
 double SecDetPrior_Time_LogProb(const SecDetPrior_t * prior, double sec_time,
                                 double prim_time);

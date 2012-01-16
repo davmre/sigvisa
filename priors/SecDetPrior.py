@@ -28,8 +28,9 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   time_data, az_data, slo_data, logamp_data, snr_data = [], [], [], [], []
   sec_phase = np.zeros(earthmodel.NumPhases())
 
-  HIGH_AMP, STEP_AMP = 500, 20
-  amp_det, amp_tot = np.zeros(HIGH_AMP/STEP_AMP), np.zeros(HIGH_AMP/STEP_AMP)
+  LOW_LOGAMP, HIGH_LOGAMP, STEP_LOGAMP = -4, 10, .25
+  logamp_det, logamp_tot = np.zeros((HIGH_LOGAMP - LOW_LOGAMP)/STEP_LOGAMP),\
+                           np.zeros((HIGH_LOGAMP - LOW_LOGAMP)/STEP_LOGAMP)
 
   HIGH_SNR, STEP_SNR = 200, 1
   snr_det, snr_tot = np.zeros(HIGH_SNR/STEP_SNR), np.zeros(HIGH_SNR/STEP_SNR)
@@ -47,8 +48,9 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
       for pos, detnum in enumerate(detlist):
         det = detections[detnum]
         
-        if det[DET_AMP_COL] < HIGH_AMP:
-          amp_tot[ det[DET_AMP_COL] // STEP_AMP ] += 1
+        if (np.log(det[DET_AMP_COL]) < HIGH_LOGAMP and
+            np.log(det[DET_AMP_COL]) >= LOW_LOGAMP):
+          logamp_tot[(np.log(det[DET_AMP_COL])-LOW_LOGAMP) // STEP_LOGAMP]+= 1
 
         if det[DET_SNR_COL] < HIGH_SNR:
           snr_tot[ det[DET_SNR_COL] // STEP_SNR ] += 1
@@ -69,9 +71,10 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
           snr_data.append(secdet[DET_SNR_COL] - det[DET_SNR_COL])
           sec_phase[int(secdet[DET_PHASE_COL])] += 1
 
-          if det[DET_AMP_COL] < HIGH_AMP:
-            amp_det[ det[DET_AMP_COL] // STEP_AMP ] += 1
-
+          if (np.log(det[DET_AMP_COL]) < HIGH_LOGAMP and
+              np.log(det[DET_AMP_COL]) >= LOW_LOGAMP):
+            logamp_det[(np.log(det[DET_AMP_COL])-LOW_LOGAMP) // STEP_LOGAMP]+= 1
+          
           if det[DET_SNR_COL] < HIGH_SNR:
             snr_det[ det[DET_SNR_COL] // STEP_SNR ] += 1
 
@@ -94,15 +97,17 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   
   sec_phase += 1.0
   sec_phase /= sec_phase.sum()
-  
-  amp_tot += .0001
 
+  logamp_det += .000001
+  logamp_tot += .001
+  
   snr_tot += .0001
   
   pos_tot += .0001
 
   print "Secondary Detection :"
   print "Probability", detprob
+  print "DetProb(logamp)", logamp_det / logamp_tot
   print "Time", time_shape, MIN_SECDET_DELAY, time_scale, MAX_SECDET_DELAY
   print "Time lost probability mass:", \
         gamma.sf(MAX_SECDET_DELAY, time_shape, MIN_SECDET_DELAY, time_scale)
@@ -131,10 +136,12 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Secondary detection probability vs primary detection amp")
-    plt.bar(np.arange(0, HIGH_AMP, STEP_AMP), amp_det / amp_tot, STEP_AMP)
+    plt.bar(np.arange(LOW_LOGAMP, HIGH_LOGAMP, STEP_LOGAMP),
+            logamp_det / logamp_tot, STEP_LOGAMP)
+    plt.xlabel("log(amp)")
     plt.ylabel("probability")
     if options.writefig is not None:
-      basename = os.path.join(options.writefig, "SecDetProbAmp")
+      basename = os.path.join(options.writefig, "SecDetProbLogAmp")
       if options.type1:
         plt.savefig(basename+".pdf")
       else:
@@ -144,6 +151,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
     if not options.type1:
       plt.title("Secondary detection probability vs primary detection SNR")
     plt.bar(np.arange(0, HIGH_SNR, STEP_SNR), snr_det / snr_tot, STEP_SNR)
+    plt.xlabel("SNR")
     plt.ylabel("probability")
     if options.writefig is not None:
       basename = os.path.join(options.writefig, "SecDetProbSNR")
@@ -256,20 +264,23 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
       else:
         plt.savefig(basename+".png")
     
+
+  def print_list(fp, list):
+    for x in list:
+      print >>fp, x,
+    print >> fp
   
   fp = open(param_fname, "w")
-  
-  print >> fp, detprob
-  # we need the location of the Gamma to not be at exactly zero
+  print >> fp, len(logamp_det), LOW_LOGAMP, STEP_LOGAMP
+  print_list(fp, logamp_det / logamp_tot)
+  # the location of the Gamma can't be at precisely zero!
   print >> fp, time_shape, MIN_SECDET_DELAY-.1, time_scale, MAX_SECDET_DELAY
   print >> fp, az_loc, az_scale
   print >> fp, slo_loc, slo_scale
   print >> fp, logamp_loc, logamp_scale
   print >> fp, snr_prob_plus, snr_lambda_plus, snr_lambda_minus
   print >> fp, len(sec_phase)
-  for s in sec_phase:
-    print >> fp, s,
-  print
+  print_list(fp, sec_phase)
   fp.close()
 
 def compute_secondary_dets(earthmodel, detections, leb_events, leb_evlist):

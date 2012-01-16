@@ -909,7 +909,7 @@ void *propose_invert_step_helper(void *args)
           p_event->evlat = lat + latidx * degree_step;
           FIXUP_EVLAT(p_event);
 
-          for (depth=0; depth<MAX_DEPTH; depth+=300)
+          for (depth=0; depth<MAX_DEPTH; depth+=MAX_DEPTH)
           {
             double trvtime;
             p_event->evdepth = depth;

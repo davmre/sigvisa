@@ -110,7 +110,7 @@ def main(param_dirname):
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
-
+  netmodel.disable_sec_arr()
 
   print "Reading VISA Events...",
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,

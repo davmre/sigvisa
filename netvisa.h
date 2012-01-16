@@ -127,7 +127,9 @@ typedef struct NetModel_t
 
   int numsites;
   int numtime;       /* number of quantized time slots in p_site_up */
-  
+
+  int enable_sec_arr;                  /* enable secondary arrivals */
+
   int * p_site_up;                           /* numsites x numtime */
 
   EarthModel_t * p_earth;

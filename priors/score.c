@@ -70,7 +70,7 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
     Detection_t * det;
     Detection_t * prev_det;
     int detnum;
-    
+
     detnum = p_event->p_all_detids[(siteid * numtimedefphases
                                     + phaseid) * MAX_PHASE_DET + detpos];
 
@@ -88,10 +88,6 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
     
     *p_detcnt += 1;
 
-    /* the probability of the next secondary detection */
-    *p_detsc += SecDetPrior_Det_LogProb(&p_netmodel->sec_det_prior,
-                                        (detpos+1) < numdet ? 1 : 0);
-    
     if (!detpos)
       *p_dettimesc += ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
                                                det->time_det, pred_arrtime,
@@ -199,6 +195,15 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
         exit(1);
       }
     }
+
+    /* don't score any of the secondaries if not enabled */
+    if (p_netmodel->enable_sec_arr)
+      /* the probability of the next secondary detection */
+      *p_detsc += SecDetPrior_Det_LogProb(&p_netmodel->sec_det_prior,
+                                          (detpos+1) < numdet ? 1 : 0,
+                                          det->amp_det);
+    else
+      break;
   }
 
   return 1;

@@ -276,6 +276,10 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
                                       p_world->high_evtime,
                                   (PyArrayObject * )p_world->propose_eventobj);
   else
+  {
+    /* since the inverts doesn't create secondaries it doesn't make sense to
+     * enable the secondary model for it. */
+    p_netmodel->enable_sec_arr = 0;
     numevents = propose_invert_step(p_netmodel, pp_events,
                                     p_world->max_prop_evtime,
                                     p_world->high_evtime,
@@ -283,6 +287,8 @@ static void add_propose_invert_events(NetModel_t * p_netmodel,
                                     p_world->high_detnum,
                                     2.5, p_world->birthsteps,
                                     p_world->numthreads);
+    p_netmodel->enable_sec_arr = 1;
+  }
   
   t1 = time(NULL) - t1;
   
@@ -358,6 +364,41 @@ static int remove_negative_events(World_t * p_world)
       if (p_world->verbose)
       {
         printf("death: ");
+        print_event(p_old_event);
+      }
+      delete_event(p_world, p_old_event);
+      free_event(p_old_event);
+      numdel ++;
+    }
+  }
+
+  return numdel;
+}
+
+static int remove_prim_negative_events(NetModel_t * p_netmodel,
+                                       World_t * p_world)
+{
+  int numdel;
+  int j;
+  
+  numdel = 0;
+  
+  for (j=p_world->low_evnum; j<p_world->high_evnum; j++)
+  {
+    Event_t * p_old_event;
+    double prim_score;
+    
+    p_old_event = p_world->pp_events[j];
+        
+    p_netmodel->enable_sec_arr = 0;
+    prim_score = score_event(p_netmodel, p_old_event);
+    p_netmodel->enable_sec_arr = 1;
+    
+    if (prim_score < 0)
+    {
+      if (p_world->verbose)
+      {
+        printf("death (prim-score %.1f): ", prim_score);
         print_event(p_old_event);
       }
       delete_event(p_world, p_old_event);
@@ -822,11 +863,14 @@ static void change_detections(NetModel_t * p_netmodel, World_t * p_world,
 {
   int detnum;
   int cnt;
+  int iters;
   
   /* keep changing the detections till something converges */
+  iters = 0;
   do 
   {
     cnt = 0;
+    iters ++;
     
     for (detnum = p_world->low_detnum; detnum < p_world->high_detnum;
          detnum ++)
@@ -837,7 +881,7 @@ static void change_detections(NetModel_t * p_netmodel, World_t * p_world,
 #ifdef DEBUG2
     printf("change_detections_loop: %d\n", cnt);
 #endif
-  } while (cnt > 0);
+  } while ((cnt > 0) && (iters < 20));
 }
 
 #ifdef SAVE_RESTORE
@@ -1189,8 +1233,8 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       }
 
       /* now try and change the detections to go to the event with the
-       * highest score rather than the best place for the detection. This
-       * might get rid of some spurious events */
+       * highest score rather than the best place for the
+       * detection. This might get rid of some spurious events */
       change_detections(p_netmodel, p_world, 1);
       
       numdel = remove_negative_events(p_world);
@@ -1202,13 +1246,31 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       /* restore the detections in normal mode */
       change_detections(p_netmodel, p_world, 0);
       
-      /* if we freed up some detections and hence reassociated then we need
-       * to relocate/reassociate again */
+      /* if we freed up some detections then we need to
+       * relocate/reassociate again */
       if (numdel > 0)
       {
         change_events(p_netmodel, p_world, 10);
         change_detections(p_netmodel, p_world, 0);
       }
+
+      /* finally, we will check if all these events are justified by
+       * their primary detections alone. If not kill those events */
+      numdel = remove_prim_negative_events(p_netmodel, p_world);
+      if ((numdel > 0) && p_world->verbose)
+      {
+        printf("primary negative mode killed %d events\n", numdel);
+      }
+      
+      /* if we freed up some detections then we need to
+       * relocate/reassociate again */
+      if (numdel > 0)
+      {
+        change_detections(p_netmodel, p_world, 0);
+        change_events(p_netmodel, p_world, 10);
+        change_detections(p_netmodel, p_world, 0);
+      }
+
     }
     
 /*

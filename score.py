@@ -42,6 +42,11 @@ def main(param_dirname):
   parser.add_option("-p", "--prob", dest="prob", default=False,
                     action = "store_true",
                     help = "write probabilities instead of densities (False)")
+
+  parser.add_option("-s", "--secondary_arrivals", dest="sec_arr", default=False,
+                    action = "store_true",
+                    help = "use secondary arrival model (False)")
+  
   
   parser.add_option("-w", "--writefile", dest="writefile", default=None,
                     type="str",
@@ -63,10 +68,15 @@ def main(param_dirname):
   prune_detections(netmodel, leb_events, leb_evlist)
   prune_detections(netmodel, sel3_events, sel3_evlist)
 
-  leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
-                                       leb_evlist)
-  sel3_seclist = compute_secondary_dets(earthmodel, detections, sel3_events,
-                                        sel3_evlist)
+  if (options.sec_arr):
+    leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
+                                         leb_evlist)
+    sel3_seclist = compute_secondary_dets(earthmodel, detections, sel3_events,
+                                          sel3_evlist)
+    netmodel.enable_sec_arr()
+  else:
+    netmodel.disable_sec_arr()
+  
   print "LEB:"
   netmodel.score_world(leb_events, leb_seclist, 1)
 

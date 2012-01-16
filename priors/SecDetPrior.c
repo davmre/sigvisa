@@ -63,7 +63,14 @@ void SecDetPrior_Init_Params(SecDetPrior_t * prior, const char * filename)
     exit(1);
   }
 
-  READPARAM(1, fscanf(fp, "%lg\n", &prior->detprob), "detection probability");
+  READPARAM(3, fscanf(fp, "%d %lg %lg\n", &prior->num_logamp_bins,
+                      &prior->low_logamp, &prior->step_logamp), 
+            "number of logamp bins, low logamp, step logamp");
+  prior->p_detprob = (double *)malloc(sizeof(*prior->p_detprob) 
+                                      * prior->num_logamp_bins);
+  for (i=0; i<prior->num_logamp_bins; i++)
+    READPARAM(1, fscanf(fp, "%lg ", prior->p_detprob + i), "det probability");
+  
   READPARAM(4, fscanf(fp, "%lg %lg %lg %lg\n", &prior->time_shape,
                       &prior->min_delay, &prior->time_scale, &prior->max_delay),
             "time shape, location, scale, maximum");
@@ -89,15 +96,36 @@ void SecDetPrior_Init_Params(SecDetPrior_t * prior, const char * filename)
 
 void SecDetPrior_UnInit(SecDetPrior_t * prior)
 {
+  free(prior->p_detprob);
   free(prior->phaseprob);
 }
 
-double SecDetPrior_Det_LogProb(const SecDetPrior_t * prior, int is_det)
+double SecDetPrior_Det_LogProb(const SecDetPrior_t * prior, int is_det,
+                               double prim_amp)
 {
-  if (is_det)
-    return log(prior->detprob);
+  int index;
+  
+  /* if prim_amp is -1 we will simply use the min bucket */
+  if (prim_amp <= 0)
+    index = 0;
+  
   else
-    return log(1-prior->detprob);
+  {
+    index = (int)floor((log(prim_amp) - prior->low_logamp)/prior->step_logamp);
+    
+    /* keep the index within range */
+    if (index < 0)
+      index = 0;
+
+    if (index >= prior->num_logamp_bins)
+      index = prior->num_logamp_bins - 1;
+  }
+  
+  if (is_det)
+    return log(prior->p_detprob[index]);
+  
+  else
+    return log(1-prior->p_detprob[index]);
 }
 
 int SecDetPrior_Time_Possible(const SecDetPrior_t * prior, double sec_time,

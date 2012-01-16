@@ -147,6 +147,7 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
   if evtype == "visa":
     cursor.execute("select vass.orid, vass.arid, ph.id-1 from visa_assoc vass,"
                    "visa_origin vori, static_phaseid ph where "
+                   "ph.timedef='d' and "
                    "vass.orid=vori.orid and vass.phase=ph.phase and vori.time "
                    "between %f and %f and vass.runid=vori.runid "
                    "and vass.runid=%d" % (start_time, end_time, runid))

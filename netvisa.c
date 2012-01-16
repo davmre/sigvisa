@@ -23,6 +23,8 @@ static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_enable_sec_arr(NetModel_t * self);
+static PyObject * py_disable_sec_arr(NetModel_t * self);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
@@ -71,6 +73,10 @@ static PyMethodDef NetModel_methods[] = {
   {"arrslo_logprob", (PyCFunction)py_arrslo_logprob, METH_VARARGS,
    "arrslo_logprob(arrslo, pred_arrslo, det_delslo, siteid, phaseid)"
    " -> log probability"},
+  {"enable_sec_arr", (PyCFunction)py_enable_sec_arr, METH_NOARGS,
+   "enable_sec_arr(): enables secondary arrivals"},
+  {"disable_sec_arr", (PyCFunction)py_disable_sec_arr, METH_NOARGS,
+   "disable_sec_arr(): disables secondary arrivals"},
   {NULL}  /* Sentinel */
 };
 
@@ -386,6 +392,10 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   alloc_detections(detectionsobj, &self->numdetections, &self->p_detections);
 
   alloc_site_up(siteupobj, &self->numsites, &self->numtime, &self->p_site_up);
+  
+  /* we will enable secondary arrivals, it can be modified by calling one of
+   * the enable/disable methods */
+  self->enable_sec_arr = 1;
   
   SecDetPrior_Init_Params(&self->sec_det_prior, secdet_fname);
 
@@ -1055,6 +1065,20 @@ static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,
                                          det_delslo, siteid, phaseid);
   
   return Py_BuildValue("d", logprob);
+}
+
+static PyObject * py_enable_sec_arr(NetModel_t * p_netmodel)
+{
+  p_netmodel->enable_sec_arr = 1;
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+static PyObject * py_disable_sec_arr(NetModel_t * p_netmodel)
+{
+  p_netmodel->enable_sec_arr = 0;
+  Py_INCREF(Py_None);
+  return Py_None;
 }
 
 static PyObject * py_srand(PyObject * self, PyObject * args)
