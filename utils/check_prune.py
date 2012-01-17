@@ -132,10 +132,12 @@ def main(param_dirname):
   unpruned_visa_events, unpruned_visa_orid2num = \
                         suppress_duplicates(visa_events, visa_evscores, False)
   print "done"
-  
+  pruned_visa_orids = [int(event[EV_ORID_COL]) for event in visa_events
+                       if int(event[EV_ORID_COL]) not in unpruned_visa_orid2num]
   print "Out of %d VISA events, %d left after suppressing duplicates" \
         % (len(visa_events), len(unpruned_visa_events))
   
+  report_pruned_events(pruned_visa_orids, visa_evscores)
   report_pruning_errors(leb_events, visa_events, unpruned_visa_events)
 
   print "Dropping secondary detections...",
@@ -152,6 +154,10 @@ def main(param_dirname):
                        for evnum in range(len(visa_events))
                        if netmodel.score_event(visa_events[evnum],
                                                visa_assoc[evnum]) > 0)
+  negative_orids = [int(visa_events[evnum, EV_ORID_COL])
+                    for evnum in range(len(visa_events))
+                    if int(visa_events[evnum, EV_ORID_COL])
+                    not in positive_orids]
   
   pos_evnums = [evnum for evnum in range(len(visa_events))
                 if int(visa_events[evnum, EV_ORID_COL]) in positive_orids]
@@ -161,6 +167,7 @@ def main(param_dirname):
   print "Out of %d VISA events, %d left after dropping secondaries"\
         % (len(visa_events), len(posvisa_events))
 
+  report_pruned_events(pruned_visa_orids, visa_evscores)
   report_pruning_errors(leb_events, visa_events, posvisa_events)
   
   plt.figure()
@@ -233,6 +240,10 @@ def report_pruning_errors(true_events, orig_guess, final_guess):
     for orid in orig_matches:
       print int(orid),
     print
+
+def report_pruned_events(pruned_orids, evscores):
+  pruned_orids.sort(cmp=lambda x,y: cmp(evscores[x], evscores[y]), reverse=True)
+  print "Pruned events:", pruned_orids
 
 if __name__ == "__main__":
   try:

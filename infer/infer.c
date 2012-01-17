@@ -1232,6 +1232,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
         }
       }
 
+#ifdef MAXSCORE_MODE
       /* now try and change the detections to go to the event with the
        * highest score rather than the best place for the
        * detection. This might get rid of some spurious events */
@@ -1253,6 +1254,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
         change_events(p_netmodel, p_world, 10);
         change_detections(p_netmodel, p_world, 0);
       }
+#endif
 
       /* finally, we will check if all these events are justified by
        * their primary detections alone. If not kill those events */

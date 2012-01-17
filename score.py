@@ -75,6 +75,8 @@ def main(param_dirname):
                                           sel3_evlist)
     netmodel.enable_sec_arr()
   else:
+    leb_seclist = leb_evlist
+    sel3_seclist = sel3_evlist
     netmodel.disable_sec_arr()
   
   print "LEB:"
