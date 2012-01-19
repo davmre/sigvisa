@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from optparse import OptionParser
 
 from database.dataset import *
@@ -52,7 +53,7 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                            os.path.join(param_dirname,
                                         "ArrivalPhasePrior.txt"),
                            os.path.join(param_dirname,
-                                        "ArrivalSNR.txt"),
+                                        "ArrivalSNRPrior.txt"),
                            os.path.join(param_dirname,
                                         "ArrivalAmplitudePrior.txt")
                            )
@@ -64,9 +65,9 @@ def main(param_dirname):
   parser.add_option("-q", "--quick", dest="quick", default=False,
                     action = "store_true",
                     help = "quick training on a subset of data (False)")
-  parser.add_option("-x", "--text", dest="gui", default=True,
-                    action = "store_false",
-                    help = "text only output (False)")
+  parser.add_option("-g", "--gui", dest="gui", default=False,
+                    action = "store_true",
+                    help = "display the model  (False)")
   parser.add_option("-s", "--silent", dest="verbose", default=True,
                     action = "store_false",
                     help = "silent, i.e. no output (False)")
@@ -81,6 +82,9 @@ def main(param_dirname):
   parser.add_option("-w", "--writefig", dest="writefig",
                     default=None, help = "Directory to save figures (None)",
                     metavar="DIR")
+  parser.add_option("-p", "--pdf", dest="pdf",
+                    default=None, help = "pdf file to save figures (None)",
+                    metavar="FILE")
   parser.add_option("-d", "--datadir", dest="datadir",
                     default=None, help = "Directory to save data (None)",
                     metavar="DIR")
@@ -91,6 +95,23 @@ def main(param_dirname):
   if options.type1:
     plt.rcParams['text.usetex'] = True
     
+  if options.pdf:
+    options.pdf = PdfPages(options.pdf)
+    
+  if options.gui:
+    options.plt = plt
+    showgui = True
+  # if the user has not request a GUI but he does want the pictures then we
+  # will set the gui flag for the subcomponents, however, we won't display
+  # the generated images
+  elif options.pdf or options.writefig:
+    options.plt = plt
+    options.gui = True
+    showgui = False
+
+  if options.datadir:
+    param_dirname = options.datadir
+  
   if options.quick:
     hours = 100
   else:
@@ -98,9 +119,6 @@ def main(param_dirname):
 
   if options.model is not None:
     options.model = set(m for m in options.model.split(","))
-
-  if options.gui:
-    options.plt = plt
   
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
@@ -114,7 +132,7 @@ def main(param_dirname):
   if options.model is None or "SecDet" in options.model:
     priors.SecDetPrior.learn(os.path.join(param_dirname, "SecDetPrior.txt"),
                              options, earthmodel, detections, leb_events,
-                             leb_seclist)
+                             leb_evlist)
 
   if options.model is None or "NumEvent" in options.model:
     priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
@@ -170,7 +188,7 @@ def main(param_dirname):
 
   if options.model is None or "ArrivalSNR" in options.model:
     priors.ArrivalSNR.learn(os.path.join(param_dirname,
-                                         "ArrivalSNR.txt"),
+                                         "ArrivalSNRPrior.txt"),
                             options, earthmodel, detections, leb_events,
                             leb_evlist)
 
@@ -179,7 +197,10 @@ def main(param_dirname):
       os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
       options, earthmodel, detections, leb_events, leb_evlist)
 
-  if options.gui:
+  if options.pdf:
+    options.pdf.close()
+  
+  if showgui:
     plt.show()
 
 if __name__ == "__main__":

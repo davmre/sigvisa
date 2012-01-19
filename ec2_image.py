@@ -6,14 +6,16 @@ import sys
 
 from utils import EC2
 
+CRED_FNAME="visa-credentials.csv"
+
 def main():
-  if (len(sys.argv) < 3 or
-      (sys.argv[2] not in ('create', 'delete', 'list'))
-      or (sys.argv[2] == 'create' and len(sys.argv) != 5)
-      or (sys.argv[2] == 'delete' and len(sys.argv) != 4)
-      or (sys.argv[2] == 'list' and len(sys.argv) != 3) ):
+  if (len(sys.argv) < 2 or
+      (sys.argv[1] not in ('create', 'delete', 'list'))
+      or (sys.argv[1] == 'create' and len(sys.argv) != 4)
+      or (sys.argv[1] == 'delete' and len(sys.argv) != 3)
+      or (sys.argv[1] == 'list' and len(sys.argv) != 2) ):
     print """\
-Usage: python ec2_image.py <credentials-file> command
+Usage: python ec2_image.py command
   where valid commands are:
   create <image-name> <instance-id> 
   delete <image-name
@@ -21,15 +23,15 @@ Usage: python ec2_image.py <credentials-file> command
   """
     sys.exit(1)
 
-  cred_fname, cmd_prefix = sys.argv[1:3]
+  cmd_prefix = sys.argv[1]
 
   # connect to EC2
-  ec2conn = EC2.connect_with_credfile(cred_fname)
+  ec2conn = EC2.connect_with_credfile(CRED_FNAME)
 
   if cmd_prefix == 'create':
-    create_image(ec2conn, *sys.argv[3:])
+    create_image(ec2conn, *sys.argv[2:])
   elif cmd_prefix == 'delete':
-    delete_image(ec2conn, *sys.argv[3:])
+    delete_image(ec2conn, *sys.argv[2:])
   elif cmd_prefix == 'list':
     list_images(ec2conn)
   else:

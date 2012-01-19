@@ -23,18 +23,24 @@ def export(curs, tablename, runid, filename):
 
 def main():
   
-  if len(sys.argv) != 3:
-    print >> sys.stderr, "Usage: python saverun.py <runid> <filename>.tar"
+  if len(sys.argv) not in (2,3):
+    print >> sys.stderr, "Usage: python saverun.py [<runid>] <filename>.tar"
     sys.exit(1)
-  
-  runid = int(sys.argv[1])
-  tarfname = sys.argv[2]
-  if not tarfname.endswith(".tar"):
-    tarfname += ".tar"
-  
+
   conn = database.db.connect()
   curs = conn.cursor()
 
+  if len(sys.argv) == 3:
+    runid = int(sys.argv[1])
+    tarfname = sys.argv[2]
+  else:
+    curs.execute("select max(runid) from visa_run")
+    runid, = curs.fetchone()
+    tarfname = sys.argv[1]
+    
+  if not tarfname.endswith(".tar"):
+    tarfname += ".tar"
+  
   if export(curs, "visa_run", runid, TEMPNAME) != 1:
     print >> sys.stderr, "Runid %d not found" % runid
     sys.exit(1)

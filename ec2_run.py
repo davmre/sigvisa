@@ -6,9 +6,9 @@
 #
 # one can run this in an infinite loop
 # WINDOWS:
-# for /L %i in (0,0,0) do @python ec2_run.py credential key "cd netvisa; python analyze.py" "" & ping -n 60 127.0.0.1>NUL
+# for /L %i in (0,0,0) do @python ec2_run.py key "cd netvisa; python analyze.py" "" & ping -n 60 127.0.0.1>NUL
 # BASH:
-# for ((;;)) do python ec2_run.py credential key 'cd netvisa; python analyze.py' '' ; sleep 60; done
+# for ((;;)) do python ec2_run.py key 'cd netvisa; python analyze.py' '' ; sleep 60; done
 #
 import warnings
 warnings.filterwarnings("ignore")
@@ -19,16 +19,18 @@ from utils import EC2
 
 from ec2_start import ssh_cmd, scp_from
 
+CRED_FNAME = "visa-credentials.csv"
+
 def main():
-  if len(sys.argv) != 5:
-    print "Usage: python ec2_run.py <credentials-file> <key-name> <command>"\
+  if len(sys.argv) != 4:
+    print "Usage: python ec2_run.py <key-name> <command>"\
           " <file-list>"
     sys.exit(1)
 
-  cred_fname, ec2keyname, command, file_list = sys.argv[1:]
+  ec2keyname, command, file_list = sys.argv[1:]
 
   # connect to EC2
-  ec2conn = EC2.connect_with_credfile(cred_fname)
+  ec2conn = EC2.connect_with_credfile(CRED_FNAME)
   
   # find all the running instances with the keypair ..
   hostnames = []

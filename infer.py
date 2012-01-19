@@ -75,7 +75,7 @@ def print_event(netmodel, earthmodel, event, event_detlist, label):
   print "Detections:",
   detlist = [x for x in event_detlist]
   detlist.sort()
-  for phaseid, detid in detlist:
+  for phaseid, detid in detlist[:2]:
     print "(%s, %d)" % (earthmodel.PhaseName(phaseid), detid),
   print
   score = netmodel.score_event(event, event_detlist)

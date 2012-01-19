@@ -6,6 +6,8 @@
 #  Services LLC or its affiliates with respect to your use of this software
 #  code. (c) 2006 Amazon Web Services LLC or its affiliates.  All rights
 #  reserved.
+import warnings
+warnings.filterwarnings("ignore")
 
 import base64
 import hmac

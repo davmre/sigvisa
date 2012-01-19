@@ -9,6 +9,10 @@
 #include "../netvisa.h"
 #include "quickselect.h"
 
+/*
+#define VERBOSE
+*/
+
 #define BUCKET(lonidx, latidx, timeidx) \
 p_bucket_score[(lonidx)*(numlat)*(numtime) + (latidx)*(numtime) + (timeidx)]
 
@@ -1031,6 +1035,13 @@ int propose_invert_step(NetModel_t * p_netmodel, Event_t **pp_events,
     {
       p_skip_inv[det_off] = 1;
     }
+#ifdef VERBOSE
+    else
+    {
+      printf("detnum %d: inv-> ", inv_detnum);
+      print_event(p_event);
+    }
+#endif
   }
   
 #ifdef VERBOSE

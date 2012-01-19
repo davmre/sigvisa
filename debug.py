@@ -186,7 +186,8 @@ def main(param_dirname):
                                 start_time, end_det_time,
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
-
+  netmodel.disable_sec_arr()
+  
   # print all the events
   print_events(sitenames, netmodel, earthmodel, detections, leb_events, leb_evlist, "LEB")
   print_events(sitenames, netmodel, earthmodel, detections, sel3_events, sel3_evlist,

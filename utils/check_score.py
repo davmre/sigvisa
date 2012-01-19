@@ -20,7 +20,7 @@ def main(param_dirname):
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
-  
+  netmodel.disable_sec_arr()
   prune_detections(netmodel, leb_events, leb_evlist)
   prune_detections(netmodel, sel3_events, sel3_evlist)
 

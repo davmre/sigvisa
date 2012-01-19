@@ -6,15 +6,17 @@ import sys
 
 from utils import EC2
 
+CRED_FNAME="visa-credentials.csv"
+
 def main():
-  if len(sys.argv) != 3:
-    print "Usage: python ec2_kill.py <credentials-file> <key-name>"
+  if len(sys.argv) != 2:
+    print "Usage: python ec2_kill.py <key-name>"
     sys.exit(1)
 
-  cred_fname, ec2keyname = sys.argv[1:3]
+  ec2keyname = sys.argv[1]
 
   # connect to EC2
-  ec2conn = EC2.connect_with_credfile(cred_fname)
+  ec2conn = EC2.connect_with_credfile(CRED_FNAME)
   
   # find all the running instances with the keypair ..
   instids = []

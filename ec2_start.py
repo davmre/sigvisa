@@ -2,6 +2,7 @@
 #
 # PREREQUISITES:
 # - create access keys (under the IAM tab) and download the credentials.csv file
+#   into the current directory as visa-credentials.csv
 # - create a disk image and give it a descriptive name
 #
 # USAGE
@@ -16,12 +17,12 @@
 #
 # EXAMPLE:
 #
-# python ec2_start.py visa-credentials.csv baseline-194-clus30 revision-194 30 c1.xlarge 'ec2_infer.py,netvisa/' '' 'cd netvisa; python ec2_infer.py -z 8' ''
+# python ec2_start.py baseline-194-clus30 revision-194 30 c1.xlarge 'ec2_infer.py,netvisa/' '' 'cd netvisa; python ec2_infer.py -z 8' ''
 #
-#  python ec2_start.py visa-credentials.csv revision-197-learn revision-196 1 m1.large '' '' 'cd netvisa; svn update .; python setup.py build_ext --inplace; python -u learn.py -x; python -u score.py -x' ''
+#  python ec2_start.py revision-197-learn revision-196 1 m1.large '' '' 'cd netvisa; svn update .; python setup.py build_ext --inplace; python -u learn.py -x; python -u score.py -x' ''
 #
 # if you need to kill the instances try:
-#   python ec2-kill.py <credentials-file> <key-name>
+#   python ec2-kill.py <key-name>
 #
 # Common instance types
 #  c1.xlarge -> 8 core   64-bit    $.68/hr
@@ -34,6 +35,8 @@ warnings.filterwarnings("ignore")
 import csv, sys, time, subprocess, os, shlex, socket
 
 from utils import EC2
+
+CRED_FNAME = "visa-credentials.csv"
 
 # unbuffer stdout
 class Unbuffered:
@@ -48,18 +51,18 @@ sys.stdout=Unbuffered(sys.stdout)
 
 def main(param_dirname):
   # parse command line arguments
-  if len(sys.argv) != 10:
-    print "Usage: python ec2_start.py <credentials-file> <key-name> "\
+  if len(sys.argv) != 9:
+    print "Usage: python ec2_start.py <key-name> "\
           "<image-name> <number-of-instances> <instance-type> "\
           "<file-copy-list> <slave-command> <master-command> "\
           "<monitor-command>"
     sys.exit(1)
   
-  cred_fname, ec2keyname, ec2imgname, numinst, insttype, file_list,\
+  ec2keyname, ec2imgname, numinst, insttype, file_list,\
               slave_command, master_command, monitor_command = sys.argv[1:]
 
   # read the credentials file
-  ec2conn = EC2.connect_with_credfile(cred_fname)
+  ec2conn = EC2.connect_with_credfile(CRED_FNAME)
   
   # create the instances
   inst_names, master = create_instances(ec2conn, ec2imgname, ec2keyname,

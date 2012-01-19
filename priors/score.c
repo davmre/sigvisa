@@ -94,9 +94,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                det->deltim_det, siteid,
                                                phaseid);
     else
-      *p_dettimesc += SecDetPrior_Time_LogProb(&p_netmodel->sec_det_prior,
-                                               det->time_det,
-                                               prev_det->time_det);
+      *p_dettimesc += SecDetPrior_PhaseCodaTime_LogProb(
+        &p_netmodel->sec_det_prior, det->time_det, prev_det->time_det);
     
 
     *p_dettimesc -= NumFalseDet_LogTimeRate(&p_netmodel
@@ -118,8 +117,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                   siteid, phaseid);
     }
     else
-      *p_detslosc += SecDetPrior_Slow_LogProb(&p_netmodel->sec_det_prior,
-                                              det->slo_det, prev_det->slo_det);
+      *p_detslosc += SecDetPrior_PhaseCodaSlow_LogProb(
+        &p_netmodel->sec_det_prior, det->slo_det, prev_det->slo_det);
     
     *p_detslosc -= LOGPROB_UNIFORM_SLOWNESS;
 
@@ -130,9 +129,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                 det->delaz_det,
                                                 siteid, phaseid);
     else
-      *p_detazsc += SecDetPrior_Azimuth_LogProb(&p_netmodel->sec_det_prior,
-                                                det->azi_det,
-                                                prev_det->azi_det);
+      *p_detazsc += SecDetPrior_PhaseCodaAzimuth_LogProb(
+        &p_netmodel->sec_det_prior, det->azi_det, prev_det->azi_det);
     
     *p_detazsc -= LOGPROB_UNIFORM_AZIMUTH;
     
@@ -142,8 +140,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                  det->phase_det,
                                                  phaseid);
     else
-      *p_detphasesc += SecDetPrior_Phase_LogProb(&p_netmodel->sec_det_prior,
-                                                 det->phase_det);
+      *p_detphasesc += SecDetPrior_PhaseCodaPhase_LogProb(
+        &p_netmodel->sec_det_prior, det->phase_det);
     
     *p_detphasesc -= FalseArrivalPhasePrior_LogProb(&p_netmodel
                                                     ->arr_phase_prior,
@@ -154,8 +152,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                           det->site_det, phaseid,
                                           det->snr_det);
     else
-      *p_snrsc += SecDetPrior_SNR_LogProb(&p_netmodel->sec_det_prior,
-                                          det->snr_det, prev_det->snr_det);
+      *p_snrsc += SecDetPrior_PhaseCodaSNR_LogProb(
+        &p_netmodel->sec_det_prior, det->snr_det, prev_det->snr_det);
     
     *p_snrsc -= FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
                                              det->site_det, det->snr_det);
@@ -174,8 +172,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                   ttime, siteid, phaseid,
                                                   det->amp_det);
       else if (-1 != prev_det->amp_det)
-        *p_ampsc += SecDetPrior_Amp_LogProb(&p_netmodel->sec_det_prior,
-                                            det->amp_det, prev_det->amp_det);
+        *p_ampsc += SecDetPrior_PhaseCodaAmp_LogProb(
+          &p_netmodel->sec_det_prior, det->amp_det, prev_det->amp_det);
     
       if (isnan(*p_ampsc))
       {
@@ -199,9 +197,9 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
     /* don't score any of the secondaries if not enabled */
     if (p_netmodel->enable_sec_arr)
       /* the probability of the next secondary detection */
-      *p_detsc += SecDetPrior_Det_LogProb(&p_netmodel->sec_det_prior,
-                                          (detpos+1) < numdet ? 1 : 0,
-                                          det->amp_det);
+      *p_detsc += SecDetPrior_PhaseCodaDet_LogProb(&p_netmodel->sec_det_prior,
+                                                   (detpos+1) < numdet ? 1 : 0,
+                                                   det->amp_det);
     else
       break;
   }
