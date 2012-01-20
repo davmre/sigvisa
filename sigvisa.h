@@ -8,12 +8,6 @@
 #undef NDEBUG
 #include <assert.h>
 
-#include <liblogger/liblogger_levels.h>
-// possible log levels: TRACE, DEBUG, INFO, WARN, ERROR, FATAL 
-#define LOG_LEVEL LOG_LEVEL_INFO
-#define LOG_MODULE_NAME "sigvisa"
-#include <liblogger/liblogger.h>
-
 typedef struct Detection_t
 {
   int site_det;
@@ -46,7 +40,6 @@ typedef struct Arrival_t {
   double score;
 
 } Arrival_t;
-
 
 typedef struct Event_t
 {
@@ -139,9 +132,8 @@ double ChannelBundle_EndTime(ChannelBundle_t * b);
 
 #include "priors/ArrivalTimeJointPrior.h"
 #include "priors/SignalPrior.h"
+#include "priors/SignalModelCommon.h"
 
-char * signal_str(Signal_t * signal);
-int print_signal(Signal_t * signal);
 Signal_t * alloc_signal(ChannelBundle_t * p_segment);
 
 typedef struct SigModel_t
@@ -160,8 +152,7 @@ typedef struct SigModel_t
   long numdetections;
   Detection_t * p_detections;
 
-  SignalPrior_t sig_prior;
-  int ar_perturbation;
+  SignalModel_t signal_model;
 
   NumEventPrior_t num_event_prior;
   EventLocationPrior_t event_location_prior;
@@ -188,12 +179,12 @@ typedef struct SigModel_t
 int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end_time);
 
 
+#include "priors/SignalModelCommon.h"
 #include "priors/score_sig.h"
-
 #include "priors/score.h"
 #include "infer/infer.h"
 #include "infer/propose.h"
-
+#include "logging.h"
 
 #define Event2R3Vector(event, vector) do {\
 (vector)[0] = (event)->evlon; (vector)[1] = (event)->evlat;\
@@ -281,16 +272,12 @@ void free_event(Event_t * p_event);
 void free_events(int numevents, Event_t * p_events);
 void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event);
-char * event_str(const Event_t * p_event);
-void print_event(const Event_t * p_event);
-char * arrival_str(const Arrival_t * p_arr);
-void print_arrival(const Arrival_t * p_arr);
-int print_signal(Signal_t * signal);
 
-int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename, char * format);
 
 #define ALLOC_EVENT(net, sig) (net != NULL) ? alloc_event_net(net) : alloc_event_sig(sig);
 #define COPY_EVENT(net,sig, a, b) (net != NULL) ? copy_event_net(net, a, b) : copy_event_sig(sig, a, b);
+
+int canonical_channel_num(char* chan_str);
 
 void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
                              const Event_t ** pp_events, int numevents,
@@ -304,6 +291,7 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 				  PyObject ** pp_evarrlistobj);
 
 PyObject * channel_bundle_to_trace_bundle(ChannelBundle_t * p_segment);
+int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace);
 
 PyObject * py_srand(PyObject * self, PyObject * args);
 #endif // SIGVISA_INCLUDE

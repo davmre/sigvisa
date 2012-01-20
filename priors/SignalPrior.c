@@ -14,7 +14,81 @@
 
 #include "../sigvisa.h"
 
-void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites) {
+void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py_dict) {
+  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
+  
+
+  Envelope_StationModel_t * sta = NULL;
+  if (siteid > p_params->numsites) {
+    LogError("invalid siteid %d", siteid);
+    exit(EXIT_FAILURE);
+  } else if (siteid > 0) {
+    sta = p_params->p_stations + siteid - 1;
+  }
+
+  PyObject *py_key, *py_value;
+  Py_ssize_t pos = 0;
+  while (PyDict_Next(py_dict, &pos, &py_key, &py_value)) {
+    char * key = PyString_AsString(py_key);
+
+    if (sta != NULL) {
+
+      if (strcmp(key, "env_height") == 0) {
+	sta->env_height = PyFloat_AsDouble(py_value);
+      } else if (strcmp(key, "env_p_onset") == 0) {
+	sta->env_height = PyFloat_AsDouble(py_value);
+      } else if (strcmp(key, "env_p_decay") == 0) {
+	sta->env_height = PyFloat_AsDouble(py_value);
+      } else if (strcmp(key, "env_s_onset") == 0) {
+	sta->env_height = PyFloat_AsDouble(py_value);
+      } else if (strcmp(key, "env_s_decay") == 0) {
+	sta->env_height = PyFloat_AsDouble(py_value);
+
+      } else if (strncmp(key, "chan_mean_", 10) == 0) {
+	int chan_num = canonical_channel_num(key+10);
+	// LogTrace("setting chan mean %lf for chan str %s int %d at siteid %d", PyFloat_AsDouble(py_value), key+10, chan_num, siteid);
+	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "chan_var_", 9) == 0) {
+	int chan_num = canonical_channel_num(key+9);
+	// LogTrace("setting chan var %lf for chan str %s int %d siteid %d", PyFloat_AsDouble(py_value), key+9, chan_num, siteid);
+	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value);
+
+      } else if (strcmp(key, "ar_noise_sigma2") == 0) {
+	sta->ar_noise_sigma2 = PyFloat_AsDouble(py_value);
+      } else if (strcmp(key, "ar_coeffs") == 0) {
+	sta->ar_n = PyList_Size(py_value);
+	if (sta->p_ar_coeffs != NULL) free(sta->p_ar_coeffs);
+	sta->p_ar_coeffs = calloc(sta->ar_n, sizeof(double));
+	for (int i=0; i < sta->ar_n; ++i) {
+	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyList_GetItem(py_value, i));
+	}
+
+      CHECK_ERROR;
+
+      } else {
+	LogError("unrecognized param %s at siteid %d", key, siteid);
+	exit(EXIT_FAILURE);
+      }
+    } else {
+      LogError("unrecognized global param %s", key);
+      exit(EXIT_FAILURE);
+    }
+
+  }
+}
+
+void Envelope_SignalModel_Init_Params(void * pv_params,  int numsites) {
+  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
+
+  p_params->numsites = numsites;
+
+  /* using calloc (instead of malloc) is important here since we
+     depend on the p_ar_coeffs pointer being NULL iff unallocated */
+  p_params->p_stations = calloc(numsites, sizeof(Envelope_StationModel_t));
+}
+
+
+/*void Envelope_SignalModel_Init_Params(Envelope_SignalModel_t * prior, const char * filename, int numsites) {
   
   FILE * fp;
 
@@ -97,138 +171,32 @@ void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int n
 
   fclose(fp);
   fflush(stdout);
-}
+  }*/ 
 
-void vector_times_scalar_inplace(int n, double * vector, double scalar) {
-  for (int i=0; i < n; ++i) {
-    *(vector++) *= scalar;
-  }
-}
+int Envelope_SignalModel_Has_Model(void * pv_sigmodel, int siteid, int chan) {
 
-void vector_abs_inplace(int n, double * vector) {
-  for (int i=0; i < n; ++i) {
-    vector[i] = fabs(vector[i]);
-  }
-}
+  SigModel_t * p_sigmodel = (SigModel_t *) pv_sigmodel;
+  SignalModel_t * p_model = &p_sigmodel->signal_model;
+  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *)p_model->pv_params;
 
-/*
-double * vector_times_scalar_copy(int n, double * vector, double scalar) {
-  double * nvector = malloc(n * sizeof(double));
-  for (int i=0; i < n; ++i) {
-    nvector[i] = vector[i]*scalar;
-  }
-  return nvector;
-}
-*/
-
-void print_vector(int n, double * vector) {
-  for(int i=0; i < n; ++i) {
-    if (i == 0 || vector[i] != vector[i-1])
-      fprintf(stdout, "%d %lf \n", i, vector[i]);
-  }
-}
-
-long time2idx(double t, double start_time, double hz) {
-  double delta_t = t - start_time;
-  long result = floorl(delta_t * hz);
-
-  return result;
-}
-
-
-
-void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double max_time, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals) {
-  
-  int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-
-  *num_arrivals = 0;
-  *ppp_arrivals = calloc(num_events*MAX_PHASE(numtimedefphases), sizeof(Arrival_t *));
-
-  for (int i=0; i < num_events; ++i) {
-    const Event_t * p_event = *(pp_events+i);
-    for (int j=0; j < MAX_PHASE(numtimedefphases); ++j) {
-      if (!USE_PHASE(j)) continue;
-      Arrival_t * p_arr = p_event->p_arrivals + (siteid-1)*numtimedefphases + j;
-
-      //      LogInfo("testing arrival %s", arrival_str(p_arr));
-      if (p_arr->amp == 0 || p_arr->time <= 0) {
-	continue;
+  /* chan < 0 means return true if we have a model for any channel at
+     this station */
+  if (chan < 0) {
+    for (int i=0; i < NUM_CHANS; ++i) {
+      if (p_params->p_stations[siteid-1].chan_vars[i] > 0) {
+	return 1;
       }
-      if (p_arr->time < min_time - MAX_ENVELOPE_LENGTH && p_arr->time > max_time) {
-	continue;
-      }
-      *(*ppp_arrivals + (*num_arrivals)++) = p_arr;
     }
+    return 0; 
   }
-}
 
-int test_identity(int n, double * x, double * means) {
-
-  for (int i=0; i < n; ++i) {
-    double diff = fabs(x[i] - means[i]);
-    if (diff > 0.0001) {
-      printf("NOT IDENTICAL: discrepancy at %d\n", i);
-      print_vector(n, means);
-      printf("NOT IDENTICAL: discrepancy at %d\n", i);
-      print_vector(n, x);
-      exit(0);
-    }
+  else {
+    // LogTrace("checking var %lf for site %d chan %d", p_params->p_stations[siteid-1].chan_vars[chan], siteid, chan);
+    // LogTrace("p_model %p sta %p", p_params, p_params->p_stations + siteid-1);
+    return (p_params->p_stations[siteid-1].chan_vars[chan] > 0);
   }
-  printf("identity check passed!\n");
-  return 1;
+
 }
-
-
-int add_signals(double * dest, long dest_len, double * source, long source_len, long offset) {
-  
-  long max_i = dest_len - offset;
-  long i;
-
-  //fprintf(stdout, " dest len %ld, source len %ld, offset %ld, max i %ld\n", dest_len, source_len, offset, max_i);
-
-  for (i=0; (i < source_len) && (i < max_i); ++i) {
-    if (offset + i < 0 || offset+i > dest_len || i < 0 || i > source_len) continue;
-    dest[offset+i] = dest[offset+i] + source[i];
-  }
-  return i;
-}
-
-
-double vector_sum(int n, double * vector) {
-  double result = 0;
-  for (int i=0; i < n; ++i) {
-    result += *(vector++);
-  }
-  return result;
-}
-
-void evt_arrival_times(const Event_t * p_event, int siteid, int numtimedefphases, double * first_arrival, double *last_arrival) {
-  *first_arrival = DBL_MAX;
-  *last_arrival = DBL_MIN;
-  //  printf("called with siteid %d\n", siteid);
-  fflush(stdout);
-  for (int i=0; i < MAX_PHASE(numtimedefphases); ++i) {
-    if (!USE_PHASE(i)) continue;
-    double phase_arr_time = (p_event->p_arrivals + (siteid-1)*numtimedefphases + i)->time;
-    if (phase_arr_time <= 0) continue;
-    if (phase_arr_time < *first_arrival) {
-      *first_arrival = phase_arr_time;
-    }
-    if (phase_arr_time > *last_arrival) {
-      *last_arrival = phase_arr_time;
-    }
-  }
-}
-
-const Event_t ** augment_events(int numevents, const Event_t ** events, const Event_t *event) {
-  const Event_t ** augmented =  (const Event_t **)malloc((numevents+1)* sizeof(Event_t *));
-  CHECK_PTR(augmented);
-  memcpy(augmented, events, numevents*sizeof(Event_t *));
-  augmented[numevents] = event;
-  return augmented;
-}
-
-
 
 
 typedef struct ArrivalWaveform {
@@ -332,21 +300,19 @@ ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head,
 }
 
 
-void abstract_env(SignalPrior_t * prior, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
-
-  StationModel_t * sta = prior->p_stations + p_arr->siteid-1;
+void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
 
   double env_onset, env_decay;
   if (IS_S_PHASE(p_arr->phase)) {
-    env_onset = sta->env_s_onset;
-    env_decay = sta->env_s_decay;
+    env_onset = p_sta->env_s_onset;
+    env_decay = p_sta->env_s_decay;
   } else {
-    env_onset = sta->env_p_onset;
-    env_decay = sta->env_p_decay;
+    env_onset = p_sta->env_p_onset;
+    env_decay = p_sta->env_p_decay;
   }
-  LogInfo("env for siteid %d phase %d height %lf onset %lf decay %lf hz %lf", p_arr->siteid, p_arr->phase, sta->env_height, env_onset, env_decay, hz);
+  LogTrace("env for siteid %d phase %d height %lf onset %lf decay %lf hz %lf", p_arr->siteid, p_arr->phase, p_sta->env_height, env_onset, env_decay, hz);
 
-  double peak_height = sta->env_height * p_arr->amp;
+  double peak_height = p_sta->env_height * p_arr->amp;
   long peak_idx = (long) (log(peak_height) / env_onset * hz);
   long end_idx = peak_idx + (long)(log(peak_height)/env_decay * hz);
 
@@ -616,17 +582,22 @@ void AR_update(gsl_vector * p_means, gsl_matrix * p_covars,
   some station over some time period), under the envelope + AR(n)
   wiggles + Gaussian iid noise signal model.
  */
-double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
+double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
+
+  SigModel_t * p_sigmodel = (SigModel_t *) pv_sigmodel;
+  SignalModel_t * p_model = &p_sigmodel->signal_model;
 
   int siteid = p_segment->siteid;
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
 
-  SignalPrior_t * prior = &p_sigmodel->sig_prior;
+  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t * )p_model->pv_params;
+  Envelope_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
+
 
   double ll = 0;
   double iidll = 0;
 
-  int n = prior->ar_n;
+  int n = p_sta->ar_n;
 
   ArrivalWaveform_t * st_arrivals = NULL;
   ArrivalWaveform_t * et_arrivals = NULL;
@@ -670,7 +641,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
     ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
     w->start_time = p_arr->time;
     w->idx = 0;
-    abstract_env(prior, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+    abstract_env(p_sta, p_arr, p_segment->hz, &w->p_envelope, &w->len);
     w->end_time = w->start_time + (double) w->len / p_segment->hz;
 
     double iangle;
@@ -716,7 +687,12 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
   int curr_chan=0;
   for(int i=0; i < NUM_CHANS; ++i) {
     if (p_segment->p_channels[i] != NULL) {
-      gsl_matrix_set(obs_covar, curr_chan, curr_chan, prior->p_stations[siteid-1].chan_vars[i]);
+      if (p_sta->chan_vars[i] <= 0) {
+	LogError("invalid variance %lf for siteid %d, channel %d!", p_sta->chan_vars[i], siteid, i);
+	exit(EXIT_FAILURE);
+      }
+
+      gsl_matrix_set(obs_covar, curr_chan, curr_chan, p_sta->chan_vars[i]);
       curr_chan++;
     }
 
@@ -734,7 +710,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       LogTrace(" activating arrivalwaveform w/ st %lf at time %lf t %d", starting_next->start_time, time, t);
       active_arrivals = append_active(active_arrivals, starting_next);
       n_active++;
-      AR_transitions(n, k, prior->p_ar_coeffs, n_active, &p_transition);
+      AR_transitions(n, k, p_sta->p_ar_coeffs, n_active, &p_transition);
       starting_next->active_id = AR_add_arrival(&p_means, &p_covars, n);
       starting_next = starting_next->next_start;
     }
@@ -746,7 +722,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", ending_next->end_time, time);
       active_arrivals = remove_active(active_arrivals, ending_next);
       n_active--;
-      AR_transitions(n, k, prior->p_ar_coeffs, n_active, &p_transition);
+      AR_transitions(n, k, p_sta->p_ar_coeffs, n_active, &p_transition);
       AR_remove_arrival(&p_means, &p_covars, n, ending_next->active_id);
       for (ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
 	if (a->active_id > ending_next->active_id) {
@@ -776,9 +752,9 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
       LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
     }
 
-    double pred_bhz = prior->p_stations[siteid-1].chan_means[CHAN_BHZ] + env_bhz;
-    double pred_bhe = prior->p_stations[siteid-1].chan_means[CHAN_BHE] + env_bhe;
-    double pred_bhn = prior->p_stations[siteid-1].chan_means[CHAN_BHN] + env_bhn;
+    double pred_bhz = p_sta->chan_means[CHAN_BHZ] + env_bhz;
+    double pred_bhe = p_sta->chan_means[CHAN_BHE] + env_bhe;
+    double pred_bhn = p_sta->chan_means[CHAN_BHN] + env_bhn;
 
     double obs_bhz, obs_bhe, obs_bhn;
     int obs_perturb_n = 0;
@@ -797,7 +773,7 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
 
 
     if (n_active > 0) {
-      AR_predict(p_means, p_covars, p_transition, prior->ar_noise_sigma2, n);
+      AR_predict(p_means, p_covars, p_transition, p_sta->ar_noise_sigma2, n);
       AR_update(p_means, p_covars, p_observation, obs_perturb, obs_covar, n, k, residuals, residual_covars);
       LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
     } else {
@@ -857,13 +833,18 @@ double segment_likelihood_AR(SigModel_t * p_sigmodel, ChannelBundle_t * p_segmen
 /* Fills in the signal envelope for a set of event arrivals at a
    three-axis station. p_segment must set start_time, hz, and
    siteid. */
-void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior, 
+void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
 				   EarthModel_t * p_earth, 
-				   int samplePerturb,
-				   int sampleNoise,
+				   ChannelBundle_t * p_segment,
 				   int num_arrivals, 
 				   const Arrival_t ** pp_arrivals,
-				   ChannelBundle_t * p_segment) {
+				   int samplePerturb,
+				   int sampleNoise) {
+  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
+  int siteid = p_segment->siteid;
+  Envelope_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
+
+
   double end_time = p_segment->start_time + p_segment->len / p_segment->hz;
 
 
@@ -877,10 +858,10 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
   p_segment->p_channels[CHAN_BHE]->chan = CHAN_BHE;
   p_segment->p_channels[CHAN_BHE]->p_data = calloc(p_segment->len, sizeof(double));
     
-  int siteid = p_segment->siteid;
+  
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
-  int n = prior->ar_n;
+  int n = p_sta->ar_n;
 
   ArrivalWaveform_t * st_arrivals = NULL;
   ArrivalWaveform_t * et_arrivals = NULL;
@@ -893,7 +874,7 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
   r = gsl_rng_alloc (T);
   gsl_rng_set(r, time(NULL));
 
-  double stddev = sqrt(prior->ar_noise_sigma2);
+  double stddev = sqrt(p_sta->ar_noise_sigma2);
 
   /* populate two linked lists, storing waveform info sorted by
      start_time and end_time respectively */
@@ -907,21 +888,21 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
     w->start_time = p_arr->time;
     w->idx = 0;
 
-    abstract_env(prior, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+    abstract_env(p_sta, p_arr, p_segment->hz, &w->p_envelope, &w->len);
 
     if (samplePerturb) {
-      w->last_perturbs = calloc(prior->ar_n, sizeof(double));
+      w->last_perturbs = calloc(p_sta->ar_n, sizeof(double));
       for(int t=0; t < w->len; ++t) {
 	double newperturb=0;
-	for(int j=0; j < prior->ar_n; ++j) {
-	  newperturb += w->last_perturbs[j] * prior->p_ar_coeffs[j]; 
-	  //printf("inc newperturb by %lf * %lf = %lf to %lf\n", w->last_perturbs[j], prior->p_ar_coeffs[j] , w->last_perturbs[j] * prior->p_ar_coeffs[j], newperturb);
+	for(int j=0; j < p_sta->ar_n; ++j) {
+	  newperturb += w->last_perturbs[j] * p_sta->p_ar_coeffs[j]; 
+	  //printf("inc newperturb by %lf * %lf = %lf to %lf\n", w->last_perturbs[j], p_sta->p_ar_coeffs[j] , w->last_perturbs[j] *  p_sta->p_ar_coeffs[j], newperturb);
 	  if (j > 0) w->last_perturbs[j-1] = w->last_perturbs[j];
 	}
 	double epsilon = gsl_ran_gaussian(r, stddev);
 	newperturb += epsilon;
       
-	w->last_perturbs[prior->ar_n-1] = newperturb;
+	w->last_perturbs[p_sta->ar_n-1] = newperturb;
 	newperturb *= w->p_envelope[t];
 	w->p_envelope[t] = w->p_envelope[t] + newperturb;
       }
@@ -980,9 +961,9 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
 
     
     // compute the predicted envelope for each component
-    double env_bhz = prior->p_stations[siteid-1].chan_means[CHAN_BHZ];
-    double env_bhe = prior->p_stations[siteid-1].chan_means[CHAN_BHE];
-    double env_bhn = prior->p_stations[siteid-1].chan_means[CHAN_BHN];
+    double env_bhz = p_sta->chan_means[CHAN_BHZ];
+    double env_bhe = p_sta->chan_means[CHAN_BHE];
+    double env_bhn = p_sta->chan_means[CHAN_BHN];
     for(ArrivalWaveform_t * a = active_arrivals; a != NULL; a = a->next_active) {
       if (a->idx >= a->len) continue;
       env_bhz += a->p_envelope[a->idx] * a->bhz_coeff;
@@ -996,13 +977,13 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
     p_segment->p_channels[CHAN_BHN]->p_data[t] = env_bhn;
 									   
     if(sampleNoise) {
-      printf("sampling gaussian noise with var %lf\n", prior->p_stations[siteid-1].chan_vars[CHAN_BHZ]);
+      printf("sampling gaussian noise with var %lf\n", p_sta->chan_vars[CHAN_BHZ]);
       p_segment->p_channels[CHAN_BHZ]->p_data[t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_vars[CHAN_BHZ]))); 
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHZ]))); 
       p_segment->p_channels[CHAN_BHE]->p_data[t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_vars[CHAN_BHE]))); 
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHE]))); 
       p_segment->p_channels[CHAN_BHN]->p_data[t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(prior->p_stations[siteid-1].chan_vars[CHAN_BHN]))); 
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHN]))); 
     }
 
   }
@@ -1017,190 +998,12 @@ void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior,
 
 }
 
-
-double segment_likelihood_AR_outside(void * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
-  SigModel_t * p_sm = (SigModel_t *) p_sigmodel;
-  return segment_likelihood_AR(p_sm, p_segment, num_arrivals, pp_arrivals);
-}
-
-
-void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals) {
-  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
-
-  // for each segment, compute a list of arrivals
-
-  *num_arrivals = 0;
-  int num_alloced = 20;
-  *ppp_arrivals = calloc(num_alloced, sizeof(Arrival_t *));
-  CHECK_PTR(*ppp_arrivals);
+void Envelope_SignalModel_UnInit(void * pv_params) {
+  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
   
-  for (int d = 0; d < p_sigmodel->numdetections; ++d) {
-    Detection_t * p_det = p_sigmodel->p_detections + d;
-    
-    if (p_segment != NULL) {
-      if (p_det->site_det != p_segment->siteid-1) continue;
-      if (p_det->time_det + MAX_ENVELOPE_LENGTH < p_segment->start_time) continue;
-      if (p_det->time_det > ChannelBundle_EndTime(p_segment)) continue;
-    }
-    
-    if (++(*num_arrivals) > num_alloced) {
-      num_alloced *= 2;
-      *ppp_arrivals = realloc(*ppp_arrivals, num_alloced * sizeof(Arrival_t *));
-      CHECK_PTR(*ppp_arrivals);
-    }
-    
-    Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
-    *(*ppp_arrivals+*num_arrivals-1) = p_arr;
-    p_arr->time = p_det->time_det;
-    p_arr->amp = p_det->amp_det;
-    p_arr->azi = p_det->azi_det;
-    p_arr->slo = p_det->slo_det;
-    p_arr->phase = p_det->phase_det;
-    p_arr->siteid = p_det->site_det+1;
+  for (int i=0; i < p_params->numsites; ++i) {
+    free((p_params->p_stations + i)->p_ar_coeffs);
   }
-}
+  free(p_params->p_stations);
 
-
-double det_likelihood(void * p_sigmodel_v, int write_log) {
-
-
-  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
-
-  double ll = 0;
-
-
-  for (int i=0; i < p_sigmodel->numsegments; ++i) {
-    
-    ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
-
-
-    // for each segment, compute a list of arrivals
-    int num_arrivals=0;
-    Arrival_t ** pp_arrivals;
-    det_arrivals(p_sigmodel_v, p_segment, &num_arrivals, &pp_arrivals);
-
-
-    /* ------------ begin logging ------ */
-    if(write_log) {
-
-     char desc[50];
-    snprintf(desc, 50, "real_signal_%d", i);
-    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "g-");
-    ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
-    pred_segment->start_time = p_segment->start_time;
-    pred_segment->hz = p_segment->hz;
-    pred_segment->siteid = p_segment->siteid;
-    pred_segment->len = p_segment->len;
-    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
-				  p_sigmodel->p_earth,
-				  0, 0,
-				  num_arrivals, (const Arrival_t **)pp_arrivals,
-				  pred_segment);
-    snprintf(desc, 50, "pred_signal_%d", i);
-    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-"); 
-    }
-
-    /* ------------ end logging ------ */
-
-
-    
-
-    double seg_ll = segment_likelihood_AR(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
-    // double seg_ll_iid = segment_likelihood_iid(p_sigmodel, p_segment, num_arrivals, (const Arrival_t **)pp_arrivals);
-    assert(!isnan(seg_ll) && seg_ll > -1*DBL_MAX);
-
-    LogTrace("segment site %d start %lf contributed ll %lf iidll %lf from %d arrivals", p_segment->siteid, p_segment->start_time, seg_ll, -1,  num_arrivals);
-
-    ll += seg_ll;
-
-    for(int i=0; i < num_arrivals; ++i) {
-      free(*(pp_arrivals+i));
-    }
-    free(pp_arrivals);
-  }
-
-  return ll;
-}
-
-
-
-/* Return the score for this event: the ratio of signal likelihoods
-   between a world where this event exists, and one where it
-   doesn't. */
-double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events) {
-  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
-
-  double score = 0;
-  ChannelBundle_t * p_segment;
-
-  int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
-
-  for (int i=0; i < p_sigmodel->numsegments; ++i) {
-
-    p_segment = p_sigmodel->p_segments + i;
-
-    if (p_segment->siteid != siteid)  {
-      continue;
-    }
-    //printf("scoring event at siteid %d...\n", siteid);
-    /* compute the time period during which the event will affect the station */
-    double first_envelope_time, last_envelope_time;
-    evt_arrival_times(p_event, siteid, numtimedefphases, &first_envelope_time, &last_envelope_time);
-    last_envelope_time += MAX_ENVELOPE_LENGTH;
-
-    /* if this trace doesn't fall within that period, skip it */
-    if (p_segment->start_time > last_envelope_time || ChannelBundle_EndTime(p_segment) < first_envelope_time) {
-      //printf("     skipping signal segment %d: first env %lf last env %lf seg start %lf seg end %lf\n", i, first_envelope_time, last_envelope_time, p_segment->start_time, ChannelBundle_EndTime(p_segment));
-      continue;
-    }
-
-    /* we compute scores for the background event set, and for an
-       augmented event set which includes the specified event. */
-    
-    int num_basic_arrivals, num_augmented_arrivals;
-    Arrival_t ** pp_basic_arrivals;
-    Arrival_t ** pp_augmented_arrivals;
-    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), num_other_events, pp_other_events, &num_basic_arrivals, &pp_basic_arrivals);
-
-    const Event_t ** augmented_events = augment_events(num_other_events, pp_other_events, p_event);
-    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), num_other_events+1, augmented_events, &num_augmented_arrivals, &pp_augmented_arrivals);
-
-    double event_lp , background_lp;
-    event_lp = segment_likelihood_AR(p_sigmodel, p_segment, num_augmented_arrivals, (const Arrival_t **)pp_augmented_arrivals);
-    background_lp = segment_likelihood_AR(p_sigmodel, p_segment, num_basic_arrivals, (const Arrival_t **)pp_basic_arrivals);
-    free(augmented_events);
-    free(pp_basic_arrivals);
-    free(pp_augmented_arrivals);
-
-    score += (event_lp - background_lp);
-
-    //LogInfo("   segment %d siteid %d contributed score %lf = event_lp %lf - background_lp %lf (perturb %d)", i, p_segment->siteid, event_lp - background_lp, event_lp, background_lp, p_sigmodel->ar_perturbation);
-
-  }
-
-  return score;
-
-}
-
-/* Return the score for this event: the ratio of signal likelihoods
-   between a world where this event exists, and one where it
-   doesn't. */
-double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int num_other_events, const Event_t ** pp_other_events) {
-
-  SigModel_t * p_sigmodel = (SigModel_t *) p_sigmodel_v;
-  int numsites = EarthModel_NumSites(p_sigmodel->p_earth);
-
-  double score = 0;
-  for (int siteid = 1; siteid <= numsites; ++siteid) {
-    score += SignalPrior_Score_Event_Site(prior, p_sigmodel_v, p_event, 
-					  siteid, num_other_events, 
-					  pp_other_events);
-  }
-
-  return score;
-}
-
-void SignalPrior_UnInit(SignalPrior_t * prior) {
-  free(prior->p_stations);
-  free(prior->p_ar_coeffs);
 }

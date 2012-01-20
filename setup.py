@@ -17,15 +17,17 @@ priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'ArrivalAmplitudePrior.c',
                   'Poisson.c', 'score.c', 'score_sig.c', 
                   'Gaussian.c', 'Gamma.c',
-                  'NumSecDetPrior.c', 'SignalPrior.c']
+                  'NumSecDetPrior.c', 'SignalPrior.c', 'SignalModelCommon.c']
 
 infer_sources = ['infer.c', 'propose.c', 'quickselect.c']
+misc_sources = ['logging.c']
 
 sigvisa_module = Extension('sigvisa',
                            sources = ([os.path.join("priors", f)
                                        for f in priors_sources]
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]
+                                      + [f for f in misc_sources]
                                       + ["netvisa.c"]
                                       + ["sigvisa.c"]),
                            libraries = ['logger', 'gsl', 'gslcblas'],
@@ -40,6 +42,7 @@ netvisa_module = Extension('netvisa',
                                        for f in priors_sources]
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]
+                                      + [f for f in misc_sources]
                                       + ["netvisa.c"]
                                       + ["sigvisa.c"]),
                            libraries = ['logger', 'gsl', 'gslcblas'],

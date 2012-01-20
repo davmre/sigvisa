@@ -266,8 +266,8 @@ void read_samples(EarthModel_t * p_earth, int phasenum, const char * table_prefi
       fp = fopen(fname, "r");
       if (!fp)
       {
-        LogInfo("EarthModel: Unable to open travel time file %s",
-                fname);
+        LogTrace("EarthModel: Unable to open travel time file %s",
+		 fname);
 	
 	// TODO: TauP doesn't seem to give Lg, Rg, or PKPab info; let's ignore that for the moment
 	free(fname);
