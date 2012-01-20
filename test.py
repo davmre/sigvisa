@@ -37,23 +37,23 @@ class TestLoadFunctions(unittest.TestCase):
         self.cursor = db.connect().cursor()
         self.start_time = 1237680000
         self.end_time = self.start_time + 900
-        self.stalist = [2, 9]
+        self.stalist = [2, 5]
         
     # Load a couple of brief waveforms from disk.
     def test_load_signals(self):
         energies, traces = sigvisa_util.load_and_process_traces(self.cursor, self.start_time, self.end_time, stalist = self.stalist)
 
         self.assertEqual(len(energies), len(traces))
-        self.assertGreater(len(energies), 0)
+        self.assertTrue(len(energies) > 0)
 
         self.assertEqual(len(energies[0]), 3)
         self.assertEqual(len(energies[0]), len(traces[0]))
 
-        self.assertIsInstance(energies[0][0], Trace)
-        self.assertIsInstance(traces[0][0], Trace)
+        self.assertTrue(isinstance(energies[0][0], Trace))
+        self.assertTrue(isinstance(traces[0][0], Trace))
 
         self.assertEqual(len(energies[0][0].data), energies[0][0].stats['npts'])
-        self.assertGreater(len(energies[0][0].data), 0)
+        self.assertTrue(len(energies[0][0].data) > 0)
 
     def tearDown(self):
         self.cursor.close()
@@ -72,7 +72,7 @@ class TestCFunctions(unittest.TestCase):
     def test_arrival_likelihood(self):
         self.sigmodel.set_signals(gen_random_segments((2,), 1000))
         ll = self.sigmodel.arrival_likelihood(10500, 8, 360, 10, 0, 2, 0)
-        self.assertLess(ll, 0)
+        self.assertTrue(ll < 0)
         
 
     # Generate a couple of random signals, pass them to Sigmodel to be
@@ -82,7 +82,7 @@ class TestCFunctions(unittest.TestCase):
     def test_set_signals(self):
 
         for signal_len in (100, 10, 1000):
-            segments_in = gen_random_segments((2, 9), signal_len)
+            segments_in = gen_random_segments((2, 5), signal_len)
             self.sigmodel.set_signals(segments_in)
             segments_out = self.sigmodel.get_signals()
         
