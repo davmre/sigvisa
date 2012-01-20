@@ -152,7 +152,7 @@ double score_event_sta_sig(SigModel_t * p_sigmodel,
 				  const Event_t ** pp_other_events) {
 
   double ev_sta_score = score_event_sta_prior(p_sigmodel, p_event, siteid);
-  double sigsc = SignalPrior_Score_Event_Site(&p_sigmodel->sig_prior, p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
+  double sigsc = Signal_Score_Event_Site(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
   ev_sta_score += sigsc;
  
  assert(!isnan(ev_sta_score));

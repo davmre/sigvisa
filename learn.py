@@ -62,11 +62,11 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
   
   return model
 
-def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
-                 sites, phasenames, phasetimedef):
+def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up,
+                 sites, phasenames, phasetimedef, load_signal_params = True):
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
-  sigmodel = sigvisa.SigModel(earthmodel, start_time, end_time, ar_perturb,
+  sigmodel = sigvisa.SigModel(earthmodel, start_time, end_time, signal_model_name,
                               os.path.join(param_dirname, "NumEventPrior.txt"),
                               os.path.join(param_dirname, "EventLocationPrior.txt"),
                               os.path.join(param_dirname, "EventMagPrior.txt"),
@@ -74,8 +74,11 @@ def load_sigvisa(param_dirname, start_time, end_time, ar_perturb, site_up,
                               os.path.join(param_dirname, "ArrivalAzimuthPrior.txt"),
                               os.path.join(param_dirname, "ArrivalSlownessPrior.txt"),
                               os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
-                              os.path.join(param_dirname, "SignalPrior.txt"),
                               sigvisa_util.log_trace)
+
+  if (load_signal_params):
+    sigmodel.set_all_signal_params(priors.SignalPrior.read_params(os.path.join(param_dirname, "EnvelopeSignalModel.txt")))
+
   return sigmodel
 
 
@@ -110,14 +113,13 @@ def learn_signal(param_dirname, earthmodel, hours, site_up, sites, phasenames, p
   #energies = sigmodel.get_signals()  
   
 
+  sigmodel = load_sigvisa(param_dirname, start_time, end_time, "envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
 
- 
-  return priors.SignalPrior.learn(cursor, 
-                                  os.path.join(param_dirname, "SignalPrior.txt"),
-                                  earthmodel, events, evlist, 
+
+  return priors.SignalPrior.learn(cursor, earthmodel, sigmodel, events, 
+                                  evlist, 
                                   idcx_detections, arid2num, param_dirname, 
-                                  start_time, end_time, fake_det, site_up,
-                                  sites, phasenames, phasetimedef)
+                                  start_time, end_time, fake_det, sites)
   
 
 def main(param_dirname):

@@ -11,76 +11,71 @@ import sigvisa
 
 LEARN_NOISE = True
 LEARN_SHAPE = True
-LEARN_PERTURB = True
-WRITE_LEARNED = LEARN_NOISE and LEARN_SHAPE and LEARN_PERTURB
+LEARN_PERTURB = False
 
-def learn(cursor, filename, earthmodel, events, leb_evlist, detections, arid2num, param_dirname, start_time, end_time, fake_det, site_up,
-                            sites, phasenames, phasetimedef):
+def learn(cursor, earthmodel, sigmodel, events, leb_evlist, detections, arid2num, param_dirname, start_time, end_time, fake_det, sites):
     """
     Find maximum-likelhood parameter estimates. 
     """
 
-    env_params = [(.04, .8, .04, .8) for site in sites]
+    sigmodel.set_fake_detections(fake_det)
 
-    if LEARN_NOISE:
-        energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time)
+    try:
+        params = read_params(os.path.join(param_dirname, 
+                                          "EnvelopeSignalModel.txt"))
+        sigmodel.set_all_signal_params(siteid, params)
+    except:
+        params = default_params(sites)
 
-        print "learning noise params"
-        ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
-        sta_noise_means, sta_noise_vars = learn_noise_params(energies, events, ttimes)
+    # iterate over stations to build a model at each station
+    for (id_minus1, site) in enumerate(sites):
+        if site[SITE_IS_ARRAY] == 1:
+            continue
 
-        if WRITE_LEARNED:
-            f = open(filename, 'w')
-        # begin with dummy envelope and AR params, then bootstrap
-            f.write("1 0.8 0.05\n")
-            write_sta_params(f, sta_noise_means, sta_noise_vars, env_params)
-            f.close()
-        else:
-            print "learned noise params:"
-            write_sta_params(sys.stdout, sta_noise_means, sta_noise_vars, env_params)
+        siteid = id_minus1 + 1
 
-    sigmodel = l.load_sigvisa(param_dirname, start_time, end_time, 1, site_up,
-                            sites, phasenames, phasetimedef)
+        print "at siteid %d:" % (siteid)
 
+        # load signals for this station
+        energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, stalist=[siteid, ])
 
-    if LEARN_SHAPE:
-        for (id_minus1, site) in enumerate(sites):
-            if site[SITE_IS_ARRAY] == 1:
-                continue
+        if len(energies) == 0:
+            print "no waveform data is available in this time period for siteid %d, skipping..." % (siteid)
+            continue
 
-            siteid = id_minus1 + 1
+        if LEARN_NOISE:
+            print " learning noise params..."
+            ttimes = ttimes_from_assoc(leb_evlist, events, detections, arid2num)
+            sta_noise_means, sta_noise_vars = learn_noise_params(energies, events, 
+                                                                 ttimes)
+            params = build_noise_params(params, sta_noise_means, sta_noise_vars)
+            sigmodel.set_signal_params(siteid, params[siteid])
 
-            energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, stalist=[siteid, ])
-            sigmodel.set_signals(energies)
-            sigmodel.set_fake_detections(fake_det)
-            print "learning envelope params"
-            env_params[id_minus1] = learn_envelope_params(sigmodel, siteid)
-            print "learned ", env_params[id_minus1]
-
-    #xopt = learn_ar_params(sigmodel)
-
-        if WRITE_LEARNED:
-            f = open(filename, 'w')
-            f.write("1 0.8 0.05\n")
-            write_sta_params(f, sta_noise_means, sta_noise_vars, env_params)
-            f.close()
-
-    if LEARN_PERTURB:
         sigmodel.set_signals(energies)
-        sigmodel.set_fake_detections(fake_det)
-        print "learning AR params"
-        ar_params = learn_ar_params(sigmodel)
-        print "learned ", ar_params
 
-        if WRITE_LEARNED:
-            f = open(filename, 'w')
-            f.write("1 " + str(ar_params[0]) + " " + str(ar_params[1]) + "\n" )
-            write_sta_params(f, sta_noise_means, sta_noise_vars, env_params)
-            f.close()
+        if LEARN_SHAPE:
+            print " learning envelope params..."
+            params = learn_envelope_params(sigmodel, siteid, params)
+            sigmodel.set_signal_params(siteid, params[siteid])            
 
+        if LEARN_PERTURB:
+            print ' learning AR params...'
+            params = learn_ar_params(sigmodel, siteid, params)
+            sigmodel.set_signal_params(siteid, params[siteid])
 
-def learn_envelope_params(sigmodel, siteid):
-    ll = lambda (p_decay, p_onset, s_decay, s_onset): -1 * sigmodel.detection_likelihood_env(1, p_decay, p_onset, s_decay, s_onset, siteid, 0)
+        save_params(os.path.join(param_dirname, "EnvelopeSignalModel.txt"), params)
+
+    return params
+
+def param_likelihood(sigmodel, siteid, params):
+    sigmodel.set_signal_params(siteid, params)
+    print "trying params", params
+    r = sigmodel.detection_likelihood(0)
+    print "got ll", r
+    return r
+
+def learn_envelope_params(sigmodel, siteid, params):
+    ll = lambda (p_decay, p_onset, s_decay, s_onset): -1 * param_likelihood(sigmodel, siteid, {'env_p_decay': p_decay, 'env_p_onset': p_onset, 'env_s_decay': s_decay, 'env_s_onset': s_onset, 'env_height': 1})
 
     print "starting the optimizer"
     #xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((1.5, .08, .4)), full_output=True)
@@ -109,7 +104,6 @@ def learn_envelope_params(sigmodel, siteid):
         ranges = ((0.01, 0.5), (0.1, 5), (0.01, 0.5), (0.1, 5))
         xopt  = scipy.optimize.brute(ll, ranges, Ns=8, full_output=0)
 
-    print xopt
     if (xopt[0:2] == (0.01, 0.1)).all():
         print "p learning failed, using default params..."
         xopt[0:2] = (0.04, 0.8)
@@ -117,23 +111,42 @@ def learn_envelope_params(sigmodel, siteid):
         print "s learning failed, using default params..."
         xopt[2:4] = (0.04, 0.8)
 
+    if siteid not in params:
+        params[siteid] = dict()
+
+    params[siteid]['env_height'] = 1
+    params[siteid]['env_p_onset'] = xopt[1]
+    params[siteid]['env_p_decay'] = xopt[0]
+    params[siteid]['env_s_onset'] = xopt[3]
+    params[siteid]['env_s_decay'] = xopt[2]
+
 
     print "learned params: ", xopt
     print "give likelihood ", ll(xopt)
-    return xopt
+    return params
     
-def learn_ar_params(sigmodel):
-    ll = lambda (p1, e): -1 * sigmodel.detection_likelihood_ar(1, (p1,), e, 0)
+def learn_ar_params(sigmodel, siteid, params):
+    ll = lambda (coeff1, sigma2): -1 * param_likelihood(sigmodel, siteid, {'ar_noise_sigma2': sigma2, 'ar_coeffs': (coeff1,)})
+    #ll = lambda (coeff1, sigma2): -1 * 12
 
     print "starting the optimizer"
     #xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((1.5, .08, .4)), full_output=True)
 
-    ranges = ((0, .99), (0.01, 0.15))
+    ranges = ((0.1, .99), (0.01, 0.15))
+
+    ll((0.1, 0.01))
+    ll((0.2, 0.01))
+    ll((0.3, 0.01))
+    ll((0.1, 0.02))
+
     xopt  = scipy.optimize.brute(ll, ranges, Ns=10, full_output=0)
     
+    params[siteid]['ar_noise_sigma2'] = xopt[1]
+    params[siteid]['ar_coeffs'] = (xopt[0],)
+
     print "learned params: ", xopt
     print "give likelihood ", ll(xopt)
-    return xopt
+    return params
     
 def expectation_over_noise(fn, traces, events, ttimes):
     MAX_EVENT_LENGTH = 50 # seconds
@@ -188,18 +201,16 @@ def expectation_over_noise(fn, traces, events, ttimes):
             results[siteid][chan] = results[siteid][chan] / normalizer[siteid][chan]
     return results
 
-def write_sta_params(filehandle, sta_noise_means, sta_noise_vars, env_params):
-    filehandle.write(str(len(sta_noise_means)) + "\n")
+
+def build_noise_params(params, sta_noise_means, sta_noise_vars):
     for siteid in sta_noise_means.keys():
-        filehandle.write(str(siteid) + " " + str(len(sta_noise_means[siteid].keys())))
+        if siteid not in params:
+            params[siteid] = dict()
         for chan in sta_noise_means[siteid].keys():
-            chan_num = sigvisa.canonical_channel_num(chan)
-            filehandle.write(" " + str(chan_num) + " " + str(sta_noise_means[siteid][chan]) + " " + str(sta_noise_vars[siteid][chan]))
-        
-        # write envelope shape parameters
-        filehandle.write(" " + " ".join(
-                map(lambda x : str(x), env_params[siteid-1])))
-        filehandle.write("\n")
+            params[siteid]['chan_mean_'+chan] = sta_noise_means[siteid][chan]
+            params[siteid]['chan_var_'+chan] = sta_noise_vars[siteid][chan]
+    return params
+
 
 def learn_noise_params(traces, events, ttimes):
     expectation_f = lambda x, siteid, chan: x
@@ -271,10 +282,43 @@ def ttimes_from_assoc(evlist, events, detections, arid2num):
                 ttimes[siteid] = __nanlist(len(evlist))
             elif not np.isnan(ttimes[siteid][evnum]):
                 travel_time = np.amin((travel_time, ttimes[siteid][evnum]))
-            print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
+            #print "set ttimes[", siteid, "][", evnum, "] = ", travel_time
             ttimes[siteid][evnum] = travel_time
 
     return ttimes
+
+def default_params(sites):
+    params = dict()
+    for (id_minus1, site) in enumerate(sites):
+        params[id_minus1 + 1] = dict()
+    params = default_env_params(params)
+    params = default_AR_params(params)
+    return params
+
+def default_env_params(params):
+    for siteid in params.keys():
+        params[siteid]['env_height'] = 1
+        params[siteid]['env_p_onset'] = 0.8
+        params[siteid]['env_p_decay'] = 0.04
+        params[siteid]['env_s_onset'] = 0.8
+        params[siteid]['env_s_decay'] = 0.04
+    return params
+
+def default_AR_params(params):
+    for siteid in params.keys():
+        params[siteid]['ar_noise_sigma2'] = 0.05
+        params[siteid]['ar_coeffs'] = [0.8,]
+    return params
+
+def save_params(filename, params):
+    with open(filename, 'w') as f:
+        f.write(repr(params))
+        f.write('\n')
+
+def read_params(filename):
+    with open(filename, 'r') as f:
+        return eval(f.read())
+            
 
 def __reverse_conv(num, xxx2num):
     for (xxx, n) in xxx2num.items():

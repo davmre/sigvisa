@@ -2,7 +2,7 @@
 #include <Python.h>
 
 
-typedef struct StationModel_t {
+typedef struct Envelope_StationModel_t {
   double chan_means[NUM_CHANS];
   double chan_vars[NUM_CHANS];
 
@@ -14,40 +14,33 @@ typedef struct StationModel_t {
   double env_s_onset;
   double env_s_decay;
 
-} StationModel_t;
-
-typedef struct SignalPrior_t
-{
-  int numsites;
-  StationModel_t * p_stations;
-
-
-  // TODO: make AR model distance-dependent
   int ar_n;
   double * p_ar_coeffs;
   double ar_noise_sigma2;
-} SignalPrior_t;
+} Envelope_StationModel_t;
 
-void SignalPrior_Init_Params(SignalPrior_t * prior, const char * filename, int numsites);
+typedef struct Envelope_SignalModel_t
+{
+  int numsites;
+  Envelope_StationModel_t * p_stations;
+
+} Envelope_SignalModel_t;
+
+void Envelope_SignalModel_Init_Params(void * pv_params, int numsites);
+
+void Envelope_SignalModel_Set_Params(void * pv_params, int station, PyObject * py_dict);
+
+int Envelope_SignalModel_Has_Model(void * pv_model, int siteid, int chan);
+
+double Envelope_SignalModel_Likelihood(void * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
 
 
-void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double max_time, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals);
-void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals);
+void Envelope_SignalModel_SampleThreeAxis(void * pv_params, 
+					  EarthModel_t * p_earth, 
+					  ChannelBundle_t * p_segment,
+					  int num_arrivals,
+					  const Arrival_t ** pp_arrivals,
+					  int samplePerturb,
+					  int sampleNoise);
 
-double segment_likelihood_AR_outside(void * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
-
-double det_likelihood(void * p_sigmodel_v, int write_log);
-
-double SignalPrior_Score_Event_Site(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events);
-
-double SignalPrior_Score_Event(SignalPrior_t * prior, void * p_sigmodel_v, const Event_t * event, int num_other_events, const Event_t ** pp_other_events);
-
-void SignalPrior_SampleThreeAxisAR(SignalPrior_t * prior, 
-				   EarthModel_t * p_earth, 
-				   int samplePerturb,
-				   int sampleNoise,
-				   int num_arrivals,
-				   const Arrival_t ** pp_arrivals,
-				   ChannelBundle_t * p_segment);
-
-void SignalPrior_UnInit(SignalPrior_t * prior);
+void Envelope_SignalModel_UnInit(void * pv_params);

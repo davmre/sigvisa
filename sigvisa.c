@@ -7,16 +7,10 @@
 static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
-static PyObject * py_set_waves(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args);
-static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args);
-static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args);
-PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args);
-PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args);
-PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 
 static PyObject * py_canonical_channel_num(PyObject * self, PyObject * args);
@@ -27,9 +21,6 @@ static PyMethodDef SigModel_methods[] = {
   {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
    "set_signals(traces) "
    "-> num_translated\n"},
-  {"set_waves", (PyCFunction)py_set_waves, METH_VARARGS,
-   "set_waves(traces) "
-   "-> num_translated\n"},
   {"synthesize_signals", (PyCFunction)py_synthesize_signals, METH_VARARGS,
    "synthesize_signals(evlist, stalist, start_time, end_time, hz, samplePerturb, sampleNoise) "
    "-> success\n"},
@@ -39,25 +30,23 @@ static PyMethodDef SigModel_methods[] = {
   {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
    "get_signals() "
    "-> signals\n"},
-  {"get_waves", (PyCFunction)py_get_waves, METH_VARARGS,
-   "get_waves() "
-   "-> signals\n"},
   {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "
    "-> num_translated\n"},
-  {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
-   "score_world(events, arrtimes, verbose) "
-   "-> log probability\n"},
-  {"detection_likelihood_env", (PyCFunction)py_det_likelihood_env, METH_VARARGS,
-   "detection_likelihood(env_height, env_p_decay, env_p_offset, env_s_decay, env_s_offset, siteid, write_log)"
-   "-> log likelihood\n"},
-  {"detection_likelihood_ar", (PyCFunction)py_det_likelihood_ar, METH_VARARGS,
-   "detection_likelihood(ar_order, ar_coeff_tuple, ar_noise_variance)"},
   {"arrival_likelihood", (PyCFunction)py_arr_likelihood, METH_VARARGS,
-   "arrival_likelihood(arrtime, arramp, arrazi, arrslo)"
+   "arrival_likelihood(arrtime, arramp, arrazi, arrslo, arrphase, arrsiteid, write_log)"
    "-> log likelihood\n"},
+  {"set_signal_params", (PyCFunction)py_set_params, METH_VARARGS,
+   "set_signal_params(siteid, param_dict)"
+   "-> success\n"},
+  {"set_all_signal_params", (PyCFunction)py_set_all_params, METH_VARARGS,
+   "set_all_signal_params(siteid_dict)"
+   "-> success\n"},
   {"event_likelihood", (PyCFunction)py_event_likelihood, METH_VARARGS,
    "event_likelihood(time, lon, lat, depth, mb)"
+   "-> log likelihood\n"},
+  {"detection_likelihood", (PyCFunction)py_det_likelihood, METH_VARARGS,
+   "detection_likelihood(write_log)"
    "-> log likelihood\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
@@ -117,7 +106,7 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   double start_time;
   double end_time;
   int ar_perturbation;
-
+  const char * signal_model_name;
   const char * numevent_fname;
   const char * evloc_fname;
   const char * evmag_fname;
@@ -125,19 +114,22 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arrazi_fname;
   const char * arrslo_fname;
   const char * arramp_fname;
-  const char * sig_fname;
   PyObject * log_trace_cb;
 
-    if (!PyArg_ParseTuple(args, "OddissssssssO", &p_earth, &start_time, &end_time, &ar_perturbation, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &sig_fname, &log_trace_cb))
-    return -1;
-  
+  if (!PyArg_ParseTuple(args, "OddssssssssO", &p_earth, &start_time, &end_time, &signal_model_name, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &log_trace_cb)) {
+    LogError("can't parse input args");
+    CHECK_ERROR;
+    return NULL;
+  }
   if (end_time <= start_time)
   {
+    LogError("invalid end time");
     PyErr_SetString(PyExc_ValueError, 
                     "SigModel: error: end_time <= start_time");
-    return -1;
+    return NULL;
   }
 
+  LogInfo("init...");
   // TODO: check that siteid array is good
 
   self->start_time = start_time;
@@ -145,11 +137,6 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 
   self->p_earth = p_earth;
   Py_INCREF((PyObject *)self->p_earth);
-
-  self->ar_perturbation = ar_perturbation;
-  LogInfo("set ar perturb %d", self->ar_perturbation);
-  //self->siteid = siteid;
-  //Py_INCREF((PyObject *)self->siteid);
 
   NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
   EventLocationPrior_Init_Params(&self->event_location_prior, evloc_fname);
@@ -159,12 +146,11 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   ArrivalSlownessPrior_Init_Params(&self->arr_slo_prior, arrslo_fname);
   ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
 
-  SignalPrior_Init_Params(&self->sig_prior, sig_fname, p_earth->numsites);
-  fflush(stdout);
-
+  int numsites = EarthModel_NumSites(p_earth);
+  init_signal_model(&(self->signal_model), signal_model_name, numsites);
+  LogInfo("signal model init success");
   self->log_trace_cb = log_trace_cb;
   Py_INCREF(log_trace_cb);
-
 
   return 0;
 }
@@ -259,16 +245,11 @@ static void py_sig_model_dealloc(SigModel_t * self)
     free(self->p_segments);
   }
 
-  if(self->p_wave_segments) {
-    for (int i=0; i < self->numsegments; ++i) {
-      segment_dealloc(self->p_wave_segments + i);
-    }
-    free(self->p_wave_segments);
-  }
 
   EventLocationPrior_UnInit(&self->event_location_prior);
   ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
-  SignalPrior_UnInit(&self->sig_prior);
+
+  uninit_signal_model(&self->signal_model);
 
 }
 
@@ -363,78 +344,6 @@ static void convert_eventobj_no_det(PyArrayObject * p_events_arrobj,
 }
 
 
-static PyObject * py_score_world(SigModel_t * p_sigmodel, PyObject * args)
-{
-  /* input arguments */
-  PyArrayObject * p_events_arrobj;
-  PyArrayObject * p_arrtimes_arrobj;
- 
-  int numevents;
-  Event_t * p_events;
-  double score;
-  
-  if (!PyArg_ParseTuple(args, "O!O!",
-                        &PyArray_Type, &p_events_arrobj, 
-                        &PyArray_Type, &p_arrtimes_arrobj)
-      || !p_events_arrobj || !p_arrtimes_arrobj)
-    return NULL;
-
-  if ((2 != p_events_arrobj->nd) || (NPY_DOUBLE 
-                                     != p_events_arrobj->descr->type_num)
-      || (EV_NUM_COLS != p_events_arrobj->dimensions[1]))
-  {
-    PyErr_SetString(PyExc_ValueError,
-                    "score_world: wrong shape or type of events array");
-    return NULL;
-  }
-
-  convert_eventobj_no_det(p_events_arrobj, &numevents, &p_events);
-  
-  PyArrayObject * p_arrtimes = convert_arrtimes(p_sigmodel, (PyObject *)p_arrtimes_arrobj);
-
-  int verbose = 1;
-  
-  // TODO: make world scoring work
-  //score = score_world_sig(p_sigmodel, numevents, p_events, p_arrtimes, verbose);
-  score = -1;
-
-  free_events(numevents, p_events);
-  
-  return Py_BuildValue("d", score);
-}
-
-
-/* ==== Make a Python Array Obj. from a PyObject, ================
-       generates a double vector w/ contiguous memory which may be a new allocation if
-       the original was not a double type or contiguous 
-    !! Must DECREF the object returned from this routine unless it is returned to the
-       caller of this routines caller using return PyArray_Return(obj) or
-       PyArray_BuildValue with the "N" construct   !!!
-  */
-  PyArrayObject *pyvector(PyObject *objin)  {
-      return (PyArrayObject *) PyArray_ContiguousFromAny(objin,
-          NPY_DOUBLE, 1,2);
-  }
-
-char * signal_str(Signal_t * signal) {
-  char * str = malloc(200*sizeof(char));
-  snprintf(str, 200, "Signal: at station %d, sampling rate %f, samples %ld, start time %f, end time %f\n", 
-	   signal->siteid, 
-	   signal->hz, 
-	   signal->len, 
-	   signal->start_time, 
-	   signal->start_time + (signal->len)/(signal->hz));
-  return str;
-}
-
-int print_signal(Signal_t * signal) {
-  char * s = signal_str(signal);
-  int result = fputs(s, stdout);
-  free(s);
-  return result;
-}
-
-
 PyObject* canonical_channel_name(int num) {
    switch (num) {
    case CHAN_BHZ:
@@ -472,79 +381,6 @@ static PyObject * py_canonical_channel_num(PyObject * self, PyObject * args) {
    int result = canonical_channel_num(PyString_AsString(py_chan_str));
    return Py_BuildValue("n", result);
  }
-
-PyObject * py_det_likelihood_env(SigModel_t * p_sigmodel, PyObject * args) {
-
-  double env_height, env_p_decay, env_p_onset, env_s_decay, env_s_onset;
-  int siteid, write_log;
-
-  if (!PyArg_ParseTuple(args, "dddddii", &env_height, &env_p_decay, &env_p_onset, &env_s_decay, &env_s_onset, &siteid, &write_log))
-    return NULL;
-
-  StationModel_t * sta = p_sigmodel->sig_prior.p_stations + siteid - 1;
-
-  double backup_env_height = sta->env_height;
-  double backup_env_p_decay = sta->env_p_decay;
-  double backup_env_p_onset = sta->env_p_onset;
-  double backup_env_s_decay = sta->env_s_decay;
-  double backup_env_s_onset = sta->env_s_onset;
-
-  sta->env_height = env_height;
-  sta->env_p_decay = BOUND(env_p_decay, 0.01, 10);
-  sta->env_p_onset = BOUND(env_p_onset, 0.01, 10);
-  sta->env_s_decay = BOUND(env_s_decay, 0.01, 10);
-  sta->env_s_onset = BOUND(env_s_onset, 0.01, 10);
-
-
-  double ll = det_likelihood((void *)p_sigmodel, write_log);
-  // LogInfo("%lf %lf %lf %lf %lf %d = %lf", env_height, env_p_decay, env_p_onset, env_s_decay, env_s_onset, siteid, ll);
-
-  sta->env_height = backup_env_height;
-  sta->env_p_decay = backup_env_p_decay;
-  sta->env_p_onset = backup_env_p_onset;
-  sta->env_s_decay = backup_env_s_decay;
-  sta->env_s_onset = backup_env_s_onset;
-
-  return Py_BuildValue("d", ll);
-}
-
-
-PyObject * py_det_likelihood_ar(SigModel_t * p_sigmodel, PyObject * args) {
-
-  int ar_n;
-  PyObject * py_ar_coeffs;
-  double noise_sigma2;
-
-  int write_log;
-
-  int backup_ar_n = p_sigmodel->sig_prior.ar_n;
-  double * backup_ar_coeffs = p_sigmodel->sig_prior.p_ar_coeffs;
-  double backup_noise_sigma2 = p_sigmodel->sig_prior.ar_noise_sigma2;
-
-  if (!PyArg_ParseTuple(args, "iOdi", &ar_n, &py_ar_coeffs, &noise_sigma2, &write_log))
-    return NULL;
-
-  double * ar_coeffs = calloc(ar_n, sizeof(double));
-  for(int i=0; i < ar_n; ++i) {
-    ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_ar_coeffs, i));
-  }
-
-  p_sigmodel->sig_prior.ar_n = ar_n;
-  p_sigmodel->sig_prior.p_ar_coeffs = ar_coeffs;
-  p_sigmodel->sig_prior.ar_noise_sigma2 = noise_sigma2;
-
-  double ll = det_likelihood((void *)p_sigmodel, write_log);
-
-  LogInfo("order %d c %lf v %lf gives ll %lf", ar_n, ar_coeffs[0], noise_sigma2, ll);
-
-  p_sigmodel->sig_prior.ar_n = backup_ar_n;
-  p_sigmodel->sig_prior.p_ar_coeffs = backup_ar_coeffs;
-  p_sigmodel->sig_prior.ar_noise_sigma2 = backup_noise_sigma2;
-
-  free(ar_coeffs);
-
-  return Py_BuildValue("d", ll);
-}
 
 
 int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
@@ -624,21 +460,8 @@ int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace) {
 }
 
 
-int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename, char * format) {
-
-  PyObject * p_trace;
-
-  signal_to_trace(p_signal, &p_trace);
-  PyObject * py_text = Py_BuildValue("s", filename);
-  PyObject * py_format = Py_BuildValue("s", format);
-
-  int retval = PyObject_CallFunction(p_sigmodel->log_trace_cb, "OOO", 
-				   p_trace,
-				     py_text, py_format);
-  return retval;
-}
-
-PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
+/* return the score of an event, using optimal arrival times */
+PyObject * py_event_score(SigModel_t * p_sigmodel, PyObject * args) {
 
   LogInfo ("hello!");
   double time, lon, lat, depth, mb;
@@ -665,121 +488,6 @@ PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
     return Py_BuildValue("d", score); 
 }
 
-/* return the score of a single, given, arrival, with respect to a
-   single signal segment (assumed to have already been set). */
-PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
-
-  double arrtime, arramp, arrazi, arrslo;
-  int arrphase, arrsiteid;
-  int write_log;
-  if (!PyArg_ParseTuple(args, "ddddiii", &arrtime, &arramp, &arrazi, &arrslo, &arrphase,  &arrsiteid, &write_log))
-    return NULL;
-
-  // goal: save pdf plots of real signal for each segment, and of generated signals w/ given params
-
-
-  ChannelBundle_t * p_segment = p_sigmodel->p_segments;
-
-  Arrival_t * p_best = calloc(1, sizeof(Arrival_t));
-  p_best->time = arrtime;
-  p_best->amp = arramp;
-  p_best->azi = arrazi;
-  p_best->azi = arrslo;
-  p_best->phase = arrphase;
-  p_best->siteid = arrsiteid;
-
-  Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
-  p_arr->time = arrtime;
-  p_arr->amp = arramp;
-  p_arr->azi = arrazi;
-  p_arr->azi = arrslo;
-  p_arr->phase = arrphase;
-  p_arr->siteid = arrsiteid;
-
-  double best_score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_best);
-
-  for (int i=0; i < 5; ++i) {
-
-    const double amp_step = 1.5;
-    const double num_amp_steps = 7;
-
-  double min_amp = MAX(arramp*pow(amp_step, -1*num_amp_steps), 0.05);
-  double max_amp = MAX(arramp*pow(amp_step, num_amp_steps), 0.1);
-  for (double amp = min_amp; amp <= max_amp; amp *= amp_step) { 
-    p_arr->amp = amp;
-    double score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_arr);
-    if (score > best_score) {
-      best_score = score;
-      memcpy(p_best, p_arr, sizeof(Arrival_t));
-    } 
-  }
-  memcpy(p_arr, p_best, sizeof(Arrival_t));
-  
- 
-  double min_azi = 0;
-  double max_azi = 360;
-  double azi_step = 36;
-  for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
-    p_arr->azi = azi;
-    double score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_arr);
-    if (score > best_score) {
-      best_score = score;
-      memcpy(p_best, p_arr, sizeof(Arrival_t));
-    } 
-  }
-  memcpy(p_arr, p_best, sizeof(Arrival_t));
-
-
-  double min_slo = 0;
-  double max_slo;
-  iangle_to_slowness(90, 0, &max_slo);
-  double slo_step = 5;
-  for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
-    p_arr->slo = slo;
-    double score = segment_likelihood_AR_outside(p_sigmodel, p_segment, 1, &p_arr);
-    if (score > best_score) {
-      best_score = score;
-      memcpy(p_best, p_arr, sizeof(Arrival_t));
-    } 
-  }
-  memcpy(p_arr, p_best, sizeof(Arrival_t));
-
-  }
-
-
-  LogInfo("best arrival %s", arrival_str(p_best));
-
-    /* ------------ begin logging ------ */
-
-    if(write_log) {
-      char desc[50];
-      snprintf(desc, 50, "real_signal");
-    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "r-");
-    ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
-    pred_segment->start_time = p_segment->start_time;
-    pred_segment->hz = p_segment->hz;
-    pred_segment->siteid = p_segment->siteid;
-    pred_segment->len = p_segment->len;
-    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
-				  p_sigmodel->p_earth,
-				  0, 0,
-				  1, &p_best,
-				  pred_segment);
-    snprintf(desc, 50, "pred_signal", p_best->time, p_best->amp, p_best->azi, p_best->slo);
-    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-");
-    }
-    /* ------------ end logging ------ */
-
-
-
-
-  free(p_arr);
-  free(p_best);
-
-  printf("returning %lf\n", best_score);
-  return Py_BuildValue("d", best_score);
-}
-
 
  int trace_to_signal(PyObject * p_trace, Signal_t * p_signal) {
 
@@ -797,7 +505,7 @@ PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 	  ((PyArrayObject *)py_data)->dimensions[0],  
 	  ((PyArrayObject *)py_data)->dimensions[1]); */
 
-  p_signal->py_array = pyvector(py_data);
+  p_signal->py_array = (PyArrayObject *) PyArray_ContiguousFromAny(py_data, NPY_DOUBLE, 1,2);
   Py_INCREF(p_signal->py_array);
   Py_DECREF(py_data);
   CHECK_ERROR
@@ -906,7 +614,7 @@ int trace_bundles_to_channel_bundles(SigModel_t * p_sigmodel, PyObject * trace_b
     int skip = 0;
     for(int chan=0; chan < NUM_CHANS; ++chan) {
       if (new_segment->p_channels[chan] != NULL) {
-	if (p_sigmodel->sig_prior.p_stations[new_segment->siteid-1].chan_vars[chan] < 0) {
+	if (!(*p_sigmodel->signal_model.has_model)(p_sigmodel, new_segment->siteid , chan)) {
 	  LogInfo("no signal model available for siteid %d chan %d, skipping segment...", new_segment->siteid, chan);
 	  skip = 1;
 	  break;
@@ -916,10 +624,13 @@ int trace_bundles_to_channel_bundles(SigModel_t * p_sigmodel, PyObject * trace_b
 
     if (!skip) {
       memcpy((*pp_channel_bundles) + idx++, new_segment, sizeof(ChannelBundle_t));
+
+      // don't do a deep dealloc because we want to retain the segment data
       free(new_segment);
     } else {
       segment_dealloc(new_segment);
     }
+
 
   }
 
@@ -947,18 +658,6 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args) {
   return Py_BuildValue("n", n);
 }
 
-static PyObject * py_set_waves(SigModel_t *p_sigmodel, PyObject *args) {
-  PyObject * p_tracelist_obj;
-  if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
-    return NULL;
-
-  // TODO: memory leak if this is called multiple times. Not fixing because there's a bigger problem, which is that I don't think storing waves and signals separately is a good idea. 
-
-  int n = trace_bundles_to_channel_bundles(p_sigmodel, p_tracelist_obj, &p_sigmodel->p_wave_segments);
-  p_sigmodel->numsegments = n;
-  
-  return Py_BuildValue("n", n);
-}
 
 PyObject * channel_bundle_to_trace_bundle(ChannelBundle_t * p_segment) {
 
@@ -974,21 +673,6 @@ PyObject * channel_bundle_to_trace_bundle(ChannelBundle_t * p_segment) {
   return chan_traces;
 }
 
-static PyObject * py_get_waves(SigModel_t *p_sigmodel, PyObject *args) {
-  //PyObject * p_tracelist_obj;
-  //  if (!PyArg_ParseTuple(args, "O!", &PyList_Type, &p_tracelist_obj))
-  //  return NULL;
-
-  int numsegments = p_sigmodel->numsegments;
-
-  PyObject * channels = PyList_New(0);
-  for (int i=0; i < numsegments; ++i) {
-    PyObject * chan_traces = channel_bundle_to_trace_bundle(p_sigmodel->p_wave_segments + i);
-    PyList_Append(channels, chan_traces);
-  }
-  
-  return channels;
-}
 
 static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args) {
   //PyObject * p_tracelist_obj;
@@ -1059,39 +743,26 @@ void synthesize_signals_dets(SigModel_t *p_sigmodel, int numsiteids, int * p_sit
 
   p_sigmodel->numsegments = numsiteids;
   p_sigmodel->p_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
-  p_sigmodel->p_wave_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
   
   for (int i=0; i < numsiteids; ++i) {
     int siteid = p_siteids[i];
     
     ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
-    ChannelBundle_t * p_wave_segment = p_sigmodel->p_wave_segments + i;
 
     p_segment->start_time = start_time;
     p_segment->hz = hz;
     p_segment->siteid = siteid;
     p_segment->len = (int) (end_time - start_time) * hz;
 
-    p_wave_segment->start_time = start_time;
-    p_wave_segment->hz = hz;
-    p_wave_segment->siteid = siteid;
-    p_wave_segment->len = (int) (end_time - start_time) * hz;
-
-    /*    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
-				  p_sigmodel->p_earth,
-				  numevents,
-				  (const Event_t **)pp_events,
-				  p_segment,
-				  p_wave_segment);*/
     int num_arrivals;
     Arrival_t ** pp_arrivals;
     
     det_arrivals((void *)p_sigmodel, p_segment, &num_arrivals, &pp_arrivals);
-    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
-				  p_sigmodel->p_earth,
-				  samplePerturb, sampleNoise,
-				  num_arrivals, (const Arrival_t **)pp_arrivals,
-				  p_segment);
+    (*p_sigmodel->signal_model.sample)(&p_sigmodel->signal_model.pv_params,
+				       p_sigmodel->p_earth,
+				       p_segment,
+				       num_arrivals, (const Arrival_t **)pp_arrivals,
+				       samplePerturb, sampleNoise);
     for (int i=0; i < num_arrivals; ++i) {
       free(pp_arrivals[i]);
     }
@@ -1112,7 +783,6 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 
   p_sigmodel->numsegments = numsiteids;
   p_sigmodel->p_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
-  p_sigmodel->p_wave_segments = calloc(numsiteids, sizeof(ChannelBundle_t));
 
 
   for (int i=0; i < numevents; ++i) {
@@ -1129,24 +799,11 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     
 
     ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
-    ChannelBundle_t * p_wave_segment = p_sigmodel->p_wave_segments + i;
 
     p_segment->start_time = start_time;
     p_segment->hz = hz;
     p_segment->siteid = siteid;
     p_segment->len = (int) (end_time - start_time) * hz;
-
-    p_wave_segment->start_time = start_time;
-    p_wave_segment->hz = hz;
-    p_wave_segment->siteid = siteid;
-    p_wave_segment->len = (int) (end_time - start_time) * hz;
-
-    /*    SignalPrior_ThreeAxisEnvelope(&p_sigmodel->sig_prior,
-				  p_sigmodel->p_earth,
-				  numevents,
-				  (const Event_t **)pp_events,
-				  p_segment,
-				  p_wave_segment);*/
 
     int num_arrivals;
     Arrival_t ** pp_arrivals;
@@ -1155,11 +812,11 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     LogInfo("siteid %d time %lf end %lf events %d", p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents);
 
     LogInfo("sampling siteid %d with %d arrivals", siteid, num_arrivals);
-    SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,
-				  p_sigmodel->p_earth,
-				  samplePerturb, sampleNoise,
-				  num_arrivals, (const Arrival_t **) pp_arrivals,
-				  p_segment);
+    (*p_sigmodel->signal_model.sample)(&p_sigmodel->signal_model.pv_params,
+				       p_sigmodel->p_earth,
+				       p_segment,
+				       num_arrivals, (const Arrival_t **)pp_arrivals,
+				       samplePerturb, sampleNoise);
 
     /*for (int i=0; i < num_arrivals; ++i) {
       free(pp_arrivals[i]);
@@ -1481,38 +1138,6 @@ void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
          numsites * numtimedefphases * sizeof(*p_src_event->p_arrivals));
 }
 
-char * arrival_str(const Arrival_t * p_arr) {
-  char * str = malloc(100*sizeof(char));
-  snprintf(str, 100, "time %.4lf amp %.4lf azi %.4lf slo %.4lf %d %d",
-	   p_arr->time, p_arr->amp, p_arr->azi, p_arr->slo, 
-	   p_arr->phase, p_arr->siteid);
-  return str;
-}
-
-void print_arrival(const Arrival_t * p_arr) {
-  char *s = arrival_str(p_arr);
-  puts(s);
-  free(s);
-}
-
-char * event_str(const Event_t * p_event) {
-  char * str = malloc(100*sizeof(char));
-  snprintf(str, 100, 
-	   "%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d",
-	   p_event->evlon, p_event->evlat, p_event->evdepth,
-	   p_event->evtime, p_event->evmag, p_event->evscore,
-	   p_event->orid);
-  return str;
-}
-
-void print_event(const Event_t * p_event)
-{
-  char *s = event_str(p_event);
-  puts(s);
-  free(s);
-}
-
-
 double ChannelBundle_EndTime(ChannelBundle_t * b) {
   return b->start_time + (b->len / b->hz);
 }
@@ -1534,4 +1159,29 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
   return 0;
 }
 
+PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
+  LogInfo ("hello!");
+  double time, lon, lat, depth, mb;
+  if (!PyArg_ParseTuple(args, "ddddd", &time, &lon, &lat, &depth, &mb))
+    return NULL;
+
+  Event_t * p_event = ALLOC_EVENT(NULL, p_sigmodel);
+
+    p_event->evtime = time;
+    p_event->evlon = lon;
+    p_event->evlat = lat;
+    p_event->evdepth = depth;
+    p_event->evmag = mb;
+
+    LogInfo("optimizing...");
+    optimize_arrivals(p_sigmodel, p_event, 0, NULL);
+    LogInfo("scoring...");
+    score_event_sig(p_sigmodel, p_event, 0, NULL);
+    LogInfo("score %lf",p_event->evscore);
+    double score = p_event->evscore;
+
+    free(p_event);
+
+    return Py_BuildValue("d", score);
+}
