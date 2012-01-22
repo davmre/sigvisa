@@ -75,51 +75,48 @@ def param_likelihood(sigmodel, siteid, params):
     return r
 
 def learn_envelope_params(sigmodel, siteid, params):
-    ll = lambda (p_decay, p_onset, s_decay, s_onset): -1 * param_likelihood(sigmodel, siteid, {'env_p_decay': p_decay, 'env_p_onset': p_onset, 'env_s_decay': s_decay, 'env_s_onset': s_onset, 'env_height': 1})
+    ll = lambda (p_decay, p_onset, p_height, s_decay, s_onset, s_height): -1 * param_likelihood(sigmodel, siteid, {'env_p_decay': p_decay, 'env_p_onset': p_onset, 'env_s_decay': s_decay, 'env_s_onset': s_onset, 'env_p_height': p_height, 'env_s_height': s_height})
 
     print "starting the optimizer"
     #xopt, fopt, iters, evals, flags  = scipy.optimize.fmin(ll, np.array((1.5, .08, .4)), full_output=True)
 
-    l1 = ll((0.01, 0.3, 0.01, 0.3))
-    lp = ll((0.5, 0.01, 0.01, 0.3))
-    ls = ll((0.01, 0.3, 0.5, 0.01))
-
+    l1 = ll((0.01, 0.3, 1, 0.01, 0.3, 1))
+    lp = ll((0.5, 0.01, 1, 0.01, 0.3, 1))
+    ls = ll((0.01, 0.3, 1, 0.5, 0.01, 1))
     print [l1,lp,ls]
 
-    if lp==ls and lp==l1:
-        xopt = np.array([0.04, 0.8, 0.04, 0.8])
-    # if there are no S detections, learn only P params
-    elif l1 == ls:
-        pll = lambda(p_decay, p_onset) : ll((p_decay, p_onset, 0.04, 0.8))
-        ranges = ((0.01, 0.5), (0.1, 5))
-        xopt  = scipy.optimize.brute(pll, ranges, Ns=8, full_output=0)
-        xopt = np.concatenate((xopt, [0.04, 0.8]))
-    # and vice versa
-    elif l1 == lp:
-        sll = lambda(s_decay, s_onset) : ll((0.04, 0.8, s_decay, s_onset))
-        ranges = ((0.01, 0.5), (0.1, 5))
-        xopt  = scipy.optimize.brute(sll, ranges, Ns=8, full_output=0)
-        xopt = np.concatenate(([0.04, 0.8], xopt))
-    else:        
-        ranges = ((0.01, 0.5), (0.1, 5), (0.01, 0.5), (0.1, 5))
-        xopt  = scipy.optimize.brute(ll, ranges, Ns=8, full_output=0)
+    p_params = np.array([0.04, 0.8, 1])
+    s_params = np.array([0.04, 0.8, 1])
+    ranges = ((0.01, 0.5), (0.1, 5), (0.5, 2))
 
-    if (xopt[0:2] == (0.01, 0.1)).all():
-        print "p learning failed, using default params..."
-        xopt[0:2] = (0.04, 0.8)
-    if (xopt[2:4] == (0.01, 0.1)).all():
-        print "s learning failed, using default params..."
-        xopt[2:4] = (0.04, 0.8)
+    for i in range(3):
+
+        if l1 != lp:
+            pll = lambda(p_decay, p_onset, p_height) : ll((p_decay, p_onset, p_height) + tuple(s_params)  )
+            p_params  = scipy.optimize.brute(pll, ranges, Ns=8, full_output=0)
+
+        if l1 != ls:
+            sll = lambda(s_decay, s_onset, s_height) : ll(tuple(p_params) + (s_decay, s_onset, s_height))
+            s_params  = scipy.optimize.brute(sll, ranges, Ns=8, full_output=0)
+
+        if (p_params == (0.01, 0.1, 0.5)).all():
+            print "p learning failed, using default params..."
+            p_params = (0.04, 0.8, 1)
+        if (s_params == (0.01, 0.1, 0.5)).all():
+            print "s learning failed, using default params..."
+            s_params = (0.04, 0.8, 1)
 
     if siteid not in params:
         params[siteid] = dict()
 
-    params[siteid]['env_height'] = 1
-    params[siteid]['env_p_onset'] = xopt[1]
-    params[siteid]['env_p_decay'] = xopt[0]
-    params[siteid]['env_s_onset'] = xopt[3]
-    params[siteid]['env_s_decay'] = xopt[2]
+    params[siteid]['env_p_onset'] = p_params[1]
+    params[siteid]['env_p_decay'] = p_params[0]
+    params[siteid]['env_p_height'] = p_params[2]
+    params[siteid]['env_s_onset'] = s_params[1]
+    params[siteid]['env_s_decay'] = s_params[0]
+    params[siteid]['env_s_height'] = s_params[2]
 
+    xopt = tuple(p_params) + tuple(s_params)
 
     print "learned params: ", xopt
     print "give likelihood ", ll(xopt)
@@ -298,7 +295,8 @@ def default_params(sites):
 
 def default_env_params(params):
     for siteid in params.keys():
-        params[siteid]['env_height'] = 1
+        params[siteid]['env_p_height'] = 1
+        params[siteid]['env_s_height'] = 1
         params[siteid]['env_p_onset'] = 0.8
         params[siteid]['env_p_decay'] = 0.04
         params[siteid]['env_s_onset'] = 0.8

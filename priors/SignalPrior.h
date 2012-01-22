@@ -6,9 +6,9 @@ typedef struct Envelope_StationModel_t {
   double chan_means[NUM_CHANS];
   double chan_vars[NUM_CHANS];
 
-
   // TODO: make distance-dependent
-  double env_height;
+  double env_p_height;
+  double env_s_height;
   double env_p_onset;
   double env_p_decay;
   double env_s_onset;

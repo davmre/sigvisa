@@ -66,12 +66,16 @@ class TestCFunctions(unittest.TestCase):
             sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
             = read_data(hours=self.hours)
 
-        self.sigmodel = learn.load_sigvisa("parameters", start_time, end_time, "envelope", site_up, sites, phasenames, phasetimedef)
-
+        self.sigmodel = learn.load_sigvisa("parameters", start_time, end_time, "envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
         self.test_siteids = (2,5)
+        self.set_default_params()
 
-        
-
+    def set_default_params(self):
+        site_params = {"chan_mean_BHZ": 0, "chan_var_BHZ": 1, "chan_mean_BHE": 0, "chan_var_BHE": 1, "chan_mean_BHN": 0, "chan_var_BHN": 1, "env_p_height": 1, "env_p_onset": 0.8, "env_p_decay": 0.04, "env_s_height": 1, "env_s_onset": 0.8, "env_s_decay": 0.04, "ar_noise_sigma2": 0.05, "ar_coeffs": (0.8,)}    
+        self.params = dict()
+        for siteid in self.test_siteids:
+            self.params[siteid] = site_params.copy()
+        self.sigmodel.set_all_signal_params(self.params)
 
     def test_arrival_likelihood(self):
         self.sigmodel.set_signals(gen_random_segments((2,), 1000))
@@ -111,33 +115,31 @@ class TestCFunctions(unittest.TestCase):
         # what we learn fits the sample signal. right now we just
         # verify that we learning *something*.
 
-
-        site_params = {"chan_mean_BHZ": 0, "chan_var_BHZ": 1, "chan_mean_BHE": 0, "chan_var_BHE": 1, "chan_mean_BHN": 0, "chan_var_BHN": 1, "env_height": 1, "env_p_onset": 0.8, "env_p_decay": 0.04, "env_s_onset": 0.8, "env_s_decay": 0.04, "ar_noise_sigma2": 0.05, "ar_coeffs": (0.8,)}    
-        params = dict()
-        for siteid in self.test_siteids:
-            params[siteid] = site_params.copy()
-
+        self.set_default_params()
+        
         for siteid in self.test_siteids:
             self.sigmodel.set_fake_detections([ (1, siteid-1, 10005, 10, 1, 1, 1), ])
             self.sigmodel.set_signals(gen_random_segments((siteid,), 1000))
-            params = priors.SignalPrior.learn_envelope_params(self.sigmodel, siteid, params)
+            params = priors.SignalPrior.learn_envelope_params(self.sigmodel, siteid, self.params)
             print params
             print 0.8, params[siteid]["env_p_onset"]
             self.assertNotEqual(params[siteid]["env_p_onset"], 0.8)
 
+        self.set_default_params()
+
     def test_learn_wiggle_params(self):
-        site_params = {"chan_mean_BHZ": 0, "chan_var_BHZ": 1, "chan_mean_BHE": 0, "chan_var_BHE": 1, "chan_mean_BHN": 0, "chan_var_BHN": 1, "env_height": 1, "env_p_onset": 0.8, "env_p_decay": 0.04, "env_s_onset": 0.8, "env_s_decay": 0.04, "ar_noise_sigma2": 0.05, "ar_coeffs": (0.8,)}    
-        params = dict()
-        for siteid in self.test_siteids:
-            params[siteid] = site_params.copy()
+
+        self.set_default_params()
 
         for siteid in self.test_siteids:
             self.sigmodel.set_fake_detections([ (1, siteid-1, 10005, 10, 1, 1, 1), ])
             self.sigmodel.set_signals(gen_random_segments((siteid,), 1000))
-            params = priors.SignalPrior.learn_ar_params(self.sigmodel, siteid, params)
+            params = priors.SignalPrior.learn_ar_params(self.sigmodel, siteid, self.params)
             print params
             self.assertNotEqual(params[siteid]["ar_noise_sigma2"], 0.05)
             self.assertNotEqual(params[siteid]["ar_coeffs"][0], 0.8)
+
+        self.set_default_params()
 
     def test_birth_propose(self):
         pass
