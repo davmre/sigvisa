@@ -110,7 +110,7 @@ def plot_segment(channel_traces, title=None, all_det_times=None, format = "k:"):
       srate = trc.stats.sampling_rate
       npts = trc.stats.npts
     stime = trc.stats["starttime_unix"]
-    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)
+    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
     plt.plot(timevals, trc, format)
 
