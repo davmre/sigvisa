@@ -765,7 +765,7 @@ void synthesize_signals_dets(SigModel_t *p_sigmodel, int numsiteids, int * p_sit
     Arrival_t ** pp_arrivals;
     
     det_arrivals((void *)p_sigmodel, p_segment, &num_arrivals, &pp_arrivals);
-    (*p_sigmodel->signal_model.sample)(&p_sigmodel->signal_model.pv_params,
+    (*p_sigmodel->signal_model.sample)(p_sigmodel->signal_model.pv_params,
 				       p_sigmodel->p_earth,
 				       p_segment,
 				       num_arrivals, (const Arrival_t **)pp_arrivals,
@@ -819,7 +819,7 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
     LogInfo("siteid %d time %lf end %lf events %d", p_segment->siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), numevents);
 
     LogInfo("sampling siteid %d with %d arrivals", siteid, num_arrivals);
-    (*p_sigmodel->signal_model.sample)(&p_sigmodel->signal_model.pv_params,
+    (*p_sigmodel->signal_model.sample)(p_sigmodel->signal_model.pv_params,
 				       p_sigmodel->p_earth,
 				       p_segment,
 				       num_arrivals, (const Arrival_t **)pp_arrivals,
