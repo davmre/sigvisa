@@ -33,37 +33,67 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
 
     if (sta != NULL) {
 
-      if (strcmp(key, "env_height") == 0) {
-	sta->env_height = PyFloat_AsDouble(py_value);
+      if (strcmp(key, "env_p_height") == 0) {
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	sta->env_p_height = PyFloat_AsDouble(py_value);
+      }  else if (strcmp(key, "env_s_height") == 0) {
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	sta->env_s_height = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_p_onset") == 0) {
-	sta->env_height = PyFloat_AsDouble(py_value);
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	sta->env_p_onset = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_p_decay") == 0) {
-	sta->env_height = PyFloat_AsDouble(py_value);
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	sta->env_p_decay = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_s_onset") == 0) {
-	sta->env_height = PyFloat_AsDouble(py_value);
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	sta->env_s_onset = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_s_decay") == 0) {
-	sta->env_height = PyFloat_AsDouble(py_value);
-
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	sta->env_s_decay = PyFloat_AsDouble(py_value);
       } else if (strncmp(key, "chan_mean_", 10) == 0) {
 	int chan_num = canonical_channel_num(key+10);
-	// LogTrace("setting chan mean %lf for chan str %s int %d at siteid %d", PyFloat_AsDouble(py_value), key+10, chan_num, siteid);
+	LogTrace("setting chan mean %lf for chan str %s int %d at siteid %d", PyFloat_AsDouble(py_value), key+10, chan_num, siteid);
 	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value);
       } else if (strncmp(key, "chan_var_", 9) == 0) {
 	int chan_num = canonical_channel_num(key+9);
-	// LogTrace("setting chan var %lf for chan str %s int %d siteid %d", PyFloat_AsDouble(py_value), key+9, chan_num, siteid);
+	LogTrace("setting chan var %lf for chan str %s int %d siteid %d", PyFloat_AsDouble(py_value), key+9, chan_num, siteid);
 	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value);
 
       } else if (strcmp(key, "ar_noise_sigma2") == 0) {
-	sta->ar_noise_sigma2 = PyFloat_AsDouble(py_value);
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	double val = PyFloat_AsDouble(py_value);
+	
+	if (val > 0.0000001) {
+	  sta->ar_noise_sigma2 = val;
+	} else {
+	  LogInfo("ignoring invalid param setting ar_noise_sigma2 = %lf", val);
+	}
+
       } else if (strcmp(key, "ar_coeffs") == 0) {
-	sta->ar_n = PyList_Size(py_value);
+
+	int converted_tuple = 0;
+	if (PyList_Check(py_value)) {
+	  converted_tuple = 1;
+	  py_value = PyList_AsTuple(py_value);
+	}
+
+	if (!PyTuple_Check(py_value)) {
+	  LogFatal("expected Python tuple for ar_coeffs!\n");
+	  exit(EXIT_FAILURE);
+	}
+
+	sta->ar_n = PyTuple_Size(py_value); CHECK_ERROR;
+	LogTrace("setting %s to tuple of length %d at siteid %d", key, sta->ar_n, siteid);      
 	if (sta->p_ar_coeffs != NULL) free(sta->p_ar_coeffs);
 	sta->p_ar_coeffs = calloc(sta->ar_n, sizeof(double));
 	for (int i=0; i < sta->ar_n; ++i) {
-	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyList_GetItem(py_value, i));
+	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_value, i));
 	}
 
-      CHECK_ERROR;
+	if (converted_tuple) {
+	  Py_DECREF(py_value);
+	}
 
       } else {
 	LogError("unrecognized param %s at siteid %d", key, siteid);
@@ -73,6 +103,8 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
       LogError("unrecognized global param %s", key);
       exit(EXIT_FAILURE);
     }
+
+    CHECK_ERROR;
 
   }
 }
@@ -86,92 +118,6 @@ void Envelope_SignalModel_Init_Params(void * pv_params,  int numsites) {
      depend on the p_ar_coeffs pointer being NULL iff unallocated */
   p_params->p_stations = calloc(numsites, sizeof(Envelope_StationModel_t));
 }
-
-
-/*void Envelope_SignalModel_Init_Params(Envelope_SignalModel_t * prior, const char * filename, int numsites) {
-  
-  FILE * fp;
-
-  fp = fopen(filename, "r");
-  
-  if (!fp)
-  {
-    fprintf(stderr, "Unable to open file: %s\n", filename);
-    exit(1);
-  }
-
-  if (1 != fscanf(fp, "%d", &prior->ar_n)) {
-    fprintf(stderr, "error reading AR_n from %s\n", filename);
-    exit(1);
-  }
-  prior->p_ar_coeffs = calloc(prior->ar_n, sizeof(double));
-  for(int i=0; i < prior->ar_n; ++i) {
-    if (1 != fscanf(fp, "%lf", prior->p_ar_coeffs+i)) {
-      fprintf(stderr, "error reading AR coefficient %d of %d from %s\n", i, prior->ar_n, filename);
-      exit(1);
-    }
-  }
-  if (1 != fscanf(fp, "%lf\n", &prior->ar_noise_sigma2)) {
-    fprintf(stderr, "error reading AR_noise_sigma2 from %s\n", filename);
-    exit(1);
-  }
- 
-  prior->numsites = numsites;  
-  prior->p_stations = (StationModel_t *) calloc(numsites, sizeof(StationModel_t));
-
-  for (int i=0; i < numsites; ++i) {
-    for (int j=0; j < NUM_CHANS; ++j) {
-      (prior->p_stations + i)->chan_means[j] = -1;
-      (prior->p_stations + i)->chan_vars[j] = -1;
-    }
-  }
-
-  int numentries;
-  if (1 != fscanf(fp, "%d\n", &numentries))
-  {
-    LogFatal("error reading num entries from %s\n", filename);
-    exit(1);
-  }
-
-  for (int i=0; i < numentries; ++i) {
-
-    int siteid;
-    int num_chans;
-    if (2 != fscanf(fp, "%d %d", &siteid, &num_chans)) {
-      LogFatal("error reading siteid and num_chans from station line %d of %s\n", i, filename);
-      exit(1);
-    }
-
-    for (int j=0; j < num_chans; ++j) {
-      int chan_num;
-      double mean, var;
-      if (3 != fscanf(fp, " %d %lf %lf", &chan_num, &mean, &var))
-	{
-	  LogFatal("error reading mean and variance for site %d from %s\n", i, filename);
-	  exit(1);
-	}
-    
-      LogTrace("%d: loaded %d %d %lf %lf", i, siteid, chan_num, mean, var);
-      (prior->p_stations + siteid-1)->chan_means[chan_num] = mean;
-      (prior->p_stations + siteid-1)->chan_vars[chan_num] = var;
-    }
-
-    double p_decay, p_onset, s_decay, s_onset;
-    if (4 != fscanf(fp, "%lf %lf %lf %lf\n", &p_decay, &p_onset, &s_decay, &s_onset))
-    {
-      LogFatal("error reading envelope coefficients for site %d from %s\n", i, filename);
-      exit(1);
-    }
-    (prior->p_stations + siteid-1)->env_height = 1;
-    (prior->p_stations + siteid-1)->env_p_onset = p_onset;
-    (prior->p_stations + siteid-1)->env_p_decay = p_decay;
-    (prior->p_stations + siteid-1)->env_s_onset = s_onset;
-    (prior->p_stations + siteid-1)->env_s_decay = s_decay;
-  }
-
-  fclose(fp);
-  fflush(stdout);
-  }*/ 
 
 int Envelope_SignalModel_Has_Model(void * pv_sigmodel, int siteid, int chan) {
 
@@ -302,17 +248,19 @@ ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head,
 
 void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
 
-  double env_onset, env_decay;
+  double env_onset, env_decay, env_height;
   if (IS_S_PHASE(p_arr->phase)) {
     env_onset = p_sta->env_s_onset;
     env_decay = p_sta->env_s_decay;
+    env_height = p_sta->env_s_height;
   } else {
     env_onset = p_sta->env_p_onset;
     env_decay = p_sta->env_p_decay;
+    env_height = p_sta->env_p_height;
   }
-  LogTrace("env for siteid %d phase %d height %lf onset %lf decay %lf hz %lf", p_arr->siteid, p_arr->phase, p_sta->env_height, env_onset, env_decay, hz);
+  LogTrace("env for siteid %d phase %d height %lf onset %lf decay %lf hz %lf amp %lf", p_arr->siteid, p_arr->phase, env_height, env_onset, env_decay, hz, p_arr->amp);
 
-  double peak_height = p_sta->env_height * p_arr->amp;
+  double peak_height = env_height * p_arr->amp;
   long peak_idx = (long) (log(peak_height) / env_onset * hz);
   long end_idx = peak_idx + (long)(log(peak_height)/env_decay * hz);
 
@@ -329,10 +277,10 @@ void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, doub
     exit(-1);
   }
 
-  for (int i=0; i < MIN(peak_idx, *len); ++i) {
+  for (long i=0; i < MIN(peak_idx, *len); ++i) {
     means[i] = exp(env_onset * (i/hz));
   }
-  for (int i=peak_idx; i < *len; ++i) {
+  for (long i=MIN(peak_idx, *len); i < *len; ++i) {
     means[i] = exp(env_decay * ((end_idx - i)/hz));
     // LogInfo("%d %d %d %lf %d %lf %lf", i, peak_idx, *len, env_decay, end_idx, hz, means[i]);
   }
@@ -775,7 +723,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
     if (n_active > 0) {
       AR_predict(p_means, p_covars, p_transition, p_sta->ar_noise_sigma2, n);
       AR_update(p_means, p_covars, p_observation, obs_perturb, obs_covar, n, k, residuals, residual_covars);
-      LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
+      //LogTrace("pz %lf pe %lf pn %lf rz %lf re %lf rn %lf", gsl_vector_get(obs_perturb, 0), gsl_vector_get(obs_perturb, 1), gsl_vector_get(obs_perturb, 2), gsl_vector_get(residuals, 0), gsl_vector_get(residuals, 1), gsl_vector_get(residuals, 2));
     } else {
       gsl_vector_memcpy(residuals, obs_perturb);
       gsl_matrix_memcpy(residual_covars, obs_covar);
@@ -787,9 +735,10 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
 
     gsl_blas_ddot(residuals, residuals_tmp, &ex);
     double thisll = 0.5 * k*log(2*PI) + .5 * log(det) + 0.5 * ex;
+    LogTrace(" ll minus %lf is %lf (%lf = 0.5 * %d * log(2pi) + .5 * log(%lf) + 0.5 * %lf", thisll, ll, thisll, k, det, ex);
     assert(!isnan(thisll) && thisll > -1*DBL_MAX);
     ll -= thisll;
-    LogTrace(" ll minus %lf is %lf", thisll, ll);
+
 
     //filtered_perturbs.p_data[t] = obs_perturb_mean-residual;
     //filtered_waveform.p_data[t] = env_bhz + obs_perturb_mean-residual;
