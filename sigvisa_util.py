@@ -526,6 +526,21 @@ def load_and_process_event_traces(cursor, evids, evtype="leb", window_size=1, ov
 
     return energies, traces
 
+def trim_first_n_seconds(segments, n):
+  for segment in segments:
+    for trc in segment:
+      srate = trc.stats.sampling_rate
+      npts = trc.stats.npts
+      
+      to_trim = n*srate
+
+      if to_trim < npts:
+        trc.data = trc.data[to_trim:]
+        trc.stats.npts = len(trc.data)
+        trc.stats.starttime_unix = trc.stats.starttime_unix + n
+  return segments
+
+
 def print_trace(trace):
     prevx = None
     for (i, x) in enumerate(trace.data):
