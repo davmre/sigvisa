@@ -139,7 +139,8 @@ def learn_ar_params(sigmodel, siteid, params):
     ll((0.3, 0.01))
     ll((0.1, 0.02))
 
-    xopt  = scipy.optimize.brute(ll, ranges, Ns=10, full_output=0)
+    # specify finish=None to prevent finishing with an optimizer that might try negative values
+    xopt  = scipy.optimize.brute(ll, ranges, Ns=10, full_output=0, finish=None)
     
     params[siteid]['ar_noise_sigma2'] = xopt[1]
     params[siteid]['ar_coeffs'] = (xopt[0],)
@@ -307,7 +308,7 @@ def default_env_params(params):
 def default_AR_params(params):
     for siteid in params.keys():
         params[siteid]['ar_noise_sigma2'] = 0.05
-        params[siteid]['ar_coeffs'] = [0.8,]
+        params[siteid]['ar_coeffs'] = (0.8,)
     return params
 
 def save_params(filename, params):

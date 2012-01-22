@@ -129,7 +129,7 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
     return NULL;
   }
 
-  LogInfo("init...");
+  LogTrace("init sigmodel...");
   // TODO: check that siteid array is good
 
   self->start_time = start_time;
@@ -148,7 +148,6 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 
   int numsites = EarthModel_NumSites(p_earth);
   init_signal_model(&(self->signal_model), signal_model_name, numsites);
-  LogInfo("signal model init success");
   self->log_trace_cb = log_trace_cb;
   Py_INCREF(log_trace_cb);
 
@@ -706,7 +705,13 @@ int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
 
     if (!PyTuple_Check(p_fakedet)) {
       LogFatal("convert_fake_detections: expected Python tuple!\n");
-      exit(1);
+      exit(EXIT_FAILURE);
+    }
+
+    int n = PyTuple_Size(p_fakedet);
+    if (n != 7) {
+      LogFatal("convert_fake_detections: expected tuple of size 7, found size %d", n);
+      exit(EXIT_FAILURE);
     }
 
     (*pp_detections)[i].arid_det = (int)PyInt_AsLong(PyTuple_GetItem(p_fakedet, 0));
@@ -716,6 +721,8 @@ int convert_fake_detections(PyObject * det_list, Detection_t ** pp_detections) {
     (*pp_detections)[i].azi_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 4));
     (*pp_detections)[i].slo_det = (double)PyFloat_AsDouble(PyTuple_GetItem(p_fakedet, 5));
     (*pp_detections)[i].phase_det = (int)PyInt_AsLong(PyTuple_GetItem(p_fakedet, 6));
+
+    CHECK_ERROR;
 
     (*pp_detections)[i].sigvisa_fake = 1;
   }
