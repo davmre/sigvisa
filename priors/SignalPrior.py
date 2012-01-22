@@ -69,9 +69,9 @@ def learn(cursor, earthmodel, sigmodel, events, leb_evlist, detections, arid2num
 
 def param_likelihood(sigmodel, siteid, params):
     sigmodel.set_signal_params(siteid, params)
-    print "trying params", params
+    #print "trying params", params
     r = sigmodel.detection_likelihood(0)
-    print "got ll", r
+    #print "got ll", r
     return r
 
 def learn_envelope_params(sigmodel, siteid, params):
@@ -93,11 +93,11 @@ def learn_envelope_params(sigmodel, siteid, params):
 
         if l1 != lp:
             pll = lambda(p_decay, p_onset, p_height) : ll((p_decay, p_onset, p_height) + tuple(s_params)  )
-            p_params  = scipy.optimize.brute(pll, ranges, Ns=8, full_output=0)
+            p_params  = scipy.optimize.brute(pll, ranges, Ns=8, full_output=0, finish=None)
 
         if l1 != ls:
             sll = lambda(s_decay, s_onset, s_height) : ll(tuple(p_params) + (s_decay, s_onset, s_height))
-            s_params  = scipy.optimize.brute(sll, ranges, Ns=8, full_output=0)
+            s_params  = scipy.optimize.brute(sll, ranges, Ns=8, full_output=0, finish=None)
 
         if (p_params == (0.01, 0.1, 0.5)).all():
             print "p learning failed, using default params..."
