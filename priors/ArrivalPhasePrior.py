@@ -2,9 +2,8 @@ import numpy as np
 
 from database.dataset import DET_PHASE_COL
 
-from NumFalseDetPrior import get_false_detnums
-
-def learn(filename, options, earthmodel, detections, leb_events, leb_evlist):
+def learn(filename, options, earthmodel, detections, leb_events, leb_evlist,
+          false_dets):
   numtimedefphases = earthmodel.NumTimeDefPhases()
   numphases = earthmodel.NumPhases()
 
@@ -16,7 +15,7 @@ def learn(filename, options, earthmodel, detections, leb_events, leb_evlist):
     for ph, detnum in ph_detlist:
       ph2ph[ph, int(detections[detnum, DET_PHASE_COL])] += 1.0
 
-  for detnum in get_false_detnums(leb_evlist, detections):
+  for detnum in false_dets:
     falseph[int(detections[detnum, DET_PHASE_COL])] += 1.0
 
   # normalize

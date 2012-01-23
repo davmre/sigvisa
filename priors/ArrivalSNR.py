@@ -9,13 +9,11 @@ SNR_STEP = 1
 SNR_BINS = np.arange(0, 100, SNR_STEP)
 
 def learn(param_filename, options, earthmodel, detections, leb_events,
-          leb_evlist):
-  # learn the set of true detections and their phase-SNR distribution
-  true_dets = set()
+          leb_evlist, false_dets):
+  # learn the phase-SNR distribution for true detections
   true_bins = np.zeros((earthmodel.NumTimeDefPhases(), len(SNR_BINS)))
   for detlist in leb_evlist:
     for phase, detnum in detlist:
-      true_dets.add(detnum)
       snr = int(detections[detnum, DET_SNR_COL] // SNR_STEP)
       if snr >= len(SNR_BINS):
         snr = len(SNR_BINS) - 1
@@ -30,12 +28,11 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
 
   false_bins = np.zeros(len(SNR_BINS))
   # learn the false detections distribution
-  for detnum in range(len(detections)):
-    if detnum not in true_dets:
-      snr = int(detections[detnum, DET_SNR_COL] // SNR_STEP)
-      if snr >= len(SNR_BINS):
-        snr = len(SNR_BINS) - 1
-      false_bins[snr] += 1
+  for detnum in false_dets:
+    snr = int(detections[detnum, DET_SNR_COL] // SNR_STEP)
+    if snr >= len(SNR_BINS):
+      snr = len(SNR_BINS) - 1
+    false_bins[snr] += 1
   
   # smooth the distribution by add one smoothing
   false_bins += 1.

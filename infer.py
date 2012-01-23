@@ -106,8 +106,6 @@ def write_events2(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
   for evnum in range(len(events)):
     event = events[evnum]
     seclist = ev_seclist[evnum]
-    # compute the score of just the primary arrivals
-    netmodel.disable_sec_arr()
     evscore = netmodel.score_event(event, seclist)
     netmodel.enable_sec_arr()
     world_score += evscore

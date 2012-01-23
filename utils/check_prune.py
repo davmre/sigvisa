@@ -11,7 +11,7 @@ import learn
 import results.compare
 from utils.geog import degdiff, dist_deg
 
-def steal_dets(netmodel, visa_events, visa_evscores, visa_assoc):
+def steal_dets(netmodel, detections, visa_events, visa_evscores, visa_assoc):
   low_evnum = 0
   for evnum in range(len(visa_events)):
     for evnum2 in xrange(low_evnum, len(visa_events)):
@@ -28,6 +28,12 @@ def steal_dets(netmodel, visa_events, visa_evscores, visa_assoc):
       if visa_evscores[int(visa_events[evnum2, EV_ORID_COL])]\
          > visa_evscores[int(visa_events[evnum, EV_ORID_COL])]:
         event2 = visa_events[evnum2]
+        for phaseid, detnum in visa_assoc[evnum]:
+          if netmodel.score_event_det(event2, phaseid, detnum) >= 0:
+            print "orid %d stole arid %d from orid %d phase %d"\
+                  % (int(visa_events[evnum2, EV_ORID_COL]),
+                     int(detections[detnum, DET_ARID_COL]),
+                     int(visa_events[evnum, EV_ORID_COL]), phaseid)
         visa_assoc[evnum] = [(phaseid, detnum)
                              for phaseid, detnum in visa_assoc[evnum]
                              if netmodel.score_event_det(event2, phaseid,
@@ -142,7 +148,7 @@ def main(param_dirname):
 
   print "Dropping secondary detections...",
   #drop_detections(visa_events, visa_evscores, visa_assoc, detections)
-  steal_dets(netmodel, visa_events, visa_evscores, visa_assoc)
+  steal_dets(netmodel, detections, visa_events, visa_evscores, visa_assoc)
 
   # recompute VISA event scores after dropping secondaries
   sec_visa_evscores = dict ((int(visa_events[evnum, EV_ORID_COL]),

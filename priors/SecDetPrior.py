@@ -29,49 +29,9 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   - The log-amp diff
   - The secondary phase
   """
-  # first identify the set of associated arrivals
-  assoc_dets = set()
-  for evlist in leb_evlist:
-    for ph,detnum in evlist:
-      assoc_dets.add(detnum)
-  # now identify two types of adjacent arrivals
-  assoc_coda_detpair = []               # assoc det -> coda det
-  coda_coda_detpair = []                # coda det -> coda det
-  for detnum, det in enumerate(detections):
-    sec_found = False
-    for secdetnum in xrange(detnum+1, len(detections)):
-      secdet = detections[secdetnum]
-      # no coda found
-      if secdet[DET_TIME_COL] > (det[DET_TIME_COL] + MAX_SECDET_DELAY):
-        break
-      # different site
-      if secdet[DET_SITE_COL] != det[DET_SITE_COL]:
-        continue
-      # we don't want coda -> assoc det
-      if secdetnum in assoc_dets:
-        break
-      # too close, this is a rare occurrence and we are ignoring for now
-      if secdet[DET_TIME_COL] < (det[DET_TIME_COL] + MIN_SECDET_DELAY):
-        break
-      # if the azimuth is more than 90 degrees off or the slowness doesn't
-      # match then discount it
-      if (abs(degdiff(det[DET_AZI_COL], secdet[DET_AZI_COL])) > 50
-          or abs(secdet[DET_SLO_COL] - det[DET_SLO_COL]) > 10):
-        break
-
-      sec_found = True
-      if detnum in assoc_dets:
-        assoc_coda_detpair.append((detnum, secdetnum))
-      else:
-        coda_coda_detpair.append((detnum, secdetnum))
-      break
-
-    if not sec_found:
-      if detnum in assoc_dets:
-        assoc_coda_detpair.append((detnum, None))
-      else:
-        coda_coda_detpair.append((detnum, None))
-
+  assoc_coda_detpair, coda_coda_detpair = compute_coda_pairs(detections,
+                                                             leb_evlist)
+  
   # the prefix "pc" stands for phase -> coda
   pc_time_data, pc_az_data, pc_slo_data, pc_logamp_data, pc_snr_data \
                 = [], [], [], [], []
@@ -487,55 +447,86 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   fp.close()
 
 def compute_secondary_dets(earthmodel, detections, leb_events, leb_evlist):
-  # first create a copy of the leb_evlist and map each associated
-  # detection to its phase_detlist
+  assoc_coda_detpair, coda_coda_detpair = compute_coda_pairs(detections,
+                                                             leb_evlist)
+  det_coda = dict(assoc_coda_detpair + coda_coda_detpair)
+  
   leb_seclist = []
-  detnum_map = {}
   for detlist in leb_evlist:
     seclist = []
-    for phase, detnum in detlist:
-      phase_detlist = [phase, detnum]
-      seclist.append(phase_detlist)
-      detnum_map[detnum] = phase_detlist
+    for ph, detnum in detlist:
+      codalist = [ph, detnum]
+      while (len(codalist) < (MAX_PHASE_DET+1)
+             and det_coda[codalist[-1]] is not None):
+        codalist.append(det_coda[codalist[-1]])
+      seclist.append(tuple(codalist))
     leb_seclist.append(seclist)
-  
-  for detnum, det in enumerate(detections):
-    # only an associated detection can have a secondary
-    if detnum not in detnum_map or len(detnum_map[detnum]) == (MAX_PHASE_DET+1):
-      continue
-    
-    for secdetnum in xrange(detnum+1, len(detections)):
-      
-      secdet = detections[secdetnum]
-      
-      if secdet[DET_TIME_COL] > (det[DET_TIME_COL] + MAX_SECDET_DELAY):
-        break
-      
-      if secdet[DET_SITE_COL] != det[DET_SITE_COL]:
-        continue
-      
-      # if we find an associated detection at this site then that one
-      # owns the future secondary detections
-      if secdetnum in detnum_map:
-        break
-      
-      if secdet[DET_TIME_COL] < (det[DET_TIME_COL] + MIN_SECDET_DELAY):
-        continue
-      
-      # we have  a secondary detection
-      phase_detlist = detnum_map[detnum]
-      assert(phase_detlist[-1] == detnum)
-      
-      phase_detlist.append(secdetnum)
-      detnum_map[secdetnum] = phase_detlist
-      break
-
-  # convert the lists back to tuples
-  return [[tuple(phase_detlist) for phase_detlist in seclist]
-          for seclist in leb_seclist]
+  return leb_seclist
 
 def print_list(fp, list):
   for x in list:
     print >>fp, x,
   print >> fp
-  
+
+def compute_coda_pairs(detections, leb_evlist):
+  # first identify the set of associated arrivals
+  assoc_dets = set()
+  for evlist in leb_evlist:
+    for ph,detnum in evlist:
+      assoc_dets.add(detnum)
+  # now identify two types of adjacent arrivals
+  assoc_coda_detpair = []               # assoc det -> coda det
+  coda_coda_detpair = []                # coda det -> coda det
+  for detnum, det in enumerate(detections):
+    sec_found = False
+    for secdetnum in xrange(detnum+1, len(detections)):
+      secdet = detections[secdetnum]
+      # no coda found
+      if secdet[DET_TIME_COL] > (det[DET_TIME_COL] + MAX_SECDET_DELAY):
+        break
+      # different site
+      if secdet[DET_SITE_COL] != det[DET_SITE_COL]:
+        continue
+      # we don't want coda -> assoc det
+      if secdetnum in assoc_dets:
+        break
+      # too close, this is a rare occurrence and we are ignoring for now
+      if secdet[DET_TIME_COL] < (det[DET_TIME_COL] + MIN_SECDET_DELAY):
+        break
+      # if the azimuth is more than 90 degrees off or the slowness doesn't
+      # match then discount it
+      if (abs(degdiff(det[DET_AZI_COL], secdet[DET_AZI_COL])) > 50
+          or abs(secdet[DET_SLO_COL] - det[DET_SLO_COL]) > 10):
+        break
+
+      sec_found = True
+      if detnum in assoc_dets:
+        assoc_coda_detpair.append((detnum, secdetnum))
+      else:
+        coda_coda_detpair.append((detnum, secdetnum))
+      break
+
+    if not sec_found:
+      if detnum in assoc_dets:
+        assoc_coda_detpair.append((detnum, None))
+      else:
+        coda_coda_detpair.append((detnum, None))
+
+  return assoc_coda_detpair, coda_coda_detpair
+
+# return a set of detnums which are *independent* noise arrivals, i.e. they
+# are not associated to any event or prior arrival
+def compute_false_detections(detections, leb_evlist):
+  phase_dets, coda_dets = set(), set()
+  assoc_coda_detpair, coda_coda_detpair = compute_coda_pairs(detections,
+                                                             leb_evlist)
+
+  for detnum, secdetnum in assoc_coda_detpair:
+    phase_dets.add(detnum)
+    coda_dets.add(secdetnum)
+    
+  for detnum, secdetnum in coda_coda_detpair:
+    coda_dets.add(secdetnum)
+    
+  return set(detnum for detnum in xrange(len(detections))
+             if detnum not in phase_dets and detnum not in coda_dets)

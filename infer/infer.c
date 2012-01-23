@@ -122,6 +122,12 @@ typedef struct World_t
   PyObject * propose_eventobj;
   int verbose;
   PyObject * write_events_cb;
+
+  /* detection-specific pre-computed values */
+  int * prev_detnum;                         /* the previous arrival or -1 */
+  double * detscore_phase_coda;              /* score if previous is phase */
+  double * detscore_coda_coda;               /* score if previous is coda */
+  
 } World_t;
 
 static void insert_event(NetModel_t * p_netmodel,
@@ -1024,7 +1030,16 @@ static World_t * alloc_world(NetModel_t * p_netmodel)
 
   p_world->pp_prop_events = (Event_t **) calloc(p_world->maxevents,
                                              sizeof(*p_world->pp_prop_events));
-
+  
+  p_world->prev_detnum = (int *) malloc(p_netmodel->numdetections *
+                                        sizeof(*p_world->prev_detnum));
+  
+  p_world->detscore_phase_coda = (double *) malloc(
+    p_netmodel->numdetections * sizeof(*p_world->detscore_phase_coda));
+  
+  p_world->detscore_coda_coda = (double *) malloc(
+    p_netmodel->numdetections * sizeof(*p_world->detscore_coda_coda));
+  
   return p_world;
 }
 
@@ -1054,7 +1069,55 @@ static void free_world(World_t * p_world)
 
   free(p_world->pp_prop_events);
 
+  free(p_world->prev_detnum);
+  
+  free(p_world->detscore_phase_coda);
+  
+  free(p_world->detscore_coda_coda);
+  
   free(p_world);
+}
+
+static void init_secdet(NetModel_t * p_netmodel, World_t * p_world)
+{
+  int detnum;
+  
+  /* initialize prev_detnum and detscore */
+  for (detnum = 0; detnum < p_netmodel->numdetections; detnum++)
+  {
+    p_world->prev_detnum[detnum] = -1;
+    p_world->detscore_phase_coda[detnum] = 0;
+    p_world->detscore_coda_coda[detnum] = 0;
+  }
+  
+  for (detnum = 0; detnum < p_netmodel->numdetections; detnum++)
+  {
+    int secdetnum;
+    Detection_t * p_det = p_netmodel->p_detections + detnum;
+    
+    for (secdetnum = (detnum+1); secdetnum < p_netmodel->numdetections; 
+         secdetnum ++)
+    {
+      Detection_t * p_secdet = p_netmodel->p_detections + secdetnum;
+      /* sanity check to avoid searching forever */
+      if (p_secdet->time_det > (p_det->time_det + 300))
+        break;
+      /* needs to be the same site to be a coda arrival */
+      if (p_secdet->site_det != p_det->site_det)
+        continue;
+      /* did we find a coda arrival ? */
+      if (SecDetPrior_Time_Possible(&p_netmodel->sec_det_prior,
+                                    p_secdet->time_det, p_det->time_det))
+      {
+        p_world->prev_detnum[secdetnum] = detnum;
+        p_world->detscore_phase_coda[secdetnum] = score_phase_coda(
+          p_netmodel, p_secdet, p_det);
+        p_world->detscore_coda_coda[secdetnum] = score_coda_coda(
+          p_netmodel, p_secdet, p_det);
+      }
+      break;
+    }
+  }
 }
 
 static void infer(NetModel_t * p_netmodel, World_t * p_world)
@@ -1351,6 +1414,8 @@ PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args)
   p_world->propose_eventobj = propose_eventobj;
   p_world->verbose = verbose;
   p_world->write_events_cb = write_events_cb;
+  
+  init_secdet(p_netmodel, p_world);
   
   infer(p_netmodel, p_world);
 

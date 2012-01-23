@@ -93,6 +93,10 @@ typedef struct Detection_t
   int phase_det;
   double amp_det;
   double per_det;
+
+  int prev_det;               /* the previous detection or -1 */
+  double logprob_det;   /* the log probability of either being noise or coda */
+  
 } Detection_t;
 
 

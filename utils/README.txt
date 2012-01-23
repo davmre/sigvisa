@@ -18,4 +18,4 @@ check_prune -- try out various pruning strategies
 
 check_sec   -- report statistics on secondary detections
 
-check_noise -- reports the noise level
+check_score -- statistics on LEB , SEL3 and a VISA run score

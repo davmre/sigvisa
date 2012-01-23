@@ -72,7 +72,7 @@ def predict_amp_model(coeffs, mb, depth, ttime):
 #         + coeffs[7] * (7 - mb) * ttime
 
 def learn(param_filename, options, earthmodel, detections, leb_events,
-          leb_evlist):
+          leb_evlist, false_dets):
   np.seterr(divide = 'raise')
   
   fp = open(param_filename, "w")
@@ -94,10 +94,8 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
                             for sitenum in range(earthmodel.NumSites()))
   
   # first, the set of true detections
-  true_dets = set()
   for evnum, detlist in enumerate(leb_evlist):
     for phase, detnum in detlist:
-      true_dets.add(detnum)
       
       # -1 => amplitude not observed
       if -1 == detections[detnum, DET_AMP_COL]:
@@ -124,17 +122,16 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     del writer
   
   # next, the false detections
-  for detnum in range(len(detections)):
+  for detnum in false_dets:
     
     if -1 == detections[detnum, DET_AMP_COL]:
       continue
     
-    if detnum not in true_dets:
-      sitenum = detections[detnum, DET_SITE_COL]
-      datum = np.log(detections[detnum, DET_AMP_COL])
+    sitenum = detections[detnum, DET_SITE_COL]
+    datum = np.log(detections[detnum, DET_AMP_COL])
 
-      false_logamps.append(datum)
-      site_false_logamps[sitenum].append(datum)
+    false_logamps.append(datum)
+    site_false_logamps[sitenum].append(datum)
     
   # learn the overall false detection model (for all sites)
   false_wts, false_means, false_stds = utils.GMM.estimate(2, false_logamps)

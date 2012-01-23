@@ -126,8 +126,8 @@ def main(param_dirname):
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
-  leb_seclist = priors.SecDetPrior.compute_secondary_dets(earthmodel,detections,
-                                                   leb_events, leb_evlist)
+  false_dets = priors.SecDetPrior.compute_false_detections(detections,
+                                                           leb_evlist)
 
   if options.model is None or "SecDet" in options.model:
     priors.SecDetPrior.learn(os.path.join(param_dirname, "SecDetPrior.txt"),
@@ -158,10 +158,8 @@ def main(param_dirname):
   if options.model is None or "NumFalseDet" in options.model:
     priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
                                                "NumFalseDetPrior.txt"),
-                                  earthmodel, start_time, end_time,
-                                  detections, leb_events, leb_evlist,
-                                  site_up)
-
+                                  detections, false_dets, site_up)
+  
   if options.model is None or "ArrivalTime" in options.model:
     priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
                                                "ArrivalTimePrior.txt"),
@@ -184,18 +182,18 @@ def main(param_dirname):
     priors.ArrivalPhasePrior.learn(os.path.join(param_dirname,
                                                 "ArrivalPhasePrior.txt"),
                                    options, earthmodel, detections, leb_events,
-                                   leb_evlist)
+                                   leb_evlist, false_dets)
 
   if options.model is None or "ArrivalSNR" in options.model:
     priors.ArrivalSNR.learn(os.path.join(param_dirname,
                                          "ArrivalSNRPrior.txt"),
                             options, earthmodel, detections, leb_events,
-                            leb_evlist)
+                            leb_evlist, false_dets)
 
   if options.model is None or "ArrivalAmplitude" in options.model:
     priors.ArrivalAmplitudePrior.learn(
       os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
-      options, earthmodel, detections, leb_events, leb_evlist)
+      options, earthmodel, detections, leb_events, leb_evlist, false_dets)
 
   if options.pdf:
     options.pdf.close()

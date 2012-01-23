@@ -30,7 +30,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                       double * p_detazsc,
                                       double * p_detphasesc,
                                       double * p_snrsc,
-                                      double * p_ampsc)
+                                      double * p_ampsc,
+                                      double * p_noisesc)
 {
   EarthModel_t * p_earth;
   double pred_arrtime;
@@ -88,19 +89,21 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
     
     *p_detcnt += 1;
 
+    /* account for the noise/coda model explaining this detection */
+    *p_noisesc += det->logprob_det;
+    
     if (!detpos)
       *p_dettimesc += ArrivalTimePrior_LogProb(&p_netmodel->arr_time_prior,
                                                det->time_det, pred_arrtime,
                                                det->deltim_det, siteid,
                                                phaseid);
-    else
+    else if (1==detpos)
       *p_dettimesc += SecDetPrior_PhaseCodaTime_LogProb(
         &p_netmodel->sec_det_prior, det->time_det, prev_det->time_det);
     
-
-    *p_dettimesc -= NumFalseDet_LogTimeRate(&p_netmodel
-                                            ->num_falsedet_prior,
-                                            siteid);
+    else
+      *p_dettimesc += SecDetPrior_CodaCodaTime_LogProb(
+        &p_netmodel->sec_det_prior, det->time_det, prev_det->time_det);
 
     if (!detpos)
     {
@@ -116,48 +119,55 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                   det->delslo_det,
                                                   siteid, phaseid);
     }
-    else
+    
+    else if (1==detpos)
       *p_detslosc += SecDetPrior_PhaseCodaSlow_LogProb(
         &p_netmodel->sec_det_prior, det->slo_det, prev_det->slo_det);
     
-    *p_detslosc -= LOGPROB_UNIFORM_SLOWNESS;
-
+    else
+      *p_detslosc += SecDetPrior_CodaCodaSlow_LogProb(
+        &p_netmodel->sec_det_prior, det->slo_det, prev_det->slo_det);
+    
     if (!detpos)
       *p_detazsc += ArrivalAzimuthPrior_LogProb(&p_netmodel->arr_az_prior,
                                                 det->azi_det, 
                                                 pred_az,
                                                 det->delaz_det,
                                                 siteid, phaseid);
-    else
+    else if (1==detpos)
       *p_detazsc += SecDetPrior_PhaseCodaAzimuth_LogProb(
         &p_netmodel->sec_det_prior, det->azi_det, prev_det->azi_det);
     
-    *p_detazsc -= LOGPROB_UNIFORM_AZIMUTH;
-    
+    else
+      *p_detazsc += SecDetPrior_CodaCodaAzimuth_LogProb(
+        &p_netmodel->sec_det_prior, det->azi_det, prev_det->azi_det);
+
     if (!detpos)
       *p_detphasesc += ArrivalPhasePrior_LogProb(&p_netmodel
                                                  ->arr_phase_prior,
                                                  det->phase_det,
                                                  phaseid);
-    else
+    else if (1==detpos)
       *p_detphasesc += SecDetPrior_PhaseCodaPhase_LogProb(
         &p_netmodel->sec_det_prior, det->phase_det);
     
-    *p_detphasesc -= FalseArrivalPhasePrior_LogProb(&p_netmodel
-                                                    ->arr_phase_prior,
-                                                    det->phase_det);
+    else
+      *p_detphasesc += SecDetPrior_CodaCodaPhase_LogProb(
+        &p_netmodel->sec_det_prior, det->phase_det);
+
 
     if (!detpos)
       *p_snrsc += ArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
                                           det->site_det, phaseid,
                                           det->snr_det);
-    else
+    else if (1==detpos)
       *p_snrsc += SecDetPrior_PhaseCodaSNR_LogProb(
         &p_netmodel->sec_det_prior, det->snr_det, prev_det->snr_det);
-    
-    *p_snrsc -= FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
-                                             det->site_det, det->snr_det);
-    
+
+    else
+      *p_snrsc += SecDetPrior_CodaCodaSNR_LogProb(
+        &p_netmodel->sec_det_prior, det->snr_det, prev_det->snr_det);
+
     /* a -1 amplitude suggests that the amplitude has not been observed */
     if (-1 != det->amp_det)
     {
@@ -172,9 +182,15 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                                   ttime, siteid, phaseid,
                                                   det->amp_det);
       else if (-1 != prev_det->amp_det)
-        *p_ampsc += SecDetPrior_PhaseCodaAmp_LogProb(
-          &p_netmodel->sec_det_prior, det->amp_det, prev_det->amp_det);
-    
+      {
+        if (1 == detpos)
+          *p_ampsc += SecDetPrior_PhaseCodaAmp_LogProb(
+            &p_netmodel->sec_det_prior, det->amp_det, prev_det->amp_det);
+        else
+          *p_ampsc += SecDetPrior_CodaCodaAmp_LogProb(
+            &p_netmodel->sec_det_prior, det->amp_det, prev_det->amp_det);
+      }
+      
       if (isnan(*p_ampsc))
       {
         printf("nan arr-amp mb %.2lg, dep %.2lg ttime %.2lg siteid %d "
@@ -182,24 +198,22 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                ttime, siteid, phaseid, det->amp_det);
         exit(1);
       }
-    
-      if ((!detpos) || (-1 != prev_det->amp_det))
-        *p_ampsc -= FalseArrivalAmplitudePrior_LogProb(&p_netmodel
-                                                       ->arr_amp_prior,
-                                                       siteid, det->amp_det);
-      if (isnan(*p_ampsc))
-      {
-        printf("nan false-amp siteid %d amp %.2lg", siteid, det->amp_det);
-        exit(1);
-      }
     }
 
     /* don't score any of the secondaries if not enabled */
     if (p_netmodel->enable_sec_arr)
+    {
+      
       /* the probability of the next secondary detection */
-      *p_detsc += SecDetPrior_PhaseCodaDet_LogProb(&p_netmodel->sec_det_prior,
-                                                   (detpos+1) < numdet ? 1 : 0,
-                                                   det->amp_det);
+      if (0==detpos)
+        *p_detsc += SecDetPrior_PhaseCodaDet_LogProb(&p_netmodel->sec_det_prior,
+                                                     (detpos+1) < numdet ? 1 :0,
+                                                     det->amp_det);
+      else
+        *p_detsc += SecDetPrior_CodaCodaDet_LogProb(&p_netmodel->sec_det_prior,
+                                                    (detpos+1) < numdet ? 1 : 0,
+                                                    det->amp_det);
+    }
     else
       break;
   }
@@ -223,17 +237,20 @@ int score_event_site_phase(NetModel_t * p_netmodel,
   double   detphasesc;
   double   detsnrsc;
   double   detampsc;
+  double   detnoisesc;
 
   detcnt = 0;
-  detsc = dettimesc = detslosc = detazsc = detphasesc = detsnrsc = detampsc =0;
+  detsc = dettimesc = detslosc = detazsc = detphasesc = detsnrsc = detampsc
+    = detnoisesc = 0;
   
   poss = score_event_site_phase_int(p_netmodel, p_event, siteid, phaseid,
                                     distance, pred_az, &detcnt, &detsc,
                                     &dettimesc, &detslosc, &detazsc,
-                                    &detphasesc, &detsnrsc, &detampsc);
+                                    &detphasesc, &detsnrsc, &detampsc,
+                                    &detnoisesc);
 
   *p_score = detsc + dettimesc + detslosc + detazsc + detphasesc + detsnrsc
-    + detampsc;
+    + detampsc - detnoisesc;
 
   return poss;
 }
@@ -267,7 +284,7 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
                             double * p_detsc, double * p_dettimesc,
                             double * p_detazsc, double * p_detslosc,
                             double * p_detphasesc, double * p_detsnrsc,
-                            double * p_detampsc,
+                            double * p_detampsc, double * p_detnoisesc,
                             int * p_poss_detcnt, int * p_detcnt)
 {
   EarthModel_t * p_earth;
@@ -310,7 +327,8 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
                                                    p_detsc, p_dettimesc,
                                                    p_detslosc, p_detazsc,
                                                    p_detphasesc,
-                                                   p_detsnrsc, p_detampsc);   
+                                                   p_detsnrsc, p_detampsc,
+                                                   p_detnoisesc);
     }
   }
 }
@@ -318,20 +336,20 @@ static void score_event_int(NetModel_t * p_netmodel, Event_t * p_event,
 double score_event(NetModel_t * p_netmodel, Event_t * p_event)
 {
   double numsc, locsc, magsc, detsc, dettimesc, detazsc, detslosc, detphasesc;
-  double detsnrsc, detampsc;
+  double detsnrsc, detampsc, detnoisesc;
   double score;
   int possdetcnt, detcnt;
 
   numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 
-    detphasesc = detsnrsc = detampsc = 0;
+    detphasesc = detsnrsc = detampsc = detnoisesc = 0;
   possdetcnt = detcnt = 0;
   
   score_event_int(p_netmodel, p_event, &numsc, &locsc, &magsc, &detsc, 
                   &dettimesc, &detazsc, &detslosc, &detphasesc, &detsnrsc,
-                  &detampsc, &possdetcnt, &detcnt);
+                  &detampsc, &detnoisesc, &possdetcnt, &detcnt);
   
   score = numsc + locsc + magsc + detsc + dettimesc + detazsc + detslosc
-    + detphasesc + detsnrsc + detampsc;
+    + detphasesc + detsnrsc + detampsc - detnoisesc;
 
   return score;
 }
@@ -350,6 +368,7 @@ double score_world(NetModel_t * p_netmodel,
   double detphasesc;
   double detsnrsc;
   double detampsc;
+  double detnoisesc;
   
   int poss_detcnt;
   int detcnt;
@@ -362,14 +381,14 @@ double score_world(NetModel_t * p_netmodel,
   }
   
   numsc = locsc = magsc = detsc = dettimesc = detazsc = detslosc = 
-    detphasesc = detsnrsc = detampsc = 0;
+    detphasesc = detsnrsc = detampsc = detnoisesc = 0;
   poss_detcnt = detcnt = 0;
   
   for (i=0; i<numevents; i++)
   {
     score_event_int(p_netmodel, p_events + i, &numsc, &locsc, &magsc, &detsc,
                     &dettimesc, &detazsc, &detslosc, &detphasesc,
-                    &detsnrsc, &detampsc,
+                    &detsnrsc, &detampsc, &detnoisesc,
                     &poss_detcnt, &detcnt);
   }
   
@@ -392,13 +411,15 @@ double score_world(NetModel_t * p_netmodel,
            detsnrsc/numevents, detsnrsc/detcnt);
     printf("Det AMP: score %lf, avg-event %lf avg-det %lf\n", detampsc, 
            detampsc/numevents, detampsc/detcnt);
+    printf("Det Noise: score %lf avg-event %lf avg-det %lf\n", detnoisesc,
+           detnoisesc/numevents, detnoisesc/detcnt);
     printf("Avg. # Detections: Possible %lf, Actual %lf\n", 
            ((double) poss_detcnt) / ((double) numevents),
            ((double) detcnt) / ((double) numevents));
   }
   
   score = numsc + locsc + magsc + detsc + dettimesc + detslosc + detazsc +
-    detphasesc + detsnrsc + detampsc;
+    detphasesc + detsnrsc + detampsc - detnoisesc;
   
   if (verbose)
     printf("Total: %lf Avg. %lf\n", score, score/numevents);
@@ -537,5 +558,167 @@ double logprob_false(NetModel_t * p_netmodel, int numdets, int * p_detids,
   }
   
   return sum_logprob;
+}
+
+/* log probability that p_det (which is a phase arrival) generates the
+ * coda arrival p_secdet 
+ * minus
+ * log probability that p_det doesn't generate a secondary arrival and
+ * p_secdet is a noise arrival
+ */
+double score_phase_coda(NetModel_t * p_netmodel, Detection_t * p_secdet,
+                        Detection_t * p_det)
+{
+  double score;
+  SecDetPrior_t * p_prior = &p_netmodel->sec_det_prior;
+  
+  score = 0;
+  
+  /* log odds of a coda arrival */
+  score += SecDetPrior_PhaseCodaDet_LogProb(p_prior, 1, p_det->amp_det)
+    - SecDetPrior_PhaseCodaDet_LogProb(p_prior, 0, p_det->amp_det);
+  
+  /* coda arrival time */
+  score += SecDetPrior_PhaseCodaTime_LogProb(p_prior, p_secdet->time_det,
+                                             p_det->time_det)
+    - NumFalseDet_LogTimeRate(&p_netmodel->num_falsedet_prior,
+                              p_secdet->site_det);
+  
+  /* coda slowness */
+  score += SecDetPrior_PhaseCodaSlow_LogProb(p_prior, p_secdet->slo_det, 
+                                             p_det->slo_det)
+    - LOGPROB_UNIFORM_SLOWNESS;
+  
+  /* coda azimuth */
+  score += SecDetPrior_PhaseCodaAzimuth_LogProb(p_prior, p_secdet->azi_det, 
+                                                p_det->azi_det)
+    - LOGPROB_UNIFORM_AZIMUTH;
+
+  /* coda phase */
+  score += SecDetPrior_PhaseCodaPhase_LogProb(p_prior, p_secdet->phase_det)
+    - FalseArrivalPhasePrior_LogProb(&p_netmodel->arr_phase_prior,
+                                     p_secdet->phase_det);
+
+  /* coda SNR */
+  score += SecDetPrior_PhaseCodaSNR_LogProb(p_prior, p_secdet->snr_det, 
+                                            p_det->snr_det)
+    - FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
+                                   p_secdet->site_det, p_secdet->snr_det);
+
+  /* coda AMP */
+  if ((-1 != p_det->amp_det) && (-1 != p_secdet->amp_det))
+    score += SecDetPrior_PhaseCodaAmp_LogProb(p_prior, p_secdet->amp_det, 
+                                              p_det->amp_det)
+      - FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                          p_secdet->site_det,p_secdet->amp_det);
+
+  return score;
+}
+
+
+/* log probability that p_det generates the coda arrival p_secdet 
+ * minus
+ * log probability that p_det doesn't generate a secondary arrival and
+ * p_secdet is a noise arrival
+ */
+double score_coda_coda(NetModel_t * p_netmodel, Detection_t * p_secdet,
+                       Detection_t * p_det)
+{
+  double score;
+  SecDetPrior_t * p_prior = &p_netmodel->sec_det_prior;
+  
+  score = 0;
+  
+  /* log odds of a coda arrival */
+  score += SecDetPrior_CodaCodaDet_LogProb(p_prior, 1, p_det->amp_det)
+    - SecDetPrior_CodaCodaDet_LogProb(p_prior, 0, p_det->amp_det);
+  
+  /* coda arrival time */
+  score += SecDetPrior_CodaCodaTime_LogProb(p_prior, p_secdet->time_det,
+                                             p_det->time_det)
+    - NumFalseDet_LogTimeRate(&p_netmodel->num_falsedet_prior,
+                              p_secdet->site_det);
+  
+  /* coda slowness */
+  score += SecDetPrior_CodaCodaSlow_LogProb(p_prior, p_secdet->slo_det, 
+                                             p_det->slo_det)
+    - LOGPROB_UNIFORM_SLOWNESS;
+  
+  /* coda azimuth */
+  score += SecDetPrior_CodaCodaAzimuth_LogProb(p_prior, p_secdet->azi_det, 
+                                                p_det->azi_det)
+    - LOGPROB_UNIFORM_AZIMUTH;
+
+  /* coda phase */
+  score += SecDetPrior_CodaCodaPhase_LogProb(p_prior, p_secdet->phase_det)
+    - FalseArrivalPhasePrior_LogProb(&p_netmodel->arr_phase_prior,
+                                     p_secdet->phase_det);
+
+  /* coda SNR */
+  score += SecDetPrior_CodaCodaSNR_LogProb(p_prior, p_secdet->snr_det, 
+                                            p_det->snr_det)
+    - FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior,
+                                   p_secdet->site_det, p_secdet->snr_det);
+
+  /* coda AMP */
+  if ((-1 != p_det->amp_det) && (-1 != p_secdet->amp_det))
+    score += SecDetPrior_CodaCodaAmp_LogProb(p_prior, p_secdet->amp_det, 
+                                              p_det->amp_det)
+      - FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                          p_secdet->site_det,p_secdet->amp_det);
+
+  return score;
+}
+
+double logprob_noise(NetModel_t * p_netmodel, Detection_t * p_det,
+                     Detection_t * p_prev_det)
+{
+  return 
+    /* if there is a previous detection then we need to account for the
+     * fact that that previous detection doesn't generate a coda */
+    ((p_prev_det != NULL) ?
+     SecDetPrior_CodaCodaDet_LogProb(&p_netmodel->sec_det_prior, 0,
+                                     p_prev_det->amp_det)
+     : 0)
+    + NumFalseDet_LogTimeRate(&p_netmodel->num_falsedet_prior, p_det->site_det)
+    + LOGPROB_UNIFORM_SLOWNESS
+    + LOGPROB_UNIFORM_AZIMUTH
+    + FalseArrivalPhasePrior_LogProb(&p_netmodel->arr_phase_prior,
+                                     p_det->phase_det)
+    + FalseArrivalSNRPrior_LogProb(&p_netmodel->arr_snr_prior, p_det->site_det,
+                                   p_det->snr_det)
+    + ((-1 != p_det->amp_det) ?
+       FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                          p_det->site_det, p_det->amp_det) : 0)
+    ;
+}
+
+double logprob_coda_coda(NetModel_t * p_netmodel, Detection_t * p_secdet,
+                         Detection_t * p_det)
+{
+  return
+
+    SecDetPrior_CodaCodaDet_LogProb(&p_netmodel->sec_det_prior, 1,
+                                    p_det->amp_det)
+    
+    + SecDetPrior_CodaCodaTime_LogProb(&p_netmodel->sec_det_prior,
+                                       p_secdet->time_det, p_det->time_det)
+
+    + SecDetPrior_CodaCodaSlow_LogProb(&p_netmodel->sec_det_prior, 
+                                       p_secdet->slo_det, p_det->slo_det)
+    
+    + SecDetPrior_CodaCodaAzimuth_LogProb(&p_netmodel->sec_det_prior,
+                                          p_secdet->azi_det, p_det->azi_det)
+    
+    + SecDetPrior_CodaCodaPhase_LogProb(&p_netmodel->sec_det_prior,
+                                         p_secdet->phase_det)
+    
+    + SecDetPrior_CodaCodaSNR_LogProb(&p_netmodel->sec_det_prior,
+                                      p_secdet->snr_det, p_det->snr_det)
+    
+    + (((-1 != p_secdet->amp_det) && (-1 != p_det->amp_det)) ?
+       SecDetPrior_CodaCodaAmp_LogProb(&p_netmodel->sec_det_prior,
+                                       p_secdet->amp_det, p_det->amp_det) : 0)
+    ;
 }
 

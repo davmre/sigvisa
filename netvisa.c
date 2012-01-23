@@ -25,6 +25,8 @@ static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_enable_sec_arr(NetModel_t * self);
 static PyObject * py_disable_sec_arr(NetModel_t * self);
+static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
@@ -77,6 +79,14 @@ static PyMethodDef NetModel_methods[] = {
    "enable_sec_arr(): enables secondary arrivals"},
   {"disable_sec_arr", (PyCFunction)py_disable_sec_arr, METH_NOARGS,
    "disable_sec_arr(): disables secondary arrivals"},
+  {"score_coda_coda", (PyCFunction)py_score_coda_coda, METH_VARARGS,
+   "score_coda_coda(secdetnum, detnum)"
+   "-> log probability of secdetnum being a secondary coda of detnum"
+   " minus log probability of secdetnum being noise"},
+  {"score_phase_coda", (PyCFunction)py_score_phase_coda, METH_VARARGS,
+   "score_phase_coda(secdetnum, detnum)"
+   "-> log probability of secdetnum being a secondary coda of detnum"
+   " minus log probability of secdetnum being noise"},
   {NULL}  /* Sentinel */
 };
 
@@ -327,6 +337,56 @@ static void free_site_up(int nsites, int ntime, int * p_site_up)
   free(p_site_up);
 }
 
+static void init_det_logprob(NetModel_t * self)
+{
+  int detnum;
+
+  /* initialize prev_detnum and logprob */
+  for (detnum = 0; detnum < self->numdetections; detnum++)
+  {
+    Detection_t * p_det = self->p_detections + detnum;
+    
+    p_det->prev_det = -1;
+    p_det->logprob_det = logprob_noise(self, p_det, NULL);
+  }
+
+  /* look at each detection and see if it caused a secondary detection */
+  for (detnum = 0; detnum < self->numdetections; detnum++)
+  {
+    int secdetnum;
+    Detection_t * p_det = self->p_detections + detnum;
+    
+    for (secdetnum = (detnum+1); secdetnum < self->numdetections; 
+         secdetnum ++)
+    {
+      Detection_t * p_secdet = self->p_detections + secdetnum;
+      /* sanity check to avoid searching forever */
+      if (p_secdet->time_det > (p_det->time_det + 300))
+        break;
+      /* needs to be the same site to be a coda arrival */
+      if (p_secdet->site_det != p_det->site_det)
+        continue;
+      /* did we find a coda arrival ? */
+      if (SecDetPrior_Time_Possible(&self->sec_det_prior,
+                                    p_secdet->time_det, p_det->time_det))
+      {
+        double coda_logprob = logprob_coda_coda(self, p_secdet, p_det);
+
+        p_secdet->logprob_det = logprob_noise(self, p_secdet, p_det);
+
+        /* we will consider this a secondary detection only if the coda->coda
+         * explanation is better than the noise explanation */
+        if (coda_logprob > p_secdet->logprob_det)
+        {
+          p_secdet->prev_det = detnum;
+          p_secdet->logprob_det = coda_logprob;
+        }
+      }
+      break;
+    }
+  }
+}
+
 
 static int py_net_model_init(NetModel_t *self, PyObject *args)
 {
@@ -420,6 +480,8 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   ArrivalSNRPrior_Init_Params(&self->arr_snr_prior, arrsnr_fname);
 
   ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
+
+  init_det_logprob(self);
   
   return 0;
 }
@@ -788,6 +850,96 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
     Py_INCREF(Py_None);
     return Py_None;
   }
+}
+
+static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  int secdetnum;
+  int detnum;
+  Detection_t * p_det;
+  Detection_t * p_secdet;
+  
+  if (!PyArg_ParseTuple(args, "ii", &secdetnum, &detnum))
+    return NULL;
+
+  if ((secdetnum < 0) || (secdetnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_coda_coda: error: illegal secdetnum");
+    return NULL;
+  }
+  
+  if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_coda_coda: error: illegal detnum");
+    return NULL;
+  }
+
+  p_det = p_netmodel->p_detections + detnum;
+  p_secdet = p_netmodel->p_detections + secdetnum;
+
+  if (p_det->site_det != p_secdet->site_det)
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_coda_coda: error: detections from different sites");
+    return NULL;
+  }
+
+  if (!SecDetPrior_Time_Possible(&p_netmodel->sec_det_prior,
+                                 p_secdet->time_det,
+                                 p_det->time_det))
+  {
+    return Py_BuildValue("d", -1.0);
+  }
+  
+  return Py_BuildValue("d", score_coda_coda(p_netmodel, p_secdet, p_det));
+}
+
+static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  int secdetnum;
+  int detnum;
+  Detection_t * p_det;
+  Detection_t * p_secdet;
+  
+  if (!PyArg_ParseTuple(args, "ii", &secdetnum, &detnum))
+    return NULL;
+
+  if ((secdetnum < 0) || (secdetnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_phase_coda: error: illegal secdetnum");
+    return NULL;
+  }
+  
+  if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_phase_coda: error: illegal detnum");
+    return NULL;
+  }
+
+  p_det = p_netmodel->p_detections + detnum;
+  p_secdet = p_netmodel->p_detections + secdetnum;
+
+  if (p_det->site_det != p_secdet->site_det)
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_phase_coda: error: detections from different sites");
+    return NULL;
+  }
+
+  if (!SecDetPrior_Time_Possible(&p_netmodel->sec_det_prior,
+                                 p_secdet->time_det,
+                                 p_det->time_det))
+  {
+    return Py_BuildValue("d", -1.0);
+  }
+  
+  return Py_BuildValue("d", score_phase_coda(p_netmodel, p_secdet, p_det));
 }
 
 static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args)
