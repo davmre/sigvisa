@@ -29,8 +29,9 @@ events = np.array(cursor.fetchall())
 print events
 event = events[0]
 
-start_time = event[3] - 100
-end_time = event[3] + 2000
+fromfile= False
+if len(sys.argv) == 4:
+    fromfile = True
 
 
 format_strings = ','.join(['%s'] * len(stalist))
@@ -40,36 +41,43 @@ cursor.execute("select lon, lat from static_siteid where id IN (%s)" % format_st
 sta_locations = np.array(cursor.fetchall())
 print sta_locations
 
-detections, arid2num = read_detections(cursor, start_time, end_time, arrival_table="leb_arrival", noarrays=False)
-print detections
-sites = read_sites(cursor)
-print sites
-site_up = read_uptime(cursor, start_time, end_time)
-phasenames, phasetimedef = read_phases(cursor)
 
-earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
-netmodel = learn.load_netvisa("parameters", start_time, end_time, detections, site_up, sites, phasenames, phasetimedef)
+if not fromfile:
+
+    start_time = event[3] - 100
+    end_time = event[3] + 2000
+
+    detections, arid2num = read_detections(cursor, start_time, end_time, arrival_table="leb_arrival", noarrays=False)
+    print detections
+    sites = read_sites(cursor)
+    print sites
+    site_up = read_uptime(cursor, start_time, end_time)
+    phasenames, phasetimedef = read_phases(cursor)
+
+    earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
+    netmodel = learn.load_netvisa("parameters", start_time, end_time, detections, site_up, sites, phasenames, phasetimedef)
 
 
-sigmodel = learn.load_sigvisa("parameters", start_time, end_time, 1, 
+    sigmodel = learn.load_sigvisa("parameters", start_time, end_time, "envelope", 
                               site_up, sites, phasenames,
                               phasetimedef)
 
 
-sigvisa.srand(int((time.time()*100) % 1000 ))
+    sigvisa.srand(int((time.time()*100) % 1000 ))
 
 
-energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=stalist)
-sigmodel.set_waves(traces)
-sigmodel.set_signals(energies)
+    energies, traces = sigvisa_util.load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=stalist)
+    sigmodel.set_signals(energies)
 
-print event
-print event[3], event[0], event[1], event[2], event[4]
+    print event
+    print event[3], event[0], event[1], event[2], event[4]
 
-f = open("logs/heatmap_%s.log" % (hsh), "w")
+    f = open("logs/heatmap_%s.log" % (hsh), "w")
+else:
+    f = open("logs/heatmap_%s.log" % (hsh), "r")
 
-window = 10
-resolution = 1.5
+window = 5
+resolution = 1
 
 lon1 = event[0] - window
 lon2 = event[0] + window
@@ -110,22 +118,37 @@ lat_arr = np.degrees(np.arcsin(z_arr))
 
 score = np.zeros((len(lon_arr), len(lat_arr)))
 best, worst = -np.inf, np.inf
-for loni, lon in enumerate(lon_arr):
-    for lati, lat in enumerate(lat_arr):
-        if lon<-180: lon+=360
-        if lon>180: lon-=360
-
-        sc = -np.inf
-        for evtime in np.arange(event[3]-8, event[3] + 8.1, 2):
-            sc = max(sc, sigmodel.event_likelihood(evtime, lon, lat, event[2], event[4]))
-      
+if fromfile:
+    for line in f:
+        tokens = line.strip().split(" ")
+        loni = int(tokens[0])
+        lati = int(tokens[1])
+        sc = float(tokens[2])
         score[loni, lati] = sc
-        f.write(str(loni) + " " + str(lati) + " " + str(sc) + " " + str(lon) + " " + str(lat) + "\n")
-        f.flush()
-        print "set score for lon %f lat %f to %f" % (lon, lat, sc)
+        print loni, lati, "=", sc
+        if sc > best: 
+            print "new best", sc
+            best = sc
+        if sc < worst: 
+            print "new worst", sc
+            worst = sc
+else:
+    for loni, lon in enumerate(lon_arr):
+        for lati, lat in enumerate(lat_arr):
+            if lon<-180: lon+=360
+            if lon>180: lon-=360
 
-        if sc > best: best = sc
-        if sc < worst: worst = sc
+            sc = -np.inf
+            for evtime in np.arange(event[3]-8, event[3] + 8.1, 2):
+                sc = max(sc, sigmodel.event_likelihood(evtime, lon, lat, event[2], event[4]))
+      
+            score[loni, lati] = sc
+            f.write(str(loni) + " " + str(lati) + " " + str(sc) + " " + str(lon) + " " + str(lat) + "\n")
+            f.flush()
+            print "set score for lon %f lat %f to %f" % (lon, lat, sc)
+
+            if sc > best: best = sc
+            if sc < worst: worst = sc
 
 if worst < best * .9:
     levels = np.arange(worst, best*.9, (best*.9 - worst)/5).tolist() +\
