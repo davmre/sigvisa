@@ -108,6 +108,8 @@ def main(param_dirname):
     options.plt = plt
     options.gui = True
     showgui = False
+  else:
+    showgui = False
 
   if options.datadir:
     param_dirname = options.datadir

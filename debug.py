@@ -60,31 +60,29 @@ def print_event(sitenames, netmodel, earthmodel, detections, event, event_detlis
   detlist = [x for x in event_detlist]
   detlist.sort()
   for phaseid, detid in detlist:
-    tres = detections[detid, DET_TIME_COL] \
-           - earthmodel.ArrivalTime(event[EV_LON_COL],
-                                    event[EV_LAT_COL],
-                                    event[EV_DEPTH_COL],
-                                    event[EV_TIME_COL],
-                                    phaseid,
-                                    int(detections[detid, DET_SITE_COL]))
     detsc = netmodel.score_event_det(event, phaseid, detid)
+    if detsc is None:
+      detsc = -1
     inv = netmodel.invert_det(detid, 0)
     if inv is None:
-      idist, itimediff = "_", "_"
-      iscore = "_"
+      asterisk = ""
     else:
       (ilon, ilat, idepth, itime) = inv
-      idist = "%.1f" % dist_deg((ilon, ilat), event[[EV_LON_COL, EV_LAT_COL]])
-      itimediff = "%.1f" % (itime - event[EV_TIME_COL],)
+      idist = dist_deg((ilon, ilat), event[[EV_LON_COL, EV_LAT_COL]])
+      itimediff = itime - event[EV_TIME_COL]
       ievent = event.copy()
       (ievent[EV_LON_COL], ievent[EV_LAT_COL], ievent[EV_DEPTH_COL],
        ievent[EV_TIME_COL]) = inv
       ievent [EV_MB_COL] = 3.0
       iscore = "%.1f" % best_score(netmodel, ievent, detlist)
+      if abs(itimediff) < 50 and idist < 5:
+        asterisk = " *"
+      else:
+        asterisk = ""
       
-    print "(%s %s %.1f)" % (earthmodel.PhaseName(phaseid),
-                            sitenames[int(detections[detid, DET_SITE_COL])],
-                            tres),
+    print "(%s %s %.1f%s)" % (earthmodel.PhaseName(phaseid),
+                               sitenames[int(detections[detid, DET_SITE_COL])],
+                               detsc, asterisk),
   print
   score = netmodel.score_event(event, event_detlist)
   print "Ev Score: %.1f    (prior location logprob %.1f)" \
