@@ -35,34 +35,34 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
 
       if (strcmp(key, "env_p_height") == 0) {
 	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_height = PyFloat_AsDouble(py_value);
+	sta->env_p_height = PyFloat_AsDouble(py_value); CHECK_ERROR;
       }  else if (strcmp(key, "env_s_height") == 0) {
 	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_height = PyFloat_AsDouble(py_value);
+	sta->env_s_height = PyFloat_AsDouble(py_value); CHECK_ERROR;
       } else if (strcmp(key, "env_p_onset") == 0) {
 	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_onset = PyFloat_AsDouble(py_value);
+	sta->env_p_onset = PyFloat_AsDouble(py_value); CHECK_ERROR;
       } else if (strcmp(key, "env_p_decay") == 0) {
 	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_decay = PyFloat_AsDouble(py_value);
+	sta->env_p_decay = PyFloat_AsDouble(py_value); CHECK_ERROR;
       } else if (strcmp(key, "env_s_onset") == 0) {
 	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_onset = PyFloat_AsDouble(py_value);
+	sta->env_s_onset = PyFloat_AsDouble(py_value); CHECK_ERROR;
       } else if (strcmp(key, "env_s_decay") == 0) {
 	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_decay = PyFloat_AsDouble(py_value);
+	sta->env_s_decay = PyFloat_AsDouble(py_value); CHECK_ERROR;
       } else if (strncmp(key, "chan_mean_", 10) == 0) {
-	int chan_num = canonical_channel_num(key+10);
+	int chan_num = canonical_channel_num(key+10); CHECK_ERROR;
 	LogTrace("setting chan mean %lf for chan str %s int %d at siteid %d", PyFloat_AsDouble(py_value), key+10, chan_num, siteid);
-	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value);
+	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value); CHECK_ERROR;
       } else if (strncmp(key, "chan_var_", 9) == 0) {
 	int chan_num = canonical_channel_num(key+9);
 	LogTrace("setting chan var %lf for chan str %s int %d siteid %d", PyFloat_AsDouble(py_value), key+9, chan_num, siteid);
-	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value);
+	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value); CHECK_ERROR;
 
       } else if (strcmp(key, "ar_noise_sigma2") == 0) {
 	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	double val = PyFloat_AsDouble(py_value);
+	double val = PyFloat_AsDouble(py_value); CHECK_ERROR;
 	
 	if (val > 0.0000001) {
 	  sta->ar_noise_sigma2 = val;
@@ -75,20 +75,21 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
 	int converted_tuple = 0;
 	if (PyList_Check(py_value)) {
 	  converted_tuple = 1;
-	  py_value = PyList_AsTuple(py_value);
+	  py_value = PyList_AsTuple(py_value); CHECK_ERROR;
 	}
 
 	if (!PyTuple_Check(py_value)) {
 	  LogFatal("expected Python tuple for ar_coeffs!\n");
 	  exit(EXIT_FAILURE);
 	}
+	CHECK_ERROR;
 
 	sta->ar_n = PyTuple_Size(py_value); CHECK_ERROR;
 	LogTrace("setting %s to tuple of length %d at siteid %d", key, sta->ar_n, siteid);      
 	if (sta->p_ar_coeffs != NULL) free(sta->p_ar_coeffs);
 	sta->p_ar_coeffs = calloc(sta->ar_n, sizeof(double));
 	for (int i=0; i < sta->ar_n; ++i) {
-	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_value, i));
+	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_value, i)); CHECK_ERROR;
 	}
 
 	if (converted_tuple) {
@@ -269,7 +270,7 @@ void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, doub
     end_idx = 1;
   }
   
-  *len = MIN(end_idx+15*hz, 60*hz);
+  *len = MIN(end_idx+15*hz, 240*hz);
   double * means = (double *) calloc(*len, sizeof(double));
 
   if (means == NULL) {
