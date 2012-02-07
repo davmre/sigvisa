@@ -10,28 +10,23 @@ from utils.geog import dist_deg, azimuth
 
 
 # does not save for you - you need to call savefig() yourself!
-def plot_segment(channel_traces, title=None, all_det_times=None, format = "k:"):
+def plot_segment(chan_dict, title=None, all_det_times=None, band="broadband_envelope", format = "k:"):
   plt.figure()
   plt.xlabel("Time (s)")
 
-  for chidx, trc in enumerate(channel_traces):
+  for chidx, chan in enumerate(sorted(chan_dict.keys())):
     if chidx == 0:
-      axes = plt.subplot(len(channel_traces), 1, 1)
+      axes = plt.subplot(len(chan_dict), 1, 1)
       if title is not None:
         plt.title(title)
     else:
-      plt.subplot(len(channel_traces), 1, chidx+1, sharex=axes)
+      plt.subplot(len(chan_dict), 1, chidx+1, sharex=axes)
       
-    chan_name = trc.stats["channel"]
+    plt.ylabel(chan)
 
-    plt.ylabel(chan_name)
-
-    if "window_size" in trc.stats:
-      srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
-      npts = trc.stats.npts_processed
-    else:
-      srate = trc.stats.sampling_rate
-      npts = trc.stats.npts
+    trc = chan_dict[chan][band]
+    srate = trc.stats.sampling_rate
+    npts = trc.stats.npts
     stime = trc.stats["starttime_unix"]
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
@@ -53,14 +48,10 @@ def plot_trace(trc, title=None, all_det_times=None, format="k:"):
 
   plt.ylabel(chan_name)
 
-  if trc.stats["window_size"] is not None:
-    srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
-    npts = trc.stats.npts_processed
-  else:
-    srate = trc.stats.sampling_rate
-    npts = trc.stats.npts
+  srate = trc.stats.sampling_rate
+  npts = trc.stats.npts
   stime = trc.stats["starttime_unix"]
-  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)
+  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
   plt.plot(timevals, trc, format)
 
@@ -69,6 +60,33 @@ def plot_trace(trc, title=None, all_det_times=None, format="k:"):
     plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
             width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
 
+def plot_traces(trc1, trc2, title=None, all_det_times=None, format1="k:", format2="r-"):
+  plt.figure()
+  plt.xlabel("Time (s)")
+
+  if title is not None:
+    plt.title(title)
+      
+  chan_name = trc1.stats["channel"]
+
+  plt.ylabel(chan_name)
+
+  srate = trc1.stats.sampling_rate
+  npts = trc1.stats.npts
+  stime = trc1.stats["starttime_unix"]
+  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
+  plt.plot(timevals, trc1, format1)
+
+  srate = trc2.stats.sampling_rate
+  npts = trc2.stats.npts
+  stime = trc2.stats["starttime_unix"]
+  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
+  plt.plot(timevals, trc2, format2)
+
+  if all_det_times is not None:
+    maxtrc, mintrc = float(max(trc1.data)), float(min(trc1.data))
+    plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
+            width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
 
 
 # does not save for you - you need to call savefig() yourself!
