@@ -3,7 +3,7 @@
 #include "sigvisa.h"
 
 
-char * signal_str(Signal_t * signal) {
+char * signal_str(Channel_t * signal) {
   char * str = malloc(200*sizeof(char));
   snprintf(str, 200, "Signal: at station %d, sampling rate %f, samples %ld, start time %f, end time %f\n", 
 	   signal->siteid, 
@@ -14,7 +14,7 @@ char * signal_str(Signal_t * signal) {
   return str;
 }
 
-int print_signal(Signal_t * signal) {
+int print_signal(Channel_t * signal) {
   char * s = signal_str(signal);
   int result = fputs(s, stdout);
   free(s);
@@ -60,11 +60,11 @@ void print_vector(int n, double * vector) {
   }
 }
 
-int save_pdf_plot(SigModel_t * p_sigmodel, Signal_t * p_signal, char * filename, char * format) {
+int save_pdf_plot(SigModel_t * p_sigmodel, Channel_t * p_signal, int band, char * filename, char * format) {
 
   PyObject * p_trace;
 
-  signal_to_trace(p_signal, &p_trace);
+  //signal_to_trace(p_signal, &p_trace);
   PyObject * py_text = Py_BuildValue("s", filename);
   PyObject * py_format = Py_BuildValue("s", format);
 
@@ -94,18 +94,18 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
   for (i = 0; i < p_sigmodel->numsegments; ++i) {
     LogTrace("logging segment %d", i);
 
-    ChannelBundle_t * p_real_segment = p_sigmodel->p_segments + i;
+    Segment_t * p_real_segment = p_sigmodel->p_segments + i;
     if (p_real_segment->start_time > max_start_time) {
       continue;
     }
 
-    ChannelBundle_t * p_pred_segment = calloc(1, sizeof(ChannelBundle_t));
-    memcpy(p_pred_segment, p_real_segment, sizeof(ChannelBundle_t));
+    Segment_t * p_pred_segment = calloc(1, sizeof(Segment_t));
+    memcpy(p_pred_segment, p_real_segment, sizeof(Segment_t));
 
 
     int num_arrivals;
     Arrival_t ** pp_arrivals;
-    arrival_list(p_sigmodel->p_earth, p_pred_segment->siteid, p_pred_segment->start_time, ChannelBundle_EndTime(p_pred_segment), numevents, pp_events, &num_arrivals, &pp_arrivals);
+    arrival_list(p_sigmodel->p_earth, p_pred_segment->siteid, p_pred_segment->start_time, Segment_EndTime(p_pred_segment), numevents, pp_events, &num_arrivals, &pp_arrivals);
 
 
     /*SignalPrior_SampleThreeAxisAR(&p_sigmodel->sig_prior,

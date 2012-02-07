@@ -32,12 +32,12 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int station, PyObject * p
 
 int Envelope_SignalModel_Has_Model(void * pv_model, int siteid, int chan);
 
-double Envelope_SignalModel_Likelihood(void * p_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
+double Envelope_SignalModel_Likelihood(void * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
 
 
 void Envelope_SignalModel_SampleThreeAxis(void * pv_params, 
 					  EarthModel_t * p_earth, 
-					  ChannelBundle_t * p_segment,
+					  Segment_t * p_segment,
 					  int num_arrivals,
 					  const Arrival_t ** pp_arrivals,
 					  int samplePerturb,

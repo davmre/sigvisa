@@ -15,8 +15,16 @@ from obspy.signal.trigger import triggerOnset
 
 from database import db, dataset
 import utils.waveform
+import plot
 import netvisa, learn
 import sys, os
+
+# Frequency bands in Hz. From Mayeda et. al., "Stable and Transportable Regional Magnitudes Based on Coda-Derived Moment-Rate Spectra". (2003)
+#FREQ_BANDS = ((0.02, 0.03), (0.03, 0.05), (0.05, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.5), (0.5, 0.7), (0.7, 1.0), (0.7, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 6.0), (6.0, 8.0))
+
+# also need to update sigvisa.h whenever this changes
+FREQ_BANDS = ((0.5, 0.7), (0.7, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 6.0), (6.0, 8.0))
+
 
 class MissingChannel(Exception):
   pass
@@ -65,42 +73,6 @@ def process_trace(trace, f, opts):
   processed_trace = Trace(processed_data, header=new_header)
   return processed_trace
 
-def window_energies(trace, window_size=1, overlap=0.5):
-  """
-  Returns a vector giving the signal energy in each of many
-  windows. 
-
-  The length of each window in seconds is given by
-  window_size. 
-
-  The overlap argument specifies (1 - the fraction of a window length
-  to wait before starting the next window); for example, overlap=0
-  causes successive windows to be disjoint, while overlap=0.99 causes
-  successive windows to share 99% of their data.
-  """
-  samprate = trace.stats["sampling_rate"]
-  data = trace.data
-
-  nsamples_window = window_size * samprate
-  offset = nsamples_window * (1-overlap)
-  nwindows = int((len(data) - nsamples_window) / offset)
-
-  if (nwindows <= 0):
-    nwindows = 1
-
-  #print 'computing windows on data on length ', len(data)
-  windows = np.zeros((nwindows, 1))
-
-  for i in range(nwindows):
-    wstart = offset*i
-    wstop = min(wstart+window_size, len(data))
-    
-    #print "window ", i, " runs from ", wstart, '-', wstop
-    window = data[wstart:wstop]
-    windows[i] = np.linalg.norm(window, 2)
-
-  return windows
-
 # return the fraction of the timespan of the first segment, which is overlapped by the second
 def seconds_overlap(seg1, seg2):
 
@@ -117,11 +89,6 @@ def seconds_overlap(seg1, seg2):
         overlap=min(e1,e2)-s2
 
     return overlap,s1,e1,s2,e2
-
-def set_start_end(segment):
-    for chan in segment:
-        chan[1] = start
-        chan[2] = end
 
 def getchans(segment):
     return map(lambda x : x[0], segment)
@@ -195,7 +162,7 @@ def print_segments(segments):
         print seg
 
 
-def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, downsample_factor = 8):
+def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, downsample_factor = 1):
     traces = []
     traces_processed = []
 
@@ -219,8 +186,7 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, 
       stm = float(arr[2]) - 4
       etm = float(arr[2]) +30
       
-      segment_chans_processed = []
-      segment_chans = []
+      segment_chans = dict()
 
       for chan in ("BHZ", "BHN", "BHE", "BH1", "BH2"):
         print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}", 
@@ -231,29 +197,28 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, 
           if chan == "BH2":
             trace.stats['channel'] = "BHN"
 
-          trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
+          if trace.stats['channel'] not in segment_chans:
+            segment_chans[trace.stats['channel']] = dict()
 
           if process is not None:
             trace_processed = process(trace)
             trace_processed.downsample(downsample_factor)
-            segment_chans_processed.append(trace_processed)
+            segment_chans[trace.stats['channel']]["broadband_envelope"] =  trace_processed
           trace.downsample(downsample_factor)
-          segment_chans.append(trace)
+          segment_chans[trace.stats['channel']]["broadband"] = trace
           print " ... successfully loaded."
         except (utils.waveform.MissingWaveform, IOError):
           print " ... not found, skipping."
           continue
  
       if len(segment_chans) > 0:
-        if process is not None:
-          traces_processed.append(segment_chans_processed)
         traces.append(segment_chans)      
 
-    return traces, traces_processed
+    return traces
 
-def load_traces(cursor, stations, start_time, end_time, process=None, downsample_factor = 8):
+
+def load_traces(cursor, stations, start_time, end_time, process=None, downsample_factor = 1):
     traces = []
-    traces_processed = []
 
     for (idx, sta) in enumerate(stations):
         sql = "select chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
@@ -272,8 +237,7 @@ def load_traces(cursor, stations, start_time, end_time, process=None, downsample
 #        print "trying ", segments
 
         for segment in segments:
-            segment_chans = []
-            segment_chans_processed = []
+            segment_chans = dict()
             for (chan, st, et) in segment:
 
               stm = max(st, float(start_time))
@@ -294,25 +258,24 @@ def load_traces(cursor, stations, start_time, end_time, process=None, downsample
                 if chan == "BH2":
                   trace.stats['channel'] = "BHN"
 
-                trace.data = obspy.signal.filter.bandpass(trace.data,1,4,trace.stats['sampling_rate'])
+                if trace.stats['channel'] not in segment_chans:
+                  segment_chans[trace.stats['channel']] = dict()
 
                 if process is not None:
                   trace_processed = process(trace)
                   trace_processed.downsample(downsample_factor)
-                  segment_chans_processed.append(trace_processed)
+                  segment_chans[trace.stats['channel']]["broadband_envelope"] =  trace_processed
                 trace.downsample(downsample_factor)
-                segment_chans.append(trace)
+                segment_chans[trace.stats['channel']]["broadband"] = trace
                 print " ... successfully loaded."
               except (utils.waveform.MissingWaveform, IOError):
                 print " ... not found, skipping."
                 continue
  
-            if process is not None:
-              traces_processed.append(segment_chans_processed)
             traces.append(segment_chans)
 
    # print "fetched ", len(traces), " segments."
-    return traces, traces_processed
+    return traces
 
 def max_over_channels(channel_bundle):
     max_data = []
@@ -497,8 +460,54 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
 
     return detections
 
-def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap=0.5, stalist=None, downsample_factor=8):
-    print window_size, overlap, stalist
+
+def compute_narrowband_envelopes(segments):
+
+  for segment_chans in segments:
+    
+    for (chan, chan_bands) in segment_chans.items():
+
+      broadband_signal = chan_bands["broadband"]
+      
+      # compute log envelope for each frequency band in this component
+      for band in FREQ_BANDS:
+        band_data = obspy.signal.filter.bandpass(broadband_signal.data, band[0], band[1], broadband_signal.stats['sampling_rate'], corners = 4, zerophase=True)
+        band_env = obspy.signal.filter.envelope(band_data)
+        band_trace = Trace(np.log(band_env), dict(broadband_signal.stats.items() + [("freq_band", band)]))
+        chan_bands["narrow_logenvelope_%1.2f_%1.2f" % (band[0], band[1])] = band_trace
+
+    # average the two horizonal components, if they're both present
+    horiz_avg = None
+    chan1 = None
+    chan2 = None
+    if "BHE" in segment_chans:
+      horiz_avg = segment_chans["BHE"]
+      chan1 = segment_chans["BHE"]
+    if "BH1" in segment_chans:
+      horiz_avg = segment_chans["BH1"]
+      chan1 = segment_chans["BH1"]
+    if "BHN" in segment_chans:
+      horiz_avg = segment_chans["BHN"]
+      chan2 = segment_chans["BHN"]
+    if "BH2" in segment_chans:
+      horiz_avg = segment_chans["BH2"]
+      chan2 = segment_chans["BH2"]
+
+    if chan1 is not None and chan2 is not None:
+      horiz_avg = dict()
+      for band in chan1.keys():
+        if not band.startswith("narrow_logenvelope"):
+          continue
+
+        horiz_avg_data = ( chan1[band].data + chan2[band].data ) /2
+        horiz_avg_trace = Trace(horiz_avg_data, header = chan1[band].stats.copy())
+        horiz_avg_trace.stats["channel"] = "horiz_avg"
+        horiz_avg[band] = horiz_avg_trace
+    if horiz_avg is not None:
+      segment_chans["horiz_avg"] = horiz_avg
+
+      
+def load_and_process_traces(cursor, start_time, end_time, stalist=None, downsample_factor=1):
 
     if stalist is None:
         cursor.execute("select sta, id from static_siteid where statype='ss'")
@@ -515,20 +524,20 @@ def load_and_process_traces(cursor, start_time, end_time, window_size=1, overlap
     opts = dict()
     f = lambda trace: obspy.signal.filter.envelope(trace.data)
     pr = lambda trace: process_trace(trace, f=f, opts=opts)
-    traces, energies = load_traces(cursor, stations, start_time, end_time, process=pr, downsample_factor = downsample_factor)
+    traces = load_traces(cursor, stations, start_time, end_time, process=pr, downsample_factor = downsample_factor)
 
-    return energies, traces
+    return traces
 
 def load_and_process_event_traces(cursor, evids, evtype="leb", window_size=1, overlap=0.5, stations=None, downsample_factor=8):
     f = lambda trace: obspy.signal.filter.envelope(trace.data)
     pr = lambda trace: process_trace(trace, f=f, opts=dict())
-    traces, energies = load_event_traces(cursor, evids, evtype, stations=stations, process=pr, downsample_factor=downsample_factor)
+    traces = load_event_traces(cursor, evids, evtype, stations=stations, process=pr, downsample_factor=downsample_factor)
 
-    return energies, traces
+    return traces
 
 def trim_first_n_seconds(segments, n):
   for segment in segments:
-    for trc in segment:
+    for trc in segment.values():
       srate = trc.stats.sampling_rate
       npts = trc.stats.npts
       
@@ -557,9 +566,9 @@ def main():
     parser.add_option("--overlap", dest="overlap", default=0.5,
                     type="float",
                     help = "fraction of a window length between the start of successive windows (0.5)")
-    parser.add_option("--start", dest="start_time", type="float", default=1237680000,
+    parser.add_option("--start", dest="start_time", type="float", default=1237680520,
                     help = "start time")
-    parser.add_option("--end", dest="end_time", type="float", default=1237683600,
+    parser.add_option("--end", dest="end_time", type="float", default=1237680700,
                     help = "end time")
     parser.add_option("--events", dest="event_set", default="leb",
                     help = "set of events for which to compute likelihood: visa, leb, or sel3 (leb)")
@@ -573,8 +582,31 @@ def main():
 
     # read traces for each station
     cursor = db.connect().cursor()
-    energies, traces = load_and_process_traces(cursor, options.start_time, options.end_time, options.window_size, options.overlap, options.small)
+    traces = load_and_process_traces(cursor, options.start_time, options.end_time, stalist=(2,))
     print "loaded energies"
+
+    for segment in traces:
+      for (chan, chan_dict) in segment.items():
+        print chan
+        print chan_dict
+
+    compute_narrowband_envelopes(traces)
+
+    for segment in traces:
+      for (chan, chan_dict) in segment.items():
+        print chan
+        print chan_dict
+
+
+    print "loaded", traces[0]["BHZ"]["broadband"].data, "len", len(traces[0]["BHZ"]["broadband"].data)
+
+    pp = PdfPages('logs/test_bands.pdf')
+    plot.plot_bands(traces[0]["BHZ"])
+    pp.savefig()
+    pp.close()
+
+    sys.exit(0)
+
 
     # load earth and net models
     # read the detections and uptime

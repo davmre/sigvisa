@@ -15,11 +15,11 @@
 #include "../sigvisa.h"
 #include "SignalModelUtil.h"
 
-void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py_dict) {
-  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
+void Spectral_Envelope_Model_Set_Params(void * pv_params, int siteid, PyObject * py_dict) {
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
   
 
-  Envelope_StationModel_t * sta = NULL;
+  Spectral_StationModel_t * sta = NULL;
   if (siteid > p_params->numsites) {
     LogError("invalid siteid %d", siteid);
     exit(EXIT_FAILURE);
@@ -34,35 +34,56 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
 
     if (sta != NULL) {
 
-      if (strcmp(key, "env_p_height") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_height = PyFloat_AsDouble(py_value);
-      }  else if (strcmp(key, "env_s_height") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_height = PyFloat_AsDouble(py_value);
-      } else if (strcmp(key, "env_p_onset") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_onset = PyFloat_AsDouble(py_value);
-      } else if (strcmp(key, "env_p_decay") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_decay = PyFloat_AsDouble(py_value);
-      } else if (strcmp(key, "env_s_onset") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_onset = PyFloat_AsDouble(py_value);
-      } else if (strcmp(key, "env_s_decay") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_decay = PyFloat_AsDouble(py_value);
+      if (strcmp(key, "override_b") == 0) {
+	sta->override_b = PyFloat_AsDouble(py_value);
+      }  else if (strcmp(key, "override_gamma") == 0) {
+	sta->override_gamma = PyFloat_AsDouble(py_value);
+      } else if (strcmp(key, "override_height") == 0) {
+	sta->override_height = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "p_b0_", 5) == 0) {
+	int band = canonical_band_num(key+5);
+	sta->p_b0[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "p_b1_", 5) == 0) {
+	int band = canonical_band_num(key+5);
+	sta->p_b1[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "p_b2_", 5) == 0) {
+	int band = canonical_band_num(key+5);
+	sta->p_b2[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "s_b0_", 5) == 0) {
+	int band = canonical_band_num(key+5);
+	sta->s_b0[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "s_b1_", 5) == 0) {
+	int band = canonical_band_num(key+5);
+	sta->s_b1[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "s_b2_", 5) == 0) {
+	int band = canonical_band_num(key+5);
+	sta->s_b2[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "p_gamma0_", 9) == 0) {
+	int band = canonical_band_num(key+9);
+	sta->p_gamma0[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "p_gamma1_", 9) == 0) {
+	int band = canonical_band_num(key+9);
+	sta->p_gamma1[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "p_gamma2_", 9) == 0) {
+	int band = canonical_band_num(key+9);
+	sta->p_gamma2[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "s_gamma0_", 9) == 0) {
+	int band = canonical_band_num(key+9);
+	sta->s_gamma0[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "s_gamma1_", 9) == 0) {
+	int band = canonical_band_num(key+9);
+	sta->s_gamma1[band] = PyFloat_AsDouble(py_value);
+      } else if (strncmp(key, "s_gamma2_", 9) == 0) {
+	int band = canonical_band_num(key+9);
+	sta->s_gamma2[band] = PyFloat_AsDouble(py_value);
       } else if (strncmp(key, "chan_mean_", 10) == 0) {
 	int chan_num = canonical_channel_num(key+10);
-	LogTrace("setting chan mean %lf for chan str %s int %d at siteid %d", PyFloat_AsDouble(py_value), key+10, chan_num, siteid);
 	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value);
       } else if (strncmp(key, "chan_var_", 9) == 0) {
 	int chan_num = canonical_channel_num(key+9);
-	LogTrace("setting chan var %lf for chan str %s int %d siteid %d", PyFloat_AsDouble(py_value), key+9, chan_num, siteid);
 	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value);
 
       } else if (strcmp(key, "ar_noise_sigma2") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
 	double val = PyFloat_AsDouble(py_value);
 	
 	if (val > 0.0000001) {
@@ -110,21 +131,21 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
   }
 }
 
-void Envelope_SignalModel_Init_Params(void * pv_params,  int numsites) {
-  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
+void Spectral_Envelope_Model_Init_Params(void * pv_params,  int numsites) {
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
 
   p_params->numsites = numsites;
 
   /* using calloc (instead of malloc) is important here since we
      depend on the p_ar_coeffs pointer being NULL iff unallocated */
-  p_params->p_stations = calloc(numsites, sizeof(Envelope_StationModel_t));
+  p_params->p_stations = calloc(numsites, sizeof(Spectral_StationModel_t));
 }
 
-int Envelope_SignalModel_Has_Model(void * pv_sigmodel, int siteid, int chan) {
+int Spectral_Envelope_Model_Has_Model(void * pv_sigmodel, int siteid, int chan) {
 
   SigModel_t * p_sigmodel = (SigModel_t *) pv_sigmodel;
   SignalModel_t * p_model = &p_sigmodel->signal_model;
-  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *)p_model->pv_params;
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *)p_model->pv_params;
 
   /* chan < 0 means return true if we have a model for any channel at
      this station */
@@ -147,30 +168,10 @@ int Envelope_SignalModel_Has_Model(void * pv_sigmodel, int siteid, int chan) {
 
 
 
-void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
 
-  double env_onset, env_decay, env_height;
-  if (IS_S_PHASE(p_arr->phase)) {
-    env_onset = p_sta->env_s_onset;
-    env_decay = p_sta->env_s_decay;
-    env_height = p_sta->env_s_height;
-  } else {
-    env_onset = p_sta->env_p_onset;
-    env_decay = p_sta->env_p_decay;
-    env_height = p_sta->env_p_height;
-  }
-  LogTrace("env for siteid %d phase %d height %lf onset %lf decay %lf hz %lf amp %lf", p_arr->siteid, p_arr->phase, env_height, env_onset, env_decay, hz, p_arr->amp);
-
-  double peak_height = env_height * p_arr->amp;
-  long peak_idx = (long) (log(peak_height) / env_onset * hz);
-  long end_idx = peak_idx + (long)(log(peak_height)/env_decay * hz);
-
-  if (peak_idx < 0 || end_idx <=0) {
-    peak_idx = 0;
-    end_idx = 1;
-  }
+void abstract_spectral_env_raw(double gamma, double b, double height, double hz, double ** pp_envelope, long *len) {
   
-  *len = MIN(end_idx+15*hz, 60*hz);
+  *len = 200 * hz;
   double * means = (double *) calloc(*len, sizeof(double));
 
   if (means == NULL) {
@@ -178,23 +179,41 @@ void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, doub
     exit(-1);
   }
 
-  for (long i=0; i < MIN(peak_idx, *len); ++i) {
-    means[i] = exp(env_onset * (i/hz));
-  }
-  for (long i=MIN(peak_idx, *len); i < *len; ++i) {
-    means[i] = exp(env_decay * ((end_idx - i)/hz));
+  for (long t=0; t < *len; ++t) {
+    means[t] = height * pow(t/hz, -1 * gamma) * exp(b * t/hz);
     // LogInfo("%d %d %d %lf %d %lf %lf", i, peak_idx, *len, env_decay, end_idx, hz, means[i]);
   }
   
   *pp_envelope = means;
 }
 
+void abstract_spectral_env(Spectral_StationModel_t * p_sta, int band, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
+  
+  double b, gamma, height; 
+
+  assert(p_arr->dist != 0);
+
+  if (IS_P_PHASE(p_arr->phase)) {
+    b = p_sta->p_b0[band] - p_sta->p_b1[band] / (p_sta->p_b2[band] + p_arr->dist);
+    gamma = p_sta->p_gamma0[band] - p_sta->p_gamma1[band] / (p_sta->p_gamma2[band] + p_arr->dist);
+  } else {    
+    b = p_sta->s_b0[band] - p_sta->s_b1[band] / (p_sta->s_b2[band] + p_arr->dist);
+    gamma = p_sta->s_gamma0[band] - p_sta->s_gamma1[band] / (p_sta->s_gamma2[band] + p_arr->dist);
+  } 
+
+  height = p_arr->amp;
+
+  abstract_spectral_env_raw(b, gamma, height, hz, pp_envelope, len);
+
+}
+
+
 /*
   Return the likelihood of the given signal segment (three channels at
   some station over some time period), under the envelope + AR(n)
   wiggles + Gaussian iid noise signal model.
  */
-double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
+double Spectral_Envelope_Model_Likelihood(void * pv_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
 
   SigModel_t * p_sigmodel = (SigModel_t *) pv_sigmodel;
   SignalModel_t * p_model = &p_sigmodel->signal_model;
@@ -202,8 +221,8 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
   int siteid = p_segment->siteid;
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
 
-  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t * )p_model->pv_params;
-  Envelope_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t * )p_model->pv_params;
+  Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
 
 
   double ll = 0;
@@ -242,8 +261,12 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
   noise.py_array=NULL;
   noise.chan=CHAN_BHZ;*/
 
+  // TODO: figure this out
+  int band = BB_ENVELOPE;
+
+
   /* populate two linked lists, storing waveform info sorted by
-     start_time and end_time respectively */
+     start_time and end_time respectively */  
   for (int i=0; i < num_arrivals; ++i) {
 
     const Arrival_t * p_arr = *(pp_arrivals + i);
@@ -253,7 +276,12 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
     ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
     w->start_time = p_arr->time;
     w->idx = 0;
-    abstract_env(p_sta, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+
+    if (p_sta->override_b != 0) {
+      abstract_spectral_env_raw(p_sta->override_b, p_sta->override_gamma, p_sta->override_height, p_segment->hz, &w->p_envelope, &w->len);
+    } else {
+      abstract_spectral_env(p_sta, band, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+    }
     w->end_time = w->start_time + (double) w->len / p_segment->hz;
 
     double iangle;
@@ -371,15 +399,15 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
     double obs_bhz, obs_bhe, obs_bhn;
     int obs_perturb_n = 0;
     if (p_segment->p_channels[CHAN_BHZ] != NULL) {
-      obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE][t] - pred_bhz;
+      obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_bands[band][t] - pred_bhz;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhz);
     }
     if (p_segment->p_channels[CHAN_BHE] != NULL) {
-      obs_bhe = p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE][t] - pred_bhe;
+      obs_bhe = p_segment->p_channels[CHAN_BHE]->p_bands[band][t] - pred_bhe;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhe);
     }
     if (p_segment->p_channels[CHAN_BHN] != NULL) {
-      obs_bhn = p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE][t] - pred_bhn;
+      obs_bhn = p_segment->p_channels[CHAN_BHN]->p_bands[band][t] - pred_bhn;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhn);
     }
 
@@ -446,31 +474,19 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
 /* Fills in the signal envelope for a set of event arrivals at a
    three-axis station. p_segment must set start_time, hz, and
    siteid. */
-void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
+void Spectral_Envelope_Model_SampleThreeAxis(void * pv_params,
 				   EarthModel_t * p_earth, 
 				   Segment_t * p_segment,
 				   int num_arrivals, 
 				   const Arrival_t ** pp_arrivals,
 				   int samplePerturb,
 				   int sampleNoise) {
-  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
   int siteid = p_segment->siteid;
-  Envelope_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
-
+  Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
 
   double end_time = p_segment->start_time + p_segment->len / p_segment->hz;
-
-
-  p_segment->p_channels[CHAN_BHZ] = alloc_channel(p_segment);
-  p_segment->p_channels[CHAN_BHZ]->chan = CHAN_BHZ;
-  p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE] = calloc(p_segment->len, sizeof(double));
-  p_segment->p_channels[CHAN_BHN] = alloc_channel(p_segment);
-  p_segment->p_channels[CHAN_BHN]->chan = CHAN_BHN;
-  p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE] = calloc(p_segment->len, sizeof(double));
-  p_segment->p_channels[CHAN_BHE] = alloc_channel(p_segment);
-  p_segment->p_channels[CHAN_BHE]->chan = CHAN_BHE;
-  p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE] = calloc(p_segment->len, sizeof(double));
-    
+   
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
   int n = p_sta->ar_n;
@@ -488,6 +504,18 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
 
   double stddev = sqrt(p_sta->ar_noise_sigma2);
 
+  for (int band=0; band < NUM_BANDS; ++band) {
+
+    p_segment->p_channels[CHAN_BHZ] = alloc_channel(p_segment);
+    p_segment->p_channels[CHAN_BHZ]->chan = CHAN_BHZ;
+    p_segment->p_channels[CHAN_BHZ]->p_bands[band] = calloc(p_segment->len, sizeof(double));
+    p_segment->p_channels[CHAN_BHN] = alloc_channel(p_segment);
+    p_segment->p_channels[CHAN_BHN]->chan = CHAN_BHN;
+    p_segment->p_channels[CHAN_BHN]->p_bands[band] = calloc(p_segment->len, sizeof(double));
+    p_segment->p_channels[CHAN_BHE] = alloc_channel(p_segment);
+    p_segment->p_channels[CHAN_BHE]->chan = CHAN_BHE;
+    p_segment->p_channels[CHAN_BHE]->p_bands[band] = calloc(p_segment->len, sizeof(double));
+
   /* populate two linked lists, storing waveform info sorted by
      start_time and end_time respectively */
   for (int i=0; i < num_arrivals; ++i) {
@@ -500,7 +528,11 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
     w->start_time = p_arr->time;
     w->idx = 0;
 
-    abstract_env(p_sta, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+    if (p_sta->override_b != 0) {
+      abstract_spectral_env_raw(p_sta->override_b, p_sta->override_gamma, p_sta->override_height, p_segment->hz, &w->p_envelope, &w->len);
+    } else {
+      abstract_spectral_env(p_sta, band, p_arr, p_segment->hz, &w->p_envelope, &w->len);
+    }
 
     if (samplePerturb) {
       w->last_perturbs = calloc(p_sta->ar_n, sizeof(double));
@@ -584,34 +616,37 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       a->idx++;
       LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
     }
-    p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE][t] = env_bhz; 
-    p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE][t] = env_bhe;
-    p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE][t] = env_bhn;
+    p_segment->p_channels[CHAN_BHZ]->p_bands[band][t] = env_bhz; 
+    p_segment->p_channels[CHAN_BHE]->p_bands[band][t] = env_bhe;
+    p_segment->p_channels[CHAN_BHN]->p_bands[band][t] = env_bhn;
 									   
     if(sampleNoise) {
       printf("sampling gaussian noise with var %lf\n", p_sta->chan_vars[CHAN_BHZ]);
-      p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE][t] += 
+      p_segment->p_channels[CHAN_BHZ]->p_bands[band][t] += 
 	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHZ]))); 
-      p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE][t] += 
+      p_segment->p_channels[CHAN_BHE]->p_bands[band][t] += 
 	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHE]))); 
-      p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE][t] += 
+      p_segment->p_channels[CHAN_BHN]->p_bands[band][t] += 
 	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHN]))); 
     }
 
   }
-
 
   for(ArrivalWaveform_t * a = st_arrivals; a != NULL; a = a->next_start) {
     free(a->p_envelope);
     free(a);
   }
 
+
+  }
+
+
   gsl_rng_free(r);
 
 }
 
-void Envelope_SignalModel_UnInit(void * pv_params) {
-  Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
+void Spectral_Envelope_Model_UnInit(void * pv_params) {
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
   
   for (int i=0; i < p_params->numsites; ++i) {
     free((p_params->p_stations + i)->p_ar_coeffs);

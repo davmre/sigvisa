@@ -86,68 +86,6 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
     
     #st.plot(color='k')
 
-# does not save for you - you need to call savefig() yourself!
-def plot_segment(channel_traces, title=None, all_det_times=None, format = "k:"):
-  plt.figure()
-  plt.xlabel("Time (s)")
-
-  for chidx, trc in enumerate(channel_traces):
-    if chidx == 0:
-      axes = plt.subplot(len(channel_traces), 1, 1)
-      if title is not None:
-        plt.title(title)
-    else:
-      plt.subplot(len(channel_traces), 1, chidx+1, sharex=axes)
-      
-    chan_name = trc.stats["channel"]
-
-    plt.ylabel(chan_name)
-
-    if "window_size" in trc.stats:
-      srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
-      npts = trc.stats.npts_processed
-    else:
-      srate = trc.stats.sampling_rate
-      npts = trc.stats.npts
-    stime = trc.stats["starttime_unix"]
-    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-
-    plt.plot(timevals, trc, format)
-
-    if all_det_times is not None:
-      maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
-      plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
-              width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
-
-
-def plot_trace(trc, title=None, all_det_times=None, format="k:"):
-  plt.figure()
-  plt.xlabel("Time (s)")
-
-  if title is not None:
-    plt.title(title)
-      
-  chan_name = trc.stats["channel"]
-
-  plt.ylabel(chan_name)
-
-  if trc.stats["window_size"] is not None:
-    srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
-    npts = trc.stats.npts_processed
-  else:
-    srate = trc.stats.sampling_rate
-    npts = trc.stats.npts
-  stime = trc.stats["starttime_unix"]
-  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)
-
-  plt.plot(timevals, trc, format)
-
-  if all_det_times is not None:
-    maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
-    plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
-            width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
-
-
 
 def fetch_array_elements(siteid):
   cursor = database.db.connect().cursor()

@@ -37,6 +37,8 @@ typedef struct Arrival_t {
   int phase;
   int siteid;
 
+  double dist;
+
   double score;
 
 } Arrival_t;
@@ -94,30 +96,45 @@ typedef struct Site_t
 #define CHAN_BHE    0
 #define CHAN_BHN    1
 #define CHAN_BHZ    2
-#define CHAN_OTHER  3
+#define CHAN_HORIZ_AVG    3
+#define CHAN_OTHER  4
+
+#define NUM_BANDS   10
+#define BROADBAND       0
+#define BB_ENVELOPE     1
+#define NARROW_05_07    2
+#define NARROW_07_10    3
+#define NARROW_10_15    4
+#define NARROW_15_20    5
+#define NARROW_20_30    6
+#define NARROW_30_40    7
+#define NARROW_40_60    8
+#define NARROW_60_80    9
 
 #define CHECK_ERROR if(PyErr_Occurred()) { PyErr_Print(); exit(1); }
 #define CHECK_PTR(p) if (p == NULL) { LogFatal("memory allocation failed, or null pointer detected!"); exit(1);}
 #define CHECK_FATAL(x) if(x < 0) { CHECK_ERROR; LogFatal("fatal error!"); exit(1);}
 
-typedef struct Signal_t
+typedef struct Channel_t
 {
 
   long len;
-  double * p_data;
-  PyArrayObject * py_array;  /*  we're forced to keep the Python
-				 object around so that we can DECREF
-				 it when finished */
+
+
+  double * p_bands[NUM_BANDS];
+  PyArrayObject * py_bands[NUM_BANDS];   /*  we're forced to keep the Python
+					     object around so that we can DECREF
+					     it when finished */
+
   double start_time;
   double hz;
 
   int siteid;
   int chan;
-  int chanid;
   
-} Signal_t;
+} Channel_t;
 
-typedef struct ChannelBundle_t {
+typedef struct Segment_t {
   long len;
 
   double start_time;
@@ -125,16 +142,17 @@ typedef struct ChannelBundle_t {
 
   int siteid;
 
-  Signal_t * p_channels[NUM_CHANS];
-} ChannelBundle_t;
+  Channel_t * p_channels[NUM_CHANS];
+} Segment_t;
 
-double ChannelBundle_EndTime(ChannelBundle_t * b);
+double Segment_EndTime(Segment_t * b);
 
 #include "priors/ArrivalTimeJointPrior.h"
 #include "priors/SignalPrior.h"
+#include "priors/SpectralEnvelopeModel.h"
 #include "priors/SignalModelCommon.h"
 
-Signal_t * alloc_signal(ChannelBundle_t * p_segment);
+Channel_t * alloc_channel(Segment_t * p_segment);
 
 typedef struct SigModel_t
 {
@@ -144,8 +162,8 @@ typedef struct SigModel_t
   double end_time;
 
   int numsegments;
-  ChannelBundle_t * p_segments;
-  ChannelBundle_t * p_wave_segments;
+  Segment_t * p_segments;
+  Segment_t * p_wave_segments;
 
   EarthModel_t * p_earth;
 
@@ -290,8 +308,8 @@ void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 				  PyObject ** pp_eventsobj,
 				  PyObject ** pp_evarrlistobj);
 
-PyObject * channel_bundle_to_trace_bundle(ChannelBundle_t * p_segment);
-int signal_to_trace(Signal_t * p_signal, PyObject ** pp_trace);
+PyObject * channel_bundle_to_trace_bundle(Segment_t * p_segment);
+int signal_to_trace(Channel_t * p_signal, PyObject ** pp_trace);
 
 PyObject * py_srand(PyObject * self, PyObject * args);
 #endif // SIGVISA_INCLUDE

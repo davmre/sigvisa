@@ -17,7 +17,7 @@ priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'ArrivalAmplitudePrior.c',
                   'Poisson.c', 'score.c', 'score_sig.c', 
                   'Gaussian.c', 'Gamma.c',
-                  'NumSecDetPrior.c', 'SignalPrior.c', 'SignalModelCommon.c']
+                  'NumSecDetPrior.c', 'SignalPrior.c', 'SignalModelCommon.c', 'SignalModelUtil.c', 'SpectralEnvelopeModel.c']
 
 infer_sources = ['infer.c', 'propose.c', 'quickselect.c']
 misc_sources = ['logging.c']
