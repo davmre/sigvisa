@@ -17,75 +17,20 @@ def learn_phase_site(phasename, true_data, fake_data):
   for (isdet, mag, depth, dist) in true_data + fake_data:
     output.append(isdet)
     
-    if phasename not in ("PcP", "ScP", "PKKPbc", "PKPab"):
-      mag_feat.append(mag)
-    else:
-      mag_feat.append(0)
-
-    if phasename not in ("Lg", "Pg", "Rg"):
-      depth_feat.append(depth)
-    else:
-      depth_feat.append(0)
-
-    if phasename not in ("PcP", "ScP", "PKKPbc", "PKP", "PKPbc", "PKPab"):
-      dist_feat.append(dist)
-    else:
-      dist_feat.append(0)
-    
-    if phasename in ("P", "S"):
-      dist0_feat.append(gtf(dist, 0, 5))
-    else:
-      dist0_feat.append(0)
-      
-    if phasename in ("ScP",):
-      dist35_feat.append(gtf(dist, 35, 20))
-    else:
-      dist35_feat.append(0)
-      
-    if phasename in ("PcP",):
-      dist40_feat.append(gtf(dist, 40, 20))
-    else:
-      dist40_feat.append(0)
-      
-    if phasename in ("PKP",):
-      dist12520_feat.append(gtf(dist, 125, 20))
-    else:
-      dist12520_feat.append(0)
-      
-    if phasename in ("PKKPbc",):
-      dist12540_feat.append(gtf(dist, 125, 40))
-    else:
-      dist12540_feat.append(0)
-      
-    if phasename in ("PKPbc",):
-      dist145_feat.append(gtf(dist, 145, 10))
-    else:
-      dist145_feat.append(0)
-      
-    if phasename in ("PKP",):
-      dist170_feat.append(gtf(dist, 170, 20))
-    else:
-      dist170_feat.append(0)
-      
-    if phasename in ("PKPab",):
-      dist175_feat.append(gtf(dist, 175, 30))
-    else:
-      dist175_feat.append(0)
-      
-    if phasename in ("PcP", "ScP", "PKPab"):
-      mag6_feat.append(gtf(mag, 6, 5.5))
-    else:
-      mag6_feat.append(0)
-      
-    if phasename in ("PKKPbc",):
-      mag68_feat.append(gtf(mag, 6, 8))
-    else:
-      mag68_feat.append(0)
-      
-    if phasename in ("P", "S", "PKP", "Sn", "Pn"):
-      md_feat.append((7-mag) * dist)
-    else:
-      md_feat.append(0)
+    mag_feat.append(mag)
+    depth_feat.append(depth)
+    dist_feat.append(dist)
+    dist0_feat.append(gtf(dist, 0, 5))
+    dist35_feat.append(gtf(dist, 35, 20))
+    dist40_feat.append(gtf(dist, 40, 20))
+    dist12520_feat.append(gtf(dist, 125, 20))
+    dist12540_feat.append(gtf(dist, 125, 40))
+    dist145_feat.append(gtf(dist, 145, 10))
+    dist170_feat.append(gtf(dist, 170, 20))
+    dist175_feat.append(gtf(dist, 175, 30))
+    mag6_feat.append(gtf(mag, 6, 5.5))
+    mag68_feat.append(gtf(mag, 6, 8))
+    md_feat.append((7-mag) * dist)
 
   feature_names = ["mag", "depth", "dist", "dist0", "dist35",
                    "dist40", "dist12520", "dist12540", "dist145",

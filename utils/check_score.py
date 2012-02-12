@@ -89,11 +89,17 @@ def main(param_dirname):
     
     print "%.1f %% True VISA events have +ve score" % \
           (100. * float(pos_true_visa) / len(true_visa_idx))
+    print "     Average %.1f" % (sum(visa_scores[evnum]
+                                     for evnum in true_visa_idx)
+                                 / len(true_visa_idx))
     
     pos_false_visa = sum(1 for evnum in false_visa_idx if visa_scores[evnum] >0)
     
     print "%.1f %% False VISA events have +ve score" % \
           (100. * float(pos_false_visa) / len(false_visa_idx))
+    print "     Average %.1f" % (sum(visa_scores[evnum]
+                                     for evnum in false_visa_idx)
+                                 / len(false_visa_idx))
     
     if options.gui:
       draw_pr_curve("NET-VISA run %d" % options.runid, true_visa_idx,

@@ -281,8 +281,8 @@ def main(param_dirname):
       if sc < worst: worst = sc
 
   if worst < best * .9:
-    levels = np.arange(worst, best*.9, (best*.9 - worst)/5).tolist() +\
-             np.linspace(best*.9, best, 5).tolist()
+    levels = np.arange(worst, best*.75, (best*.75 - worst)/5).tolist() +\
+             np.linspace(best*.75, best, 5).tolist()
   else:
     levels = np.linspace(worst, best, 10).tolist()
 

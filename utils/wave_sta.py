@@ -7,6 +7,7 @@ warnings.filterwarnings("ignore")
 import sys, MySQLdb,struct
 import matplotlib.pyplot as plt
 import numpy as np
+from optparse import OptionParser
 
 import obspy.signal
 
@@ -14,17 +15,34 @@ from database import db, wave
 
 MIN_SAMPRATE = 5
 
-SPECTRUM = [None, (0.1, .5), (.5, .7), (1.0, 2.0), (2.0, 4.0)]
+DEFAULT_SPECTRUM = [None, (0.1, .5), (.5, .7), (1.0, 2.0), (2.0, 4.0)]
 
 # we need to skip a certain early portion to allow for propery filtering
 SKIP = 100
 
 def main(param_dirname):
-  if len(sys.argv) != 4:
-    print "Usage: python wave_sta.py <sta> <start time> <duration>"
-    sys.exit(1)
+  parser = OptionParser()
+  parser.set_usage("Usage: python wave_sta.py [options] <sta> <start time>"
+                   " <duration>")
+  parser.add_option("-e", "--envelope", dest="envelope", default=False,
+                    action="store_true", help="display envelope")
+  parser.add_option("-a", "--arrival", dest="arrivals", default=False,
+                    action="store_true", help="display arrivals")
+  parser.add_option("-f", "--frequencies", dest="frequencies", default=None,
+                    help="frequency ranges "
+                    "('[None,(0.1,.5),(.5,.7),(1,2),(2,4)]")
+  (options, args) = parser.parse_args()
   
-  sta, start_time, duration = sys.argv[1],float(sys.argv[2]),float(sys.argv[3])
+  if len(args) != 3:
+    parser.print_help()
+    sys.exit(1)
+
+  if options.frequencies is None:
+    options.frequencies = DEFAULT_SPECTRUM
+  else:
+    options.frequencies = eval(options.frequencies)
+  
+  sta, start_time, duration = args[0], float(args[1]), float(args[2])
   end_time = start_time + duration
   cursor = db.connect().cursor()
 
@@ -43,8 +61,8 @@ def main(param_dirname):
       if samprate < MIN_SAMPRATE:
         continue
       
-      plot_spectrum(cursor, sta, sitechanrec['chan'], rawdata, start_time,
-                    end_time, samprate)
+      plot_spectrum(options, cursor, sta, sitechanrec['chan'], rawdata,
+                    start_time, end_time, samprate)
       
   else:                                 # array
     # get all the array elements
@@ -94,12 +112,14 @@ def main(param_dirname):
       rawdata = sumdata / float(channel_cnt[chan])
       samprate = channel_samprate[chan]
       
-      plot_spectrum(cursor, sta, chan, rawdata, start_time, end_time, samprate)
+      plot_spectrum(options, cursor, sta, chan, rawdata, start_time, end_time,
+                    samprate)
 
   plt.show()
   return
   
-def plot_spectrum(cursor, sta, chan, rawdata, start_time, end_time, samprate):
+def plot_spectrum(options, cursor, sta, chan, rawdata, start_time, end_time,
+                  samprate):
   timerange = np.arange(start_time, end_time, 1.0/samprate)
 
   assert(len(timerange) == (len(rawdata) - SKIP*samprate))
@@ -108,7 +128,7 @@ def plot_spectrum(cursor, sta, chan, rawdata, start_time, end_time, samprate):
   plt.xlabel("Time (s)")
   
   # for each frequency band
-  for bandnum, freqrange in enumerate(SPECTRUM):
+  for bandnum, freqrange in enumerate(options.frequencies):
     if freqrange is None:
       filt_data = rawdata
       filt_name = "raw"
@@ -116,47 +136,60 @@ def plot_spectrum(cursor, sta, chan, rawdata, start_time, end_time, samprate):
       lowf, highf = freqrange
       try:
         filt_data = obspy.signal.filter.bandpass(rawdata, lowf, highf, samprate)
-        filt_name = "%.1f - %.1f" % (lowf, highf)
+        filt_name = "%.1f - %.1f Hz" % (lowf, highf)
       except ValueError:
         # if the sampling rate is too low just show the raw data
         filt_data = rawdata
         filt_name = "raw"
     assert(len(filt_data) == len(rawdata))
     if bandnum == 0:
-      axes = plt.subplot(len(SPECTRUM)+1, 1, bandnum+1)
+      axes = plt.subplot(len(options.frequencies)+1, 1, bandnum+1)
     else:
-      plt.subplot(len(SPECTRUM)+1, 1, bandnum+1, sharex=axes)
+      plt.subplot(len(options.frequencies)+1, 1, bandnum+1, sharex=axes)
 
-    filt_data = obspy.signal.filter.envelope(np.array(filt_data))
+    if options.envelope:
+      filt_data = obspy.signal.filter.envelope(np.array(filt_data))
     plt.plot(timerange, filt_data[int(SKIP*samprate):])
     plt.ylabel(filt_name)
     plt.grid(True)
 
-  plt.subplot(len(SPECTRUM)+1, 1, len(SPECTRUM)+1, sharex=axes)
-  plot_arrivals(cursor, sta, start_time, end_time)
+  plt.subplot(len(options.frequencies)+1, 1, len(options.frequencies)+1,
+              sharex=axes)
+  plot_stalta(options, cursor, sta, start_time, end_time, filt_data, samprate)
+  plt.xlabel("Time (s)")
   
-def plot_arrivals(cursor, sta, start_time, end_time):
-  plt.ylabel("arrivals")
+def plot_stalta(options, cursor, sta, start_time, end_time, filt_data,
+                  samprate):
+  plt.ylabel("STA (1.5s) / LTA (60s)")
 
-  cursor.execute("select time from idcx_arrival where sta='%s' and "
-                 "time between %d and %d" % (sta, start_time, end_time))
+  if options.arrivals:
+    cursor.execute("select time from idcx_arrival where sta='%s' and "
+                   "time between %d and %d" % (sta, start_time, end_time))
+    
+    for arrtime, in cursor.fetchall():
+      plt.plot([arrtime, arrtime], [.25, 1], linewidth=3, color="blue")
   
-  for arrtime, in cursor.fetchall():
-    plt.plot([arrtime, arrtime], [.25, 1], linewidth=3, color="blue")
+    cursor.execute("select time from leb_arrival where sta='%s' and "
+                   "time between %d and %d" % (sta, start_time, end_time))
+    
+    for arrtime, in cursor.fetchall():
+      plt.plot([arrtime, arrtime], [0, .75], linewidth=3, color="red")
+  
+    cursor.execute("select orid, phase, time from leb_assoc join leb_arrival "
+                   "using (arid,sta) where sta='%s' and "
+                   "time between %d and %d order by time"
+                   % (sta, start_time, end_time))
+    
+    for orid, phase, arrtime, in cursor.fetchall():
+      print "orid %d phase %s time %.1f" % (orid, phase, arrtime)
+      plt.plot([arrtime, arrtime], [-1, 0], linewidth=3, color="red",
+               linestyle="-.")
 
-  cursor.execute("select time from leb_arrival where sta='%s' and "
-                 "time between %d and %d" % (sta, start_time, end_time))
-  
-  for arrtime, in cursor.fetchall():
-    plt.plot([arrtime, arrtime], [0, .75], linewidth=3, color="red")
+  stalta = obspy.signal.trigger.recStalta(filt_data, int(1.5 * samprate),
+                                          int(10 * samprate))
 
-  cursor.execute("select time from leb_assoc join leb_arrival using (arid,sta)"
-                 " where sta='%s' and "
-                 "time between %d and %d" % (sta, start_time, end_time))
-  
-  for arrtime, in cursor.fetchall():
-    plt.plot([arrtime, arrtime], [-1, 0], linewidth=3, color="red",
-             linestyle="-.")
+  timerange = np.arange(start_time, end_time, 1.0/samprate)
+  plt.plot(timerange, stalta[int(SKIP*samprate):], color="black")
 
   plt.grid(True)
   

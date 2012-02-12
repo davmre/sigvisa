@@ -1,4 +1,4 @@
-import os
+import os, cPickle
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -76,7 +76,7 @@ def main(param_dirname):
                     help = "Type 1 fonts (False)")
   parser.add_option("-i", "--visa_leb_runid", dest="visa_leb_runid",
                     default=None, help = "Visa runid to be treated as leb",
-                    metavar="RUNID")
+                    metavar="RUNID", type="int")
   parser.add_option("-m", "--model", dest="model",
                     default=None, help = "Which model(s) to learn (all)")
   parser.add_option("-w", "--writefig", dest="writefig",
@@ -88,6 +88,9 @@ def main(param_dirname):
   parser.add_option("-d", "--datadir", dest="datadir",
                     default=None, help = "Directory to save data (None)",
                     metavar="DIR")
+  parser.add_option("-c", "--cache", dest="cache", default=False,
+                    action = "store_true",
+                    help = "write data to cache and read from cache (False)")
   
   (options, args) = parser.parse_args()
 
@@ -121,10 +124,23 @@ def main(param_dirname):
 
   if options.model is not None:
     options.model = set(m for m in options.model.split(","))
+
+  cache_fname = "cache-training-hours-%s-visa-%s.pic1" \
+                % (str(hours), str(options.visa_leb_runid))
   
-  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid)
+  if options.cache and os.path.exists(cache_fname):
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = cPickle.load(file(cache_fname, "rb"))
+  else:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data(hours=hours, visa_leb_runid=options.visa_leb_runid)
+
+  if options.cache and not os.path.exists(cache_fname):
+    cPickle.dump((start_time, end_time, detections, leb_events, leb_evlist,
+                  sel3_events, sel3_evlist, site_up, sites, phasenames,
+                  phasetimedef), file(cache_fname, "wb"), protocol=1)
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
