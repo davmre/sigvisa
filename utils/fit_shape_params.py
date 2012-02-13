@@ -35,19 +35,19 @@ def logenv_l1_cost(true_env, logenv):
     return c
 
 
-def fit_logenvelope(trace, peak_time, peak_height):
+def fit_logenvelope(trace, peak_time, peak_height, coda_length):
     srate = trace.stats['sampling_rate']
-    true_env = trace.data[peak_time*srate :]
-    length = len(trace.data) - srate*peak_time
-    cost = lambda(gamma, b): logenv_l1_cost(true_env, gen_logenvelope(length, srate, peak_height, gamma, b))
+    true_env = trace.data[peak_time*srate : coda_length]
+    length = coda_length - srate*peak_time
+    cost = lambda(gamma, b, peak): logenv_l1_cost(true_env, gen_logenvelope(length, srate, peak, gamma, b))
 
-    bounds = ((-2, 2), (-.05, 0.05))
-    results = scipy.optimize.brute(cost, bounds, Ns=20, full_output=0, finish=None)
+    bounds = ((0, 2), (-.03, 0), (0, 5))
+    results = scipy.optimize.brute(cost, bounds, Ns=15, full_output=0)
     print "fit at cost", cost(results)
     
     return results
 
-def plot_envelopes(pp, trace, peak_time, peak_height, gamma, b, title = None):
+def plot_envelopes(pp, trace, peak_time, peak_height, coda_length, gamma, b, title = None):
     srate = trace.stats['sampling_rate']
     true_env = trace.data[peak_time*srate :]
     length = len(trace.data) - srate*peak_time
@@ -56,7 +56,7 @@ def plot_envelopes(pp, trace, peak_time, peak_height, gamma, b, title = None):
     fake_stats['npts'] = length
     fake_trace = Trace(gen_logenvelope(length, srate, peak_height, gamma, b), fake_stats)
 
-    plot.plot_traces(trace, fake_trace, title=title)
+    plot.plot_traces(trace, fake_trace, title=title, all_det_times = [trace.stats['starttime_unix'] + coda_length/srate])
 #    pp.savefig()
 #    plot.plot_trace(fake_trace, title= "SYNTHETIC ENVELOPE (2-3Hz, site %d, gamma %f b %f)" % (siteid, gamma, b))
     pp.savefig()
@@ -116,6 +116,18 @@ def smooth(x,window_len=11,window='hanning'):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y    
 
+
+def find_coda_length(trace):
+    srate = trace.stats.sampling_rate
+    npts = trace.stats.npts
+    noise_floor = np.mean(trace.data[npts - 5*srate:])
+
+    for i in np.linspace(15*srate, npts - 5*srate, npts/(5*srate)-3):
+        window_avg = np.mean(trace.data[i : i + 5*srate])
+        if (window_avg < noise_floor) or np.abs(window_avg - noise_floor) < 0.1:
+            return i
+    return npts
+
 siteid = int(sys.argv[1])
 
 cursor = db.connect().cursor()
@@ -123,7 +135,7 @@ cursor = db.connect().cursor()
 sites = read_sites(cursor)
 print sites[siteid-1]
 
-sql_query="SELECT l.time, lebo.mb, lebo.lon, lebo.lat, lebo.evid FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and lebo.orid=leba.orid and (iphase='S' or iphase='Sn' or iphase='ScP') and sid.sta=l.sta and sid.statype='ss' and sid.id=%d order by l.sta" % (siteid)
+sql_query="SELECT l.time, lebo.mb, lebo.lon, lebo.lat, lebo.evid FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4.0 and leba.arid=l.arid and lebo.orid=leba.orid and (iphase='S' or iphase='Sn') and sid.sta=l.sta and sid.statype='ss' and sid.id=%d order by l.sta" % (siteid)
 cursor.execute(sql_query)
 arrivals = np.array(cursor.fetchall())
 
@@ -139,7 +151,7 @@ for band in bands:
 
     learned = []
 
-    pp = PdfPages('logs/synthetic_%s_%d.pdf' % (band, siteid))
+    pp = PdfPages('logs/synthetic_%s_%d_fit_amp.pdf' % (band, siteid))
 
     for arrival in arrivals:
         start_time = arrival[0] - 5
@@ -152,22 +164,42 @@ for band in bands:
         
         trace = arrival_segment[0]['horiz_avg'][band]
         
-        smoothed = Trace(smooth(trace.data, window_len=5, window="flat") , header=trace.stats.copy())
+        smoothed = Trace(smooth(trace.data, window_len=60, window="flat") , header=trace.stats.copy())
         smoothed.stats.npts = len(smoothed.data)
         (peak_time, peak_height) = arrival_peak_offset( smoothed )
 
-        (gamma, b) = fit_logenvelope(trace, peak_time, peak_height)
+        coda_length = find_coda_length(smoothed)
 
-    #gamma = 0.2
-    #b = -0.01
+        (gamma, b, peak) = fit_logenvelope(smoothed, peak_time, peak_height, coda_length)
+
         print "fit params", gamma, b, "at station", siteid, ", event at distance", distance
-        plot_envelopes(pp, smoothed, peak_time, peak_height, gamma, b, title="%s evid %d siteid %d mb %f \n dist %f gamma %f b %f" % (band, arrival[4], siteid, arrival[1], distance, gamma, b))
 
-        learned.append((distance, gamma, b))
+        plot_envelopes(pp, smoothed, peak_time, peak, coda_length, gamma, b, title="%s evid %d siteid %d mb %f \n dist %f gamma %f b %f" % (band, arrival[4], siteid, arrival[1], distance, gamma, b))
+
+        if distance < 7000 and b > -0.06 and b <= 0:
+            learned.append((distance, gamma, b))
 
     print " learned params for band: ", band
     for l in learned:
         print l
+
+
+    l = np.array(learned)
+
+    print l
+
+    plt.figure()
+    plt.xlabel("distance (km)")
+    plt.ylabel("gamma")
+    plt.plot(l[:, 0], l[:, 1], 'ro')
+    pp.savefig()
+
+    plt.figure()
+    plt.xlabel("distance (km)")
+    plt.ylabel("b")
+    plt.plot(l[:, 0], l[:, 2], 'ro')
+    pp.savefig()
+
 
     pp.close()          
 
