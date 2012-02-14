@@ -7,10 +7,22 @@ import database.db
 import learn, netvisa
 from utils.geog import dist_deg, azimuth
 
+def plot_det_times(trc, all_det_times, all_det_labels):
+  if trc == None or all_det_times == None:
+    return
 
+  if all_det_times is not None:
+    maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+    plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
+            width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
+    if all_det_labels is not None:
+      for (t, lbl) in zip(all_det_times, all_det_labels):
+        plt.text(t+3, maxtrc - (maxtrc-mintrc)*0.1, lbl, color="red", fontsize=4)
+
+  
 
 # does not save for you - you need to call savefig() yourself!
-def plot_segment(chan_dict, title=None, all_det_times=None, band="broadband_envelope", format = "k:"):
+def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None, band="broadband_envelope", format = "k:"):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -31,13 +43,9 @@ def plot_segment(chan_dict, title=None, all_det_times=None, band="broadband_enve
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
     plt.plot(timevals, trc, format)
+    plot_det_times(trc, all_det_times, all_det_labels)
 
-    if all_det_times is not None:
-      maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
-      plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
-              width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
-
-def plot_trace(trc, title=None, all_det_times=None, format="k:"):
+def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format="k:"):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -54,13 +62,10 @@ def plot_trace(trc, title=None, all_det_times=None, format="k:"):
   timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
   plt.plot(timevals, trc, format)
+  plot_det_times(trc, all_det_times, all_det_labels)
 
-  if all_det_times is not None:
-    maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
-    plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
-            width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
 
-def plot_traces(trc1, trc2, title=None, all_det_times=None, format1="k:", format2="r-"):
+def plot_traces(trc1, trc2, title=None, all_det_times=None, all_det_labels=None, format1="k:", format2="r-"):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -83,14 +88,11 @@ def plot_traces(trc1, trc2, title=None, all_det_times=None, format1="k:", format
   timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
   plt.plot(timevals, trc2, format2)
 
-  if all_det_times is not None:
-    maxtrc, mintrc = float(max(trc1.data)), float(min(trc1.data))
-    plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
-            width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
+  plot_det_times(trc1, all_det_times, all_det_labels)
 
 
 # does not save for you - you need to call savefig() yourself!
-def plot_bands(bands_dict, title=None, all_det_times=None):
+def plot_bands(bands_dict, title=None, all_det_times=None, all_det_labels=None):
   format = "k-"
     
   plt.figure(figsize=(12, 30))
@@ -127,8 +129,5 @@ def plot_bands(bands_dict, title=None, all_det_times=None):
 
     plt.plot(timevals, trc, format)
 
-    if all_det_times is not None:
-      maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
-      plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
-              width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
+    plot_det_times(trc, all_det_times, all_det_labels)
 
