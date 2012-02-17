@@ -43,7 +43,7 @@ def test_logistic():
   
 class LogisticModel:
   def __init__(self, name, dim_names, dim_vals, samples, weights=None,
-               alpha = 0):
+               alpha = 0, prior_means = None, prior_precisions = None):
     """
     Logistic Regression Model. Learns to predict a probability based
     on specified inputs
@@ -69,27 +69,29 @@ class LogisticModel:
 
     feat_outer = np.array([np.outer(x,x) for x in features])
 
-    regul = alpha * np.ones(len(dim_vals))
-    regul[-1] = 0
-    
+    if prior_means is None or prior_precisions is None:
+      prior_means = np.zeros(len(dim_vals))
+      prior_precisions = alpha * np.ones(len(dim_vals))
+    else:
+      prior_means = np.array(prior_means)
+      prior_precisions = np.array(prior_precisions)
+
     def neg_log_lik(coeffs):
       return - (np.log(logistic(output * (features * coeffs).sum(axis=1)))
-                * weights).sum() + (regul * coeffs ** 2).sum() / 2
+                * weights).sum()\
+                + (prior_precisions * (coeffs - prior_means) ** 2).sum() / 2
 
     def grad_neg_log_lik(coeffs):
       return - ((output * logistic( -output * (features * coeffs).sum(axis=1))
-                 * weights) * features.T).sum(axis=1) + regul * coeffs
+                 * weights) * features.T).sum(axis=1)\
+                 + prior_precisions * (coeffs - prior_means)
     
     def hess_neg_log_lik(coeffs):
       sgn_log_odds = output * (features * coeffs).sum(axis=1)
       return ((logistic(-sgn_log_odds) * logistic(sgn_log_odds) * weights)
-              * feat_outer.T).sum(axis=2) + regul * np.eye(len(coeffs))
+              * feat_outer.T).sum(axis=2)\
+              + prior_precisions * np.eye(len(coeffs))
     
-    #self.coeffs = fmin(neg_log_lik, np.zeros(features.shape[1]))
-    
-    #self.coeffs = fmin_bfgs(neg_log_lik, np.zeros(features.shape[1]),
-    #                        fprime = grad_neg_log_lik)
-
     self.coeffs, fopt, fcalls, gcalls, hcalls, warnflag \
                  = fmin_ncg(neg_log_lik, np.zeros(features.shape[1]),
                             fprime = grad_neg_log_lik, fhess=hess_neg_log_lik,

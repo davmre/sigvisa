@@ -220,6 +220,7 @@ def main(param_dirname):
     plt.show()
 
 if __name__ == "__main__":
+  np.seterr(divide = 'raise', invalid='raise', over='raise')
   try:
     main("parameters")
   except SystemExit:
