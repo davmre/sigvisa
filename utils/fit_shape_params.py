@@ -1,12 +1,13 @@
-import os, sys
+import os, sys, traceback
 import numpy as np, scipy
-import matplotlib.pyplot as plt
+
 
 from database.dataset import *
 from database import db
 
 import matplotlib
 matplotlib.use('PDF')
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
@@ -17,62 +18,19 @@ import utils.geog
 import obspy.signal.util
 
 
-S_PHASES = ['S']
+S_PHASES = ['S', 'Sn']
 P_PHASES = ['P']
 LOVE_PHASES = ['LR']
-phasenames = S_PHASES
+phasenames = eval(sys.argv[2])
 
-def arrival_peak_offset(trace, window_start_time, window_end_time):
-    srate = trace.stats.sampling_rate
+chan_name = "horiz_avg"
+mag_threshold = 4.0
+if sys.argv[2] == "P_PHASES":
+    mag_threshold = 4.5
+    chan_name = "BHZ"
 
-    i = np.floor((window_start_time)*srate)
-    j = np.floor((window_end_time)*srate)
+label = '_' + sys.argv[2]
 
-    print window_start_time, window_end_time, i, j, srate, trace.data.shape
-
-    pt = np.argmax(trace.data[i:j]) / srate
-    return (pt +window_start_time, trace.data[(pt+window_start_time) * srate ])
-
-def gen_logenvelope(length, sampling_rate, peak_height, gamma, b):
-    t = np.linspace(1/sampling_rate, length, length*sampling_rate)
-    f = (gamma*-1)*np.log(t) + (b * t)
-
-    offset = peak_height - f[0]
-    f = f + offset
-
-    return f
-
-def logenv_l1_cost(true_env, logenv):
-    c = np.sum (np.abs(true_env - logenv))
-    return c
-
-
-def fit_logenvelope(trace, peak_offset_time, peak_height, coda_length):
-    srate = trace.stats['sampling_rate']
-    true_env = trace.data[peak_offset_time*srate : (peak_offset_time + coda_length)*srate]
-
-    cost = lambda(gamma, b): logenv_l1_cost(true_env, gen_logenvelope(len(true_env)/srate, srate, peak_height, gamma, b))
-
-    bounds = ((0, 2), (-.03, 0))
-    results = scipy.optimize.brute(cost, bounds, Ns=15, full_output=0)
-    print "fit at cost", cost(results)
-    
-    return results
-
-def plot_envelopes(pp, trace, peak_offset_time, peak_height, phase_start_time, coda_length, gamma, b, all_det_times = None, all_det_labels = None, title = None):
-    srate = trace.stats['sampling_rate']
-    fake_stats = trace.stats.copy()
-    fake_stats['starttime_unix'] += peak_offset_time
-
-    fake_trace = Trace(gen_logenvelope(coda_length, srate, peak_height, gamma, b), fake_stats)
-    fake_trace.stats.npts = len(fake_trace.data)
-
-    plot.plot_traces(trace, fake_trace, title=title, all_det_times=all_det_times, all_det_labels=all_det_labels)
-    maxtrc, mintrc = float(max(trace.data)), float(min(trace.data))
-    plt.bar(left = trace.stats['starttime_unix'] + phase_start_time - .2, height = maxtrc-mintrc, width=.25, bottom=mintrc, color="blue", linewidth=1, alpha=.5)
-    plt.bar(left = trace.stats['starttime_unix'] + (peak_offset_time + coda_length) - .2, height = maxtrc-mintrc, width=.25, bottom=mintrc, color="blue", linewidth=1, alpha=.5)
-
-    pp.savefig()
 
 def smooth(x,window_len=11,window='hanning'):
     """smooth the data using a window with requested size.
@@ -129,6 +87,82 @@ def smooth(x,window_len=11,window='hanning'):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y    
 
+def arrival_peak_offset(trace, window_start_time, window_end_time):
+    srate = trace.stats.sampling_rate
+
+    i = np.floor((window_start_time)*srate)
+    j = np.floor((window_end_time)*srate)
+
+#    print window_start_time, window_end_time, i, j, srate, trace.data.shape
+
+    pt = np.argmax(trace.data[i:j]) / srate
+    return (pt +window_start_time, trace.data[(pt+window_start_time) * srate ])
+
+def gen_logenvelope(length, sampling_rate, peak_height, gamma, b):
+    t = np.linspace(1/sampling_rate, length, length*sampling_rate)
+    f = (gamma*-1)*np.log(t) + (b * t)
+
+    offset = peak_height - f[0]
+    f = f + offset
+
+    return f
+
+def logenv_linf_cost(true_env, logenv):
+    c = np.max (np.abs(true_env - logenv))
+    return c
+
+def logenv_l1_cost(true_env, logenv):
+    c = np.sum (np.abs(true_env - logenv))
+    return c
+
+def logenv_ar_cost(true_env, logenv):
+    diff = true_env - logenv
+
+    ar_n = 3
+    ar_params = [0.1, 0.1, 0.8]
+    ll = 0
+
+    last_n = diff[0:ar_n]
+    for x in diff:
+        pred = np.sum(last_n * ar_params)
+        ll = ll - (x-pred)**2
+
+    return ll
+
+def fit_logenvelope(trace, peak_offset_time, peak_height, coda_length):
+    srate = trace.stats['sampling_rate']
+    true_env = trace.data[peak_offset_time*srate : (peak_offset_time + coda_length)*srate]
+
+    cost = lambda(height, b): logenv_l1_cost(true_env, gen_logenvelope(len(true_env)/srate, srate, height, 0, b))
+    mcost = lambda(height, b): logenv_linf_cost(true_env, gen_logenvelope(len(true_env)/srate, srate, height, 0, b))
+
+    bounds = ((peak_height-2, peak_height+1), (-.1, 0),)
+    results = scipy.optimize.brute(cost, bounds, Ns=15, full_output=0)
+
+    avg_cost = cost(results)/len(true_env)
+    max_cost = mcost(results)
+
+    #b = results[0]
+    #results = (0., b)
+    
+    return results, avg_cost, max_cost
+
+def plot_envelopes(pp, trace, peak_offset_time, peak_height, phase_start_time, coda_length, gamma, b, all_det_times = None, all_det_labels = None, title = None):
+    srate = trace.stats['sampling_rate']
+    fake_stats = trace.stats.copy()
+    fake_stats['starttime_unix'] += peak_offset_time
+
+    fake_trace = Trace(gen_logenvelope(coda_length, srate, gamma, 0, b), fake_stats)
+#    fake_trace = Trace(gen_logenvelope(coda_length, srate, peak_height, gamma, b), fake_stats)
+    fake_trace.stats.npts = len(fake_trace.data)
+
+    plot.plot_traces(trace, fake_trace, title=title, all_det_times=all_det_times, all_det_labels=all_det_labels)
+    maxtrc, mintrc = float(max(trace.data)), float(min(trace.data))
+    plt.bar(left = trace.stats['starttime_unix'] + phase_start_time - .2, height = maxtrc-mintrc, width=.25, bottom=mintrc, color="blue", linewidth=1, alpha=.5)
+    plt.bar(left = trace.stats['starttime_unix'] + (peak_offset_time + coda_length) - .2, height = maxtrc-mintrc, width=.25, bottom=mintrc, color="blue", linewidth=1, alpha=.5)
+
+    pp.savefig()
+
 
 def find_coda_length(trace, peak_offset_time, phase_end_time):
     srate = trace.stats.sampling_rate
@@ -152,86 +186,118 @@ def find_coda_length(trace, peak_offset_time, phase_end_time):
 
 #    return phase_end_time - peak_offset_time
 
-    num_back_windows = np.min([5, np.floor((phase_end_time - peak_offset_time)/5)])
-    boundaries = np.linspace((phase_end_time - 5*num_back_windows)*srate, phase_end_time*srate, num_back_windows+1)
-    noise_floor = np.max([ np.mean(trace.data[boundaries[n]:boundaries[n+1]]) for n in range(num_back_windows) ])
 
-    print "windows", num_back_windows, noise_floor
 
-    num_windows = np.floor((phase_end_time - peak_offset_time)/5)
-    for i in np.linspace((peak_offset_time + 10)*srate, (peak_offset_time + (num_windows+2)* 5)*srate, num_windows):
-        window_avg = np.mean(trace.data[i : i + 5*srate])
-        print window_avg, " vs ", noise_floor
-        if window_avg < noise_floor + 0.1:
-            return i/srate - peak_offset_time
+# choose noise floor as the largest of the last 5 five-second windows
+#    num_back_windows = int(np.min([5, np.floor((phase_end_time - peak_offset_time)/5)]))
+#    boundaries = np.floor(np.linspace((phase_end_time - 5*num_back_windows)*srate, phase_end_time*srate, num_back_windows+1))
+#    print boundaries
+#    noise_floor = np.max([ np.mean(trace.data[int(boundaries[n]):int(boundaries[n+1])]) for n in range(num_back_windows) ])
+
+#    print "windows", num_back_windows, noise_floor
+
+#    num_windows = np.floor((phase_end_time - peak_offset_time)/5)
+#    for i in np.linspace((peak_offset_time + 10)*srate, (peak_offset_time + (num_windows+2)* 5)*srate, num_windows):
+#        window_avg = np.mean(trace.data[i : i + 5*srate])
+#        print window_avg, " vs ", noise_floor
+#        if window_avg < noise_floor + 0.1:
+#            return (i+5)/srate - peak_offset_time
+#    return phase_end_time - peak_offset_time
+
+
+# choose coda end time as the first 5s window when we fit a positive slope?
+
+# or, do some sort of clustering of slopes - but this is only good if it means we tolerate one or two moments of positive slope in exchange for a much longer period of consistent negative slope...
+
+    num_windows = np.floor((phase_end_time - peak_offset_time - 10 )/5) -1
+    for i in np.linspace((peak_offset_time + 10)*srate, (phase_end_time - 10)*srate, num_windows):
+        height = trace.data[i]
+        cost = lambda(b): logenv_l1_cost(trace.data[i:i+10*srate], gen_logenvelope(10, srate, height, 0, b))
+        bounds = ((-.01, 0.1),)
+        results = scipy.optimize.brute(cost, bounds, Ns=10, full_output=0)
+        b = results[0]
+
+        if b > -0.001:
+            return (i)/srate - peak_offset_time
     return phase_end_time - peak_offset_time
 
 
+
+
 siteid = int(sys.argv[1])
-
 cursor = db.connect().cursor()
-
 sites = read_sites(cursor)
-print sites[siteid-1]
-
-
 phase_condition = "(" + " or ".join(["iphase='%s'" % (pn) for pn in phasenames]) + ")"
-sql_query="SELECT l.time, lebo.mb, lebo.lon, lebo.lat, lebo.evid FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4.0 and leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d order by l.sta" % (phase_condition, siteid)
+
+max_azi_count = -1
+max_azi = -1
+max_azi_condition = ""
+for azi in np.linspace(0, 330, 12):
+    if azi == 330:
+        azi_condition = "(l.azimuth between 0 and 30 or l.azimuth between 330 and 360)"
+    else:
+        azi_condition = "l.azimuth between %f and %f" % (azi, azi+60)
+    sql_query="SELECT count(distinct(l.arid)) FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>%f and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.id=%d and %s" % (mag_threshold, phase_condition, siteid, azi_condition)
+    cursor.execute(sql_query)
+    azi_count = cursor.fetchall()
+    if azi_count > max_azi_count:
+        max_azi_count = azi_count
+        max_azi = azi
+        max_azi_condition = azi_condition
+
+
+print "max azi is", max_azi, "with count", max_azi_count
+
+sql_query="SELECT l.time, lebo.mb, lebo.lon, lebo.lat, l.azimuth, lebo.evid FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>%f and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and %s order by l.sta" % (mag_threshold, phase_condition, siteid, max_azi_condition)
 cursor.execute(sql_query)
 arrivals = np.array(cursor.fetchall())
 
-
-
+print arrivals
 
 segments = []
 
+bands = ['narrow_logenvelope_4.00_6.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_1.00_1.50', 'narrow_logenvelope_0.70_1.00']
+#bands = ['narrow_logenvelope_0.10_0.20', 'narrow_logenvelope_0.70_1.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_4.00_6.00']
+#bands = ['narrow_logenvelope_2.00_3.00']
 
+bands_b = np.zeros((arrivals.shape[0], len(bands)))
 
-bands = ['narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_0.70_1.00']
-
-
-for band in bands:
+f = open('logs/station_%d%s_decay.data' % (siteid, label), 'w')
+for (band_idx, band) in enumerate(bands):
     try:
         learned = []
 
-        pp = PdfPages('logs/synthetic_%s_%d.pdf' % (band, siteid))
+        pp = PdfPages('logs/synthetic_%s_%d%s.pdf' % (band, siteid, label))
 
-        for arrival in arrivals:
+        for (arrival_idx, arrival) in enumerate(arrivals):
             start_time = arrival[0] - 5
             end_time = arrival[0] + 200
 
-            print start_time
 
-            sql_query="SELECT l.time FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (arrival[4], siteid)
+            sql_query="SELECT l.time FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (arrival[5], siteid)
             cursor.execute(sql_query)
             other_arrivals = np.array(cursor.fetchall())
-            sql_query="SELECT l.iphase FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (arrival[4], siteid)    
+            sql_query="SELECT l.iphase FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (arrival[5], siteid)    
             cursor.execute(sql_query)
             other_arrival_phases = np.array(cursor.fetchall())
-            print other_arrivals
-            print other_arrival_phases
 
             phase_length = 200
             if other_arrivals.shape[0] > 0:
                 for a in other_arrivals:
-                    print "a is ", a[0]
                     if a[0] > arrival[0]:
                         phase_length = a[0] - arrival[0]
-                        print "pl is ", phase_length
                         break
 
-            print arrival[0]
-            print phase_length
-            print [arrival[0]+phase_length,  np.max(other_arrivals)]
-
-            arrival_segment = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals), np.max([arrival[0]+phase_length,  np.max(other_arrivals)]), stalist=[siteid,])
+            arrival_segment = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)-30, np.max([arrival[0]+phase_length,  np.max(other_arrivals)]), stalist=[siteid,])
             sigvisa_util.compute_narrowband_envelopes(arrival_segment)
             segments = segments + arrival_segment
         
             distance = utils.geog.dist_km((arrival[2], arrival[3]), (sites[siteid-1][0], sites[siteid-1][1]))
+
+            azimuth = arrival[4]
         
             try:
-                trace = arrival_segment[0]['horiz_avg'][band]
+                trace = arrival_segment[0][chan_name][band]
             except:
                 print "couldn't load trace, skipping..."
                 continue
@@ -243,9 +309,11 @@ for band in bands:
                 print "minimum segment length 15s, skipping segment with", npts/srate
                 continue
 
-            smoothed = Trace(smooth(trace.data, window_len=60, window="flat") , header=trace.stats.copy())
+            smoothed = Trace(smooth(trace.data, window_len=300, window="flat") , header=trace.stats.copy())
             smoothed.stats.npts = len(smoothed.data)
             npts = smoothed.stats.npts
+            
+            phase_length = np.min([phase_length, npts/srate - phase_start_time])
 
             try:
                 (peak_offset_time, peak_height) = arrival_peak_offset( smoothed, phase_start_time, phase_start_time + phase_length )
@@ -258,17 +326,36 @@ for band in bands:
                 print "skipping segment because peak is within 10s of end"
                 continue
         
-            coda_length = np.min([phase_length - (peak_offset_time - phase_start_time), find_coda_length(smoothed, peak_offset_time, peak_offset_time - (peak_offset_time - phase_start_time)  + phase_length  )])
+            try:
+                coda_length = np.min([phase_length - (peak_offset_time - phase_start_time), find_coda_length(smoothed, peak_offset_time, peak_offset_time - (peak_offset_time - phase_start_time)  + phase_length  )])
+            except:
+                print "error finding coda length"
+                print traceback.format_exc()
+                print phase_length, peak_offset_time, phase_start_time
+                continue
 
-            (gamma, b) = fit_logenvelope(smoothed, peak_offset_time, peak_height, coda_length)
+            if coda_length < 15:
+                print "coda length %f < 15s, skipping" % (coda_length,)
+                continue
 
-            print "fit params", gamma, b, "at station", siteid, ", event at distance", distance
+            (gamma, b), avg_cost, max_cost = fit_logenvelope(smoothed, peak_offset_time, peak_height, coda_length)
 
-            plot_envelopes(pp, smoothed, peak_offset_time, peak_height, phase_start_time, coda_length, gamma, b, all_det_times = other_arrivals[:,0], all_det_labels = other_arrival_phases, title="%s evid %d siteid %d mb %f \n dist %f gamma %f b %f" % (band, arrival[4], siteid, arrival[1], distance, gamma, b))
+            print "fit params", gamma, b, "at station", siteid, ", event at distance", distance, "at rel avg cost", avg_cost/peak_height, "rel max cost", max_cost/peak_height
 
+            if avg_cost/peak_height > 0.06 or max_cost/peak_height > 0.15:
+                print "cost too high, skipping" 
+                continue
 
-            if distance < 7000 and b > -0.06 and b <= 0:
-                learned.append((distance, gamma, b))
+            try:
+                plot_envelopes(pp, smoothed, peak_offset_time, peak_height, phase_start_time, coda_length, gamma, b, all_det_times = other_arrivals[:,0], all_det_labels = other_arrival_phases, title="%s evid %d siteid %d mb %f \n dist %f peak %f b %f \n acost %f mcost %f azi %f" % (band, arrival[5], siteid, arrival[1], distance, gamma, b, avg_cost/peak_height, max_cost/peak_height, azimuth))
+            except:
+                print "error plotting:"
+                print traceback.format_exc()
+                continue
+
+            if b > -0.15 and b <= 0:
+                bands_b[arrival_idx, band_idx] = b
+                learned.append((distance, azimuth, gamma, b))
 
         print " learned params for band: ", band
         for l in learned:
@@ -277,25 +364,82 @@ for band in bands:
 
         l = np.array(learned)
         
-        print l
+        f.write(band + "\n")
+        for idx in range(l.shape[0]):
+            f.write("%f %f %f\n" % (l[idx, 0], l[idx, 1], l[idx, 3]))
+        
+        try:
+
+#            plt.figure()
+#            plt.xlabel("distance (km)")
+#            plt.ylabel("gamma")
+#            plt.plot(l[:, 0], l[:, 2], 'ro')
+#            pp.savefig()
+
+            plt.figure()
+            plt.xlabel("distance (km)")
+            plt.ylabel("b")
+            plt.plot(l[:, 0], l[:, 3], 'ro')
+            pp.savefig()
+
+ #           plt.figure()
+ #           plt.xlabel("azimuth (deg)")
+ #           plt.ylabel("gamma")
+ #           plt.plot(l[:, 1], l[:, 2], 'ro')
+ #           pp.savefig()
+
+            plt.figure()
+            plt.xlabel("azimuth (deg)")
+            plt.ylabel("b")
+            plt.xlim([0, 360])
+            plt.plot(l[:, 1], l[:, 3], 'ro')
+            pp.savefig()
 
 
-        plt.figure()
-        plt.xlabel("distance (km)")
-        plt.ylabel("gamma")
-        plt.plot(l[:, 0], l[:, 1], 'ro')
-        pp.savefig()
-
-        plt.figure()
-        plt.xlabel("distance (km)")
-        plt.ylabel("b")
-        plt.plot(l[:, 0], l[:, 2], 'ro')
-        pp.savefig()
+        except:
+            print "error plotting learned params"
+            continue
 
     finally:
         pp.close()          
 
+f.close()
 
+
+pp = PdfPages('logs/synthetic_bs_%d%s.pdf' % (siteid, label))
+
+try:
+    for i in range(len(bands)):
+        for j in range(i+1, len(bands)):
+
+            plt.figure()
+            plt.xlabel(bands[i])
+            plt.ylabel(bands[j])
+            plt.plot(bands_b[:, i], bands_b[:, j], 'ro')
+            pp.savefig()
+
+
+    for base in range(len(bands)):
+        plt.figure()
+        plt.title("Ratios against %s" % (bands[base]))
+        success = 0
+        for i in range(bands_b.shape[0]):
+            try:
+                ratios = [bands_b[i, j]/ bands_b[i, base] for j in range(len(bands))]
+                print ratios
+                plt.plot(range(len(ratios)), ratios, "b-")
+                success = success+1
+            except:
+                print "exception", ratios
+                print traceback.format_exc()
+                continue
+        if success  > 0:
+            pp.savefig()
+
+finally:
+    pp.close()
+
+print bands_b
 
 
 

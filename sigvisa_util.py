@@ -20,10 +20,10 @@ import netvisa, learn
 import sys, os
 
 # Frequency bands in Hz. From Mayeda et. al., "Stable and Transportable Regional Magnitudes Based on Coda-Derived Moment-Rate Spectra". (2003)
-#FREQ_BANDS = ((0.02, 0.03), (0.03, 0.05), (0.05, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.5), (0.5, 0.7), (0.7, 1.0), (0.7, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 6.0), (6.0, 8.0))
+FREQ_BANDS = ((0.02, 0.03), (0.03, 0.05), (0.05, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.5), (0.5, 0.7), (0.7, 1.0), (0.7, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 6.0), (6.0, 8.0))
 
 # also need to update sigvisa.h whenever this changes
-FREQ_BANDS = ((0.5, 0.7), (0.7, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 6.0), (6.0, 8.0))
+#FREQ_BANDS = ((0.5, 0.7), (0.7, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 6.0), (6.0, 8.0))
 
 
 class MissingChannel(Exception):
@@ -566,9 +566,9 @@ def main():
     parser.add_option("--overlap", dest="overlap", default=0.5,
                     type="float",
                     help = "fraction of a window length between the start of successive windows (0.5)")
-    parser.add_option("--start", dest="start_time", type="float", default=1237680520,
+    parser.add_option("--start", dest="start_time", type="float", default=1238889600,
                     help = "start time")
-    parser.add_option("--end", dest="end_time", type="float", default=1237680700,
+    parser.add_option("--end", dest="end_time", type="float", default=1238893000,
                     help = "end time")
     parser.add_option("--events", dest="event_set", default="leb",
                     help = "set of events for which to compute likelihood: visa, leb, or sel3 (leb)")

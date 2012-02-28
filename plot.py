@@ -22,7 +22,7 @@ def plot_det_times(trc, all_det_times, all_det_labels):
   
 
 # does not save for you - you need to call savefig() yourself!
-def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None, band="broadband_envelope", format = "k:"):
+def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None, band="broadband_envelope", format = "k-"):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -45,7 +45,7 @@ def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None,
     plt.plot(timevals, trc, format)
     plot_det_times(trc, all_det_times, all_det_labels)
 
-def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format="k:"):
+def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format="k-"):
   plt.figure()
   plt.xlabel("Time (s)")
 
@@ -65,12 +65,12 @@ def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format=
   plot_det_times(trc, all_det_times, all_det_labels)
 
 
-def plot_traces(trc1, trc2, title=None, all_det_times=None, all_det_labels=None, format1="k:", format2="r-"):
+def plot_traces(trc1, trc2, title=None, all_det_times=None, all_det_labels=None, format1="k-", format2="r-"):
   plt.figure()
   plt.xlabel("Time (s)")
 
   if title is not None:
-    plt.title(title)
+    plt.title(title, fontsize=12)
       
   chan_name = trc1.stats["channel"]
 
@@ -80,13 +80,13 @@ def plot_traces(trc1, trc2, title=None, all_det_times=None, all_det_labels=None,
   npts = trc1.stats.npts
   stime = trc1.stats["starttime_unix"]
   timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-  plt.plot(timevals, trc1, format1)
+  plt.plot(timevals, trc1, format1, linewidth=5)
 
   srate = trc2.stats.sampling_rate
   npts = trc2.stats.npts
   stime = trc2.stats["starttime_unix"]
   timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-  plt.plot(timevals, trc2, format2)
+  plt.plot(timevals, trc2, format2, linewidth=5)
 
   plot_det_times(trc1, all_det_times, all_det_labels)
 
