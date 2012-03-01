@@ -1453,8 +1453,10 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
 
 PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args)
 {
+  int i;
   int phaseid;
   EarthPhaseModel_t * p_phase;
+  double min, max;
   
   if (!PyArg_ParseTuple(args, "i", &phaseid))
     return NULL;
@@ -1467,8 +1469,22 @@ PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args)
 
   p_phase = p_earth->p_phases + phaseid;
 
-  return Py_BuildValue("dd", p_phase->p_dists[0],
-                       p_phase->p_dists[p_phase->numdist-1]);
+  min = p_phase->p_dists[0];
+  max = p_phase->p_dists[p_phase->numdist-1];
+  
+  for (i=0; i<p_phase->numddrange; i++)
+  {
+    DDRange * range = p_phase->p_ddranges + i;
+  
+    if ((0 >= range->mindepth) && (0 <= range->maxdepth))
+    {
+      min = range->mindist;
+      max = range->maxdist;
+      break;
+    }
+  }
+
+  return Py_BuildValue("dd", min, max);
 }
 
 double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double distance)

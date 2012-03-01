@@ -15,6 +15,7 @@ static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_logamp(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_arramp_zval_logprob_cdf(NetModel_t * p_netmodel,
                                              PyObject *args);
 static PyObject * py_falseamp_logprob_cdf(NetModel_t * p_netmodel,
@@ -23,10 +24,11 @@ static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_arrphase_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_falsephase_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_enable_sec_arr(NetModel_t * self);
 static PyObject * py_disable_sec_arr(NetModel_t * self);
-static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args);
-static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_score_coda(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
@@ -61,6 +63,8 @@ static PyMethodDef NetModel_methods[] = {
    METH_VARARGS,
    "arramp_zval_logprob_cdf(mb, depth, ttime, siteid, phaseid, amp)\n"
    " -> zval, log prob, cdf"},
+  {"logamp", (PyCFunction)py_logamp, METH_VARARGS,
+   "logamp(mb, depth, ttime, siteid, phaseid)\n -> log(amp)"},
   {"falseamp_logprob_cdf", (PyCFunction)py_falseamp_logprob_cdf, METH_VARARGS,
    "falseamp_logprob_cdf(siteid, amp) -> log prob, cdf"},
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
@@ -75,16 +79,16 @@ static PyMethodDef NetModel_methods[] = {
   {"arrslo_logprob", (PyCFunction)py_arrslo_logprob, METH_VARARGS,
    "arrslo_logprob(arrslo, pred_arrslo, det_delslo, siteid, phaseid)"
    " -> log probability"},
+  {"arrphase_logprob", (PyCFunction)py_arrphase_logprob, METH_VARARGS,
+   "arrphase_logprob(arrphaseid, phaseid) -> log probability"},
+  {"falsephase_logprob", (PyCFunction)py_falsephase_logprob, METH_VARARGS,
+   "falsephase_logprob(arrphaseid) -> log probability"},
   {"enable_sec_arr", (PyCFunction)py_enable_sec_arr, METH_NOARGS,
    "enable_sec_arr(): enables secondary arrivals"},
   {"disable_sec_arr", (PyCFunction)py_disable_sec_arr, METH_NOARGS,
    "disable_sec_arr(): disables secondary arrivals"},
-  {"score_coda_coda", (PyCFunction)py_score_coda_coda, METH_VARARGS,
-   "score_coda_coda(secdetnum, detnum)"
-   "-> log probability of secdetnum being a secondary coda of detnum"
-   " minus log probability of secdetnum being noise"},
-  {"score_phase_coda", (PyCFunction)py_score_phase_coda, METH_VARARGS,
-   "score_phase_coda(secdetnum, detnum)"
+  {"score_coda", (PyCFunction)py_score_coda, METH_VARARGS,
+   "score_coda(secdetnum, detnum)"
    "-> log probability of secdetnum being a secondary coda of detnum"
    " minus log probability of secdetnum being noise"},
   {NULL}  /* Sentinel */
@@ -852,52 +856,7 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
   }
 }
 
-static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args)
-{
-  /* input arguments */
-  int secdetnum;
-  int detnum;
-  Detection_t * p_det;
-  Detection_t * p_secdet;
-  
-  if (!PyArg_ParseTuple(args, "ii", &secdetnum, &detnum))
-    return NULL;
-
-  if ((secdetnum < 0) || (secdetnum >= p_netmodel->numdetections))
-  {
-    PyErr_SetString(PyExc_ValueError, 
-                    "score_coda_coda: error: illegal secdetnum");
-    return NULL;
-  }
-  
-  if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
-  {
-    PyErr_SetString(PyExc_ValueError, 
-                    "score_coda_coda: error: illegal detnum");
-    return NULL;
-  }
-
-  p_det = p_netmodel->p_detections + detnum;
-  p_secdet = p_netmodel->p_detections + secdetnum;
-
-  if (p_det->site_det != p_secdet->site_det)
-  {
-    PyErr_SetString(PyExc_ValueError, 
-                    "score_coda_coda: error: detections from different sites");
-    return NULL;
-  }
-
-  if (!SecDetPrior_Time_Possible(&p_netmodel->sec_det_prior,
-                                 p_secdet->time_det,
-                                 p_det->time_det))
-  {
-    return Py_BuildValue("d", -1.0);
-  }
-  
-  return Py_BuildValue("d", score_coda_coda(p_netmodel, p_secdet, p_det));
-}
-
-static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args)
+static PyObject * py_score_coda(NetModel_t * p_netmodel, PyObject * args)
 {
   /* input arguments */
   int secdetnum;
@@ -928,7 +887,7 @@ static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args)
   if (p_det->site_det != p_secdet->site_det)
   {
     PyErr_SetString(PyExc_ValueError, 
-                    "score_phase_coda: error: detections from different sites");
+                    "score_coda: error: detections from different sites");
     return NULL;
   }
 
@@ -939,7 +898,7 @@ static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args)
     return Py_BuildValue("d", -1.0);
   }
   
-  return Py_BuildValue("d", score_phase_coda(p_netmodel, p_secdet, p_det));
+  return Py_BuildValue("d", score_coda(p_netmodel, p_secdet, p_det));
 }
 
 static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args)
@@ -1099,6 +1058,23 @@ static PyObject * py_arramp_zval_logprob_cdf(NetModel_t * p_netmodel,
   }  
 }
 
+static PyObject * py_logamp(NetModel_t * p_netmodel, PyObject * args)
+{
+  double mb, depth, ttime;
+  int siteid, phaseid;
+
+  double out_logamp;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &mb, &depth, &ttime,
+                        &siteid, &phaseid))
+    return NULL;
+  
+  out_logamp = ArrivalAmplitudePrior_logamp(&p_netmodel->arr_amp_prior,
+                                            mb, depth, ttime, siteid,
+                                            phaseid);
+  return Py_BuildValue("d", out_logamp);
+}
+
 static PyObject * py_falseamp_logprob_cdf(NetModel_t * p_netmodel,
                                           PyObject * args)
 {
@@ -1215,6 +1191,37 @@ static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,
   logprob = ArrivalSlownessPrior_LogProb(&p_netmodel->arr_slo_prior,
                                          arrslo, pred_arrslo,
                                          det_delslo, siteid, phaseid);
+  
+  return Py_BuildValue("d", logprob);
+}
+
+static PyObject * py_arrphase_logprob(NetModel_t * p_netmodel, PyObject * args)
+{
+  int arrphaseid;
+  int phaseid;
+  
+  double logprob;
+  
+  if (!PyArg_ParseTuple(args, "ii", &arrphaseid, &phaseid))
+    return NULL;
+  
+  logprob = ArrivalPhasePrior_LogProb(&p_netmodel->arr_phase_prior,
+                                      arrphaseid, phaseid);
+  
+  return Py_BuildValue("d", logprob);
+}
+
+static PyObject * py_falsephase_logprob(NetModel_t * p_netmodel, PyObject *args)
+{
+  int arrphaseid;
+  
+  double logprob;
+  
+  if (!PyArg_ParseTuple(args, "i", &arrphaseid))
+    return NULL;
+  
+  logprob = FalseArrivalPhasePrior_LogProb(&p_netmodel->arr_phase_prior,
+                                           arrphaseid);
   
   return Py_BuildValue("d", logprob);
 }

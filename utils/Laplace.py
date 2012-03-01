@@ -135,22 +135,21 @@ def estimate_trunc(vals):
 # scale_k = \frac{\sum_{i=1..n_k} |x_k^i - loc_k| + 1/beta} {n_k + alpha1 - 1}
 # beta = \frac{\sum_{k=1..K}1/scale_k + 1/beta2 } {K alpha1 + alpha2 - 1}
 #
-def hier_estimate(site_data, init_loc=0., init_scale=1.,
+def hier_estimate(site_data, init_loc=0., init_scale=1., init_beta=1,
                   loc0=0., scale0=100., alpha0=1e-2, beta0=1e2,
-                  alpha1=1., alpha2=1e-2, beta2=1e-2):
+                  alpha1=1., alpha2=1e-2, beta2=1e-2, tolerance=0.01,
+                  maxiters=100):
   
   K = len(site_data)
   assert K > 1                    # there should be more than one site
   
-  loc, scale = init_loc, init_scale
+  loc, scale, beta = init_loc, init_scale, init_beta
   
   site_params = np.ndarray((K, 2))
   site_params[:, 0] = init_loc
-  site_params[:, 1] = init_scale
+  site_params[:, 1] = init_beta
   
-  beta = ((1.0/site_params[:,1]).sum() + (1./beta2))/(K*alpha1 + alpha2 - 1.)
-  
-  while True:
+  for iternum in xrange(maxiters):
     prev_loc, prev_scale, prev_beta = loc, scale, beta
 
     # update the location and scale for each site
@@ -176,8 +175,8 @@ def hier_estimate(site_data, init_loc=0., init_scale=1.,
     scale = ((abs(site_params[:,0] - loc)).sum() +(1./beta0))/(K + alpha0 - 1.)
     beta = ((1.0/site_params[:,1]).sum() + (1./beta2))/(K*alpha1 + alpha2 - 1.)
     
-    if abs(prev_loc - loc) < .01 and abs(prev_scale - scale) < .01\
-       and abs(prev_beta - beta) < .01:
+    if abs(prev_loc - loc) < tolerance and abs(prev_scale - scale) < toelrance\
+       and abs(prev_beta - beta) < tolerance:
       break
 
   return site_params, loc, scale, beta

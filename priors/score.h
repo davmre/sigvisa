@@ -25,19 +25,10 @@ double logprob_noise(NetModel_t * p_netmodel, Detection_t * p_det,
 double logprob_coda_coda(NetModel_t * p_netmodel, Detection_t * p_secdet,
                          Detection_t * p_det);
 
-/* log probability that p_det (which is a phase arrival) generates the
- * coda arrival p_secdet 
- * minus
- * log probability that p_det doesn't generate a secondary arrival and
- * p_secdet is a noise arrival
- */
-double score_phase_coda(NetModel_t * p_netmodel, Detection_t * p_secdet,
-                        Detection_t * p_det);
-
 /* log probability that p_det generates the coda arrival p_secdet 
  * minus
  * log probability that p_det doesn't generate a secondary arrival and
  * p_secdet is a noise arrival
  */
-double score_coda_coda(NetModel_t * p_netmodel, Detection_t * p_secdet,
-                       Detection_t * p_det);
+double score_coda(NetModel_t * p_netmodel, Detection_t * p_secdet,
+                  Detection_t * p_det);

@@ -347,3 +347,8 @@ def compute_arid2num(detections):
   return dict((det[DET_ARID_COL], detnum) for detnum, det
               in enumerate(detections))
 
+def read_sitenames():
+  cursor = db.connect().cursor()  
+  cursor.execute("select sta from static_siteid site order by id")
+  sitenames = np.array(cursor.fetchall())[:,0]
+  return sitenames

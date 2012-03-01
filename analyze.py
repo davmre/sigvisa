@@ -751,6 +751,39 @@ def main():
          % (len(leb_events), sel3_f, sel3_p, sel3_r,
             sel3_err[0], sel3_err[1],
             visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
+  
+  if options.runid2 is not None:
+    visa_events2 = read_events(cursor, options.data_start, options.data_end,
+                               "visa", options.runid2)[0]
+    if options.suppress:
+      cursor.execute("select orid, score from visa_origin where runid=%d" %
+                     (options.runid2,))
+      visa_evscores2 = dict(cursor.fetchall())
+      visa_events2 = suppress_duplicates(visa_events2, visa_evscores2)[0]
+    
+    visa2_f, visa2_p, visa2_r, visa2_err \
+             = f1_and_error(leb_events, visa_events2)
+  
+    print ("  NETVISA2                                    |"
+           " %5.1f %5.1f %5.1f %3.0f %3.0f")\
+           % (visa2_f, visa2_p, visa2_r, visa2_err[0], visa2_err[1])
+
+  if options.runid3 is not None:
+    visa_events3 = read_events(cursor, options.data_start, options.data_end,
+                               "visa", options.runid3)[0]
+    if options.suppress:
+      cursor.execute("select orid, score from visa_origin where runid=%d" %
+                     (options.runid3,))
+      visa_evscores3 = dict(cursor.fetchall())
+      visa_events3 = suppress_duplicates(visa_events3, visa_evscores3)[0]
+    
+    visa3_f, visa3_p, visa3_r, visa3_err \
+             = f1_and_error(leb_events, visa_events3)
+  
+    print ("  NETVISA3                                    |"
+           " %5.1f %5.1f %5.1f %3.0f %3.0f")\
+           % (visa3_f, visa3_p, visa3_r, visa3_err[0], visa3_err[1])
+  
   print "=" * 74
 
 
