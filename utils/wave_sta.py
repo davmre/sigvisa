@@ -30,13 +30,21 @@ def main(param_dirname):
                     action="store_true", help="display arrivals")
   parser.add_option("-f", "--frequencies", dest="frequencies", default=None,
                     help="frequency ranges "
-                    "('[None,(0.1,.5),(.5,.7),(1,2),(2,4)]")
+                    "[None,(0.1,.5),(.5,.7),(1,2),(2,4)]")
+  parser.add_option("-1", "--type1", dest="type1", default=False,
+                    action = "store_true",
+                    help = "Type 1 fonts (False)")
+  
   (options, args) = parser.parse_args()
   
   if len(args) != 3:
     parser.print_help()
     sys.exit(1)
 
+  # use Type 1 fonts by invoking latex
+  if options.type1:
+    plt.rcParams['text.usetex'] = True
+    
   if options.frequencies is None:
     options.frequencies = DEFAULT_SPECTRUM
   else:
@@ -173,18 +181,8 @@ def plot_stalta(options, cursor, sta, start_time, end_time, filt_data,
                    "time between %d and %d" % (sta, start_time, end_time))
     
     for arrtime, in cursor.fetchall():
-      plt.plot([arrtime, arrtime], [0, .75], linewidth=3, color="red")
+      plt.plot([arrtime, arrtime], [-1, 0], linewidth=3, color="red")
   
-    cursor.execute("select orid, phase, time from leb_assoc join leb_arrival "
-                   "using (arid,sta) where sta='%s' and "
-                   "time between %d and %d order by time"
-                   % (sta, start_time, end_time))
-    
-    for orid, phase, arrtime, in cursor.fetchall():
-      print "orid %d phase %s time %.1f" % (orid, phase, arrtime)
-      plt.plot([arrtime, arrtime], [-1, 0], linewidth=3, color="red",
-               linestyle="-.")
-
   stalta = obspy.signal.trigger.recStalta(filt_data, int(1.5 * samprate),
                                           int(10 * samprate))
 

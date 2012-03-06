@@ -24,12 +24,15 @@ DETCNT_RANGES = [(-1, 0), (0, 1), (1, 2), (2, 3), (3,4), (4,5), (5,6), (6, 100)]
 TPHASE_RANGES = [(-1, 0), (0, 100)]
 HPHASE_RANGES = [(-1, 0), (0, 100)]
 MAG_RANGES = [(0,2), (2,3), (3,4), (4,9)]
+ML_RANGES = [(-1000,0), (0,1), (1,2), (2,2.5), (2.5,3), (3,4.5), (4.5,9)]
 
-JAPAN_LON_1, JAPAN_LON_2 = 130, 145
-JAPAN_LAT_1, JAPAN_LAT_2 = 30, 45
-
-US_LON_1, US_LON_2 = -125, -70
-US_LAT_1, US_LAT_2 = 25, 50
+# network, (lon1, lon2), (lat1, lat2)
+REGIONS = (
+  ('JMA', (130, 145), (30, 45)),   # Japan
+  ('IRIS', (-125, -70), (25, 50)), # Continental US
+  ('ROM', (6, 19), (36, 48)),      # Italy
+  ('NNC', (46,86), (40,55)),       # Kazakhstan
+  )
 
 def read_sel3_svm_scores():
   evscores = {}
@@ -79,6 +82,10 @@ def split_by_attr(attr_ranges, attr_vals):
     for bucnum, (vallo, valhi) in enumerate(attr_ranges):
       if val > vallo and val <= valhi:
         ev_buckets[bucnum].append(evnum)
+        break
+    else:
+      print "WARNING: EVENT NOT IN ANY BUCKET!!"
+      
   return ev_buckets
 
 def analyze_by_attr(attr_name, attr_ranges, leb_attrvals, leb_events,
@@ -117,14 +124,25 @@ def analyze_by_attr(attr_name, attr_ranges, leb_attrvals, leb_events,
              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
     
     if verbose:
+      # print unmatched VISA events
       unmat_idx = find_unmatched(
         leb_events[leb_buckets[i], :], visa_events[visa_buckets[i], :])
-
+      
       if len(unmat_idx):
-        print "Unmatched:",
-        for idx in unmat_idx:
-          print int(leb_events[leb_buckets[i][idx], EV_ORID_COL]),
-        print
+        unmat_orids = [int(leb_events[leb_buckets[i][idx], EV_ORID_COL])
+                       for idx in unmat_idx]
+        unmat_orids.sort()
+        print "Unmatched VISA:", unmat_orids
+        
+      # repeat for SEL3
+      unmat_idx = find_unmatched(
+        leb_events[leb_buckets[i], :], sel3_events[sel3_buckets[i], :])
+      
+      if len(unmat_idx):
+        unmat_orids = [int(leb_events[leb_buckets[i][idx], EV_ORID_COL])
+                       for idx in unmat_idx]
+        unmat_orids.sort()
+        print "Unmatched SEL3:", unmat_orids
       
     
 def azimuth_gap(esazlist):
@@ -134,8 +152,13 @@ def azimuth_gap(esazlist):
   azlist = [x for x in esazlist]        # copy the list
   azlist.sort()
 
-  return max((360 + degdiff(azlist[i], azlist[(i+1) % len(azlist)])) % 360 \
-             for i in range(len(azlist)))
+  gap = max((360 + degdiff(azlist[i], azlist[(i+1) % len(azlist)])) % 360 \
+            for i in range(len(azlist)))
+  
+  if gap == 0:
+    gap = 360
+  
+  return gap
 
 # find the nearest leb event for each event
 def find_nearest(leb_events, events):
@@ -459,9 +482,13 @@ def main():
                     action = "store_true",
                     help = "Type 1 fonts (False)")
 
-  parser.add_option("-b", "--mag", dest="mag", default=False,
+  parser.add_option("-b", "--mb", dest="mb", default=False,
                     action = "store_true",
-                    help = "analyze by magnitude (False)")
+                    help = "analyze by mb (False)")
+
+  parser.add_option("--ml", dest="ml", default=False,
+                    action = "store_true",
+                    help = "analyze by ML (False)")
   
   parser.add_option("-d", "--detcnt", dest="detcnt", default=False,
                     action = "store_true",
@@ -491,18 +518,10 @@ def main():
                     action = "store_true",
                     help = "suppress duplicates (False)")
 
-  parser.add_option("-n", "--NEIC", dest="neic", default=False,
+  parser.add_option("-r", "--regional", dest="regional", default=False,
                     action = "store_true",
-                    help = "compare with NEIC events (False)")
-
-  parser.add_option("-c", "--coords", dest="coords", default=None,
-                    help = "compare with ISC author in a region: e.g. "
-                    "THE,-10,26,36,60 or NNC,38,96,30,57 (default: none)")
+                    help = "compare with regional bulletins (False)")
   
-  parser.add_option("-j", "--JMA", dest="jma", default=False,
-                    action = "store_true",
-                    help = "compare with JMA events (False)")
-
   parser.add_option("-z", "--svm", dest="svm", default=False,
                     action = "store_true",
                     help = "use svm scores to improve SEL3 (False)")
@@ -578,16 +597,6 @@ def main():
                  (options.runid,))
   visa_scores = dict(cursor.fetchall())
 
-  if options.neic:
-    neic_events = read_isc_events(cursor, data_start, data_end, "NEIC")
-  else:
-    neic_events = None
-
-  if options.jma:
-    jma_events = read_isc_events(cursor, data_start, data_end, "JMA")
-  else:
-    jma_events = None
-    
   if options.suppress:
     visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_scores)
 
@@ -674,7 +683,7 @@ def main():
              np.average(all[1]), np.std(all[1]))
 
 
-  if options.mag:
+  if options.mb:
     analyze_by_attr("mb", MAG_RANGES, [ev[EV_MB_COL] for ev in leb_events],
                     leb_events, sel3_events, visa_events, options.verbose)
 
@@ -727,7 +736,7 @@ def main():
     # compute the azimuth gaps for each leb event
     leb_azgaps = [None for _ in leb_events]
     for (leb_orid, leb_evnum) in leb_orid2num.iteritems():
-      cursor.execute("select esaz from leb_assoc join leb_arrival "
+      cursor.execute("select esaz from leb_assoc join idcx_arrival "
                      "using(arid,sta) where orid=%d and "
                      "timedef='d' and time between %f and %f" %
                      (leb_orid, data_start, data_end))
@@ -751,208 +760,105 @@ def main():
          % (len(leb_events), sel3_f, sel3_p, sel3_r,
             sel3_err[0], sel3_err[1],
             visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
-  
-  if options.runid2 is not None:
-    visa_events2 = read_events(cursor, options.data_start, options.data_end,
-                               "visa", options.runid2)[0]
-    if options.suppress:
-      cursor.execute("select orid, score from visa_origin where runid=%d" %
-                     (options.runid2,))
-      visa_evscores2 = dict(cursor.fetchall())
-      visa_events2 = suppress_duplicates(visa_events2, visa_evscores2)[0]
-    
-    visa2_f, visa2_p, visa2_r, visa2_err \
-             = f1_and_error(leb_events, visa_events2)
-  
-    print ("  NETVISA2                                    |"
-           " %5.1f %5.1f %5.1f %3.0f %3.0f")\
-           % (visa2_f, visa2_p, visa2_r, visa2_err[0], visa2_err[1])
-
-  if options.runid3 is not None:
-    visa_events3 = read_events(cursor, options.data_start, options.data_end,
-                               "visa", options.runid3)[0]
-    if options.suppress:
-      cursor.execute("select orid, score from visa_origin where runid=%d" %
-                     (options.runid3,))
-      visa_evscores3 = dict(cursor.fetchall())
-      visa_events3 = suppress_duplicates(visa_events3, visa_evscores3)[0]
-    
-    visa3_f, visa3_p, visa3_r, visa3_err \
-             = f1_and_error(leb_events, visa_events3)
-  
-    print ("  NETVISA3                                    |"
-           " %5.1f %5.1f %5.1f %3.0f %3.0f")\
-           % (visa3_f, visa3_p, visa3_r, visa3_err[0], visa3_err[1])
-  
   print "=" * 74
-
-
-  if options.neic:
-    neic_us_events = filter_by_lonlat(neic_events, US_LON_1, US_LON_2,
-                                      US_LAT_1, US_LAT_2)
-    leb_us_events = filter_by_lonlat(leb_events, US_LON_1, US_LON_2,
-                                      US_LAT_1, US_LAT_2)
-    sel3_us_events = filter_by_lonlat(sel3_events, US_LON_1, US_LON_2,
-                                      US_LAT_1, US_LAT_2)
-    visa_us_events = filter_by_lonlat(visa_events, US_LON_1, US_LON_2,
-                                      US_LAT_1, US_LAT_2)
-    
-    leb_f, leb_p, leb_r, leb_err = f1_and_error(neic_us_events, leb_us_events)
-    
-    visa_f, visa_p, visa_r, visa_err = f1_and_error(neic_us_events,
-                                                    visa_us_events)
-
-    leb_recalled = find_matching(neic_us_events, leb_us_events)
-    sel3_recalled = find_matching(neic_us_events, sel3_us_events)
-    visa_recalled = find_matching(neic_us_events, visa_us_events)
-    
-    print "LEB recall", [(int(neic_us_events[i, EV_ORID_COL]),
-                          int(leb_us_events[j, EV_ORID_COL]))
-                         for (i,j) in leb_recalled]
-    print "SEL3 recall",[(int(neic_us_events[i, EV_ORID_COL]),
-                          int(sel3_us_events[j, EV_ORID_COL]))
-                         for (i,j) in sel3_recalled]
-    print "VISA recall",[(int(neic_us_events[i, EV_ORID_COL]),
-                          int(visa_us_events[j, EV_ORID_COL]))
-                         for (i,j) in visa_recalled]
-    
-    print "NEIC (US):         |          LEB              |          VISA"
-    print "=" * 74
-    print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
-           "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
-           % (len(neic_us_events), leb_f, leb_p, leb_r,
-              leb_err[0], leb_err[1],
-              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
-    print "=" * 74
-
-    if options.gui is not None:
-      bmap = draw_earth("NEIC(orange), LEB(yellow), and NET-VISA(blue)",
-                        projection="mill",
-                        resolution="l",
-                        llcrnrlon = US_LON_1, urcrnrlon = US_LON_2,
-                        llcrnrlat = US_LAT_1, urcrnrlat = US_LAT_2)
-      draw_events(bmap, leb_us_events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="o", ms=10, mfc="none", mec="yellow", mew=1)
-      draw_events(bmap, visa_us_events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="s", ms=10, mfc="none", mec="blue", mew=1)
-      draw_events(bmap, neic_us_events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="*", ms=10, mfc="orange")
-
-      cursor = database.db.connect().cursor()
-      cursor.execute("select orid, score from visa_origin where runid=%d" %
-                     (options.runid,))
-      evscores = dict(cursor.fetchall())
-    
-      plt.figure()
-      plt.title("ROC curve with NEIC as ground truth over the Continental US")
-    
-      sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(neic_us_events,
-                                                      sel3_us_events)
+  
+  if options.regional:
+    for (agency, (minlon, maxlon), (minlat, maxlat)) in REGIONS:
+      agency_events = read_isc_events(cursor, data_start, data_end, agency)
+      agency_events = filter_by_lonlat(agency_events, minlon, maxlon,
+                                       minlat, maxlat)
+      leb_ag_events = filter_by_lonlat(leb_events, minlon, maxlon,
+                                       minlat, maxlat)
+      visa_ag_events = filter_by_lonlat(visa_events, minlon, maxlon,
+                                        minlat, maxlat)
       
-      plt.plot([(sel3_p/100.0)], [(sel3_r/100.0)], label="SEL3",
-               marker='o', ms=10, mec="red",
-               linestyle="none", mfc="none")
-
-      plt.plot([(leb_p/100.0)], [(leb_r/100.0)], label="LEB",
-               marker='o', ms=10, mec="yellow",
-               linestyle="none", mfc="none")
-
-      x_pts, y_pts = compute_roc_curve(neic_us_events, visa_us_events,
-                                       evscores, freq=1)
+      leb_f, leb_p, leb_r, leb_err = f1_and_error(agency_events,
+                                                  leb_ag_events)
       
-      plt.plot(x_pts, y_pts, label="NetVISA", color="blue")
+      visa_f, visa_p, visa_r, visa_err = f1_and_error(agency_events,
+                                                      visa_ag_events)
       
-      plt.xlim(0, 1)
-      plt.ylim(0, 1)
-      plt.xlabel("precision")
-      plt.ylabel("recall")
-      plt.legend(loc = "upper right")
-      plt.grid(True)
+      print "%s:              |          LEB              |          VISA"\
+            % agency
+      print "=" * 74
+      print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
+             "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
+             % (len(agency_events), leb_f, leb_p, leb_r,
+                leb_err[0], leb_err[1],
+                visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
 
+      if options.verbose:
+        leb_recalled = find_matching(agency_events, leb_ag_events)
+        visa_recalled = find_matching(agency_events, visa_ag_events)
+    
+        leb_rec_list = [(int(agency_events[i, EV_ORID_COL]),
+                              int(leb_ag_events[j, EV_ORID_COL]))
+                             for (i,j) in leb_recalled]
+        leb_rec_list.sort()
+        print "LEB recall", leb_rec_list 
+    
+        visa_rec_list = [(int(agency_events[i, EV_ORID_COL]),
+                              int(visa_ag_events[j, EV_ORID_COL]))
+                             for (i,j) in visa_recalled]
+        visa_rec_list.sort()
+        
+        print "VISA recall", visa_rec_list
+            
+      print "=" * 74
+
+      if options.ml:
+        agency_ml = []
+        for event in agency_events:
+          cursor.execute("select ml from isc_events where author='%s'"
+                         " and eventid=%d" % (agency, event[EV_ORID_COL]))
+          ml, = cursor.fetchone()
+          agency_ml.append(ml)
+        
+        analyze_by_attr("ML", ML_RANGES, agency_ml,
+                        agency_events, leb_ag_events, visa_ag_events,
+                        options.verbose)
+        
+      if options.gui:
+        bmap = draw_earth("%s (orange), LEB (yellow), and NET-VISA (blue)"
+                          % agency,
+                          projection="mill",
+                          resolution="l",
+                          llcrnrlon = minlon, urcrnrlon = maxlon,
+                          llcrnrlat = minlat, urcrnrlat = maxlat)
+        draw_events(bmap, agency_events[:,[EV_LON_COL, EV_LAT_COL]],
+                    marker="*", ms=10, mfc="orange")
+        draw_events(bmap, leb_ag_events[:,[EV_LON_COL, EV_LAT_COL]],
+                    marker="o", ms=10, mfc="none", mec="yellow", mew=2)
+        draw_events(bmap, visa_ag_events[:,[EV_LON_COL, EV_LAT_COL]],
+                    marker="s", ms=10, mfc="none", mec="blue", mew=2)
+
+        # draw precision-recall curve
+        cursor = database.db.connect().cursor()
+        cursor.execute("select orid, score from visa_origin where runid=%d" %
+                       (options.runid,))
+        evscores = dict(cursor.fetchall())
       
-
-  if options.coords is not None:
-    agency, minlon, maxlon, minlat, maxlat = options.coords.split(",")
-    minlon, maxlon, minlat, maxlat = float(minlon), float(maxlon),\
-                                     float(minlat), float(maxlat)
-    
-    agency_events = read_isc_events(cursor, data_start, data_end, agency)
-    agency_events = filter_by_lonlat(agency_events, minlon, maxlon,
-                                     minlat, maxlat)
-    leb_ag_events = filter_by_lonlat(leb_events, minlon, maxlon,
-                                     minlat, maxlat)
-    visa_ag_events = filter_by_lonlat(visa_events, minlon, maxlon,
-                                      minlat, maxlat)
-    
-    leb_f, leb_p, leb_r, leb_err = f1_and_error(agency_events,
-                                                leb_ag_events)
-    
-    visa_f, visa_p, visa_r, visa_err = f1_and_error(agency_events,
-                                                    visa_ag_events)
-    
-    print "%s:              |          LEB              |          VISA"\
-          % agency
-    print "=" * 74
-    print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
-           "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
-           % (len(agency_events), leb_f, leb_p, leb_r,
-              leb_err[0], leb_err[1],
-              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
-    print "=" * 74
-
-  if options.jma:
-    jma_jap_events = filter_by_lonlat(jma_events, JAPAN_LON_1, JAPAN_LON_2,
-                                      JAPAN_LAT_1, JAPAN_LAT_2)
-    leb_jap_events = filter_by_lonlat(leb_events, JAPAN_LON_1, JAPAN_LON_2,
-                                      JAPAN_LAT_1, JAPAN_LAT_2)
-    visa_jap_events = filter_by_lonlat(visa_events, JAPAN_LON_1, JAPAN_LON_2,
-                                      JAPAN_LAT_1, JAPAN_LAT_2)
-
-    leb_recalled = find_matching(jma_jap_events, leb_jap_events)
-    visa_recalled = find_matching(jma_jap_events, visa_jap_events)
-
-    leb_rec_list = [(int(jma_jap_events[i, EV_ORID_COL]),
-                          int(leb_jap_events[j, EV_ORID_COL]))
-                         for (i,j) in leb_recalled]
-    leb_rec_list.sort()
-    print "LEB recall", leb_rec_list 
-
-    visa_rec_list = [(int(jma_jap_events[i, EV_ORID_COL]),
-                          int(visa_jap_events[j, EV_ORID_COL]))
-                         for (i,j) in visa_recalled]
-    visa_rec_list.sort()
-    
-    print "VISA recall", visa_rec_list
-    
-    
-    leb_f, leb_p, leb_r, leb_err = f1_and_error(jma_jap_events,
-                                                leb_jap_events)
-    
-    visa_f, visa_p, visa_r, visa_err = f1_and_error(jma_jap_events,
-                                                    visa_jap_events)
-    
-    print "JMA:              |          LEB              |          VISA"
-    print "=" * 74
-    print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
-           "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
-           % (len(jma_jap_events), leb_f, leb_p, leb_r,
-              leb_err[0], leb_err[1],
-              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
-    print "=" * 74
-
-    if jma_events is not None:
-      bmap = draw_earth("JMA (orange), LEB (yellow), and NET-VISA (blue)",
-                        projection="mill",
-                        resolution="l",
-                        llcrnrlon = JAPAN_LON_1, urcrnrlon = JAPAN_LON_2,
-                        llcrnrlat = JAPAN_LAT_1, urcrnrlat = JAPAN_LAT_2)
-      draw_events(bmap, jma_events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="*", ms=10, mfc="orange")
-      draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="o", ms=10, mfc="none", mec="yellow", mew=2)
-      draw_events(bmap, visa_events[:,[EV_LON_COL, EV_LAT_COL]],
-                  marker="s", ms=10, mfc="none", mec="blue", mew=2)
-    
+        plt.figure()
+        plt.title("Precision-Recall curve with %s as ground truth"
+                  % agency)
+      
+        plt.plot([(leb_p/100.0)], [(leb_r/100.0)], label="LEB",
+                 marker='o', ms=10, mec="yellow", mew=3,
+                 linestyle="none", mfc="none")
+  
+        x_pts, y_pts = compute_roc_curve(agency_events, visa_ag_events,
+                                         evscores, freq=1)
+        
+        plt.plot(x_pts, y_pts, label="NET-VISA", color="blue")
+        
+        plt.xlim(0, 1)
+        plt.ylim(0, 1)
+        plt.xlabel("precision")
+        plt.ylabel("recall")
+        plt.legend(loc = "upper right")
+        plt.grid(True)
+        
+        
   if options.gui:
     gui(options, leb_events, sel3_events, visa_events)
 

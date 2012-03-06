@@ -87,6 +87,7 @@ create table isc_events (
  ndef        int,
  nsta        int,
  gap         int,
+ ml          float not null,
  primary key (eventid, author)
 );
 create index isc_events_time on isc_events(time);

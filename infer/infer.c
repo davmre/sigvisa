@@ -711,7 +711,7 @@ static int change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
                                          * MAX_PHASE_DET
                                          + phaseid * MAX_PHASE_DET + 0];
       
-      /* try adding to the head of the detection list */
+      /* first try adding to the head of the detection list */
       p_event->p_num_dets[siteid * numtimedefphases + phaseid] = 1;
       p_event->p_all_detids[siteid * numtimedefphases * MAX_PHASE_DET
                             + phaseid * MAX_PHASE_DET + 0] = detnum;
@@ -753,6 +753,64 @@ static int change_one_detection(NetModel_t * p_netmodel, World_t * p_world,
            p_event->evscore, p_event->evscore + best_score_delta,
            best_score, best_score_delta);
 #endif
+      }
+
+      /* now try adding to the tail of the detection list (only if the
+       * detection list is non-empty and this detnum is compatible with
+       * the current last detection on the detection list)
+       */
+      if ((old_numdet > 0) && (old_numdet < MAX_PHASE_DET))
+      {
+        int last_detnum = p_event->p_all_detids[siteid * numtimedefphases
+                                                * MAX_PHASE_DET
+                                                + phaseid * MAX_PHASE_DET 
+                                                + old_numdet - 1];
+        Detection_t * p_last_det = p_netmodel->p_detections + last_detnum;
+        
+        if (SecDetPrior_Time_Possible(&p_netmodel->sec_det_prior,
+                                      p_detection->time_det,
+                                      p_last_det->time_det))
+        {
+          p_event->p_num_dets[siteid * numtimedefphases + phaseid] 
+            = old_numdet + 1;
+          p_event->p_all_detids[siteid * numtimedefphases * MAX_PHASE_DET
+                                + phaseid * MAX_PHASE_DET + old_numdet] 
+            = detnum;
+
+          poss = score_event_site_phase(p_netmodel, p_event, siteid, phaseid,
+                                        distance, pred_az, &score);
+
+          assert(poss);               /* it should remain possible! */
+      
+          score_delta = score - old_score;
+
+          /* restore the phase */
+          p_event->p_num_dets[siteid * numtimedefphases + phaseid] = old_numdet;
+          
+          /* did we improve the score ? */
+          if ((score > 0) && (score_delta > 0) 
+              && ((best_evnum == -1) 
+                  || ((maxscore_mode && ((p_event->evscore + score_delta)
+                                         > (best_score + .001)))
+                      ||
+                      (!maxscore_mode &&(score_delta > best_score_delta)))))
+          {
+            best_evnum = evnum;
+            best_phaseid = phaseid;
+            best_pos = old_numdet;
+        
+            best_score = p_event->evscore + score_delta;
+            best_score_delta = score_delta;
+#ifdef VERBOSE
+            printf("curr change_detections %d: orid %d site %d phase %d pos %d"
+                   " score %f -> %f best_score %f best_score_delta %f\n",
+                   detnum, p_event->orid, p_detection->site_det, best_phaseid,
+                   best_pos,
+                   p_event->evscore, p_event->evscore + best_score_delta,
+                   best_score, best_score_delta);
+#endif
+          }
+        }
       }
     }
   }

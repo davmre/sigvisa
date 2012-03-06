@@ -93,8 +93,10 @@ def read_events(cursor, start_time, end_time, evtype, runid=None):
 
 def read_isc_events(cursor, start_time, end_time, author):
   if author is None:
+    # no point getting IDC events from ISC bulletin, we already have these
     cursor.execute("select lon, lat, depth, time, mb, eventid from "
-                   "isc_events where time between %d and %d order by time"
+                   "isc_events where time between %d and %d and author != 'IDC'"
+                   " order by time"
                    % (start_time, end_time))
   else:
     cursor.execute("select lon, lat, depth, time, mb, eventid from "
@@ -347,8 +349,3 @@ def compute_arid2num(detections):
   return dict((det[DET_ARID_COL], detnum) for detnum, det
               in enumerate(detections))
 
-def read_sitenames():
-  cursor = db.connect().cursor()  
-  cursor.execute("select sta from static_siteid site order by id")
-  sitenames = np.array(cursor.fetchall())[:,0]
-  return sitenames

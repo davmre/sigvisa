@@ -175,7 +175,7 @@ def hier_estimate(site_data, init_loc=0., init_scale=1., init_beta=1,
     scale = ((abs(site_params[:,0] - loc)).sum() +(1./beta0))/(K + alpha0 - 1.)
     beta = ((1.0/site_params[:,1]).sum() + (1./beta2))/(K*alpha1 + alpha2 - 1.)
     
-    if abs(prev_loc - loc) < tolerance and abs(prev_scale - scale) < toelrance\
+    if abs(prev_loc - loc) < tolerance and abs(prev_scale - scale) < tolerance\
        and abs(prev_beta - beta) < tolerance:
       break
 

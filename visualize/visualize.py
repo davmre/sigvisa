@@ -942,8 +942,7 @@ def visualize_arramp(options, earthmodel, netmodel,
   
   x_pts = range(0, 180, 2)
   y_pts = np.array([predict_amp_model(coeffs, 3.5, 0,
-                                      earthmodel.TravelTime(PHASEID, 0, x),
-                                      earthmodel.QFVC(0, x))
+                                      earthmodel.TravelTime(PHASEID, 0, x))
                     for x in x_pts])
   
   dist_sum = np.zeros(90, float)
@@ -977,8 +976,7 @@ def visualize_arramp(options, earthmodel, netmodel,
 
   x_pts = range(15, 95)
   y_pts = np.array([predict_amp_model(coeffs, 4.5, 0,
-                                      earthmodel.TravelTime(PHASEID, 0, x),
-                                      earthmodel.QFVC(0, x))
+                                      earthmodel.TravelTime(PHASEID, 0, x))
                     for x in x_pts])
 
   dist_sum = np.zeros(90, float)

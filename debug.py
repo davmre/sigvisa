@@ -75,6 +75,10 @@ def print_event(sitenames, netmodel, earthmodel, detections, event, event_detlis
        ievent[EV_TIME_COL]) = inv
       ievent [EV_MB_COL] = 3.0
       iscore = "%.1f" % best_score(netmodel, ievent, detlist)
+      if abs(itimediff) < 10 and idist < 1:
+        asterisk = " ***"
+      if abs(itimediff) < 25 and idist < 2.5:
+        asterisk = " **"
       if abs(itimediff) < 50 and idist < 5:
         asterisk = " *"
       else:
@@ -109,12 +113,20 @@ def main(param_dirname):
   parser.add_option("-a", "--arrival_table", dest="arrival_table",
                     default="idcx_arrival",
                     help = "arrival table to use for inferring on")
+  parser.add_option("-1", "--type1", dest="type1", default=False,
+                    action = "store_true",
+                    help = "Type 1 fonts (False)")
+
   (options, args) = parser.parse_args()
   
   if len(args) != 3:
     parser.print_help()
     sys.exit(1)
   
+  # use Type 1 fonts by invoking latex
+  if options.type1:
+    plt.rcParams['text.usetex'] = True
+    
   runid, orid_type, orid = int(args[0]), args[1], int(args[2])
   if orid_type not in ("visa", "leb"):
     print "invalid orid_type %s" % orid_type
@@ -195,6 +207,19 @@ def main(param_dirname):
   print_events(sitenames, netmodel, earthmodel, detections, neic_events, None, "NEIC")
   print_events(sitenames, netmodel, earthmodel, detections, all_isc_events, None, "ISC")
 
+  # convert the event longitudes to the 0 -- 360 range to avoid clipping
+  # issues at -180
+  if len(leb_events):
+    leb_events[:,EV_LON_COL] = (leb_events[:, EV_LON_COL] + 360) % 360
+  if len(sel3_events):
+    sel3_events[:,EV_LON_COL] = (sel3_events[:, EV_LON_COL] + 360) % 360
+  if len(visa_events):
+    visa_events[:,EV_LON_COL] = (visa_events[:, EV_LON_COL] + 360) % 360
+  if len(neic_events):
+    neic_events[:,EV_LON_COL] = (neic_events[:, EV_LON_COL] + 360) % 360
+  if len(all_isc_events):
+    all_isc_events[:,EV_LON_COL] = (all_isc_events[:, EV_LON_COL] + 360) % 360
+  
   if options.text_only:
     return
   
@@ -220,7 +245,7 @@ def main(param_dirname):
                     resolution="l",
                     llcrnrlon = lon1, urcrnrlon = lon2,
                     llcrnrlat = lat1, urcrnrlat = lat2,
-                    nofillcontinents=True, figsize=(4.5,4))
+                    nofillcontinents=True, figsize=(8,4.8))
   if len(leb_events):
     draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=10, mfc="none", mec="yellow", mew=2)
@@ -251,7 +276,7 @@ def main(param_dirname):
   lon_arr = np.arange(event[EV_LON_COL] - options.window,
                       event[EV_LON_COL] + options.window,
                       LON_BUCKET_SIZE)
-  z_arr = np.arange(np.sin(np.radians(event[EV_LAT_COL] - options.window *.88)),
+  z_arr = np.arange(np.sin(np.radians(event[EV_LAT_COL] - options.window)),
                     np.sin(np.radians(event[EV_LAT_COL] + options.window)),
                     Z_BUCKET_SIZE)
   lat_arr = np.degrees(np.arcsin(z_arr))
@@ -281,28 +306,22 @@ def main(param_dirname):
       if sc < worst: worst = sc
 
   if worst < best * .9:
-    levels = np.arange(worst, best*.75, (best*.75 - worst)/5).tolist() +\
-             np.linspace(best*.75, best, 5).tolist()
+    levels = np.arange(worst, best*.25, (best*.25 - worst)/10).tolist() +\
+             np.linspace(best*.25, best, 10).tolist()
   else:
     levels = np.linspace(worst, best, 10).tolist()
 
   # round the levels so they are easier to display in the legend
   levels = np.round(levels, 1).tolist()
-
-  draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
   
+  draw_density(bmap, lon_arr, lat_arr, score, levels = levels,
+               colorbar_shrink=1.0)
   
-  # add a map scale
-  scale_lon, scale_lat = event[EV_LON_COL], \
-                         event[EV_LAT_COL]-options.window * .98
-  try:
-    bmap.drawmapscale(scale_lon, scale_lat, scale_lon, scale_lat,
-                      options.window*100,
-                      fontsize=8, barstyle='fancy',
-                      labelstyle='simple', units='km')
-  except:
-    pass
-
+  parallels = np.arange(-90, 90, options.window/2.5)
+  bmap.drawparallels(parallels,labels=[1,0,0,0], fontsize=10)
+  # draw meridians
+  meridians = np.arange(0, 360.,options.window/2.5)
+  bmap.drawmeridians(meridians,labels=[0,0,0,1], fontsize=10)
   
   plt.savefig("output/debug_run_%d_%s_orid_%d.png" % (runid, orid_type, orid))
 
