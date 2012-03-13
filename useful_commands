@@ -1,0 +1,3 @@
+
+to plot learned shape params for all stations:
+  parallel --tmpdir logs/parallel --files -j 3 "python -m utils.fit_shape_params {1} {0}" :::: ~/sigvisa/non_array_siteids.txt  ::: P_PHASES S_PHASES
