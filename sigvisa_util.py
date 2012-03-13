@@ -506,7 +506,64 @@ def compute_narrowband_envelopes(segments):
     if horiz_avg is not None:
       segment_chans["horiz_avg"] = horiz_avg
 
-      
+# given a list of segments (e.g. as loaded by
+# load_and_process_traces), extract a signle segment containing a
+# single time window at a single statement, possibly by concatenating
+# several of the original segments
+def extract_timeslice_at_station(traces, start_time, end_time, siteid):
+  
+  new_segment = dict()
+  last_segment_end = float("NaN")
+
+  for segment in traces:
+
+    trc = segment['BHZ']['broadband']
+    if trc.stats.siteid != siteid:
+      continue
+
+    npts = trc.stats.npts
+    srate = trc.stats.sampling_rate
+    st = trc.stats.starttime_unix
+    et = st + npts / srate
+
+    if et < start_time or st > end_time:
+      continue
+
+    # to avoid discontinuities, we require each new segment starts within two seconds of the end of the previous.
+    if not np.isnan(last_segment_end) and np.abs( st - last_segment_end ) > 2:
+      continue
+    last_segment_end = min(et, end_time)
+
+    if len(new_segment.keys()) == 0:
+      # initialize the extracted segment
+      for chan in segment.keys():
+        new_segment[chan] = dict()
+        for band in segment[chan].keys():
+          trc = segment[chan][band]
+          new_stats = trc.stats.copy()
+          start_point = int((max(start_time,st) - st) * srate)
+          end_point = int((min(et, end_time)-st) * srate)
+          new_trc = Trace(trc.data[start_point:end_point], new_stats)
+#          print "initializing with data from %f to %f" % (max(start_time, st), min(end_time, et))
+          new_trc.stats.starttime_unix = start_time
+          new_trc.stats.npts = len(new_trc.data)
+          new_segment[chan][band] = new_trc
+    else:
+        # extend the extracted segment
+      for chan in new_segment.keys():
+        for band in new_segment[chan].keys():
+          trc = segment[chan][band]
+          new_trc = new_segment[chan][band]
+          start_point = 0
+          end_point = int((min(et, end_time)-st) * srate)
+#          print "continuing with data from %f to %f" % (st, min(end_time, et))
+          new_trc.data = np.concatenate((new_trc.data, trc.data[start_point:end_point]))
+          new_trc.stats.npts = len(new_trc.data)
+
+
+  print new_segment['BHZ']['broadband']
+  return [new_segment,]
+
 def load_and_process_traces(cursor, start_time, end_time, stalist=None, downsample_factor=1):
 
     if stalist is None:

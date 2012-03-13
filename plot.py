@@ -65,30 +65,39 @@ def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format=
   plot_det_times(trc, all_det_times, all_det_labels)
 
 
-def plot_traces(trc1, trc2, title=None, all_det_times=None, all_det_labels=None, format1="k-", format2="r-"):
+def plot_traces(traces, title=None, all_det_times=None, all_det_labels=None, formats=None, linewidths=None):
+
+  if formats is None:
+    if len(traces) == 1:
+      formats = ["k-",]
+    elif len(traces) == 2:
+      formats = ["k-", "r-"]
+    else:
+      formats = ["k-" for t in traces]
+
+  if linewidths is None:
+      linewidths = [1 for t in traces]
+
+
   plt.figure()
   plt.xlabel("Time (s)")
 
   if title is not None:
     plt.title(title, fontsize=12)
       
-  chan_name = trc1.stats["channel"]
+  chan_name = traces[0].stats["channel"]
 
   plt.ylabel(chan_name)
 
-  srate = trc1.stats.sampling_rate
-  npts = trc1.stats.npts
-  stime = trc1.stats["starttime_unix"]
-  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-  plt.plot(timevals, trc1, format1, linewidth=5)
+  for (i,trc) in enumerate(traces):
+    srate = trc.stats.sampling_rate
+    npts = len(trc.data)
+    stime = trc.stats["starttime_unix"]
+    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
-  srate = trc2.stats.sampling_rate
-  npts = trc2.stats.npts
-  stime = trc2.stats["starttime_unix"]
-  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-  plt.plot(timevals, trc2, format2, linewidth=5)
+    plt.plot(timevals, trc, formats[i], linewidth = linewidths[i])
 
-  plot_det_times(trc1, all_det_times, all_det_labels)
+  plot_det_times(traces[0], all_det_times, all_det_labels)
 
 
 # does not save for you - you need to call savefig() yourself!
