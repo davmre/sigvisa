@@ -1,6 +1,6 @@
-import os, sys, time, traceback
+import os, errno, sys, time, traceback
 import numpy as np, scipy
-
+from guppy import hpy; hp = hpy()
 
 from database.dataset import *
 from database import db
@@ -235,7 +235,7 @@ def fair_nonpara_predict(arrival, lb, w):
 
 
 def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, arrival, event, netmodel, band, distance, lb, shape_params, all_det_times = None, all_det_labels = None, title = None):
-    plt.figure(figsize = (8, 8))
+    fig = plt.figure(figsize = (8, 8))
 
     bhz_axes = plt.subplot(2, 1, 1)
 
@@ -247,6 +247,7 @@ def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, hor
     plot_envelopes(horiz_axes, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, arrival, event, netmodel, band, distance, lb, shape_params, all_det_times, all_det_labels)
         
     pp.savefig()
+    plt.close(fig)
 
 def plot_envelopes(axes, trace, noise_floor, fits, formats, arrival, event, netmodel, band, distance, lb, shape_params, all_det_times = None, all_det_labels = None):
     srate = trace.stats['sampling_rate']
@@ -367,7 +368,7 @@ print "max azi is", max_azi, "with count", max_azi_count
 phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
 print phase_condition
 (EV_MB_COL, EV_LON_COL, EV_LAT_COL, EV_EVID_COL, EV_TIME_COL, EV_DEPTH_COL, EV_NUM_COLS) = range(6+1)
-sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase order by l.sta limit 0,10" % (phase_condition, siteid)
+sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase order by l.sta" % (phase_condition, siteid)
 cursor.execute(sql_query)
 events = np.array(cursor.fetchall())
 
@@ -389,12 +390,24 @@ print "read data with keys", ldata.keys()
 shape_params = read_shape_params('parameters/CodaDecay.txt')
 
 
+runid = int(time.time())
+base_coda_dir = os.path.join("logs", "codas_%d_%s_%s" % (siteid, full_label, runid))
+try:
+    os.makedirs(base_coda_dir)
+except OSError as exc:
+    if exc.errno == errno.EEXIST:
+        pass
+    else: raise
+    
+f = open(os.path.join(base_coda_dir, 'all_data'), 'w')
 
-f = open('logs/station_%d_%s_decay.data' % (siteid,full_label), 'w')
 lb = np.array(())
 
 short_bands = [b[19:] for b in bands]
-pps = [PdfPages('logs/codas_%d_%s_%s.pdf' % (siteid, sb, full_label)) for sb in short_bands]
+
+
+
+
 learned_p = [[] for b in bands]
 learned_s = [[] for b in bands]
 learned_sp = [[] for b in bands]
@@ -458,7 +471,17 @@ for event in events:
 
     for (band_idx, band) in enumerate(bands):
         short_band = short_bands[band_idx]
-        pp = pps[band_idx]
+
+        pdf_dir = os.path.join(base_coda_dir, short_band)
+
+        try:
+            os.makedirs(pdf_dir)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST:
+                pass
+            else: raise
+
+        pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
 
         vert_noise_floor = np.mean(noise_segment[0]["BHZ"][band])
         horiz_noise_floor = np.mean(noise_segment[0]["horiz_avg"][band])
@@ -544,7 +567,7 @@ for event in events:
         if accept_p_vert and accept_s_horiz:
             learned_sp[band_idx].append((fit_p_horiz[FIT_B], fit_s_horiz[FIT_B]))
 
-        gen_title = lambda event, arrival, p_fit, s_fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_mcost %f p_len %f \n s_b %f s_acost %f s_mcost %f s_len %f " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, safe_lookup(p_fit, FIT_B), safe_lookup(p_fit, FIT_AVG_COST), safe_lookup(p_fit, FIT_MAX_COST), p_fit[FIT_CODA_LENGTH], safe_lookup(s_fit, FIT_B), safe_lookup(s_fit, FIT_AVG_COST), safe_lookup(s_fit, FIT_MAX_COST), s_fit[FIT_CODA_LENGTH]) 
+        gen_title = lambda event, arrival, p_fit, s_fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_mcost %f p_len %f \n s_b %f s_acost %f s_mcost %f s_len %f " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, safe_lookup(p_fit, FIT_B), safe_lookup(p_fit, FIT_AVG_COST), safe_lookup(p_fit, FIT_MAX_COST), safe_lookup(p_fit, FIT_CODA_LENGTH), safe_lookup(s_fit, FIT_B), safe_lookup(s_fit, FIT_AVG_COST), safe_lookup(s_fit, FIT_MAX_COST), safe_lookup(s_fit, FIT_CODA_LENGTH))
         try:
             plot_channels(pp, vert_smoothed, vert_noise_floor, [fit_p_vert, fit_s_vert], ["g-" if accept_p_vert else "r-", "g-" if accept_s_vert else "r-"], horiz_smoothed, horiz_noise_floor, [fit_p_horiz, fit_s_horiz], ["g-" if accept_p_horiz else "r-", "g-" if accept_s_horiz else "r-"], arrival, event, netmodel, band, distance, lb, shape_params, all_det_times = other_arrivals, all_det_labels = other_arrival_phases, title = gen_title(event, arrival, fit_p_vert, fit_s_horiz))
         except:
@@ -568,10 +591,14 @@ for event in events:
 
         f.write("%f %f %f\n" % (max_azi, vert_noise_floor, horiz_noise_floor))
 
+        pp.close()
+
     del arrival_segment
     del noise_segment
     del other_arrivals
     del other_arrival_phases
+
+#    print hp.heap()
     
 for (band_idx, band) in enumerate(bands):
     try:
@@ -580,7 +607,8 @@ for (band_idx, band) in enumerate(bands):
         ls = np.array(learned_s[band_idx])
         lsp = np.array(learned_sp[band_idx])
 
-        pp = pps[band_idx]
+        pdf_dir = os.path.join(base_coda_dir, short_bands[band_idx])
+        pp = PdfPages(os.path.join(pdf_dir, "plots.pdf"))
 
         if (len(lp.shape) == 2):
             plt.figure()
@@ -629,6 +657,16 @@ for (band_idx, band) in enumerate(bands):
         print traceback.format_exc()
     finally:
         pp.close()
+
+for (band_idx, band) in enumerate(bands):
+    try:
+        pdf_dir = os.path.join(base_coda_dir, short_bands[band_idx])
+        cmd = "gs -dNOPAUSE -sDEVICE=pdfwrite -sOUTPUTFILE=%s -dBATCH `ls %s/*.pdf`" % (os.path.join(pdf_dir, "everything.pdf"), pdf_dir)
+        print "running", cmd
+        os.popen(cmd)
+    except:
+        print traceback.format_exc()
+        continue
 
 f.close()
 
