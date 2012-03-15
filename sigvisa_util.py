@@ -552,6 +552,7 @@ def extract_timeslice_at_station(traces, start_time, end_time, siteid):
         # extend the extracted segment
       for chan in new_segment.keys():
         for band in new_segment[chan].keys():
+
           trc = segment[chan][band]
           new_trc = new_segment[chan][band]
           start_point = 0

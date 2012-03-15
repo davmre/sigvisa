@@ -19,6 +19,18 @@ def plot_det_times(trc, all_det_times, all_det_labels):
       for (t, lbl) in zip(all_det_times, all_det_labels):
         plt.text(t+3, maxtrc - (maxtrc-mintrc)*0.1, lbl, color="red", fontsize=4)
 
+def subplot_det_times(axes, trc, all_det_times, all_det_labels):
+  if trc == None or all_det_times == None:
+    return
+
+  if all_det_times is not None:
+    maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+    axes.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
+            width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
+    if all_det_labels is not None:
+      for (t, lbl) in zip(all_det_times, all_det_labels):
+        axes.text(t+3, maxtrc - (maxtrc-mintrc)*0.1, lbl, color="red", fontsize=4)
+
   
 
 # does not save for you - you need to call savefig() yourself!
@@ -66,6 +78,13 @@ def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format=
 
 
 def plot_traces(traces, title=None, all_det_times=None, all_det_labels=None, formats=None, linewidths=None):
+  plt.figure()
+  if title is not None:
+    plt.title(title, fontsize=12)
+      
+  plot_traces_subplot(plt.subplot(1,1,1), traces, all_det_times, all_det_labels, formats, linewidths)
+
+def plot_traces_subplot(axes, traces, all_det_times=None, all_det_labels=None, formats=None, linewidths=None):
 
   if formats is None:
     if len(traces) == 1:
@@ -78,16 +97,11 @@ def plot_traces(traces, title=None, all_det_times=None, all_det_labels=None, for
   if linewidths is None:
       linewidths = [1 for t in traces]
 
+  axes.set_xlabel("Time (s)")
 
-  plt.figure()
-  plt.xlabel("Time (s)")
-
-  if title is not None:
-    plt.title(title, fontsize=12)
-      
   chan_name = traces[0].stats["channel"]
 
-  plt.ylabel(chan_name)
+  axes.set_ylabel(chan_name)
 
   for (i,trc) in enumerate(traces):
     srate = trc.stats.sampling_rate
@@ -95,9 +109,9 @@ def plot_traces(traces, title=None, all_det_times=None, all_det_labels=None, for
     stime = trc.stats["starttime_unix"]
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
-    plt.plot(timevals, trc, formats[i], linewidth = linewidths[i])
+    axes.plot(timevals, trc, formats[i], linewidth = linewidths[i])
 
-  plot_det_times(traces[0], all_det_times, all_det_labels)
+  subplot_det_times(axes, traces[0], all_det_times, all_det_labels)
 
 
 # does not save for you - you need to call savefig() yourself!
