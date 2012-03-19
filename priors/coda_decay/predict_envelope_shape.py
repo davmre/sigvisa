@@ -20,20 +20,20 @@ import obspy.signal.util
 
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.nonparametric_regression as nr
+from priors.coda_decay.coda_decay_common import *
 
-
-def cv_residuals_kernel(lb, x_indices, y_index, kernel=None):
+def cv_residuals_kernel(data, x_indices, y_index, kernel=None):
     kr = []
     linr = []
-    n = lb.shape[0]
+    n = data.shape[0]
     for i in range(n):
-        x0 = lb[i, x_indices]
-        y0 = lb[i, y_index]
+        x0 = data[i, x_indices]
+        y0 = data[i, y_index]
 
         #X = lb[ [j for j in range(n) if j != i], x_indices ]
-        X = lb[ : , x_indices ]
+        X = data[ : , x_indices ]
         X = X[[j for j in range(n) if j != i], :]
-        y = lb[ [j for j in range(n) if j != i], y_index ]
+        y = data[ [j for j in range(n) if j != i], y_index ]
 
         kpy0 = nr.kernel_predict(x0, X, y, kernel=kernel)
 #        kpy0 = nr.knn_predict(x0, X, y, k = 3)
@@ -52,13 +52,13 @@ def cv_residuals_kernel(lb, x_indices, y_index, kernel=None):
     return kr, linr
 
 
-def cv_residuals_mean(lb, y_index):
+def cv_residuals_mean(data, y_index):
     r = []
-    n = lb.shape[0]
+    n = data.shape[0]
     for i in range(n):
-        y0 = lb[i, y_index]
+        y0 = data[i, y_index]
         #X = lb[ [j for j in range(n) if j != i], x_indices ]
-        y = lb[ [j for j in range(n) if j != i], y_index ]
+        y = data[ [j for j in range(n) if j != i], y_index ]
 
         py0 = np.mean(y)
     
@@ -68,9 +68,7 @@ def cv_residuals_mean(lb, y_index):
     return r
 
 
-def cross_validate(l, band):
-    lb = l[band]
-
+def cross_validate(data):
 #    kresiduals_da = None
 #    bestr = np.inf
 #    bestw = 0
@@ -88,17 +86,17 @@ def cross_validate(l, band):
     w = 40
     ll_kernel = lambda ( ll1, ll2) : np.exp(-1 * utils.geog.dist_km(ll1, ll2)/ (w**2))
     #ll_kernel = lambda ( ll1, ll2) : utils.geog.dist_km(ll1, ll2)
-    kresiduals_da50, lresiduals_da = cv_residuals_kernel(lb, [LON_COL, LAT_COL], [B_COL], kernel=ll_kernel)
+    kresiduals_da50, lresiduals_da = cv_residuals_kernel(data, [LON_COL, LAT_COL], [B_COL], kernel=ll_kernel)
     w = 5
     ll_kernel = lambda ( ll1, ll2) : np.exp(-1 * utils.geog.dist_km(ll1, ll2)/ (w**2))
     #ll_kernel = lambda ( ll1, ll2) : utils.geog.dist_km(ll1, ll2)
-    kresiduals_da5, lresiduals_da = cv_residuals_kernel(lb, [LON_COL, LAT_COL], [B_COL], kernel=ll_kernel)
+    kresiduals_da5, lresiduals_da = cv_residuals_kernel(data, [LON_COL, LAT_COL], [B_COL], kernel=ll_kernel)
 
 
-    kresiduals_a, lresiduals_a = cv_residuals_kernel(lb, [AZI_COL], [B_COL])
-    kresiduals_d, lresiduals_d = cv_residuals_kernel(lb, [DISTANCE_COL], [B_COL])
+    kresiduals_a, lresiduals_a = cv_residuals_kernel(data, [AZI_COL], [B_COL])
+    kresiduals_d, lresiduals_d = cv_residuals_kernel(data, [DISTANCE_COL], [B_COL])
 
-    residuals_m = cv_residuals_mean(lb, [B_COL])
+    residuals_m = cv_residuals_mean(data, [B_COL])
 
     ll50r = np.mean(kresiduals_da50)
     ll5r = np.mean(kresiduals_da5)
@@ -108,11 +106,10 @@ def cross_validate(l, band):
     return (ll50r, ll5r, dr, mr)
     
 
-def plot_linear(pp, l, band, title=""):
-    lb = l[band]
+def plot_linear(pp, data, b_col, title=""):
 
-    X = lb[ : , DISTANCE_COL ]
-    y = lb[ : , B_COL ]
+    X = data[ : , DISTANCE_COL ]
+    y = data[ : , b_col ]
 
     w = np.linalg.lstsq(np.vstack([X, np.ones((X.shape[0],))]).T, y)[0]
    
@@ -127,12 +124,11 @@ def plot_linear(pp, l, band, title=""):
     plt.plot(X, y, 'ro')
     pp.savefig()
     
-def plot_heat(pp, l, band, w):
-    lb = l[band]
+def plot_heat(pp, data, b_col, w):
 
-    siteid = lb[0, SITEID_COL]
-    X = lb[ : , [LON_COL, LAT_COL] ]
-    y = lb[ : , B_COL ]
+    siteid = data[0, SITEID_COL]
+    X = data[ : , [LON_COL, LAT_COL] ]
+    y = data[ : , b_col ]
 
     mins = np.min(X, 0)
     maxs = np.max(X, 0)
@@ -180,62 +176,76 @@ def plot_heat(pp, l, band, w):
     plt.title("w = %f, miny = %f, maxy = %f" % (w, np.min(y), np.max(y)))
     pp.savefig()
 
-def read_shape_params(fname):
-    f = open(fname, 'r')
-    params = dict()
+def unfair_para_predict(params_dict, arrival, band, distance):
+    evid = int(arrival[5])
+    siteid = int(arrival[10])
+    phaseid = int(arrival[7])
 
-    for line in f:
-        s = line[:-1].split()
-        k = " ".join(s[0:4])
-        params[k] = [float(s[4]), float(s[5])]
+    phase = "P" if phaseid else "S"
+    s = "r" if distance < 1000 else "t"
 
-    return params
-    
+    key = "%s %d %s %s" % (s, siteid, phase, band[19:])
+    v = params_dict[key]
+    print "returning [%s] = %f, %f" % (key, v[0], v[1])
 
-def read_shape_data(fname):
-    f = open(fname, 'r')
-    l = dict()
+    return v
 
-    for line in f:
-        if line[0] == 'n':
-            
-            band = line[:-1]
-        
-            if band not in l:
-                l[band] = None
-        else:
-            new_row = np.array(  map( lambda x : float(x), (line[:-1]).split()))
+def fair_nonpara_predict(arrival, lb, w):
 
-            if l[band] is None:
-                l[band] = new_row
-            else:
-                try:
-                    l[band] = np.vstack([l[band], new_row])
-                except:
-                    break
-    return l
+    evid = int(arrival[5])
+
+    if lb is None:
+        return None
+
+    x0 = [arrival[2], arrival[3]]
+    X = np.array([ lb[i, [LON_COL, LAT_COL]] for i in range(lb.shape[0]) if lb[i, EVID_COL] != evid ] )
+    y = np.array([ lb[i, B_COL] for i in range(lb.shape[0]) if lb[i, EVID_COL] != evid ] )
+
+    if y.shape[0] == 0:
+        return None
+
+    ll_kernel = lambda ( ll1, ll2) : np.exp(-1 * utils.geog.dist_km(ll1, ll2)/ (w**2))
+    y0 = nr.kernel_predict(x0, X, y, kernel=ll_kernel)
+    print "returning", y0
+    return y0
 
 
 
 def main():
-    sta_idx = 0
-    fname = sys.argv[1]
-    label = fname[13:24]
-    outfile = 'logs/predict_envelope_%s.pdf' % (label)
-    pp = PdfPages(outfile)
-    print "saving plots to", outfile
-    
-    print "opening fname", fname
-    l = read_shape_data(fname)
 
-    for band in l.keys():
-        print "processing band %s, cleaning %d points..." % (band, l[band].shape[0])
-        l[band] = clean_points(l[band])
-        print "  points remaining = %d" % (l[band].shape[0])
-        (ll50r, ll5r, dr, mr) = cross_validate(l, band)
-        plot_linear(pp, l, band, title = "%s llr=%0.4f,%0.4f dr=%0.4f mr=%0.4f" % (band, ll5r, ll50r, dr, mr))
-        plot_heat(pp, l, band, 5)
-        plot_heat(pp, l, band, 50)
+    siteid = sys.argv[1]
+    full_label = sys.argv[2]
+    runid = sys.argv[3]
+
+    base_coda_dir = get_base_dir(int(siteid), full_label, int(runid))
+    fname = os.path.join(base_coda_dir, 'all_data')
+    all_data, bands = read_shape_data(fname)
+
+    
+    for (band_idx, band) in enumerate(bands):
+        p_fname = os.path.join(base_coda_dir, band[19:], "p_predictions.pdf")
+        pp_p = PdfPages(p_fname)
+        s_fname = os.path.join(base_coda_dir, band[19:], "s_predictions.pdf")
+        pp_s = PdfPages(s_fname)
+        print "saving plots to", p_fname, s_fname
+
+        band_data = extract_band(all_data, band_idx)
+        print "processing band %s, cleaning %d points..." % (band, band_data.shape[0])
+        clean_p_data = clean_points(band_data, P=True, vert=True)
+        clean_s_data = clean_points(band_data, P=False, vert=False)
+        #print "  points remaining = %d" % (clean_data.shape[0])
+        (ll50r, ll5r, dr, mr) = cross_validate(clean_p_data)
+        plot_linear(pp_p, clean_p_data, title = "%s llr=%0.4f,%0.4f dr=%0.4f mr=%0.4f" % (band[19:], ll5r, ll50r, dr, mr))
+        plot_heat(pp_p, clean_p_data, 5)
+        plot_heat(pp_p, clean_p_data, 30)
+        plot_heat(pp_p, clean_p_data, 50)
+
+        (ll50r, ll5r, dr, mr) = cross_validate(clean_s_data)
+        plot_linear(pp_p, clean_s_data, title = "%s llr=%0.4f,%0.4f dr=%0.4f mr=%0.4f" % (band[19:], ll5r, ll50r, dr, mr))
+        plot_heat(pp_s, clean_s_data, 5)
+        plot_heat(pp_s, clean_s_data, 30)
+        plot_heat(pp_s, clean_s_data, 50)
+
 
     pp.close()
 

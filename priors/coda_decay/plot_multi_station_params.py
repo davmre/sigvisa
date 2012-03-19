@@ -19,29 +19,6 @@ import obspy.signal.util
 
 (EVID_COL, SITEID_COL, PHASEID_COL, DISTANCE_COL, AZI_COL, DET_AZI_COL, LON_COL, LAT_COL, B_COL, PEAK_COL, PEAKFIT_COL, MB_COL, SNR_COL, CODA_LEN_COL, AVG_COST_COL, MAX_COST_COL, MIN_AZI_COL, NOISE_FLOOR_COL, NUM_COLS) = range(18+1)
 
-def clean_points(X, filter_azi = False):
-
-    if X is None:
-        return np.array(())
-
-    if len(X.shape) < 2:
-        X = np.reshape(X, (1, X.shape[0]))
-
-    n = X.shape[0]
-
-    f = lambda (a, ma) : True
-    if filter_azi:
-        f = lambda (a,ma) : np.mod(a-ma, 360) < 60
-
-    if X[0, PHASEID_COL] == 1:
-        min_coda_len = 15
-    else:
-        min_coda_len = 40
-
-    indices = [i for i in range(n) if X[i, B_COL] > -0.15 and X[i, B_COL] < 0 and X[i, CODA_LEN_COL] > 25 and (X[i, AVG_COST_COL]/X[i,PEAK_COL] < 0.06) and (X[i,MAX_COST_COL]/X[i,PEAK_COL] < 0.15) and f((X[i, AZI_COL], X[i, MIN_AZI_COL]))]
-# and X[i, DISTANCE_COL] < 1500
-
-    return X[ indices , :]
 
 def label_station(plot_idx, fname):
     ax = plt.subplot(len(sys.argv)-1, 9, plot_idx)

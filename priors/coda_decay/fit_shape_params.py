@@ -1,0 +1,337 @@
+import os, errno, sys, time, traceback
+import numpy as np, scipy
+from guppy import hpy; hp = hpy()
+
+from database.dataset import *
+from database import db
+
+import matplotlib
+matplotlib.use('PDF')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+import plot
+import learn, sigvisa_util
+import priors.SignalPrior
+from utils.waveform import *
+import utils.geog
+import obspy.signal.util
+
+
+import utils.nonparametric_regression as nr
+from priors.coda_decay.coda_decay_common import *
+from priors.coda_decay.plot_coda_decays import *
+
+def arrival_peak_offset(trace, window_start_time, window_end_time):
+    srate = trace.stats.sampling_rate
+
+    i = np.floor((window_start_time)*srate)
+    j = np.floor(np.min([window_start_time+15, window_end_time])*srate)
+
+    # print window_start_time, window_end_time, i, j, srate, trace.data.shape
+
+    pt = np.argmax(trace.data[i:j]) / srate
+    return (pt +window_start_time, trace.data[(pt+window_start_time) * srate ])
+
+
+def logenv_linf_cost(true_env, logenv):
+    c = np.max (np.abs(true_env - logenv))
+    return c
+
+def logenv_l1_cost(true_env, logenv):
+    c = np.sum (np.abs(true_env - logenv))
+    return c
+
+def logenv_ar_cost(true_env, logenv):
+    diff = true_env - logenv
+
+    ar_n = 3
+    ar_params = [0.1, 0.1, 0.8]
+    ll = 0
+
+    last_n = diff[0:ar_n]
+    for x in diff:
+        pred = np.sum(last_n * ar_params)
+        ll = ll - (x-pred)**2
+
+    return ll
+
+def fit_logenvelope(trace, peak_offset_time, peak_height, coda_length):
+    srate = trace.stats['sampling_rate']
+    true_env = trace.data[peak_offset_time*srate : (peak_offset_time + coda_length)*srate]
+
+    cost = lambda(height, b): logenv_l1_cost(true_env, gen_logenvelope(len(true_env)/srate, srate, height, 0, b))
+    mcost = lambda(height, b): logenv_linf_cost(true_env, gen_logenvelope(len(true_env)/srate, srate, height, 0, b))
+
+    bounds = ((peak_height-2, peak_height+1), (-.1, 0),)
+    results = scipy.optimize.brute(cost, bounds, Ns=15, full_output=0)
+
+    avg_cost = cost(results)/len(true_env)
+    max_cost = mcost(results)
+
+    #b = results[0]
+    #results = (0., b)
+    
+    return results, avg_cost, max_cost
+
+
+def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases, noise_floor):
+    npts = smoothed.stats.npts
+    srate = smoothed.stats.sampling_rate
+    stime = smoothed.stats.starttime_unix
+
+    phase_length = 200
+    if other_arrivals.shape[0] > 0:
+        for (a, pa) in zip(other_arrivals, other_arrival_phases):
+            if a > phase_arrival[AR_TIME_COL] and pa != "LR":
+                phase_length = np.min([a - phase_arrival[AR_TIME_COL], phase_length])
+                
+    # compute phase arrival times relative to the trace start time
+    phase_start_time = phase_arrival[AR_TIME_COL] - stime
+    phase_length = np.min([phase_length, npts/srate - phase_start_time])
+    
+    try:
+        (peak_offset_time, peak_height) = arrival_peak_offset(smoothed, phase_start_time, phase_start_time + phase_length )
+    except:
+        print "segment does not contain the arrival we care about"
+        return None
+
+    if (npts/srate - peak_offset_time) < 10:
+        print "skipping segment because peak is within 10s of end"
+        return None
+        
+    try:
+        max_coda_length = find_coda_max_length(smoothed, peak_offset_time, peak_offset_time - (peak_offset_time - phase_start_time)  + phase_length, noise_floor)
+        max_coda_length = np.min([max_coda_length, phase_length - (peak_offset_time - phase_start_time)])
+    except:
+        print "error finding coda length"
+        print traceback.format_exc()
+        print phase_length, peak_offset_time, phase_start_time
+        return None
+
+    (fit_height, b), avg_cost, max_cost = fit_logenvelope(smoothed, peak_offset_time, peak_height, max_coda_length)
+    
+    return (b, fit_height, phase_start_time, phase_length, peak_offset_time, peak_height, coda_length, avg_cost/peak_height, max_cost/peak_height)
+
+def find_coda_max_length(trace, peak_offset_time, phase_end_time, noise_floor):
+    srate = trace.stats.sampling_rate
+
+# choose coda end time as the first 5s window when we fit a positive slope
+
+    num_windows = np.floor((phase_end_time - peak_offset_time - 10 )/5) -1
+
+    for i in np.linspace((peak_offset_time + 10)*srate, (phase_end_time - 10)*srate, num_windows):
+        height = trace.data[i]
+        cost = lambda(b): logenv_l1_cost(trace.data[i:i+10*srate], gen_logenvelope(10, srate, height, 0, b))
+        bounds = ((-.1, 0.1),)
+        results = scipy.optimize.brute(cost, bounds, Ns=10, full_output=0)
+        b = results[0]
+
+        if np.mean(trace.data[i:i+10*srate]) < noise_floor(i/srate) + 0.5:
+            return (i)/srate - peak_offset_time
+
+
+    return phase_end_time - peak_offset_time
+
+
+def get_first_p_s_arrivals(cursor, event, siteid):
+    phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
+    sql_query="SELECT l.time, l.azimuth, l.snr, pid.id, sid.id FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase order by l.sta" % (event[EV_EVID_COL], phase_condition, siteid)
+    cursor.execute(sql_query)
+    arrivals = np.array(cursor.fetchall())
+
+    first_p_arrival = None
+    for arrival in arrivals:
+        if int(arrival[AR_PHASEID_COL]) in P_PHASEIDS:
+            first_p_arrival = arrival
+            break
+    first_s_arrival = None
+    for arrival in arrivals:
+        if int(arrival[AR_PHASEID_COL]) in S_PHASEIDS:
+            first_s_arrival = arrival
+            break
+
+    return (first_p_arrival, first_s_arrival)
+
+
+def get_densest_azi(cursor, siteid):
+    max_azi_count = -1
+    max_azi = -1
+    max_azi_condition = ""
+    for azi in np.linspace(0, 330, 12):
+        if azi == 330:
+            azi_condition = "(l.azimuth between 0 and 30 or l.azimuth between 330 and 360)"
+        else:
+            azi_condition = "l.azimuth between %f and %f" % (azi, azi+60)
+        sql_query="SELECT count(distinct(l.arid)) FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and sid.sta=l.sta and sid.id=%d and %s" % (siteid, azi_condition)
+        cursor.execute(sql_query)
+        azi_count = cursor.fetchall()
+        if azi_count > max_azi_count:
+            max_azi_count = azi_count
+            max_azi = azi
+            max_azi_condition = azi_condition
+    print "max azi is", max_azi, "with count", max_azi_count
+    return max_azi
+
+
+def main():
+# boilerplate initialization of various things
+    siteid = int(sys.argv[1])
+    cursor = db.connect().cursor()
+    sites = read_sites(cursor)
+    st  = 1237680000
+    et = st + 3600*24
+    site_up = read_uptime(cursor, st, et)
+    detections, arid2num = read_detections(cursor, st, et, arrival_table="leb_arrival", noarrays=True)
+    phasenames, phasetimedef = read_phases(cursor)
+    earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
+    netmodel = learn.load_netvisa("parameters", st, et, detections, site_up, sites, phasenames, phasetimedef)
+
+    max_azi = get_densest_azi(cursor, siteid)
+
+
+# want to select all events, with certain properties, which have a P or S phase detected at this station
+    phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
+    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase order by l.sta" % (phase_condition, siteid)
+    cursor.execute(sql_query)
+    events = np.array(cursor.fetchall())
+
+    bands = ['narrow_logenvelope_4.00_6.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_1.00_1.50', 'narrow_logenvelope_0.70_1.00']
+    short_bands = [b[19:] for b in bands]
+
+    runid = int(time.time())    
+    base_coda_dir = get_base_dir(siteid, full_label, runid)
+    print "writing data to directory", base_coda_dir
+
+    f = open(os.path.join(base_coda_dir, 'all_data'), 'w')
+    for b in bands:
+        f.write(b + " ")
+    f.write("\n")
+
+    learned_p = [[] for b in bands]
+    learned_s = [[] for b in bands]
+    learned_sp = [[] for b in bands]
+
+    for event in events:
+
+        distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
+        azimuth = utils.geog.azimuth((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
+
+        (first_p_arrival, first_s_arrival) = get_first_p_s_arrivals(cursor, event, siteid)
+
+        if first_p_arrival is not None and first_s_arrival is not None and first_p_arrival[AR_TIME_COL] > first_s_arrival[AR_TIME_COL]:
+            print "skipping evid %d because S comes before P..." % (event[EV_EVID_COL])
+            continue 
+
+        try:
+            (arrival_segment, noise_segment, other_arrivals, other_arrival_phases) = load_signal_slice(cursor, event[EV_EVID_COL], siteid, load_noise = True)
+        except:
+            print traceback.format_exc()      
+            continue
+
+        for (band_idx, band) in enumerate(bands):
+            short_band = short_bands[band_idx]
+
+
+            vert_noise_floor = np.mean(noise_segment[0]["BHZ"][band])
+            horiz_noise_floor = np.mean(noise_segment[0]["horiz_avg"][band])
+
+            try:
+                vert_smoothed, horiz_smoothed = smoothed_traces(arrival_segment, band)
+            except:
+                print traceback.format_exc()      
+                continue
+
+            # DO THE FITTING
+            vnf = lambda t : vert_noise_floor
+            hnf = lambda t : horiz_noise_floor
+            fit_p_vert = None
+            fit_p_horiz = None
+            fit_s_vert = None
+            fit_s_horiz = None
+            accept_p_vert = False
+            accept_p_horiz = False
+            accept_s_vert = False
+            accept_s_horiz = False
+            if first_p_arrival is not None:
+                fit_p_vert = fit_phase_coda(first_p_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
+                fit_p_horiz = fit_phase_coda(first_p_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
+                accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
+                accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
+
+
+            if first_s_arrival is not None:
+
+                # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
+                if accept_p_vert:
+                    vnf = lambda t : max(vert_noise_floor, fit_p_vert[FIT_HEIGHT] + fit_p_vert[FIT_B]*(t - fit_p_vert[FIT_PEAK_OFFSET]))
+                if accept_p_horiz:
+                    hnf = lambda t : max(horiz_noise_floor, fit_p_horiz[FIT_HEIGHT] + fit_p_horiz[FIT_B]*(t - fit_p_horiz[FIT_PEAK_OFFSET]))
+
+                fit_s_vert = fit_phase_coda(first_s_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
+                fit_s_horiz = fit_phase_coda(first_s_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
+                accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
+                accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
+
+
+    #        print first_p_arrival
+    #        print first_s_arrival
+    #        print "p vert" , fit_p_vert
+    #        print "s horiz", fit_s_horiz
+
+            if accept_p_vert:
+                learned_p[band_idx].append((distance, azimuth, fit_p_vert[FIT_B]))
+            if accept_s_horiz:
+                learned_s[band_idx].append((distance, azimuth, fit_s_horiz[FIT_B]))
+            if accept_p_vert and accept_s_horiz:
+                learned_sp[band_idx].append((fit_p_horiz[FIT_B], fit_s_horiz[FIT_B]))
+
+
+
+            # plot!
+            pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
+            pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
+            gen_title = lambda event, p_fit, s_fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_mcost %f p_len %f \n s_b %f s_acost %f s_mcost %f s_len %f " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, safe_lookup(p_fit, FIT_B), safe_lookup(p_fit, FIT_AVG_COST), safe_lookup(p_fit, FIT_MAX_COST), safe_lookup(p_fit, FIT_CODA_LENGTH), safe_lookup(s_fit, FIT_B), safe_lookup(s_fit, FIT_AVG_COST), safe_lookup(s_fit, FIT_MAX_COST), safe_lookup(s_fit, FIT_CODA_LENGTH))
+            try:
+                plot_channels(pp, vert_smoothed, vert_noise_floor, [fit_p_vert, fit_s_vert], ["g-" if accept_p_vert else "r-", "g-" if accept_s_vert else "r-"], horiz_smoothed, horiz_noise_floor, [fit_p_horiz, fit_s_horiz], ["g-" if accept_p_horiz else "r-", "g-" if accept_s_horiz else "r-"], all_det_times = other_arrivals, all_det_labels = other_arrival_phases, title = gen_title(event, fit_p_vert, fit_s_horiz))
+            except:
+                print "error plotting:"
+                print traceback.format_exc()
+
+
+            # write a line to the output file
+            f.write("%d %d %d %d %d %f %f %f %f %f " % (event[EV_EVID_COL], siteid, band_idx, first_p_arrival[AR_PHASEID_COL] if first_p_arrival is not None else -1, first_s_arrival[AR_PHASEID_COL] if first_s_arrival is not None else -1, distance, azimuth, event[EV_LON_COL], event[EV_LAT_COL], event[EV_MB_COL]))
+            write_fit = lambda f, fit, accept: f.write("%f %f %f %f %f %f %f %f %f " % (fit[FIT_B], fit[FIT_HEIGHT], fit[FIT_PHASE_START_TIME], fit[FIT_PHASE_LENGTH], fit[FIT_PEAK_OFFSET], fit[FIT_HEIGHT], fit[FIT_CODA_LENGTH], fit[FIT_AVG_COST], fit[FIT_MAX_COST]))
+            if first_p_arrival is not None:
+                write_fit(f, fit_p_vert, accept_p_vert)
+                write_fit(f, fit_p_horiz, accept_p_horiz)
+            else:
+                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
+                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
+            if first_s_arrival is not None:
+                write_fit(f, fit_s_vert, accept_s_vert)
+                write_fit(f, fit_s_horiz, accept_s_horiz)
+            else:
+                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
+                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
+
+            f.write("%f %f\n" % (vert_noise_floor, horiz_noise_floor))
+
+            pp.close()
+
+        del arrival_segment
+        del noise_segment
+        del other_arrivals
+        del other_arrival_phases
+    #    print hp.heap()
+
+    f.close()
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
