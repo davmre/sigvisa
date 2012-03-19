@@ -51,7 +51,7 @@ def plot_envelopes(axes, trace, noise_floor, fits, formats, all_det_times = None
     for fit in fits:
         if fit is not None and fit[FIT_CODA_LENGTH] > 0:
             stats = trace.stats.copy()
-            stats['starttime_unix'] += fit[FIT_PEAK_OFFSET]
+            stats['starttime_unix'] += fit[FIT_CODA_START_OFFSET]
             fit_trace = Trace(gen_logenvelope(fit[FIT_CODA_LENGTH], srate, fit[FIT_HEIGHT], 0, fit[FIT_B]), stats)
             fit_trace.stats.npts = len(fit_trace.data)
             traces.append(fit_trace)
@@ -152,9 +152,7 @@ def generate_scatter_plots(all_data, bands, base_coda_dir):
             fit_p_vert = fit_from_row(row, P=True, vert=True)
             fit_s_horiz = fit_from_row(row, P=False, vert=False)
 
-            accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
-            accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
- 
+            accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
             if accept_p_vert:
                 r = np.array((row[DISTANCE_COL], row[AZI_COL], fit_p_vert[FIT_B]))
                 if lp == None:
@@ -166,13 +164,17 @@ def generate_scatter_plots(all_data, bands, base_coda_dir):
             else:
                 print "%s: rejected p for %d" % (short_band, row[EVID_COL])
                     
-
+            accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)            
             if accept_s_horiz:
                 r = np.array((row[DISTANCE_COL], row[AZI_COL], fit_s_horiz[FIT_B]))
                 if ls == None:
                     ls = r
                 else:
                     ls = np.vstack([ls, r])
+#                print "%s: accepted s for %d" % (short_band, row[EVID_COL])
+#            else:
+#                print "%s: rejected s for %d" % (short_band, row[EVID_COL])
+  
             if accept_p_vert and accept_s_horiz:
                 r = np.array((fit_p_vert[FIT_B], fit_s_horiz[FIT_B]))
                 if lsp == None:
@@ -257,16 +259,16 @@ def main():
             fit_s_vert = fit_from_row(row, P=False, vert=True)
             fit_s_horiz = fit_from_row(row, P=False, vert=False)
 
-            accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
-            accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
-            accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
-            accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
+            accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
+            accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
+            accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
+            accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
 
 
             pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
             pp = PdfPages(os.path.join(pdf_dir, str(int(row[EVID_COL])) + ".pdf"))
 
-            title = "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_mcost %f p_len %f \n s_b %f s_acost %f s_mcost %f s_len %f " % (short_band, row[EVID_COL], row[SITEID_COL], row[MB_COL], row[DISTANCE_COL], row[AZI_COL], row[VERT_P_FIT_B], row[VERT_P_FIT_AVG_COST], row[VERT_P_FIT_MAX_COST], row[VERT_P_FIT_CODA_LENGTH], row[HORIZ_S_FIT_B], row[HORIZ_S_FIT_AVG_COST], row[HORIZ_S_FIT_MAX_COST], row[HORIZ_S_FIT_CODA_LENGTH])
+            title = "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_len %f \n s_b %f s_acost %f s_len %f " % (short_band, row[EVID_COL], row[SITEID_COL], row[MB_COL], row[DISTANCE_COL], row[AZI_COL], row[VERT_P_FIT_B], row[VERT_P_FIT_AVG_COST], row[VERT_P_FIT_CODA_LENGTH], row[HORIZ_S_FIT_B], row[HORIZ_S_FIT_AVG_COST], row[HORIZ_S_FIT_CODA_LENGTH])
         
 
             try:

@@ -56,29 +56,50 @@ def logenv_ar_cost(true_env, logenv):
 
     return ll
 
-def fit_logenvelope(trace, peak_offset_time, peak_height, coda_length):
+def fit_specific(trace, coda_start_time, coda_len):
     srate = trace.stats['sampling_rate']
-    true_env = trace.data[peak_offset_time*srate : (peak_offset_time + coda_length)*srate]
-
+    true_env = trace.data[coda_start_time*srate : (coda_start_time + coda_len)*srate]
     cost = lambda(height, b): logenv_l1_cost(true_env, gen_logenvelope(len(true_env)/srate, srate, height, 0, b))
-    mcost = lambda(height, b): logenv_linf_cost(true_env, gen_logenvelope(len(true_env)/srate, srate, height, 0, b))
-
-    bounds = ((peak_height-2, peak_height+1), (-.1, 0),)
+    start_height = true_env[0]
+    bounds = ((start_height-2, start_height+1), (-.1, 0),)
     results = scipy.optimize.brute(cost, bounds, Ns=15, full_output=0)
-
     avg_cost = cost(results)/len(true_env)
-    max_cost = mcost(results)
+    return results, avg_cost
 
-    #b = results[0]
-    #results = (0., b)
+def fit_logenvelope(trace, peak_offset_time, peak_height, max_coda_length, min_coda_length):
+
+    best_cost = 100000
+    best_tradeoff = 100000
+    best_results = None
+    best_start_time = peak_offset_time
+    best_length = max_coda_length
+
+    best_results, best_cost = fit_specific(trace, peak_offset_time, max_coda_length)
+
+    tradeoff_score = lambda cost, l, min_l: cost / np.sqrt(l / min_l)
     
-    return results, avg_cost, max_cost
+    if max_coda_length > min_coda_length:
+        for coda_start_time in np.linspace(peak_offset_time, min(peak_offset_time+10, peak_offset_time + max_coda_length - min_coda_length), 4):
+            real_max_len = max_coda_length - (coda_start_time - peak_offset_time)
+            for coda_len in np.linspace(min_coda_length, real_max_len, np.ceil((real_max_len - min_coda_length)/5)):
+                results, cost = fit_specific(trace, coda_start_time, coda_len)
+                tradeoff = tradeoff_score(cost, coda_len, min_coda_length)
+                if tradeoff < best_tradeoff:
+                    best_tradeoff = tradeoff
+                    best_cost = cost
+                    best_results = results
+                    best_start_time = coda_start_time
+                    best_length = coda_len
 
+#    print "returning", best_results, best_cost, best_start_time, best_length
+    return best_results, best_cost, best_start_time, best_length
 
 def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases, noise_floor):
     npts = smoothed.stats.npts
     srate = smoothed.stats.sampling_rate
     stime = smoothed.stats.starttime_unix
+
+    P = True if int(phase_arrival[AR_PHASEID_COL]) in P_PHASEIDS else False
 
     phase_length = 200
     if other_arrivals.shape[0] > 0:
@@ -109,9 +130,9 @@ def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases
         print phase_length, peak_offset_time, phase_start_time
         return None
 
-    (fit_height, b), avg_cost, max_cost = fit_logenvelope(smoothed, peak_offset_time, peak_height, max_coda_length)
+    (fit_height, b), avg_cost, coda_start_time, coda_length = fit_logenvelope(smoothed, peak_offset_time, peak_height, max_coda_length, min_p_coda_length if P else min_s_coda_length)
     
-    return (b, fit_height, phase_start_time, phase_length, peak_offset_time, peak_height, coda_length, avg_cost/peak_height, max_cost/peak_height)
+    return (b, fit_height, phase_start_time, phase_length, peak_offset_time, peak_height, coda_start_time, coda_length, max_coda_length, avg_cost)
 
 def find_coda_max_length(trace, peak_offset_time, phase_end_time, noise_floor):
     srate = trace.stats.sampling_rate
@@ -128,7 +149,7 @@ def find_coda_max_length(trace, peak_offset_time, phase_end_time, noise_floor):
         b = results[0]
 
         if np.mean(trace.data[i:i+10*srate]) < noise_floor(i/srate) + 0.5:
-            return (i)/srate - peak_offset_time
+            return (i)/srate - peak_offset_time + 10
 
 
     return phase_end_time - peak_offset_time
@@ -200,7 +221,7 @@ def main():
     short_bands = [b[19:] for b in bands]
 
     runid = int(time.time())    
-    base_coda_dir = get_base_dir(siteid, full_label, runid)
+    base_coda_dir = get_base_dir(siteid, None, runid)
     print "writing data to directory", base_coda_dir
 
     f = open(os.path.join(base_coda_dir, 'all_data'), 'w')
@@ -256,22 +277,22 @@ def main():
             if first_p_arrival is not None:
                 fit_p_vert = fit_phase_coda(first_p_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
                 fit_p_horiz = fit_phase_coda(first_p_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
-                accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
-                accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
+                accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
+                accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
 
 
             if first_s_arrival is not None:
 
                 # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
                 if accept_p_vert:
-                    vnf = lambda t : max(vert_noise_floor, fit_p_vert[FIT_HEIGHT] + fit_p_vert[FIT_B]*(t - fit_p_vert[FIT_PEAK_OFFSET]))
+                    vnf = lambda t : max(vert_noise_floor, fit_p_vert[FIT_HEIGHT] + fit_p_vert[FIT_B]*(t - fit_p_vert[FIT_CODA_START_OFFSET]))
                 if accept_p_horiz:
-                    hnf = lambda t : max(horiz_noise_floor, fit_p_horiz[FIT_HEIGHT] + fit_p_horiz[FIT_B]*(t - fit_p_horiz[FIT_PEAK_OFFSET]))
+                    hnf = lambda t : max(horiz_noise_floor, fit_p_horiz[FIT_HEIGHT] + fit_p_horiz[FIT_B]*(t - fit_p_horiz[FIT_CODA_START_OFFSET]))
 
                 fit_s_vert = fit_phase_coda(first_s_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
                 fit_s_horiz = fit_phase_coda(first_s_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
-                accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
-                accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound, max_max_cost=max_cost_bound)
+                accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
+                accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
 
 
     #        print first_p_arrival
@@ -291,29 +312,30 @@ def main():
             # plot!
             pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
             pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
-            gen_title = lambda event, p_fit, s_fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_mcost %f p_len %f \n s_b %f s_acost %f s_mcost %f s_len %f " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, safe_lookup(p_fit, FIT_B), safe_lookup(p_fit, FIT_AVG_COST), safe_lookup(p_fit, FIT_MAX_COST), safe_lookup(p_fit, FIT_CODA_LENGTH), safe_lookup(s_fit, FIT_B), safe_lookup(s_fit, FIT_AVG_COST), safe_lookup(s_fit, FIT_MAX_COST), safe_lookup(s_fit, FIT_CODA_LENGTH))
+            gen_title = lambda event, p_fit, s_fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_len %f \n s_b %f s_acost %f s_len %f " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, safe_lookup(p_fit, FIT_B), safe_lookup(p_fit, FIT_AVG_COST), safe_lookup(p_fit, FIT_CODA_LENGTH), safe_lookup(s_fit, FIT_B), safe_lookup(s_fit, FIT_AVG_COST), safe_lookup(s_fit, FIT_CODA_LENGTH))
             try:
                 plot_channels(pp, vert_smoothed, vert_noise_floor, [fit_p_vert, fit_s_vert], ["g-" if accept_p_vert else "r-", "g-" if accept_s_vert else "r-"], horiz_smoothed, horiz_noise_floor, [fit_p_horiz, fit_s_horiz], ["g-" if accept_p_horiz else "r-", "g-" if accept_s_horiz else "r-"], all_det_times = other_arrivals, all_det_labels = other_arrival_phases, title = gen_title(event, fit_p_vert, fit_s_horiz))
             except:
                 print "error plotting:"
                 print traceback.format_exc()
+            print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
 
 
             # write a line to the output file
             f.write("%d %d %d %d %d %f %f %f %f %f " % (event[EV_EVID_COL], siteid, band_idx, first_p_arrival[AR_PHASEID_COL] if first_p_arrival is not None else -1, first_s_arrival[AR_PHASEID_COL] if first_s_arrival is not None else -1, distance, azimuth, event[EV_LON_COL], event[EV_LAT_COL], event[EV_MB_COL]))
-            write_fit = lambda f, fit, accept: f.write("%f %f %f %f %f %f %f %f %f " % (fit[FIT_B], fit[FIT_HEIGHT], fit[FIT_PHASE_START_TIME], fit[FIT_PHASE_LENGTH], fit[FIT_PEAK_OFFSET], fit[FIT_HEIGHT], fit[FIT_CODA_LENGTH], fit[FIT_AVG_COST], fit[FIT_MAX_COST]))
+            write_fit = lambda f, fit: map(lambda x : f.write("%f " % (x) ), fit)
             if first_p_arrival is not None:
-                write_fit(f, fit_p_vert, accept_p_vert)
-                write_fit(f, fit_p_horiz, accept_p_horiz)
+                write_fit(f, fit_p_vert)
+                write_fit(f, fit_p_horiz)
             else:
-                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
-                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
+                f.write("-1 " * FIT_NUM_COLS)
+                f.write("-1 " * FIT_NUM_COLS)
             if first_s_arrival is not None:
-                write_fit(f, fit_s_vert, accept_s_vert)
-                write_fit(f, fit_s_horiz, accept_s_horiz)
+                write_fit(f, fit_s_vert)
+                write_fit(f, fit_s_horiz)
             else:
-                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
-                f.write("-1 -1 -1 -1 -1 -1 -1 -1 -1")
+                f.write("-1 " * FIT_NUM_COLS)
+                f.write("-1 " * FIT_NUM_COLS)
 
             f.write("%f %f\n" % (vert_noise_floor, horiz_noise_floor))
 
