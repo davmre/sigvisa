@@ -27,19 +27,34 @@ S_PHASEIDS = [4, 5]
 min_p_coda_length = 30
 min_s_coda_length = 45
 
-avg_cost_bound = 0.07
-max_cost_bound = 0.25
+avg_cost_bound = 0.2
 
-(EVID_COL, SITEID_COL, BANDID_COL, P_PHASEID_COL, S_PHASEID_COL, DISTANCE_COL, AZI_COL, LON_COL, LAT_COL, MB_COL, VERT_P_FIT_B, VERT_P_FIT_HEIGHT, VERT_P_FIT_PHASE_START_TIME, VERT_P_FIT_PHASE_LENGTH, VERT_P_FIT_PEAK_OFFSET, VERT_P_FIT_PEAK_HEIGHT, VERT_P_FIT_CODA_LENGTH, VERT_P_FIT_AVG_COST, VERT_P_FIT_MAX_COST, HORIZ_P_FIT_B, HORIZ_P_FIT_HEIGHT, HORIZ_P_FIT_PHASE_START_TIME, HORIZ_P_FIT_PHASE_LENGTH, HORIZ_P_FIT_PEAK_OFFSET, HORIZ_P_FIT_PEAK_HEIGHT, HORIZ_P_FIT_CODA_LENGTH, HORIZ_P_FIT_AVG_COST, HORIZ_P_FIT_MAX_COST, VERT_S_FIT_B, VERT_S_FIT_HEIGHT, VERT_S_FIT_PHASE_START_TIME, VERT_S_FIT_PHASE_LENGTH, VERT_S_FIT_PEAK_OFFSET, VERT_S_FIT_PEAK_HEIGHT, VERT_S_FIT_CODA_LENGTH, VERT_S_FIT_AVG_COST, VERT_S_FIT_MAX_COST, HORIZ_S_FIT_B, HORIZ_S_FIT_HEIGHT, HORIZ_S_FIT_PHASE_START_TIME, HORIZ_S_FIT_PHASE_LENGTH, HORIZ_S_FIT_PEAK_OFFSET, HORIZ_S_FIT_PEAK_HEIGHT, HORIZ_S_FIT_CODA_LENGTH, HORIZ_S_FIT_AVG_COST, HORIZ_S_FIT_MAX_COST, VERT_NOISE_FLOOR_COL, HORIZ_NOISE_FLOOR_COL, NUM_COLS) = range(48+1)
+(EVID_COL, SITEID_COL, BANDID_COL, P_PHASEID_COL, S_PHASEID_COL, DISTANCE_COL, AZI_COL, LON_COL, LAT_COL, MB_COL, VERT_P_FIT_B, VERT_P_FIT_HEIGHT, VERT_P_FIT_PHASE_START_TIME, VERT_P_FIT_PHASE_LENGTH, VERT_P_FIT_PEAK_OFFSET, VERT_P_FIT_PEAK_HEIGHT, VERT_P_FIT_CODA_START_OFFSET, VERT_P_FIT_CODA_LENGTH, VERT_P_FIT_MAX_CODA_LENGTH, VERT_P_FIT_AVG_COST, HORIZ_P_FIT_B, HORIZ_P_FIT_HEIGHT, HORIZ_P_FIT_PHASE_START_TIME, HORIZ_P_FIT_PHASE_LENGTH, HORIZ_P_FIT_PEAK_OFFSET, HORIZ_P_FIT_PEAK_HEIGHT, HORIZ_P_FIT_CODA_START_OFFSET, HORIZ_P_FIT_CODA_LENGTH, HORIZ_P_FIT_MAX_CODA_LENGTH, HORIZ_P_FIT_AVG_COST, VERT_S_FIT_B, VERT_S_FIT_HEIGHT, VERT_S_FIT_PHASE_START_TIME, VERT_S_FIT_PHASE_LENGTH, VERT_S_FIT_PEAK_OFFSET, VERT_S_FIT_PEAK_HEIGHT, VERT_S_FIT_CODA_START_OFFSET, VERT_S_FIT_CODA_LENGTH, VERT_S_FIT_MAX_CODA_LENGTH, VERT_S_FIT_AVG_COST, HORIZ_S_FIT_B, HORIZ_S_FIT_HEIGHT, HORIZ_S_FIT_PHASE_START_TIME, HORIZ_S_FIT_PHASE_LENGTH, HORIZ_S_FIT_PEAK_OFFSET, HORIZ_S_FIT_PEAK_HEIGHT, HORIZ_S_FIT_CODA_START_OFFSET, HORIZ_S_FIT_CODA_LENGTH, HORIZ_S_FIT_MAX_CODA_LENGTH, HORIZ_S_FIT_AVG_COST, VERT_NOISE_FLOOR_COL, HORIZ_NOISE_FLOOR_COL, DEPTH_COL, EVTIME_COL, NUM_COLS) = range(54+1)
 
 (EV_MB_COL, EV_LON_COL, EV_LAT_COL, EV_EVID_COL, EV_TIME_COL, EV_DEPTH_COL, EV_NUM_COLS) = range(6+1)
 
 (AR_TIME_COL, AR_AZI_COL, AR_SNR_COL, AR_PHASEID_COL, AR_SITEID_COL, AR_NUM_COLS) = range(5+1)
 
-(FIT_B, FIT_HEIGHT, FIT_PHASE_START_TIME, FIT_PHASE_LENGTH, FIT_PEAK_OFFSET, FIT_PEAK_HEIGHT, FIT_CODA_LENGTH, FIT_AVG_COST, FIT_MAX_COST) = range(9)
+(FIT_B, FIT_HEIGHT, FIT_PHASE_START_TIME, FIT_PHASE_LENGTH, FIT_PEAK_OFFSET, FIT_PEAK_HEIGHT, FIT_CODA_START_OFFSET, FIT_CODA_LENGTH, FIT_MAX_CODA_LENGTH, FIT_AVG_COST, FIT_NUM_COLS) = range(10+1)
 
-def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound, max_max_cost=max_cost_bound):
-    return fit[FIT_B] > -0.15 and fit[FIT_B] <= 0 and fit[FIT_CODA_LENGTH] > min_coda_length and fit[FIT_AVG_COST] < max_avg_cost and fit[FIT_MAX_COST] < max_max_cost
+def add_depth_time(cursor, r):
+    print r.shape
+    z =  np.zeros( (r.shape[0], 1) )
+    print z.shape
+    r = np.hstack((r,  z, z))
+    print r.shape
+
+    for (idx, row) in enumerate(r):
+        cursor.execute("select time, depth from leb_origin where evid=%d" % (row[EVID_COL]))
+        (t, d) = cursor.fetchone()
+        r[idx, DEPTH_COL] = d
+        r[idx, EVTIME_COL] = t
+    return r
+                  
+    
+def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
+#    print fit[FIT_B], fit[FIT_CODA_LENGTH], fit[FIT_AVG_COST]
+    return fit[FIT_B] > -0.15 and fit[FIT_B] <= 0 and fit[FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[FIT_AVG_COST] <= max_avg_cost
 
 def clean_points(X, P=True, vert=True):
 
@@ -62,7 +77,7 @@ def clean_points(X, P=True, vert=True):
             if new_X is None:
                 new_X = row
             else:
-                new_X = np.vstack([new_x, row])
+                new_X = np.vstack([new_X, row])
 
     return new_X
 
@@ -90,8 +105,10 @@ def get_dir(dname):
 
 
 def get_base_dir(siteid, label, runid):
-    return get_dir(os.path.join("logs", "codas_%d_%s_%s" % (siteid, label, runid)))
-
+    if label is not None:
+        return get_dir(os.path.join("logs", "codas_%d_%s_%s" % (siteid, label, runid)))
+    else:
+        return get_dir(os.path.join("logs", "codas_%d_%s" % (siteid, runid)))       
 
 def read_shape_data(fname):
     f = open(fname, 'r')
@@ -116,7 +133,7 @@ def read_shape_data(fname):
     return all_data, bands
 
 def gen_logenvelope(length, sampling_rate, peak_height, gamma, b):
-    print length, sampling_rate, peak_height, gamma, b
+#    print length, sampling_rate, peak_height, gamma, b
 
     t = np.linspace(1/sampling_rate, length, length*sampling_rate)
     f = (gamma*-1)*np.log(t) + (b * t)
@@ -213,8 +230,8 @@ def smoothed_traces(arrival_segment, band):
     horiz_smoothed = Trace(smooth(horiz_trace.data, window_len=300, window="hamming") , header=horiz_trace.stats.copy())
     horiz_smoothed.stats.npts = len(horiz_smoothed.data)
 
-#    return vert_smoothed, horiz_smoothed
-    return vert_trace, horiz_trace
+    return vert_smoothed, horiz_smoothed
+#    return vert_trace, horiz_trace
 
 def load_signal_slice(cursor, evid, siteid, load_noise = False):
 
@@ -257,8 +274,6 @@ def extract_band(all_data, idx):
 
     band_data = None
 
-    print "all_data has size", all_data.shape
-
     for row in all_data:
 #        print row
         if int(row[BANDID_COL]) == idx:
@@ -270,6 +285,7 @@ def extract_band(all_data, idx):
     print band_data.shape
     return band_data
 
+
 def safe_lookup(l, idx):
     if l is not None:
         return l[idx]
@@ -279,9 +295,9 @@ def safe_lookup(l, idx):
 def fit_from_row(row, P, vert):
     idx = VERT_P_FIT_B
     if P and not vert:
-        idx += 9
+        idx += FIT_NUM_COLS
     elif not P and vert:
-        idx += 18
+        idx += FIT_NUM_COLS*2
     elif not P and not vert:
-        idx += 27
-    return row[idx:idx+9]
+        idx += FIT_NUM_COLS*3
+    return row[idx:idx+FIT_NUM_COLS]
