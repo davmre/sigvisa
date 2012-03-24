@@ -76,8 +76,11 @@ class LogisticModel:
       prior_means = np.array(prior_means)
       prior_precisions = np.array(prior_precisions)
 
+    def log_logistic(x):
+      return -np.log(1 + np.exp(-x))
+    
     def neg_log_lik(coeffs):
-      return - (np.log(logistic(output * (features * coeffs).sum(axis=1)))
+      return - (log_logistic(output * (features * coeffs).sum(axis=1))
                 * weights).sum()\
                 + (prior_precisions * (coeffs - prior_means) ** 2).sum() / 2
 

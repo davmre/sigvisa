@@ -18,14 +18,32 @@ def main(param_dirname):
                     help = "the run-identifier to score (None)")
   parser.add_option("-l", "--label", dest="label", default="validation",
                     help = "the data label (validation)")
+  parser.add_option("-r", "--hours", dest="hours", default=None,
+                    type="float",
+                    help = "inference on HOURS worth of data (all)")
+  parser.add_option("-k", "--skip", dest="skip", default=0,
+                    type="float",
+                    help = "skip the first HOURS of data (0)")
   parser.add_option("-g", "--gui", dest="gui", default=False,
                     action="store_true", help="display graphs (False)")
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")
+  parser.add_option("--sel3", dest="sel3", default=False,
+                    action = "store_true",
+                    help = "show SEL3 scores (False)")
   
   (options, args) = parser.parse_args()
-  
-  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data(options.label)
+
+  if options.datafile is not None:
+    start_time, end_time, detections, leb_events, leb_evlist,\
+      sel3_events, sel3_evlist, site_up, sites, phasenames, \
+      phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(options.datafile, param_dirname,
+                                       hours = options.hours, skip=options.skip)
+  else:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+      sel3_evlist, site_up, sites, phasenames, phasetimedef \
+      = read_data(options.label, hours = options.hours, skip=options.skip)
   
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   
@@ -51,13 +69,58 @@ def main(param_dirname):
   prune_detections(netmodel, leb_events, leb_evlist)
   prune_detections(netmodel, sel3_events, sel3_evlist)
 
-  leb_scores = [netmodel.score_event(event, leb_evlist[evnum]) for
-                evnum, event in enumerate(leb_events)]
+  for evnum, event in enumerate(leb_events):
+    evsc = netmodel.score_event(event, leb_evlist[evnum])
+    if evsc is None or np.isinf(evsc):
+      import pdb
+      pdb.set_trace()
+    
+  leb_scores = dict((evnum, netmodel.score_event(event, leb_evlist[evnum])) for
+                    evnum, event in enumerate(leb_events))
   
-  pos_leb = sum(1 for s in leb_scores if s>0)
+  pos_leb = sum(1 for s in leb_scores.values() if s>0)
   
   print "%.1f %% LEB events have +ve score" % (100. * pos_leb / len(leb_events))
-  print "     Average Score %.1f" % np.average(leb_scores)
+  print "     Average Score %.1f Median %.1f" \
+        % (np.average(leb_scores.values()), np.median(leb_scores.values()))
+  
+  # compute mis-detection statistics on events with negative scores
+  tot_ev_misdet_lp, num_neg_ev = 0., 0
+  for evnum in range(len(leb_events)):
+    if leb_scores[evnum] < 0:
+      det_ph_site = set((ph, int(detections[detnum, DET_SITE_COL]))\
+                        for ph, detnum in leb_evlist[evnum])
+      ev_misdet_lp = 0.
+      for p in range(earthmodel.NumTimeDefPhases()):
+        for s in range(earthmodel.NumSites()):
+          if (p, s) not in det_ph_site:
+            misdet_lp = netmodel.logprob_event_misdet(leb_events[evnum], p, s)
+            if misdet_lp is not None:
+              ev_misdet_lp += misdet_lp
+      num_neg_ev += 1
+      tot_ev_misdet_lp += ev_misdet_lp
+  print "Of the %d negative LEB events average mis-detection logprob %.1f"\
+        % (num_neg_ev, tot_ev_misdet_lp / num_neg_ev)
+
+  print "Highest mb -ve LEB event:"
+  print max((leb_events[evnum, EV_MB_COL], leb_events[evnum, EV_ORID_COL])
+            for evnum, evscore in leb_scores.iteritems() if evscore < 0)
+  
+  if options.gui:
+    plt.figure()
+    plt.title("LEB scores")
+    plt.hist(leb_scores.values())
+
+    plt.figure()
+    plt.title("mb of -ve LEB events")
+    plt.hist([leb_events[evnum, EV_MB_COL]
+              for evnum, evscore in leb_scores.iteritems() if evscore < 0])
+    
+  if not options.sel3 and options.gui:
+    plt.show()
+
+  if not options.sel3:
+    return
 
   true_sel3_idx, false_sel3_idx, mat_idx = find_true_false_guess(leb_events,
                                                                  sel3_events)

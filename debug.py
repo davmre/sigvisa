@@ -110,12 +110,13 @@ def main(param_dirname):
                     action = "store_true", help = "suppress duplicates")
   parser.add_option("-x", "--text_only", dest="text_only", default=False,
                     action = "store_true", help = "text only")
-  parser.add_option("-a", "--arrival_table", dest="arrival_table",
-                    default="idcx_arrival",
-                    help = "arrival table to use for inferring on")
+  parser.add_option("-q", "--quiet", dest="verbose", default=True,
+                    action = "store_false", help = "limit text output")
   parser.add_option("-1", "--type1", dest="type1", default=False,
                     action = "store_true",
                     help = "Type 1 fonts (False)")
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")  
 
   (options, args) = parser.parse_args()
   
@@ -147,24 +148,21 @@ def main(param_dirname):
   evtime, = fetch
   print "Event Time %.1f" % evtime
 
-  start_time, end_time, end_det_time = evtime-100, evtime+100,\
-                                       evtime+100+MAX_TRAVEL_TIME
+  if options.datafile is not None:
+    start_time, end_time, detections, leb_events, leb_evlist,\
+      sel3_events, sel3_evlist, site_up, sites, phasenames, \
+      phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(options.datafile, param_dirname,
+                                          hours = evtime + 100,
+                                          skip = evtime - 100)
+  else:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data(options.label, hours = evtime + 100,
+                            skip = evtime - 100)
 
-  # read all detections which could have been caused by events in the
-  # time range
-  detections, arid2num = read_detections(cursor, start_time, end_det_time,
-                                         options.arrival_table)
-
-  # read LEB events
-  leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "leb")
-  leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
-                          arid2num, "leb")
+  leb_orid2num = compute_orid2num(leb_events)
   
-  
-  sel3_events, sel3_orid2num = read_events(cursor, start_time, end_time,"sel3")
-  sel3_evlist = read_assoc(cursor, start_time, end_time, sel3_orid2num,
-                           arid2num, "sel3")
-
   visa_events, visa_orid2num = read_events(cursor, start_time, end_time,"visa",
                                            runid=runid)
 
@@ -175,37 +173,34 @@ def main(param_dirname):
     visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_evscores)
   
   visa_evlist = read_assoc(cursor, start_time, end_time, visa_orid2num,
-                           arid2num, "visa", runid=runid)
+                           compute_arid2num(detections), "visa", runid=runid)
 
   neic_events = read_isc_events(cursor, start_time, end_time, "NEIC")
 
   all_isc_events = read_isc_events(cursor, start_time, end_time, None)
   
-  site_up = read_uptime(cursor, start_time, end_det_time,
-                        options.arrival_table)
-  
-  sites = read_sites(cursor)
-  
-  cursor.execute("select sta from static_siteid site order by id")
-  sitenames = np.array(cursor.fetchall())[:,0]
-  
-  phasenames, phasetimedef = read_phases(cursor)
-  
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
-                                start_time, end_det_time,
+                                start_time, end_time,
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
   netmodel.disable_sec_arr()
   
+  import pdb
+  pdb.set_trace()
+  
   # print all the events
-  print_events(sitenames, netmodel, earthmodel, detections, leb_events, leb_evlist, "LEB")
-  print_events(sitenames, netmodel, earthmodel, detections, sel3_events, sel3_evlist,
-               "SEL3")
-  print_events(sitenames, netmodel, earthmodel, detections, visa_events, visa_evlist,
-               "VISA")
-  print_events(sitenames, netmodel, earthmodel, detections, neic_events, None, "NEIC")
-  print_events(sitenames, netmodel, earthmodel, detections, all_isc_events, None, "ISC")
+  if options.verbose:
+    print_events(sitenames, netmodel, earthmodel, detections, leb_events,
+                 leb_evlist, "LEB")
+    print_events(sitenames, netmodel, earthmodel, detections, sel3_events,
+                 sel3_evlist, "SEL3")
+    print_events(sitenames, netmodel, earthmodel, detections, visa_events,
+                 visa_evlist, "VISA")
+    print_events(sitenames, netmodel, earthmodel, detections, neic_events,
+                 None, "NEIC")
+    print_events(sitenames, netmodel, earthmodel, detections, all_isc_events,
+                 None, "ISC")
 
   # convert the event longitudes to the 0 -- 360 range to avoid clipping
   # issues at -180
@@ -232,6 +227,35 @@ def main(param_dirname):
     evnum = leb_orid2num[orid]
     event = leb_events[evnum].copy()
     event_detlist = leb_evlist[evnum]
+
+  # draw a map of all the stations which detected and mis-detected this event
+  bmap = draw_earth("P phase: sites detecting(blue) missing(red) off(grey)",
+                    figsize=(8,4.8))
+  detsites = np.zeros(len(sites), bool)
+  posssites = np.zeros(len(sites), bool)
+  # compute the list of sites actually detecting the event
+  for ph, detnum in event_detlist:
+    if phasenames[ph][0] == 'P':
+      detsites[detections[detnum, DET_SITE_COL]] = True
+  # and the list of sites for whom it is possible to detect
+  for siteid in xrange(len(sites)):
+    logprob = netmodel.logprob_event_misdet(event, 0, siteid)
+    if logprob is not None:
+      posssites[siteid] = True
+
+  draw_events(bmap, sites[detsites & posssites][:,[SITE_LON_COL, SITE_LAT_COL]],
+              marker = "o", ms=10, mfc="none", mec="blue", mew=2)
+  draw_events(bmap,sites[(~detsites)&posssites][:,[SITE_LON_COL, SITE_LAT_COL]],
+              marker = "o", ms=10, mfc="none", mec="red", mew=2)
+  draw_events(bmap, sites[~posssites][:,[SITE_LON_COL, SITE_LAT_COL]],
+              marker = "o", ms=10, mfc="none", mec="grey", mew=2)
+
+  draw_events(bmap, [[event[EV_LON_COL], event[EV_LAT_COL]]],
+              marker = "*", ms=10, mfc="none", mec="white", mew=2)
+
+
+  plt.show()#TODO remove these two lines
+  return
   
   lon1 = event[EV_LON_COL] - options.window
   lon2 = event[EV_LON_COL] + options.window

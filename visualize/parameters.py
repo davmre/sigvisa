@@ -9,6 +9,7 @@ import os, csv
 from database import db
 from database.dataset import *
 from learn import load_earth
+from priors import ArrivalAmplitudePrior
 
 def main(param_dirname):
   parser = OptionParser()
@@ -175,7 +176,8 @@ def ArrivalAmplitude(param_dirname, options, phasenames):
   numsites, numphases = [int(x) for x in cfp.next()]
 
   false_par = np.ndarray((numsites, 6))
-  true_par = np.ndarray((numphases, numsites, 6))
+  true_par = np.ndarray((numphases, numsites,
+                         len(ArrivalAmplitudePrior.FEATURE_NAMES)+1))
 
   for siteid in xrange(numsites):
     false_par[siteid] = cfp.next()
@@ -207,9 +209,15 @@ def ArrivalAmplitude(param_dirname, options, phasenames):
     plt.figure(figsize=(16,9.6))
     #plt.subplots_adjust(hspace=.35)
     plt.suptitle("Arrival Amplitude - %s" % phasenames[phaseid])
-    for idx, name in enumerate(["(intercept)", "mb", "depth", "ttime",
-                                "ttime0", "std"]):
-      plt.subplot(3, 2, idx+1)
+    numfeats = len(ArrivalAmplitudePrior.FEATURE_NAMES)
+    for numsubplots in xrange(100):
+      if numsubplots ** 2 >= numfeats:
+        break
+    else:
+      assert False                      # too many features
+    
+    for idx, name in enumerate(ArrivalAmplitudePrior.FEATURE_NAMES):
+      plt.subplot(numsubplots, numsubplots, idx+1)
       plt.hist(true_par[phaseid,:,idx])
       plt.xlabel(name)
 

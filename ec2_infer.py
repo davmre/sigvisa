@@ -13,6 +13,10 @@ import numpy as np
 from database.dataset import *
 import MySQLdb
 from ec2_start import locate_keyname
+import learn
+
+# we will divide the work with the following time granularity
+TIME_QUANT = 900
 
 # unbuffer stdout
 class Unbuffered:
@@ -25,7 +29,7 @@ class Unbuffered:
     return getattr(self.stream, attr)
 sys.stdout=Unbuffered(sys.stdout)
 
-def main():
+def main(param_dirname):
 
   args = sys.argv[1:]
 
@@ -42,14 +46,21 @@ def main():
   label = parse_remove(args, "-l", "--label", "validation")
 
   # remove any description and replace it with the key name
-  parse_remove(args, "-d", "--descrip", None)
+  descrip = parse_remove(args, "-d", "--descrip", "")
   args.extend(["-d", ec2keyname])
 
   email = parse_remove(args, None, "--email", None)
+
+  # look for any datafile directive
+  datafile = parse_remove(args, None, "--datafile", None)
+  if datafile is not None:
+    args.extend(["--datafile", datafile])
   
   print "key", ec2keyname
+  print "descrip", descrip
   print "numsamples", numsamples
   print "label", label
+  print "datafile", datafile
   print "hours", hours
   print "skip", skip
   print "rest:", " ".join(args)
@@ -59,40 +70,71 @@ def main():
   for row in open(os.path.join(os.getenv("HOME"), ec2keyname+".instid")):
     hostnames.append(row.split()[2])
   print "hosts:", hostnames
+
+  # now read the data to deduce the starting and ending time
+  if datafile is not None:
+    start_time, end_time, detections, leb_events, leb_evlist,\
+      sel3_events, sel3_evlist, site_up, sites, phasenames, \
+      phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(datafile, param_dirname,
+                                          hours = hours, skip = skip)
+    
+  else:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data(label, hours=hours, skip=skip)
   
-  # now deduce the starting and ending time of the data
+  # get the current max runid
   localconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", host="127.0.0.1",
                               port=3306)
   cursor = localconn.cursor()
-  data_start, data_end = read_timerange(cursor, label, hours, skip)
-
-  # get the current max runid
   cursor.execute("select max(runid) from visa_run")
   prevmaxrunid, = cursor.fetchone()
 
-  # compute the starting and ending times of all the slaves
-  data_splits = np.linspace(data_start, data_end, len(hostnames)+1)
-  
-  print "Splits:", data_splits
+  # count the number of detections in each hour and divide the hours between
+  # the slaves so that each slave has approximately the same total number of
+  # the square of the number of detections
+  hr_cnt = np.zeros(np.ceil((end_time - start_time) / TIME_QUANT))
+  for det in detections:
+    if det[DET_TIME_COL] < end_time:
+      hr_cnt[(det[DET_TIME_COL] - start_time) // TIME_QUANT] += 1
+  hr_cnt = hr_cnt ** 2
 
-  # now divide the job among all the hosts, we give a little extra at the end
-  # time to allow for detections past the end point.
+  # the target share for each host
+  tgtcnt = float(hr_cnt.sum()) / len(hostnames)
+
+  host_ranges = []
+  curr_skip = 0
+  curr_cnt = 0
+  for idx, cnt in enumerate(hr_cnt):
+    curr_cnt += cnt
+    if curr_cnt >= tgtcnt or idx == len(hr_cnt)-1:
+      host_ranges.append((start_time + curr_skip * TIME_QUANT,
+                          min(start_time + (idx + 1) * TIME_QUANT,
+                              end_time)))
+      curr_skip = idx + 1
+      curr_cnt = 0
+
+  # complete the host ranges for all the other hosts with dummy values
+  for i in range(len(hostnames) - len(host_ranges)):
+    host_ranges.append((end_time-50, end_time))
+  
+  print "Host Ranges:", host_ranges
+  
+  # now divide the job among all the hosts, we give each host 50 seconds
+  # extra to ensure that events on the border between the two hosts are
+  # not squeezed
   # we will also open a tunnel in the background to each of the hosts so that
   # we can monitor their progress using MySQL
-  hostconns = []
-  for hostidx, hostname in enumerate(hostnames):
+  for hostidx, (hostname, (host_start, host_end))\
+          in enumerate(zip(hostnames, host_ranges)):
     # open a tunnel to the host in the background
     while ssh_tunnel(hostname, ec2keyname, 3307 + hostidx, 3306):
       print "Retrying ssh_tunnel to hostidx %d host %s" % (hostidx, hostname)
     # start inference on the host also in the background
     ssh_cmd(hostname, ec2keyname, "cd netvisa; utils/bgjob python -u "
             "infer.py %s -n 0 -l %s -k %f -r %f"
-            % (" ".join(args), label, data_splits[hostidx],
-               min(data_splits[hostidx+1] + MAX_TRAVEL_TIME, data_end)))
-    # create a connection to the host's MySQL database
-    conn = MySQLdb.connect(user="ctbt", db="ctbt3mos", host="127.0.0.1",
-                           port=3307 + hostidx)
-    hostconns.append(conn)
+            % (" ".join(args), label, host_start, min(host_end+50, end_time)))
   
   # first wait for the local host to get started with its run to avoid any
   # confusion in the runids
@@ -105,17 +147,21 @@ def main():
     time.sleep(5)
   print "done"
 
-  # NOTE: variable runid now contains the runid which is being used by
+  # NOTE: the variable 'runid' now contains the runid which is being used by
   # all the hosts to run the above propose job
 
   # create a new run for storing the proposal
-  cursor.execute ("insert into visa_run(run_start, run_end, "
-                  "data_start, data_end, descrip, numsamples, window, step) "
-                  "values (now(), now(), %f, %f, '%s-propose', 0, 0, 0)" %
-                  (data_start, data_end, ec2keyname))
+  cursor.execute ("insert into visa_run(run_start, "
+                  "data_start, descrip, numsamples, window, step) "
+                  "values (now(), %f, '%s-propose (%s)', 0, 0, 0)" %
+                  (start_time, descrip, ec2keyname))
   localconn.commit()
   cursor.execute("select max(runid) from visa_run")
   proprunid, = cursor.fetchone()
+
+  # we are closing and reopening the connections to avoid errors caused by
+  # the MySQL server going away
+  localconn.close()
 
   host_cpus = []
   # for each host check if it has completed and if so copy over the events
@@ -124,25 +170,35 @@ def main():
   num_prop_origin = 0
   propose_start = time.time()
   while len(pending_hostidcs):
-    for hostidx, hostconn in enumerate(hostconns):
+    for hostidx in range(len(hostnames)):
       if hostidx in pending_hostidcs:
         time.sleep(5)                   # don't query too often
+        # connect to the MySQL database on the host
+        try:
+          hostconn = MySQLdb.connect(user="ctbt", db="ctbt3mos",
+                                     host="127.0.0.1", port=3307 + hostidx)
+        except:
+          print "Error connecting to MySQL db of hostidx %d" % hostidx
+          raise
         hostcursor = hostconn.cursor()
         # if the run has not even started then skip it
-        if not hostcursor.execute("select f1 from visa_run where runid=%d"
-                                  % runid):
+        if not hostcursor.execute("select f1, data_end from visa_run "
+                                  "where runid=%d" % runid):
+          hostconn.close()
           continue
-        f1, = hostcursor.fetchone()
+        host_f1, host_data_end = hostcursor.fetchone()
         # when the run is over it populates the f1 column
-        if f1 is not None:
+        if host_f1 is not None:
           # we will copy over the results to the current machine
+          localconn = MySQLdb.connect(user="ctbt", db="ctbt3mos",
+                                      host="127.0.0.1", port=3306)
           cursor = localconn.cursor()
-
-          # note: we don't want to query events which were proposed in the
-          # extra time
+    
+          # we will pull over all the events (even those in the extra
+          # 50 second margin)
           hostcursor.execute("select lon, lat, depth, time, mb from visa_origin"
-                             " where runid=%d and time <= %f"
-                             % (runid, data_splits[hostidx+1]))
+                             " where runid=%d"
+                             % (runid,))
           for row in hostcursor.fetchall():
             num_prop_origin += 1
             cursor.execute("insert into visa_origin(lon, lat, depth, time, mb,"
@@ -154,15 +210,21 @@ def main():
           host_cpu = time.time() - propose_start
           print "Host %d used %.1f cpu seconds" % (hostidx, host_cpu)
           host_cpus.append(host_cpu)
-          
-          cursor.execute("update visa_run set run_end = now() where runid=%d"
-                         % proprunid)
+
+          # check if all the hosts before this one have completed
+          for otheridx in range(hostidx):
+            if otheridx in pending_hostidcs:
+              break
+          else:            
+            cursor.execute("update visa_run set run_end = now(), data_end = %f"
+                           " where runid=%d" % (host_data_end, proprunid))
           localconn.commit()
+          localconn.close()
           
           # we don't need a connection to this host anymore
           hostconn.close()
           
-          # shutdown the host, but don't shutdown if it's the master!!
+          # shutdown the host, but don't shut it down if it's the master!!
           if hostidx > 0:
             print "shutting down hostidx", hostidx
             ssh_cmd(hostnames[hostidx], ec2keyname,
@@ -174,10 +236,10 @@ def main():
   # now we will do a run on the local host using the aggregated events as the
   # proposal run
   exec_cmd("python -u infer.py %s -n %d -l %s -k %f -r %f -p %d"
-           " -d '%s (#nodes=%d node-hrs: sum=%.1f max=%.1f)'"
-           % (" ".join(args), numsamples, label, data_start, data_end,
-              proprunid, ec2keyname, len(hostnames), sum(host_cpus) / 3600.,
-              max(host_cpus)/3600.))
+           " -d '%s (%s) (#nodes=%d node-hrs: sum=%.1f max=%.1f)'"
+           % (" ".join(args), numsamples, label, start_time, end_time,
+              proprunid, descrip, ec2keyname, len(hostnames),
+              sum(host_cpus) / 3600., max(host_cpus)/3600.))
 
   # next we will save the results in a tar file
   exec_cmd("python -m utils.saverun %d %s.tar" %(proprunid+1, ec2keyname))
@@ -240,5 +302,5 @@ def parse_remove(args, shortname, longname, default):
   return retval
 
 if __name__ == "__main__":
-  main()
+  main("parameters")
 

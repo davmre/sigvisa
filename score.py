@@ -51,12 +51,21 @@ def main(param_dirname):
   parser.add_option("-w", "--writefile", dest="writefile", default=None,
                     type="str",
                     help = "file to write the sel3 scores output to")
+
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")
   
   (options, args) = parser.parse_args()
-  
-  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data("validation")
+
+  if options.datafile is not None:
+    start_time, end_time, detections, leb_events, leb_evlist,\
+      sel3_events, sel3_evlist, site_up, sites, phasenames, \
+      phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(options.datafile, param_dirname)
+  else:  
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data("validation")
   
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   

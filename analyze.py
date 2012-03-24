@@ -7,6 +7,7 @@ from database.dataset import *
 from results.compare import *
 from utils.geog import degdiff, dist_deg, dist_km
 import database.db
+import learn
 
 # ignore warnings from matplotlib in python 2.4
 import warnings
@@ -25,6 +26,8 @@ TPHASE_RANGES = [(-1, 0), (0, 100)]
 HPHASE_RANGES = [(-1, 0), (0, 100)]
 MAG_RANGES = [(0,2), (2,3), (3,4), (4,9)]
 ML_RANGES = [(-1000,0), (0,1), (1,2), (2,2.5), (2.5,3), (3,4.5), (4.5,9)]
+DEPTH_RANGES = [(-1, 0), (0, 100), (100, 200), (200, 300), (300, 400),
+                (400, 500), (500, 600), (600, 700), (700, 999)]
 
 # network, (lon1, lon2), (lat1, lat2)
 REGIONS = (
@@ -446,7 +449,7 @@ def kleinermackey_display(leb_events, sel3_events, visa_events):
   print "VISA: Precision %.1f, Recall %.1f, Avg Err %.1f, Std Err %.1f" %\
         (visa_p, visa_r, visa_err, visa_std)
   
-def main():
+def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-i", "--runid", dest="runid", default=None,
                     type="int",
@@ -494,6 +497,10 @@ def main():
                     action = "store_true",
                     help = "analyze by number of timedef detections (False)")
 
+  parser.add_option("-z", "--depth", dest="depth", default=False,
+                    action = "store_true",
+                    help = "analyze by depth (False)")
+
   parser.add_option("--missdet", dest="missdet", default=False,
                     action = "store_true",
                     help = "analyze by number of missed detections (False)")
@@ -522,7 +529,7 @@ def main():
                     action = "store_true",
                     help = "compare with regional bulletins (False)")
   
-  parser.add_option("-z", "--svm", dest="svm", default=False,
+  parser.add_option("--svm", dest="svm", default=False,
                     action = "store_true",
                     help = "use svm scores to improve SEL3 (False)")
 
@@ -551,6 +558,12 @@ def main():
   parser.add_option("-x", "--sel3_prec", dest="sel3_prec", default=False,
                     action = "store_true",
                     help = "match sel3 precision by dropping events (False)")
+
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")
+  
+  parser.add_option("-l", "--label", dest="label", default="validation",
+                    help = "training, validation (default), or test")
   
   (options, args) = parser.parse_args()
 
@@ -583,13 +596,18 @@ def main():
   
   print "D='%s' N=%d W=%s S=%s" % (descrip, numsamples, str(window), str(step))
 
-  detections, arid2num = read_detections(cursor, data_start, data_end)
-  
-  leb_events, leb_orid2num = read_events(cursor, data_start, data_end, "leb")
-
-  sel3_events, sel3_orid2num = read_events(cursor, data_start, data_end,
-                                           "sel3")
-  
+  if options.datafile is not None:
+    _, _, detections, leb_events, leb_evlist,sel3_events,\
+       sel3_evlist, site_up, sites, phasenames, phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(options.datafile, param_dirname,
+                                          hours = data_end, skip = data_start,
+                                          verbose = False)
+  else:
+    _, _, detections, leb_events, leb_evlist, sel3_events, \
+       sel3_evlist, site_up, sites, phasenames, phasetimedef \
+       = read_data(options.label, hours=data_end,
+                   skip=data_start, verbose=False)
+    
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,
                                            "visa", options.runid)
 
@@ -604,10 +622,9 @@ def main():
     visa_events, visa_orid2num = match_sel3_prec(visa_events, visa_scores,
                                                  leb_events, sel3_events)
     
-  leb_evlist = read_assoc(cursor, data_start, data_end, leb_orid2num,
-                          arid2num, "leb")
   visa_evlist = read_assoc(cursor, data_start, data_end, visa_orid2num,
-                           arid2num, "visa", runid=options.runid)  
+                           compute_arid2num(detections), "visa",
+                           runid=options.runid)
 
   # use Type 1 fonts by invoking latex
   if options.type1:
@@ -698,6 +715,10 @@ def main():
     analyze_by_attr("# Det", DETCNT_RANGES, detcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
+  if options.depth:
+    analyze_by_attr("Depth", DEPTH_RANGES, leb_events[:, EV_DEPTH_COL],
+                    leb_events, sel3_events, visa_events, options.verbose)
+
   if options.missdet:
     detcnts = []
     for leb_event in leb_events:
@@ -735,7 +756,7 @@ def main():
   if options.azgap:
     # compute the azimuth gaps for each leb event
     leb_azgaps = [None for _ in leb_events]
-    for (leb_orid, leb_evnum) in leb_orid2num.iteritems():
+    for (leb_orid, leb_evnum) in compute_orid2num(leb_events).items():
       cursor.execute("select esaz from leb_assoc join idcx_arrival "
                      "using(arid,sta) where orid=%d and "
                      "timedef='d' and time between %f and %f" %
@@ -760,6 +781,39 @@ def main():
          % (len(leb_events), sel3_f, sel3_p, sel3_r,
             sel3_err[0], sel3_err[1],
             visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
+  
+  if options.runid2 is not None:
+    visa_events2 = read_events(cursor, options.data_start, options.data_end,
+                               "visa", options.runid2)[0]
+    if options.suppress:
+      cursor.execute("select orid, score from visa_origin where runid=%d" %
+                     (options.runid2,))
+      visa_evscores2 = dict(cursor.fetchall())
+      visa_events2 = suppress_duplicates(visa_events2, visa_evscores2)[0]
+    
+    visa2_f, visa2_p, visa2_r, visa2_err \
+             = f1_and_error(leb_events, visa_events2)
+  
+    print ("  NETVISA2                                    |"
+           " %5.1f %5.1f %5.1f %3.0f %3.0f")\
+           % (visa2_f, visa2_p, visa2_r, visa2_err[0], visa2_err[1])
+
+  if options.runid3 is not None:
+    visa_events3 = read_events(cursor, options.data_start, options.data_end,
+                               "visa", options.runid3)[0]
+    if options.suppress:
+      cursor.execute("select orid, score from visa_origin where runid=%d" %
+                     (options.runid3,))
+      visa_evscores3 = dict(cursor.fetchall())
+      visa_events3 = suppress_duplicates(visa_events3, visa_evscores3)[0]
+    
+    visa3_f, visa3_p, visa3_r, visa3_err \
+             = f1_and_error(leb_events, visa_events3)
+  
+    print ("  NETVISA3                                    |"
+           " %5.1f %5.1f %5.1f %3.0f %3.0f")\
+           % (visa3_f, visa3_p, visa3_r, visa3_err[0], visa3_err[1])
+
   print "=" * 74
   
   if options.regional:
@@ -864,7 +918,7 @@ def main():
 
 if __name__ == "__main__":
   try:
-    main()
+    main("parameters")
   except SystemExit:
     raise
   except:

@@ -122,7 +122,7 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival"):
                  "iarr.sta=site.sta and iarr.iphase=ph.phase and "
                  "ascii(iarr.iphase) = ascii(ph.phase) and "
                  "iarr.time between %d and %d order by iarr.time, iarr.arid" %
-                 (arrival_table, start_time, end_time))
+                 (arrival_table, start_time, end_time + MAX_TRAVEL_TIME))
   
   detections = np.array(cursor.fetchall())
 
@@ -178,15 +178,16 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
   numsites, = cursor.fetchone()
   
   uptime = np.zeros((numsites,
-                     int(ceil((end_time - start_time) / UPTIME_QUANT))),
+          int(ceil((MAX_TRAVEL_TIME + end_time - start_time) / UPTIME_QUANT))),
                     bool)
   
   cursor.execute("select snum, hnum, count(*) from "
-                 "(select site.id-1 snum,trunc((arr.time-%d)/3600, 0) hnum "
+                 "(select site.id-1 snum,trunc((arr.time-%d)/%d, 0) hnum "
                  "from %s arr, static_siteid site "
                  "where arr.sta = site.sta and "
                  "arr.time between %d and %d) sitearr group by snum, hnum" %
-                 (start_time, arrival_table, start_time, end_time))
+                 (start_time, UPTIME_QUANT, arrival_table, start_time,
+                  end_time + MAX_TRAVEL_TIME))
   
   for (siteidx, timeidx, cnt) in cursor.fetchall():
     uptime[siteidx, timeidx] = True
@@ -212,13 +213,13 @@ def read_phases(cursor):
 
   return phasenames, phasetimedef
 
-def read_data(label="training", hours=None, skip=0, verbose=1,
+def read_data(label="training", hours=None, skip=0, verbose=True,
               visa_leb_runid=None, read_leb_detections=False):
   """
   Reads
   - LEB events/assoc, with IDCX arrivals
   - SEL3 events/assoc,
-  - IDCX arrivals with delaz>0 and delsnr>0
+  - IDCX arrivals with delaz>0 and delsnr>0 (upto 2000 secs beyond end_time)
   - Site information
   - Phase information
   - LEB assoc with LEB arrivals
@@ -279,7 +280,7 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
                              strftime("%x %X", gmtime(end_time)))
 
   if verbose:
-    print "Reading SEL3 detections...",
+    print "Reading IDCX detections...",
     
   det, arid2num = read_detections(cursor, start_time, end_time)
 
@@ -349,3 +350,12 @@ def compute_arid2num(detections):
   return dict((det[DET_ARID_COL], detnum) for detnum, det
               in enumerate(detections))
 
+def compute_orid2num(events):
+  return dict((event[EV_ORID_COL], evnum) for evnum, event
+              in enumerate(events))
+
+def read_sitenames():
+  cursor = db.connect().cursor()
+  cursor.execute("select sta from static_siteid site order by id")
+  sitenames = np.array(cursor.fetchall())[:,0]
+  return sitenames

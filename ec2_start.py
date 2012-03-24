@@ -6,7 +6,7 @@
 # - create a disk image and give it a descriptive name
 #
 # USAGE
-# python ec2_start.py <cred> <key> <image> <num-instances> <instance-type> <file-copy> <slave-command> <master-command> <monitor-command>
+# python ec2_start.py <key> <image> <num-instances> <instance-type> <file-copy> <slave-command> <master-command> <monitor-command>
 #
 # This creates a number of instances, copies the files to them, and
 # then runs the command on the master.

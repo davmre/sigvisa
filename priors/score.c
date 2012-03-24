@@ -65,7 +65,7 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
                                           p_event->evdepth,
                                           p_event->evmag,
                                           distance, siteid, phaseid);
-
+  
   for (detpos = 0; detpos < numdet; detpos++)
   {
     Detection_t * det;

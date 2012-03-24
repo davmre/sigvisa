@@ -56,15 +56,19 @@ def learn(param_fname, earthmodel, start_time, end_time,
   numtimedefphases = earthmodel.NumTimeDefPhases()
   numsites = earthmodel.NumSites()
   
-  # separate out the data for each site and phase
-  site_phase_raw = [[[] for phase in xrange(numtimedefphases)]
-                    for site in xrange(numsites)]
-  for evnum, event in enumerate(leb_events):
-    det_phase_site = set((phaseid, detections[detnum, DET_SITE_COL])\
-                         for phaseid, detnum in leb_evlist[evnum])
-    for siteid in range(numsites):
-      dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
-      for phaseid in range(numtimedefphases):
+  site_phase_coeffs = [[None for phaseid in xrange(numtimedefphases)]
+                       for siteid in xrange(numsites)]
+
+  # we will learn the model for each phase at a time
+  for phaseid in xrange(numtimedefphases):
+    
+    # separate out the data for each site
+    site_raw = [[] for site in xrange(numsites)]
+    for evnum, event in enumerate(leb_events):
+      det_site = set(detections[detnum, DET_SITE_COL]\
+                     for ph, detnum in leb_evlist[evnum] if ph==phaseid)
+      for siteid in range(numsites):
+        dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
         arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
                                          event[EV_DEPTH_COL],
                                          event[EV_TIME_COL], phaseid, siteid)
@@ -78,22 +82,15 @@ def learn(param_fname, earthmodel, start_time, end_time,
             or not site_up[siteid, int((arrtime - start_time) / UPTIME_QUANT)]:
           continue
         
-        isdet = int((phaseid, siteid) in det_phase_site)
+        isdet = int(siteid in det_site)
 
-        site_phase_raw[siteid][phaseid].append((isdet, event[EV_MB_COL],
-                                                event[EV_DEPTH_COL], dist))
-
-  # extract the features for each site and phase and construct a dataset
-  site_phase_data = [[extract_features(site_phase_raw[siteid][phaseid])
-                      for phaseid in xrange(numtimedefphases)]
-                     for siteid in xrange(numsites)]
-
+        site_raw[siteid].append((isdet, event[EV_MB_COL],
+                                 event[EV_DEPTH_COL], dist))
   
-  site_phase_coeffs = [[None for phaseid in xrange(numtimedefphases)]
-                       for siteid in xrange(numsites)]
-
-  # we will learn the model for each phase at a time
-  for phaseid in xrange(numtimedefphases):
+    # extract the features for each site and phase and construct a dataset
+    site_data = [extract_features(site_raw[siteid])
+                 for siteid in xrange(numsites)]
+    
     # we initialize all the means to zero and precisions to 1
     feat_mean = np.zeros(len(FEATURE_NAMES) + 1) # add one for intercept
     feat_prec = np.ones(len(FEATURE_NAMES) + 1)
@@ -104,7 +101,7 @@ def learn(param_fname, earthmodel, start_time, end_time,
       # first we will learn the coefficients for each site using
       # the phase global coefficients
       for siteid in xrange(numsites):
-        predictors, output = site_phase_data[siteid][phaseid]
+        predictors, output = site_data[siteid]
         if len(output) == 0:
           site_phase_coeffs[siteid][phaseid] = feat_mean.copy()
         else:

@@ -83,6 +83,10 @@ typedef struct EarthModel_t
   QFactorModel_t qfvc;
 
   int enforce_ddrange;
+  
+  ArrivalAmplitudePrior_t arr_amp_prior;
+  int arr_amp_prior_loaded;                  /* boolean */
+  
 } EarthModel_t;
 
 #define EarthModel_IsTimeDefPhase(p_earth, phaseid)\
@@ -173,3 +177,6 @@ PyObject * py_EarthModel_QFVC(EarthModel_t * p_earth, PyObject * args);
 
 double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double dist);
 
+PyObject * py_EarthModel_LoadAmpModel(EarthModel_t * p_earth, PyObject * args);
+
+PyObject * py_EarthModel_LogArrivalAmp(EarthModel_t * p_earth, PyObject * args);

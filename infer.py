@@ -216,6 +216,8 @@ def main(param_dirname):
   parser.add_option("-z", "--threads", dest="threads", default=1,
                     type="int",
                     help = "number of threads (1)")
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")  
   (options, args) = parser.parse_args()
 
   if options.seed == 0:
@@ -223,7 +225,15 @@ def main(param_dirname):
   
   netvisa.srand(options.seed)
 
-  if options.arrival_table is None:
+  if options.datafile is not None:
+    start_time, end_time, detections, leb_events, leb_evlist,\
+      sel3_events, sel3_evlist, site_up, sites, phasenames, \
+      phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(options.datafile, param_dirname,
+                                          hours = options.hours,
+                                          skip = options.skip)
+    
+  elif options.arrival_table is None:
     start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
                 sel3_evlist, site_up, sites, phasenames, phasetimedef \
                 = read_data(options.label, hours=options.hours,

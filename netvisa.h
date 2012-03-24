@@ -130,11 +130,11 @@ typedef struct NetModel_t
   struct Detection_t * p_detections;
 
   int numsites;
-  int numtime;       /* number of quantized time slots in p_site_up */
+  int num_uptime;    /* number of quantized time slots in p_site_up */
 
   int enable_sec_arr;                  /* enable secondary arrivals */
 
-  int * p_site_up;                           /* numsites x numtime */
+  int * p_site_up;                         /* numsites x num_uptime */
 
   EarthModel_t * p_earth;
   
@@ -160,8 +160,9 @@ typedef struct NetModel_t
 #define UPTIME_QUANT     3600                /* 1 hour */
 
 #define NetModel_IsSiteUp(p_netmodel, siteid, arrtime)\
-  ((arrtime >= (p_netmodel)->start_time) && (arrtime < (p_netmodel)->end_time)\
-   && (p_netmodel)->p_site_up[(siteid) * (p_netmodel)->numtime\
+  ((arrtime >= (p_netmodel)->start_time) &&                     \
+   (arrtime < ((p_netmodel)->end_time + MAX_TRAVEL_TIME))       \
+   && (p_netmodel)->p_site_up[(siteid) * (p_netmodel)->num_uptime\
    + ((int) floor(((arrtime) - (p_netmodel)->start_time) / UPTIME_QUANT))])
 
 #define PI                 ((double) 3.1415926535897931)
