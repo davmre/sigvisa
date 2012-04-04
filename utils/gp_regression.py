@@ -20,7 +20,8 @@ class GaussianProcess:
 
     def train(self, X, y):
         self.X = X
-        self.y = y
+        self.mu = np.mean(y)
+        self.y = y - self.mu
         self.n = X.shape[0]
         self.Ks = self.sigma2 * np.eye(self.n,self.n)
         for i in range(self.n):
@@ -28,7 +29,7 @@ class GaussianProcess:
                 self.Ks[i,j] += self.kernel(X[i, :], X[j, :])
 
         L = scipy.linalg.cholesky(self.Ks, lower=True)
-        self.alpha = scipy.linalg.cho_solve((L, True), y)
+        self.alpha = scipy.linalg.cho_solve((L, True), self.y)
         invL = scipy.linalg.inv(L)
         self.invKs = np.dot(invL.T, invL)
 
@@ -36,18 +37,22 @@ class GaussianProcess:
         k = np.zeros((self.n,))
         for i in range(self.n):
             k[i] = self.kernel(x, self.X[i, :])
+#            print "kernel of",x , "against", self.X[i, :], "is", k[i]
         return k
 
     def predict(self, x):
-        return np.dot(self.alpha, self.__kernel_vector(x))
+        k = self.__kernel_vector(x)
+#        print k
+#        print self.alpha
+#        print self.mu
+        return self.mu + np.dot(self.alpha, k)
 
     def variance(self, x):
-        k = self.__kernel_vector(x)
         return self.kernel(x,x) - np.dot(k.T, np.dot(self.invKs, k))
 
     def log_likelihood(self, x, y):
         k = self.__kernel_vector(x)
-        mu = np.dot(self.alpha, k)
+        mu = self.mu + np.dot(self.alpha, k)
         var = self.kernel(x,x) - np.dot(k.T, np.dot(self.invKs, k))
         return -.5 * np.log(2*np.pi * var) - .5 * ((y - mu)**2 )/var
 
@@ -84,14 +89,14 @@ def main():
     y = np.array((1, 50, 50, 15))
 
 
-    kernel = lambda x, y : np.exp(-.5 * np.linalg.norm(x-y)**2)
+    kernel = lambda x, y : np.exp(-1 * np.linalg.norm(x-y)**2)
     gp = GaussianProcess(kernel, 0.01)
     gp.train(X, y)
     print gp.predict((0,0))
 
-    print pickle.dumps(gp)
+#    print pickle.dumps(gp)
 
-#    plot_interpolated_surface(gp, X, y)
+    plot_interpolated_surface(gp, X, y)
 
 
 if __name__ == "__main__":
