@@ -301,3 +301,44 @@ def fit_from_row(row, P, vert):
     elif not P and not vert:
         idx += FIT_NUM_COLS*3
     return row[idx:idx+FIT_NUM_COLS]
+
+
+def row_to_ev(cursor, row):
+    sql_query="SELECT lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_origin lebo where lebo.evid=%d" % (row[EVID_COL])
+    cursor.execute(sql_query)
+    return np.array(cursor.fetchone())
+
+def pred_arrtime(cursor, r, netmodel, phaseid_col, phase_arr_time_col):
+    cursor.execute("select time, depth from leb_origin where evid=%d" % (r[EVID_COL]))
+    (t, d) = cursor.fetchone()
+
+    phase = int(r[phaseid_col])
+    if phase == -1:
+        phase = 4 if phaseid_col == S_PHASEID_COL else 0
+
+    pred_arr_time = t + netmodel.mean_travel_time(r[LON_COL], r[LAT_COL], d, int(r[SITEID_COL])-1, phase-1)
+
+    sql_query="SELECT l.time, l.arid FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (r[EVID_COL], r[SITEID_COL])
+    cursor.execute(sql_query)
+    other_arrivals = np.array(cursor.fetchall())
+    other_arrivals = other_arrivals[:, 0]
+    start_time = np.min(other_arrivals) - 30
+
+    return (pred_arr_time - start_time) - r[phase_arr_time_col]
+
+def construct_output_generators(cursor, netmodel, P, vert):
+    if P and vert:
+        b_col = VERT_P_FIT_B
+    elif P and not vert:
+        b_col = HORIZ_P_FIT_B
+    elif not P and vert:
+        b_col = VERT_S_FIT_B
+    elif not P and not vert:
+        b_col = HORIZ_S_FIT_B
+    gen_decay = lambda x :x[b_col]
+    gen_onset = lambda x : pred_arrtime(cursor, x, netmodel, P_PHASEID_COL if P else S_PHASEID_COL, b_col + (VERT_P_FIT_PEAK_OFFSET - VERT_P_FIT_B))
+#    gen_amp = lambda x : (  (x[b_col + (VERT_P_FIT_HEIGHT - VERT_P_FIT_B)] - x[b_col] * (x[b_col + (VERT_P_FIT_CODA_START_OFFSET - VERT_P_FIT_B)] - x[b_col + (VERT_P_FIT_PEAK_OFFSET - VERT_P_FIT_B)]))  - x[VERT_NOISE_FLOOR_COL if vert else HORIZ_NOISE_FLOOR_COL]  )/ x[MB_COL]
+
+    gen_amp = lambda x : ( x[b_col + (VERT_P_FIT_PEAK_HEIGHT - VERT_P_FIT_B)] - x[VERT_NOISE_FLOOR_COL if vert else HORIZ_NOISE_FLOOR_COL]  )/ x[MB_COL]
+    
+    return b_col, gen_decay, gen_onset, gen_amp
