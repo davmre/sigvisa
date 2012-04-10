@@ -77,7 +77,7 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
 double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
                                    int is_detected,
                                    double evdepth, double evmag, double dist,
-                                   int siteid, int phaseid)
+                                   int siteid, int phaseid, double dderror)
 {
   double logodds;
   double logprob;
@@ -126,7 +126,21 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
            evdepth, evmag, dist, siteid, phaseid, is_detected,logodds);
     exit(1);
   }
-  
+
+  if (dderror > 0)
+  {
+    logprob += -dderror;
+
+    /* if the event is not detected then we should consider the alternate
+     * explanation that the ddrange was violated */
+    if (!is_detected)
+    {
+      double altlogprob = log(1 - exp(-dderror));
+
+      logprob = LOGSUMEXP(altlogprob, logprob);
+    }
+  }
+
   return logprob;
 }
 

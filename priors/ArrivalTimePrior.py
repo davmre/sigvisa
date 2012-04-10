@@ -24,8 +24,9 @@ def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
       
       res = arrtime - pred_arrtime
       
-      if res > 1000:
-        raise ValueError("residual too large")
+      if res > 100:
+        print "Skipping time residual %d" % res
+        continue
       
       phase_site_res[phaseid][siteid].append(res)
   

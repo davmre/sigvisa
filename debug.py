@@ -186,8 +186,8 @@ def main(param_dirname):
                                 phasetimedef)
   netmodel.disable_sec_arr()
   
-  import pdb
-  pdb.set_trace()
+  #import pdb
+  #pdb.set_trace()
   
   # print all the events
   if options.verbose:

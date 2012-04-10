@@ -123,6 +123,12 @@ typedef struct NetModel_t
 {
   PyObject_HEAD
 
+
+  /* the temperature determines how strongly the deterministic
+  * constraints are enforced. As temperature goes to 0 all constraints
+  * are fully enforced */
+  double temperature;
+  
   double start_time;
   double end_time;
   
@@ -221,6 +227,8 @@ typedef struct NetModel_t
 /* RAND_UNIFORM(a,b) -> random value between a and b */
 #define RAND_UNIFORM(a,b) (((double) (a)) + ((double) ((b)-(a))) * RAND_DOUBLE)
 
+#define LOGSUMEXP(a, b) ((a) > (b) ? ( (a) + log(1 + exp((b)-(a))) )    \
+                         : ((b) + log(1 + exp((a) - (b)))) ) 
 
 Event_t * alloc_event(NetModel_t * p_netmodel);
 void free_event(Event_t * p_event);

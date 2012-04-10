@@ -35,8 +35,6 @@ def main(param_dirname):
 
   ec2keyname = locate_keyname()
 
-  numsamples = int(parse_remove(args, "-n", "--numsamples", 10))
-  
   hours = parse_remove(args, "-r", "--hours", None)
   if hours is not None:
     hours = float(hours)
@@ -58,7 +56,6 @@ def main(param_dirname):
   
   print "key", ec2keyname
   print "descrip", descrip
-  print "numsamples", numsamples
   print "label", label
   print "datafile", datafile
   print "hours", hours
@@ -175,9 +172,12 @@ def main(param_dirname):
         time.sleep(5)                   # don't query too often
         # connect to the MySQL database on the host
         try:
+          # a connect timeout is needed because the host can be overloaded
+          # due to heavy activity
           hostconn = MySQLdb.connect(user="ctbt", db="ctbt3mos",
-                                     host="127.0.0.1", port=3307 + hostidx)
-        except:
+                                     host="127.0.0.1", port=3307 + hostidx,
+                                     connect_timeout=300)
+        except (AttributeError, MySQLdb.OperationalError):
           print "Error connecting to MySQL db of hostidx %d" % hostidx
           raise
         hostcursor = hostconn.cursor()
@@ -235,9 +235,9 @@ def main(param_dirname):
 
   # now we will do a run on the local host using the aggregated events as the
   # proposal run
-  exec_cmd("python -u infer.py %s -n %d -l %s -k %f -r %f -p %d"
+  exec_cmd("python -u infer.py %s -l %s -k %f -r %f -p %d"
            " -d '%s (%s) (#nodes=%d node-hrs: sum=%.1f max=%.1f)'"
-           % (" ".join(args), numsamples, label, start_time, end_time,
+           % (" ".join(args), label, start_time, end_time,
               proprunid, descrip, ec2keyname, len(hostnames),
               sum(host_cpus) / 3600., max(host_cpus)/3600.))
 

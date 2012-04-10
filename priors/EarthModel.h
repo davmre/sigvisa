@@ -180,3 +180,5 @@ double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double dist);
 PyObject * py_EarthModel_LoadAmpModel(EarthModel_t * p_earth, PyObject * args);
 
 PyObject * py_EarthModel_LogArrivalAmp(EarthModel_t * p_earth, PyObject * args);
+double dist_depth_range_error(EarthModel_t * p_earth, int phaseid,
+                              double depth, double distance);

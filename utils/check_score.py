@@ -119,24 +119,23 @@ def main(param_dirname):
   if not options.sel3 and options.gui:
     plt.show()
 
-  if not options.sel3:
-    return
-
-  true_sel3_idx, false_sel3_idx, mat_idx = find_true_false_guess(leb_events,
-                                                                 sel3_events)
-
-  sel3_scores = [netmodel.score_event(event, sel3_evlist[evnum]) for
-                 evnum, event in enumerate(sel3_events)]
+  if options.sel3:
+    true_sel3_idx, false_sel3_idx, mat_idx = find_true_false_guess(leb_events,
+                                                                   sel3_events)
   
-  pos_true_sel3 = sum(1 for evnum in true_sel3_idx if sel3_scores[evnum] > 0)
-  
-  print "%.1f %% True SEL3 events have +ve score" % \
-        (100. * float(pos_true_sel3) / len(true_sel3_idx))
-  
-  pos_false_sel3 = sum(1 for evnum in false_sel3_idx if sel3_scores[evnum] > 0)
-  
-  print "%.1f %% False SEL3 events have +ve score" % \
-        (100. * float(pos_false_sel3) / len(false_sel3_idx))
+    sel3_scores = [netmodel.score_event(event, sel3_evlist[evnum]) for
+                   evnum, event in enumerate(sel3_events)]
+    
+    pos_true_sel3 = sum(1 for evnum in true_sel3_idx if sel3_scores[evnum] > 0)
+    
+    print "%.1f %% True SEL3 events have +ve score" % \
+          (100. * float(pos_true_sel3) / len(true_sel3_idx))
+    
+    pos_false_sel3 = sum(1 for evnum in false_sel3_idx
+                         if sel3_scores[evnum] > 0)
+    
+    print "%.1f %% False SEL3 events have +ve score" % \
+          (100. * float(pos_false_sel3) / len(false_sel3_idx))
 
   if options.gui:
     plt.figure()

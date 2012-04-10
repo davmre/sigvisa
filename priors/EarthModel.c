@@ -1644,3 +1644,32 @@ PyObject * py_EarthModel_LogArrivalAmp(EarthModel_t * p_earth, PyObject * args)
                          ttime, siteid, phaseid));
 }
 
+double dist_depth_range_error(EarthModel_t * p_earth, int phaseid,
+                              double depth, double distance)
+{
+  EarthPhaseModel_t * p_phase;
+  double minerr;
+  int i;
+  
+  assert((phaseid < p_earth->numphases) && p_earth->p_phase_time_def[phaseid]);
+  
+  p_phase = p_earth->p_phases + phaseid;  
+  
+  minerr = INFINITY;
+  
+  for (i=0; i<p_phase->numddrange; i++)
+  {
+    DDRange * range = p_phase->p_ddranges + i;
+    double err = 0;
+
+    err = MAX(err, range->mindist - distance);
+    err = MAX(err, distance - range->maxdist);
+    err = MAX(err, (range->mindepth - depth) / 100.0);
+    err = MAX(err, (depth - range->maxdepth) / 100.0);
+
+    minerr = MIN(minerr, err);
+  }
+
+  assert(minerr >= 0);
+  return minerr;
+}

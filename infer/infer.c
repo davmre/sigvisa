@@ -1064,6 +1064,13 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
 
   do 
   {
+    /* for each window */
+
+    /* we first set the temperature to 100 so that the propose move is not
+     * constrained too much, later we will decrease the temperature to ensure
+     * that we move towards fully complying with the constraints */
+    p_netmodel->temperature = 100.0;
+    
     /* initialize high_evtime */
     p_world->high_evtime = MIN(p_world->low_evtime + p_world->window,
                                p_netmodel->end_time);
@@ -1127,6 +1134,7 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
     {
       int numdel;
       double old_score;
+
 #ifdef NEVER
       Event_t * p_new_event;
 
@@ -1157,6 +1165,10 @@ static void infer(NetModel_t * p_netmodel, World_t * p_world)
       }
       
 #endif /* NEVER */
+
+      /* decrease the temperature in each iteration so that we will
+       * converge to respecting all the constraints */
+      p_netmodel->temperature *= .6;
 
       old_score = p_world->world_score;
       

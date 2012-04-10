@@ -30,6 +30,7 @@ static PyObject * py_arrphase_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_falsephase_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_enable_sec_arr(NetModel_t * self);
 static PyObject * py_disable_sec_arr(NetModel_t * self);
+static PyObject * py_set_temperature(NetModel_t * self, PyObject * args);
 static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_srand(PyObject * self, PyObject * args);
@@ -93,6 +94,8 @@ static PyMethodDef NetModel_methods[] = {
    "enable_sec_arr(): enables secondary arrivals"},
   {"disable_sec_arr", (PyCFunction)py_disable_sec_arr, METH_NOARGS,
    "disable_sec_arr(): disables secondary arrivals"},
+  {"set_temperature", (PyCFunction)py_set_temperature, METH_VARARGS,
+   "set_temperature(temp): set the temperature for constraints"},
   {"score_coda_coda", (PyCFunction)py_score_coda_coda, METH_VARARGS,
    "score_coda_coda(secdetnum, detnum)"
    "-> log probability of secdetnum being a secondary coda of detnum"
@@ -460,6 +463,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
     return -1;
   }
 
+  self->temperature = 100.0;
   self->start_time = start_time;
   self->end_time = end_time;
   self->numsites = siteupobj->dimensions[0];
@@ -953,6 +957,16 @@ static PyObject * py_logprob_event_misdet(NetModel_t * p_netmodel,
   }
 }
 
+static PyObject * py_set_temperature(NetModel_t * self, PyObject * args)
+{
+  double temperature;
+  if (!PyArg_ParseTuple(args, "d", &temperature))
+    return NULL;
+  self->temperature = temperature;
+  Py_INCREF(Py_None);
+  return Py_None;  
+}
+
 static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args)
 {
   /* input arguments */
@@ -1152,17 +1166,22 @@ static PyObject * py_detection_logprob(NetModel_t * p_netmodel,
   double dist;
   int siteid;
   int phaseid;
+  double dderror;
   
   if (!PyArg_ParseTuple(args, "idddii", &isdet, &evdepth, &evmag, &dist,
                         &siteid, &phaseid))
     return NULL;
 
   /* we are assuming a noise value of 0 */
+  dderror = dist_depth_range_error(p_netmodel->p_earth, phaseid, evdepth,
+                                   dist);
+
   return Py_BuildValue("d",
                        EventDetectionPrior_LogProb(&p_netmodel
                                                    ->event_det_prior,
                                                    isdet, evdepth, evmag,
-                                                   dist, siteid, phaseid));
+                                                   dist, siteid, phaseid,
+                                           dderror / p_netmodel->temperature));
 }
 
 static PyObject * py_arramp_zval_logprob_cdf(NetModel_t * p_netmodel,

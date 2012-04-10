@@ -175,9 +175,9 @@ def write_events2(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
   
 def main(param_dirname):
   parser = OptionParser()
-  parser.add_option("-n", "--numsamples", dest="numsamples", default=10,
+  parser.add_option("-n", "--numsamples", dest="numsamples", default=20,
                     type="int",
-                    help = "number of samples per window step (10)")
+                    help = "number of samples per window step (20)")
   parser.add_option("-c", "--birthsteps", dest="birthsteps", default=2,
                     type="int",
                     help = "number of steps per dimension in birth move (2)")

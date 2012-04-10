@@ -58,6 +58,7 @@ def main():
   print "Uploading tar file",
   for pubname in inst_names.itervalues():
     scp_to(pubname, keyname, tarname, "netvisa/"+tarname)
+    print ".",
   print "done."
 
   print "Untarring and compiling:"

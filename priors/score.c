@@ -38,7 +38,8 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
   int numtimedefphases;
   int numdet;
   int detpos;
-
+  double dderror;
+  
   p_earth = p_netmodel->p_earth;
   
   assert(EarthModel_IsTimeDefPhase(p_earth, phaseid));
@@ -60,11 +61,15 @@ static int score_event_site_phase_int(NetModel_t * p_netmodel,
   numdet = p_event->p_num_dets[siteid * numtimedefphases + phaseid];
   
   /* (mis)detection probability for primary detection */
+  dderror = dist_depth_range_error(p_earth, phaseid, p_event->evdepth,
+                                   distance);
+  
   *p_detsc += EventDetectionPrior_LogProb(&p_netmodel->event_det_prior,
                                           numdet == 0 ? 0 : 1,
                                           p_event->evdepth,
                                           p_event->evmag,
-                                          distance, siteid, phaseid);
+                                          distance, siteid, phaseid,
+                                          dderror / p_netmodel->temperature);
   
   for (detpos = 0; detpos < numdet; detpos++)
   {

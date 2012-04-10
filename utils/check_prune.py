@@ -133,6 +133,13 @@ def main(param_dirname):
   visa_evscores = dict(cursor.fetchall())
   print "Done (Average score %.1f)" % (sum(visa_evscores.itervalues())
                                        /len(visa_evscores))
+  plt.figure()
+  plt.title("Runid %d" % options.runid)
+  print "Matching original VISA with LEB...",
+  x_pts, y_pts = compute_roc_curve(leb_events, visa_events, visa_evscores)
+  plt.plot(x_pts, y_pts, label="original", color="blue",
+           linestyle="-.", linewidth=3)
+  
 
   print "Suppressing VISA duplicate events...",
   unpruned_visa_events, unpruned_visa_orid2num = \
@@ -176,8 +183,6 @@ def main(param_dirname):
   report_pruned_events(pruned_visa_orids, visa_evscores)
   report_pruning_errors(leb_events, visa_events, posvisa_events)
   
-  plt.figure()
-  plt.title("Runid %d" % options.runid)
   print "Matching secondary-det VISA with LEB...",
   x_pts, y_pts = compute_roc_curve(leb_events, posvisa_events,
                                    sec_visa_evscores)

@@ -30,6 +30,6 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * dist,
 double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
                                    int is_detected,
                                    double evdepth, double evmag, double dist,
-                                   int siteid, int phaseid);
+                                   int siteid, int phaseid, double dderror);
 
 void EventDetectionPrior_UnInit(EventDetectionPrior_t * dist);
