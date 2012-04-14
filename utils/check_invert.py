@@ -5,6 +5,7 @@ import numpy as np
 from optparse import OptionParser
 
 from database.dataset import *
+from learn import read_datafile_and_sitephase
 from database.db import connect
 import netvisa, learn
 from results.compare import *
@@ -81,14 +82,25 @@ def main(param_dirname):
   parser.add_option("-i", "--runid", dest="runid", default=None,
                     type="int",
                     help = "the run-identifier to treat as LEB (None)")
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")  
 
   (options, args) = parser.parse_args()
 
   netvisa.srand(options.seed)
-  
-  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data("validation", hours=options.hours, skip=options.skip)
+
+  if options.datafile:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef, \
+                sitenames = read_datafile_and_sitephase(options.datafile,
+                                                        param_dirname,
+                                                        hours = options.hours,
+                                                        skip = options.skip)
+  else:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data("validation", hours=options.hours,
+                            skip=options.skip)
 
   # treat a VISA run as LEB
   if options.runid is not None:

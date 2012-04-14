@@ -97,9 +97,6 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
     + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST40], Gaussian_prob(dist, 40, 20))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST12520], Gaussian_prob(dist, 125, 20))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST12540], Gaussian_prob(dist, 125, 40))
-    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST145], Gaussian_prob(dist, 145, 10))
-    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST170], Gaussian_prob(dist, 170, 20))
-    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST175], Gaussian_prob(dist, 175, 30))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_MAG6], Gaussian_prob(evmag, 6, 5.5))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_MAG68], Gaussian_prob(evmag, 6, 8))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_MD], (7 - evmag) * dist);

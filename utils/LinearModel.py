@@ -4,17 +4,18 @@ from scipy.optimize import fmin_ncg
 
 def test_linear():
   random.seed(10)
+  intercept = [1 for i in range(10000)]
   x = [random.random() for i in range(10000)]
   w = [random.random() for i in range(10000)]
 
   y = [random.normalvariate(2*a - 3*b + 5, .1) for a,b in zip(x,w)]
 
-  model = LinearModel("y", ["x", "w"], [x, w], y)
+  model = LinearModel("y", ["int", "x", "w"], [intercept, x, w], y)
 
-  ypred = [model[a,b] for a,b in zip(x,w)]
+  ypred = [model[1, a, b] for a,b in zip(x,w)]
 
   print "linear"
-  print "coeffs", model.coeffs
+  print "coeffs", model.coeffs, "std", model.std
   
   err = np.sqrt(float(sum((y1-y2) ** 2 for y1, y2 in zip(y, ypred))) / len(y))
 
@@ -22,25 +23,29 @@ def test_linear():
   assert(err < .11)
 
 class LinearModel:
-  def __init__(self, name, dim_names, dim_vals, samples):
+  def __init__(self, name, dim_names, dim_vals, samples, verbose=True):
     """
     Learns a linear function of the input dimensions
     """
     assert(len(dim_names) == len(dim_vals))
     self.name, self.dim_names = name, dim_names
 
-    datalen = len(dim_vals[0])
+    datalen = len(samples)
     
     dim_vals = [d for d in dim_vals]              # make a copy
-    dim_vals.append(np.ones(datalen))             # add intercept
     
     data = np.vstack([np.array(d) for d in dim_vals]).T
     
     self.coeffs, residues, rank, sing  = np.linalg.lstsq(data, samples, 1e-6)
+    if len(residues):
+      self.std = np.sqrt(residues[0]/datalen)
+    else:
+      self.std = 1.0
+    
     self.converged = True
     #print "Rank:", rank
     #print "Singular values:", sing
-    if rank < len(dim_vals):
+    if rank < len(dim_vals) and verbose:
       print "Warning: LinearModel: predictors are not independent"
       
       
@@ -76,8 +81,7 @@ class LinearModel:
       raise ValueError("%d dimensions expected got %d" % (len(self.dim_names),
                                                           len(index)))
 
-    val = self.coeffs[-1] + sum(self.coeffs[i] * idx \
-                                for i,idx in enumerate(index))
+    val = sum(self.coeffs[i] * idx for i,idx in enumerate(index))
     
     return val
 

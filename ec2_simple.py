@@ -95,7 +95,13 @@ def main():
 
   print "Copying results:"
   
-  ssh_cmd(inst_names[master], keyname, "cd netvisa; python -m utils.saverun results-%s.tar" % keyname)
+  if numnodes == 1:
+    ssh_cmd(inst_names[master], keyname,
+            "cd netvisa; python -m utils.saverun results-%s.tar" % keyname)
+  
+  if numnodes > 1:
+    scp_from(inst_names[master], keyname,
+             "netvisa/results-%s-propose.tar" % keyname, ".")
   
   scp_from(inst_names[master], keyname, "netvisa/results-%s.tar" % keyname, ".")
   scp_from(inst_names[master], keyname, "netvisa/trace-%s.out" % keyname, ".")

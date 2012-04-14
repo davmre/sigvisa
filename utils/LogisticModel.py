@@ -43,7 +43,8 @@ def test_logistic():
   
 class LogisticModel:
   def __init__(self, name, dim_names, dim_vals, samples, weights=None,
-               alpha = 0, prior_means = None, prior_precisions = None):
+               alpha = 0, prior_means = None, prior_precisions = None,
+               verbose = True):
     """
     Logistic Regression Model. Learns to predict a probability based
     on specified inputs
@@ -57,10 +58,10 @@ class LogisticModel:
     self.dim_names = dim_names
 
     dim_vals = [x for x in dim_vals]              # make a copy
-    dim_vals.append(np.ones_like(dim_vals[0])) # add intercept
+    dim_vals.append(np.ones_like(samples)) # add intercept
 
     if weights is None:
-      weights = np.ones_like(dim_vals[0])
+      weights = np.ones_like(samples)
     else:
       weights = np.array(weights)
     
@@ -99,7 +100,7 @@ class LogisticModel:
                  = fmin_ncg(neg_log_lik, np.zeros(features.shape[1]),
                             fprime = grad_neg_log_lik, fhess=hess_neg_log_lik,
                             disp = 0, full_output=1, avextol=1e-12)
-    if warnflag:
+    if warnflag and verbose:
       self.converged = False
       print "LogisticModel: Warning(%d): regression did not converge" % warnflag
       print "coeffs:", self.coeffs

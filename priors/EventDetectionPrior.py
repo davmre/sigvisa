@@ -9,8 +9,8 @@ def gtf(val, m, s):
          / math.sqrt(2.0 * math.pi * float(s) ** 2)
 
 FEATURE_NAMES = ["mag", "depth", "dist", "dist0", "dist35",
-                 "dist40", "dist12520", "dist12540", "dist145",
-                 "dist170", "dist175", "mag6", "mag68", "md"]
+                 "dist40", "dist12520", "dist12540",
+                 "mag6", "mag68", "md"]
 
 COEFF_PRIOR_MEAN = 0
 COEFF_PRIOR_PREC = 1e-4
@@ -20,7 +20,7 @@ COEFF_PREC_PRIOR_SCALE = 1e2
 def extract_features(raw):
   output, mag_feat, depth_feat, dist_feat = [], [], [], []
   dist0_feat, dist35_feat, dist40_feat, dist12520_feat = [], [], [], []
-  dist12540_feat, dist145_feat, dist170_feat, dist175_feat = [], [], [], []
+  dist12540_feat = []
   mag6_feat, mag68_feat, md_feat, md145_feat = [], [], [], []
   
   for (isdet, mag, depth, dist) in raw:
@@ -35,17 +35,14 @@ def extract_features(raw):
     dist40_feat.append(gtf(dist, 40, 20))
     dist12520_feat.append(gtf(dist, 125, 20))
     dist12540_feat.append(gtf(dist, 125, 40))
-    dist145_feat.append(gtf(dist, 145, 10))
-    dist170_feat.append(gtf(dist, 170, 20))
-    dist175_feat.append(gtf(dist, 175, 30))
     mag6_feat.append(gtf(mag, 6, 5.5))
     mag68_feat.append(gtf(mag, 6, 8))
     md_feat.append((7-mag) * dist)
   
   feature_values = [mag_feat, depth_feat, dist_feat, dist0_feat,
                     dist35_feat, dist40_feat, dist12520_feat,
-                    dist12540_feat, dist145_feat, dist170_feat,
-                    dist175_feat, mag6_feat, mag68_feat, md_feat]
+                    dist12540_feat,
+                    mag6_feat, mag68_feat, md_feat]
   
   return feature_values, output
 
@@ -162,5 +159,79 @@ def learn(param_fname, earthmodel, start_time, end_time,
       print >>fp, buf
       
   fp.close()
+
+def create_featureset(earthmodel,start_time, end_time, detections, leb_events,
+                      leb_evlist, sel3_events, sel3_evlist, site_up, sites,
+                      phasenames, phasetimedef):
+  phase_raw = [[] for phaseid in xrange(phasetimedef.sum())]
   
+  for evnum, event in enumerate(leb_events):
+    for phaseid in xrange(phasetimedef.sum()):
+      det_site = set(detections[detnum, DET_SITE_COL]\
+                     for ph, detnum in leb_evlist[evnum] if ph==phaseid)
+      for siteid in [6,]:
+        dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
+        arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
+                                         event[EV_DEPTH_COL],
+                                         event[EV_TIME_COL], phaseid, siteid)
+        
+        # check if the site is in the shadow zone of this phase
+        if arrtime < 0:
+          continue
+        
+        # check if the site was up at the expected arrival time
+        if arrtime < start_time or arrtime >= end_time \
+            or not site_up[siteid, int((arrtime - start_time) / UPTIME_QUANT)]:
+          continue
+        
+        isdet = int(siteid in det_site)
+
+        phase_raw[phaseid].append((isdet, event[EV_MB_COL],
+                                    event[EV_DEPTH_COL], dist))
   
+  # extract the features for each phase and construct a dataset
+  phase_data = [extract_features(phase_raw[phaseid])
+                for phaseid in xrange(phasetimedef.sum())]
+  
+  return phase_data
+  
+def test_model(earthmodel, train, test):
+  train_feat = create_featureset(earthmodel, *train)
+  test_feat = create_featureset(earthmodel, *test)
+  # we will evaluate with increasing number of features
+  for numfeatures in range(len(FEATURE_NAMES)+1):
+
+    print "Evaluating features:", FEATURE_NAMES[:numfeatures]
+    
+    # train a model for each phase
+    phase_model = []
+    for phaseid, (predictors, output) in enumerate(train_feat):
+      model = LogisticModel("EventDetection", FEATURE_NAMES[:numfeatures],
+                            predictors[:numfeatures], output, verbose=False)
+
+      phase_model.append(model.coeffs)
+
+    # now predict on the test data
+    totcnt = 0
+    tot_logprob = 0.
+    for phaseid, (predictors, output) in enumerate(test_feat):
+      model = phase_model[phaseid]
+      for idx in range(len(output)):
+        logodds = sum(predictors[f][idx] * model[f]
+                      for f in xrange(numfeatures)) + model[-1]
+        if output[idx]:
+          if logodds < -40:
+            logprob = logodds
+          else:
+            logprob = - np.log(1 + np.exp(-logodds))
+        else:
+          if logodds > 40:
+            logprob = -logodds
+          else:
+            logprob = - np.log(1 + np.exp(logodds))
+
+        tot_logprob += logprob
+        totcnt += 1
+
+    print "Avg. log likelihood", tot_logprob / totcnt
+    

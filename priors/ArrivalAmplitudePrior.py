@@ -191,3 +191,73 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
           plt.savefig(basename+".pdf")
         else:
           plt.savefig(basename+".png")
+
+def create_featureset(earthmodel,start_time, end_time, detections, leb_events,
+                      leb_evlist, sel3_events, sel3_evlist, site_up, sites,
+                      phasenames, phasetimedef):
+
+  phase_data = [([[] for _ in FEATURE_NAMES], [])
+                for phaseid in xrange(phasetimedef.sum())]
+  
+  for evnum, detlist in enumerate(leb_evlist):
+    for phase, detnum in detlist:
+      
+      # -1 => amplitude not observed
+      if -1 == detections[detnum, DET_AMP_COL]:
+        continue
+      
+      sitenum = int(detections[detnum, DET_SITE_COL])
+      if sitenum != 6:
+        continue
+      
+      # compute the predictors
+      pred = extract_features(leb_events[evnum, EV_MB_COL],
+                              leb_events[evnum, EV_DEPTH_COL],
+                              detections[detnum, DET_TIME_COL]
+                              - leb_events[evnum,EV_TIME_COL])
+      data = phase_data[phase]
+      for f in range(len(FEATURE_NAMES)):
+        data[0][f].append(pred[f])
+      data[1].append(np.log(detections[detnum, DET_AMP_COL]))
+
+  return phase_data
+  
+def test_model(earthmodel, train, test):
+  train_feat = create_featureset(earthmodel, *train)
+  test_feat = create_featureset(earthmodel, *test)
+  # we will evaluate with increasing number of features
+  for numfeatures in range(1, len(FEATURE_NAMES)+1):
+    print "Evaluating features:", FEATURE_NAMES[:numfeatures]
+    
+    # train a model for each phase
+    phase_model = []
+    for phaseid, (predictors, output) in enumerate(train_feat):
+      if len(output) < 2:
+        phase_model.append(None)
+        continue
+      
+      model = utils.LinearModel.LinearModel("Amp", FEATURE_NAMES[:numfeatures],
+                                            predictors[:numfeatures], output,
+                                            verbose=False)
+
+      phase_model.append(tuple(model.coeffs) + (model.std,))
+      
+    # now predict on the test data
+    totcnt = 0
+    tot_logprob = 0.
+    for phaseid, (predictors, output) in enumerate(test_feat):
+      model = phase_model[phaseid]
+      if model is None:
+        continue
+      
+      for idx in range(len(output)):
+        guess = sum(predictors[f][idx] * model[f]
+                    for f in xrange(numfeatures))
+        logprob = - 0.5 * np.log(2 * np.pi) - np.log(model[-1]) \
+                  - 0.5 * (guess - output[idx])**2 / model[-1] ** 2
+
+        totcnt += 1
+        tot_logprob += logprob
+    
+    print "Avg. log likelihood", tot_logprob / totcnt
+    

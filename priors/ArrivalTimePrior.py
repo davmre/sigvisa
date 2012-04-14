@@ -1,7 +1,8 @@
 from utils import Laplace
+import numpy as np
 
 from database.dataset import EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL,\
-     EV_TIME_COL, DET_SITE_COL, DET_TIME_COL
+     EV_TIME_COL, DET_SITE_COL, DET_TIME_COL, DET_AZI_COL, DET_SLO_COL
 
 def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
   # keep a residual for each site and phase
@@ -50,3 +51,120 @@ def learn(param_filename, earthmodel, detections, leb_events, leb_evlist):
       print >>fp, loc, scale
   
   fp.close()
+
+def create_featureset(earthmodel,start_time, end_time, detections, leb_events,
+                      leb_evlist, sel3_events, sel3_evlist, site_up, sites,
+                      phasenames, phasetimedef):
+  
+  phase_data = [([], [], []) for phaseid in xrange(phasetimedef.sum())]
+
+  for evnum, event in enumerate(leb_events):
+    for phaseid, detnum in leb_evlist[evnum]:
+      siteid = int(detections[detnum, DET_SITE_COL])
+      if siteid != 6:
+        continue
+      
+      arrtime = detections[detnum, DET_TIME_COL]
+      
+      pred_arrtime = earthmodel.ArrivalTime(event[EV_LON_COL],
+                                            event[EV_LAT_COL],
+                                            event[EV_DEPTH_COL],
+                                            event[EV_TIME_COL], phaseid,
+                                            siteid)
+      if pred_arrtime < 0:
+        continue
+      
+      restime = arrtime - pred_arrtime
+      if restime > 100:
+        continue
+
+      arraz = detections[detnum, DET_AZI_COL]
+      
+      pred_az = earthmodel.ArrivalAzimuth(event[EV_LON_COL], event[EV_LAT_COL],
+                                          siteid)
+      
+      resaz = earthmodel.DiffAzimuth(pred_az, arraz)
+      
+      arrslo = detections[detnum, DET_SLO_COL]
+      
+      pred_slo = earthmodel.ArrivalSlowness(event[EV_LON_COL],
+                                            event[EV_LAT_COL],
+                                            event[EV_DEPTH_COL],
+                                            phaseid, siteid)
+      
+      resslo = arrslo - pred_slo
+
+
+      phase_data[phaseid][0].append(restime)
+      phase_data[phaseid][1].append(resaz)
+      phase_data[phaseid][2].append(resslo)
+
+  return phase_data
+
+def compare_laplace_gaussian(trainres, testres):
+  loc, scale = Laplace.estimate(trainres)
+
+  laploglike = sum(Laplace.ldensity(loc, scale, v) for v in testres)
+
+  mean, std = np.mean(trainres), np.std(trainres)
+  
+  gausslike = sum(-0.5 * np.log(2*np.pi) - np.log(std) \
+                  - 0.5 * (v - mean)**2 / std ** 2 for v in testres)
+
+  print "Laplace Avg Log Like", laploglike/len(testres),
+  print "Gaussian Avg Log Like", gausslike/len(testres)
+
+def corrcoeff(xvals, yvals):
+  xmean = np.mean(xvals)
+  ymean = np.mean(yvals)
+
+  return sum((x - xmean) * (y-ymean) for x,y in zip(xvals, yvals)) \
+         / (np.sqrt(sum((x-xmean)**2 for x in xvals))
+            * np.sqrt(sum((y-ymean)**2 for y in yvals)))
+
+def test_model(options, earthmodel, train, test):
+  train_feat = create_featureset(earthmodel, *train)
+  test_feat = create_featureset(earthmodel, *test)
+
+  for phaseid, (timeres, azres, slores) in enumerate(train_feat):
+
+    if len(timeres) < 2 or len(test_feat[phaseid][0]) < 2:
+      continue
+    
+    phname = train[9][phaseid]
+    print "Phase", phname, "traincnt", len(timeres), "testcnt", \
+          len(test_feat[phaseid][0])
+
+    print "Time residual"
+    compare_laplace_gaussian(timeres, test_feat[phaseid][0])
+
+    print "Azimuth residual"
+    compare_laplace_gaussian(timeres, test_feat[phaseid][1])
+
+    print "Slowness residual"
+    compare_laplace_gaussian(timeres, test_feat[phaseid][2])
+
+    print "correlation time az", corrcoeff(timeres, azres)
+    print "correlation time slo", corrcoeff(timeres, slores)
+    print "correlation slo az", corrcoeff(slores, azres)
+    
+    if options.gui and phname in ('P', 'S'):
+      plt = options.plt
+      plt.figure()
+      plt.title(phname)
+      plt.scatter(timeres, azres, s=1)
+      plt.xlabel("Time Residual (s)")
+      plt.ylabel("Azimuth Residual (s/deg)")
+
+      plt.figure()
+      plt.title(phname)
+      plt.scatter(timeres, slores, s=1)
+      plt.xlabel("Time Residual (s)")
+      plt.ylabel("Slowness Residual (s/deg)")
+  
+      plt.figure()
+      plt.title(phname)
+      plt.scatter(azres, slores, s=1)
+      plt.xlabel("Azimuth Residual (deg)")
+      plt.ylabel("Slowness Residual (s/deg)")
+

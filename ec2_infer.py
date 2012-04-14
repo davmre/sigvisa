@@ -165,6 +165,7 @@ def main(param_dirname):
   # and shutdown the host, also record the cpu time used
   pending_hostidcs = set(range(len(hostnames)))
   num_prop_origin = 0
+  connect_errors = 0
   propose_start = time.time()
   while len(pending_hostidcs):
     for hostidx in range(len(hostnames)):
@@ -179,7 +180,9 @@ def main(param_dirname):
                                      connect_timeout=300)
         except (AttributeError, MySQLdb.OperationalError):
           print "Error connecting to MySQL db of hostidx %d" % hostidx
-          raise
+          connect_errors += 1
+          if connect_errors > 100:
+            raise
         hostcursor = hostconn.cursor()
         # if the run has not even started then skip it
         if not hostcursor.execute("select f1, data_end from visa_run "
@@ -211,13 +214,17 @@ def main(param_dirname):
           print "Host %d used %.1f cpu seconds" % (hostidx, host_cpu)
           host_cpus.append(host_cpu)
 
-          # check if all the hosts before this one have completed
-          for otheridx in range(hostidx):
+          # find the minimum pending host index, its start time is the
+          # maximum time that the propose run has covered
+          for otheridx, (othermin, othermax) in enumerate(host_ranges):
             if otheridx in pending_hostidcs:
+              curr_max_time = othermin
               break
-          else:            
-            cursor.execute("update visa_run set run_end = now(), data_end = %f"
-                           " where runid=%d" % (host_data_end, proprunid))
+          else:
+            curr_max_time = end_time
+
+          cursor.execute("update visa_run set run_end = now(), data_end = %f"
+                         " where runid=%d" % (curr_max_time, proprunid))
           localconn.commit()
           localconn.close()
           
@@ -233,6 +240,10 @@ def main(param_dirname):
           # and forget about this host for future iterations
           pending_hostidcs.remove(hostidx)
 
+  # save the results of the propose run
+  exec_cmd("python -m utils.saverun %d results-%s-propose.tar"
+           % (proprunid, ec2keyname))
+  
   # now we will do a run on the local host using the aggregated events as the
   # proposal run
   exec_cmd("python -u infer.py %s -l %s -k %f -r %f -p %d"
@@ -242,12 +253,15 @@ def main(param_dirname):
               sum(host_cpus) / 3600., max(host_cpus)/3600.))
 
   # next we will save the results in a tar file
-  exec_cmd("python -m utils.saverun %d %s.tar" %(proprunid+1, ec2keyname))
+  exec_cmd("python -m utils.saverun %d results-%s.tar"
+           % (proprunid+1, ec2keyname))
 
   # if the user has requested email then send it out and shutdown
   if email is not None:
-    exec_cmd("echo | mutt -s %s -a %s.tar -- %s" % (ec2keyname, ec2keyname,
-                                                    email))
+    exec_cmd("echo | mutt -s %s-propose -a results-%s-propose.tar -- %s"
+             % (ec2keyname, ec2keyname, email))
+    exec_cmd("echo | mutt -s %s -a results-%s.tar -- %s"
+             % (ec2keyname, ec2keyname, email))
     exec_cmd("sudo /sbin/shutdown -h now")
 
 def ssh_tunnel(host, keyname, localport, remoteport):

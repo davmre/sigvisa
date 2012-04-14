@@ -254,9 +254,6 @@ def main(param_dirname):
               marker = "*", ms=10, mfc="none", mec="white", mew=2)
 
 
-  plt.show()#TODO remove these two lines
-  return
-  
   lon1 = event[EV_LON_COL] - options.window
   lon2 = event[EV_LON_COL] + options.window
   lat1 = event[EV_LAT_COL] - options.window
