@@ -1,0 +1,66 @@
+\documentclass{article}
+
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{fullpage}
+
+\begin{document}
+\title{SIGVISA Internal Design}
+\author{Dave Moore}
+\date{}
+
+This document describes the data structures used in SIGVISA's internal representations. This includes representations of events, stations, event arrivals at a station, waveform traces, aggregate data segments from a station potentially consisting of many waveform traces (corresponding to multiple channels and/or frequency bands), etc.
+
+
+Because SIGVISA has portions written in Python and in C, some structures have versions in both languages. When this is the case, both versions will be described, along with (when available) functions to inferface between the two. 
+
+\section{Waveform Traces}
+
+The {\em trace} is the most basic form of signal in SIGVISA. It is a simple time series giving the activity over some period of time at a station, along with certain metadata.
+
+\subsection{Python}
+
+In Python, a trace is represented by the {\tt obspy.signal.Trace} class, which contains two members: {\tt data} is a Numpy array with the raw data, and {\tt stats} is a Python dict containing metadata in the form of key-value pairs. Standard entries are
+
+\begin{tabular}{lp{4in}}
+{\bf Key} & {\bf Value}\\
+{\tt starttime\_unix} & Start time in Unix timestamp format (seconds since midnight on 1/1/1970). \\
+{\tt srate} & Sample rate in Hz.\\
+{\tt npts} & Number of data points (should be equal to {\tt len(data)}). \\
+{\tt siteid} & The station's site id, as an integer (corresponding to {\tt static\_siteid.id} in the database).\\
+{\tt chan} & String representing the channel (usually ``BHZ'', ``BHN'', or ``BHE''; also possibly ``horiz\_avg'').\\
+{\tt chan} & String representing the frequency band (e.g. ``broadband'', ``broadband\_envelope'', etc., see examples below).\\
+{\tt noise\_floor} (optional) & The level of ambient background noise around the time of the signal. \\
+{\tt p\_time} (optional) & The time of the first P-type phase arrival during the trace.\\
+{\tt s\_time} (optional) & The time of the first S-type phase arrival during the trace.\\
+{\tt p\_phaseid} (optional) & The phaseid (from {\tt static\_phaseid.id} of the first P-type phase arrival during the trace.\\
+{\tt s\_phaseid} (optional) & The phaseid of the first S-type -phase arrival during the trace.
+\end{tabular}
+
+\subsection{C}
+
+
+\section{Signal Segments}
+
+A {\tt signal segment} bundles together many traces that correspond to the same time period at the same station. 
+
+\subsection{Python}
+
+A segment in Python is a nested structure, consisting of a dictionary of dictionaries of Traces. The keys in the first-level dictionary are channels (e.g. ``BHZ'' or ``horiz\_avg''), with the values being a different second-level dictionary for each channel. The second-level dictionaries have keys corresponding to different processed versions of the signal, e.g. the envelope, log envelope, or different frequency bands, and Traces as values. Example keys include:
+
+\begin{itemize} 
+\item {\tt broadband} (raw signal data)
+\item {\tt broadband\_envelope} (envelope of raw signal)
+\item {\tt narrow\_logenvelope\_2.00\_3.00} (apply a 2-3Hz bandpass filter to raw signal, then take the log envelope)
+\end{itemize}
+
+\subsubsection{Loading}
+\begin{itemize}
+\item {\tt sigvisa\_util.load\_traces} returns a list of segments for a station between a given start and end time. These segments include {\tt broadband} but no other processing is performed. 
+\item {\tt sigvisa\_util.load\_and\_process\_traces} calls {\tt load\_traces} but also applies a processing function to each trace. Currently this is just computing the envelope, which is stored as {\tt broadband\_envelope}.
+\item {\tt sigvisa\_util.compute\_narrowband\_envelopes} takes a list of segments, and for each one computes the logenvelope in a range of frequency bands. 
+\item {\tt sigvisa\_util.extract\_timeslice\_at\_station} takes a list of segments, and trims/concatenates them as necessary to form a single segment corresponding to the given time window at the given station. 
+\item {\tt priors.coda\_decay.coda\_decay\_common.load\_signal\_slice} loads the window of time associated with an event at a station (using {\tt extract\_timeslice\_at\_station}), as well as a window of noise preceding the signal itself. It computes the narrowband envelopes, finds the noise floor, and sets {\tt p\_time, s\_time, p\_phaseid, s\_phaseid, noise\_floor} for each trace in the segment.
+\end{itemize}
+
+
+\end{document}
