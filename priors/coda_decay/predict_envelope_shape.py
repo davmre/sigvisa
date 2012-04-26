@@ -23,6 +23,7 @@ import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
 
 from priors.coda_decay.train_coda_models import CodaModel
+from priors.coda_decay.signal_likelihood import TraceModel
 
 def cv_residuals_kernel(data, x_indices, y_index, kernel=None):
     kr = []
@@ -69,24 +70,25 @@ def cv_residuals_mean(data, y_index):
 #    print "mean", r
     return r
 
-def plot_residuals(pp, quantity, P, vert, gp_residuals, gpd_residuals, lin_residuals, mean_residuals):
+def plot_residuals(pp, quantity, P, vert, gp_residuals, gpd_residuals, gpt_residuals, lin_residuals, mean_residuals):
     gp_residuals = np.asarray(gp_residuals)
     gpd_residuals = np.asarray(gpd_residuals)
+    gpt_residuals = np.asarray(gpt_residuals)
     lin_residuals = np.asarray(lin_residuals)
     mean_residuals = np.asarray(mean_residuals)
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    rects1 = ax.bar([1.5,2.5,3.5,4.5], [np.mean(np.abs(gp_residuals)), np.mean(np.abs(gpd_residuals)), np.mean(np.abs(lin_residuals)), np.mean(np.abs(mean_residuals))], 0.5, color='r', yerr=[np.std(np.abs(gp_residuals)), np.std(np.abs(gpd_residuals)), np.std(np.abs(lin_residuals)), np.std(np.abs(mean_residuals))   ])
+    rects1 = ax.bar([1.5,2.5,3.5,4.5, 5.5], [np.mean(np.abs(gp_residuals)), np.mean(np.abs(gpd_residuals)), np.mean(np.abs(gpt_residuals)), np.mean(np.abs(lin_residuals)), np.mean(np.abs(mean_residuals))], 0.5, color='r', yerr=[np.std(np.abs(gp_residuals)), np.std(np.abs(gpd_residuals)), np.std(np.abs(gpt_residuals)), np.std(np.abs(lin_residuals)), np.std(np.abs(mean_residuals))   ])
     ax.set_ylabel('Residual')
     ax.set_title('%s Residuals (P=%s, vert=%s)' % (quantity, P, vert))
-    ax.set_xticks([1.5,2.5,3.5,4.5])
-    ax.set_xticklabels( ('GP', 'GP+D', 'Linear', 'Const') )
+    ax.set_xticks([1.5,2.5,3.5,4.5, 5.5])
+    ax.set_xticklabels( ('GP', 'GP+D', 'GP/TT', 'Linear', 'Const') )
     pp.savefig()
 
     fig = plt.figure()
-    print gpd_residuals, 
-    print "mean", mean_residuals
+#    print gpd_residuals, 
+#    print "mean", mean_residuals
     plt.hist(gpd_residuals, bins=10)
     plt.title('%s GPD Residual Distribution (P=%s, vert=%s)' % (quantity, P, vert))
     pp.savefig()
@@ -96,7 +98,7 @@ def plot_residuals(pp, quantity, P, vert, gp_residuals, gpd_residuals, lin_resid
     plt.title('%s Baseline Residual Distribution (P=%s, vert=%s)' % (quantity, P, vert))
     pp.savefig()
 
-def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w1 = .001, w2 = 500, s2 = 0.00001):
+def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w = .001, sigma_f = 500, sigma_n = 0.00001):
 
 
     gp_decay_residuals = []
@@ -105,6 +107,9 @@ def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w1 = 
     gpd_decay_residuals = []
     gpd_onset_residuals = []
     gpd_amp_residuals = []
+    gpt_decay_residuals = []
+    gpt_onset_residuals = []
+    gpt_amp_residuals = []
     lin_decay_residuals = []
     lin_onset_residuals = []
     lin_amp_residuals = []
@@ -126,7 +131,7 @@ def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w1 = 
                 row = r
                 break
 
-        cm = CodaModel(band_data, band_dir, P, vert, ignore_evids = (int(evid),) , earthmodel=earthmodel, netmodel = netmodel, w1 = [w1, w1, w1], w2 = [w2, w2, w2], s2 = [s2, s2, s2])
+        cm = CodaModel(band_data, band_dir, P, vert, ignore_evids = (int(evid),) , earthmodel=earthmodel, netmodel = netmodel, w = [w, w, w], sigma_n = [sigma_n,sigma_n,sigma_n], sigma_f = [sigma_f,sigma_f,sigma_f])
         earthmodel = cm.earthmodel
         netmodel = cm.netmodel
 
@@ -144,6 +149,9 @@ def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w1 = 
         gpd_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_GPD, row[DISTANCE_COL]) - true_decay)
         gpd_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_GPD, row[DISTANCE_COL]) - true_onset)
         gpd_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_GPD, row[DISTANCE_COL]) - true_amp)
+        gpt_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_GPT, row[DISTANCE_COL]) - true_decay)
+        gpt_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_GPT, row[DISTANCE_COL]) - true_onset)
+        gpt_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_GPT, row[DISTANCE_COL]) - true_amp)
         lin_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_LINEAR, row[DISTANCE_COL]) - true_decay)
         lin_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_LINEAR, row[DISTANCE_COL]) - true_onset)
         lin_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_LINEAR, row[DISTANCE_COL]) - true_amp)
@@ -156,16 +164,16 @@ def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w1 = 
     print gp_onset_residuals
     print mean_onset_residuals
 
-
-
-        
+       
     print "cross-validated %d events, found residuals:" % (len(evids))
-    print "decay: gp %f gpd %f lin %f mean %f" % (np.mean(np.abs(gp_decay_residuals)), np.mean(np.abs(gpd_decay_residuals)), np.mean(np.abs(lin_decay_residuals)), np.mean(np.abs(mean_decay_residuals)))
+    print "decay: gp %f gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_decay_residuals)), np.mean(np.abs(gpd_decay_residuals)), np.mean(np.abs(gpt_decay_residuals)), np.mean(np.abs(lin_decay_residuals)), np.mean(np.abs(mean_decay_residuals)))
+    print "onset: gp %f gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_onset_residuals)), np.mean(np.abs(gpd_onset_residuals)), np.mean(np.abs(gpt_onset_residuals)), np.mean(np.abs(lin_onset_residuals)), np.mean(np.abs(mean_onset_residuals)))
+    print "amp: gp %f gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_amp_residuals)), np.mean(np.abs(gpd_amp_residuals)), np.mean(np.abs(gpt_amp_residuals)), np.mean(np.abs(lin_amp_residuals)), np.mean(np.abs(mean_amp_residuals)))
 
     if pp is not None:
-        plot_residuals(pp, "Decay", P, vert, gp_decay_residuals, gpd_decay_residuals, lin_decay_residuals, mean_decay_residuals)
-        plot_residuals(pp, "Onset", P, vert, gp_onset_residuals, gpd_onset_residuals, lin_onset_residuals, mean_onset_residuals)
-        plot_residuals(pp, "Log Amplitude", P, vert, gp_amp_residuals, gpd_amp_residuals, lin_amp_residuals, mean_amp_residuals)
+        plot_residuals(pp, "Decay", P, vert, gp_decay_residuals, gpd_decay_residuals, gpt_decay_residuals, lin_decay_residuals, mean_decay_residuals)
+        plot_residuals(pp, "Onset", P, vert, gp_onset_residuals, gpd_onset_residuals, gpt_onset_residuals, lin_onset_residuals, mean_onset_residuals)
+        plot_residuals(pp, "Log Amplitude", P, vert, gp_amp_residuals, gpd_amp_residuals, gpt_amp_residuals, lin_amp_residuals, mean_amp_residuals)
 
 #    print "onset: gp %f gpd %f lin %f mean %f" % (np.mean(np.abs(gp_onset_residuals)), np.mean(np.abs(gpd_onset_residuals)), np.mean(np.abs(lin_onset_residuals)), np.mean(np.abs(mean_onset_residuals)))
 #    print "amp: gp %f gpd %f lin %f mean %f" % (np.mean(np.abs(gp_amp_residuals)), np.mean(np.abs(gpd_amp_residuals)), np.mean(np.abs(lin_amp_residuals)), np.mean(np.abs(mean_amp_residuals)))
@@ -232,7 +240,8 @@ def plot_linear(pp, data, b_col, title=""):
     plt.plot(X, y, 'ro')
     pp.savefig()
     
-def plot_heat(pp, data, cm, w):
+
+def plot_events_heat(pp, data, cm):
 
     siteid = data[0, SITEID_COL]
     X = data[ : , [LON_COL, LAT_COL] ]
@@ -275,50 +284,15 @@ def plot_heat(pp, data, cm, w):
     print "mlon: %f - %f = %f" % (max_lon, min_lon, max_lon - min_lon)
     print "mlat: %f - %f = %f" % (max_lat, min_lat, max_lat - min_lat)
 
-    bmap = draw_earth("",
-                  #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
-                  #"SEL3(red), NET-VISA(blue)",
-                  projection="cyl",
-                  resolution="l",
-                  llcrnrlon = min_lon-2, urcrnrlon = max_lon,
-                  llcrnrlat = min_lat-2, urcrnrlat = max_lat+2,
-                  nofillcontinents=True,
-                      figsize=(8,8))
+    f = lambda lon, lat: cm.predict_decay(np.array((5.0, lon, lat, -1, 0, 0)), CodaModel.MODEL_TYPE_GP)
+    bmap = plot_heat(pp, f, lonbounds=[min_lon-2, max_lon+2], latbounds=[min_lat-2, max_lat+2])
 
     draw_events(bmap, ((slon, slat),),  marker="x", ms=50, mfc="none", mec="purple", mew=5)
     draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="yellow", mew=2)
-
-#    if min_lon < max_lon:
-    lon_arr = np.linspace(min_lon-2, max_lon, 40)
-#    else:
-#        lon_arr = np.linspace(-185, max_lon, 40)
-
-#        rotated_min = ((min_lon+ 360) % 360) - 180
-#        rotated_max = ((max_lon+ 360) % 360) - 180
-#        print "rotating arr:", min_lon, max_lon, rotated_min, rotated_max
-#        rotated_lon_arr = np.linspace(rotated_min, rotated_max, 40)
-#        print "rotated arr", rotated_lon_arr
-#        lon_arr = ((rotated_lon_arr + 360) % 360) - 180
-#        print "true arr", lon_arr
-
-    lat_arr = np.linspace(min_lat-2, max_lat+2, 40)
-
-    out = np.zeros((len(lon_arr), len(lat_arr)))
-    for loni, lon in enumerate(lon_arr):
-        for lati, lat in enumerate(lat_arr):
-            out[loni, lati] = cm.predict_decay(np.array((5.0, lon, lat, -1, 0, 0)), CodaModel.MODEL_TYPE_GP)
-
-    levels = np.linspace(np.min(out), np.max(out), 10)
-    draw_density(bmap, lon_arr, lat_arr, out, levels = levels, colorbar=True)
-
-    plt.title("w = %f" % (w))
     pp.savefig()
 
 
 def main():
-
-
-
     parser = OptionParser()
 
     parser.add_option("-s", "--siteid", dest="siteid", default=None, type="int", help="siteid of station for which to generate plots")
@@ -362,21 +336,13 @@ def main():
     clean_p_data = clean_points(band_data, P=True, vert=True)
     clean_s_data = clean_points(band_data, P=False, vert=False)
 
-    cv_external(cursor, clean_p_data, band_idx, band_dir, True, True, pp = pp_p, w1=.00001, w2=100, s2=0.01)
-    cm = CodaModel(band_data, band_dir, True, True, w1 = [0.00001, 1, 1], w2 = [100, 100, 100], s2 = [0.01, 0.01, 0.01])
-    plot_heat(pp_p, clean_p_data, cm, 100)
-
-
+    cv_external(cursor, clean_p_data, band_idx, band_dir, True, True, pp = pp_p, sigma_f=.01, w=100, sigma_n=.01)
     pp_p.close()
 
     print "doing s stuff now..."
-    cv_external(cursor, clean_s_data, band_idx, band_dir, False, False, pp = pp_s, w1=.0001, w2=100, s2=0.01)
-    cm = CodaModel(band_data, band_dir, False, False, w1 = [0.0001, 1, 1], w2 = [100, 100, 100], s2 = [0.01, 0.01, 0.01])
-    plot_heat(pp_s, clean_s_data, cm, 100)
-
-
-
-
+    cv_external(cursor, clean_s_data, band_idx, band_dir, False, False, pp = pp_s, sigma_f=.01, w=100, sigma_n=.01)
+ #   cm_s = CodaModel(band_data, band_dir, False, False, sigma_f = [0.01, 1, 1], w = [100, 100, 100], sigma_n = [0.01, 0.01, 0.01])
+#    plot_event_heat(pp_s, clean_s_data, cm, 100)
     pp_s.close()
 
 if __name__ == "__main__":

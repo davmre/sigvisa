@@ -19,11 +19,12 @@ import scipy.linalg
 import hashlib
 
 from priors.coda_decay.coda_decay_common import *
-from utils.gp_regression import GaussianProcess
+
+from utils.gp_regression import GaussianProcess, optimize_hyperparams
+from utils.kernels import InvGamma, LogNormal
 
 
-
-def learn_models(band_data, P, vert, earthmodel, gen_target_col, w1, w2, s2, pp, label):
+def learn_models(band_data, P, vert, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, label):
 
     clean_data = clean_points(band_data, P, vert)
     n = clean_data.shape[0]
@@ -32,20 +33,43 @@ def learn_models(band_data, P, vert, earthmodel, gen_target_col, w1, w2, s2, pp,
     y = np.zeros((n,))
     for i in range(n):
         y[i] = gen_target_col(clean_data[i,:])
-    ll_kernel = lambda  ll1, ll2 : w1 * np.exp(-1 * utils.geog.dist_km(ll1, ll2)**2 / (w2**2))
-    lld_kernel = lambda  lld1, lld2 : w1 * np.exp(-1 * ( utils.geog.dist_km(lld1[0:2], lld2[0:2])**2 + np.abs(lld1[2] - lld2[2])**2 )   / (w2**2)   )
 
-#    llt_kernel = lambda  lld1, lld2 : np.exp(-1 * .5 * ( earthmodel.ArrivalTimeCoord(lld1[0], lld1[1], lld1[2], 0, 0 if P else 4, lld2[0], lld2[1], lld2[2]) + earthmodel.ArrivalTimeCoord(lld2[0], lld2[1], lld2[2], 0, 0 if P else 4, lld1[0], lld1[1], lld1[2])) ** 2 / (w ** 2))
 
-    gp = GaussianProcess(ll_kernel, s2)
-    gp.train(X, y)
-#    gp = None
-    gpd = GaussianProcess(lld_kernel, s2)
-    gpd.train(Xd, y)
-#    gpd = None
-#    gpt = GaussianProcess(llt_kernel, s2)
-#    gpt.train(Xd, y)
+    distfn = lambda ll1, ll2: utils.geog.dist_km(ll1, ll2)
+#    best_params,v = optimize_hyperparams(X, y, kernel="distfn", start_kernel_params=[sigma_n, sigma_f, w], kernel_extra=distfn, kernel_priors = [InvGamma(1.0, 1.0), InvGamma(1.0, 1.0), LogNormal(3, 2.0)])
+    best_params = [sigma_n, sigma_f, w]
+    print "training GP w/ params", best_params #, "giving ll", v
+    gp = GaussianProcess(X, y, kernel="distfn", kernel_params=best_params, kernel_extra=distfn)
+
+    posdef = False
+    gpd = None
     gpt = None
+    posdef = True
+
+    while not posdef:
+
+        try:
+            best_params = [sigma_n, sigma_f, w]
+
+            distfn = lambda ll1, ll2: np.sqrt(utils.geog.dist_km(ll1[0:2], ll2[0:2])**2 + (ll1[2] - ll2[2])**2)
+            print "training GPd w/ params", best_params #, "giving ll", v
+            gpd = GaussianProcess(Xd, y, kernel="distfn", kernel_params=best_params, kernel_extra=distfn)
+
+
+            distfn = lambda lld1, lld2: (earthmodel.ArrivalTimeCoord(lld1[0], lld1[1], lld1[2], 0, 0 if P else 4, lld2[0], lld2[1], lld2[2]) + earthmodel.ArrivalTimeCoord(lld2[0], lld2[1], lld2[2], 0, 0 if P else 4, lld1[0], lld1[1], lld1[2]) )/2
+            #    best_params,v = optimize_hyperparams(Xd, y, kernel="distfn", start_kernel_params=[sigma_n, sigma_f, w], kernel_extra=distfn, kernel_priors = [InvGamma(1.0, 1.0), InvGamma(1.0, 1.0), LogNormal(3, 2.0)])
+            best_params = [sigma_n, sigma_f, w]
+            print "training GPt w/ params", best_params #, "giving ll", v
+            gpt = GaussianProcess(Xd, y, kernel="distfn", kernel_params=best_params, kernel_extra=distfn, ignore_pos_def_errors=False)
+
+
+            posdef = True
+        except np.linalg.linalg.LinAlgError:
+            print "lin alg error, upping sigma_n to %f and tryign again" % (sigma_n)
+            sigma_n *= 1.5
+
+
+
 
     regional_dist = []
     regional_y = []
@@ -57,7 +81,7 @@ def learn_models(band_data, P, vert, earthmodel, gen_target_col, w1, w2, s2, pp,
         if d > 1000:
             tele_dist.append(d)
             tele_y.append(dy)
-        else:            
+        else:
             regional_dist.append(d)
             regional_y.append(dy)
 
@@ -67,7 +91,7 @@ def learn_models(band_data, P, vert, earthmodel, gen_target_col, w1, w2, s2, pp,
     tele_model = utils.LinearModel.LinearModel("tele", ["distance"],
                                         [tele_dist,],
                                         tele_y)
-    
+
 
     if pp is not None:
         plt.figure()
@@ -75,10 +99,10 @@ def learn_models(band_data, P, vert, earthmodel, gen_target_col, w1, w2, s2, pp,
         plt.xlabel("distance (km)")
         plt.ylabel("")
         t = np.linspace(0, 1000, 50)
-        pred = [ regional_model[tv] for tv in t ] 
+        pred = [ regional_model[tv] for tv in t ]
         plt.plot(t, pred, "k-")
         t = np.linspace(1000, np.max(tele_dist), 50)
-        pred = [ tele_model[tv] for tv in t ] 
+        pred = [ tele_model[tv] for tv in t ]
         plt.plot(t, pred, "k-")
         plt.plot(np.concatenate([regional_dist, tele_dist]), np.concatenate([regional_y, tele_y]), 'ro')
         pp.savefig()
@@ -96,7 +120,7 @@ def learn_models(band_data, P, vert, earthmodel, gen_target_col, w1, w2, s2, pp,
         y = mlab.normpdf( bincenters, regional_mean, np.sqrt(regional_var))
         plt.plot(bincenters, y, 'r--', linewidth=1)
         pp.savefig()
-    
+
         plt.figure()
         plt.title(label + " tele gaussian")
         n, bins, patches = plt.hist(tele_y, normed=1)
@@ -123,7 +147,7 @@ class CodaModel:
 
     MODEL_TYPE_GP, MODEL_TYPE_GPD, MODEL_TYPE_GPT, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(5)
 
-    def __init__(self, band_data_with_depth, band_dir, P = True, vert = True, ignore_evids = None, earthmodel = None, netmodel=None, w1 = [.001, .5, .5], w2 = [500, 500, 500], s2 = [0.00001, 0.5, 0.5]):
+    def __init__(self, band_data_with_depth, band_dir, P = True, vert = True, ignore_evids = None, earthmodel = None, netmodel=None, sigma_f = [.001, .5, .5], w = [500, 500, 500], sigma_n = [0.00001, 0.5, 0.5]):
 
         band_data = band_data_with_depth
 
@@ -170,15 +194,15 @@ class CodaModel:
         (b_col, gen_decay, gen_onset, gen_amp) = construct_output_generators(cursor, self.netmodel, P, vert)
 
         # learn decay rate models
-        m = learn_models(band_data, P, vert, self.earthmodel, gen_decay, w1[0], w2[0], s2[0], pp, "decay P=%s vert=%s" % (P, vert))
+        m = learn_models(band_data, P, vert, self.earthmodel, gen_decay, sigma_n[0], sigma_f[0], w[0], pp, "decay P=%s vert=%s" % (P, vert))
         self.decay_models = m
 
         # learn onset time models
-        m = learn_models(band_data, P, vert, self.earthmodel, gen_onset, w1[1], w2[1], s2[1], pp, "offset P=%s vert=%s" % (P, vert))
+        m = learn_models(band_data, P, vert, self.earthmodel, gen_onset, sigma_n[1], sigma_f[1], w[1], pp, "offset P=%s vert=%s" % (P, vert))
         self.onset_models = m
 
         # learn peak height models
-        m = learn_models(band_data, P, vert, self.earthmodel, gen_amp, w1[2], w2[2], s2[2], pp, "amp P=%s vert=%s" % (P, vert))
+        m = learn_models(band_data, P, vert, self.earthmodel, gen_amp, sigma_n[2], sigma_f[2], w[2], pp, "amp P=%s vert=%s" % (P, vert))
         self.peak_amp_models = m
 
         if pp is not None:
@@ -209,6 +233,7 @@ class CodaModel:
                 (mean, var) = model_set['tele_gaussian']
             return mean
 
+
     def predict_decay(self, ev, model_type, distance = None):
         return self.predict(ev, model_type, self.decay_models, distance=distance)
 
@@ -217,6 +242,79 @@ class CodaModel:
 
     def predict_peak_amp(self, ev, model_type, distance = None):
         return self.predict(ev, model_type, self.peak_amp_models, distance=distance)
+
+    def sample(self, ev, model_type, model_set, distance = None):
+
+        if distance is None:
+            distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
+
+        if model_type == self.MODEL_TYPE_GP:
+#            print "GP predicting at ", (ev[EV_LON_COL], ev[EV_LAT_COL])
+            return model_set['gp'].sample((ev[EV_LON_COL], ev[EV_LAT_COL]))
+        elif model_type == self.MODEL_TYPE_GPD:
+            return model_set['gpd'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
+        elif model_type == self.MODEL_TYPE_GPT:
+            return model_set['gpt'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
+        elif model_type == self.MODEL_TYPE_LINEAR:
+            raise RuntimeError("sampling not yet implemented for linear models")
+            if distance < 1000:
+                model = model_set['regional_linear']
+            else:
+                model = model_set['tele_linear']
+
+        elif model_type == self.MODEL_TYPE_GAUSSIAN:
+            if distance < 1000:
+                (mean, var) = model_set['regional_gaussian']
+            else:
+                (mean, var) = model_set['tele_gaussian']
+            return mean + np.random.randn() * np.sqrt(var)
+
+
+    def sample_decay(self, ev, model_type, distance = None):
+        return self.sample(ev, model_type, self.decay_models, distance=distance)
+
+    def sample_peak_time(self, ev, model_type, distance = None):
+        return self.sample(ev, model_type, self.onset_models, distance=distance)
+
+    def sample_peak_amp(self, ev, model_type, distance = None):
+        return self.sample(ev, model_type, self.peak_amp_models, distance=distance)
+
+    def log_likelihood(self, val, ev, model_type, model_set, distance = None):
+
+        if distance is None:
+            distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
+
+        if model_type == self.MODEL_TYPE_GP:
+#            print "GP predicting at ", (ev[EV_LON_COL], ev[EV_LAT_COL])
+            return model_set['gp'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL]), val)
+        elif model_type == self.MODEL_TYPE_GPD:
+            return model_set['gpd'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
+        elif model_type == self.MODEL_TYPE_GPT:
+            return model_set['gpt'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
+        elif model_type == self.MODEL_TYPE_LINEAR:
+            raise RuntimeError("log likelihood not yet implemented for linear models")
+            if distance < 1000:
+                model = model_set['regional_linear']
+            else:
+                model = model_set['tele_linear']
+
+        elif model_type == self.MODEL_TYPE_GAUSSIAN:
+            if distance < 1000:
+                (mean, var) = model_set['regional_gaussian']
+            else:
+                (mean, var) = model_set['tele_gaussian']
+            return -.5 *np.log(2*np.pi*var) - .5 *(val-mean)**2 / var
+
+
+    def log_likelihood_decay(self, val, ev, model_type, distance = None):
+        return self.log_likelihood(val, ev, model_type, self.decay_models, distance=distance)
+
+    def log_likelihood_peak_time(self, val, ev, model_type, distance = None):
+        return self.log_likelihood(val, ev, model_type, self.onset_models, distance=distance)
+
+    def log_likelihood_peak_amp(self, val, ev, model_type, distance = None):
+        return self.log_likelihood(val, ev, model_type, self.peak_amp_models, distance=distance)
+
 
 def main():
     cm = CodaModel(sys.argv[1], ignore_evids = (5330781,))

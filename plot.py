@@ -58,7 +58,7 @@ def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None,
     plot_det_times(trc, all_det_times, all_det_labels)
 
 def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format="k-"):
-  plt.figure()
+  fig = plt.figure()
   plt.xlabel("Time (s)")
 
   if title is not None:
@@ -75,7 +75,7 @@ def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format=
 
   plt.plot(timevals, trc, format)
   plot_det_times(trc, all_det_times, all_det_labels)
-
+  return fig
 
 def plot_traces(traces, title=None, all_det_times=None, all_det_labels=None, formats=None, linewidths=None):
   plt.figure()

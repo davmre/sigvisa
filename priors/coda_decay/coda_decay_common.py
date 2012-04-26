@@ -1,5 +1,5 @@
 import os, errno, sys, time, traceback
-import numpy as np, scipy
+import numpy as np, scipy, scipy.stats
 from guppy import hpy; hp = hpy()
 
 from database.dataset import *
@@ -14,6 +14,7 @@ import plot
 import learn, sigvisa_util
 import priors.SignalPrior
 from utils.waveform import *
+from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
 import obspy.signal.util
 
@@ -50,8 +51,8 @@ def add_depth_time(cursor, r):
         r[idx, DEPTH_COL] = d
         r[idx, EVTIME_COL] = t
     return r
-                  
-    
+
+
 def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
 #    print fit[FIT_B], fit[FIT_CODA_LENGTH], fit[FIT_AVG_COST]
     return fit[FIT_B] > -0.15 and fit[FIT_B] <= 0 and fit[FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[FIT_AVG_COST] <= max_avg_cost
@@ -94,7 +95,7 @@ def read_shape_params(fname):
     return params
 
 def get_dir(dname):
-    
+
     try:
         os.makedirs(dname)
     except OSError as exc:
@@ -108,7 +109,7 @@ def get_base_dir(siteid, label, runid):
     if label is not None:
         return get_dir(os.path.join("logs", "codas_%d_%s_%s" % (siteid, label, runid)))
     else:
-        return get_dir(os.path.join("logs", "codas_%d_%s" % (siteid, runid)))       
+        return get_dir(os.path.join("logs", "codas_%d_%s" % (siteid, runid)))
 
 def read_shape_data(fname):
     f = open(fname, 'r')
@@ -145,33 +146,33 @@ def gen_logenvelope(length, sampling_rate, peak_height, gamma, b):
 
 def smooth(x,window_len=11,window='hanning'):
     """smooth the data using a window with requested size.
-    
+
     This method is based on the convolution of a scaled window with the signal.
-    The signal is prepared by introducing reflected copies of the signal 
+    The signal is prepared by introducing reflected copies of the signal
     (with the window size) in both ends so that transient parts are minimized
     in the begining and end part of the output signal.
-    
+
     input:
-        x: the input signal 
+        x: the input signal
         window_len: the dimension of the smoothing window; should be an odd integer
         window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
             flat window will produce a moving average smoothing.
 
     output:
         the smoothed signal
-        
+
     example:
 
     t=linspace(-2,2,0.1)
     x=sin(t)+randn(len(t))*0.1
     y=smooth(x)
-    
-    see also: 
-    
+
+    see also:
+
     numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
     scipy.signal.lfilter
- 
-    TODO: the window parameter could be the window itself if an array instead of a string   
+
+    TODO: the window parameter could be the window itself if an array instead of a string
     """
 
     if x.ndim != 1:
@@ -196,7 +197,7 @@ def smooth(x,window_len=11,window='hanning'):
         w=eval('np.'+window+'(window_len)')
 
     y=np.convolve(w/w.sum(),s,mode='valid')
-    return y    
+    return y
 
 # load the vertical and horizontal channels (intended for
 # analyzing P and S arrivals respectively), and establish
@@ -235,14 +236,30 @@ def smoothed_traces(arrival_segment, band):
 
 def load_signal_slice(cursor, evid, siteid, load_noise = False):
 
-    sql_query="SELECT l.time, l.arid FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (evid, siteid)
+    sql_query="SELECT l.time, l.arid, pid.id FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba, static_phaseid pid where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase order by l.time" % (evid, siteid)
     cursor.execute(sql_query)
     other_arrivals = np.array(cursor.fetchall())
+    other_arrival_phaseids = other_arrivals[:, 2]
     other_arrivals = other_arrivals[:, 0]
     sql_query="SELECT leba.phase, l.arid FROM leb_arrival l, static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (evid, siteid)
     cursor.execute(sql_query)
     other_arrival_phases = np.array(cursor.fetchall())
     other_arrival_phases = other_arrival_phases[:,0]
+
+    first_p_arrival = None
+    first_p_phaseid = 1
+    for i, arrival in enumerate(other_arrivals):
+        if int(other_arrival_phaseids[i]) in P_PHASEIDS:
+            first_p_arrival = arrival
+            first_p_phaseid = other_arrival_phaseids[i]
+            break
+    first_s_arrival = None
+    first_s_phaseid = None
+    for i, arrival in enumerate(other_arrivals):
+        if int(other_arrival_phaseids[i]) in S_PHASEIDS:
+            first_s_arrival = arrival
+            first_s_phaseid = other_arrival_phaseids[i]
+            break
 
     try:
         traces = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)- 100, np.max(other_arrivals) + 170, stalist=[siteid,])
@@ -250,20 +267,27 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False):
         if arrival_segment is None:
             return None
         sigvisa_util.compute_narrowband_envelopes(arrival_segment)
-        for chan in arrival_segment[0].keys():
-            for band in arrival_segment[0][chan].keys():
-                arrival_segment[0][chan][band].data = arrival_segment[0][chan][band].data[arrival_segment[0][chan][band].stats.sampling_rate*70: - arrival_segment[0][chan][band].stats.sampling_rate*20]
-                arrival_segment[0][chan][band].stats.starttime_unix += 70
-                arrival_segment[0][chan][band].stats.npts = len(arrival_segment[0][chan][band].data)
-
-        # test to make sure we have the necessary channels
-        tr1 = arrival_segment[0]["BHZ"]
-        tr2 = arrival_segment[0]["horiz_avg"]
 
         noise_segment = None
         if load_noise:
             noise_segment = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)-150, np.min(other_arrivals)-50, stalist=[siteid,])
             sigvisa_util.compute_narrowband_envelopes(noise_segment)
+
+        for chan in arrival_segment[0].keys():
+            for band in arrival_segment[0][chan].keys():
+                arrival_segment[0][chan][band].data = arrival_segment[0][chan][band].data[arrival_segment[0][chan][band].stats.sampling_rate*70: - arrival_segment[0][chan][band].stats.sampling_rate*20]
+                arrival_segment[0][chan][band].stats.starttime_unix += 70
+                arrival_segment[0][chan][band].stats.npts = len(arrival_segment[0][chan][band].data)
+                arrival_segment[0][chan][band].stats.p_time = first_p_arrival
+                arrival_segment[0][chan][band].stats.s_time = first_s_arrival
+                arrival_segment[0][chan][band].stats.p_phaseid = first_p_phaseid
+                arrival_segment[0][chan][band].stats.s_phaseid = first_s_phaseid
+                if load_noise:
+                    arrival_segment[0][chan][band].stats.noise_floor=np.mean(noise_segment[0][chan][band])
+
+        # test to make sure we have the necessary channels
+        tr1 = arrival_segment[0]["BHZ"]
+        tr2 = arrival_segment[0]["horiz_avg"]
 
     except:
         raise
@@ -281,7 +305,7 @@ def extract_band(all_data, idx):
                 band_data = row
             else:
                 band_data = np.vstack([band_data, row])
-                
+
     print band_data.shape
     return band_data
 
@@ -302,11 +326,15 @@ def fit_from_row(row, P, vert):
         idx += FIT_NUM_COLS*3
     return row[idx:idx+FIT_NUM_COLS]
 
-
-def row_to_ev(cursor, row):
-    sql_query="SELECT lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_origin lebo where lebo.evid=%d" % (row[EVID_COL])
+def load_event(cursor, evid):
+    sql_query="SELECT lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_origin lebo where lebo.evid=%d" % (evid)
     cursor.execute(sql_query)
     return np.array(cursor.fetchone())
+
+def row_to_ev(cursor, row):
+    return load_event(cursor, row[EVID_COL])
+
+
 
 def pred_arrtime(cursor, r, netmodel, phaseid_col, phase_arr_time_col):
     cursor.execute("select time, depth from leb_origin where evid=%d" % (r[EVID_COL]))
@@ -339,6 +367,88 @@ def construct_output_generators(cursor, netmodel, P, vert):
     gen_onset = lambda x : pred_arrtime(cursor, x, netmodel, P_PHASEID_COL if P else S_PHASEID_COL, b_col + (VERT_P_FIT_PEAK_OFFSET - VERT_P_FIT_B))
 #    gen_amp = lambda x : (  (x[b_col + (VERT_P_FIT_HEIGHT - VERT_P_FIT_B)] - x[b_col] * (x[b_col + (VERT_P_FIT_CODA_START_OFFSET - VERT_P_FIT_B)] - x[b_col + (VERT_P_FIT_PEAK_OFFSET - VERT_P_FIT_B)]))  - x[VERT_NOISE_FLOOR_COL if vert else HORIZ_NOISE_FLOOR_COL]  )/ x[MB_COL]
 
-    gen_amp = lambda x : ( x[b_col + (VERT_P_FIT_PEAK_HEIGHT - VERT_P_FIT_B)] - x[VERT_NOISE_FLOOR_COL if vert else HORIZ_NOISE_FLOOR_COL]  )/ x[MB_COL]
-    
+    gen_amp = lambda x : np.log (  np.exp( x[b_col + (VERT_P_FIT_PEAK_HEIGHT - VERT_P_FIT_B)] ) - np.exp ( x[VERT_NOISE_FLOOR_COL if vert else HORIZ_NOISE_FLOOR_COL])  ) -  x[MB_COL]
+
     return b_col, gen_decay, gen_onset, gen_amp
+
+
+
+def logenv_linf_cost(true_env, logenv):
+    c = np.max (np.abs(true_env - logenv))
+    return c
+
+def logenv_l1_cost(true_env, logenv):
+    n = len(true_env)
+    n2 = len(logenv)
+    if n != n2:
+        if np.abs(n-n2) > 5:
+            print "warning: comparing unequal-length traces (%d vs %d)" % (n, n2)
+        n = np.min([n, n2])
+    c = np.sum (np.abs(true_env[:n] - logenv[:n]))
+    return c
+
+def logenv_ar_cost(true_env, logenv):
+    diff = true_env - logenv
+
+    ar_n = 3
+    ar_params = [0.1, 0.1, 0.8]
+    ll = 0
+
+    last_n = diff[0:ar_n]
+    for x in diff:
+        pred = np.sum(last_n * ar_params)
+        ll = ll - (x-pred)**2
+
+    return ll
+
+
+def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=None, title=""):
+
+    if lonbounds is not None and latbounds is not None:
+        min_lon = lonbounds[0]
+        max_lon = lonbounds[1]
+        min_lat = latbounds[0]
+        max_lat = latbounds[1]
+    elif center is not None and width is not None:
+        min_lon = center[0]-width/2.0
+        max_lon = center[0]+width/2.0
+        min_lat = center[1]-width/2.0
+        max_lat = center[1]+width/2.0
+    else:
+        raise RuntimeError("Heat map requires either a bounding box, or a center and a width")
+
+    bmap = draw_earth("",
+                  #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
+                  #"SEL3(red), NET-VISA(blue)",
+                  projection="cyl",
+                  resolution="l",
+                  llcrnrlon = min_lon, urcrnrlon = max_lon,
+                  llcrnrlat = min_lat, urcrnrlat = max_lat,
+                  nofillcontinents=True,
+                      figsize=(8,8))
+
+    lon_arr = np.linspace(min_lon, max_lon, n)
+    lat_arr = np.linspace(min_lat, max_lat, n)
+
+
+    max_val = np.float("-inf")
+    max_lon = 0
+    max_lat = 0
+    out = np.zeros((len(lon_arr), len(lat_arr)))
+    for loni, lon in enumerate(lon_arr):
+        for lati, lat in enumerate(lat_arr):
+            out[loni, lati] = f(lon, lat)
+
+            if out[loni, lati] > max_val:
+                max_lon = lon
+                max_lat = lat
+                max_val = out[loni, lati]
+
+    minlevel = scipy.stats.scoreatpercentile(out.flatten(), 20)
+    levels = np.linspace(minlevel, np.max(out), 10)
+
+    draw_density(bmap, lon_arr, lat_arr, out, levels = levels, colorbar=True)
+
+    plt.title(title)
+
+    return bmap, (max_lon, max_lat)

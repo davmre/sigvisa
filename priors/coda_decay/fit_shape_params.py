@@ -34,27 +34,6 @@ def arrival_peak_offset(trace, window_start_time, window_end_time):
     return (pt +window_start_time, trace.data[(pt+window_start_time) * srate ])
 
 
-def logenv_linf_cost(true_env, logenv):
-    c = np.max (np.abs(true_env - logenv))
-    return c
-
-def logenv_l1_cost(true_env, logenv):
-    c = np.sum (np.abs(true_env - logenv))
-    return c
-
-def logenv_ar_cost(true_env, logenv):
-    diff = true_env - logenv
-
-    ar_n = 3
-    ar_params = [0.1, 0.1, 0.8]
-    ll = 0
-
-    last_n = diff[0:ar_n]
-    for x in diff:
-        pred = np.sum(last_n * ar_params)
-        ll = ll - (x-pred)**2
-
-    return ll
 
 def fit_specific(trace, coda_start_time, coda_len):
     srate = trace.stats['sampling_rate']
@@ -254,8 +233,8 @@ def main():
             short_band = short_bands[band_idx]
 
 
-            vert_noise_floor = np.mean(noise_segment[0]["BHZ"][band])
-            horiz_noise_floor = np.mean(noise_segment[0]["horiz_avg"][band])
+            vert_noise_floor = arrival_segment[0]["BHZ"][band].stats.noise_floor
+            horiz_noise_floor = arrival_segment[0]["horiz_avg"][band].stats.noise_floor 
 
             try:
                 vert_smoothed, horiz_smoothed = smoothed_traces(arrival_segment, band)
