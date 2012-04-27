@@ -22,7 +22,7 @@ typedef struct Detection_t
   int phase_det;
   double amp_det;
   double per_det;
-  
+
   int sigvisa_fake;
 
 } Detection_t;
@@ -56,7 +56,7 @@ typedef struct Event_t
 
   /* array of numsites * numtimedefphases * MAX_PHASE_DET */
   int * p_all_detids;       /* all detids, first one is the primary */
-  
+
   /* array of numsites * numtimedefphases */
   Arrival_t * p_arrivals;
 
@@ -84,7 +84,7 @@ typedef struct Site_t
 
 /* site array columns */
 #define SITE_LON_COL      0
-#define SITE_LAT_COL      1 
+#define SITE_LAT_COL      1
 #define SITE_ELEV_COL     2
 #define SITE_ISARR_COL    3        /* is the site an array station? */
 #define SITE_NUM_COLS     4
@@ -115,23 +115,41 @@ typedef struct Site_t
 #define CHECK_PTR(p) if (p == NULL) { LogFatal("memory allocation failed, or null pointer detected!"); exit(1);}
 #define CHECK_FATAL(x) if(x < 0) { CHECK_ERROR; LogFatal("fatal error!"); exit(1);}
 
+typedef struct Trace_t
+{
+  long len;
+  double * p_data;
+  PyArrayObject * py_data;   /*  we're forced to keep the Python
+				 object around so that we can DECREF
+				 it when finished */
+
+
+  double start_time;
+  double hz;
+  int siteid;
+  int chan;
+  int band;
+
+
+  double p_time;
+  double s_time;
+  int p_phaseid;
+  int s_phaseid;
+  double noise_floor;
+} Trace_t;
+
 typedef struct Channel_t
 {
 
   long len;
-
-
-  double * p_bands[NUM_BANDS];
-  PyArrayObject * py_bands[NUM_BANDS];   /*  we're forced to keep the Python
-					     object around so that we can DECREF
-					     it when finished */
+  Trace_t * p_bands[NUM_BANDS];
 
   double start_time;
   double hz;
 
   int siteid;
   int chan;
-  
+
 } Channel_t;
 
 typedef struct Segment_t {
@@ -189,7 +207,7 @@ typedef struct SigModel_t
   ArrivalPhasePrior_t arr_phase_prior;
   ArrivalSNRPrior_t arr_snr_prior;
 */
-  
+
   PyObject * log_trace_cb;
 
 } SigModel_t;
@@ -302,7 +320,7 @@ void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
                              PyObject ** pp_eventsobj,
                              PyObject ** pp_evdetlistobj);
 
-void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel, 
+void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
 				  const EarthModel_t * p_earth,
 				  const Event_t ** pp_events, int numevents,
 				  PyObject ** pp_eventsobj,
