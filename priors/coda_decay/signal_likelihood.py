@@ -13,6 +13,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from optparse import OptionParser
 
 import plot
+import sigvisa
 import learn, sigvisa_util
 import priors.SignalPrior
 from utils.waveform import *
@@ -24,7 +25,7 @@ import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
 from priors.coda_decay.train_coda_models import CodaModel
 
-ARR_TIME_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(3+1)
+ARR_TIME_PARAM, PEAK_TIME_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
 
 class TraceModel:
 
@@ -129,6 +130,9 @@ class TraceModel:
         ll = -1 * nll
         return ll, params
 
+
+    def generate_trace_c(self, start_time, end_time, siteid, noise_floor, phaseids, params, srate=40):
+        return sigvisa.generate_trace(start_time, end_time, siteid, noise_floor, srate, phaseids, params)
 
     def generate_trace(self, start_time, end_time, siteid, noise_floor, phaseids, params, srate=40):
 
@@ -387,6 +391,8 @@ def main():
     clean_s_data109 = clean_s_data109[include_rows, :]
 #    for (band_idx, band) in enumerate(bands):
 
+
+
     out_fname = os.path.join("logs", "heatmap_lesscheat_%d_%d_%d_%d.pdf" % (evid, integrate_method, model_type, map_width))
     pp_s = PdfPages(out_fname)
     print "saving plots to", out_fname
@@ -401,6 +407,11 @@ def main():
 
     cm_p109 = CodaModel(clean_p_data109, band_dir109, True, True, sigma_f = [0.01, 1, 1], w = [100, 100, 100], sigma_n = [0.01, 0.01, 0.01])
     cm_s109 = CodaModel(clean_s_data109, band_dir109, False, True, sigma_f = [0.01, 1, 1], w = [100, 100, 100], sigma_n = [0.01, 0.01, 0.01])
+
+#    cm_p2 = None
+#    cm_s2 = None
+#    cm_p109 = None
+#    cm_s109 = None
 
 
     true2 = np.zeros((2, NUM_PARAMS))
@@ -452,6 +463,17 @@ def main():
     mt = CodaModel.MODEL_TYPE_GP if model_type == 1 else CodaModel.MODEL_TYPE_GAUSSIAN
 
     tm = TraceModel(cursor, {2: [cm_p2, cm_s2], 109: [cm_p109, cm_s109]}, model_type=mt)
+
+    params = np.array(((30, 34, 6, .8, 5, -.02), (130, 134, 8, 1, 7, -.02)))
+    tr1 = tm.generate_trace(0, 250, 2, 2, [1,5], params, srate=40)
+    tr2 = tm.generate_trace_c(0, 250, 2, 2, [1,5], params, srate=40)
+
+    fig = plot.plot_trace(tr1, "python")
+    pp_s.savefig()
+    fig = plot.plot_trace(tr2, "c")
+    pp_s.savefig()
+    pp_s.close()
+    sys.exit(1)
 
     ev = load_event(cursor, evid)
     s2, n2, o, op = load_signal_slice(cursor, evid, 2, load_noise=True)

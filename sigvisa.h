@@ -34,6 +34,11 @@ typedef struct Arrival_t {
   double azi;
   double slo;
 
+  double peak_time;
+  double peak_amp;
+  double peak_decay;
+  double coda_decay;
+
   int phase;
   int siteid;
 
@@ -111,6 +116,15 @@ typedef struct Site_t
 #define NARROW_40_60    8
 #define NARROW_60_80    9
 
+/* parameters for specifying a signal envelope */
+#define ARR_TIME_PARAM 0
+#define PEAK_TIME_PARAM 1
+#define PEAK_HEIGHT_PARAM 2
+#define PEAK_DECAY_PARAM 3
+#define CODA_HEIGHT_PARAM 4
+#define CODA_DECAY_PARAM 5
+
+
 #define CHECK_ERROR if(PyErr_Occurred()) { PyErr_Print(); exit(1); }
 #define CHECK_PTR(p) if (p == NULL) { LogFatal("memory allocation failed, or null pointer detected!"); exit(1);}
 #define CHECK_FATAL(x) if(x < 0) { CHECK_ERROR; LogFatal("fatal error!"); exit(1);}
@@ -119,7 +133,7 @@ typedef struct Trace_t
 {
   long len;
   double * p_data;
-  PyArrayObject * py_data;   /*  we're forced to keep the Python
+  PyArrayObject * py_array;   /*  we're forced to keep the Python
 				 object around so that we can DECREF
 				 it when finished */
 
@@ -166,9 +180,10 @@ typedef struct Segment_t {
 double Segment_EndTime(Segment_t * b);
 
 #include "priors/ArrivalTimeJointPrior.h"
-#include "priors/SignalPrior.h"
-#include "priors/SpectralEnvelopeModel.h"
-#include "priors/SignalModelCommon.h"
+#include "signals/SignalPrior.h"
+#include "signals/SpectralEnvelopeModel.h"
+#include "signals/SignalModelCommon.h"
+#include "signals/envelope.h"
 
 Channel_t * alloc_channel(Segment_t * p_segment);
 
@@ -215,7 +230,7 @@ typedef struct SigModel_t
 int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end_time);
 
 
-#include "priors/SignalModelCommon.h"
+#include "signals/SignalModelCommon.h"
 #include "priors/score_sig.h"
 #include "priors/score.h"
 #include "infer/infer.h"
@@ -274,6 +289,9 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 #define MIN(a,b) ((a) <= (b) ? (a) : (b))
 #define MAX(a,b) ((a) >= (b) ? (a) : (b))
 #define BOUND(x, low, high) MIN(high, MAX(x, low))
+
+// given log(x) and log(y), returns log(x+y)
+#define LOGSUM(logx,logy) (logx > logy) ? logx + log(1 + exp(logy-logx)) : logy + log(1 + exp(logx-logy))
 
 /* RAND_DOUBLE -> random number between 0 and 1 (exclusive) */
 #define RAND_DOUBLE ( ((double) rand() + 1.0) / ((double) RAND_MAX + 2.0) )

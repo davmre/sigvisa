@@ -10,6 +10,7 @@ static PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
+static PyObject * py_gen_logenvelope(SigModel_t *p_sigmodel, PyObject *args);
 static PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args);
 PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 
@@ -160,6 +161,8 @@ static PyMethodDef sigvisaMethods[] = {
   {"canonical_channel_num", (PyCFunction)py_canonical_channel_num, METH_VARARGS,
    "canonical_channel_num(chan_name) "
    "-> channel_num\n"},
+  {"generate_trace", (PyCFunction) py_gen_logenvelope, METH_VARARGS,
+   "generate_trace(start_time, end_time, siteid, noise_floor, srate, phaseids, params) -> trace\n" },
   {"srand", py_srand, METH_VARARGS,
     "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
@@ -216,8 +219,8 @@ void segment_dealloc(Segment_t * p_segment) {
     if (channel != NULL) {
       for (int band = 0; band < NUM_BANDS; ++band) {
 	if (channel->p_bands[band] != NULL) {
-	  if (channel->p_bands[band]->py_data != NULL) {
-	    Py_DECREF(channel->p_bands[band]->py_data);
+	  if (channel->p_bands[band]->py_array != NULL) {
+	    Py_DECREF(channel->p_bands[band]->py_array);
 	  }
 	  free(channel->p_bands[band]);
 	}
@@ -486,7 +489,7 @@ PyObject * py_event_score(SigModel_t * p_sigmodel, PyObject * args) {
 
 int pydict_get_double(PyObject * py_dict, char * key, double *value) {
   int retcode = 0;
-  PyObject * py_value = PyDict_GetItemString(stats, py_key); CHECK_ERROR;
+  PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
   if (py_value != NULL) {
     *value = PyFloat_AsDouble(py_value);
     retcode = 1;
@@ -496,7 +499,7 @@ int pydict_get_double(PyObject * py_dict, char * key, double *value) {
 
 int pydict_get_int(PyObject * py_dict, char * key, long * value) {
   int retcode = 0;
-  PyObject * py_value = PyDict_GetItemString(stats, py_key); CHECK_ERROR;
+  PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
   if (py_value != NULL) {
     *value = PyInt_AsLong(py_value);
     retcode = 1;
@@ -506,7 +509,7 @@ int pydict_get_int(PyObject * py_dict, char * key, long * value) {
 
 int pydict_get_string(PyObject * py_dict, char * key, char ** value) {
   int retcode = 0;
-  PyObject * py_value = PyDict_GetItemString(stats, py_key); CHECK_ERROR;
+  PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
   if (py_value != NULL) {
     *value = PyString_AsString(py_value);
     retcode = 1;
@@ -537,31 +540,31 @@ int trace_to_signal(PyObject * py_trace, Trace_t ** pp_trace) {
 	  ((PyArrayObject *)py_data)->dimensions[1]); */
 
 
-  *pp_trace = calloc(sizeof(Trace_t), 1);
+  *pp_trace = calloc(1, sizeof(Trace_t));
 
-  *py_array = (PyArrayObject *) PyArray_ContiguousFromAny(py_data, NPY_DOUBLE, 1,2);
-  Py_INCREF(*py_array);
+  PyArrayObject * py_array = (PyArrayObject *) PyArray_ContiguousFromAny(py_data, NPY_DOUBLE, 1,2);
+  Py_INCREF(py_array);
   Py_DECREF(py_data);
   CHECK_ERROR;
-  (*pp_trace)->p_data = (double *) (*py_array)->data;
-  (*pp_trace)->py_data = py_array;
-  (*pp_trace)->len = PyArray_SIZE(*py_array);
+  (*pp_trace)->p_data = (double *) (py_array)->data;
+  (*pp_trace)->py_array = py_array;
+  (*pp_trace)->len = PyArray_SIZE(py_array);
 
   PyObject * stats = PyObject_GetAttrString(py_trace, "stats");
 
   pydict_get_double(stats, "starttime_unix", & (*pp_trace)->start_time);
   pydict_get_double(stats, "sampling_rate", & (*pp_trace)->hz);
-  pydict_get_int(stats, "siteid", & (*pp_trace)->siteid);
+  pydict_get_int(stats, "siteid", (long*)&(*pp_trace)->siteid);
 
   char * chan_str;
   pydict_get_string(stats, "channel", &chan_str);
-  & (*pp_trace)->chan = canonical_channel_num(chan_str)
+  (*pp_trace)->chan = canonical_channel_num(chan_str);
 
   pydict_get_double(stats, "noise_floor", & (*pp_trace)->noise_floor);
   pydict_get_double(stats, "p_time", & (*pp_trace)->p_time);
   pydict_get_double(stats, "s_time", & (*pp_trace)->s_time);
-  pydict_get_int(stats, "p_phaseid", & (*pp_trace)->p_phaseid);
-  pydict_get_int(stats, "s_phaseid", & (*pp_trace)->s_phaseid);
+  pydict_get_int(stats, "p_phaseid", (long*)& (*pp_trace)->p_phaseid);
+  pydict_get_int(stats, "s_phaseid", (long*)& (*pp_trace)->s_phaseid);
 
   return 0;
 }
@@ -694,50 +697,50 @@ signal structures into Python:
 ****************************************************************
 */
 
-PyObject * build_trace(long len, double * p_data, PyArrayObject * py_array, double start_time, double hz, int siteid, int chan) {
+PyObject * build_trace(Trace_t * p_trace) {
 
   // a trace object contains two members: data, a numpy array, and stats, a python dict.
    npy_intp dims[1];
-   dims[0] = len;
+   dims[0] = p_trace->len;
 
    PyObject * py_data;
-   if (py_array == NULL) {
-     py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_data);
-     Py_DECREF(py_data);
+   if (p_trace->py_array == NULL) {
+     py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_trace->p_data);
+     ( (PyArrayObject *) py_data)->flags |= NPY_OWNDATA;
    } else {
-     py_data = (PyObject *)py_array;
+     py_data = (PyObject *)p_trace->py_array;
    }
 
    PyObject * py_stats = PyDict_New();
 
-   PyObject * key = PyString_FromString("npts_processed");
-   PyObject * value = Py_BuildValue("n", len);
+   PyObject * key = PyString_FromString("npts");
+   PyObject * value = Py_BuildValue("n", p_trace->len);
    PyDict_SetItem(py_stats, key, value);
    Py_DECREF(key);
    Py_DECREF(value);
 
    key = PyString_FromString("starttime_unix");
-   value = Py_BuildValue("d", start_time);
+   value = Py_BuildValue("d", p_trace->start_time);
    PyDict_SetItem(py_stats, key, value);
    Py_DECREF(key);
    Py_DECREF(value);
 
    key = PyString_FromString("sampling_rate");
-   value = Py_BuildValue("d", hz);
+   value = Py_BuildValue("d", p_trace->hz);
    assert(key != NULL && value != NULL);
    PyDict_SetItem(py_stats, key, value);
    Py_DECREF(key);
    Py_DECREF(value);
 
    key = PyString_FromString("siteid");
-   value = Py_BuildValue("n", siteid);
+   value = Py_BuildValue("n", p_trace->siteid);
    assert(key != NULL && value != NULL);
    PyDict_SetItem(py_stats, key, value);
    Py_DECREF(key);
    Py_DECREF(value);
 
    key = PyString_FromString("channel");
-   value = canonical_channel_name(chan);
+   value = canonical_channel_name(p_trace->chan);
    assert(key != NULL && value != NULL);
    PyDict_SetItem(py_stats, key, value);
    Py_DECREF(key);
@@ -756,8 +759,7 @@ void channel_to_band_dict(Channel_t * p_channel, PyObject ** py_band_dict) {
   for(int j=0; j < NUM_BANDS; ++j) {
 
     if (p_channel->p_bands[j] != NULL) {
-      PyObject * py_band_trace = build_trace(p_channel->len,  p_channel->p_bands[j], p_channel->py_bands[j], p_channel->start_time, p_channel->hz, p_channel->siteid, p_channel->chan);
-
+      PyObject * py_band_trace = build_trace(p_channel->p_bands[j]);
       PyDict_SetItem(*py_band_dict, canonical_band_name(j), py_band_trace);
     }
   }
@@ -1297,3 +1299,5 @@ PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
     return Py_BuildValue("d", score);
 }
+
+

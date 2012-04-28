@@ -10,14 +10,16 @@ extra_link_args = []
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c', 'EventDetectionPrior.c',
-                  'EarthModel.c', 'ArrivalTimePrior.c', 'ArrivalTimeJointPrior.c', 
+                  'EarthModel.c', 'ArrivalTimePrior.c', 'ArrivalTimeJointPrior.c',
                   'NumFalseDetPrior.c',
                   'ArrivalAzimuthPrior.c', 'ArrivalSlownessPrior.c',
                   'ArrivalPhasePrior.c', 'ArrivalSNRPrior.c',
                   'ArrivalAmplitudePrior.c',
-                  'Poisson.c', 'score.c', 'score_sig.c', 
+                  'Poisson.c', 'score.c',
                   'Gaussian.c', 'Gamma.c',
-                  'NumSecDetPrior.c', 'SignalPrior.c', 'SignalModelCommon.c', 'SignalModelUtil.c', 'SpectralEnvelopeModel.c']
+                  'NumSecDetPrior.c']
+
+signals_sources = ['SignalPrior.c', 'SignalModelCommon.c', 'SignalModelUtil.c', 'SpectralEnvelopeModel.c', 'envelope.c', 'score_sig.c']
 
 infer_sources = ['infer.c', 'propose.c', 'quickselect.c']
 misc_sources = ['logging.c']
@@ -25,6 +27,8 @@ misc_sources = ['logging.c']
 sigvisa_module = Extension('sigvisa',
                            sources = ([os.path.join("priors", f)
                                        for f in priors_sources]
+                                      + [os.path.join("signals", f)
+                                       for f in signals_sources]
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]
                                       + [f for f in misc_sources]
@@ -40,6 +44,8 @@ sigvisa_module = Extension('sigvisa',
 netvisa_module = Extension('netvisa',
                            sources = ([os.path.join("priors", f)
                                        for f in priors_sources]
+                                      + [os.path.join("signals", f)
+                                       for f in signals_sources]
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]
                                       + [f for f in misc_sources]

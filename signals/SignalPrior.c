@@ -17,7 +17,7 @@
 
 void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py_dict) {
   Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
-  
+
 
   Envelope_StationModel_t * sta = NULL;
   if (siteid > p_params->numsites) {
@@ -35,22 +35,22 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
     if (sta != NULL) {
 
       if (strcmp(key, "env_p_height") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
 	sta->env_p_height = PyFloat_AsDouble(py_value);
       }  else if (strcmp(key, "env_s_height") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
 	sta->env_s_height = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_p_onset") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
 	sta->env_p_onset = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_p_decay") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
 	sta->env_p_decay = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_s_onset") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
 	sta->env_s_onset = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_s_decay") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
 	sta->env_s_decay = PyFloat_AsDouble(py_value);
       } else if (strncmp(key, "chan_mean_", 10) == 0) {
 	int chan_num = canonical_channel_num(key+10);
@@ -62,9 +62,9 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
 	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value);
 
       } else if (strcmp(key, "ar_noise_sigma2") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
 	double val = PyFloat_AsDouble(py_value);
-	
+
 	if (val > 0.0000001) {
 	  sta->ar_noise_sigma2 = val;
 	} else {
@@ -85,7 +85,7 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
 	}
 
 	sta->ar_n = PyTuple_Size(py_value); CHECK_ERROR;
-	LogTrace("setting %s to tuple of length %d at siteid %d", key, sta->ar_n, siteid);      
+	LogTrace("setting %s to tuple of length %d at siteid %d", key, sta->ar_n, siteid);
 	if (sta->p_ar_coeffs != NULL) free(sta->p_ar_coeffs);
 	sta->p_ar_coeffs = calloc(sta->ar_n, sizeof(double));
 	for (int i=0; i < sta->ar_n; ++i) {
@@ -134,7 +134,7 @@ int Envelope_SignalModel_Has_Model(void * pv_sigmodel, int siteid, int chan) {
 	return 1;
       }
     }
-    return 0; 
+    return 0;
   }
 
   else {
@@ -169,7 +169,7 @@ void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, doub
     peak_idx = 0;
     end_idx = 1;
   }
-  
+
   *len = MIN(end_idx+15*hz, 60*hz);
   double * means = (double *) calloc(*len, sizeof(double));
 
@@ -185,7 +185,7 @@ void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, doub
     means[i] = exp(env_decay * ((end_idx - i)/hz));
     // LogInfo("%d %d %d %lf %d %lf %lf", i, peak_idx, *len, env_decay, end_idx, hz, means[i]);
   }
-  
+
   *pp_envelope = means;
 }
 
@@ -247,7 +247,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
   for (int i=0; i < num_arrivals; ++i) {
 
     const Arrival_t * p_arr = *(pp_arrivals + i);
-      
+
     if (p_arr->amp == 0 || p_arr->time <= 0) continue;
 
     ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
@@ -261,7 +261,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
       //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
       iangle = 45;
     }
-    
+
     w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhz_coeff = 1;
@@ -371,15 +371,15 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
     double obs_bhz, obs_bhe, obs_bhn;
     int obs_perturb_n = 0;
     if (p_segment->p_channels[CHAN_BHZ] != NULL) {
-      obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE][t] - pred_bhz;
+      obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE]->p_data[t] - pred_bhz;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhz);
     }
     if (p_segment->p_channels[CHAN_BHE] != NULL) {
-      obs_bhe = p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE][t] - pred_bhe;
+      obs_bhe = p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE]->p_data[t] - pred_bhe;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhe);
     }
     if (p_segment->p_channels[CHAN_BHN] != NULL) {
-      obs_bhn = p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE][t] - pred_bhn;
+      obs_bhn = p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE]->p_data[t] - pred_bhn;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhn);
     }
 
@@ -447,9 +447,9 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment
    three-axis station. p_segment must set start_time, hz, and
    siteid. */
 void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
-				   EarthModel_t * p_earth, 
+				   EarthModel_t * p_earth,
 				   Segment_t * p_segment,
-				   int num_arrivals, 
+				   int num_arrivals,
 				   const Arrival_t ** pp_arrivals,
 				   int samplePerturb,
 				   int sampleNoise) {
@@ -470,7 +470,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
   p_segment->p_channels[CHAN_BHE] = alloc_channel(p_segment);
   p_segment->p_channels[CHAN_BHE]->chan = CHAN_BHE;
   p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE] = calloc(p_segment->len, sizeof(double));
-    
+
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
   int n = p_sta->ar_n;
@@ -480,7 +480,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
 
   // initialize random number generator
   const gsl_rng_type * T;
-  gsl_rng * r;   
+  gsl_rng * r;
   gsl_rng_env_setup();
   T = gsl_rng_default;
   r = gsl_rng_alloc (T);
@@ -493,7 +493,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
   for (int i=0; i < num_arrivals; ++i) {
 
     const Arrival_t * p_arr = *(pp_arrivals + i);
-      
+
     if (p_arr->amp == 0 || p_arr->time <= 0) continue;
 
     ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
@@ -507,13 +507,13 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       for(int t=0; t < w->len; ++t) {
 	double newperturb=0;
 	for(int j=0; j < p_sta->ar_n; ++j) {
-	  newperturb += w->last_perturbs[j] * p_sta->p_ar_coeffs[j]; 
+	  newperturb += w->last_perturbs[j] * p_sta->p_ar_coeffs[j];
 	  //printf("inc newperturb by %lf * %lf = %lf to %lf\n", w->last_perturbs[j], p_sta->p_ar_coeffs[j] , w->last_perturbs[j] *  p_sta->p_ar_coeffs[j], newperturb);
 	  if (j > 0) w->last_perturbs[j-1] = w->last_perturbs[j];
 	}
 	double epsilon = gsl_ran_gaussian(r, stddev);
 	newperturb += epsilon;
-      
+
 	w->last_perturbs[p_sta->ar_n-1] = newperturb;
 	newperturb *= w->p_envelope[t];
 	w->p_envelope[t] = w->p_envelope[t] + newperturb;
@@ -527,7 +527,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
       iangle = 45;
     }
-    
+
     w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhz_coeff = 1;
@@ -571,7 +571,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       ending_next = ending_next->next_end;
     }
 
-    
+
     // compute the predicted envelope for each component
     double env_bhz = p_sta->chan_means[CHAN_BHZ];
     double env_bhe = p_sta->chan_means[CHAN_BHE];
@@ -584,18 +584,19 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       a->idx++;
       LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
     }
-    p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE][t] = env_bhz; 
-    p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE][t] = env_bhe;
-    p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE][t] = env_bhn;
-									   
+
+    p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE]->p_data[t] = env_bhz;
+    p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE]->p_data[t] = env_bhe;
+    p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE]->p_data[t] = env_bhn;
+
     if(sampleNoise) {
       printf("sampling gaussian noise with var %lf\n", p_sta->chan_vars[CHAN_BHZ]);
-      p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE][t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHZ]))); 
-      p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE][t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHE]))); 
-      p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE][t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHN]))); 
+      p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE]->p_data[t] +=
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHZ])));
+      p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE]->p_data[t] +=
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHE])));
+      p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE]->p_data[t] +=
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHN])));
     }
 
   }
@@ -612,7 +613,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
 
 void Envelope_SignalModel_UnInit(void * pv_params) {
   Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
-  
+
   for (int i=0; i < p_params->numsites; ++i) {
     free((p_params->p_stations + i)->p_ar_coeffs);
   }

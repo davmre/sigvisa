@@ -38,6 +38,7 @@ In Python, a trace is represented by the {\tt obspy.signal.Trace} class, which c
 
 \subsection{C}
 
+A trace in C is defined by the {\tt Trace\_t} structure in {\tt sigvisa.h}. The data are represented by a C array of doubles, with fields for other metadata.
 
 \section{Signal Segments}
 
@@ -62,5 +63,19 @@ A segment in Python is a nested structure, consisting of a dictionary of diction
 \item {\tt priors.coda\_decay.coda\_decay\_common.load\_signal\_slice} loads the window of time associated with an event at a station (using {\tt extract\_timeslice\_at\_station}), as well as a window of noise preceding the signal itself. It computes the narrowband envelopes, finds the noise floor, and sets {\tt p\_time, s\_time, p\_phaseid, s\_phaseid, noise\_floor} for each trace in the segment.
 \end{itemize}
 
+\subsection{C}
+
+A segment in C is represented by the {\tt Segment\_t} structure, defined in {\tt sigvisa.h}. This stores metadata as well as an array of (pointers to) {\tt Channel\_t} structures, which each store the same metadata as the parent segment (for convenience), and contain an array of pointers to of {\tt Trace\_t} structures corresponding to the individual traces, just as in the Python case. Since these traces will primarily correspond to different frequency bands, the array has size {\tt NUM\_BANDS} of them with the indices being given by frequency band constants defined in {\tt sigvisa.h}. 
+
+\subsubsection{Converting}
+
+Ordinarily segments are loaded in Python, then converted to C as needed. 
+
+\begin{itemize}
+\item {\tt trace\_to\_signal} in {\tt sigvisa.c} converts a Python trace into a C trace.
+\item {\tt py\_segment\_to\_c\_segment} in {\tt sigvisa.c} converts a Python segment to an equivalent C segment.
+\item {\tt py\_segment\_to\_c\_segments} in {\tt sigvisa.c} converts a list of Python segments to a an array of C segments.
+\item {\tt py\_set\_signals} in {\tt sigvisa.c} (callable from Python as {\tt sigmodel.set\_signals(segments)}) takes a list of Python segments, converts them to C segments, and saves them as part of the C sigmodel structure. 
+\end{itemize}
 
 \end{document}
