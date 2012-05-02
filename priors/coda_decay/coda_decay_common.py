@@ -12,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog

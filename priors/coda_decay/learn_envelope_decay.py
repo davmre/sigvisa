@@ -14,7 +14,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 from utils.plot_multi_station_params import *
 import utils.geog
@@ -34,7 +34,7 @@ def main():
         outfile = 'logs/envelope_shape_dist_%s.pdf' % (label)
         pp = PdfPages(outfile)
         print "saving plots to", outfile
-    
+
         l = read_shape_data(fname)
 
         print l.keys()
@@ -48,7 +48,7 @@ def main():
 
                 if lbr.shape[0] == 0:
                     continue
-            
+
                 siteid = int(lbr[0, SITEID_COL])
                 print siteid
                 phase = "P" if lbr[0, PHASEID_COL] == 1 else "S"
@@ -56,12 +56,12 @@ def main():
 
                 regional_bs = [lbr[i, B_COL] for i in range (lbr.shape[0]) if lbr[i, DISTANCE_COL] < 1000 ]
                 tele_bs = [lbr[i, B_COL] for i in range (lbr.shape[0]) if lbr[i, DISTANCE_COL] >= 1000 ]
-                
+
 
             #        print lbr
             #    print regional_bs
             #        print tele_bs
-        
+
                 if len(regional_bs) > 0:
 
                     plt.figure()
@@ -76,7 +76,7 @@ def main():
                     y = mlab.normpdf( bincenters, mu, sigma)
                     plt.plot(bincenters, y, 'r--', linewidth=1)
                     pp.savefig()
-                    
+
                     params["r " + key_base] = [mu, sigma]
 
                 if len(tele_bs) > 0:
@@ -92,7 +92,7 @@ def main():
                     y = mlab.normpdf( bincenters, mu, sigma)
                     plt.plot(bincenters, y, 'r--', linewidth=1)
                     pp.savefig()
-                    
+
                     params["t " + key_base] = [mu, sigma]
 
         finally:

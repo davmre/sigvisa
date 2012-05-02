@@ -12,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 import utils.geog
 import obspy.signal.util
@@ -95,7 +95,7 @@ def write_grid(in_dirs, out_fname, get_col = None, P=True, vert=True):
 
         label_station(sta_idx*5+1, fname.split("_")[1])
         sta_idx = sta_idx + 1
-        
+
     pp.savefig()
     pp.close()
 
