@@ -1,6 +1,6 @@
 
 import time
-import sys, MySQLdb,struct
+import sys, struct
 import matplotlib
 matplotlib.use('PDF')
 import matplotlib.pyplot as plt

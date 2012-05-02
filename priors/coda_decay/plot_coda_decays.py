@@ -1,6 +1,5 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
-from guppy import hpy; hp = hpy()
 
 from database.dataset import *
 from database import db
