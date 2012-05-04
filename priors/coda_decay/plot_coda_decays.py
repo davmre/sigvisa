@@ -1,6 +1,5 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
-from guppy import hpy; hp = hpy()
 
 from database.dataset import *
 from database import db
@@ -14,7 +13,7 @@ from optparse import OptionParser
 
 import plot
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 import utils.geog
 import obspy.signal.util

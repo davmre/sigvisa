@@ -1,6 +1,5 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
-from guppy import hpy; hp = hpy()
 
 from database.dataset import *
 from database import db
@@ -12,7 +11,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 import utils.geog
 import obspy.signal.util
@@ -56,7 +55,7 @@ def fit_logenvelope(trace, peak_offset_time, peak_height, max_coda_length, min_c
     best_results, best_cost = fit_specific(trace, peak_offset_time, max_coda_length)
 
     tradeoff_score = lambda cost, l, min_l: cost / np.sqrt(l / min_l)
-    
+
     if max_coda_length > min_coda_length:
         for coda_start_time in np.linspace(peak_offset_time, min(peak_offset_time+10, peak_offset_time + max_coda_length - min_coda_length), 4):
             real_max_len = max_coda_length - (coda_start_time - peak_offset_time)
@@ -85,11 +84,11 @@ def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases
         for (a, pa) in zip(other_arrivals, other_arrival_phases):
             if a > phase_arrival[AR_TIME_COL] and pa != "LR":
                 phase_length = np.min([a - phase_arrival[AR_TIME_COL], phase_length])
-                
+
     # compute phase arrival times relative to the trace start time
     phase_start_time = phase_arrival[AR_TIME_COL] - stime
     phase_length = np.min([phase_length, npts/srate - phase_start_time])
-    
+
     try:
         (peak_offset_time, peak_height) = arrival_peak_offset(smoothed, phase_start_time, phase_start_time + phase_length )
     except:
@@ -99,7 +98,7 @@ def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases
     if (npts/srate - peak_offset_time) < 10:
         print "skipping segment because peak is within 10s of end"
         return None
-        
+
     try:
         max_coda_length = find_coda_max_length(smoothed, peak_offset_time, peak_offset_time - (peak_offset_time - phase_start_time)  + phase_length, noise_floor)
         max_coda_length = np.min([max_coda_length, phase_length - (peak_offset_time - phase_start_time)])
@@ -110,7 +109,7 @@ def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases
         return None
 
     (fit_height, b), avg_cost, coda_start_time, coda_length = fit_logenvelope(smoothed, peak_offset_time, peak_height, max_coda_length, min_p_coda_length if P else min_s_coda_length)
-    
+
     return (b, fit_height, phase_start_time, phase_length, peak_offset_time, peak_height, coda_start_time, coda_length, max_coda_length, avg_cost)
 
 def find_coda_max_length(trace, peak_offset_time, phase_end_time, noise_floor):
@@ -199,7 +198,7 @@ def main():
     bands = ['narrow_logenvelope_4.00_6.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_1.00_1.50', 'narrow_logenvelope_0.70_1.00']
     short_bands = [b[19:] for b in bands]
 
-    runid = int(time.time())    
+    runid = int(time.time())
     base_coda_dir = get_base_dir(siteid, None, runid)
     print "writing data to directory", base_coda_dir
 
@@ -221,12 +220,12 @@ def main():
 
         if first_p_arrival is not None and first_s_arrival is not None and first_p_arrival[AR_TIME_COL] > first_s_arrival[AR_TIME_COL]:
             print "skipping evid %d because S comes before P..." % (event[EV_EVID_COL])
-            continue 
+            continue
 
         try:
             (arrival_segment, noise_segment, other_arrivals, other_arrival_phases) = load_signal_slice(cursor, event[EV_EVID_COL], siteid, load_noise = True)
         except:
-            print traceback.format_exc()      
+            print traceback.format_exc()
             continue
 
         for (band_idx, band) in enumerate(bands):
@@ -234,12 +233,12 @@ def main():
 
 
             vert_noise_floor = arrival_segment[0]["BHZ"][band].stats.noise_floor
-            horiz_noise_floor = arrival_segment[0]["horiz_avg"][band].stats.noise_floor 
+            horiz_noise_floor = arrival_segment[0]["horiz_avg"][band].stats.noise_floor
 
             try:
                 vert_smoothed, horiz_smoothed = smoothed_traces(arrival_segment, band)
             except:
-                print traceback.format_exc()      
+                print traceback.format_exc()
                 continue
 
             # DO THE FITTING

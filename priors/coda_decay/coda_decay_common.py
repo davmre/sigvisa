@@ -1,6 +1,5 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy, scipy.stats
-from guppy import hpy; hp = hpy()
 
 from database.dataset import *
 from database import db
@@ -13,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import plot
 import sigvisa
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog

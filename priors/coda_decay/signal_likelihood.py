@@ -15,7 +15,7 @@ from optparse import OptionParser
 import plot
 import sigvisa
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 import utils.geog
 import obspy.signal.util

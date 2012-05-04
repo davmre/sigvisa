@@ -12,7 +12,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from optparse import OptionParser
 import plot
 import learn, sigvisa_util
-import priors.SignalPrior
+import signals.SignalPrior
 from utils.waveform import *
 from utils.plot_multi_station_params import *
 import utils.geog
@@ -46,7 +46,7 @@ def cv_residuals_kernel(data, x_indices, y_index, kernel=None):
         X =np.hstack([X, np.ones((X.shape[0], 1))])
         # w = np.dot(np.linalg.inv(np.dot(X.T, X)), np.dot(X.T, y))
         w = np.linalg.lstsq(X, y)[0]
-        
+
         linpy0 = np.dot(w, np.hstack([x0, [1]]))
         linr.append(np.abs(linpy0-y0)[0])
         # print y0, py0
@@ -64,7 +64,7 @@ def cv_residuals_mean(data, y_index):
         y = data[ [j for j in range(n) if j != i], y_index ]
 
         py0 = np.mean(y)
-    
+
         # print y0, py0
         r.append(np.abs(py0-y0)[0])
 #    print "mean", r
@@ -87,7 +87,7 @@ def plot_residuals(pp, quantity, P, vert, gp_residuals, gpd_residuals, gpt_resid
     pp.savefig()
 
     fig = plt.figure()
-#    print gpd_residuals, 
+#    print gpd_residuals,
 #    print "mean", mean_residuals
     plt.hist(gpd_residuals, bins=10)
     plt.title('%s GPD Residual Distribution (P=%s, vert=%s)' % (quantity, P, vert))
@@ -138,7 +138,7 @@ def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w = .
         if gen_decay is None:
             (b_col, gen_decay, gen_onset, gen_amp) = construct_output_generators(cursor, netmodel, P, vert)
 
-        ev = row_to_ev(cursor, row)        
+        ev = row_to_ev(cursor, row)
         true_decay = gen_decay(row)
         true_onset = gen_onset(row)
         true_amp = gen_amp(row)
@@ -164,7 +164,7 @@ def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w = .
     print gp_onset_residuals
     print mean_onset_residuals
 
-       
+
     print "cross-validated %d events, found residuals:" % (len(evids))
     print "decay: gp %f gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_decay_residuals)), np.mean(np.abs(gpd_decay_residuals)), np.mean(np.abs(gpt_decay_residuals)), np.mean(np.abs(lin_decay_residuals)), np.mean(np.abs(mean_decay_residuals)))
     print "onset: gp %f gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_onset_residuals)), np.mean(np.abs(gpd_onset_residuals)), np.mean(np.abs(gpt_onset_residuals)), np.mean(np.abs(lin_onset_residuals)), np.mean(np.abs(mean_onset_residuals)))
@@ -182,7 +182,7 @@ def cv_external(cursor, band_data, band_idx, band_dir, P, vert, pp = None, w = .
 
 #    cm = CodaModel(band_data, band_dir, P, vert, ignore_evids = None , earthmodel=earthmodel, netmodel = netmodel)
 #    return cm
-    
+
 
 def cross_validate(data, b_col):
 #    kresiduals_da = None
@@ -220,7 +220,7 @@ def cross_validate(data, b_col):
     mr = np.mean(residuals_m)
 
     return (ll30r, ll5r, dr, mr)
-    
+
 
 def plot_linear(pp, data, b_col, title=""):
 
@@ -228,7 +228,7 @@ def plot_linear(pp, data, b_col, title=""):
     y = data[ : , b_col ]
 
     w = np.linalg.lstsq(np.vstack([X, np.ones((X.shape[0],))]).T, y)[0]
-   
+
     plt.figure()
     plt.title(title)
     plt.xlabel("distance (km)")
@@ -239,7 +239,7 @@ def plot_linear(pp, data, b_col, title=""):
     plt.plot(t, pred, "k-")
     plt.plot(X, y, 'ro')
     pp.savefig()
-    
+
 
 def plot_events_heat(pp, data, cm):
 
