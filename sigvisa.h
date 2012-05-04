@@ -118,7 +118,7 @@ typedef struct Site_t
 
 /* parameters for specifying a signal envelope */
 #define ARR_TIME_PARAM 0
-#define PEAK_TIME_PARAM 1
+#define PEAK_OFFSET_PARAM 1
 #define PEAK_HEIGHT_PARAM 2
 #define PEAK_DECAY_PARAM 3
 #define CODA_HEIGHT_PARAM 4
