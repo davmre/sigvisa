@@ -24,6 +24,33 @@ import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
 from priors.coda_decay.train_coda_models import CodaModel
 
+
+def plot_channels_with_pred(pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None):
+    fig = plt.figure(figsize = (8, 8))
+
+    bhz_axes = plt.subplot(2, 1, 1)
+
+    if title is not None:
+        plt.title(title, fontsize=12)
+
+    plot_envelopes_with_pred(bhz_axes, vert_trace, phaseids, vert_params)
+    horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
+    plot_envelopes_with_pred(horiz_axes, horiz_trace, phaseids, horiz_params)
+
+    pp.savefig()
+    plt.close(fig)
+
+def plot_envelopes_with_pred(axes, trace, phaseids, params):
+    srate = trace.stats['sampling_rate']
+
+    synth_trace = imitate_envelope(trace, phaseids, params)
+
+    traces = [trace,synth_trace]
+    formats = ["k-","g-"]
+    linewidths = [5,5]
+
+    plot.plot_traces_subplot(axes, traces, formats = formats, linewidths = linewidths)
+
 def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, all_det_times = None, all_det_labels = None, title = None):
     fig = plt.figure(figsize = (8, 8))
 
@@ -35,7 +62,7 @@ def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, hor
     plot_envelopes(bhz_axes, vert_trace, vert_noise_floor, vert_fits, vert_formats, all_det_times, all_det_labels)
     horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
     plot_envelopes(horiz_axes, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, all_det_times, all_det_labels)
-        
+
     pp.savefig()
     plt.close(fig)
 
@@ -44,7 +71,7 @@ def plot_envelopes(axes, trace, noise_floor, fits, formats, all_det_times = None
 
 #    siteid = int(arrival[AR_SITEID_COL])
 #    phaseid = int(arrival[AR_PHASEID_COL])
- 
+
     traces = [trace,]
     formats = ["k-",] + formats
     linewidths = [5,]
@@ -69,7 +96,7 @@ def plot_envelopes(axes, trace, noise_floor, fits, formats, all_det_times = None
 
 #    if pred_nonpara_b is not None:
 #        pred_trace_nonpara = Trace(gen_logenvelope(coda_length, srate, gamma, 0, pred_nonpara_b), pred_stats.copy())
-#    else: 
+#    else:
 #        pred_trace_nonpara = Trace(np.array(()), pred_stats.copy())
 #    pred_trace_nonpara.stats.npts = len(pred_trace_nonpara.data)
 
@@ -82,6 +109,7 @@ def plot_envelopes(axes, trace, noise_floor, fits, formats, all_det_times = None
 
     xvals = [trace.stats.starttime_unix, trace.stats.starttime_unix + trace.stats.npts/srate]
     axes.plot(xvals, [noise_floor, noise_floor], "g-")
+
 
 def plot_scatter(lp, ls, lsp, base_coda_dir, band):
     try:
@@ -220,8 +248,8 @@ def generate_scatter_plots(all_data, bands, base_coda_dir):
                 print "%s: accepted p for %d" % (short_band, row[EVID_COL])
             else:
                 print "%s: rejected p for %d" % (short_band, row[EVID_COL])
-                    
-            accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)            
+
+            accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
             if accept_s_horiz:
                 r = np.array((row[DISTANCE_COL], row[AZI_COL], row[DEPTH_COL], fit_s_horiz[FIT_B]))
                 if ls == None:
@@ -231,7 +259,7 @@ def generate_scatter_plots(all_data, bands, base_coda_dir):
 #                print "%s: accepted s for %d" % (short_band, row[EVID_COL])
 #            else:
 #                print "%s: rejected s for %d" % (short_band, row[EVID_COL])
-  
+
             if accept_p_vert and accept_s_horiz:
                 r = np.array((fit_p_vert[FIT_B], fit_s_horiz[FIT_B]))
                 if lsp == None:
@@ -275,7 +303,7 @@ def predict_trace(cursor, ev, row, noise_floor, cm_p, cm_s):
     srate = 10
     npts = int(((endtime-starttime)*srate))
     stats = {"starttime_unix": starttime, "sampling_rate": srate, "npts":npts, "siteid": siteid}
-    
+
 
     data = noise_floor * np.ones( (npts,) )
 
@@ -300,7 +328,7 @@ def predict_trace(cursor, ev, row, noise_floor, cm_p, cm_s):
         data[i] += max(0, pred_arr_height + t*pred_decay_rate)
 
     return Trace(data=data, header=stats)
-        
+
 
 def main():
 
@@ -370,7 +398,7 @@ def main():
             pp = PdfPages(os.path.join(pdf_dir, str(int(row[EVID_COL])) + "_log.pdf"))
 
             title = "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_len %f \n s_b %f s_acost %f s_len %f " % (short_band, row[EVID_COL], row[SITEID_COL], row[MB_COL], row[DISTANCE_COL], row[AZI_COL], row[VERT_P_FIT_B], row[VERT_P_FIT_AVG_COST], row[VERT_P_FIT_CODA_LENGTH], row[HORIZ_S_FIT_B], row[HORIZ_S_FIT_AVG_COST], row[HORIZ_S_FIT_CODA_LENGTH])
-        
+
 
             try:
                 plot_channels(pp, vert_smoothed, vert_noise_floor, [], [], horiz_smoothed, horiz_noise_floor, [], [], all_det_times = other_arrivals, all_det_labels = other_arrival_phases, title = "")
@@ -415,7 +443,7 @@ def main():
             accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
             accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
 
-            # need to fabricate vert_smoothed and horiz_smoothed. each will be at the noise level until the predicted arrival time, then will 
+            # need to fabricate vert_smoothed and horiz_smoothed. each will be at the noise level until the predicted arrival time, then will
 
             try:
                 ev = row_to_ev(cursor, row)
@@ -438,11 +466,11 @@ def main():
 
             except ValueError:
                 continue
-                
+
             pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
             pp = PdfPages(os.path.join(pdf_dir, str(int(row[EVID_COL])) + "_pred.pdf"))
             title = "PREDICTED %s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_len %f \n s_b %f s_acost %f s_len %f " % (short_band, row[EVID_COL], row[SITEID_COL], row[MB_COL], row[DISTANCE_COL], row[AZI_COL], row[VERT_P_FIT_B], row[VERT_P_FIT_AVG_COST], row[VERT_P_FIT_CODA_LENGTH], row[HORIZ_S_FIT_B], row[HORIZ_S_FIT_AVG_COST], row[HORIZ_S_FIT_CODA_LENGTH])
-        
+
             try:
                 plot_channels(pp, vert_predicted, vert_noise_floor, [fit_p_vert, fit_s_vert], ["g-" if accept_p_vert else "r-", "g-" if accept_s_vert else "r-"], horiz_predicted, horiz_noise_floor, [fit_p_horiz, fit_s_horiz], ["g-" if accept_p_horiz else "r-", "g-" if accept_s_horiz else "r-"], title = title)
             except:
@@ -451,7 +479,7 @@ def main():
             finally:
                 pp.close()
 
-      
+
     if options.merge:
         merge_plots(base_coda_dir, bands)
 

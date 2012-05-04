@@ -25,7 +25,6 @@ import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
 from priors.coda_decay.train_coda_models import CodaModel
 
-ARR_TIME_PARAM, PEAK_TIME_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
 
 class TraceModel:
 

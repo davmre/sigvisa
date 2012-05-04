@@ -47,10 +47,10 @@ int add_phase_arrival(Arrival_t * p_arrival, Trace_t * p_trace) {
   double onset_slope = (real_peak_height-p_trace->noise_floor)/(peak_offset_idx - arrival_offset_idx);
   double alpha = pow(exp(p_arrival->amp) / (exp(p_arrival->peak_amp) - exp(p_arrival->amp)), p_arrival->peak_decay );
 
-  for (long t=arrival_offset_idx; t < peak_offset_idx; ++t) {
+  for (long t=MAX(0, arrival_offset_idx); t < peak_offset_idx; ++t) {
     d[t] = LOGSUM(d[t], (t - arrival_offset_idx) * onset_slope);
   }
-  for (long t=peak_offset_idx; t < p_trace->len; ++t) {
+  for (long t=MAX(0, peak_offset_idx); t < p_trace->len; ++t) {
     double t_off = (t - peak_offset_idx)/p_trace->hz;
     double signal = p_arrival->amp + log(1+ 1.0/(pow(alpha + t_off, p_arrival->peak_decay))) + p_arrival->coda_decay*t_off;
     d[t] = LOGSUM(d[t], signal);
@@ -110,11 +110,13 @@ PyObject * py_gen_logenvelope(PyObject * self, PyObject * args) {
   int n = PyList_Size(py_phaseids_list);
   for(int i=0; i < n; ++i) {
     arr.time = ARRAY2(py_params_array, i, ARR_TIME_PARAM);
-    arr.peak_time = ARRAY2(py_params_array, i, PEAK_TIME_PARAM);
+    arr.peak_time = ARRAY2(py_params_array, i, PEAK_OFFSET_PARAM) + arr.time;
     arr.peak_amp = ARRAY2(py_params_array, i, PEAK_HEIGHT_PARAM);
     arr.peak_decay = ARRAY2(py_params_array, i, PEAK_DECAY_PARAM);
     arr.amp = ARRAY2(py_params_array, i, CODA_HEIGHT_PARAM);
     arr.coda_decay = ARRAY2(py_params_array, i, CODA_DECAY_PARAM);
+
+    printf("%d %f %f %f %f %f %f\n", i, arr.time, arr.peak_time, arr.peak_amp, arr.peak_decay, arr.amp, arr.coda_decay);
 
     add_phase_arrival(&arr, &trace);
   }

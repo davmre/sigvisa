@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
+import sigvisa
 import learn, sigvisa_util
 import priors.SignalPrior
 from utils.waveform import *
@@ -37,6 +38,10 @@ avg_cost_bound = 0.2
 (AR_TIME_COL, AR_AZI_COL, AR_SNR_COL, AR_PHASEID_COL, AR_SITEID_COL, AR_NUM_COLS) = range(5+1)
 
 (FIT_B, FIT_HEIGHT, FIT_PHASE_START_TIME, FIT_PHASE_LENGTH, FIT_PEAK_OFFSET, FIT_PEAK_HEIGHT, FIT_CODA_START_OFFSET, FIT_CODA_LENGTH, FIT_MAX_CODA_LENGTH, FIT_AVG_COST, FIT_NUM_COLS) = range(10+1)
+
+# params for the envelope model
+ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
+
 
 def add_depth_time(cursor, r):
     print r.shape
@@ -132,6 +137,8 @@ def read_shape_data(fname):
             finally:
                 line_no += 1
     return all_data, bands
+
+
 
 def gen_logenvelope(length, sampling_rate, peak_height, gamma, b):
 #    print length, sampling_rate, peak_height, gamma, b
@@ -452,3 +459,17 @@ def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=No
     plt.title(title)
 
     return bmap, (max_lon, max_lat)
+
+
+
+def imitate_envelope(tr, phaseids, params):
+    noise_floor = tr.stats.noise_floor
+    start_time = tr.stats.starttime_unix
+    srate = tr.stats.sampling_rate
+    end_time = start_time + tr.stats.npts / srate
+    tr = sigvisa.generate_trace(start_time, end_time,
+                                tr.stats.siteid,
+                                noise_floor,
+                                srate,
+                                phaseids, params)
+    return tr
