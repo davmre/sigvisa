@@ -2,8 +2,20 @@ from distutils.core import setup, Extension
 import numpy as np
 import os
 
-liblogger_include = '/home/dmoore/local/include/'
-liblogger_library = '/home/dmoore/local/lib/'
+
+nonempty = lambda x : len(x) > 0
+
+if os.getenv("C_INCLUDE_PATH") is not None:
+    sys_includes = filter(nonempty, os.getenv("C_INCLUDE_PATH").split(':'))
+else:
+    sys_includes = []
+if os.getenv("LIBRARY_PATH") is not None:
+    sys_libraries = filter(nonempty, os.getenv("LIBRARY_PATH").split(':'))
+else:
+    sys_libraries = []
+
+print sys_includes
+print sys_libraries
 
 extra_compile_args = ['-std=c99', '-g', '-O0']
 extra_link_args = []
@@ -35,8 +47,8 @@ sigvisa_module = Extension('sigvisa',
                                       + ["netvisa.c"]
                                       + ["sigvisa.c"]),
                            libraries = ['logger', 'gsl', 'gslcblas'],
-                           library_dirs = [liblogger_library],
-                           runtime_library_dirs = [liblogger_library],
+                           library_dirs = sys_libraries,
+                           runtime_library_dirs = sys_libraries,
                            extra_compile_args = extra_compile_args,
                            extra_link_args = extra_link_args,
                            )
@@ -52,14 +64,14 @@ netvisa_module = Extension('netvisa',
                                       + ["netvisa.c"]
                                       + ["sigvisa.c"]),
                            libraries = ['logger', 'gsl', 'gslcblas'],
-                           library_dirs = [liblogger_library],
-                           runtime_library_dirs = [liblogger_library],
+                           library_dirs = sys_libraries,
+                           runtime_library_dirs = sys_libraries,
                            extra_compile_args = extra_compile_args
                            )
 
 setup (name = 'sigvisa',
        version = '1.0',
        description = 'Signal-Based Vertically Integrated Seismological Processing',
-       include_dirs = [np.get_include(), liblogger_include],
+       include_dirs = [np.get_include()] +  sys_includes,
        ext_modules = [sigvisa_module, netvisa_module])
 
