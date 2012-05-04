@@ -16,14 +16,14 @@ def gen_random_segments(siteids, length):
     return segments
 
 def gen_random_segment(siteid, length):
-    channels = []
+    channels = dict()
     for (chan, chanid) in (('BHE', 0), ('BHN', 1), ('BHZ', 2)):
         data = np.random.random((length, 1))
         stats = {'network': 's' + str(siteid), 'station': 's' + str(siteid), 'location': '',
                  'channel': chan, 'npts': len(data), 'sampling_rate': 5,
                  'starttime_unix': 10000, 'siteid': siteid, 'chanid': chanid, 'starttime': UTCDateTime(10000)}
-        trace = Trace(data = data, header=stats)
-        channels.append(trace)
+        trace = Trace(data = data, header=stats)        
+        channels[chan] = {"broadband_envelope": trace}
     return channels
 
 class TestPurePythonFunctions(unittest.TestCase):
@@ -41,19 +41,17 @@ class TestLoadFunctions(unittest.TestCase):
         
     # Load a couple of brief waveforms from disk.
     def test_load_signals(self):
-        energies, traces = sigvisa_util.load_and_process_traces(self.cursor, self.start_time, self.end_time, stalist = self.stalist)
+        segments = sigvisa_util.load_and_process_traces(self.cursor, self.start_time, self.end_time, stalist = self.stalist)
 
-        self.assertEqual(len(energies), len(traces))
-        self.assertTrue(len(energies) > 0)
+        self.assertTrue(len(segments) > 0)
+        self.assertEqual(len(segments[0]), 3)
 
-        self.assertEqual(len(energies[0]), 3)
-        self.assertEqual(len(energies[0]), len(traces[0]))
+        self.assertTrue(isinstance(segments[0]["BHZ"]["broadband_envelope"], Trace))
+        s = segments[0]["BHZ"]["broadband_envelope"]
 
-        self.assertTrue(isinstance(energies[0][0], Trace))
-        self.assertTrue(isinstance(traces[0][0], Trace))
 
-        self.assertEqual(len(energies[0][0].data), energies[0][0].stats['npts'])
-        self.assertTrue(len(energies[0][0].data) > 0)
+        self.assertEqual(len(s.data), s.stats['npts'])
+        self.assertTrue(len(s.data) > 0)
 
     def tearDown(self):
         self.cursor.close()
@@ -97,17 +95,19 @@ class TestCFunctions(unittest.TestCase):
             self.assertEqual(len(segments_in), len(segments_out))
             for (seg_in, seg_out) in zip(segments_in, segments_out):
                 self.assertEqual(len(seg_in), len(seg_out))
-                for (chan_in, chan_out) in zip(seg_in, seg_out):
-                    self.assertTrue((chan_in.data == chan_out.data).all())
-                    for stat in ('npts', 'siteid', 'chanid', 'starttime_unix', 'sampling_rate'):
-                        self.assertEqual(chan_in.stats[stat], chan_in.stats[stat])
+                for chan in seg_in.keys():
+                    chan_in = seg_in[chan]
+                    chan_out = seg_out[chan]
+                    for band in chan_in.keys():
+                        self.assertTrue((chan_in[band].data == chan_out[band].data).all())
+                        for stat in ('npts', 'siteid', 'chanid', 'starttime_unix', 'sampling_rate'):
+                            self.assertEqual(chan_in[band].stats[stat], chan_in[band].stats[stat])
 
 #    def test_detection_likelihood(self):
 #        pass
 
     def test_learn_noise_params(self):
-
-
+        
         pass
 
     def test_learn_shape_params(self):

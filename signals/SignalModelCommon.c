@@ -13,6 +13,16 @@ void init_signal_model(SignalModel_t * p_model, char * model_name, int numsites)
     p_model->pv_params = calloc(1, sizeof(Envelope_SignalModel_t));
 
     Envelope_SignalModel_Init_Params(p_model->pv_params,  numsites);
+  } else if (strcmp(model_name, "spectral_envelope") == 0) {
+    p_model->set_params = &Spectral_Envelope_Model_Set_Params;
+    p_model->has_model = &Spectral_Envelope_Model_Has_Model;
+    p_model->likelihood = &Spectral_Envelope_Model_Likelihood;
+    p_model->sample =  &Spectral_Envelope_Model_SampleThreeAxis;
+    p_model->uninit = &Spectral_Envelope_Model_UnInit;
+
+    p_model->pv_params = calloc(1, sizeof(Spectral_Envelope_Model_t));
+
+    Spectral_Envelope_Model_Init_Params(p_model->pv_params,  numsites);
   } else {
     LogError("unrecognized signal model %s", model_name);
     exit(EXIT_FAILURE);
@@ -61,7 +71,7 @@ double Signal_Score_Event_Site(void * pv_sigmodel, const Event_t * p_event, int 
   SignalModel_t * p_model = &p_sigmodel->signal_model;
 
   double score = 0;
-  ChannelBundle_t * p_segment;
+  Segment_t * p_segment;
 
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
 
@@ -79,8 +89,8 @@ double Signal_Score_Event_Site(void * pv_sigmodel, const Event_t * p_event, int 
     last_envelope_time += MAX_ENVELOPE_LENGTH;
 
     /* if this trace doesn't fall within that period, skip it */
-    if (p_segment->start_time > last_envelope_time || ChannelBundle_EndTime(p_segment) < first_envelope_time) {
-      //printf("     skipping signal segment %d: first env %lf last env %lf seg start %lf seg end %lf\n", i, first_envelope_time, last_envelope_time, p_segment->start_time, ChannelBundle_EndTime(p_segment));
+    if (p_segment->start_time > last_envelope_time || Segment_EndTime(p_segment) < first_envelope_time) {
+      //printf("     skipping signal segment %d: first env %lf last env %lf seg start %lf seg end %lf\n", i, first_envelope_time, last_envelope_time, p_segment->start_time, Segment_EndTime(p_segment));
       continue;
     }
 
@@ -90,10 +100,10 @@ double Signal_Score_Event_Site(void * pv_sigmodel, const Event_t * p_event, int 
     int num_basic_arrivals, num_augmented_arrivals;
     Arrival_t ** pp_basic_arrivals;
     Arrival_t ** pp_augmented_arrivals;
-    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), num_other_events, pp_other_events, &num_basic_arrivals, &pp_basic_arrivals);
+    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, Segment_EndTime(p_segment), num_other_events, pp_other_events, &num_basic_arrivals, &pp_basic_arrivals);
 
     const Event_t ** augmented_events = augment_events(num_other_events, pp_other_events, p_event);
-    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, ChannelBundle_EndTime(p_segment), num_other_events+1, augmented_events, &num_augmented_arrivals, &pp_augmented_arrivals);
+    arrival_list(p_sigmodel->p_earth, siteid, p_segment->start_time, Segment_EndTime(p_segment), num_other_events+1, augmented_events, &num_augmented_arrivals, &pp_augmented_arrivals);
 
     double event_lp , background_lp;
     event_lp = p_model->likelihood(p_sigmodel, p_segment, num_augmented_arrivals, (const Arrival_t **)pp_augmented_arrivals);
@@ -135,7 +145,7 @@ double Signal_Score_Event(void * pv_sigmodel, const Event_t * p_event, int num_o
 /* given a sigmodel with a set of detections, and a signal segment
    from some station, creates a list of those arrivals detected at
    that station within the time period of the segment*/ 
-void det_arrivals(void * pv_sigmodel, ChannelBundle_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals) {
+void det_arrivals(void * pv_sigmodel, Segment_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals) {
   SigModel_t * p_sigmodel = (SigModel_t *) pv_sigmodel;
 
   // for each segment, compute a list of arrivals
@@ -151,7 +161,7 @@ void det_arrivals(void * pv_sigmodel, ChannelBundle_t * p_segment, int * num_arr
     if (p_segment != NULL) {
       if (p_det->site_det != p_segment->siteid-1) continue;
       if (p_det->time_det + MAX_ENVELOPE_LENGTH < p_segment->start_time) continue;
-      if (p_det->time_det > ChannelBundle_EndTime(p_segment)) continue;
+      if (p_det->time_det > Segment_EndTime(p_segment)) continue;
     }
     
     if (++(*num_arrivals) > num_alloced) {
@@ -186,7 +196,7 @@ double det_likelihood(void * pv_sigmodel, int write_log) {
 
   for (int i=0; i < p_sigmodel->numsegments; ++i) {
     
-    ChannelBundle_t * p_segment = p_sigmodel->p_segments + i;
+    Segment_t * p_segment = p_sigmodel->p_segments + i;
 
 
     // for each segment, compute a list of arrivals
@@ -200,8 +210,8 @@ double det_likelihood(void * pv_sigmodel, int write_log) {
 
      char desc[50];
     snprintf(desc, 50, "real_signal_%d", i);
-    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "g-");
-    ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
+    //save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "g-");
+    Segment_t * pred_segment = calloc(1, sizeof(Segment_t));
     pred_segment->start_time = p_segment->start_time;
     pred_segment->hz = p_segment->hz;
     pred_segment->siteid = p_segment->siteid;
@@ -212,7 +222,7 @@ double det_likelihood(void * pv_sigmodel, int write_log) {
 		    num_arrivals, (const Arrival_t **)pp_arrivals,
 		    0, 0);
     snprintf(desc, 50, "pred_signal_%d", i);
-    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-"); 
+    //save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-"); 
     }
 
     /* ------------ end logging ------ */
@@ -326,7 +336,7 @@ PyObject * py_arr_likelihood(void * pv_sigmodel, PyObject * args) {
   // goal: save pdf plots of real signal for each segment, and of generated signals w/ given params
 
 
-  ChannelBundle_t * p_segment = p_sigmodel->p_segments;
+  Segment_t * p_segment = p_sigmodel->p_segments;
 
   if (p_segment == NULL) {
     LogError("Error: no segment found...");
@@ -405,8 +415,8 @@ PyObject * py_arr_likelihood(void * pv_sigmodel, PyObject * args) {
     if(write_log) {
       char desc[50];
       snprintf(desc, 50, "real_signal");
-    save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "r-");
-    ChannelBundle_t * pred_segment = calloc(1, sizeof(ChannelBundle_t));
+      // save_pdf_plot(p_sigmodel, p_segment->p_channels[CHAN_BHZ], desc, "r-");
+    Segment_t * pred_segment = calloc(1, sizeof(Segment_t));
     pred_segment->start_time = p_segment->start_time;
     pred_segment->hz = p_segment->hz;
     pred_segment->siteid = p_segment->siteid;
@@ -417,7 +427,7 @@ PyObject * py_arr_likelihood(void * pv_sigmodel, PyObject * args) {
 		       1, &p_best,
 		       0, 0);
     snprintf(desc, 50, "pred_signal", p_best->time, p_best->amp, p_best->azi, p_best->slo);
-    save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-");
+    // save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-");
     }
     /* ------------ end logging ------ */
 

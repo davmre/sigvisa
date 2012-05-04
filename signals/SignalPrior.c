@@ -13,10 +13,11 @@
 #include <gsl/gsl_randist.h>
 
 #include "../sigvisa.h"
+#include "SignalModelUtil.h"
 
 void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py_dict) {
   Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
-  
+
 
   Envelope_StationModel_t * sta = NULL;
   if (siteid > p_params->numsites) {
@@ -34,36 +35,36 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
     if (sta != NULL) {
 
       if (strcmp(key, "env_p_height") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_height = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
+	sta->env_p_height = PyFloat_AsDouble(py_value);
       }  else if (strcmp(key, "env_s_height") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_height = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
+	sta->env_s_height = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_p_onset") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_onset = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
+	sta->env_p_onset = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_p_decay") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_p_decay = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
+	sta->env_p_decay = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_s_onset") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_onset = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
+	sta->env_s_onset = PyFloat_AsDouble(py_value);
       } else if (strcmp(key, "env_s_decay") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	sta->env_s_decay = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
+	sta->env_s_decay = PyFloat_AsDouble(py_value);
       } else if (strncmp(key, "chan_mean_", 10) == 0) {
-	int chan_num = canonical_channel_num(key+10); CHECK_ERROR;
+	int chan_num = canonical_channel_num(key+10);
 	LogTrace("setting chan mean %lf for chan str %s int %d at siteid %d", PyFloat_AsDouble(py_value), key+10, chan_num, siteid);
-	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value);
       } else if (strncmp(key, "chan_var_", 9) == 0) {
 	int chan_num = canonical_channel_num(key+9);
 	LogTrace("setting chan var %lf for chan str %s int %d siteid %d", PyFloat_AsDouble(py_value), key+9, chan_num, siteid);
-	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value); CHECK_ERROR;
+	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value);
 
       } else if (strcmp(key, "ar_noise_sigma2") == 0) {
-	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);      
-	double val = PyFloat_AsDouble(py_value); CHECK_ERROR;
-	
+	LogTrace("setting %s to %lf at siteid %d", key, PyFloat_AsDouble(py_value), siteid);
+	double val = PyFloat_AsDouble(py_value);
+
 	if (val > 0.0000001) {
 	  sta->ar_noise_sigma2 = val;
 	} else {
@@ -75,21 +76,20 @@ void Envelope_SignalModel_Set_Params(void * pv_params, int siteid, PyObject * py
 	int converted_tuple = 0;
 	if (PyList_Check(py_value)) {
 	  converted_tuple = 1;
-	  py_value = PyList_AsTuple(py_value); CHECK_ERROR;
+	  py_value = PyList_AsTuple(py_value);
 	}
 
 	if (!PyTuple_Check(py_value)) {
 	  LogFatal("expected Python tuple for ar_coeffs!\n");
 	  exit(EXIT_FAILURE);
 	}
-	CHECK_ERROR;
 
 	sta->ar_n = PyTuple_Size(py_value); CHECK_ERROR;
-	LogTrace("setting %s to tuple of length %d at siteid %d", key, sta->ar_n, siteid);      
+	LogTrace("setting %s to tuple of length %d at siteid %d", key, sta->ar_n, siteid);
 	if (sta->p_ar_coeffs != NULL) free(sta->p_ar_coeffs);
 	sta->p_ar_coeffs = calloc(sta->ar_n, sizeof(double));
 	for (int i=0; i < sta->ar_n; ++i) {
-	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_value, i)); CHECK_ERROR;
+	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_value, i));
 	}
 
 	if (converted_tuple) {
@@ -134,7 +134,7 @@ int Envelope_SignalModel_Has_Model(void * pv_sigmodel, int siteid, int chan) {
 	return 1;
       }
     }
-    return 0; 
+    return 0;
   }
 
   else {
@@ -145,106 +145,6 @@ int Envelope_SignalModel_Has_Model(void * pv_sigmodel, int siteid, int chan) {
 
 }
 
-
-typedef struct ArrivalWaveform {
-  double start_time;
-  long idx;
-  double end_time;
-  long len;
-  double * p_envelope;
-
-  struct ArrivalWaveform * next_start;
-  struct ArrivalWaveform * next_end;
-  struct ArrivalWaveform * next_active;
-  int active_id;
-
-  double bhe_coeff;
-  double bhn_coeff;
-  double bhz_coeff;
-
-  // used for sampling
-  double * last_perturbs;
-
-} ArrivalWaveform_t;
-
-ArrivalWaveform_t * append_active(ArrivalWaveform_t * p_head, 
-				  ArrivalWaveform_t * p_arr) {
-  ArrivalWaveform_t * p_new_head;
-  p_arr->next_active=NULL;
-  if (p_head == NULL) {
-    p_new_head = p_arr;
-  } else if (p_head->next_active == NULL) {
-    // if at the end of the list, add to the end
-    p_head->next_active = p_arr;
-    p_new_head = p_head;
-  } else {
-    // otherwise, insert recursively
-    p_head->next_active = append_active(p_head->next_active, p_arr);
-    p_new_head = p_head;
-  }
-  return p_new_head;
-}
-
-ArrivalWaveform_t * remove_active(ArrivalWaveform_t * p_head, 
-				  ArrivalWaveform_t * p_arr) {
-  ArrivalWaveform_t * p_new_head;
-  if (p_head == NULL) {
-    p_new_head = NULL;
-  } else if (p_head == p_arr) {
-    p_new_head = p_arr->next_active;
-  } else if (p_head->next_active == NULL) {
-    p_new_head = p_head;
-  } else {
-    // otherwise, delete recursively
-    p_head->next_active = remove_active(p_head->next_active, p_arr);
-    p_new_head = p_head;
-  }
-  return p_new_head;
-}
-
-ArrivalWaveform_t * insert_st(ArrivalWaveform_t * p_head, 
-			      ArrivalWaveform_t * p_arr) {
-  ArrivalWaveform_t * p_new_head;
-  p_arr->next_start=NULL;
-  if (p_head == NULL) {
-    p_new_head = p_arr;
-  } else if (p_head->start_time > p_arr->start_time ) {
-    // if the new addition comes before the head, make it the new head
-    p_arr->next_start = p_head;
-    p_new_head = p_arr;
-  } else if (p_head->next_start == NULL) {
-    // if at the end of the list, add to the end
-    p_head->next_start = p_arr;
-    p_new_head = p_head;
-  } else {
-    // otherwise, insert recursively
-    p_head->next_start = insert_st(p_head->next_start, p_arr);
-    p_new_head = p_head;
-  }
-  return p_new_head;
-}
-
-ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head, 
-				 ArrivalWaveform_t * p_arr) {
-  ArrivalWaveform_t * p_new_head;
-  p_arr->next_end=NULL;
-  if (p_head == NULL) {
-    p_new_head = p_arr;
-  } else if (p_head->end_time > p_arr->end_time ) {
-    // if the new addition comes before the head, make it the new head
-    p_arr->next_end = p_head;
-    p_new_head = p_arr;
-  } else if (p_head->next_end == NULL) {
-    // if at the end of the list, add to the end
-    p_head->next_end = p_arr;
-    p_new_head = p_head;
-  } else {
-    // otherwise, insert recursively
-    p_head->next_end = insert_et(p_head->next_end, p_arr);
-    p_new_head = p_head;
-  }
-  return p_new_head;
-}
 
 
 void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
@@ -269,8 +169,8 @@ void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, doub
     peak_idx = 0;
     end_idx = 1;
   }
-  
-  *len = MIN(end_idx+15*hz, 240*hz);
+
+  *len = MIN(end_idx+15*hz, 60*hz);
   double * means = (double *) calloc(*len, sizeof(double));
 
   if (means == NULL) {
@@ -285,253 +185,16 @@ void abstract_env(Envelope_StationModel_t * p_sta, const Arrival_t * p_arr, doub
     means[i] = exp(env_decay * ((end_idx - i)/hz));
     // LogInfo("%d %d %d %lf %d %lf %lf", i, peak_idx, *len, env_decay, end_idx, hz, means[i]);
   }
-  
+
   *pp_envelope = means;
 }
-
-int AR_add_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n) {
-
-  int arridx = 0;
-
-  if (*pp_means == NULL || *pp_covars == NULL) {
-
-    *pp_means = gsl_vector_alloc(n);
-    gsl_vector_set_zero(*pp_means);
-
-    *pp_covars = gsl_matrix_alloc(n,n);
-    gsl_matrix_set_identity(*pp_covars);
-
-  } else {
-    
-    int l = (*pp_means)->size;
-    arridx = l/n;
-    gsl_vector * new_means = gsl_vector_alloc(l + n);
-    gsl_vector_set_zero(new_means);
-    for(int i=0; i < l; ++i) {
-      gsl_vector_set(new_means, i,  gsl_vector_get(*pp_means, i));
-    }
-    gsl_vector_free(*pp_means);
-    *pp_means = new_means;
-
-    gsl_matrix * new_covars = gsl_matrix_alloc(l + n, l + n);
-    gsl_matrix_set_identity(new_covars);
-    for (int i=0; i < l; ++i) {
-      for(int j=0; j < l; ++j) {
-	gsl_matrix_set(new_covars, i, j, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    gsl_matrix_free(*pp_covars);
-    *pp_covars = new_covars;
-  }
-  return arridx;
-}
-
-void AR_remove_arrival(gsl_vector ** pp_means, gsl_matrix ** pp_covars, int n, int arridx) {
-  if (*pp_means == NULL || *pp_covars == NULL) {
-    return;
-  } 
-
-  int l = (*pp_means)->size;
-  if (l == n) {
-    gsl_vector_free(*pp_means);
-    gsl_matrix_free(*pp_covars);
-    *pp_means = NULL;
-    *pp_covars = NULL;
-  } else {
-    gsl_vector * new_means = gsl_vector_alloc(l - n);
-    for(int i=0; i < arridx*n; ++i) {
-      gsl_vector_set(new_means, i,  gsl_vector_get(*pp_means, i));
-    }
-    for(int i=(arridx+1)*n; i < l; ++i) {
-      gsl_vector_set(new_means, i-n,  gsl_vector_get(*pp_means, i));
-    }
-    gsl_vector_free(*pp_means);
-    *pp_means = new_means;
-
-    gsl_matrix * new_covars = gsl_matrix_alloc(l - n, l - n);
-
-    for (int i=0; i < arridx*n; ++i) {
-      for(int j=0; j < arridx*n; ++j) {
-	gsl_matrix_set(new_covars, i, j, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    // move everything up by n rows
-    for (int i=(arridx+1)*n; i < l; ++i) {
-      for(int j=0; j < (arridx+1)*n; ++j) {
-	gsl_matrix_set(new_covars, i-n, j, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    // move everything in by n columns
-    for (int i=0; i < (arridx+1)*n; ++i) {
-      for(int j=(arridx+1)*n; j < l; ++j) {
-	gsl_matrix_set(new_covars, i, j-n, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    // move everything in by n columns
-    for (int i=i=(arridx+1)*n; i < l; ++i) {
-      for(int j=(arridx+1)*n; j < l; ++j) {
-	gsl_matrix_set(new_covars, i-n, j-n, gsl_matrix_get(*pp_covars, i, j));
-      }
-    }
-    gsl_matrix_free(*pp_covars);
-    *pp_covars = new_covars;
-
-  }
-}
-
-void AR_transitions(int n, int k, double * ar_coeffs, 
-		    int n_arrs, 
-		    gsl_matrix ** pp_transition) {
-  if (*pp_transition != NULL) {
-    gsl_matrix_free(*pp_transition);
-  } 
-  
-
-  if (n_arrs == 0) {
-    *pp_transition = NULL;
-    return;
-  } 
-
-  *pp_transition = gsl_matrix_alloc(n*n_arrs, n*n_arrs);
-
-  gsl_matrix_set_zero(*pp_transition);
-
-  for (int arr=0; arr < n_arrs; ++arr) {
-    gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n, ar_coeffs[0]);
-    for (int i=1; i < n; ++i) {
-      gsl_matrix_set(*pp_transition, arr*n+i-1, arr*n+i, 1);
-      gsl_matrix_set(*pp_transition, arr*n+n-1, arr*n+i, ar_coeffs[i]);
-    }
-   
-  }
-
-}
-
-void AR_observation(int n, int k, 
-		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
-		    ChannelBundle_t * p_segment,
-		    gsl_matrix ** pp_obs) {
-  if (*pp_obs != NULL) {
-    gsl_matrix_free(*pp_obs);
-  }
-  
-  if (n_arrs == 0) {
-    *pp_obs = NULL;
-    return;
-  } 
-
-  *pp_obs = gsl_matrix_alloc(k, n*n_arrs);
-  gsl_matrix_set_zero(*pp_obs);
-
-
-  for (int arr=0; arr < n_arrs; ++arr) {
-    ArrivalWaveform_t * p_a = active_arrivals;
-   int curr_chan=0;
-    for (int i=0; i < NUM_CHANS; ++i) {
-      if (p_segment->p_channels[i] != NULL) {
-	switch (i) {
-	case CHAN_BHZ:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]); 
-	  break;
-	case CHAN_BHN:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]); 
-	  break;
-	case CHAN_BHE:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]); 
-	  break;
-	}
-	curr_chan++;
-      }
-    }
-
-    active_arrivals=active_arrivals->next_active;
-  }
-
-
-}
-
-void AR_predict(gsl_vector * p_means, gsl_matrix * p_covars, gsl_matrix * p_transition, double noise_sigma2, int n) {
-  int num_arrs = p_means->size/n;
-  
-  gsl_vector * tmp = gsl_vector_alloc(p_means->size);
-  gsl_blas_dgemv (CblasNoTrans, 1, p_transition, p_means, 0, tmp);
-  gsl_vector_memcpy(p_means, tmp);
-  gsl_vector_free(tmp);
-
-  gsl_matrix * mtmp = gsl_matrix_alloc(p_covars->size1, p_covars->size2);
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, mtmp);  
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_transition, mtmp, 0, p_covars);
-  
-  gsl_matrix_free(mtmp);
-  for(int i=0; i < num_arrs; ++i) {
-    int idx = (i+1)*n-1;
-    gsl_matrix_set(p_covars, idx, idx, gsl_matrix_get(p_covars, idx, idx) + noise_sigma2);
-  }
-}
-
-double matrix_inv_det(gsl_matrix * A, gsl_matrix * invA) {
-  gsl_matrix * LU = gsl_matrix_alloc(A->size1,A->size2);
-  gsl_permutation *p = gsl_permutation_alloc(A->size1);
-  int signum;
-  gsl_matrix_memcpy(LU, A);
-  gsl_linalg_LU_decomp(LU, p, &signum);
-  gsl_linalg_LU_invert(LU, p, invA);
-
-  double det = gsl_linalg_LU_det (LU, signum);
-
-  gsl_matrix_free(LU);
-  gsl_permutation_free(p);
-  return det;
-}
-
-void AR_update(gsl_vector * p_means, gsl_matrix * p_covars, 
-	       gsl_matrix * p_obs, gsl_vector * obs_perturb, 
-	       gsl_matrix * obs_covar, int n, int k, 
-	       gsl_vector * y, gsl_matrix * S) {
-
-  gsl_blas_dgemv (CblasNoTrans, 1, p_obs, p_means, 0, y);
-  //LogTrace("predicted perturb %lf versus obs %lf",  pred_obs_perturb, obs_perturb_mean);
-  gsl_vector_sub(y, obs_perturb);
-  gsl_vector_scale(y, -1);
-
-
-  gsl_matrix * Sinv = gsl_matrix_alloc(k,k);
-  gsl_matrix * PHt = gsl_matrix_alloc(p_means->size, k);
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_obs, 0, PHt);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_obs, PHt, 0, S);
-  gsl_matrix_add (S, obs_covar);
-  matrix_inv_det(S, Sinv);
-
-  gsl_matrix * K = gsl_matrix_alloc(p_means->size, k);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, PHt, Sinv, 0, K);
-
-  gsl_vector *mean_update = gsl_vector_alloc(p_means->size);
-  gsl_blas_dgemv(CblasNoTrans, 1, K, y, 0, mean_update);
-  gsl_vector_add(p_means, mean_update);
-
-  gsl_matrix * I = gsl_matrix_alloc(p_means->size, p_means->size);
-  gsl_matrix_set_identity (I);
-
-  gsl_matrix * new_covar = gsl_matrix_alloc(p_means->size, p_means->size);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, K, p_obs, 1, I);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, I, p_covars, 0, new_covar);
-  gsl_matrix_memcpy(p_covars, new_covar);
-
-  gsl_matrix_free(Sinv);
-  gsl_matrix_free(PHt);
-  gsl_matrix_free(K);
-  gsl_vector_free(mean_update);
-  gsl_matrix_free(I);
-  gsl_matrix_free(new_covar);
-}
-
 
 /*
   Return the likelihood of the given signal segment (three channels at
   some station over some time period), under the envelope + AR(n)
   wiggles + Gaussian iid noise signal model.
  */
-double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
+double Envelope_SignalModel_Likelihood(void * pv_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
 
   SigModel_t * p_sigmodel = (SigModel_t *) pv_sigmodel;
   SignalModel_t * p_model = &p_sigmodel->signal_model;
@@ -552,7 +215,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
   ArrivalWaveform_t * et_arrivals = NULL;
 
   /*
-  Signal_t filtered_waveform;
+  Channel_t filtered_waveform;
   filtered_waveform.p_data = calloc(p_segment->len, sizeof(double));
   filtered_waveform.len = p_segment->len;
   filtered_waveform.start_time = p_segment->start_time;
@@ -561,7 +224,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
   filtered_waveform.py_array=NULL;
   filtered_waveform.chan=CHAN_BHZ;
 
-  Signal_t filtered_perturbs;
+  Channel_t filtered_perturbs;
   filtered_perturbs.p_data = calloc(p_segment->len, sizeof(double));
   filtered_perturbs.len = p_segment->len;
   filtered_perturbs.start_time = p_segment->start_time;
@@ -570,7 +233,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
   filtered_perturbs.py_array=NULL;
   filtered_perturbs.chan=CHAN_BHZ;
 
-  Signal_t noise;
+  Channel_t noise;
   noise.p_data = calloc(p_segment->len, sizeof(double));
   noise.len = p_segment->len;
   noise.start_time = p_segment->start_time;
@@ -584,7 +247,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
   for (int i=0; i < num_arrivals; ++i) {
 
     const Arrival_t * p_arr = *(pp_arrivals + i);
-      
+
     if (p_arr->amp == 0 || p_arr->time <= 0) continue;
 
     ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
@@ -598,7 +261,7 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
       //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
       iangle = 45;
     }
-    
+
     w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhz_coeff = 1;
@@ -708,15 +371,15 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
     double obs_bhz, obs_bhe, obs_bhn;
     int obs_perturb_n = 0;
     if (p_segment->p_channels[CHAN_BHZ] != NULL) {
-      obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_data[t] - pred_bhz;
+      obs_bhz = p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE]->p_data[t] - pred_bhz;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhz);
     }
     if (p_segment->p_channels[CHAN_BHE] != NULL) {
-      obs_bhe = p_segment->p_channels[CHAN_BHE]->p_data[t] - pred_bhe;
+      obs_bhe = p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE]->p_data[t] - pred_bhe;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhe);
     }
     if (p_segment->p_channels[CHAN_BHN] != NULL) {
-      obs_bhn = p_segment->p_channels[CHAN_BHN]->p_data[t] - pred_bhn;
+      obs_bhn = p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE]->p_data[t] - pred_bhn;
       gsl_vector_set(obs_perturb, obs_perturb_n++, obs_bhn);
     }
 
@@ -784,9 +447,9 @@ double Envelope_SignalModel_Likelihood(void * pv_sigmodel, ChannelBundle_t * p_s
    three-axis station. p_segment must set start_time, hz, and
    siteid. */
 void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
-				   EarthModel_t * p_earth, 
-				   ChannelBundle_t * p_segment,
-				   int num_arrivals, 
+				   EarthModel_t * p_earth,
+				   Segment_t * p_segment,
+				   int num_arrivals,
 				   const Arrival_t ** pp_arrivals,
 				   int samplePerturb,
 				   int sampleNoise) {
@@ -798,17 +461,16 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
   double end_time = p_segment->start_time + p_segment->len / p_segment->hz;
 
 
-  p_segment->p_channels[CHAN_BHZ] = alloc_signal(p_segment);
+  p_segment->p_channels[CHAN_BHZ] = alloc_channel(p_segment);
   p_segment->p_channels[CHAN_BHZ]->chan = CHAN_BHZ;
-  p_segment->p_channels[CHAN_BHZ]->p_data = calloc(p_segment->len, sizeof(double));
-  p_segment->p_channels[CHAN_BHN] = alloc_signal(p_segment);
+  p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE] = calloc(p_segment->len, sizeof(double));
+  p_segment->p_channels[CHAN_BHN] = alloc_channel(p_segment);
   p_segment->p_channels[CHAN_BHN]->chan = CHAN_BHN;
-  p_segment->p_channels[CHAN_BHN]->p_data = calloc(p_segment->len, sizeof(double));
-  p_segment->p_channels[CHAN_BHE] = alloc_signal(p_segment);
+  p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE] = calloc(p_segment->len, sizeof(double));
+  p_segment->p_channels[CHAN_BHE] = alloc_channel(p_segment);
   p_segment->p_channels[CHAN_BHE]->chan = CHAN_BHE;
-  p_segment->p_channels[CHAN_BHE]->p_data = calloc(p_segment->len, sizeof(double));
-    
-  
+  p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE] = calloc(p_segment->len, sizeof(double));
+
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
   int n = p_sta->ar_n;
@@ -818,7 +480,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
 
   // initialize random number generator
   const gsl_rng_type * T;
-  gsl_rng * r;   
+  gsl_rng * r;
   gsl_rng_env_setup();
   T = gsl_rng_default;
   r = gsl_rng_alloc (T);
@@ -831,7 +493,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
   for (int i=0; i < num_arrivals; ++i) {
 
     const Arrival_t * p_arr = *(pp_arrivals + i);
-      
+
     if (p_arr->amp == 0 || p_arr->time <= 0) continue;
 
     ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
@@ -845,13 +507,13 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       for(int t=0; t < w->len; ++t) {
 	double newperturb=0;
 	for(int j=0; j < p_sta->ar_n; ++j) {
-	  newperturb += w->last_perturbs[j] * p_sta->p_ar_coeffs[j]; 
+	  newperturb += w->last_perturbs[j] * p_sta->p_ar_coeffs[j];
 	  //printf("inc newperturb by %lf * %lf = %lf to %lf\n", w->last_perturbs[j], p_sta->p_ar_coeffs[j] , w->last_perturbs[j] *  p_sta->p_ar_coeffs[j], newperturb);
 	  if (j > 0) w->last_perturbs[j-1] = w->last_perturbs[j];
 	}
 	double epsilon = gsl_ran_gaussian(r, stddev);
 	newperturb += epsilon;
-      
+
 	w->last_perturbs[p_sta->ar_n-1] = newperturb;
 	newperturb *= w->p_envelope[t];
 	w->p_envelope[t] = w->p_envelope[t] + newperturb;
@@ -865,7 +527,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
       iangle = 45;
     }
-    
+
     w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->bhz_coeff = 1;
@@ -909,7 +571,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       ending_next = ending_next->next_end;
     }
 
-    
+
     // compute the predicted envelope for each component
     double env_bhz = p_sta->chan_means[CHAN_BHZ];
     double env_bhe = p_sta->chan_means[CHAN_BHE];
@@ -922,18 +584,19 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
       a->idx++;
       LogTrace("getting envelope from active id %d st %lf coeffs z %lf e %lf n %lf idx %d env %lf", a->active_id, a->start_time, a->bhz_coeff, a->bhe_coeff, a->bhn_coeff, a->idx, a->p_envelope[a->idx]);
     }
-    p_segment->p_channels[CHAN_BHZ]->p_data[t] = env_bhz; 
-    p_segment->p_channels[CHAN_BHE]->p_data[t] = env_bhe;
-    p_segment->p_channels[CHAN_BHN]->p_data[t] = env_bhn;
-									   
+
+    p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE]->p_data[t] = env_bhz;
+    p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE]->p_data[t] = env_bhe;
+    p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE]->p_data[t] = env_bhn;
+
     if(sampleNoise) {
       printf("sampling gaussian noise with var %lf\n", p_sta->chan_vars[CHAN_BHZ]);
-      p_segment->p_channels[CHAN_BHZ]->p_data[t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHZ]))); 
-      p_segment->p_channels[CHAN_BHE]->p_data[t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHE]))); 
-      p_segment->p_channels[CHAN_BHN]->p_data[t] += 
-	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHN]))); 
+      p_segment->p_channels[CHAN_BHZ]->p_bands[BB_ENVELOPE]->p_data[t] +=
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHZ])));
+      p_segment->p_channels[CHAN_BHE]->p_bands[BB_ENVELOPE]->p_data[t] +=
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHE])));
+      p_segment->p_channels[CHAN_BHN]->p_bands[BB_ENVELOPE]->p_data[t] +=
+	fabs(gsl_ran_gaussian(r,sqrt(p_sta->chan_vars[CHAN_BHN])));
     }
 
   }
@@ -950,7 +613,7 @@ void Envelope_SignalModel_SampleThreeAxis(void * pv_params,
 
 void Envelope_SignalModel_UnInit(void * pv_params) {
   Envelope_SignalModel_t * p_params = (Envelope_SignalModel_t *) pv_params;
-  
+
   for (int i=0; i < p_params->numsites; ++i) {
     free((p_params->p_stations + i)->p_ar_coeffs);
   }

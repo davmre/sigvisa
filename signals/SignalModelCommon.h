@@ -9,9 +9,9 @@ typedef void(*SMSetParams_f)(void * pv_params, int station, PyObject * py_dict);
 
 typedef int(*SMHasModel_f)(void * pv_model, int siteid, int chan);
 
-typedef double(*SMLikelihood_f)(void * pv_sigmodel, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
+typedef double(*SMLikelihood_f)(void * pv_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
 
-typedef void(*SMSample_f)(void * pv_params, EarthModel_t * p_earth, ChannelBundle_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int samplePerturb, int sampleNoise);
+typedef void(*SMSample_f)(void * pv_params, EarthModel_t * p_earth, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int samplePerturb, int sampleNoise);
 
 typedef void(*SMUnInit_f)(void * pv_params);
 
@@ -32,7 +32,7 @@ void uninit_signal_model(SignalModel_t * p_model);
 
 
 void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double max_time, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals);
-void det_arrivals(void * p_sigmodel_v, ChannelBundle_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals);
+void det_arrivals(void * p_sigmodel_v, Segment_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals);
 
 double Signal_Score_Event_Site(void * pv_sigmodel, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events);
 
