@@ -116,7 +116,7 @@ PyObject * py_gen_logenvelope(PyObject * self, PyObject * args) {
     arr.amp = ARRAY2(py_params_array, i, CODA_HEIGHT_PARAM);
     arr.coda_decay = ARRAY2(py_params_array, i, CODA_DECAY_PARAM);
 
-    printf("%d %f %f %f %f %f %f\n", i, arr.time, arr.peak_time, arr.peak_amp, arr.peak_decay, arr.amp, arr.coda_decay);
+    // printf("%d %f %f %f %f %f %f\n", i, arr.time, arr.peak_time, arr.peak_amp, arr.peak_decay, arr.amp, arr.coda_decay);
 
     add_phase_arrival(&arr, &trace);
   }
