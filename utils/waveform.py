@@ -1,6 +1,6 @@
 # draw the waveforms for an LEB event at some of the stations
 
-import sys, MySQLdb, struct
+import sys, struct
 import matplotlib.pyplot as plt
 import gzip
 
