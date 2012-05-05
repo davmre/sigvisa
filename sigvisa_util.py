@@ -202,9 +202,9 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, 
 
           if process is not None:
             trace_processed = process(trace)
-            trace_processed.downsample(downsample_factor)
+            trace_processed.decimate(downsample_factor)
             segment_chans[trace.stats['channel']]["broadband_envelope"] =  trace_processed
-          trace.downsample(downsample_factor)
+          trace.decimate(downsample_factor)
           segment_chans[trace.stats['channel']]["broadband"] = trace
           print " ... successfully loaded."
         except (utils.waveform.MissingWaveform, IOError):
@@ -263,9 +263,10 @@ def load_traces(cursor, stations, start_time, end_time, process=None, downsample
 
                 if process is not None:
                   trace_processed = process(trace)
-                  trace_processed.downsample(downsample_factor)
+                  trace_processed.decimate(downsample_factor)
                   segment_chans[trace.stats['channel']]["broadband_envelope"] =  trace_processed
-                trace.downsample(downsample_factor)
+                print trace
+                trace.decimate(downsample_factor)
                 segment_chans[trace.stats['channel']]["broadband"] = trace
                 print " ... successfully loaded."
               except (utils.waveform.MissingWaveform, IOError):
