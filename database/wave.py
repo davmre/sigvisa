@@ -1,4 +1,4 @@
-import sys, MySQLdb,struct
+import sys, struct
 import numpy as np
 import gzip
 
@@ -59,22 +59,24 @@ def fetch_waveform(station, chan, stime, etime):
   Returns a single obspy trace corresponding to the waveform for the given
   channel at the station in the given interval.
   """
-  cursor = database.db.connect().cursor(MySQLdb.cursors.DictCursor)
+  cursor = database.db.connect().cursor()
   
   # scan the waveforms for the given interval
   samprate = None
   data = []
   
   while True:
-    cursor.execute("select * from idcx_wfdisc where sta = '%s' and chan ='%s' "
-                   "and time <= %f and %f < endtime" %
-                   (station, chan, stime, stime))
-    
-    waveform = cursor.fetchone()
-    if waveform is None:
+    TIME_COL, CHANID_COL, ENDTIME_COL, NSAMP_COL, SAMPRATE_COL = range(5)
+    sql = "select * from idcx_wfdisc where sta = '%s' and chan ='%s' and time <= %f and %f < endtime" % (station, chan, stime, stime)
+    cursor.execute(sql)    
+    waveform_values = cursor.fetchone()
+    if waveform_values is None:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
                             % (station, chan, stime))
     
+    waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
+    print cursor.description
+    print waveform
     # check the samprate is consistent for all waveforms in this interval
     assert(samprate is None or samprate == waveform['samprate'])
     if samprate is None:

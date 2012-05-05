@@ -138,6 +138,7 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", n
       det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
       det[DET_DELSLO_COL])
 
+
   return detections, arid2num
 
 def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,

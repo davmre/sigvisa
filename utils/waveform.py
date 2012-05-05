@@ -95,11 +95,10 @@ def fetch_array_elements(siteid):
                  "s2.sta=s1.sta and s2.offdate=-1" % (siteid+1,))
   sta, refsta, staname = cursor.fetchone()
   # deduce the channel with the most number of array elements
-  cursor.execute("select c.chan, count(*) from static_sitechan c, "
-                 "static_site s where c.offdate=-1 and s.offdate=-1 and "
-                 "c.sta=s.sta and s.statype='ss' and s.refsta='%s' and "
-                 "c.vang=0 and c.hang=-1 group by 1 order by 2 desc limit 1" %
-                 (refsta,))
+  #  sql_query = "select c.chan, count(*) from static_sitechan c, static_site s where c.offdate=-1 and s.offdate=-1 and c.sta=s.sta and s.statype='ss' and s.refsta='%s' and c.vang=0 and c.hang=-1 group by 1 order by 2 desc limit 1" % (refsta,)
+  sql_query = "select * from (select c.chan, count(*) cnt from static_sitechan c, static_site s where c.offdate=-1 and s.offdate=-1 and c.sta=s.sta and s.statype='ss' and s.refsta='%s' and c.vang=0 and c.hang=-1 group by c.chan order by cnt desc) where rownum <= 1" % (refsta,)
+  print sql_query
+  cursor.execute(sql_query)
   chan,chan_cnt = cursor.fetchone()
   # now, return the name and locations of all these array elements
   cursor.execute("select s.sta, s.lon, s.lat, s.elev-c.edepth from "
@@ -215,35 +214,43 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
   calib = float(waveform['calib'])
   return [float(x) * calib for x in data]
 
+
+def dict_cursor(cursor):
+  description = [x[0] for x in cursor.description]
+  for row in cursor:
+    yield dict(zip(description, row))
+                
   
 def fetch_waveform(station, chan, stime, etime):
   """
   Returns a single obspy trace corresponding to the waveform for the given
   channel at the station in the given interval.
   """
-  cursor = database.db.connect().cursor(MySQLdb.cursors.DictCursor)
+  cursor = database.db.connect().cursor()
 
   # scan the waveforms for the given interval
   samprate = None
   data = []
-  
+
   while True:
 
     sql = "select * from idcx_wfdisc where sta = '%s' and chan ='%s' and time <= %f and %f < endtime" % (station, chan, stime, stime)
     cursor.execute(sql)
-    waveform = cursor.fetchone()
-    if waveform is None:
+    waveform_values = cursor.fetchone()
+
+    if waveform_values is None:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
                             % (station, chan, stime))
-
+    
+    waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
     cursor.execute("select id from static_siteid where sta = '%s'" % (station))
     try:
-      siteid = cursor.fetchone()['id']
+      siteid = cursor.fetchone()[0]
     except:
       raise MissingWaveform("couldn't get siteid for station %s" % (station))
     
     # check the samprate is consistent for all waveforms in this interval
-    assert(samprate is None or samprate == waveform['samprate'])
+    assert(samprate is None or samprate == waveform[SAMPRATE_COL])
     if samprate is None:
       samprate = waveform['samprate']
     
