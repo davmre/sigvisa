@@ -1,9 +1,19 @@
+
+import matplotlib
+matplotlib.use("PDF")
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
-import matplotlib
-import numpy as np
+from matplotlib.backends.backend_pdf import PdfPages
 
+import os
+from optparse import OptionParser
+
+import numpy as np
 import geog
+
+from database.dataset import *
+from database import db
+
 
 def draw_earth(title, **args):
   """
@@ -20,7 +30,7 @@ def draw_earth(title, **args):
     del args["figsize"]
   else:
     figsize = (8, 4.8)
-  
+
   if "projection" not in args:
     args["projection"] = "moll"
   if "resolution" not in args:
@@ -31,7 +41,7 @@ def draw_earth(title, **args):
     draw_grid = True
   else:
     draw_grid = False
-  
+
   # if no args other than those above then center the map
   if len(args) == 2:
     args["lat_0"] = 0
@@ -52,7 +62,7 @@ def draw_earth(title, **args):
     bmap.drawcoastlines(zorder=10)
   except:
     bmap.drawcoastlines()
-    
+
   plt.subplots_adjust(left=0.02, right=0.98)
 
   if not nofillcontinents:
@@ -74,16 +84,16 @@ def draw_earth(title, **args):
   if draw_grid:
     bmap.drawmeridians(np.arange(-180, 180, 30), zorder=10)
     bmap.drawparallels(np.arange(-90, 90, 30), zorder=10)
-  
+
   return bmap
 
-def draw_events(bmap, events, **args):
+def draw_events(bmap, events, labels = None, **args):
   """
   The args can be any collection of marker args like ms, mfc mec
   """
   if "zorder" not in args:
     args["zorder"] = 10
-  
+
   # if there are any array args then we need to apply them to each event
   # separately
   array_args = []
@@ -91,13 +101,21 @@ def draw_events(bmap, events, **args):
     if not np.issctype(type(argval)):
       assert(len(events) == len(argval))
       array_args.append((argname, argval))
-      
+
   for enum, ev in enumerate(events):
     x,y = bmap(ev[0], ev[1])
     # set each of the array argument for this event
     for (argname, argval) in array_args:
       args[argname] = argval[enum]
     bmap.plot([x], [y], **args)
+
+    if labels is not None:
+      plt.annotate(
+        labels[enum][0],
+        xy = (x, y),
+        size=4,
+        arrowprops = None)
+
 
 def draw_events_mag(bmap, events, **args):
   """
@@ -108,7 +126,7 @@ def draw_events_mag(bmap, events, **args):
 
   base_ms = args["ms"]
   del args["ms"]
-  
+
   for ev in events:
     x,y = bmap(ev[0], ev[1])
     args["ms"] = int(base_ms * pow(ev[4],2.01))
@@ -121,12 +139,12 @@ def draw_vectors(bmap, vectors, scale, **args):
     x1, y1 = bmap(lon1, lat1)
     x2, y2 = bmap(lon2, lat2)
     plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
-    
+
 def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
                  nolines = False):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
-  
+
   # convert to map coordinates
   x, y = bmap(list(lon_arr.flat), list(lat_arr.flat))
   x_arr = np.array(x).reshape(lon_arr.shape)
@@ -153,7 +171,7 @@ def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
     ev_x, ev_y = bmap(ev_lon, ev_lat)
     bmap.plot([ev_x], [ev_y], marker="s", ms=10, mfc="none",
               mec=evcolors[evcolnum], mew=2, zorder=4)
-    
+
     for arr in arrivals.itervalues():
       sta = sites[arr.sta]
       dist = geog.dist_deg((sta.lon, sta.lat), (ev_lon, ev_lat))
@@ -167,6 +185,86 @@ def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
   draw_events(bmap, sites, marker="^", ms=10, mfc="none", mec="green",
               mew=2, zorder=3)
 
+
 def show():
   plt.show()
-  
+
+
+def main():
+
+    parser = OptionParser()
+
+    parser.add_option("-s", "--siteid", dest="siteid", default=None, type="int", help="siteid of station for which to generate plots, or None to just plot all stations (None)")
+
+    parser.add_option("--min_azi", dest="min_azi", default=0, type="float", help="exclude all events with azimuth less than this value (0)")
+    parser.add_option("--max_azi", dest="max_azi", default=360, type="float", help="exclude all events with azimuth greater than this value (360)")
+    parser.add_option("--min_dist", dest="min_dist", default=0, type="float", help="exclude all events with distance less than this value (0)")
+    parser.add_option("--max_dist", dest="max_dist", default=24000, type="float", help="exclude all events with distance greater than this value (24000)")
+    parser.add_option("--min_depth", dest="min_depth", default=0, type="float", help="exclude all events with depth less than this value (0)")
+    parser.add_option("--max_depth", dest="max_depth", default=8000, type="float", help="exclude all events with depth greater than this value (8000)")
+    parser.add_option("--min_mb", dest="min_mb", default=0, type="float", help="exclude all events with mb less than this value (0)")
+    parser.add_option("--max_mb", dest="max_mb", default=10, type="float", help="exclude all events with mb greater than this value (10)")
+    parser.add_option("--start_time", dest="start_time", default=1238889600, type="float", help="exclude all events with time less than this value (1238889600)")
+    parser.add_option("--end_time", dest="end_time", default=1245456000, type="float", help="exclude all events with time greater than this value (1245456000)")
+
+    (options, args) = parser.parse_args()
+
+#    pp = PdfPages(os.path.join(pdf_dir, "geog.pdf"))
+    pp = PdfPages("geog.pdf")
+
+    cursor = db.connect().cursor()
+    sites = read_sites(cursor)
+
+    max_lon=180
+    min_lon=-180
+    max_lat=90
+    min_lat=-90
+    bmap = draw_earth("",
+                      projection="cyl",
+                      resolution="l",
+                      llcrnrlon = min_lon, urcrnrlon = max_lon,
+                      llcrnrlat = min_lat, urcrnrlat = max_lat,
+                      nofillcontinents=True,
+                      figsize=(8,8))
+
+    if options.siteid is not None:
+      siteid = options.siteid
+      site_lonlat = sites[siteid-1, 0:2]
+
+      sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between %f and %f and lebo.mb between %f and %f and lebo.depth between %f and %f and leba.arid=l.arid and lebo.orid=leba.orid and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (options.start_time, options.end_time, options.min_mb, options.max_mb, options.min_depth, options.max_depth, options.siteid)
+      cursor.execute(sql_query)
+      events = np.array(cursor.fetchall())
+
+      d = lambda ev : geog.dist_km((ev[1], ev[2]), (sites[siteid-1][0], sites[siteid-1][1]))
+      a = lambda ev : geog.azimuth((ev[1], ev[2]), (sites[siteid-1][0], sites[siteid-1][1]))
+      distances = np.array([d(ev) for ev in events])
+      azimuths = np.array([a(ev) for ev in events])
+      dist_i = np.logical_and((distances >= options.min_dist), (distances <= options.max_dist))
+      azi_i = np.logical_and((azimuths >= options.min_azi), (azimuths <= options.max_azi))
+      i = np.logical_and(dist_i, azi_i)
+
+      print events.shape
+      print i.shape
+
+      ev_lonlat = events[i, 1:3]
+
+      for i,ev in enumerate(ev_lonlat):
+        draw_events(bmap, ((ev[0], ev[1]),), marker="o", ms=2, mfc="none", mec="yellow", mew=1)
+      draw_events(bmap, (site_lonlat,),  marker="x", ms=5, mfc="none", mec="purple", mew=1)
+
+      plt.title("siteid %d azi (%d, %d) dist (%d, %d)\n mb (%.2f, %.2f) depth (%d, %d)" % (siteid, options.min_azi, options.max_azi, options.min_dist, options.max_dist, options.min_mb, options.max_mb, options.min_depth, options.max_depth))
+
+    else:
+      sql_query = "select sta from static_siteid"
+      cursor.execute(sql_query)
+      stas = cursor.fetchall()
+
+      draw_events(bmap, sites[:, 0:2],  labels=stas, marker="x", ms=3, mfc="none", mec="purple", mew=1)
+
+
+    pp.savefig()
+    pp.close()
+
+
+if __name__ == "__main__":
+  main()
