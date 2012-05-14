@@ -245,11 +245,7 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   Reads
   - LEB events/assoc, with IDCX arrivals
   - SEL3 events/assoc,
-<<<<<<< HEAD
-  - IDCX arrivals with delaz>0 and delsnr>0
-=======
   - IDCX arrivals with delaz>0 and delsnr>0 (upto 2000 secs beyond end_time)
->>>>>>> git-svn
   - Site information
   - Phase information
   - LEB assoc with LEB arrivals
@@ -263,14 +259,9 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   - training
   
   Setting 'hours' to None will return all the data from the specified
-<<<<<<< HEAD
   dataset. 'skip' controls the number of initial hours to skip, for
   example for testing the second 2 hour window set hours=2
   skip=2. 'noarrays' prohibits using data from array stations.
-=======
-  dataset. 'skip' controls the number of initial hours to skip, for example
-  for testing the second 2 hour window set hours=2 skip=2
->>>>>>> git-svn
 
   Returns the following tuple
          start_time, end_time, detections, leb_events, leb_evlist, sel3_events,

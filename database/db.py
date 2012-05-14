@@ -41,3 +41,5 @@ def connect(unix_socket=None):
         dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket=os.environ["VISA_SOCKET"])
       else:
         dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
+
+  return dbconn
