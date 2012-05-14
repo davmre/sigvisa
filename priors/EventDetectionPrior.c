@@ -165,7 +165,7 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
     {
       double altlogprob = log(1 - exp(-dderror));
 
-      logprob = LOGSUMEXP(altlogprob, logprob);
+      logprob = LOGSUM(altlogprob, logprob);
     }
   }
 

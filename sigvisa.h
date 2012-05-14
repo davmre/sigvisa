@@ -23,6 +23,9 @@ typedef struct Detection_t
   double amp_det;
   double per_det;
 
+  int prev_det;               /* the previous detection or -1 */
+  double logprob_det;   /* the log probability of either being noise or coda */
+
   int sigvisa_fake;
 
 } Detection_t;
@@ -93,6 +96,24 @@ typedef struct Site_t
 #define SITE_ELEV_COL     2
 #define SITE_ISARR_COL    3        /* is the site an array station? */
 #define SITE_NUM_COLS     4
+
+/* detections array columns */
+#define DET_SITE_COL    0
+#define DET_ARID_COL    1
+#define DET_TIME_COL    2
+#define DET_DELTIM_COL  3
+#define DET_AZI_COL     4
+#define DET_DELAZ_COL   5
+#define DET_SLO_COL     6
+#define DET_DELSLO_COL  7
+#define DET_SNR_COL     8
+#define DET_PHASE_COL   9
+#define DET_AMP_COL    10
+#define DET_PER_COL    11
+#define DET_NUM_COLS   12
+
+
+#define PHASENAME_MAXLEN 6
 
 #include "netvisa.h"
 
@@ -280,10 +301,21 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 
 #define LOGPROB_UNIFORM_AZIMUTH (- log(MAX_AZIMUTH - MIN_AZIMUTH))
 
-#define PHASENAME_MAXLEN 6
+
 
 /* maximum time taken by any phase */
 #define MAX_TRAVEL_TIME ((double) 2000.0)
+
+/* the spacing between secondary detections */
+#define SECDET_INTERVAL ((double) 5.0)
+
+/* maximum number of primary + secondary detections for any phase */
+#define MAX_PHASE_DET  15
+
+/* max time residual should not be needed in a proper model but due to
+ * unexplained extremely high variance in some of the travel time residual
+ * we need to put this in place for now */
+#define MAX_TIME_RESIDUAL ((double) 6.0)
 
 
 #define MIN(a,b) ((a) <= (b) ? (a) : (b))
@@ -306,8 +338,12 @@ int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end
 #define DELTA_TIME 50                        /* in seconds */
 #define DELTA_DIST 5                         /* in degrees */
 
+#define MIN_AMP 0.01
+#define LOG_MIN_AMP -4.6052
+#define LOG10_MIN_AMP -2
 #define MAX_AMP 10000.0
-#define LOG_MAX_AMP 9.2103
+#define LOG_MAX_AMP 9.2103404
+#define LOG10_MAX_AMP 4.0
 
 #define MAX_EVENT_RATE 1
 

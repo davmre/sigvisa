@@ -1,10 +1,39 @@
+/*
+ * Copyright (c) 2012, Bayesian Logic, Inc.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Bayesian Logic, Inc. nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ * Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+ * USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ * 
+ */
+
 #include <math.h>
 #include <stdlib.h>
 
 #define NETVISA_MAIN_MODULE
-#include "sigvisa.h"
 
-//test123
+#include "sigvisa.h"
 
 static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
@@ -13,15 +42,31 @@ static PyObject * py_logprob_false(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_logprob_event_misdet(NetModel_t * p_netmodel,
+                                          PyObject * args);
 static PyObject * py_invert_det(NetModel_t * p_netmodel, PyObject * args);
 static PyObject * py_location_logprob(NetModel_t * p_netmodel,PyObject * args);
 static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
+
+static PyObject * py_logamp(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_arramp_zval_logprob_cdf(NetModel_t * p_netmodel,
+                                             PyObject *args);
+static PyObject * py_falseamp_logprob_cdf(NetModel_t * p_netmodel,
+                                          PyObject *args);
 static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_mean_amplitude(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_arrphase_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_falsephase_logprob(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_enable_sec_arr(NetModel_t * self);
+static PyObject * py_disable_sec_arr(NetModel_t * self);
+static PyObject * py_set_temperature(NetModel_t * self, PyObject * args);
+static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args);
+static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args);
+
 
 static PyMethodDef NetModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
@@ -34,6 +79,9 @@ static PyMethodDef NetModel_methods[] = {
    "score_event(event, detlist) -> log probability ratio"},
   {"score_event_det", (PyCFunction)py_score_event_det, METH_VARARGS,
    "score_event_det(event, phaseid, detnum) -> log probability ratio\n"},
+  {"logprob_event_misdet", (PyCFunction)py_logprob_event_misdet, METH_VARARGS,
+   "logprob_event_misdet(event, phaseid, siteid) -> "
+   "log probability of mis-detection\n"},
   {"prob_event", (PyCFunction)py_prob_event, METH_VARARGS,
    "prob_event(event, detlist) -> log probability ratio"},
   {"infer", (PyCFunction)py_infer, METH_VARARGS,
@@ -51,6 +99,14 @@ static PyMethodDef NetModel_methods[] = {
   {"detection_logprob", (PyCFunction)py_detection_logprob, METH_VARARGS,
    "detection_logprob(isdet, evdepth, evmag, dist, siteid, phaseid)"
    " -> log probability"},
+  {"arramp_zval_logprob_cdf", (PyCFunction)py_arramp_zval_logprob_cdf, 
+   METH_VARARGS,
+   "arramp_zval_logprob_cdf(mb, depth, ttime, siteid, phaseid, amp)\n"
+   " -> zval, log prob, cdf"},
+  {"logamp", (PyCFunction)py_logamp, METH_VARARGS,
+   "logamp(mb, depth, ttime, siteid, phaseid)\n -> log(amp)"},
+  {"falseamp_logprob_cdf", (PyCFunction)py_falseamp_logprob_cdf, METH_VARARGS,
+   "falseamp_logprob_cdf(siteid, amp) -> log prob, cdf"},
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
    "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid, phaseid)"
    " -> log probability"},
@@ -66,6 +122,24 @@ static PyMethodDef NetModel_methods[] = {
   {"arrslo_logprob", (PyCFunction)py_arrslo_logprob, METH_VARARGS,
    "arrslo_logprob(arrslo, pred_arrslo, det_delslo, siteid, phaseid)"
    " -> log probability"},
+  {"arrphase_logprob", (PyCFunction)py_arrphase_logprob, METH_VARARGS,
+   "arrphase_logprob(arrphaseid, phaseid) -> log probability"},
+  {"falsephase_logprob", (PyCFunction)py_falsephase_logprob, METH_VARARGS,
+   "falsephase_logprob(arrphaseid) -> log probability"},
+  {"enable_sec_arr", (PyCFunction)py_enable_sec_arr, METH_NOARGS,
+   "enable_sec_arr(): enables secondary arrivals"},
+  {"disable_sec_arr", (PyCFunction)py_disable_sec_arr, METH_NOARGS,
+   "disable_sec_arr(): disables secondary arrivals"},
+  {"set_temperature", (PyCFunction)py_set_temperature, METH_VARARGS,
+   "set_temperature(temp): set the temperature for constraints"},
+  {"score_coda_coda", (PyCFunction)py_score_coda_coda, METH_VARARGS,
+   "score_coda_coda(secdetnum, detnum)"
+   "-> log probability of secdetnum being a secondary coda of detnum"
+   " minus log probability of secdetnum being noise"},
+  {"score_phase_coda", (PyCFunction)py_score_phase_coda, METH_VARARGS,
+   "score_phase_coda(secdetnum, detnum)"
+   "-> log probability of secdetnum being a secondary coda of detnum"
+   " minus log probability of secdetnum being noise"},
   {NULL}  /* Sentinel */
 };
 
@@ -179,10 +253,17 @@ static PyMethodDef EarthModel_methods[] = {
     {"PhaseRange", (PyCFunction)py_EarthModel_PhaseRange,
      METH_VARARGS, "PhaseRange(phaseid) -> (min distance, max distance)",
     },
+    {"QFVC", (PyCFunction)py_EarthModel_QFVC,
+     METH_VARARGS, "QFVC(depth, distance) -> q-factor",
+    },
+    {"TravelTime", (PyCFunction)py_EarthModel_TravelTime, METH_VARARGS,
+     "travel time for a give phase of an event a given depth and distance\n"
+     "TravelTime(phaseid, depth, dist) -> travel time"
+    },
     {NULL}  /* Sentinel */
 };
 
-PyTypeObject py_EarthModel = {
+static PyTypeObject py_EarthModel = {
     PyObject_HEAD_INIT(NULL)
     0,                                       /*ob_size*/
     "netvisa.EarthModel",                    /*tp_name*/
@@ -225,11 +306,8 @@ PyTypeObject py_EarthModel = {
 };
 
 static PyMethodDef netvisaMethods[] = {
-  {"srand", py_srand, METH_VARARGS,
-    "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
 };
-
 
 void initnetvisa(void)
 {
@@ -291,7 +369,7 @@ static void free_detections(int ndetections, Detection_t * p_detections)
   free(p_detections);
 }
 
-static void alloc_site_up(PyArrayObject * siteupobj, int * p_nsites,
+static void alloc_site_up(PyArrayObject * siteupobj,
                           int * p_ntime, int ** p_p_site_up)
 {
   int nsites;
@@ -310,7 +388,6 @@ static void alloc_site_up(PyArrayObject * siteupobj, int * p_nsites,
     for (j=0; j<ntime; j++)
       p_site_up[i * ntime + j] = BOOLARRAY2(siteupobj, i, j);
   
-  *p_nsites = nsites;
   *p_ntime = ntime;
   *p_p_site_up = p_site_up;
 }
@@ -318,6 +395,56 @@ static void alloc_site_up(PyArrayObject * siteupobj, int * p_nsites,
 static void free_site_up(int nsites, int ntime, int * p_site_up)
 {
   free(p_site_up);
+}
+
+static void init_det_logprob(NetModel_t * self)
+{
+  int detnum;
+
+  /* initialize prev_detnum and logprob */
+  for (detnum = 0; detnum < self->numdetections; detnum++)
+  {
+    Detection_t * p_det = self->p_detections + detnum;
+    
+    p_det->prev_det = -1;
+    p_det->logprob_det = logprob_noise(self, p_det, NULL);
+  }
+
+  /* look at each detection and see if it caused a secondary detection */
+  for (detnum = 0; detnum < self->numdetections; detnum++)
+  {
+    int secdetnum;
+    Detection_t * p_det = self->p_detections + detnum;
+    
+    for (secdetnum = (detnum+1); secdetnum < self->numdetections; 
+         secdetnum ++)
+    {
+      Detection_t * p_secdet = self->p_detections + secdetnum;
+      /* sanity check to avoid searching forever */
+      if (p_secdet->time_det > (p_det->time_det + 300))
+        break;
+      /* needs to be the same site to be a coda arrival */
+      if (p_secdet->site_det != p_det->site_det)
+        continue;
+      /* did we find a coda arrival ? */
+      if (SecDetPrior_Time_Possible(&self->sec_det_prior,
+                                    p_secdet->time_det, p_det->time_det))
+      {
+        double coda_logprob = logprob_coda_coda(self, p_secdet, p_det);
+
+        p_secdet->logprob_det = logprob_noise(self, p_secdet, p_det);
+
+        /* we will consider this a secondary detection only if the coda->coda
+         * explanation is better than the noise explanation */
+        if (coda_logprob > p_secdet->logprob_det)
+        {
+          p_secdet->prev_det = detnum;
+          p_secdet->logprob_det = coda_logprob;
+        }
+      }
+      break;
+    }
+  }
 }
 
 
@@ -328,7 +455,7 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   double end_time;
   PyArrayObject * detectionsobj;
   PyArrayObject * siteupobj;
-  const char * numsecdet_fname;
+  const char * secdet_fname;
   const char * numevent_fname;
   const char * evloc_fname;
   const char * evmag_fname;
@@ -341,10 +468,12 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   const char * arrsnr_fname;
   const char * arramp_fname;
   
-  if (!PyArg_ParseTuple(args, "O!ddO!O!ssssssssssss", &py_EarthModel, &p_earth,
+  if (!PyArg_ParseTuple(args, "O!ddO!O!ssssssssssss", &py_EarthModel, 
+                        &p_earth,
                         &start_time, &end_time, 
                         &PyArray_Type, &detectionsobj,
-                        &PyArray_Type, &siteupobj, &numsecdet_fname,
+                        &PyArray_Type, &siteupobj, 
+                        &secdet_fname,
                         &numevent_fname, &evloc_fname, &evmag_fname, 
                         &evdet_fname, &arrtime_fname, &numfalse_fname,
                         &arraz_fname, &arrslo_fname, &arrphase_fname,
@@ -367,8 +496,10 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
     return -1;
   }
 
+  /* note: we expect detections for an additional period of time beyond the
+   * end_time */
   if ((2 != siteupobj->nd) || (NPY_BOOL != siteupobj->descr->type_num)
-      || (((int)ceil((end_time - start_time) / UPTIME_QUANT))
+      || (((int)ceil((MAX_TRAVEL_TIME + end_time - start_time) / UPTIME_QUANT))
           != siteupobj->dimensions[1]))
   {
     PyErr_SetString(PyExc_ValueError, "net_model_init: incorrect shape or type"
@@ -376,17 +507,23 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
     return -1;
   }
 
+  self->temperature = 100.0;
   self->start_time = start_time;
   self->end_time = end_time;
+  self->numsites = siteupobj->dimensions[0];
 
   self->p_earth = p_earth;
   Py_INCREF((PyObject *)self->p_earth);
 
   alloc_detections(detectionsobj, &self->numdetections, &self->p_detections);
-
-  alloc_site_up(siteupobj, &self->numsites, &self->numtime, &self->p_site_up);
   
-  NumSecDetPrior_Init_Params(&self->num_secdet_prior, numsecdet_fname);
+  alloc_site_up(siteupobj, &self->num_uptime, &self->p_site_up);
+  
+  /* we will enable secondary arrivals, it can be modified by calling one of
+   * the enable/disable methods */
+  self->enable_sec_arr = 1;
+  
+  SecDetPrior_Init_Params(&self->sec_det_prior, secdet_fname);
 
   NumEventPrior_Init_Params(&self->num_event_prior, numevent_fname);
   
@@ -409,6 +546,8 @@ static int py_net_model_init(NetModel_t *self, PyObject *args)
   ArrivalSNRPrior_Init_Params(&self->arr_snr_prior, arrsnr_fname);
 
   ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
+
+  init_det_logprob(self);
   
   return 0;
 }
@@ -424,8 +563,10 @@ static void py_net_model_dealloc(NetModel_t * self)
   free_detections(self->numdetections, self->p_detections);
   self->p_detections = NULL;
 
-  free_site_up(self->numsites, self->numtime, self->p_site_up);
+  free_site_up(self->numsites, self->num_uptime, self->p_site_up);
   self->p_site_up = NULL;
+
+  SecDetPrior_UnInit(&self->sec_det_prior);
   
   EventLocationPrior_UnInit(&self->event_location_prior);
 
@@ -777,6 +918,189 @@ static PyObject * py_score_event_det(NetModel_t * p_netmodel, PyObject * args)
   }
 }
 
+static PyObject * py_logprob_event_misdet(NetModel_t * p_netmodel,
+                                          PyObject * args)
+{
+  /* input arguments */
+  PyArrayObject * p_event_arrobj;
+  int phaseid;
+  int siteid;
+  EarthModel_t * p_earth;
+  int numsites;
+  int numtimedefphases;
+ 
+  Event_t * p_event;
+  double distance, pred_az;
+  int poss;
+  double score;
+
+  
+  if (!PyArg_ParseTuple(args, "O!ii", &PyArray_Type, &p_event_arrobj, 
+                        &phaseid, &siteid)
+      || !p_event_arrobj)
+    return NULL;
+  
+  if ((1 != p_event_arrobj->nd) || (NPY_DOUBLE 
+                                     != p_event_arrobj->descr->type_num)
+      || (EV_NUM_COLS != p_event_arrobj->dimensions[0]))
+  {
+    PyErr_SetString(PyExc_ValueError,
+                    "prob_event_misdet: wrong shape or type of event array");
+    return NULL;
+  }
+  
+  p_earth = p_netmodel->p_earth;
+  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+  numsites = EarthModel_NumSites(p_earth);
+  
+  if ((phaseid < 0) || (phaseid >= numtimedefphases))
+  {
+    PyErr_SetString(PyExc_ValueError, "prob_event_misdet: invalid phaseid");
+    return NULL;
+  }
+
+  if ((siteid < 0) || (siteid >= numsites))
+  {
+    PyErr_SetString(PyExc_ValueError, "prob_event_misdet: invalid siteid");
+    return NULL;
+  }
+
+  p_event = (Event_t *)calloc(1, sizeof(*p_event));
+  p_event->evlon = ARRAY1(p_event_arrobj, EV_LON_COL);
+  p_event->evlat = ARRAY1(p_event_arrobj, EV_LAT_COL);
+  p_event->evdepth = ARRAY1(p_event_arrobj, EV_DEPTH_COL);
+  p_event->evtime = ARRAY1(p_event_arrobj, EV_TIME_COL);
+  p_event->evmag = ARRAY1(p_event_arrobj, EV_MB_COL);
+
+  p_event->p_all_detids = (int *) malloc(numsites * numtimedefphases *
+                                         MAX_PHASE_DET *
+                                         sizeof(*p_event->p_all_detids));
+  
+  /* allocate and initialize the number of detections to 0 */
+  p_event->p_num_dets = (int *) calloc(numsites * numtimedefphases,
+                                       sizeof(*p_event->p_num_dets));
+
+  distance = EarthModel_Delta(p_earth, p_event->evlon, p_event->evlat,
+                              siteid);
+
+  pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
+                                      p_event->evlat, siteid);
+
+  poss = score_event_site_phase(p_netmodel, p_event, siteid, phaseid,
+                                distance, pred_az, &score);
+  
+  free_events(1, p_event);
+  
+  if (poss)
+    return Py_BuildValue("d", score);
+  /* if the detections is not possible then return None */
+  else
+  {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }
+}
+
+static PyObject * py_set_temperature(NetModel_t * self, PyObject * args)
+{
+  double temperature;
+  if (!PyArg_ParseTuple(args, "d", &temperature))
+    return NULL;
+  self->temperature = temperature;
+  Py_INCREF(Py_None);
+  return Py_None;  
+}
+
+static PyObject * py_score_coda_coda(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  int secdetnum;
+  int detnum;
+  Detection_t * p_det;
+  Detection_t * p_secdet;
+  
+  if (!PyArg_ParseTuple(args, "ii", &secdetnum, &detnum))
+    return NULL;
+
+  if ((secdetnum < 0) || (secdetnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_coda_coda: error: illegal secdetnum");
+    return NULL;
+  }
+  
+  if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_coda_coda: error: illegal detnum");
+    return NULL;
+  }
+
+  p_det = p_netmodel->p_detections + detnum;
+  p_secdet = p_netmodel->p_detections + secdetnum;
+
+  if (p_det->site_det != p_secdet->site_det)
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_coda_coda: error: detections from different sites");
+    return NULL;
+  }
+
+  if (!SecDetPrior_Time_Possible(&p_netmodel->sec_det_prior,
+                                 p_secdet->time_det,
+                                 p_det->time_det))
+  {
+    return Py_BuildValue("d", -1.0);
+  }
+  
+  return Py_BuildValue("d", score_coda_coda(p_netmodel, p_secdet, p_det));
+}
+
+static PyObject * py_score_phase_coda(NetModel_t * p_netmodel, PyObject * args)
+{
+  /* input arguments */
+  int secdetnum;
+  int detnum;
+  Detection_t * p_det;
+  Detection_t * p_secdet;
+  
+  if (!PyArg_ParseTuple(args, "ii", &secdetnum, &detnum))
+    return NULL;
+
+  if ((secdetnum < 0) || (secdetnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_phase_coda: error: illegal secdetnum");
+    return NULL;
+  }
+  
+  if ((detnum < 0) || (detnum >= p_netmodel->numdetections))
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_phase_coda: error: illegal detnum");
+    return NULL;
+  }
+
+  p_det = p_netmodel->p_detections + detnum;
+  p_secdet = p_netmodel->p_detections + secdetnum;
+
+  if (p_det->site_det != p_secdet->site_det)
+  {
+    PyErr_SetString(PyExc_ValueError, 
+                    "score_phase_coda: error: detections from different sites");
+    return NULL;
+  }
+
+  if (!SecDetPrior_Time_Possible(&p_netmodel->sec_det_prior,
+                                 p_secdet->time_det,
+                                 p_det->time_det))
+  {
+    return Py_BuildValue("d", -1.0);
+  }
+  
+  return Py_BuildValue("d", score_phase_coda(p_netmodel, p_secdet, p_det));
+}
+
 static PyObject * py_prob_event(NetModel_t * p_netmodel, PyObject * args)
 {
   /* input arguments */
@@ -886,16 +1210,104 @@ static PyObject * py_detection_logprob(NetModel_t * p_netmodel,
   double dist;
   int siteid;
   int phaseid;
+  double dderror;
   
   if (!PyArg_ParseTuple(args, "idddii", &isdet, &evdepth, &evmag, &dist,
                         &siteid, &phaseid))
     return NULL;
 
+  /* we are assuming a noise value of 0 */
+  dderror = dist_depth_range_error(p_netmodel->p_earth, phaseid, evdepth,
+                                   dist);
+
   return Py_BuildValue("d",
                        EventDetectionPrior_LogProb(&p_netmodel
                                                    ->event_det_prior,
                                                    isdet, evdepth, evmag,
-                                                   dist, siteid, phaseid));
+                                                   dist, siteid, phaseid,
+                                           dderror / p_netmodel->temperature));
+}
+
+static PyObject * py_arramp_zval_logprob_cdf(NetModel_t * p_netmodel,
+                                             PyObject * args)
+{
+  double mb, depth, ttime, amp;
+  int siteid, phaseid;
+
+  double zval, logprob, cdf;
+  
+  if (!PyArg_ParseTuple(args, "dddiid", &mb, &depth, &ttime,
+                        &siteid, &phaseid, &amp))
+    return NULL;
+  
+  /* a -1 amplitude indicates that the amplitude was not observed */
+  if (-1 != amp)
+  {
+    zval = ArrivalAmplitudePrior_zval(&p_netmodel->arr_amp_prior,
+                                      mb, depth, ttime, siteid,
+                                      phaseid, amp);
+    
+    logprob = ArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                            mb, depth, ttime, siteid,
+                                            phaseid, amp);
+  
+    cdf = ArrivalAmplitudePrior_cdf(&p_netmodel->arr_amp_prior,
+                                    mb, depth, ttime, siteid,
+                                    phaseid, amp);
+    
+    return Py_BuildValue("ddd", zval, logprob, cdf);
+  }
+  else
+  {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }  
+}
+
+static PyObject * py_logamp(NetModel_t * p_netmodel, PyObject * args)
+{
+  double mb, depth, ttime;
+  int siteid, phaseid;
+
+  double out_logamp;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &mb, &depth, &ttime,
+                        &siteid, &phaseid))
+    return NULL;
+  
+  out_logamp = ArrivalAmplitudePrior_logamp(&p_netmodel->arr_amp_prior,
+                                            mb, depth, ttime, siteid,
+                                            phaseid);
+  return Py_BuildValue("d", out_logamp);
+}
+
+static PyObject * py_falseamp_logprob_cdf(NetModel_t * p_netmodel,
+                                          PyObject * args)
+{
+  double amp;
+  int siteid;
+
+  double logprob, cdf;
+  
+  if (!PyArg_ParseTuple(args, "id", &siteid, &amp))
+    return NULL;
+  
+  /* a -1 amplitude indicates that the amplitude was not observed */
+  if (-1 != amp)
+  {
+    logprob = FalseArrivalAmplitudePrior_LogProb(&p_netmodel->arr_amp_prior,
+                                                 siteid, amp);
+  
+    cdf = FalseArrivalAmplitudePrior_cdf(&p_netmodel->arr_amp_prior,
+                                         siteid, amp);
+  
+    return Py_BuildValue("dd", logprob, cdf);
+  }
+  else
+  {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }  
 }
 
 static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,
@@ -1009,7 +1421,140 @@ static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,
   return Py_BuildValue("d", logprob);
 }
 
+static PyObject * py_arrphase_logprob(NetModel_t * p_netmodel, PyObject * args)
+{
+  int arrphaseid;
+  int phaseid;
+  
+  double logprob;
+  
+  if (!PyArg_ParseTuple(args, "ii", &arrphaseid, &phaseid))
+    return NULL;
+  
+  logprob = ArrivalPhasePrior_LogProb(&p_netmodel->arr_phase_prior,
+                                      arrphaseid, phaseid);
+  
+  return Py_BuildValue("d", logprob);
+}
 
+static PyObject * py_falsephase_logprob(NetModel_t * p_netmodel, PyObject *args)
+{
+  int arrphaseid;
+  
+  double logprob;
+  
+  if (!PyArg_ParseTuple(args, "i", &arrphaseid))
+    return NULL;
+  
+  logprob = FalseArrivalPhasePrior_LogProb(&p_netmodel->arr_phase_prior,
+                                           arrphaseid);
+  
+  return Py_BuildValue("d", logprob);
+}
+
+static PyObject * py_enable_sec_arr(NetModel_t * p_netmodel)
+{
+  p_netmodel->enable_sec_arr = 1;
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+static PyObject * py_disable_sec_arr(NetModel_t * p_netmodel)
+{
+  p_netmodel->enable_sec_arr = 0;
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+
+void convert_events_to_pyobj(const EarthModel_t * p_earth,
+                             const Event_t ** pp_events, int numevents,
+                             PyObject ** pp_eventsobj,
+                             PyObject ** pp_evdetlistobj)
+{
+  PyObject * p_eventsobj;
+  PyObject * p_evdetlistobj;
+  npy_intp dims[2];
+  int i;
+  
+  /* create an array of events */
+  dims[0] = numevents;
+  dims[1] = EV_NUM_COLS;
+  p_eventsobj = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
+
+  /* and a list of event detections */
+  p_evdetlistobj = PyList_New(0);
+
+  for (i=0; i<numevents; i++)
+  {
+    PyObject * p_detlistobj;
+    const Event_t * p_event;
+    int numsites;
+    int numtimedefphases;
+    int siteid;
+    int phaseid;
+
+    p_event = pp_events[i];
+
+    /* store the current event in its row */
+    ARRAY2(p_eventsobj, i, EV_LON_COL) = p_event->evlon;
+    ARRAY2(p_eventsobj, i, EV_LAT_COL) = p_event->evlat;
+    ARRAY2(p_eventsobj, i, EV_DEPTH_COL) = p_event->evdepth;
+    ARRAY2(p_eventsobj, i, EV_TIME_COL) = p_event->evtime;
+    ARRAY2(p_eventsobj, i, EV_MB_COL) = p_event->evmag;
+    ARRAY2(p_eventsobj, i, EV_ORID_COL) = (double) p_event->orid;
+
+    p_detlistobj = PyList_New(0);
+    
+    /* copy over the (phaseid, detnum) of the event */
+    numsites = EarthModel_NumSites(p_earth);
+    numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
+    
+    for (siteid = 0; siteid < numsites; siteid ++)
+    {
+      for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
+      {
+        int numdet;
+        
+        numdet = p_event->p_num_dets[siteid * numtimedefphases + phaseid];
+
+        if (numdet > 0)
+        {
+          int pos;
+          PyObject * p_phase_det_obj;
+          
+          /* first the phase and then the detnums */
+          p_phase_det_obj = PyTuple_New(numdet + 1);
+          
+          /* tuple set_item steals a reference so we don't need to decr it */
+          PyTuple_SetItem(p_phase_det_obj, 0, Py_BuildValue("i", phaseid));
+          
+          for (pos=0; pos<numdet; pos++)
+          {
+            int detnum;
+            detnum = p_event->p_all_detids[siteid * numtimedefphases 
+                                           * MAX_PHASE_DET 
+                                           + phaseid * MAX_PHASE_DET + pos];
+            
+            PyTuple_SetItem(p_phase_det_obj, pos+1,Py_BuildValue("i", detnum));
+          }
+          
+          PyList_Append(p_detlistobj, p_phase_det_obj);
+          /* List Append increments the refcount so we need to
+           * decrement our ref */
+          Py_DECREF(p_phase_det_obj);
+        }
+      }
+    }
+
+    PyList_Append(p_evdetlistobj, p_detlistobj);
+    /* List Append increments the refcount so we need to decrement our ref */
+    Py_DECREF(p_detlistobj);
+  }
+
+  *pp_eventsobj = p_eventsobj;
+  *pp_evdetlistobj = p_evdetlistobj;
+}
 
 Event_t * alloc_event_net(NetModel_t * p_netmodel)
 {
@@ -1034,7 +1579,7 @@ Event_t * alloc_event_net(NetModel_t * p_netmodel)
 }
 
 void copy_event_net(NetModel_t * p_netmodel, Event_t * p_tgt_event,
-                const Event_t * p_src_event)
+		    const Event_t * p_src_event)
 {
   int * p_tgt_all_detids;
   int * p_tgt_num_dets;
@@ -1062,7 +1607,6 @@ void copy_event_net(NetModel_t * p_netmodel, Event_t * p_tgt_event,
          numsites * numtimedefphases * MAX_PHASE_DET 
          * sizeof(*p_src_event->p_all_detids));
 }
-
 
 void print_event_detections(EarthModel_t * p_earth, const Event_t * p_event)
 {

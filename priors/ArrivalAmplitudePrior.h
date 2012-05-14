@@ -64,6 +64,10 @@ typedef struct ArrivalAmplitudePrior_t
 void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
                                        const char * filename);
 
+double ArrivalAmplitudePrior_Point(const ArrivalAmplitudePrior_t * prior,
+				   double mb, double depth, double ttime,
+				   int siteid, int phaseid);
+
 double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
                                      double mb, double depth, double ttime,
                                      int siteid, int phaseid, double amp);

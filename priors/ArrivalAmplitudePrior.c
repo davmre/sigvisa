@@ -98,6 +98,24 @@ void ArrivalAmplitudePrior_Init_Params(ArrivalAmplitudePrior_t * prior,
   fclose(fp);
 }
 
+
+double ArrivalAmplitudePrior_Point(const ArrivalAmplitudePrior_t * prior,
+                                     double mb, double depth, double ttime,
+                                     int siteid, int phaseid)
+{
+  PhaseAmp_t * p_phase;
+  
+  assert((siteid >= 0) && (siteid < prior->numsites));
+  assert((phaseid >= 0) && (phaseid < prior->numphases));
+
+  p_phase = prior->p_site_phase_amp + siteid * prior->numphases + phaseid;
+
+  return exp(p_phase->intercept + p_phase->mb_coeff * mb
+	     + p_phase->depth_coeff * depth
+	     + p_phase->ttime_coeff * ttime
+	     + p_phase->ttime0_coeff * exp(-ttime/50.0));
+}
+
 double ArrivalAmplitudePrior_LogProb(const ArrivalAmplitudePrior_t * prior,
                                      double mb, double depth, double ttime,
                                      int siteid, int phaseid, double amp)

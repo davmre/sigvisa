@@ -799,7 +799,7 @@ int iangle_to_slowness(double iangle, int phase, double * slowness) {
   return success;
 }
 
-static void travel_time(EarthPhaseModel_t * p_phase, double depth, double
+static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, double depth, double
                         distance, double * p_trvtime, double * p_slow,
 			double * p_iangle)
 {
@@ -1147,7 +1147,7 @@ PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
                                     PyObject * args)
 {
   int phaseid;
-  double depth, dist, ttime, slow;
+  double depth, dist, ttime, slow, iangle;
   EarthPhaseModel_t * p_phase;
   
   if (!PyArg_ParseTuple(args, "idd", &phaseid, &depth, &dist))
@@ -1167,7 +1167,7 @@ PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
 
   p_phase = p_earth->p_phases + phaseid;
   
-  travel_time(p_phase, depth, dist, &ttime, &slow);
+  travel_time(p_earth, p_phase, depth, dist, &ttime, &slow, &iangle);
   
   if (ttime < 0)
   {
@@ -1266,7 +1266,7 @@ double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon,
   
   dist_azimuth(lon, lat, sitelon, sitelat, &delta, &esaz, &seaz);
   
-  travel_time(p_phase, depth, delta, &trvtime, &slow, &iangle);
+  travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
   
   if (trvtime < 0)
     return -1;
@@ -1337,7 +1337,7 @@ double EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth, double lon,
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
                &seaz);
   
-  travel_time(p_phase, depth, delta, &trvtime, &slow, &iangle);
+  travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
 
   return iangle;
 }
@@ -1390,7 +1390,7 @@ double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
                &seaz);
   
-  travel_time(p_phase, depth, delta, &trvtime, &slow, &iangle);
+  travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
 
   return slow;
 }
