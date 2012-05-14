@@ -189,6 +189,7 @@ def plotaic(data, d, loc):
 plotcompare(longd1, 20, 'MBAR')
 
 #hello hi
+#resolved
 
 #plotpsd(shortd1,3,'MBAR')
 #plotcv(shortd1,50,'psd','MBAR')
