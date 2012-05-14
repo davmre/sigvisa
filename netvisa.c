@@ -4,6 +4,8 @@
 #define NETVISA_MAIN_MODULE
 #include "sigvisa.h"
 
+//test123
+
 static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
 static PyObject * py_score_world(NetModel_t * p_netmodel, PyObject * args);
