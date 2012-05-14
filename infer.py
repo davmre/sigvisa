@@ -1,3 +1,30 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
 import os, sys, time
 import numpy as np
 from optparse import OptionParser
@@ -12,9 +39,12 @@ from results.compare import *
 from utils.geog import dist_km, degdiff
 from utils.waveform import *
 from sigvisa_util import *
+from results.compare import *
+from utils.geog import dist_km, degdiff
 import ast
 
 FDET_ARID_COL, FDET_SITEID_COL, FDET_TIME_COL, FDET_AMP_COL, FDET_AZI_COL, FDET_SLO_COL, FDET_PHASE_COL, FDET_NUM_COLS = range(7+1)
+
 
 def analyze_leb(netmodel, earthmodel, leb_events, leb_evlist, detections,
                 sel3_events, sel3_evlist):
@@ -83,7 +113,7 @@ def print_event(netmodel, earthmodel, event, event_detlist, label):
   print "Detections:",
   detlist = [x for x in event_detlist]
   detlist.sort()
-  for phaseid, detid in detlist:
+  for phaseid, detid in detlist[:2]:
     print "(%s, %d)" % (earthmodel.PhaseName(phaseid), detid),
   print
   score = netmodel.score_event(event, event_detlist)
@@ -93,19 +123,29 @@ def print_event(netmodel, earthmodel, event, event_detlist, label):
                                             event[ EV_DEPTH_COL]))
   return score
 
-def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
+def write_events(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
                  detections):
+  try:
+    write_events2(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
+                  detections)
+  except:
+    import pdb, traceback, sys
+    traceback.print_exc(file=sys.stdout)
+    
+
+def write_events2(netmodel, earthmodel, events, ev_seclist, runid, maxtime,
+                  detections):
+  #print "python: write_events: %d events upto maxtime %.1f" \
+  #      % (len(events), maxtime)
   # store the events and associations
-
-  print "called write_events on events", events, ", detlist ", ev_detlist
-
   conn = database.db.connect()
   cursor = conn.cursor()
   world_score = 0.0
   for evnum in range(len(events)):
     event = events[evnum]
-    detlist = ev_detlist[evnum]
-    evscore = netmodel.score_event(event, detlist)
+    seclist = ev_seclist[evnum]
+    evscore = netmodel.score_event(event, seclist)
+    netmodel.enable_sec_arr()
     world_score += evscore
     
     cursor.execute("insert into visa_origin (runid, orid, lon, lat, depth, "
@@ -113,38 +153,59 @@ def write_events(netmodel, earthmodel, events, ev_detlist, runid, maxtime,
                    (runid, event[EV_ORID_COL], event[EV_LON_COL],
                     event[EV_LAT_COL], event[EV_DEPTH_COL], event[EV_TIME_COL],
                     event[EV_MB_COL], evscore))
+
+    # first we have the score of the bare event by itself, so we can then
+    # compute the incremental contribution of each detection
+    bare_score = netmodel.score_event(event, [])
     
-    for phaseid, detnum in detlist:
+    for phaseid_detnums in seclist:
+      phaseid = phaseid_detnums[0]
+      detnums = phaseid_detnums[1:]
+      
+      # compute the incremental score of each detection
+      incscores = [netmodel.score_event(event, [phaseid_detnums[:detpos+2]])
+                   for detpos in range(len(detnums))]
+      detscores, detphases = [], []
+      for detpos in range(len(detnums)):
+        score = netmodel.score_event(event, [phaseid_detnums[:detpos+2]])
+        if detpos == 0:
+          detscores.append(incscores[detpos] - bare_score)
+          detphases.append(earthmodel.PhaseName(phaseid))
+        else:
+          detscores.append(incscores[detpos] - incscores[detpos-1])
+          detphases.append("tx")
+      
+      siteid = int(detections[detnums[0], DET_SITE_COL])
       arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
                                        event[EV_DEPTH_COL], event[EV_TIME_COL],
-                                       phaseid,
-                                       int(detections[detnum, DET_SITE_COL]))
+                                       phaseid, siteid)
       if arrtime < 0:
         print "Warning: visa orid %d impossible at site %d with phase %d"\
               % (event[EV_ORID_COL], int(detections[detnum, DET_SITE_COL]),
                  phaseid)
         continue
 
-      timeres = detections[detnum, DET_TIME_COL] - arrtime
-      
-      seaz = earthmodel.ArrivalAzimuth(event[EV_LON_COL], event[EV_LAT_COL],
-                                       int(detections[detnum, DET_SITE_COL]))
-      azres = degdiff(seaz, detections[detnum, DET_AZI_COL])
 
-      arrslo = earthmodel.ArrivalSlowness(event[EV_LON_COL], event[EV_LAT_COL],
+      seaz = earthmodel.ArrivalAzimuth(event[EV_LON_COL], event[EV_LAT_COL],
+                                       siteid)
+      
+      arrslo = earthmodel.ArrivalSlowness(event[EV_LON_COL],event[EV_LAT_COL],
                                           event[EV_DEPTH_COL], phaseid,
-                                       int(detections[detnum, DET_SITE_COL]))
-      
-      slores = detections[detnum, DET_SLO_COL] - arrslo
-      
-      cursor.execute("insert into visa_assoc(runid, orid, phase, arid, score, "
-                     "timeres, azres, slores) "
-                     "values (%d, %d, '%s', %d, %f, %f, %f, %f)" %
-                     (runid, event[EV_ORID_COL],
-                      earthmodel.PhaseName(phaseid),
-                      detections[detnum, DET_ARID_COL],
-                      netmodel.score_event_det(event, phaseid, detnum),
-                      timeres, azres, slores))
+                                          siteid)
+        
+      for detpos, detnum in enumerate(detnums):
+        timeres = detections[detnum, DET_TIME_COL] - arrtime
+        
+        azres = degdiff(seaz, detections[detnum, DET_AZI_COL])
+        
+        slores = detections[detnum, DET_SLO_COL] - arrslo
+        
+        cursor.execute("insert into visa_assoc(runid, orid, phase, arid, "
+                       "score, timeres, azres, slores) "
+                       "values (%d, %d, '%s', %d, %f, %f, %f, %f)" %
+                       (runid, int(event[EV_ORID_COL]), detphases[detpos],
+                        int(detections[detnum, DET_ARID_COL]),
+                        detscores[detpos], timeres, azres, slores))
   
   cursor.execute("update visa_run set data_end=%f, run_end=now(), "
                  "score = score + %f where runid=%d" %
@@ -181,6 +242,27 @@ def write_events_sig(sigmodel, earthmodel, events, ev_arrlist, runid, maxtime):
                       siteid,
                       earthmodel.PhaseName(phaseid),
                       arrtime, arramp, arrazi, arrslo))
+
+      seaz = earthmodel.ArrivalAzimuth(event[EV_LON_COL], event[EV_LAT_COL],
+                                       siteid)
+      
+      arrslo = earthmodel.ArrivalSlowness(event[EV_LON_COL],event[EV_LAT_COL],
+                                          event[EV_DEPTH_COL], phaseid,
+                                          siteid)
+        
+      for detpos, detnum in enumerate(detnums):
+        timeres = detections[detnum, DET_TIME_COL] - arrtime
+        
+        azres = degdiff(seaz, detections[detnum, DET_AZI_COL])
+        
+        slores = detections[detnum, DET_SLO_COL] - arrslo
+        
+        cursor.execute("insert into visa_assoc(runid, orid, phase, arid, "
+                       "score, timeres, azres, slores) "
+                       "values (%d, %d, '%s', %d, %f, %f, %f, %f)" %
+                       (runid, int(event[EV_ORID_COL]), detphases[detpos],
+                        int(detections[detnum, DET_ARID_COL]),
+                        detscores[detpos], timeres, azres, slores))
   
   cursor.execute("update visa_run set data_end=%f, run_end=now(), "
                  "score = score + %f where runid=%d" %
@@ -286,6 +368,11 @@ def main(param_dirname):
   parser.add_option("-z", "--threads", dest="threads", default=1,
                     type="int",
                     help = "number of threads (1)")
+  parser.add_option("-z", "--threads", dest="threads", default=1,
+                    type="int",
+                    help = "number of threads (1)")
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")  
   (options, args) = parser.parse_args()
 
   if options.seed == 0:
@@ -301,8 +388,15 @@ def main(param_dirname):
   conn = database.db.connect()
   cursor = conn.cursor()
 
-  if options.arrival_table is None:
+  if options.datafile is not None:
+    start_time, end_time, detections, leb_events, leb_evlist,\
+      sel3_events, sel3_evlist, site_up, sites, phasenames, \
+      phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(options.datafile, param_dirname,
+                                          hours = options.hours,
+                                          skip = options.skip)
 
+  if options.arrival_table is None:
     start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
                 sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
                 = read_data(options.label, hours=options.hours,
@@ -323,7 +417,6 @@ def main(param_dirname):
       end_time = options.hours
     else:
       end_time = start_time + options.hours * 60. * 60.
-
     
     print "Dataset: %.1f hrs from %d to %d" % ((end_time-start_time)/3600,
                                                start_time, end_time),

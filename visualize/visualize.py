@@ -1,3 +1,31 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
+
 # visualize the priors
 import os, sys, time, math
 import numpy as np
@@ -26,6 +54,9 @@ def main(param_dirname):
   parser.add_option("-a", "--arrival", dest="arrival", default=False,
                     action = "store_true",
                     help = "visualize arrival parameters (False)")
+  parser.add_option("--arrivalamp", dest="arrivalamp", default=False,
+                    action = "store_true",
+                    help = "visualize arrival amplitude (False)")
   parser.add_option("-n", "--noise", dest="noise", default=False,
                     action = "store_true",
                     help = "visualize noise parameters (False)")
@@ -57,9 +88,7 @@ def main(param_dirname):
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
               sel3_evlist, site_up, sites, phasenames, phasetimedef \
               = read_data(label, visa_leb_runid=options.visa_leb_runid)
-  
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
-  
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
@@ -70,14 +99,21 @@ def main(param_dirname):
 
   # if no options is selected then select all options
   if (not options.arrival and not options.location and not options.detection
-      and not options.noise and not options.correlate):
+      and not options.noise and not options.correlate
+      and not options.arrivalamp):
     options.arrival = options.location = options.detection = \
-                      options.noise = options.correlate = True
+                      options.noise = options.correlate = \
+                      options.arrivalamp = True
 
+  if options.arrivalamp:
+    visualize_arrivalamp(options, earthmodel, netmodel,
+                         detections, leb_events, leb_evlist)
+  
   if options.correlate:
     print "visualize correlations of P and S residuals"
     visualize_p_s_res_corr(options, earthmodel, netmodel,
                            detections, leb_events, leb_evlist)
+
   if options.noise:
     print "visualize noise"
     visualize_noise(options, earthmodel, netmodel,
@@ -779,7 +815,8 @@ def visualize_arramp(options, earthmodel, netmodel,
     for phase, detnum in detlist:
       true_dets.add(detnum)
       sitenum = int(detections[detnum, DET_SITE_COL])
-      
+      dist = earthmodel.Delta(leb_events[evnum, EV_LON_COL],
+                              leb_events[evnum, EV_LAT_COL], sitenum)
       datum = (leb_events[evnum, EV_MB_COL], leb_events[evnum, EV_DEPTH_COL],
                #earthmodel.Delta(leb_events[evnum, EV_LON_COL],
                #                 leb_events[evnum, EV_LAT_COL], sitenum),
@@ -925,13 +962,15 @@ def visualize_arramp(options, earthmodel, netmodel,
   
   data = site_phase_logamps[SITEID][PHASEID]
   coeffs = learn_amp_model(data)
-  print "Amp model coefficients (intercept, mb, depth, ttime)"
+  print "Amp model coefficients (intercept, mb, depth, ttime, std)"
   print_list(sys.stdout, coeffs)
   print
   
-  x_pts = range(200, 800, 10)
-  y_pts = np.array([predict_amp_model(coeffs, 3.5, 0, x) for x in x_pts])
-
+  x_pts = range(0, 180, 2)
+  y_pts = np.array([predict_amp_model(coeffs, 3.5, 0,
+                                      earthmodel.TravelTime(PHASEID, 0, x))
+                    for x in x_pts])
+  
   dist_sum = np.zeros(90, float)
   dist_count = np.ones(90, float) * 1e-6
   
@@ -951,8 +990,8 @@ def visualize_arramp(options, earthmodel, netmodel,
   plt.plot(x_pts, y_pts, label="model 3.5 mb", color = "black", linewidth=3)
   
   plt.xlim(0,900)
-  #plt.xlabel("Distance (deg)")
-  plt.xlabel("Travel Time (sec)")
+  plt.xlabel("Distance (deg)")
+  #plt.xlabel("Travel Time (sec)")
   plt.ylabel("Avg. Log Amplitude")
   plt.legend(loc="lower left")
   if options.write is not None:
@@ -962,7 +1001,9 @@ def visualize_arramp(options, earthmodel, netmodel,
     plt.savefig(pathname)
 
   x_pts = range(15, 95)
-  y_pts = np.array([predict_amp_model(coeffs, 4.5, 0, x) for x in x_pts])
+  y_pts = np.array([predict_amp_model(coeffs, 4.5, 0,
+                                      earthmodel.TravelTime(PHASEID, 0, x))
+                    for x in x_pts])
 
   dist_sum = np.zeros(90, float)
   dist_count = np.ones(90, float) * 1e-6
@@ -991,6 +1032,150 @@ def visualize_arramp(options, earthmodel, netmodel,
                             % (SITEID, earthmodel.PhaseName(PHASEID)))
     print "saving fig to %s" % pathname
     plt.savefig(pathname)
+
+def check_cdf(cdf_vals, numbuckets):
+  """
+  Check that the distribution of the cdf values in the given number of buckets
+  is indeed as expected.
+
+  Return max deviation and sum of deviation
+  """
+  if not len(cdf_vals):
+    return 0, 0
   
+  step = 1./ numbuckets
+
+  cnts = np.array([0. for i in xrange(numbuckets)])
+
+  for val in cdf_vals:
+    cnts[int(val // step)] += 1
+
+  cnts /= len(cdf_vals)                 # normalize counts
+
+  exp_cnt = 1.0 / numbuckets
+
+  return max(abs(cnts - exp_cnt)), abs(cnts - exp_cnt).sum()
+
+def visualize_arrivalamp(options, earthmodel, netmodel,
+                         detections, leb_events, leb_evlist):
+  print "visualizing arrival amplitude"
+
+  # collect all the data
+  
+  all_true_cdf = []
+  site_true_cdf = [[] for siteid in range(earthmodel.NumSites())]
+  all_false_cdf = []
+  site_false_cdf = [[] for siteid in range(earthmodel.NumSites())]
+
+  site_true_amp = [[] for siteid in range(earthmodel.NumSites())]
+  site_false_amp = [[] for siteid in range(earthmodel.NumSites())]
+
+  true_dets = set()
+  
+  for evnum, event in enumerate(leb_events):
+    evmb = event[EV_MB_COL]
+    evtime, evdepth = event[EV_TIME_COL], event[EV_DEPTH_COL]
+    evlon, evlat = event[EV_LON_COL], event[EV_LAT_COL]
+    
+    for phaseid, detnum in leb_evlist[evnum]:
+      siteid = int(detections[detnum, DET_SITE_COL])
+      ttime = detections[detnum, DET_TIME_COL] - evtime
+      dist = earthmodel.Delta(evlon, evlat, siteid)
+      amp = detections[detnum, DET_AMP_COL]
+
+      true_dets.add(detnum)
+      
+      # -1 amp signifies that the amplitude was not observed
+      if amp == -1:
+        continue
+      
+      z, lp, c = netmodel.arramp_zval_logprob_cdf(evmb, evdepth, ttime,
+                                                  siteid, phaseid, amp)
+      
+      all_true_cdf.append(c)
+      site_true_cdf[siteid].append(c)
+      site_true_amp[siteid].append((ttime, z))
+
+  for detnum in range(len(detections)):
+    # only consider false detections now
+    if detnum not in true_dets:
+      siteid = int(detections[detnum, DET_SITE_COL])
+      amp = detections[detnum, DET_AMP_COL]
+      
+      # -1 amp signifies that the amplitude was not observed
+      if amp == -1:
+        continue
+      
+      flp, fc = netmodel.falseamp_logprob_cdf(siteid, amp)
+      
+      all_false_cdf.append(fc)
+      site_false_cdf[siteid].append(fc)
+      site_false_amp[siteid].append(amp)
+  
+  # now, analyze the data to see that it follows the expected distributions
+  
+  NUMBINS = 10
+  cdfbins = np.linspace(0, 1, NUMBINS+1)
+  
+  plt.figure()
+  plt.title("True Detection Amplitude, cdf")
+  plt.hist(all_true_cdf, cdfbins, normed=True)
+  if options.write is not None:
+    pathname = os.path.join(options.write, "true-amp-cdf-hist.png")
+    print "saving fig to %s" % pathname
+    plt.savefig(pathname)
+  
+  plt.figure()
+  plt.title("False Detection Amplitude, cdf")
+  plt.hist(all_false_cdf, cdfbins, normed=True)
+  if options.write is not None:
+    pathname = os.path.join(options.write, "false-amp-cdf-hist.png")
+    print "saving fig to %s" % pathname
+    plt.savefig(pathname)
+  
+  # find the site whose deviation is the worst
+  worst_true, worst_true_siteid = \
+              max((check_cdf(site_true_cdf[siteid], NUMBINS)[0], siteid)
+                  for siteid in range(earthmodel.NumSites())
+                  if len(site_true_cdf[siteid]) >= 3 * NUMBINS)
+  
+  worst_false, worst_false_siteid = \
+               max((check_cdf(site_false_cdf[siteid], NUMBINS)[0], siteid)
+                   for siteid in range(earthmodel.NumSites())
+                   if len(site_false_cdf[siteid]) >= 3 * NUMBINS)
+  
+  # show the cdf histograms for the worst site
+  
+  plt.figure()
+  plt.title("True Detection Amplitude, cdf, site %d" % worst_true_siteid)
+  plt.hist(site_true_cdf[worst_true_siteid], cdfbins, normed=True)
+  
+  plt.figure()
+  plt.title("False Detection Amplitude, cdf, site %d" % worst_false_siteid)
+  plt.hist(site_false_cdf[worst_false_siteid], cdfbins, normed=True)
+
+  # also show the data and the model for this worst site
+
+  plt.figure()
+  plt.title("True Detection Log Amplitude Z-val, site %d" % worst_true_siteid)
+  plt.scatter([x[0] for x in site_true_amp[worst_true_siteid]],
+              [x[1] for x in site_true_amp[worst_true_siteid]])
+  plt.xlabel("Travel Time (sec)")
+  plt.ylabel("Z-val")
+
+  logampbins = np.arange(-5, 5, .1)
+  
+  plt.figure()
+  plt.title("False Detection Log Amplitude, site %d" % worst_false_siteid)
+  plt.hist([np.log(a) for a in site_false_amp[worst_false_siteid]],
+           logampbins, label="data")
+  plt.plot(logampbins, [np.exp(netmodel.falseamp_logprob_cdf(worst_false_siteid,
+                                                             np.exp(b))[0])\
+                        * len(site_false_amp[worst_false_siteid]) * .1
+                        for b in logampbins], label="model", color="black")
+  plt.xlabel("log(amp)")
+  plt.ylabel("frequency")
+  plt.legend()
+
 if __name__ == "__main__":
   main("parameters")

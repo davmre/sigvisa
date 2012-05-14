@@ -1,3 +1,30 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
 import numpy as np
 from time import strftime, gmtime
 from math import ceil
@@ -9,6 +36,7 @@ import db
 from az_slow_corr import load_az_slow_corr
 
 # events
+
 EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL, EV_MB_COL, EV_ORID_COL, EV_SC_COL,\
     EV_NUM_COLS = range(7+1)
 
@@ -93,8 +121,10 @@ def read_events(cursor, start_time, end_time, evtype, runid=None):
 
 def read_isc_events(cursor, start_time, end_time, author):
   if author is None:
+    # no point getting IDC events from ISC bulletin, we already have these
     cursor.execute("select lon, lat, depth, time, mb, eventid from "
-                   "isc_events where time between %d and %d order by time"
+                   "isc_events where time between %d and %d and author != 'IDC'"
+                   " order by time"
                    % (start_time, end_time))
   else:
     cursor.execute("select lon, lat, depth, time, mb, eventid from "
@@ -138,7 +168,6 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", n
       det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
       det[DET_DELSLO_COL])
 
-
   return detections, arid2num
 
 def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
@@ -146,6 +175,7 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
   if evtype == "visa":
     cursor.execute("select vass.orid, vass.arid, ph.id-1 from visa_assoc vass,"
                    "visa_origin vori, static_phaseid ph where "
+                   "ph.timedef='d' and "
                    "vass.orid=vori.orid and vass.phase=ph.phase and vori.time "
                    "between %f and %f and vass.runid=vori.runid "
                    "and vass.runid=%d" % (start_time, end_time, runid))
@@ -174,20 +204,18 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
   numsites, = cursor.fetchone()
 
   uptime = np.zeros((numsites,
-                     int(ceil((end_time - start_time) / UPTIME_QUANT))),
+          int(ceil((MAX_TRAVEL_TIME + end_time - start_time) / UPTIME_QUANT))),
                     bool)
   
   cursor.execute("select snum, hnum, count(*) from "
-                 "(select site.id-1 snum,trunc((arr.time-%d)/3600, 0) hnum "
+                 "(select site.id-1 snum,trunc((arr.time-%d)/%d, 0) hnum "
                  "from %s arr, static_siteid site "
                  "where arr.sta = site.sta and "
                  "arr.time between %d and %d) sitearr group by snum, hnum" %
-                 (start_time, arrival_table, start_time, end_time))
+                 (start_time, UPTIME_QUANT, arrival_table, start_time,
+                  end_time + MAX_TRAVEL_TIME))
   
   for (siteidx, timeidx, cnt) in cursor.fetchall():
-    if timeidx >= int(ceil((end_time - start_time) / UPTIME_QUANT)):
-      continue
-
     uptime[siteidx, timeidx] = True
   
   return uptime
@@ -217,7 +245,11 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   Reads
   - LEB events/assoc, with IDCX arrivals
   - SEL3 events/assoc,
+<<<<<<< HEAD
   - IDCX arrivals with delaz>0 and delsnr>0
+=======
+  - IDCX arrivals with delaz>0 and delsnr>0 (upto 2000 secs beyond end_time)
+>>>>>>> git-svn
   - Site information
   - Phase information
   - LEB assoc with LEB arrivals
@@ -231,9 +263,14 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   - training
   
   Setting 'hours' to None will return all the data from the specified
+<<<<<<< HEAD
   dataset. 'skip' controls the number of initial hours to skip, for
   example for testing the second 2 hour window set hours=2
   skip=2. 'noarrays' prohibits using data from array stations.
+=======
+  dataset. 'skip' controls the number of initial hours to skip, for example
+  for testing the second 2 hour window set hours=2 skip=2
+>>>>>>> git-svn
 
   Returns the following tuple
          start_time, end_time, detections, leb_events, leb_evlist, sel3_events,
@@ -340,7 +377,21 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
   if read_leb_detections:
     return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef,\
-         leb_det, leb_leb_evlist, arid2num
+         leb_det, leb_leb_evlist
   else:
     return start_time, end_time, det, leb_events, leb_evlist, sel3_events, \
            sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num
+
+def compute_arid2num(detections):
+  return dict((det[DET_ARID_COL], detnum) for detnum, det
+              in enumerate(detections))
+
+def compute_orid2num(events):
+  return dict((event[EV_ORID_COL], evnum) for evnum, event
+              in enumerate(events))
+
+def read_sitenames():
+  cursor = db.connect().cursor()
+  cursor.execute("select sta from static_siteid site order by id")
+  sitenames = np.array(cursor.fetchall())[:,0]
+  return sitenames

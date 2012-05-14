@@ -1,3 +1,31 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
+
 import numpy as np
 from scipy.optimize import fmin_ncg, fmin
 
@@ -33,7 +61,7 @@ def estimate_laplace_uniform_dist(vals, low, high):
   return prob_laplace, location, scale
 
 def ldensity(location, scale, val):
-  return - np.log(2 * scale) - abs(val-location) / scale
+  return - np.log(2 * scale) - np.abs(val-location) / scale
 
 def ldensity_uniform(low, high):
   return - np.log(high - low)
@@ -58,7 +86,7 @@ def ldensity_laplace_uniform_dist(prob_laplace, location, scale, low, high,
   """
   A mixture of a Laplace and a uniform distribution
   """
-  return np.log((prob_laplace * np.exp(-abs(val-location)/scale) / (2*scale))
+  return np.log((prob_laplace * np.exp(-np.abs(val-location)/scale) / (2*scale))
              + ((1-prob_laplace) / (high - low)))
 
 def lprob_laplace_uniform_dist(prob_laplace, location, scale, low, high,
@@ -119,3 +147,64 @@ def estimate_trunc(vals):
   return location, scale, minval, maxval
 
 
+# site_data is a list of data x_k^i, i=1..n_k for k=1..K sites
+#
+# x_k^i        ~ Laplace(loc_k, scale_k)
+# loc_k        ~ Laplace(loc, scale)
+# loc          ~ Laplace(loc0, scale0)
+# scale^{-1}   ~ Gamma(alpha0, beta0)
+# scale_k^{-1} ~ Gamma(alpha1, beta)
+# beta^{-1}    ~ Gamma(alpha2, beta2)
+#
+# We use the following update rules
+# loc_k = wt-median(x_k^i : scale_k i=1..n_k, loc : scale)
+# loc = wt-median(loc_k : scale k=1..K, loc0 : scale0)
+# scale = \frac{\sum_{k=1..K} |loc_k-loc| + 1/beta0} {K + alpha0 - 1}
+# scale_k = \frac{\sum_{i=1..n_k} |x_k^i - loc_k| + 1/beta} {n_k + alpha1 - 1}
+# beta = \frac{\sum_{k=1..K}1/scale_k + 1/beta2 } {K alpha1 + alpha2 - 1}
+#
+def hier_estimate(site_data, init_loc=0., init_scale=1., init_beta=1,
+                  loc0=0., scale0=100., alpha0=1e-2, beta0=1e2,
+                  alpha1=1., alpha2=1e-2, beta2=1e-2, tolerance=0.01,
+                  maxiters=100):
+  
+  K = len(site_data)
+  assert K > 1                    # there should be more than one site
+  
+  loc, scale, beta = init_loc, init_scale, init_beta
+  
+  site_params = np.ndarray((K, 2))
+  site_params[:, 0] = init_loc
+  site_params[:, 1] = init_beta
+  
+  for iternum in xrange(maxiters):
+    prev_loc, prev_scale, prev_beta = loc, scale, beta
+
+    # update the location and scale for each site
+    for siteid, data in enumerate(site_data):
+      if not len(data):
+        this_loc = loc
+        if alpha1 > 1:
+          this_scale = 1./(beta * (alpha1 - 1))
+        else:
+          # the gamma distribution has a mode at 0 so instead we pick
+          # the mean in this case
+          this_scale = 1./(beta * alpha1)
+      
+      else:
+        this_loc = np.median(data)
+        this_scale = (sum(abs(x-this_loc) for x in data) + (1./beta)) \
+                     / (len(data) + alpha1 - 1)
+        
+      site_params[siteid] = (this_loc, this_scale)
+
+    # update global location, scale, and beta
+    loc = np.median(site_params[:,0])
+    scale = ((abs(site_params[:,0] - loc)).sum() +(1./beta0))/(K + alpha0 - 1.)
+    beta = ((1.0/site_params[:,1]).sum() + (1./beta2))/(K*alpha1 + alpha2 - 1.)
+    
+    if abs(prev_loc - loc) < tolerance and abs(prev_scale - scale) < tolerance\
+       and abs(prev_beta - beta) < tolerance:
+      break
+
+  return site_params, loc, scale, beta

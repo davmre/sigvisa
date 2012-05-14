@@ -1,3 +1,30 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
 
 import matplotlib
 matplotlib.use("PDF")
@@ -13,7 +40,6 @@ import geog
 
 from database.dataset import *
 from database import db
-
 
 def draw_earth(title, **args):
   """
@@ -85,8 +111,6 @@ def draw_earth(title, **args):
     bmap.drawmeridians(np.arange(-180, 180, 30), zorder=10)
     bmap.drawparallels(np.arange(-90, 90, 30), zorder=10)
 
-  return bmap
-
 def draw_events(bmap, events, labels = None, **args):
   """
   The args can be any collection of marker args like ms, mfc mec
@@ -109,13 +133,13 @@ def draw_events(bmap, events, labels = None, **args):
       args[argname] = argval[enum]
     bmap.plot([x], [y], **args)
 
+
     if labels is not None:
       plt.annotate(
         labels[enum][0],
         xy = (x, y),
         size=4,
         arrowprops = None)
-
 
 def draw_events_mag(bmap, events, **args):
   """
@@ -140,11 +164,13 @@ def draw_vectors(bmap, vectors, scale, **args):
     x2, y2 = bmap(lon2, lat2)
     plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
 
+    
 def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
-                 nolines = False):
+                 nolines = False, colorbar_orientation="vertical",
+                 colorbar_shrink = 0.9):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
-
+  
   # convert to map coordinates
   x, y = bmap(list(lon_arr.flat), list(lat_arr.flat))
   x_arr = np.array(x).reshape(lon_arr.shape)
@@ -158,7 +184,8 @@ def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
                                                           plt.cm.jet.N))
 
   if colorbar:
-    plt.colorbar(cs2, orientation="vertical", drawedges=True)
+    plt.colorbar(cs2, orientation=colorbar_orientation, drawedges=True,
+                 shrink = colorbar_shrink)
 
 def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
   """
@@ -184,7 +211,6 @@ def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
 
   draw_events(bmap, sites, marker="^", ms=10, mfc="none", mec="green",
               mew=2, zorder=3)
-
 
 def show():
   plt.show()

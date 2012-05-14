@@ -1,3 +1,31 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
+
 import math, random
 import numpy as np
 from scipy.optimize import fmin_ncg
@@ -43,7 +71,8 @@ def test_logistic():
   
 class LogisticModel:
   def __init__(self, name, dim_names, dim_vals, samples, weights=None,
-               alpha = 0):
+               alpha = 0, prior_means = None, prior_precisions = None,
+               verbose = True):
     """
     Logistic Regression Model. Learns to predict a probability based
     on specified inputs
@@ -57,10 +86,10 @@ class LogisticModel:
     self.dim_names = dim_names
 
     dim_vals = [x for x in dim_vals]              # make a copy
-    dim_vals.append(np.ones_like(dim_vals[0])) # add intercept
+    dim_vals.append(np.ones_like(samples)) # add intercept
 
     if weights is None:
-      weights = np.ones_like(dim_vals[0])
+      weights = np.ones_like(samples)
     else:
       weights = np.array(weights)
     
@@ -69,32 +98,37 @@ class LogisticModel:
 
     feat_outer = np.array([np.outer(x,x) for x in features])
 
-    regul = alpha * np.ones(len(dim_vals))
-    regul[-1] = 0
+    if prior_means is None or prior_precisions is None:
+      prior_means = np.zeros(len(dim_vals))
+      prior_precisions = alpha * np.ones(len(dim_vals))
+    else:
+      prior_means = np.array(prior_means)
+      prior_precisions = np.array(prior_precisions)
+
+    def log_logistic(x):
+      return -np.log(1 + np.exp(-x))
     
     def neg_log_lik(coeffs):
-      return - (np.log(logistic(output * (features * coeffs).sum(axis=1)))
-                * weights).sum() + (regul * coeffs ** 2).sum() / 2
+      return - (log_logistic(output * (features * coeffs).sum(axis=1))
+                * weights).sum()\
+                + (prior_precisions * (coeffs - prior_means) ** 2).sum() / 2
 
     def grad_neg_log_lik(coeffs):
       return - ((output * logistic( -output * (features * coeffs).sum(axis=1))
-                 * weights) * features.T).sum(axis=1) + regul * coeffs
+                 * weights) * features.T).sum(axis=1)\
+                 + prior_precisions * (coeffs - prior_means)
     
     def hess_neg_log_lik(coeffs):
       sgn_log_odds = output * (features * coeffs).sum(axis=1)
       return ((logistic(-sgn_log_odds) * logistic(sgn_log_odds) * weights)
-              * feat_outer.T).sum(axis=2) + regul * np.eye(len(coeffs))
+              * feat_outer.T).sum(axis=2)\
+              + prior_precisions * np.eye(len(coeffs))
     
-    #self.coeffs = fmin(neg_log_lik, np.zeros(features.shape[1]))
-    
-    #self.coeffs = fmin_bfgs(neg_log_lik, np.zeros(features.shape[1]),
-    #                        fprime = grad_neg_log_lik)
-
     self.coeffs, fopt, fcalls, gcalls, hcalls, warnflag \
                  = fmin_ncg(neg_log_lik, np.zeros(features.shape[1]),
                             fprime = grad_neg_log_lik, fhess=hess_neg_log_lik,
                             disp = 0, full_output=1, avextol=1e-12)
-    if warnflag:
+    if warnflag and verbose:
       self.converged = False
       print "LogisticModel: Warning(%d): regression did not converge" % warnflag
       print "coeffs:", self.coeffs

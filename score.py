@@ -1,3 +1,30 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
 import os, sys, time
 import numpy as np
 from optparse import OptionParser
@@ -7,6 +34,7 @@ from database.dataset import *
 import netvisa, learn
 from results.compare import *
 from utils.kstest import kstest
+from priors.SecDetPrior import compute_secondary_dets
 
 def prune_detections(netmodel, events, event_detlists):
   for evnum, event in enumerate(events):
@@ -19,14 +47,15 @@ def prune_detections(netmodel, events, event_detlists):
       evdetnum = dellist.pop()
       event_detlists[evnum].pop(evdetnum)
 
-def extract_false_detections(numdets, leb_evlist):
+def extract_false_detections(numdets, leb_seclist):
   """
   Returns a list of false detnums
   """
   falsedets = set(range(numdets))
-  for evlist in leb_evlist:
-    for phaseid, detid in evlist:
-      falsedets.remove(detid)
+  for seclist in leb_seclist:
+    for phaseid_detlist in seclist:
+      for detnum in phaseid_detlist[1:]:
+        falsedets.remove(detnum)
   falsedets = list(falsedets)
   falsedets.sort()
   return falsedets
@@ -40,16 +69,27 @@ def main(param_dirname):
   parser.add_option("-p", "--prob", dest="prob", default=False,
                     action = "store_true",
                     help = "write probabilities instead of densities (False)")
+  parser.add_option("-s", "--secondary_arrivals", dest="sec_arr", default=False,
+                    action = "store_true",
+                    help = "use secondary arrival model (False)")
   
   parser.add_option("-w", "--writefile", dest="writefile", default=None,
                     type="str",
                     help = "file to write the sel3 scores output to")
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")
   
   (options, args) = parser.parse_args()
-  
-  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data("validation")
+
+  if options.datafile is not None:
+    start_time, end_time, detections, leb_events, leb_evlist,\
+      sel3_events, sel3_evlist, site_up, sites, phasenames, \
+      phasetimedef, sitenames \
+      = learn.read_datafile_and_sitephase(options.datafile, param_dirname)
+  else:  
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data("validation")
   
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   
@@ -60,17 +100,28 @@ def main(param_dirname):
 
   prune_detections(netmodel, leb_events, leb_evlist)
   prune_detections(netmodel, sel3_events, sel3_evlist)
+
+  if (options.sec_arr):
+    leb_seclist = compute_secondary_dets(earthmodel, detections, leb_events,
+                                         leb_evlist)
+    sel3_seclist = compute_secondary_dets(earthmodel, detections, sel3_events,
+                                          sel3_evlist)
+    netmodel.enable_sec_arr()
+  else:
+    leb_seclist = leb_evlist
+    sel3_seclist = sel3_evlist
+    netmodel.disable_sec_arr()
   
   print "LEB:"
-  netmodel.score_world(leb_events, leb_evlist, 1)
+  netmodel.score_world(leb_events, leb_seclist, 1)
 
-  falsedets = extract_false_detections(len(detections), leb_evlist)
+  falsedets = extract_false_detections(len(detections), leb_seclist)
 
   print "FALSE:"
   netmodel.logprob_false(falsedets, 1)
   
   print "SEL3:"
-  netmodel.score_world(sel3_events, sel3_evlist, 1)
+  netmodel.score_world(sel3_events, sel3_seclist, 1)
   
   # separate the SEL3 events into true and false events
   true_sel3_idx, false_sel3_idx, mat_idx = find_true_false_guess(leb_events,
@@ -83,7 +134,7 @@ def main(param_dirname):
   
   print "TRUE SEL3"
   netmodel.score_world(sel3_events[true_sel3_idx,:],
-                       [sel3_evlist[i] for i in true_sel3_idx], 1)
+                       [sel3_seclist[i] for i in true_sel3_idx], 1)
   
   #idx = true_sel3_idx[0]
   #print "Testing on one event:"
@@ -93,7 +144,7 @@ def main(param_dirname):
   
   print "FALSE SEL3"
   netmodel.score_world(sel3_events[false_sel3_idx,:],
-                       [sel3_evlist[i] for i in false_sel3_idx], 1)
+                       [sel3_seclist[i] for i in false_sel3_idx], 1)
   
   if options.writefile is not None:
     fp = open(options.writefile, "w")
@@ -115,20 +166,20 @@ def main(param_dirname):
           print 1,
         else:
           print 0,
-        print prob, netmodel.score_event(event, sel3_evlist[evnum])
+        print prob, netmodel.score_event(event, sel3_seclist[evnum])
         
       else:
-        print >>fp, netmodel.score_event(event, sel3_evlist[evnum])
+        print >>fp, netmodel.score_event(event, sel3_seclist[evnum])
       
     fp.close()
     
-  leb_scores = [netmodel.score_event(leb_events[i], leb_evlist[i])
+  leb_scores = [netmodel.score_event(leb_events[i], leb_seclist[i])
                 for i in range(len(leb_events))]
 
-  true_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+  true_sel3 = [netmodel.score_event(sel3_events[i], sel3_seclist[i])
                for i in true_sel3_idx]
     
-  false_sel3 = [netmodel.score_event(sel3_events[i], sel3_evlist[i])
+  false_sel3 = [netmodel.score_event(sel3_events[i], sel3_seclist[i])
                 for i in false_sel3_idx]
 
 

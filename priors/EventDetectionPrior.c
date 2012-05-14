@@ -1,7 +1,38 @@
+/*
+ * Copyright (c) 2012, Bayesian Logic, Inc.
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Bayesian Logic, Inc. nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ * Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+ * USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ * 
+ */
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+
 
 #include "../sigvisa.h"
 
@@ -77,7 +108,7 @@ void EventDetectionPrior_Init_Params(EventDetectionPrior_t * prior,
 double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
                                    int is_detected,
                                    double evdepth, double evmag, double dist,
-                                   int siteid, int phaseid)
+                                   int siteid, int phaseid, double dderror)
 {
   double logodds;
   double logprob;
@@ -97,9 +128,6 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
     + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST40], Gaussian_prob(dist, 40, 20))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST12520], Gaussian_prob(dist, 125, 20))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST12540], Gaussian_prob(dist, 125, 40))
-    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST145], Gaussian_prob(dist, 145, 10))
-    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST170], Gaussian_prob(dist, 170, 20))
-    + MUL_IFNZ(p_coeffs[EDA_COEFF_DIST175], Gaussian_prob(dist, 175, 30))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_MAG6], Gaussian_prob(evmag, 6, 5.5))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_MAG68], Gaussian_prob(evmag, 6, 8))
     + MUL_IFNZ(p_coeffs[EDA_COEFF_MD], (7 - evmag) * dist);
@@ -126,7 +154,21 @@ double EventDetectionPrior_LogProb(const EventDetectionPrior_t * prior,
            evdepth, evmag, dist, siteid, phaseid, is_detected,logodds);
     exit(1);
   }
-  
+
+  if (dderror > 0)
+  {
+    logprob += -dderror;
+
+    /* if the event is not detected then we should consider the alternate
+     * explanation that the ddrange was violated */
+    if (!is_detected)
+    {
+      double altlogprob = log(1 - exp(-dderror));
+
+      logprob = LOGSUMEXP(altlogprob, logprob);
+    }
+  }
+
   return logprob;
 }
 
