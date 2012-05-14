@@ -187,6 +187,9 @@ def plotaic(data, d, loc):
 #plotaic(longd1, 50, 'MBAR')
 #ploterror(longd1, 20, 'MBAR', longd1)
 plotcompare(longd1, 20, 'MBAR')
+
+
+
 #plotpsd(shortd1,3,'MBAR')
 #plotcv(shortd1,50,'psd','MBAR')
 #plotcv(shortd1,50,'raw','MBAR')
