@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #define NETVISA_MAIN_MODULE
-#include "netvisa.h"
+#include "sigvisa.h"
 
 static int py_net_model_init(NetModel_t *self, PyObject *args);
 static void py_net_model_dealloc(NetModel_t * self);
@@ -17,9 +17,9 @@ static PyObject * py_location_sample(NetModel_t * p_netmodel);
 static PyObject * py_detection_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,PyObject *args);
+static PyObject * py_mean_amplitude(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arraz_logprob(NetModel_t * p_netmodel,PyObject *args);
 static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,PyObject *args);
-static PyObject * py_srand(PyObject * self, PyObject * args);
 
 static PyMethodDef NetModel_methods[] = {
   {"score_world", (PyCFunction)py_score_world, METH_VARARGS,
@@ -55,6 +55,9 @@ static PyMethodDef NetModel_methods[] = {
   {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
    "mean_travel_time(evlon, evlat, evdepth, siteid, phaseid)"
    " -> travel time in seconds"},
+  {"mean_amplitude", (PyCFunction)py_mean_amplitude, METH_VARARGS,
+   "mean_amplitude(mb, depth, ttime, siteid, phaseid)"
+   " -> mean amplitude"},
   {"arraz_logprob", (PyCFunction)py_arraz_logprob, METH_VARARGS,
    "arraz_logprob(arraz, pred_arraz, det_delaz, siteid, phaseid)"
    " -> log probability"},
@@ -130,10 +133,20 @@ static PyMethodDef EarthModel_methods[] = {
      "Compute the arrival azimuth of an event at a site\n"
      "ArrivalAzimuth(evlon, evlat, siteid) -> seaz",
     },
+    {"ArrivalIncidentAngle", (PyCFunction)py_EarthModel_ArrivalIncidentAngle,
+     METH_VARARGS,
+     "Compute the incident angle of an event at a site\n"
+     "IncidentAngle(evlon, evlat, evdepth, int phaseid, siteid) -> iangle"
+    },
     {"ArrivalSlowness", (PyCFunction)py_EarthModel_ArrivalSlowness,
      METH_VARARGS,
      "Compute the arrival slowness of an event at a site\n"
      "ArrivalSlowness(evlon, evlat, evdepth, int phaseid, siteid) -> slowness"
+    },
+    {"InvertDetection", (PyCFunction)py_EarthModel_InvertDetection,
+     METH_VARARGS,
+     "Invert a detection\n"
+     "InvertDetection(siteid, azi, slo, time) -> (lon, lat, depth, time)",
     },
     {"IsTimeDefPhase", (PyCFunction)py_EarthModel_IsTimeDefPhase,
      METH_VARARGS,
@@ -167,7 +180,7 @@ static PyMethodDef EarthModel_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject py_EarthModel = {
+PyTypeObject py_EarthModel = {
     PyObject_HEAD_INIT(NULL)
     0,                                       /*ob_size*/
     "netvisa.EarthModel",                    /*tp_name*/
@@ -214,6 +227,7 @@ static PyMethodDef netvisaMethods[] = {
     "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
 };
+
 
 void initnetvisa(void)
 {
@@ -531,7 +545,7 @@ static void convert_eventobj(PyArrayObject * p_events_arrobj,
   *p_p_events = p_events;
 }
 
-static void free_events(int numevents, Event_t * p_events)
+void free_events(int numevents, Event_t * p_events)
 {
   int i;
   for (i=0; i<numevents; i++)
@@ -904,6 +918,26 @@ static PyObject * py_arrtime_logprob(NetModel_t * p_netmodel,
   return Py_BuildValue("d", logprob);
 }
 
+static PyObject * py_mean_amplitude(NetModel_t * p_netmodel,
+				    PyObject * args)
+{
+  double mb, depth, ttime;
+  int siteid;
+  int phaseid;
+  double amp;
+  
+  if (!PyArg_ParseTuple(args, "dddii", &mb, &depth, &ttime,
+                        &siteid, &phaseid))
+    return NULL;
+
+  
+  amp = ArrivalAmplitudePrior_Point(&p_netmodel->arr_amp_prior,
+					 mb, depth, ttime,
+					 siteid, phaseid);
+  
+  return Py_BuildValue("d", amp);
+}
+
 static PyObject * py_mean_travel_time(NetModel_t * p_netmodel,
                                       PyObject * args)
 {
@@ -973,110 +1007,9 @@ static PyObject * py_arrslo_logprob(NetModel_t * p_netmodel,
   return Py_BuildValue("d", logprob);
 }
 
-static PyObject * py_srand(PyObject * self, PyObject * args)
-{
-  int seed;
-  
-  if (!PyArg_ParseTuple(args, "i", &seed))
-    return NULL;
-  
-  srand(seed);
 
-  Py_INCREF(Py_None);
-  
-  return Py_None;
-}
 
-void convert_events_to_pyobj(const EarthModel_t * p_earth,
-                             const Event_t ** pp_events, int numevents,
-                             PyObject ** pp_eventsobj,
-                             PyObject ** pp_evdetlistobj)
-{
-  PyObject * p_eventsobj;
-  PyObject * p_evdetlistobj;
-  npy_intp dims[2];
-  int i;
-  
-  /* create an array of events */
-  dims[0] = numevents;
-  dims[1] = EV_NUM_COLS;
-  p_eventsobj = PyArray_SimpleNew(2, dims, NPY_DOUBLE);
-
-  /* and a list of event detections */
-  p_evdetlistobj = PyList_New(0);
-
-  for (i=0; i<numevents; i++)
-  {
-    PyObject * p_detlistobj;
-    const Event_t * p_event;
-    int numsites;
-    int numtimedefphases;
-    int siteid;
-    int phaseid;
-
-    p_event = pp_events[i];
-
-    /* store the current event in its row */
-    ARRAY2(p_eventsobj, i, EV_LON_COL) = p_event->evlon;
-    ARRAY2(p_eventsobj, i, EV_LAT_COL) = p_event->evlat;
-    ARRAY2(p_eventsobj, i, EV_DEPTH_COL) = p_event->evdepth;
-    ARRAY2(p_eventsobj, i, EV_TIME_COL) = p_event->evtime;
-    ARRAY2(p_eventsobj, i, EV_MB_COL) = p_event->evmag;
-    ARRAY2(p_eventsobj, i, EV_ORID_COL) = (double) p_event->orid;
-
-    p_detlistobj = PyList_New(0);
-    
-    /* copy over the (phaseid, detnum) of the event */
-    numsites = EarthModel_NumSites(p_earth);
-    numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-    
-    for (siteid = 0; siteid < numsites; siteid ++)
-    {
-      for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
-      {
-        int numdet;
-        
-        numdet = p_event->p_num_dets[siteid * numtimedefphases + phaseid];
-
-        if (numdet > 0)
-        {
-          int pos;
-          PyObject * p_phase_det_obj;
-          
-          /* first the phase and then the detnums */
-          p_phase_det_obj = PyTuple_New(numdet + 1);
-          
-          /* tuple set_item steals a reference so we don't need to decr it */
-          PyTuple_SetItem(p_phase_det_obj, 0, Py_BuildValue("i", phaseid));
-          
-          for (pos=0; pos<numdet; pos++)
-          {
-            int detnum;
-            detnum = p_event->p_all_detids[siteid * numtimedefphases 
-                                           * MAX_PHASE_DET 
-                                           + phaseid * MAX_PHASE_DET + pos];
-            
-            PyTuple_SetItem(p_phase_det_obj, pos+1,Py_BuildValue("i", detnum));
-          }
-          
-          PyList_Append(p_detlistobj, p_phase_det_obj);
-          /* List Append increments the refcount so we need to
-           * decrement our ref */
-          Py_DECREF(p_phase_det_obj);
-        }
-      }
-    }
-
-    PyList_Append(p_evdetlistobj, p_detlistobj);
-    /* List Append increments the refcount so we need to decrement our ref */
-    Py_DECREF(p_detlistobj);
-  }
-
-  *pp_eventsobj = p_eventsobj;
-  *pp_evdetlistobj = p_evdetlistobj;
-}
-
-Event_t * alloc_event(NetModel_t * p_netmodel)
+Event_t * alloc_event_net(NetModel_t * p_netmodel)
 {
   Event_t * p_event;
   int numsites;
@@ -1098,14 +1031,7 @@ Event_t * alloc_event(NetModel_t * p_netmodel)
   return p_event;
 }
 
-void free_event(Event_t * p_event)
-{
-  free(p_event->p_all_detids);
-  free(p_event->p_num_dets);
-  free(p_event);
-}
-
-void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
+void copy_event_net(NetModel_t * p_netmodel, Event_t * p_tgt_event,
                 const Event_t * p_src_event)
 {
   int * p_tgt_all_detids;
@@ -1135,13 +1061,6 @@ void copy_event(NetModel_t * p_netmodel, Event_t * p_tgt_event,
          * sizeof(*p_src_event->p_all_detids));
 }
 
-void print_event(const Event_t * p_event)
-{
-  printf("%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d\n",
-         p_event->evlon, p_event->evlat, p_event->evdepth,
-         p_event->evtime, p_event->evmag, p_event->evscore,
-         p_event->orid);
-}
 
 void print_event_detections(EarthModel_t * p_earth, const Event_t * p_event)
 {
