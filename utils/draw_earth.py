@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 
 import matplotlib
 matplotlib.use("PDF")
@@ -111,6 +111,8 @@ def draw_earth(title, **args):
     bmap.drawmeridians(np.arange(-180, 180, 30), zorder=10)
     bmap.drawparallels(np.arange(-90, 90, 30), zorder=10)
 
+  return bmap
+
 def draw_events(bmap, events, labels = None, **args):
   """
   The args can be any collection of marker args like ms, mfc mec
@@ -164,13 +166,13 @@ def draw_vectors(bmap, vectors, scale, **args):
     x2, y2 = bmap(lon2, lat2)
     plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
 
-    
+
 def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
                  nolines = False, colorbar_orientation="vertical",
                  colorbar_shrink = 0.9):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
-  
+
   # convert to map coordinates
   x, y = bmap(list(lon_arr.flat), list(lat_arr.flat))
   x_arr = np.array(x).reshape(lon_arr.shape)
