@@ -219,10 +219,7 @@ void segment_dealloc(Segment_t * p_segment) {
     if (channel != NULL) {
       for (int band = 0; band < NUM_BANDS; ++band) {
 	if (channel->p_bands[band] != NULL) {
-	  if (channel->p_bands[band]->py_array != NULL) {
-	    Py_DECREF(channel->p_bands[band]->py_array);
-	  }
-	  free(channel->p_bands[band]);
+	  free_trace(channel->p_bands[band]);
 	}
       }
       free(p_segment->p_channels[j]);
@@ -524,6 +521,24 @@ py_set_signals and associated helper methods for converting Python
 signal structures into C:
 ****************************************************************
 */
+
+Trace_t * alloc_trace() {
+  Trace_t * p_trace = calloc(1, sizeof(Trace_t));
+  p_trace->hz = 40;
+  return p_trace;
+}
+
+void free_trace(Trace_t * p_trace) {
+  if (p_trace->py_array != NULL) {
+    Py_DECREF(p_trace->py_array);
+  }
+
+  if (p_trace->p_data != NULL) {
+    free(p_trace->p_data);
+  }
+
+  free(p_trace);
+}
 
 int trace_to_signal(PyObject * py_trace, Trace_t ** pp_trace) {
 

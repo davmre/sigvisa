@@ -357,11 +357,16 @@ def main():
     else:
         base_coda_dir = options.basedir
     fname = os.path.join(base_coda_dir, 'all_data')
-    all_data, bands = read_shape_data(fname)
-    all_data = add_depth_time(cursor, all_data)
-#    print fname
-#    print bands
-    print "read data", all_data.shape
+
+    bands = ["narrow_logenvelope_2.00_3.00",]
+    try:
+        all_data, bands = read_shape_data(fname)
+        all_data = add_depth_time(cursor, all_data)
+        #    print fname
+        #    print bands
+        print "read data", all_data.shape
+    except:
+        print "error reading data"
 
     if options.scatter:
         generate_scatter_plots(all_data, bands, base_coda_dir)

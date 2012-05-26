@@ -145,6 +145,7 @@ typedef struct Site_t
 #define CODA_HEIGHT_PARAM 4
 #define CODA_DECAY_PARAM 5
 
+#define MIN_LOGENV_CUTOFF -3
 
 #define CHECK_ERROR if(PyErr_Occurred()) { PyErr_Print(); exit(1); }
 #define CHECK_PTR(p) if (p == NULL) { LogFatal("memory allocation failed, or null pointer detected!"); exit(1);}
@@ -164,7 +165,6 @@ typedef struct Trace_t
   int siteid;
   int chan;
   int band;
-
 
   double p_time;
   double s_time;
