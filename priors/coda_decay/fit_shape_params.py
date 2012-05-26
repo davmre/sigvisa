@@ -39,13 +39,14 @@ def c_cost(smoothed, phaseids, params):
 
 #    noise_floor = params[-1]
 #    params = np.reshape(params[:-1], (len(phaseids), -1))
+
     noise_floor = smoothed.stats.noise_floor
     params = np.reshape(params, (len(phaseids), -1))
 
     for i, pid in enumerate(phaseids):
         if np.isnan(params[i, PEAK_HEIGHT_PARAM]) or np.isnan(params[i, CODA_HEIGHT_PARAM]):
             return np.float('inf')
-        if params[i, PEAK_HEIGHT_PARAM] < 1:
+        if params[i, PEAK_HEIGHT_PARAM] < 0:
             return np.float('inf')
         if params[i, CODA_HEIGHT_PARAM] > 1.1 * params[i, PEAK_HEIGHT_PARAM]:
             return np.float('inf')
@@ -54,40 +55,109 @@ def c_cost(smoothed, phaseids, params):
         if params[i, PEAK_DECAY_PARAM] < 0 or params[i, PEAK_DECAY_PARAM] < 0:
             return np.float('inf')
 
+#    print "trying heights ppeak %f pcoda %f speak %f scoda %f" % (params[0, PEAK_HEIGHT_PARAM], params[0, CODA_HEIGHT_PARAM], params[1, PEAK_HEIGHT_PARAM], params[1, CODA_HEIGHT_PARAM] )
+
     tr = imitate_envelope(smoothed, phaseids, params)
     c = logenv_l1_cost(smoothed.data, tr.data)
 
     return c
 
 
-def fit_elephant_envelope(arrivals, smoothed):
+#def coord_ascent(f, params, bounds):
+#
+#    # move through arrivals one by one
+#    # for each one, optimize coda height and decay
+#    # then optimize peak
+#
+#    n_arrivals = len(params)/NUM_PARAMS
+#
+#    best_params = np.copy(params)
+#    best_cost = f(best_params)
+#
+#    for i in range(1, 5):
+#
+#        for arr_idx in range(n_arrivals):
+#            i1 = arr_idx * NUM_PARAMS
+#
+#            for cdecay in [-.1, -.08, -0.07, -0.06, -0.05, -0.04, -0.03, -0.02, -0.01, -0.005]:
+#                for cheight in np.linspace[]
+
+# params with peak but without arrtime
+def remove_peak(pp):
+    newp = np.zeros((pp.shape[0], NUM_PARAMS-3))
+    newp[:, 0] = pp[:, PEAK_OFFSET_PARAM-1]
+    newp[:, 1] = pp[:, CODA_HEIGHT_PARAM-1]
+    newp[:, 2] = pp[:, CODA_DECAY_PARAM-1]
+    return newp
+
+def restore_peak(peakless_params):
+    p = peakless_params
+    newp = np.zeros((p.shape[0], NUM_PARAMS))
+    newp[:, 0] = p[:, 0]
+    newp[:, 1] = p[:, 1]
+    newp[:, 2] = 1
+    newp[:, 3] = p[:, 1]
+    newp[:, 4] = p[:, 2]
+    return newp
+
+def fit_elephant_envelope(arrivals, smoothed, defaults, fix_peak = False):
+
     arr_bounds = [ (0, 15), (0, None) , (0, None), (0, None), (-.2, 0) ]
+    arr_bounds_fixed_peak = [ (0, 15), (0, None), (-.2, 0) ]
     arrivals = [arr for arr in arrivals if arr is not None]
 
     start_params = np.zeros((len(arrivals), NUM_PARAMS))
     bounds = []
+    bounds_fp = []
     phaseids = []
     arr_times = np.zeros((len(arrivals), 1))
     for i, arr in enumerate(arrivals):
         time = arr[AR_TIME_COL]
-        (peak_offset_time, peak_height) = arrival_peak_offset(smoothed, time - smoothed.stats.starttime_unix)
+#        (peak_offset_time, peak_height) = arrival_peak_offset(smoothed, time - smoothed.stats.starttime_unix)
 
-        start_params[i, PEAK_OFFSET_PARAM] = peak_offset_time
-        start_params[i, PEAK_HEIGHT_PARAM] = peak_height
-        start_params[i, PEAK_DECAY_PARAM] = .5
-        start_params[i, CODA_HEIGHT_PARAM] = peak_height
-        start_params[i, CODA_DECAY_PARAM] = -0.02
+        a = defaults[i]
+
+        fit_peak_height = subtract_noise(a[FIT_PEAK_HEIGHT], smoothed.stats.noise_floor)
+        fit_coda_height = subtract_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), smoothed.stats.noise_floor)
+
+        start_params[i, PEAK_OFFSET_PARAM] = ( a[FIT_PEAK_OFFSET] + smoothed.stats.starttime_unix) - time
+        print "init peak offset to ", start_params[i, PEAK_OFFSET_PARAM], "for phase", i
+        start_params[i, PEAK_HEIGHT_PARAM] = fit_peak_height if fit_peak_height > 0 else 1
+        start_params[i, PEAK_DECAY_PARAM] = 5
+        start_params[i, CODA_HEIGHT_PARAM] = fit_coda_height if fit_coda_height > 0 else 1
+        start_params[i, CODA_DECAY_PARAM] = a[FIT_B] if a[FIT_B] < 0 else -0.03
 
         bounds = bounds + arr_bounds
+        bounds_fp = bounds_fp + arr_bounds_fixed_peak
         phaseids.append(arr[AR_PHASEID_COL])
         arr_times[i] = time
 
-    start_params = start_params[:, 1:].flatten()
 
-    f = lambda params : c_cost(smoothed, phaseids, np.hstack([arr_times, np.reshape(params, (2, -1))]))
+    start_params = start_params[:, 1:]
 
+    if fix_peak:
+        print start_params
+        start_params = remove_peak(start_params)
+        bounds = bounds_fp
+        print start_params, bounds
+        assem_params = lambda params: np.hstack([arr_times, restore_peak(np.reshape(params, (len(arrivals), -1))) ])
+    else:
+        assem_params = lambda params: np.hstack([arr_times, np.reshape(params, (len(arrivals), -1))])
+
+    start_params = start_params.flatten()
+
+    f = lambda params : c_cost(smoothed, phaseids, assem_params(params))
+
+#    best_params, best_cost, d = scipy.optimize.fmin_tnc(f, start_params, approx_grad=1, bounds=bounds)
     best_params, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, start_params, approx_grad=1, bounds=bounds)
-    best_params = np.hstack([arr_times, np.reshape(best_params, (2, -1))])
+
+#    best_params = (8, 3, 5, 2.8, -0.01, 20, 3.8, 1, 3.8, -0.15)
+#    best_cost = f(best_params)
+#    print smoothed.stats
+
+    best_params = assem_params(best_params)
+
+    print "best cost", best_cost, "(chan ", smoothed.stats.channel, ")", "params", best_params
     return best_params, phaseids, best_cost
 
 #######################################################
@@ -262,11 +332,14 @@ def main():
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
     sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
+# and lebo.evid=5301449
+
     print sql_query
     cursor.execute(sql_query)
     events = np.array(cursor.fetchall())
 
-    bands = ['narrow_logenvelope_4.00_6.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_1.00_1.50', 'narrow_logenvelope_0.70_1.00']
+#    bands = ['narrow_logenvelope_4.00_6.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_1.00_1.50', 'narrow_logenvelope_0.70_1.00']
+    bands = ['narrow_logenvelope_2.00_3.00']
     short_bands = [b[19:] for b in bands]
 
     runid = int(time.time())
@@ -312,18 +385,50 @@ def main():
                 print traceback.format_exc()
                 continue
 
+            vnf = lambda t : vert_noise_floor
+            hnf = lambda t : horiz_noise_floor
+            fit_p_vert = None
+            fit_p_horiz = None
+            fit_s_vert = None
+            fit_s_horiz = None
+            accept_p_vert = False
+            accept_p_horiz = False
+            accept_s_vert = False
+            accept_s_horiz = False
+            if first_p_arrival is not None:
+                fit_p_vert = fit_phase_coda(first_p_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
+                fit_p_horiz = fit_phase_coda(first_p_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
+                accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
+                accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
+
+
+            if first_s_arrival is not None:
+
+                # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
+                if accept_p_vert:
+                    vnf = lambda t : max(vert_noise_floor, fit_p_vert[FIT_HEIGHT] + fit_p_vert[FIT_B]*(t - fit_p_vert[FIT_CODA_START_OFFSET]))
+                if accept_p_horiz:
+                    hnf = lambda t : max(horiz_noise_floor, fit_p_horiz[FIT_HEIGHT] + fit_p_horiz[FIT_B]*(t - fit_p_horiz[FIT_CODA_START_OFFSET]))
+
+                fit_s_vert = fit_phase_coda(first_s_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
+                fit_s_horiz = fit_phase_coda(first_s_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
+                accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
+                accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
+
+
+
             # DO THE FITTING
             if elephant_model:
 
                 # DO THE FITTING
-                fit_vert_params, phaseids, vert_cost = fit_elephant_envelope([first_p_arrival, first_s_arrival], vert_smoothed)
-                fit_horiz_params, phaseids, horiz_cost = fit_elephant_envelope([first_p_arrival, first_s_arrival], horiz_smoothed)
+                fit_vert_params, phaseids, vert_cost = fit_elephant_envelope([first_p_arrival, first_s_arrival], vert_smoothed, [ x for x in [fit_p_vert, fit_s_vert] if x is not None])
+                fit_horiz_params, phaseids, horiz_cost = fit_elephant_envelope([first_p_arrival, first_s_arrival], horiz_smoothed, [ x for x in [fit_p_horiz, fit_s_horiz] if x is not None])
 
 
                 # plot!
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
                 pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
-                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:])
+                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
                 try:
                     plot_channels_with_pred(pp, vert_smoothed, fit_vert_params, phaseids, horiz_smoothed, fit_horiz_params, title = gen_title(event, fit_vert_params))
                 except:
@@ -331,37 +436,10 @@ def main():
                     print traceback.format_exc()
                 print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
 
+#                pp.close()
+#                sys.exit(1)
+
             else:
-
-                vnf = lambda t : vert_noise_floor
-                hnf = lambda t : horiz_noise_floor
-                fit_p_vert = None
-                fit_p_horiz = None
-                fit_s_vert = None
-                fit_s_horiz = None
-                accept_p_vert = False
-                accept_p_horiz = False
-                accept_s_vert = False
-                accept_s_horiz = False
-                if first_p_arrival is not None:
-                    fit_p_vert = fit_phase_coda(first_p_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
-                    fit_p_horiz = fit_phase_coda(first_p_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
-                    accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
-                    accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
-
-
-                if first_s_arrival is not None:
-
-                    # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
-                    if accept_p_vert:
-                        vnf = lambda t : max(vert_noise_floor, fit_p_vert[FIT_HEIGHT] + fit_p_vert[FIT_B]*(t - fit_p_vert[FIT_CODA_START_OFFSET]))
-                    if accept_p_horiz:
-                        hnf = lambda t : max(horiz_noise_floor, fit_p_horiz[FIT_HEIGHT] + fit_p_horiz[FIT_B]*(t - fit_p_horiz[FIT_CODA_START_OFFSET]))
-
-                    fit_s_vert = fit_phase_coda(first_s_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
-                    fit_s_horiz = fit_phase_coda(first_s_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
-                    accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
-                    accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
 
 
         #        print first_p_arrival

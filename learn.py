@@ -36,7 +36,7 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                  sites, phasenames, phasetimedef):
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
-    
+
   model = netvisa.NetModel(earthmodel,
                            start_time, end_time, detections, site_up,
                            os.path.join(param_dirname, "SecDetPrior.txt"),
@@ -57,11 +57,11 @@ def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
                            os.path.join(param_dirname,
                                         "ArrivalPhasePrior.txt"),
                            os.path.join(param_dirname,
-                                        "ArrivalSNR.txt"),
+                                        "ArrivalSNRPrior.txt"),
                            os.path.join(param_dirname,
                                         "ArrivalAmplitudePrior.txt")
                            )
-  
+
   return model
 
 def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up,
@@ -164,7 +164,7 @@ def main(param_dirname):
                     action = "store_true",
                     help = "load waveforms and train signal prior (False)")
 
- 
+
   (options, args) = parser.parse_args()
 
   if options.sigvisa:
@@ -173,10 +173,10 @@ def main(param_dirname):
   # use Type 1 fonts by invoking latex
   if options.type1:
     plt.rcParams['text.usetex'] = True
-   
+
   if options.pdf:
     options.pdf = PdfPages(options.pdf)
-   
+
   if options.gui:
     options.plt = plt
     showgui = True
@@ -192,7 +192,7 @@ def main(param_dirname):
 
   if options.datadir:
     param_dirname = options.datadir
- 
+
   if options.quick:
     hours = 100
   else:
@@ -207,10 +207,10 @@ def main(param_dirname):
                 sitenames = read_datafile(options.datafile, param_dirname,
                                           hours = hours)
   else:
-     
+
     cache_fname = "cache-training-hours-%s-visa-%s.pic1" \
                   % (str(hours), str(options.visa_leb_runid))
-   
+
     if options.cache and os.path.exists(cache_fname):
       start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
                   sel3_evlist, site_up, sites, phasenames, phasetimedef \
@@ -220,16 +220,16 @@ def main(param_dirname):
                   sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
                   = read_data(hours=hours,
                               visa_leb_runid=options.visa_leb_runid)
- 
+
     if options.cache and not os.path.exists(cache_fname):
       cPickle.dump((start_time, end_time, detections, leb_events, leb_evlist,
                     sel3_events, sel3_evlist, site_up, sites, phasenames,
                     phasetimedef), file(cache_fname, "wb"), protocol=1)
-   
+
     sitenames = read_sitenames()
 
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
- 
+
   false_dets = priors.SecDetPrior.compute_false_detections(detections,
                                                            leb_evlist)
 
@@ -245,12 +245,12 @@ def main(param_dirname):
   if options.model is None or "NumEvent" in options.model:
     priors.NumEventPrior.learn(os.path.join(param_dirname, "NumEventPrior.txt"),
                                options, start_time, end_time, leb_events)
- 
+
   if options.model is None or "EventLocation" in options.model:
     priors.EventLocationPrior.learn(os.path.join(param_dirname,
                                                  "EventLocationPrior.txt"),
                                     options, leb_events)
- 
+
   if options.model is None or "EventMag" in options.model:
     priors.EventMagPrior.learn(os.path.join(param_dirname,
                                             "EventMagPrior.txt"),
@@ -267,7 +267,7 @@ def main(param_dirname):
     priors.NumFalseDetPrior.learn(os.path.join(param_dirname,
                                                "NumFalseDetPrior.txt"),
                                   detections, false_dets, site_up)
- 
+
   if options.model is None or "ArrivalTime" in options.model:
     priors.ArrivalTimePrior.learn(os.path.join(param_dirname,
                                                "ArrivalTimePrior.txt"),
@@ -279,7 +279,7 @@ def main(param_dirname):
                                                   "ArrivalAzimuthPrior.txt"),
                                      earthmodel, detections, leb_events,
                                      leb_evlist)
- 
+
   if options.model is None or "ArrivalSlowness" in options.model:
     priors.ArrivalSlownessPrior.learn(os.path.join(param_dirname,
                                                    "ArrivalSlownessPrior.txt"),
@@ -305,14 +305,14 @@ def main(param_dirname):
 
   if options.model is None or "Site" in options.model:
     learn_site(os.path.join(param_dirname, "SitePrior.txt"), sitenames, sites)
- 
+
   if options.model is None or "Phase" in options.model:
     learn_phase(os.path.join(param_dirname, "PhasePrior.txt"), phasenames,
                 phasetimedef)
 
   if options.pdf:
     options.pdf.close()
- 
+
   if showgui:
     plt.show()
 
@@ -322,7 +322,7 @@ def read_datafile_and_sitephase(data_fname, param_dirname, hours=None, skip=0,
                    site_fname = os.path.join(param_dirname, "SitePrior.txt"),
                    phase_fname = os.path.join(param_dirname, "PhasePrior.txt"),
                        verbose=verbose)
- 
+
 def read_datafile(data_fname, param_dirname, hours=None, skip=0,
                   site_fname=None, phase_fname=None, verbose=True):
   tar = tarfile.open(name=data_fname, mode="r:*")
@@ -363,7 +363,7 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
     fobj = tar.extractfile("site.csv")
   inp = csv.reader(fobj, quoting=csv.QUOTE_NONNUMERIC)
   inp.next()                            # skip header
- 
+
   sitenames = []
   sites = []
   siteid = {}
@@ -376,7 +376,7 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
 
   if verbose:
     print "%d sites, %d array" % (len(sites), sites[:,3].sum())
- 
+
   # phases
 
   if phase_fname is not None:
@@ -394,14 +394,14 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
     phasenames.append(phase)
     phasetimedef.append(istimedef)
     phaseid[phase] = len(phaseid)
- 
+
   phasenames = np.array(phasenames)
   phasetimedef = np.array(phasetimedef, bool)
 
   # arrivals and site_up
   # corrections need to be applied to the arrivals
   corr_dict = load_az_slow_corr(os.path.join(param_dirname, 'sasc'))
- 
+
   fobj = tar.extractfile("idcx_arrival.csv")
   inp = csv.reader(fobj, quoting=csv.QUOTE_NONNUMERIC)
   inp.next()                            # skip header
@@ -409,7 +409,7 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
   site_up = np.zeros((len(sites),
            int(ceil((end_time + MAX_TRAVEL_TIME - start_time)/ UPTIME_QUANT))),
                      bool)
- 
+
   detections = []
   arid2detnum = {}
   for (sta, arid, time, deltim, azimuth, delaz, slow, delslo, snr, iphase, amp,
@@ -418,15 +418,15 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
       continue
     if time > (end_time + MAX_TRAVEL_TIME):
       break
-   
+
     if sta not in siteid or delaz <= 0 or delslo <= 0 or snr <= 0:
       continue
-   
+
     # apply the SASC correction
     if sta in corr_dict:
       azimuth, slow, delaz, delslo = corr_dict[sta].correct(azimuth, slow,
                                                             delaz, delslo)
-   
+
     detections.append((siteid[sta], arid, time, deltim, azimuth, delaz, slow,
                        delslo, snr, phaseid[iphase], amp, per))
     arid2detnum[arid] = len(arid2detnum)
@@ -435,13 +435,13 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
 
   if verbose:
     print "%d detections" % len(detections)
- 
+
   # LEB events
- 
+
   fobj = tar.extractfile("leb_origin.csv")
   inp = csv.reader(fobj, quoting=csv.QUOTE_NONNUMERIC)
   inp.next()                            # skip header
- 
+
   leb_events = []
   leb_orid2num = {}
   for lon, lat, depth, time, mb, orid in inp:
@@ -456,13 +456,13 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
   leb_events = np.array(leb_events)
 
   # LEB evlist
- 
+
   fobj = tar.extractfile("leb_assoc.csv")
   inp = csv.reader(fobj, quoting=csv.QUOTE_NONNUMERIC)
   inp.next()                            # skip header
 
   leb_evlist = [[] for _ in leb_events]
- 
+
   for orid, arid, phase, sta in inp:
     if orid in leb_orid2num and arid in arid2detnum:
       leb_evlist[leb_orid2num[orid]].append((phaseid[phase],arid2detnum[arid]))
@@ -471,18 +471,18 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
     print "LEB: %d events, avg %.1f site-phases" \
           % (len(leb_events), float(sum(len(evlist) for evlist in leb_evlist))
              /(.00001 + len(leb_evlist)))
- 
+
   # SEL3 events
- 
+
   fobj = tar.extractfile("sel3_origin.csv")
   inp = csv.reader(fobj, quoting=csv.QUOTE_NONNUMERIC)
   inp.next()                            # skip header
- 
+
   sel3_events = []
   sel3_orid2num = {}
   for lon, lat, depth, time, mb, orid in inp:
     if time < start_time or time > end_time:
-      continue    
+      continue
     if depth < 0:
       depth = 0
     if mb < 0:
@@ -492,13 +492,13 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
   sel3_events = np.array(sel3_events)
 
   # SEL3 evlist
- 
+
   fobj = tar.extractfile("sel3_assoc.csv")
   inp = csv.reader(fobj, quoting=csv.QUOTE_NONNUMERIC)
   inp.next()                            # skip header
- 
+
   sel3_evlist = [[] for _ in sel3_events]
- 
+
   for orid, arid, phase, sta in inp:
     if orid in sel3_orid2num and arid in arid2detnum:
       sel3_evlist[sel3_orid2num[orid]].append((phaseid[phase],
@@ -508,7 +508,7 @@ def read_datafile(data_fname, param_dirname, hours=None, skip=0,
     print "SEL3: %d events, avg %.1f site-phases" \
           % (len(sel3_events),float(sum(len(evlist) for evlist in sel3_evlist))
              /(.00001 + len(sel3_evlist)))
- 
+
   return start_time, end_time, detections, leb_events, leb_evlist,\
          sel3_events, sel3_evlist, site_up, sites, phasenames, phasetimedef,\
          sitenames
@@ -538,8 +538,8 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     pdb.post_mortem(sys.exc_traceback)
     raise
- 
- 
+
+
 if __name__ == "__main__":
   try:
     main("parameters")
@@ -550,5 +550,5 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     pdb.post_mortem(sys.exc_traceback)
     raise
-  
-  
+
+

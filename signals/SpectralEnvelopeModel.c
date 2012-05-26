@@ -169,26 +169,57 @@ int Spectral_Envelope_Model_Has_Model(void * pv_sigmodel, int siteid, int chan) 
 
 
 
+/*
+   Input: an arrival specifying envelope parameters, and a trace object specifying the sampling rate.
+   Returns: sets p_data, len, and start_time in the Trace.
+*/
+void abstract_spectral_logenv_raw(Arrival_t * p_arrival, Trace_t * p_trace) {
 
-void abstract_spectral_env_raw(double gamma, double b, double height, double hz, double ** pp_envelope, long *len) {
+  // calculate length of envelope to generate
+  p_trace->len = (long)((MIN_LOGENV_CUTOFF- p_arrival->amp) / p_arrival->coda_decay * p_trace->hz);
 
-  *len = 200 * hz;
-  double * means = (double *) calloc(*len, sizeof(double));
-
-  if (means == NULL) {
-    printf("error allocating memory for means in abstract_env, len %ld\n", *len);
+  // allocate memory
+  p_trace->p_data = (double *) calloc(p_trace->len, sizeof(double));
+  double * d = p_trace->p_data;
+  if (d == NULL) {
+    printf("error allocating memory for means in abstract_env, len %ld\n", p_trace->len);
     exit(-1);
   }
 
-  for (long t=0; t < *len; ++t) {
-    means[t] = height * pow(t/hz, -1 * gamma) * exp(b * t/hz);
-    // LogInfo("%d %d %d %lf %d %lf %lf", i, peak_idx, *len, env_decay, end_idx, hz, means[i]);
+  // generate onset
+  long peak_idx = (p_arrival->peak_time - p_arrival->time) * p_trace->hz;
+  double onset_slope = p_arrival->peak_amp / peak_idx;
+  for (long t=0; t < peak_idx; ++t) {
+    d[t] = t * onset_slope;
   }
 
-  *pp_envelope = means;
+  // generate decay
+  /*  double alpha = (exp(p_arrival->peak_amp) - exp(p_arrival->amp)) / exp(p_arrival->amp);
+  double gamma = ( log(alpha) - log(0.1)) / log(p_arrival->peak_decay);
+  gamma = (gamma > 0) ? gamma : 0;
+  for (long t=peak_idx; t < p_trace->len; ++t) {
+    double t_off = (t - peak_idx)/p_trace->hz;
+    d[t] = p_arrival->amp + log(1+ alpha/(pow(1 + t_off, gamma))) + p_arrival->coda_decay*t_off;
+    if (t - peak_idx < 5) {
+      printf("peak d[%ld] = %f, prev d[%ld] = %f, alpha = %f, gamma = %f\n", t, d[t], t-1, d[t-1], alpha, gamma);
+    }
+    }*/
+
+
+  double A = exp(p_arrival->amp);
+  double P = exp(p_arrival->peak_amp);
+  double F = p_arrival->peak_decay;
+  double b = p_arrival->coda_decay;
+  for (long t=peak_idx; t < p_trace->len; ++t) {
+    double t_off = (t - peak_idx)/p_trace->hz;
+    d[t] = log( (P-A) * exp( -1 * (t_off * t_off) / (F * F)) + A * exp( b * t_off));
+  }
+
+  p_trace->start_time = p_arrival->time;
+
 }
 
-void abstract_spectral_env(Spectral_StationModel_t * p_sta, int band, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
+/*void abstract_spectral_env(Spectral_StationModel_t * p_sta, int band, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
 
   double b, gamma, height;
 
@@ -206,7 +237,13 @@ void abstract_spectral_env(Spectral_StationModel_t * p_sta, int band, const Arri
 
   abstract_spectral_env_raw(b, gamma, height, hz, pp_envelope, len);
 
+  }*/
+
+
+void abstract_spectral_env(Spectral_StationModel_t * p_sta, int band, const Arrival_t * p_arr, double hz, double ** pp_envelope, long *len) {
+  return;
 }
+
 
 
 /*
@@ -279,7 +316,7 @@ double Spectral_Envelope_Model_Likelihood(void * pv_sigmodel, Segment_t * p_segm
     w->idx = 0;
 
     if (p_sta->override_b != 0) {
-      abstract_spectral_env_raw(p_sta->override_b, p_sta->override_gamma, p_sta->override_height, p_segment->hz, &w->p_envelope, &w->len);
+      //      abstract_spectral_env_raw(p_sta->override_b, p_sta->override_gamma, p_sta->override_height, p_segment->hz, &w->p_envelope, &w->len);
     } else {
       abstract_spectral_env(p_sta, band, p_arr, p_segment->hz, &w->p_envelope, &w->len);
     }
@@ -471,6 +508,54 @@ double Spectral_Envelope_Model_Likelihood(void * pv_sigmodel, Segment_t * p_segm
 }
 
 
+/* adds the contents of a new trace (representing e.g. the envelope of
+a single arriving phase) to an existing trace (e.g. the recorded
+envelope at a particular station). the addition is done in the log
+domain. */
+void mixin_log_trace(Trace_t * main_tr, Trace_t * new_tr) {
+  assert (main_tr->hz == new_tr->hz);
+  double hz = main_tr->hz;
+
+  long offset = (new_tr->start_time - main_tr->start_time)*hz;
+  long new_i = (offset >= 0) ? 0 : -1*offset;
+  long main_i = (offset >= 0) ? offset : 0;
+
+  //  printf("mixing in st %f %f offset %ld i %ld %ld\n", main_tr->start_time, new_tr->start_time, offset, main_i, new_i);
+
+  while (main_i < main_tr->len && new_i < new_tr->len) {
+    main_tr->p_data[main_i] = LOGSUM(main_tr->p_data[main_i], new_tr->p_data[new_i]);
+    main_i++;
+    new_i++;
+  }
+}
+
+/* generates a single abstract envelope */
+/*   Input: a list of arrivals w/ envelope params, and a trace
+   specifying start time, length, sampling rate, and noise floor.  */
+/*
+   Output: fills in p_data for that trace.
+ */
+void generate_log_envelope(int num_arrivals, const Arrival_t * p_arrivals, Trace_t * p_trace) {
+
+  p_trace->py_array = NULL;
+  p_trace->p_data = (double*) calloc(p_trace->len, sizeof(double));
+  if (p_trace->p_data == NULL) {
+    printf("error allocating memory for Trace in gen_logenvelope, len %ld\n", p_trace->len);
+    exit(-1);
+  }
+  for (long t=0; t < p_trace->len; ++t) {
+    p_trace->p_data[t] = p_trace->noise_floor;
+  }
+
+  for (int i=0; i < num_arrivals; ++i) {
+    Arrival_t * p_arrival = p_arrivals + i;
+
+    Trace_t * tmp = alloc_trace();
+    abstract_spectral_logenv_raw(p_arrival, tmp);
+    mixin_log_trace(p_trace, tmp);
+    free_trace(tmp);
+  }
+}
 
 /* Fills in the signal envelope for a set of event arrivals at a
    three-axis station. p_segment must set start_time, hz, and
@@ -530,7 +615,7 @@ void Spectral_Envelope_Model_SampleThreeAxis(void * pv_params,
     w->idx = 0;
 
     if (p_sta->override_b != 0) {
-      abstract_spectral_env_raw(p_sta->override_b, p_sta->override_gamma, p_sta->override_height, p_segment->hz, &w->p_envelope, &w->len);
+      //      abstract_spectral_env_raw(p_sta->override_b, p_sta->override_gamma, p_sta->override_height, p_segment->hz, &w->p_envelope, &w->len);
     } else {
       abstract_spectral_env(p_sta, band, p_arr, p_segment->hz, &w->p_envelope, &w->len);
     }

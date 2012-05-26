@@ -47,9 +47,10 @@ int Spectral_Envelope_Model_Has_Model(void * pv_model, int siteid, int chan);
 
 double Spectral_Envelope_Model_Likelihood(void * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
 
-
-void Spectral_Envelope_Model_SampleThreeAxis(void * pv_params, 
-					  EarthModel_t * p_earth, 
+void generate_log_envelope(int num_arrivals, const Arrival_t * p_arrivals, Trace_t * p_trace);
+void abstract_spectral_logenv_raw(Arrival_t * p_arrival, Trace_t * p_trace);
+void Spectral_Envelope_Model_SampleThreeAxis(void * pv_params,
+					  EarthModel_t * p_earth,
 					  Segment_t * p_segment,
 					  int num_arrivals,
 					  const Arrival_t ** pp_arrivals,
