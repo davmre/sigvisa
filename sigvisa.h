@@ -32,21 +32,20 @@ typedef struct Detection_t
 
 typedef struct Arrival_t {
 
+  int phase;
+  int siteid;
+
   double time;
-  double amp;
   double azi;
   double slo;
 
+  double amp;
   double peak_time;
   double peak_amp;
   double peak_decay;
   double coda_decay;
 
-  int phase;
-  int siteid;
-
   double dist;
-
   double score;
 
 } Arrival_t;
@@ -146,6 +145,7 @@ typedef struct Site_t
 #define CODA_DECAY_PARAM 5
 
 #define MIN_LOGENV_CUTOFF -3
+#define DEFAULT_HZ 40
 
 #define CHECK_ERROR if(PyErr_Occurred()) { PyErr_Print(); exit(1); }
 #define CHECK_PTR(p) if (p == NULL) { LogFatal("memory allocation failed, or null pointer detected!"); exit(1);}
@@ -158,7 +158,6 @@ typedef struct Trace_t
   PyArrayObject * py_array;   /*  we're forced to keep the Python
 				 object around so that we can DECREF
 				 it when finished */
-
 
   double start_time;
   double hz;
@@ -205,6 +204,9 @@ double Segment_EndTime(Segment_t * b);
 #include "signals/SpectralEnvelopeModel.h"
 #include "signals/SignalModelCommon.h"
 #include "signals/envelope.h"
+
+Trace_t * alloc_trace();
+void free_trace(Trace_t * p_trace);
 
 Channel_t * alloc_channel(Segment_t * p_segment);
 

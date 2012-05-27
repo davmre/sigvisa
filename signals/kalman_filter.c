@@ -17,23 +17,39 @@
 #include "kalman_filter.h"
 
 /* Augments the mean vector and covariance matrix with space for a new order-m AR process, and fills in the transition matrix with the coefficients ar_coeffs. */
-void kalman_add_AR_process(KalmanState_t * k, int m, double * ar_coeffs, double noise_sigma2) {
+void kalman_add_AR_process(KalmanState_t * k, ARProcess * p) {
 
-  expand_vector(&k->p_means, (k->n)+m);
-  expand_vector(&k->p_process_noise, (k->n)+m);
-  expand_matrix(&k->p_covars, (k->n)+m, (k->n)+m, TRUE);
-  expand_matrix(&k->p_transition, (k->n)+m, (k->n)+m, FALSE);
+  int m = p->order;
 
-  gsl_vector_set(k->p_process_noise, (k->n)+m-1, noise_sigma2);
+  resize_vector(&k->p_means, (k->n)+m, 1);
+  resize_vector(&k->p_process_noise, (k->n)+m, 1);
+  resize_vector(&k->p_sample_state, (k->n)+m, 1);
+  resize_matrix(&k->p_covars, (k->n)+m, (k->n)+m, TRUE, 1);
+  resize_matrix(&k->p_transition, (k->n)+m, (k->n)+m, FALSE, 1);
+
+  gsl_vector_set(k->p_process_noise, k->n, p->noise_sigma2);
 
   /* fill in the new entries for the transition matrix */
-  gsl_matrix_set(k->p_transition, (k->n)+m-1, (k->n), ar_coeffs[0]);
-  for (int i=1; i < m; ++i) {
-    gsl_matrix_set(k->p_transition, (k->n)+i-1, (k->n)+i, 1);
-    gsl_matrix_set(k->p_transition, (k->n)+m-1, (k->n)+i, ar_coeffs[i]);
+  for (int i=0; i < m; ++i) {
+    gsl_matrix_set(k->p_transition, k->n, (k->n)+i, p->coeffs[i]);
+
+    if (i <m-1) {
+      gsl_matrix_set(k->p_transition, (k->n)+i+1, (k->n)+i, 1);
+    }
   }
 
   k->n += m;
+
+  // now resize all the temp matrices
+  int L = k->n;
+  realloc_matrix(k->P, L, L);
+  realloc_matrix(k->p_sigma_points, L, 2*L+1);
+  realloc_matrix(k->p_obs_points, k->obs_n, 2*L+1);
+  realloc_matrix(k->K, k->n, k->obs_n);
+  realloc_matrix(k->Ktmp, k->n, k->obs_n);
+  realloc_vector(k->p_weights, 2*L+1);
+
+  return k->n - m;
 
 }
 
@@ -42,10 +58,20 @@ void kalman_remove_AR_process(KalmanState_t * k, int m, int arridx) {
 
   remove_vector_slice(&k->p_means, arridx, m);
   remove_vector_slice(&k->p_process_noise, arridx, m);
+  remove_vector_slice(&k->p_sample_state, arridx, m);
   remove_matrix_slice(&k->p_covars, arridx, m);
   remove_matrix_slice(&k->p_transition, arridx, m);
 
   k->n -= m;
+
+  // now resize all the temp matrices
+  int L = k->n;
+  realloc_matrix(k->P, L, L);
+  realloc_matrix(k->p_sigma_points, L, 2*L+1);
+  realloc_matrix(k->p_obs_points, k->obs_n, 2*L+1);
+  realloc_matrix(k->K, k->n, k->obs_n);
+  realloc_matrix(k->Ktmp, k->n, k->obs_n);
+  realloc_vector(k->p_weights, 2*L+1);
 
 }
 
@@ -96,15 +122,13 @@ void kalman_remove_AR_process(KalmanState_t * k, int m, int arridx) {
 void kalman_predict(KalmanState * k) {
 
   /* propagate the means through the transition model */
-  gsl_vector * tmp = gsl_vector_alloc(p_means->size);
-  gsl_blas_dgemv (CblasNoTrans, 1, p_transition, p_means, 0, tmp);
-  gsl_vector_memcpy(p_means, tmp);
-  gsl_vector_free(tmp);
+  gsl_blas_dgemv (CblasNoTrans, 1, p_transition, p_means, 0, k->p_mean_update);
+  gsl_vector_memcpy(p_means, k->p_mean_update);
 
-  /* propagate the covariances through the transition model */
-  gsl_matrix * mtmp = gsl_matrix_alloc(p_covars->size1, p_covars->size2);
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, mtmp);  
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_transition, mtmp, 0, p_covars);
+  // propagate the covariance matrix
+  // use k->P as an nxn temp matrix
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, p_covars, p_transition, 0, k->P);  
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, p_transition, k->P, 0, p_covars);
 
   /* add the process noise variance */
   gsl_vector_view covar_diag = gsl_matrix_diagonal(p_covars);
@@ -113,87 +137,125 @@ void kalman_predict(KalmanState * k) {
 
 
 /* Uses the unscented transform to compute the measurement mean and covariance; then uses these to update the Kalman filtering distribution. */
-void kalman_nonlinear_update(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector ** y, gsl_matrix ** S) {
+double kalman_nonlinear_update(KalmanState *k,  gsl_vector * p_true_obs, ...) {
 
   int L = k->p_mean->size;
-  gsl_matrix * P = gsl_matrix_alloc(L, L);
-  gsl_matrix_memcpy(P, k->p_covar);
+
+  gsl_matrix_memcpy(k->P, k->p_covar);
+
+  va_list obs_fn_args;
+  va_start (obs_fn_args, S);
+  va_end ( obs_fn_args ); 
 
   double alpha = 0.001, kappa = 0, beta = 2;
   double lambda = alpha * alpha * (L + kappa) - L;
 
   /* First step in the unscented transform: 
      compute the matrix sqrt( (L+\lambda) * P ) */
-  gsl_matrix_scale(P, L + lambda);
-  gsl_linalg_cholesky_decomp(P);
+  gsl_matrix_scale(k->P, L + lambda);
+  gsl_linalg_cholesky_decomp(k->P);
   for (i=0; i < L; ++i) {
     for (j=i+1; j < L; ++j) {
-      gsl_matrix_set(P, i, j, 0);
+      gsl_matrix_set(k->P, i, j, 0);
     }
   }
 
   /* Generate sigma points by adding and subtracting the columns of
      the above matrix from the augmented mean vector. */
-  gsl_matrix * p_sigma_points = gsl_matrix_alloc(L, 2L+1);
   for (int i=0; i < 2L+1; ++i) {
-    gsl_vector_view col = gsl_matrix_column(p_sigma_points, i);
+    gsl_vector_view col = gsl_matrix_column(k->p_sigma_points, i);
     gsl_vector_memcpy(&col.vector, k->p_mean);
   }
-  gsl_matrix_view add_points = gsl_matrix_submatrix(p_sigma_points, 1, 1, L, L);
-  gsl_matrix_add(&add_points.matrix, P);
-  gsl_matrix_view sub_points = gsl_matrix_submatrix(p_sigma_points, L+1, L+1, L, L);
-  gsl_matrix_sub(&sub_points.matrix, P);
+  gsl_matrix_view add_points = gsl_matrix_submatrix(k->p_sigma_points, 1, 1, L, L);
+  gsl_matrix_add(&add_points.matrix, k->P);
+  gsl_matrix_view sub_points = gsl_matrix_submatrix(k->p_sigma_points, L+1, L+1, L, L);
+  gsl_matrix_sub(&sub_points.matrix, k->P);
 
   /* Pass the sigma points through the observation function, and
      compute their associated weights. */
-  gsl_matrix * p_obs_points = gsl_matrix_alloc(L, 2L+1);
-  gsl_vector * p_weights = gsl_vector_alloc(2L+1);
   for (int i=0; i < 2L+1; ++i) {
-     gsl_vector_view state_col = gsl_matrix_column(p_sigma_points, i);
-     gsl_vector_view obs_col = gsl_matrix_column(p_sigma_points, i);
-     (*k->p_obs_fn)(&state_col.vector, &obs_col.vector);
-     gsl_vector_set(p_weights, i, 1/(2*(L+lambda)));
+     gsl_vector_view state_col = gsl_matrix_column(k->p_sigma_points, i);
+     gsl_vector_view obs_col = gsl_matrix_column(k->p_sigma_points, i);
+
+     // provide the observation function with any extra arguments we were passed
+     va_list args;
+     va_start(Sinv, args);
+     (*k->p_obs_fn)(&state_col.vector, &obs_col.vector, &args);
+     va_end(args);
+
+     gsl_vector_set(k->p_weights, i, 1/(2*(L+lambda)));
   }
 
   /* Now, compute the weighted mean and covariance of the sigma points. */
-  gsl_vector_set(p_weights, 0, lambda/(L+lambda));
-  *y = weighted_mean(p_obs_points, p_weights);
-  gsl_vector_set(p_weights, 0, lambda/(L+lambda) + (1-alpha*alpha+beta));
-  *S = weighted_covar(p_obs_points, *y, p_weights);
+  gsl_vector_set(k->p_weights, 0, lambda/(L+lambda));
+  weighted_mean(k->p_obs_points, k->p_weights, k->y);
+  gsl_vector_set(k->p_weights, 0, lambda/(L+lambda) + (1-alpha*alpha+beta));
+  weighted_covar(k->p_obs_points, k->y, k->p_weights, k->S);
   /* add in the covariance of the observation noise */
-  matrix_add_to_diagonal(*S, k->p_obs_noise);
+  matrix_add_to_diagonal(k->S, k->p_obs_noise);
 
   /* finally, the state/measurement cross-covariance is used to get the Kalman gain */
-  gsl_matrix * K = weighted_cross_covar(p_sigma_points, k->p_mean, p_obs_points, *y, p_weights);
-  gsl_blas_dtrsm (CblasRight, CblasLower, CblasNoTrans, CblasNonUnit, 1, *S, *K);
+  weighted_cross_covar(k->p_sigma_points, k->p_mean, k->p_obs_points, k->y, k->p_weights, k->Ktmp);
+  double log_det_S = psdmatrix_inv_logdet(k->S, k->Sinv);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->Ktmp, k->Sinv, 0, k->K);
 
   // find the observation residual
-  gsl_vector_sub(*y, p_true_obs);
-  gsl_vector_scale(*y, -1); 
+  gsl_vector_sub(k->y, p_true_obs);
+  gsl_vector_scale(k->y, -1); 
 
-  gsl_vector *mean_update = gsl_vector_alloc(state_n);
-  gsl_blas_dgemv(CblasNoTrans, 1, K, *y, 0, mean_update);
-  gsl_vector_add(k->p_means, mean_update);
+  gsl_blas_dgemv(CblasNoTrans, 1, k->K, k->y, 0, p_mean_update);
+  gsl_vector_add(k->p_means, p_mean_update);
 
   // update the filtering covariance: p_covars = p_covars - K*S*K^(-1)
-  gsl_matrix * tmp = gsl_matrix_alloc(state_n,state_n);
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, *S, K, 0, tmp); // tmp = S*K^(-1)
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, K, tmp, 1, k->p_covars); 
+  // (uses k->P as an nxn temp matrix)
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->S, k->K, 0, k->P); // tmp = S*K^(-1)
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, k->K, k->P, 1, k->p_covars); 
 
-  gsl_matrix_free(P);
-  gsl_matrix_free(p_sigma_points);
-  gsl_matrix_free(p_obs_points);
-  gsl_vector_free(p_weights_m);
-  gsl_vector_free(p_weights_c);
-  gsl_matrix_free(K);
-  gsl_vector_free(mean_update);
-  gsl_matrix_free(tmp);
+  gsl_blas_dgemv(CblasNoTrans, 1, k->Sinv, k->y, 0, k->ytmp);
+  double ex;
+  gsl_blas_ddot(k->y, k->ytmp, &ex);
+  double thisll = 0.5 * k*log(2*PI) + .5 * log_det_S + 0.5 * ex;
+
+  return thisll;
+
 }
+
+/* sample a zero-mean Gaussian vector with the given variances */
+void sample_indep_gaussians(gsl_vector * p_variances, gsl_vector * p_result) {
+  gsl_vector_set_zeros(p_result);
+  for(int i=0; i < p_result->size; ++i) {
+    double std = sqrt(gsl_vector_get(p_variances, i));
+    double sample = (std > 1e-10) ? gsl_ran_gaussian(0, std) : 0;
+    gsl_vector_set(p_result, i, sample);
+  }
+}
+
+
+void kalman_sample_forward(KalmanState *k, gsl_vector * p_output, ...) {
+  // sample a new hidden state
+  gsl_blas_dgemv (CblasNoTrans, 1, k->p_transition, k->p_sample_state, 0, k->p_mean_update);
+  sample_indep_gaussians(k->p_process_noise, k->p_sample_state);
+  gsl_vector_add (k->p_sample_state, k->p_mean_update);
+  
+  // compute the deterministic observation (using optional extra arguments)
+  va_list args;
+  va_start(Sinv, args);
+  (*k->p_obs_fn)(k->p_sample_state, p_output, &args);
+  va_end(args);
+
+  // add observation noise
+  sample_indep_gaussians(k->p_obs_noise, k->ytmp);
+  gsl_vector_add(p_output, k->ytmp);
+}
+
+
 
 
 /*
   This function should work, but is untested and unproven since we're
   currently using a nonlinear observation model.
+
+  (and should be updated not to alloc its own memory; use temp variables in KalmanState)
  */
 /*
 void kalman_update_linear(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector ** y, gsl_matrix ** S) {
@@ -240,3 +302,65 @@ void kalman_update_linear(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector *
 
   }*/
 
+void kalman_state_init(KalmanState *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn) {
+
+  // initialize random number generator
+  const gsl_rng_type * T;
+  gsl_rng_env_setup();
+  T = gsl_rng_default;
+  k->r = gsl_rng_alloc (T);
+  gsl_rng_set(k->r, time(NULL));
+
+  k->n = 0;
+  k->obs_n = obs_n;
+
+  k->linear_obs = linear_obs;
+  k->p_linear_obs = p_linear_obs;
+  k->p_obs_fn = p_obs_fn;
+
+  // allocate the temp matrices that have a known size
+  k->y = gsl_vector_alloc(obs_n);
+  k->ytmp = gsl_vector_alloc(obs_n);
+  k->S = gsl_matrix_alloc(obs_n, obs_n);
+  k->Sinv = gsl_matrix_alloc(obs_n, obs_n);
+
+  k->p_obs_noise = gsl_vector_calloc(obs_n);
+
+  /* the other state matrices have varying sizes depending on the
+     current state-space dimension, so they get (re)allocated when
+     needed using kalman_add_AR_process and
+     kalman_remove_AR_process. */
+
+}
+
+void kalman_state_free(KalmanState * k) {
+
+  gsl_rng_free(r);
+
+  if (k->p_means != NULL) gsl_vector_free(p_means);
+  if (k->p_covars != NULL) gsl_matrix_free(p_covars);
+
+  if (k->p_transition != NULL) gsl_matrix_free(p_transition);
+  if (k->p_process_noise != NULL) gsl_vector_free(p_process_noise);
+  if (k->p_sample_state != NULL) gsl_vector_free(p_sample_state);
+
+  if (k->p_linear_obs != NULL) gsl_matrix_free(p_linear_obs);
+  if (k->p_obs_noise != NULL) gsl_vector_free(p_obs_noise);
+
+
+  // free all the temp matrices
+  if (k->y != NULL) gsl_vector_free(k->y);
+  if (k->ytmp != NULL) gsl_vector_free(k->ytmp);
+  if (k->S != NULL) gsl_matrix_free(k->S);
+  if (k->Sinv != NULL) gsl_matrix_free(k->Sinv);
+
+  if (k->P != NULL) gsl_matrix_free(k->P);
+  if (k->p_sigma_points != NULL) gsl_matrix_free(k->p_sigma_points);
+  if (k->p_obs_points != NULL) gsl_matrix_free(k->p_obs_points);
+  if (k->p_weights != NULL) gsl_vector_free(k->p_weights);
+  if (k->p_mean_update != NULL) gsl_vector_free(k->p_mean_update);
+
+  if (k->K != NULL) gsl_matrix_free(k->K);
+  if (k->Ktmp != NULL) gsl_matrix_free(k->Ktmp);
+
+}

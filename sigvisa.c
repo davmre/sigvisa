@@ -524,7 +524,7 @@ signal structures into C:
 
 Trace_t * alloc_trace() {
   Trace_t * p_trace = calloc(1, sizeof(Trace_t));
-  p_trace->hz = 40;
+  p_trace->hz = DEFAULT_HZ;
   return p_trace;
 }
 

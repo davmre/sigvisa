@@ -93,6 +93,24 @@ void resize_vector(gsl_vector ** pp_vector, int l) {
   }
 }
 
+void realloc_vector(gsl_vector ** pp_vector, int l) {
+  if (*pp_vector == NULL) {
+    *pp_vector = gsl_vector_alloc(l);
+  } else {
+    gsl_vector_free(*pp_vector);
+    *pp_vector = gsl_vector_alloc(l);
+  }
+}
+
+void realloc_matrix(gsl_matrix ** pp_matrix, int rows, int cols) {
+  if (*pp_matrix == NULL) {
+    *pp_matrix = gsl_matrix_alloc(rows,cols);
+  } else {
+    gsl_matrix_free(*pp_matrix);
+    *pp_matrix = gsl_matrix_alloc(rows,cols);
+  }
+}
+
 /* Resize the given matrix to have the given numbers of rows and
    columns. If either number is smaller than current, excess entries
    are dropped; if larger, then new entries are filled in with zeros
@@ -142,12 +160,27 @@ double matrix_inv_det(gsl_matrix * A, gsl_matrix * invA) {
   return det;
 }
 
-gsl_vector * weighted_mean(gsl_matrix * p_points, gsl_vector * p_weights) {
+
+double psdmatrix_inv_logdet(const gsl_matrix * A, gsl_matrix * invA) {
+
+  gsl_matrix_memcpy(invA, A);
+  gsl_linalg_cholesky_decomp(invA);
+  gsl_vector_view diag = gsl_matrix_diagonal(invA);
+  
+  double det = 0;
+  for(int i=0; i < &diag.vector->size; ++i) {
+    det += 2* log(gsl_vector_get(&diag.vector, i));
+  }
+  gsl_linalg_cholesky_invert(invA);
+  
+  return det;
+}
+
+void weighted_mean(gsl_matrix * p_points, gsl_vector * p_weights, gsl_matrix * p_result) {
   // points are columns of p_points
   int d = p_points->size1;
   int n = p_points->size2;
 
-  gsl_vector * p_result = gsl_vector_alloc(d);
   gsl_vector_set_zero(p_result);
   for (int i=0; i < n; ++i) {
     gsl_vector_view pt = gsl_matrix_column(p_points, i);
@@ -158,12 +191,11 @@ gsl_vector * weighted_mean(gsl_matrix * p_points, gsl_vector * p_weights) {
   return p_result;
 }
 
-gsl_matrix * weighted_covar(gsl_matrix * p_points, gsl_vector * p_mean, gsl_vector * p_weights) {
+void weighted_covar(gsl_matrix * p_points, gsl_vector * p_mean, gsl_vector * p_weights, gsl_matrix * p_result) {
   // points are columns of p_points
   int d = p_points->size1;
   int n = p_points->size2;
 
-  gsl_matrix * p_result = gsl_matrix_alloc(d, d);
   gsl_matrix_set_zero(p_result);
   gsl_vector * r = gsl_vector_alloc(d);
   for (int i=0; i < n; ++i) {
@@ -177,13 +209,12 @@ gsl_matrix * weighted_covar(gsl_matrix * p_points, gsl_vector * p_mean, gsl_vect
   return p_result;
 }
 
-gsl_matrix * weighted_cross_covar(gsl_matrix * p_points1, gsl_vector * p_mean1, gsl_matrix * p_points2, gsl_vector * p_mean2, gsl_vector * p_weights) {
+void weighted_cross_covar(gsl_matrix * p_points1, gsl_vector * p_mean1, gsl_matrix * p_points2, gsl_vector * p_mean2, gsl_vector * p_weights, gsl_matrix * p_result) {
   // points are columns of p_points
   int d1 = p_points1->size1;
   int d2 = p_points2->size1;
   int n = p_points1->size2;
 
-  gsl_matrix * p_result = gsl_matrix_alloc(d1, d2);
   gsl_matrix_set_zero(p_result);
   gsl_vector * r1 = gsl_vector_alloc(d1);
   gsl_vector * r2 = gsl_vector_alloc(d2);
