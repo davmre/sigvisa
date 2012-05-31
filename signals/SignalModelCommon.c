@@ -17,7 +17,7 @@ void init_signal_model(SignalModel_t * p_model, char * model_name, int numsites)
     p_model->set_params = &Spectral_Envelope_Model_Set_Params;
     p_model->has_model = &Spectral_Envelope_Model_Has_Model;
     p_model->likelihood = &Spectral_Envelope_Model_Likelihood;
-    p_model->sample =  &Spectral_Envelope_Model_SampleThreeAxis;
+    p_model->sample =  &Spectral_Envelope_Model_Sample;
     p_model->uninit = &Spectral_Envelope_Model_UnInit;
 
     p_model->pv_params = calloc(1, sizeof(Spectral_Envelope_Model_t));

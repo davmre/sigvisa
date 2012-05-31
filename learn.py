@@ -78,8 +78,8 @@ def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up
                               os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
                               sigvisa_util.log_trace)
 
-  if (load_signal_params):
-    sigmodel.set_all_signal_params(priors.SignalPrior.read_params(os.path.join(param_dirname, "EnvelopeSignalModel.txt")))
+#  if (load_signal_params):
+#    sigmodel.set_all_signal_params(priors.SignalPrior.read_params(os.path.join(param_dirname, "EnvelopeSignalModel.txt")))
 
   return sigmodel
 

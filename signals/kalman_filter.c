@@ -27,7 +27,7 @@ void kalman_add_AR_process(KalmanState_t * k, ARProcess * p) {
   resize_matrix(&k->p_covars, (k->n)+m, (k->n)+m, TRUE, 1);
   resize_matrix(&k->p_transition, (k->n)+m, (k->n)+m, FALSE, 1);
 
-  gsl_vector_set(k->p_process_noise, k->n, p->noise_sigma2);
+  gsl_vector_set(k->p_process_noise, k->n, p->sigma2);
 
   /* fill in the new entries for the transition matrix */
   for (int i=0; i < m; ++i) {

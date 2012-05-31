@@ -1,26 +1,14 @@
 #ifndef SIGNAL_MODEL_UTIL
 #define SIGNAL_MODEL_UTIL
 
-typedef struct ARProcess {
+typedef struct ARProcess_t {
   
   double mean;
   int order;
-  double * params;
-  double noise_sigma2;
+  double * coeffs; // most recent first
+  double sigma2;
 
 } ARProcess_t;
-
-
-typedef struct ARWLists_t {
-
-  struct ArrivalWaveform * st_head;
-  struct ArrivalWaveform * et_head;
-  
-  struct ArrivalWaveform * st_ptr;
-  struct ArrivalWaveform * et_ptr;
-  struct ArrivalWaveform * active_arrivals;
-
-} ARWLists_t;
 
 typedef struct ArrivalWaveform {
   double start_time;
@@ -28,7 +16,7 @@ typedef struct ArrivalWaveform {
   double end_time;
   long len;
 
-  Trace * p_abstract_trace;
+  Trace_t * p_abstract_trace;
 
   struct ArrivalWaveform * next_start;
   struct ArrivalWaveform * next_end;
@@ -43,7 +31,16 @@ typedef struct ArrivalWaveform {
 
 } ArrivalWaveform_t;
 
+typedef struct ARWLists_t {
 
+  struct ArrivalWaveform * st_head;
+  struct ArrivalWaveform * et_head;
+  
+  struct ArrivalWaveform * st_ptr;
+  struct ArrivalWaveform * et_ptr;
+  struct ArrivalWaveform * active_arrivals;
+
+} ARWLists_t;
 
 
 ArrivalWaveform_t * insert_st(ArrivalWaveform_t * p_head, 

@@ -86,8 +86,7 @@ typedef struct Site_t
 #define EV_TIME_COL  3
 #define EV_MB_COL    4
 #define EV_ORID_COL  5
-#define EV_SCORE_COL  6
-#define EV_NUM_COLS  7
+#define EV_NUM_COLS  6
 
 /* site array columns */
 #define SITE_LON_COL      0
@@ -124,7 +123,10 @@ typedef struct Site_t
 #define CHAN_HORIZ_AVG    3
 #define CHAN_OTHER  4
 
-#define NUM_BANDS   10
+#define NUM_BANDS   1
+#define NARROW_20_30 0
+#define DEFAULT_BAND NARROW_20_30
+/*
 #define BROADBAND       0
 #define BB_ENVELOPE     1
 #define NARROW_05_07    2
@@ -135,6 +137,7 @@ typedef struct Site_t
 #define NARROW_30_40    7
 #define NARROW_40_60    8
 #define NARROW_60_80    9
+*/
 
 /* parameters for specifying a signal envelope */
 #define ARR_TIME_PARAM 0
@@ -203,10 +206,13 @@ double Segment_EndTime(Segment_t * b);
 #include "signals/SignalPrior.h"
 #include "signals/SpectralEnvelopeModel.h"
 #include "signals/SignalModelCommon.h"
-#include "signals/envelope.h"
+#include "signals/python_interface.h"
 
 Trace_t * alloc_trace();
 void free_trace(Trace_t * p_trace);
+
+void alloc_segment_inner(Segment_t * p_segment);
+void free_segment_inner(Segment_t * p_segment);
 
 Channel_t * alloc_channel(Segment_t * p_segment);
 

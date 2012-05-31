@@ -26,7 +26,7 @@
 # SUCH DAMAGE.
 # 
 
-import sys, struct
+import sys, struct, time
 import numpy as np
 import gzip
 

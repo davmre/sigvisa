@@ -28,6 +28,14 @@ static PyMethodDef SigModel_methods[] = {
   {"synthesize_signals_det", (PyCFunction)py_synthesize_signals_det, METH_VARARGS,
    "synthesize_signals(stalist, start_time, end_time, hz, samplePerturb, sampleNoise) "
    "-> success\n"},
+  {"trace_likelihood", (PyCFunction) py_trace_likelihood, METH_VARARGS,
+   "trace_likelihood(trace, phaseids, params) -> ll\n" },
+  {"segment_likelihood", (PyCFunction) py_segment_likelihood, METH_VARARGS,
+   "segment_likelihood(segment, phaseids, params) -> ll\n" },
+  {"generate_segment", (PyCFunction) py_gen_logenvelope_segment, METH_VARARGS,
+   "generate_segment(start_time, end_time, siteid, srate, phaseids, params) -> segment\n" },
+  {"sample_segment", (PyCFunction) py_sample_segment, METH_VARARGS,
+   "sample_segment(start_time, end_time, siteid, srate, phaseids, params) -> segment\n" },
   {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
    "get_signals() "
    "-> signals\n"},
@@ -37,6 +45,12 @@ static PyMethodDef SigModel_methods[] = {
   {"arrival_likelihood", (PyCFunction)py_arr_likelihood, METH_VARARGS,
    "arrival_likelihood(arrtime, arramp, arrazi, arrslo, arrphase, arrsiteid, write_log)"
    "-> log likelihood\n"},
+  {"set_noise_process", (PyCFunction)py_set_noise_process, METH_VARARGS,
+   "set_noise_process(siteid, band, chan, noise_mean, noise_variance, noise_coeffs)"
+   "-> ??\n"},
+  {"set_wiggle_process", (PyCFunction)py_set_wiggle_process, METH_VARARGS,
+   "set_wiggle_process(siteid, band, noise_mean, noise_variance, noise_coeffs)"
+   "-> ??\n"},
   {"set_signal_params", (PyCFunction)py_set_params, METH_VARARGS,
    "set_signal_params(siteid, param_dict)"
    "-> success\n"},
@@ -161,8 +175,6 @@ static PyMethodDef sigvisaMethods[] = {
   {"canonical_channel_num", (PyCFunction)py_canonical_channel_num, METH_VARARGS,
    "canonical_channel_num(chan_name) "
    "-> channel_num\n"},
-  {"generate_trace", (PyCFunction) py_gen_logenvelope, METH_VARARGS,
-   "generate_trace(start_time, end_time, siteid, noise_floor, srate, phaseids, params) -> trace\n" },
   {"srand", py_srand, METH_VARARGS,
     "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
@@ -529,11 +541,11 @@ Trace_t * alloc_trace() {
 }
 
 void free_trace(Trace_t * p_trace) {
+  /* if there is a Python array that still refers to this trace data,
+     we make it responsible for freeing the data later. */
   if (p_trace->py_array != NULL) {
-    Py_DECREF(p_trace->py_array);
-  }
-
-  if (p_trace->p_data != NULL) {
+    p_trace->py_data->flags |= NPY_OWNDATA;
+  } else if (p_trace->p_data != NULL) {
     free(p_trace->p_data);
   }
 
@@ -574,6 +586,10 @@ int trace_to_signal(PyObject * py_trace, Trace_t ** pp_trace) {
   char * chan_str;
   pydict_get_string(stats, "channel", &chan_str);
   (*pp_trace)->chan = canonical_channel_num(chan_str);
+
+  char * band_str;
+  pydict_get_string(stats, "band", &band_str);
+  (*pp_trace)->band = canonical_band_num(band_str);
 
   pydict_get_double(stats, "noise_floor", & (*pp_trace)->noise_floor);
   pydict_get_double(stats, "p_time", & (*pp_trace)->p_time);
@@ -721,7 +737,6 @@ PyObject * build_trace(Trace_t * p_trace) {
    PyObject * py_data;
    if (p_trace->py_array == NULL) {
      py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_trace->p_data);
-     ( (PyArrayObject *) py_data)->flags |= NPY_OWNDATA;
    } else {
      py_data = (PyObject *)p_trace->py_array;
    }
@@ -955,6 +970,37 @@ void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_eve
 
     LogTrace("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
 
+  }
+}
+
+void alloc_segment_inner(Segment_t * p_segment) {
+  for (int c=0; c < NUM_CHANS; ++c) {
+    p_segment->p_channels[c] = calloc(1, sizeof(Channel_t));
+    Channel_t * p_channel = p_segment->p_channels[c];
+    p_channel->start_time = p_segment->start_time;
+    p_channel->len = p_segment->len;
+    p_channel->hz = p_segment->hz;
+    p_channel->siteid = p_segment->siteid;
+    for (int b=0; b < NUM_BANDS; ++b) {
+      p_channel->p_bands[b] = alloc_trace();
+      Trace_t * p_band = p_channel->p_bands[b];
+      p_band->start_time = p_segment->start_time;
+      p_band->len = p_segment->len;
+      p_band->hz = p_segment->hz;
+      p_band->siteid = p_segment->siteid;
+      p_band->p_data = calloc(len, sizeof(double));
+    }
+  }
+}
+
+void free_segment_inner(Segment_t * p_segment) {
+  for (int c=0; c < NUM_CHANS; ++c) {
+    Channel_t * p_channel = p_segment->p_channels[c];
+    for (int b=0; b < NUM_BANDS; ++b) {
+      Trace_t * p_band = p_channel->p_bands[b];
+      free_trace(p_band);
+    }
+    free(p_channel);
   }
 }
 

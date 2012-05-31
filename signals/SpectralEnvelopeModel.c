@@ -15,6 +15,16 @@
 #include "../sigvisa.h"
 #include "SignalModelUtil.h"
 
+void Spectral_Envelope_Model_Init_Params(void * pv_params,  int numsites) {
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
+
+  p_params->numsites = numsites;
+
+  /* using calloc (instead of malloc) is important here since we
+     depend on the p_ar_coeffs pointer being NULL iff unallocated */
+  p_params->p_stations = calloc(numsites, sizeof(Spectral_StationModel_t));
+}
+
 void Spectral_Envelope_Model_Set_Params(void * pv_params, int siteid, PyObject * py_dict) {
   Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
 
@@ -35,89 +45,8 @@ void Spectral_Envelope_Model_Set_Params(void * pv_params, int siteid, PyObject *
     if (sta != NULL) {
 
       if (strcmp(key, "override_b") == 0) {
-	sta->override_b = PyFloat_AsDouble(py_value);
-      }  else if (strcmp(key, "override_gamma") == 0) {
-	sta->override_gamma = PyFloat_AsDouble(py_value);
-      } else if (strcmp(key, "override_height") == 0) {
-	sta->override_height = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "p_b0_", 5) == 0) {
-	int band = canonical_band_num(key+5);
-	sta->p_b0[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "p_b1_", 5) == 0) {
-	int band = canonical_band_num(key+5);
-	sta->p_b1[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "p_b2_", 5) == 0) {
-	int band = canonical_band_num(key+5);
-	sta->p_b2[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "s_b0_", 5) == 0) {
-	int band = canonical_band_num(key+5);
-	sta->s_b0[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "s_b1_", 5) == 0) {
-	int band = canonical_band_num(key+5);
-	sta->s_b1[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "s_b2_", 5) == 0) {
-	int band = canonical_band_num(key+5);
-	sta->s_b2[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "p_gamma0_", 9) == 0) {
-	int band = canonical_band_num(key+9);
-	sta->p_gamma0[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "p_gamma1_", 9) == 0) {
-	int band = canonical_band_num(key+9);
-	sta->p_gamma1[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "p_gamma2_", 9) == 0) {
-	int band = canonical_band_num(key+9);
-	sta->p_gamma2[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "s_gamma0_", 9) == 0) {
-	int band = canonical_band_num(key+9);
-	sta->s_gamma0[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "s_gamma1_", 9) == 0) {
-	int band = canonical_band_num(key+9);
-	sta->s_gamma1[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "s_gamma2_", 9) == 0) {
-	int band = canonical_band_num(key+9);
-	sta->s_gamma2[band] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "chan_mean_", 10) == 0) {
-	int chan_num = canonical_channel_num(key+10);
-	sta->chan_means[chan_num] = PyFloat_AsDouble(py_value);
-      } else if (strncmp(key, "chan_var_", 9) == 0) {
-	int chan_num = canonical_channel_num(key+9);
-	sta->chan_vars[chan_num] = PyFloat_AsDouble(py_value);
-
-      } else if (strcmp(key, "ar_noise_sigma2") == 0) {
-	double val = PyFloat_AsDouble(py_value);
-
-	if (val > 0.0000001) {
-	  sta->ar_noise_sigma2 = val;
-	} else {
-	  LogInfo("ignoring invalid param setting ar_noise_sigma2 = %lf", val);
-	}
-
-      } else if (strcmp(key, "ar_coeffs") == 0) {
-
-	int converted_tuple = 0;
-	if (PyList_Check(py_value)) {
-	  converted_tuple = 1;
-	  py_value = PyList_AsTuple(py_value); CHECK_ERROR;
-	}
-
-	if (!PyTuple_Check(py_value)) {
-	  LogFatal("expected Python tuple for ar_coeffs!\n");
-	  exit(EXIT_FAILURE);
-	}
-	CHECK_ERROR;
-
-	sta->ar_n = PyTuple_Size(py_value); CHECK_ERROR;
-	LogTrace("setting %s to tuple of length %d at siteid %d", key, sta->ar_n, siteid);
-	if (sta->p_ar_coeffs != NULL) free(sta->p_ar_coeffs);
-	sta->p_ar_coeffs = calloc(sta->ar_n, sizeof(double));
-	for (int i=0; i < sta->ar_n; ++i) {
-	  sta->p_ar_coeffs[i] = PyFloat_AsDouble(PyTuple_GetItem(py_value, i)); CHECK_ERROR;
-	}
-
-	if (converted_tuple) {
-	  Py_DECREF(py_value);
-	}
-
+	LogError("test test test");
+	exit(EXIT_FAILURE);
       } else {
 	LogError("unrecognized param %s at siteid %d", key, siteid);
 	exit(EXIT_FAILURE);
@@ -126,20 +55,8 @@ void Spectral_Envelope_Model_Set_Params(void * pv_params, int siteid, PyObject *
       LogError("unrecognized global param %s", key);
       exit(EXIT_FAILURE);
     }
-
     CHECK_ERROR;
-
   }
-}
-
-void Spectral_Envelope_Model_Init_Params(void * pv_params,  int numsites) {
-  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
-
-  p_params->numsites = numsites;
-
-  /* using calloc (instead of malloc) is important here since we
-     depend on the p_ar_coeffs pointer being NULL iff unallocated */
-  p_params->p_stations = calloc(numsites, sizeof(Spectral_StationModel_t));
 }
 
 int Spectral_Envelope_Model_Has_Model(void * pv_sigmodel, int siteid, int chan) {
@@ -337,7 +254,7 @@ double Spectral_Envelope_Model_Likelihood(void * pv_sigmodel, Segment_t * p_segm
   Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t * )p_model->pv_params;
   Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
   int band = BB_ENVELOPE;
-  BandModel_t * p_band = p_sta.bands + band;
+  BandModel_t * p_band = p_sta->bands + band;
   double ll = 0;
 
   /* initialize lists of arriving waveforms, sorted by start time and end time
@@ -478,9 +395,19 @@ double Spectral_Envelope_Model_Sample(void * pv_sigmodel, Segment_t * p_segment,
 void Spectral_Envelope_Model_UnInit(void * pv_params) {
   Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *) pv_params;
 
+  double * coeffs;
   for (int i=0; i < p_params->numsites; ++i) {
-    free((p_params->p_stations + i)->p_ar_coeffs);
+    for (int j=0; j < NUM_BANDS; ++j) {
+      for (int k=0; k < NUM_CHANS; ++k) {
+	coeffs = (p_params->p_stations + i)->bands[j].channel_noise_models[k].coeffs;
+	if (coeffs != NULL) {
+	  free(coeffs);
+	}
+      }
+      coeffs = (p_params->p_stations + i)->bands[j].wiggle_model.coeffs;
+      if (coeffs != NULL) {
+	free(coeffs);
+      }
   }
   free(p_params->p_stations);
-
 }
