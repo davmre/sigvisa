@@ -23,6 +23,7 @@ void Spectral_Envelope_Model_Init_Params(Spectral_Envelope_Model_t * p_params,  
   /* using calloc (instead of malloc) is important here since we
      depend on the p_ar_coeffs pointer being NULL iff unallocated */
   p_params->p_stations = calloc(numsites, sizeof(Spectral_StationModel_t));
+
 }
 
 void Spectral_Envelope_Model_Set_Params(Spectral_Envelope_Model_t * p_params, int siteid, PyObject * py_dict) {
@@ -448,7 +449,7 @@ void Spectral_Envelope_Model_UnInit(Spectral_Envelope_Model_t * p_params) {
       if (coeffs != NULL) {
 	free(coeffs);
       }
+    }
   }
   free(p_params->p_stations);
-  }
 }
