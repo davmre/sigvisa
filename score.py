@@ -40,7 +40,10 @@ def prune_detections(netmodel, events, event_detlists):
   for evnum, event in enumerate(events):
     dellist = []
     for evdetnum, (phaseid, detid) in enumerate(event_detlists[evnum]):
-      detsc = netmodel.score_event_det(event, phaseid, detid)
+
+      print np.hstack([event, np.array((0,))]), phaseid, detid
+
+      detsc = netmodel.score_event_det(np.hstack([event, np.array((0,))]), phaseid, detid)
       if detsc is None or np.isinf(detsc):
         dellist.append(evdetnum)
     while len(dellist):
@@ -88,7 +91,7 @@ def main(param_dirname):
       = learn.read_datafile_and_sitephase(options.datafile, param_dirname)
   else:  
     start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
                 = read_data("validation")
   
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)

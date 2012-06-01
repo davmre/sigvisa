@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from obspy.core import Trace, Stream, UTCDateTime
 
-import netvisa, sigvisa, sigvisa_util, learn
+import sigvisa, sigvisa_util, learn
 import priors.SignalPrior
 from database.dataset import *
 from database import db
@@ -64,7 +64,7 @@ class TestCFunctions(unittest.TestCase):
             sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
             = read_data(hours=self.hours)
 
-        self.sigmodel = learn.load_sigvisa("parameters", start_time, end_time, "envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
+        self.sigmodel = learn.load_sigvisa("parameters", start_time, end_time, "spectral_envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
         self.test_siteids = (2,5)
         self.set_default_params()
 

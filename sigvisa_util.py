@@ -16,7 +16,7 @@ from obspy.signal.trigger import triggerOnset
 from database import db, dataset
 import utils.waveform
 import plot
-import netvisa, learn
+import learn
 import sys, os
 
 # Frequency bands in Hz. From Mayeda et. al., "Stable and Transportable Regional Magnitudes Based on Coda-Derived Moment-Rate Spectra". (2003)

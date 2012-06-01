@@ -35,7 +35,7 @@ def arrival_peak_offset(trace, window_start_offset, window_end_offset = None):
     pt = np.argmax(trace.data[i:j]) / srate
     return (pt +window_start_offset, trace.data[(pt+window_start_offset) * srate ])
 
-def c_cost(smoothed, phaseids, params):
+def c_cost(sigmodel, smoothed, phaseids, params):
 
 #    noise_floor = params[-1]
 #    params = np.reshape(params[:-1], (len(phaseids), -1))
@@ -57,8 +57,8 @@ def c_cost(smoothed, phaseids, params):
 
 #    print "trying heights ppeak %f pcoda %f speak %f scoda %f" % (params[0, PEAK_HEIGHT_PARAM], params[0, CODA_HEIGHT_PARAM], params[1, PEAK_HEIGHT_PARAM], params[1, CODA_HEIGHT_PARAM] )
 
-    tr = imitate_envelope(smoothed, phaseids, params)
-    c = logenv_l1_cost(smoothed.data, tr.data)
+    # we assume the noise params are already set...
+    c = sigmodel.trace_likelihood(smoothed, phaseids, params);
 
     return c
 
@@ -100,7 +100,7 @@ def restore_peak(peakless_params):
     newp[:, 4] = p[:, 2]
     return newp
 
-def fit_elephant_envelope(arrivals, smoothed, defaults, fix_peak = False):
+def fit_elephant_envelope(sigmodel, arrivals, smoothed, defaults, fix_peak = False):
 
     arr_bounds = [ (0, 15), (0, None) , (0, None), (0, None), (-.2, 0) ]
     arr_bounds_fixed_peak = [ (0, 15), (0, None), (-.2, 0) ]
@@ -146,7 +146,9 @@ def fit_elephant_envelope(arrivals, smoothed, defaults, fix_peak = False):
 
     start_params = start_params.flatten()
 
-    f = lambda params : c_cost(smoothed, phaseids, assem_params(params))
+    
+
+    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params))
 
 #    best_params, best_cost, d = scipy.optimize.fmin_tnc(f, start_params, approx_grad=1, bounds=bounds)
     best_params, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, start_params, approx_grad=1, bounds=bounds)
@@ -325,6 +327,7 @@ def main():
     phasenames, phasetimedef = read_phases(cursor)
     earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
     netmodel = learn.load_netvisa("parameters", st, et, detections, site_up, sites, phasenames, phasetimedef)
+    sigmodel = learn.load_netvisa("parameters", st, et, detections, "spectral_envelope", site_up, sites, phasenames, phasetimedef)
 
     max_azi = get_densest_azi(cursor, siteid)
 
@@ -421,8 +424,8 @@ def main():
             if elephant_model:
 
                 # DO THE FITTING
-                fit_vert_params, phaseids, vert_cost = fit_elephant_envelope([first_p_arrival, first_s_arrival], vert_smoothed, [ x for x in [fit_p_vert, fit_s_vert] if x is not None])
-                fit_horiz_params, phaseids, horiz_cost = fit_elephant_envelope([first_p_arrival, first_s_arrival], horiz_smoothed, [ x for x in [fit_p_horiz, fit_s_horiz] if x is not None])
+                fit_vert_params, phaseids, vert_cost = fit_elephant_envelope(sigmodel, [first_p_arrival, first_s_arrival], vert_smoothed, [ x for x in [fit_p_vert, fit_s_vert] if x is not None])
+                fit_horiz_params, phaseids, horiz_cost = fit_elephant_envelope(sigmodel, [first_p_arrival, first_s_arrival], horiz_smoothed, [ x for x in [fit_p_horiz, fit_s_horiz] if x is not None])
 
 
                 # plot!

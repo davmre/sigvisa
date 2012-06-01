@@ -28,6 +28,10 @@
  * 
  */
 
+#ifndef EVENT_MAG_PRIOR_H
+#define EVENT_MAG_PRIOR_H
+
+
 typedef struct EventMagPrior_t
 {
   double min_mag;
@@ -41,3 +45,5 @@ void EventMagPrior_Init_Params(EventMagPrior_t * prior, int nparams,
 
 double EventMagPrior_LogProb(const EventMagPrior_t * dist, double val, 
                              int nargs);
+
+#endif

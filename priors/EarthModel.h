@@ -28,6 +28,9 @@
  * 
  */
 
+#ifndef EARTHMODEL_H
+#define EARTHMODEL_H
+
 #define EARTH_PHASE_P       0
 #define EARTH_PHASE_Pn      1
 #define EARTH_PHASE_PKP     2
@@ -48,6 +51,8 @@
 #define EARTH_PHASE_N       17
 
 #define MAX_PHASE_DDRANGES  5 /* maximum number of DDRanges per phase */
+
+#include "../network.h"
 
 typedef struct DDRange
 {
@@ -118,10 +123,9 @@ typedef struct EarthModel_t
 
   int enforce_ddrange;
   
-  ArrivalAmplitudePrior_t arr_amp_prior;
-  int arr_amp_prior_loaded;                  /* boolean */
-  
 } EarthModel_t;
+
+
 
 #define EarthModel_IsTimeDefPhase(p_earth, phaseid)\
  ((p_earth)->p_phase_time_def[(phaseid)])
@@ -221,8 +225,10 @@ PyObject * py_EarthModel_QFVC(EarthModel_t * p_earth, PyObject * args);
 
 double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double dist);
 
-PyObject * py_EarthModel_LoadAmpModel(EarthModel_t * p_earth, PyObject * args);
-
-PyObject * py_EarthModel_LogArrivalAmp(EarthModel_t * p_earth, PyObject * args);
 double dist_depth_range_error(EarthModel_t * p_earth, int phaseid,
                               double depth, double distance);
+
+
+
+
+#endif

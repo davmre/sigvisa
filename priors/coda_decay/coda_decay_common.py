@@ -463,16 +463,3 @@ def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=No
 def subtract_noise(log_height, log_noise):
     return np.log ( np.exp(log_height) - np.exp(log_noise) )
 
-def imitate_envelope(tr, phaseids, params):
-    noise_floor = tr.stats.noise_floor
-    start_time = tr.stats.starttime_unix
-    srate = tr.stats.sampling_rate
-    end_time = start_time + tr.stats.npts / srate
-
-    tr = sigvisa.generate_trace(start_time, end_time,
-                                tr.stats.siteid,
-                                noise_floor,
-                                srate,
-                                phaseids, params)
-
-    return tr

@@ -28,6 +28,9 @@
  * 
  */
 
+#ifndef NUMEVENTPRIOR_H
+#define NUMEVENTPRIOR_H
+
 typedef struct NumEventPrior_t
 {
   double num_event_rate;
@@ -40,3 +43,5 @@ void NumEventPrior_Init_Params(NumEventPrior_t * prior, const char * filename);
 
 double NumEventPrior_LogProb(const NumEventPrior_t * dist, int val,
                              double time_interval);
+
+#endif

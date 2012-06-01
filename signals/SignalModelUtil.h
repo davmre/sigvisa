@@ -1,47 +1,7 @@
 #ifndef SIGNAL_MODEL_UTIL
 #define SIGNAL_MODEL_UTIL
 
-typedef struct ARProcess_t {
-  
-  double mean;
-  int order;
-  double * coeffs; // most recent first
-  double sigma2;
-
-} ARProcess_t;
-
-typedef struct ArrivalWaveform {
-  double start_time;
-  long idx;
-  double end_time;
-  long len;
-
-  Trace_t * p_abstract_trace;
-
-  struct ArrivalWaveform * next_start;
-  struct ArrivalWaveform * next_end;
-  struct ArrivalWaveform * next_active;
-  int active_id;
-
-  double projection_coeffs[NUM_CHANS];
-  ARProcess_t ar_process;
-
-  // used for sampling
-  double * last_perturbs;
-
-} ArrivalWaveform_t;
-
-typedef struct ARWLists_t {
-
-  struct ArrivalWaveform * st_head;
-  struct ArrivalWaveform * et_head;
-  
-  struct ArrivalWaveform * st_ptr;
-  struct ArrivalWaveform * et_ptr;
-  struct ArrivalWaveform * active_arrivals;
-
-} ARWLists_t;
-
+#include "signal_structures.h"
 
 ArrivalWaveform_t * insert_st(ArrivalWaveform_t * p_head, 
 			      ArrivalWaveform_t * p_arr);
@@ -51,5 +11,9 @@ ArrivalWaveform_t * remove_active(ArrivalWaveform_t * p_head,
 				  ArrivalWaveform_t * p_arr);
 ArrivalWaveform_t * append_active(ArrivalWaveform_t * p_head, 
 				  ArrivalWaveform_t * p_arr);
+
+void copy_AR_process(ARProcess_t *dest, ARProcess_t *src);
+void free_AR_process(ARProcess_t *ar);
+ArrivalWaveform_t * free_ArrivalWaveform(ArrivalWaveform_t * a);
 
 #endif

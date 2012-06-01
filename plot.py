@@ -4,7 +4,7 @@ from obspy.core import Trace, Stream, UTCDateTime
 
 from database.dataset import *
 import database.db
-import learn, netvisa
+import learn
 from utils.geog import dist_deg, azimuth
 
 def plot_det_times(trc, all_det_times, all_det_labels):

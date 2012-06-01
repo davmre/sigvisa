@@ -1,3 +1,8 @@
+#include "matrix_util.h"
+
+#include "../sigvisa.h"
+#include "math.h"
+
 /* Removes a slice from a vector, starting at the given index. */
 void remove_vector_slice(gsl_vector ** pp_vector, int slice_start, int slice_size) {
 
@@ -38,36 +43,29 @@ void remove_matrix_slice(gsl_matrix ** pp_matrix, int slice_start, int slice_siz
   int n = (*pp_matrix)->size1;
 
   if (l == n) {
-    gsl_vector_free(*pp_matrix);
+    gsl_matrix_free(*pp_matrix);
     *pp_matrix = NULL;
     return;
   }
 
   gsl_matrix * new_matrix = gsl_matrix_alloc(n-l, n-l);
 
-  for (int i=0; i < s; ++i) {
-    for(int j=0; j < s; ++j) {
-      gsl_matrix_set(new_matrix, i, j, gsl_matrix_get(*pp_matrix, i, j));
-    }
-  }
-  // move everything up by l rows
-  for (int i=s+l; i < n; ++i) {
-    for(int j=0; j < (arridx+1)*l; ++j) {
-      gsl_matrix_set(new_matrix, i-l, j, gsl_matrix_get(*pp_matrix, i, j));
-    }
-  }
-  // move everything in by l columns
-  for (int i=0; i < s+l; ++i) {
-    for(int j=s+l; j < n; ++j) {
-      gsl_matrix_set(new_matrix, i, j-l, gsl_matrix_get(*pp_matrix, i, j));
-    }
-  }
-  // move everything in by l columns
-  for (int i=i=s+l; i < n; ++i) {
-    for(int j=s+l; j < n; ++j) {
-      gsl_matrix_set(new_matrix, i-l, j-l, gsl_matrix_get(*pp_matrix, i, j));
-    }
-  }
+  gsl_matrix_view topleft_block_old = gsl_matrix_submatrix(*pp_matrix, 0, 0, s, s);
+  gsl_matrix_view topleft_block_new = gsl_matrix_submatrix(*pp_matrix, 0, 0, s, s);
+  gsl_matrix_memcpy(&topleft_block_new.matrix, &topleft_block_old.matrix);
+
+  gsl_matrix_view topright_block_old = gsl_matrix_submatrix(*pp_matrix, 0, s+l, s, n-s-l);
+  gsl_matrix_view topright_block_new = gsl_matrix_submatrix(*pp_matrix, 0, s, s, n-s-l);
+  gsl_matrix_memcpy(&topright_block_new.matrix, &topright_block_old.matrix);
+
+  gsl_matrix_view bottomleft_block_old = gsl_matrix_submatrix(*pp_matrix, s+l, 0, n-s-l, s);
+  gsl_matrix_view bottomleft_block_new = gsl_matrix_submatrix(*pp_matrix, s, 0, n-s-l, s);
+  gsl_matrix_memcpy(&bottomleft_block_new.matrix, &bottomleft_block_old.matrix);
+
+  gsl_matrix_view bottomright_block_old = gsl_matrix_submatrix(*pp_matrix, s+l, s+l, n-s-l, n-s-l);
+  gsl_matrix_view bottomright_block_new = gsl_matrix_submatrix(*pp_matrix, s, s, n-s-l, n-s-l);
+  gsl_matrix_memcpy(&bottomright_block_new.matrix, &bottomright_block_old.matrix);
+
   gsl_matrix_free(*pp_matrix);
   *pp_matrix = new_matrix;
 }
@@ -135,7 +133,7 @@ void resize_matrix(gsl_matrix ** pp_matrix, int rows, int cols, int fill_identit
     }
 
     for (int i=0; i < MIN(rows, (*pp_matrix)->size1); ++i) {
-      for(int j=0; j < MIN((*pp_matrix)->size2); ++j) {
+      for(int j=0; j < MIN(cols, (*pp_matrix)->size2); ++j) {
 	gsl_matrix_set(new_matrix, i, j, gsl_matrix_get(*pp_matrix, i, j));
       }
     }
@@ -168,7 +166,7 @@ double psdmatrix_inv_logdet(const gsl_matrix * A, gsl_matrix * invA) {
   gsl_vector_view diag = gsl_matrix_diagonal(invA);
   
   double det = 0;
-  for(int i=0; i < &diag.vector->size; ++i) {
+  for(int i=0; i < diag.vector.size; ++i) {
     det += 2* log(gsl_vector_get(&diag.vector, i));
   }
   gsl_linalg_cholesky_invert(invA);
@@ -176,9 +174,8 @@ double psdmatrix_inv_logdet(const gsl_matrix * A, gsl_matrix * invA) {
   return det;
 }
 
-void weighted_mean(gsl_matrix * p_points, gsl_vector * p_weights, gsl_matrix * p_result) {
+void weighted_mean(gsl_matrix * p_points, gsl_vector * p_weights, gsl_vector * p_result) {
   // points are columns of p_points
-  int d = p_points->size1;
   int n = p_points->size2;
 
   gsl_vector_set_zero(p_result);
@@ -186,9 +183,7 @@ void weighted_mean(gsl_matrix * p_points, gsl_vector * p_weights, gsl_matrix * p
     gsl_vector_view pt = gsl_matrix_column(p_points, i);
     gsl_blas_daxpy (gsl_vector_get(p_weights, i), &pt.vector, p_result);
   }
-  gsl_vector_free(tmp);
   
-  return p_result;
 }
 
 void weighted_covar(gsl_matrix * p_points, gsl_vector * p_mean, gsl_vector * p_weights, gsl_matrix * p_result) {
@@ -206,7 +201,6 @@ void weighted_covar(gsl_matrix * p_points, gsl_vector * p_mean, gsl_vector * p_w
   }
   gsl_vector_free(r);
   
-  return p_result;
 }
 
 void weighted_cross_covar(gsl_matrix * p_points1, gsl_vector * p_mean1, gsl_matrix * p_points2, gsl_vector * p_mean2, gsl_vector * p_weights, gsl_matrix * p_result) {
@@ -232,7 +226,6 @@ void weighted_cross_covar(gsl_matrix * p_points1, gsl_vector * p_mean1, gsl_matr
   gsl_vector_free(r1);
   gsl_vector_free(r2);
 
-  return p_result;
 }
 
 void matrix_add_to_diagonal(gsl_matrix * m, gsl_vector * v) {

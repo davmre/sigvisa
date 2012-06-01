@@ -1,4 +1,5 @@
-#include "../sigvisa.h"
+#include "ArrivalTimePrior.h"
+
 
 typedef struct ArrivalTimeJointPrior_t
 {

@@ -1,36 +1,17 @@
 
 #include <Python.h>
 
-#include "SignalModelUtil.h"
+#include "../sigvisa.h"
 
-typedef struct BandModel_t {
 
-  ARProcess_t channel_noise_models[NUM_CHANS];
-  ARProcess_t wiggle_model;
+void Spectral_Envelope_Model_Init_Params(Spectral_Envelope_Model_t * p_params, int numsites);
 
-  /* we will eventually need models for all of the envelope params,
-     coda decay, etc., but at the moment those are python-only... */
-} BandModel_t;
+void Spectral_Envelope_Model_Set_Params(Spectral_Envelope_Model_t * p_params, int siteid, PyObject * py_dict);
 
-typedef struct Spectral_StationModel_t {
+int Spectral_Envelope_Model_Has_Model(SigModel_t * p_sigmodel, int siteid, int chan);
 
-  BandModel_t bands[NUM_BANDS];
-  
-} Spectral_StationModel_t;
+double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
 
-typedef struct Spectral_Envelope_Model_t
-{
-  int numsites;
-  Spectral_StationModel_t * p_stations;
+void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int sample_noise, int sample_wiggles);
 
-} Spectral_Envelope_Model_t;
-
-void Spectral_Envelope_Model_Init_Params(void * pv_params, int numsites);
-
-int Spectral_Envelope_Model_Has_Model(void * pv_model, int siteid, int chan);
-
-double Spectral_Envelope_Model_Likelihood(void * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
-
-double Spectral_Envelope_Model_Sample(void * pv_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int sample_noise, int sample_wiggles);
-
-void Spectral_Envelope_Model_UnInit(void * pv_params);
+void Spectral_Envelope_Model_UnInit(Spectral_Envelope_Model_t * p_params);

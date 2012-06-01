@@ -95,71 +95,25 @@ ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head,
   return p_new_head;
 }
 
-void copy_AR_process(ARProcess *dest, ARProcess *src) {
-  memcpy(dest, src, sizeof(ARProcess));
-  dest->params = calloc(dest->order, sizeof(double));
-  memcpy(dest->params, src->params);
+void copy_AR_process(ARProcess_t *dest, ARProcess_t *src) {
+  memcpy(dest, src, sizeof(ARProcess_t));
+  dest->coeffs = calloc(dest->order, sizeof(double));
+  memcpy(dest->coeffs, src->coeffs, dest->order * sizeof(double));
 }
 
-void free_AR_process(ARProcess *ar) {
-  if (ar->params != NULL) free(ar->params);
+void free_AR_process(ARProcess_t *ar) {
+  if (ar->coeffs != NULL) free(ar->coeffs);
   free(ar);
 }
 
 // frees an ArrivalWaveform, and returns the next in the start_time linked list
-ArrivalWaveform * aw free_ArrivalWaveform(ArrivalWaveform * a) {
+ArrivalWaveform_t * free_ArrivalWaveform(ArrivalWaveform_t * a) {
   if(a->p_abstract_trace != NULL) {
     free_trace(a->p_abstract_trace);
   }
-  if (ar->params != NULL) free(ar->params);
+  if (a->ar_process.coeffs != NULL) free(a->ar_process.coeffs);
 
   ArrivalWaveform_t * next_a = a->next_start;
   free(a);
   return next_a;
-}
-
-
-/* populate two linked lists, storing waveform info sorted by
-   start_time and end_time respectively */
-void init_ArrivalWaveforms(BandModel_t * p_band, int hz, int num_arrivals, Arrival_t ** pp_arrivals, ARWLists_t * arw) {
-  for (int i=0; i < num_arrivals; ++i) {
-
-    const Arrival_t * p_arr = *(pp_arrivals + i);
-
-    if (p_arr->amp == 0 || p_arr->time <= 0) continue;
-
-    ArrivalWaveform_t * w = calloc(1, sizeof(ArrivalWaveform_t));
-    w->start_time = p_arr->time;
-    w->idx = -1; // initialize to -1 since we will increment before the first use
-
-    // for each arrival, get the predicted log-envelope
-    w->p_abstract_trace = calloc(1, sizeof(Trace));
-    w->p_abstract_trace->hz = hz;
-    abstract_spectral_logenv(p_arr, w->p_abstract_trace);
-
-    w->end_time = w->start_time + (double) w->len / hz;
-
-    copy_AR_process(w->ar_process, p_band->wiggle_process);
-
-        double iangle;
-    if(!slowness_to_iangle(p_arr->slo, p_arr->phase, &iangle)) {
-      //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
-      iangle = 45;
-    }
-
-    // TODO: FIX COEFFS
-    w->bhe_coeff = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
-    w->bhn_coeff = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
-    w->bhz_coeff = 1;
-
-    arw->st_head = insert_st(arw->st_head, w);
-    arw->et_head = insert_et(arw->et_head, w);
-
-  }
-
-  arw->st_ptr = arw->st_head;
-  arw->et_ptr = arw->et_head;
-  arw->active_arrivals = NULL;
-  arw->n_active = 0;
-
 }

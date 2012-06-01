@@ -80,5 +80,4 @@ detections */
   PyObject * log_segment_cb;
 } World_t;
 
-PyObject * py_infer(NetModel_t * p_netmodel, PyObject * args);
 PyObject * py_infer_sig(SigModel_t * p_sigmodel, PyObject * args);

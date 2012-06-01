@@ -3,6 +3,9 @@
 
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
+#include <gsl/gsl_blas.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_linalg.h>
 
 void remove_vector_slice(gsl_vector ** pp_vector, int slice_start, int slice_size);
 void remove_matrix_slice(gsl_matrix ** pp_matrix, int slice_start, int slice_size);
@@ -22,4 +25,4 @@ void weighted_cross_covar(gsl_matrix * p_points1, gsl_vector * p_mean1, gsl_matr
 
 void matrix_add_to_diagonal(gsl_matrix * m, gsl_vector * v);
 
-#endif MATRIX_UTIL
+#endif 

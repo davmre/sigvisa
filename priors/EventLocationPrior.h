@@ -27,6 +27,11 @@
  * SUCH DAMAGE.
  * 
  */
+
+#ifndef EVENT_LOC_PRIOR_H
+#define EVENT_LOC_PRIOR_H
+
+
 typedef struct EventLocationPrior_t
 {
   double lonstep;
@@ -58,3 +63,5 @@ void EventLocationPrior_Sample(const EventLocationPrior_t * dist,
                                double * p_depth);
 
 void EventLocationPrior_UnInit(EventLocationPrior_t * dist);
+
+#endif

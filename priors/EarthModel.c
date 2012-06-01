@@ -308,8 +308,7 @@ void read_samples(EarthModel_t * p_earth, int phasenum, const char * table_prefi
       fp = fopen(fname, "r");
       if (!fp)
       {
-        LogTrace("EarthModel: Unable to open travel time file %s",
-		 fname);
+        LogTrace("EarthModel: Unable to open travel time file %s", fname);
 	
 	// TODO: TauP doesn't seem to give Lg, Rg, or PKPab info; let's ignore that for the moment
 	free(fname);
@@ -545,8 +544,6 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
   
   p_earth->enforce_ddrange = 0;              /* TODO: ddrange disabled */
 
-  p_earth->arr_amp_prior_loaded = 0;
-  
   return 0;
 }
 
@@ -1854,55 +1851,7 @@ PyObject * py_EarthModel_QFVC(EarthModel_t * p_earth, PyObject * args)
   return Py_BuildValue("d", EarthModel_QFVC(p_earth, depth, dist));
 }
 
-PyObject * py_EarthModel_LoadAmpModel(EarthModel_t * self, PyObject * args)
-{
-  const char * arramp_fname;
-  
-  if (!PyArg_ParseTuple(args, "s", &arramp_fname))
-    return NULL;
-  
-  ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
 
-  self->arr_amp_prior_loaded = 1;
-  
-  Py_INCREF(Py_None);
-  return Py_None;
-}
-
-
-PyObject * py_EarthModel_LogArrivalAmp(EarthModel_t * p_earth, PyObject * args)
-{
-  double mb, depth, ttime;
-  int phaseid, siteid;
-  
-  if (!PyArg_ParseTuple(args, "dddii", &mb, &depth, &ttime, 
-                        &phaseid, &siteid))
-    return NULL;
-
-  if ((phaseid < 0) || (phaseid >= p_earth->numphases) || (siteid < 0) ||
-      (siteid >= p_earth->numsites))
-  {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid or siteid"
-      );
-    return NULL;
-  }
-
-  if (!p_earth->p_phase_time_def[phaseid])
-  {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: phaseid is not time-def");
-    return NULL;
-  }
-
-  if (!p_earth->arr_amp_prior_loaded)
-  {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: AmpModel not loaded");
-    return NULL;
-  };
-
-  return Py_BuildValue("d", ArrivalAmplitudePrior_logamp(
-                         &p_earth->arr_amp_prior, mb, depth,
-                         ttime, siteid, phaseid));
-}
 
 double dist_depth_range_error(EarthModel_t * p_earth, int phaseid,
                               double depth, double distance)

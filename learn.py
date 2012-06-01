@@ -21,10 +21,10 @@ import priors.ArrivalPhasePrior
 import priors.ArrivalSNR
 import priors.ArrivalAmplitudePrior
 
-import netvisa, sigvisa, sigvisa_util
+import sigvisa, sigvisa_util
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
-  model = netvisa.EarthModel(sites, phasenames, phasetimedef,
+  model = sigvisa.EarthModel(sites, phasenames, phasetimedef,
                              os.path.join(param_dirname, "ttime", "iasp91."),
                              "",
                              os.path.join(param_dirname,"GA_dist_depth_ranges"),
@@ -32,37 +32,6 @@ def load_earth(param_dirname, sites, phasenames, phasetimedef):
 
   return model
 
-def load_netvisa(param_dirname, start_time, end_time, detections, site_up,
-                 sites, phasenames, phasetimedef):
-
-  earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
-
-  model = netvisa.NetModel(earthmodel,
-                           start_time, end_time, detections, site_up,
-                           os.path.join(param_dirname, "SecDetPrior.txt"),
-                           os.path.join(param_dirname, "NumEventPrior.txt"),
-                           os.path.join(param_dirname,
-                                        "EventLocationPrior.txt"),
-                           os.path.join(param_dirname, "EventMagPrior.txt"),
-                           os.path.join(param_dirname,
-                                        "EventDetectionPrior.txt"),
-                           os.path.join(param_dirname,
-                                        "ArrivalTimePrior.txt"),
-                           os.path.join(param_dirname,
-                                        "NumFalseDetPrior.txt"),
-                           os.path.join(param_dirname,
-                                        "ArrivalAzimuthPrior.txt"),
-                           os.path.join(param_dirname,
-                                        "ArrivalSlownessPrior.txt"),
-                           os.path.join(param_dirname,
-                                        "ArrivalPhasePrior.txt"),
-                           os.path.join(param_dirname,
-                                        "ArrivalSNRPrior.txt"),
-                           os.path.join(param_dirname,
-                                        "ArrivalAmplitudePrior.txt")
-                           )
-
-  return model
 
 def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up,
                  sites, phasenames, phasetimedef, load_signal_params = True):

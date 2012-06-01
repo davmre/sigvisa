@@ -2,12 +2,13 @@
 #define KALMAN_FILTER
 
 
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_matrix.h>
-#include <stdarg.h>
 
-typedef void (*kalman_obs_fn)(const gsl_vector * state, gsl_vector * obs, va_list * args);
-typdef struct KalmanState {
+#include <stdarg.h>
+#include "signal_structures.h"
+
+typedef void (*kalman_obs_fn)(const gsl_vector * state, gsl_vector * obs, va_list *args);
+
+typedef struct KalmanState {
   /* KalmanState invariants:
      -- n must equal the dimension of p_means, p_covars, p_transition, and p_process_noise (note that the matrices are all square), if they are non-NULL.
      -- either p_linear_obs or p_obs_fn must be non-NULL, depending on whether linear_obs is set. 
@@ -61,22 +62,22 @@ typdef struct KalmanState {
 
 } KalmanState_t ;
 
-void kalman_state_init(KalmanState *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn);
-void kalman_state_free(KalmanState * k);
+void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn);
+void kalman_state_free(KalmanState_t * k);
 
-void kalman_add_AR_process(KalmanState_t * k, int m, double * ar_coeffs, double noise_sigma2);
+int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p);
 void kalman_remove_AR_process(KalmanState_t * k, int m, int arridx);
-void kalman_predict(KalmanState * k);
-void kalman_nonlinear_update(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector ** y, gsl_matrix ** S, ...);
+void kalman_predict(KalmanState_t * k);
+double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...);
 
-void kalman_sample_forward(KalmanState *k, gsl_vector * p_output, ...);
+void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...);
 
 /* void kalman_observation(int n, int k, 
 		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
 		    Segment_t * p_segment,
 		    gsl_matrix ** pp_obs); 
 
-void kalman_update_linear(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector ** y, gsl_matrix ** S);
+void kalman_update_linear(KalmanState_t *k,  gsl_vector * p_true_obs, gsl_vector ** y, gsl_matrix ** S);
 */
 
 

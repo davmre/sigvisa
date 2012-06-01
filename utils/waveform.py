@@ -37,7 +37,7 @@ from obspy.signal.array_analysis import sonic
 
 from database.dataset import *
 import database.db
-import learn, netvisa
+import learn
 from utils.geog import dist_deg, azimuth
 
 class MissingWaveform(Exception):
