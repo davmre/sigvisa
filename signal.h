@@ -17,7 +17,7 @@
 #include <assert.h>
 
 /* define signal channels */
-#define NUM_CHANS   4
+#define NUM_CHANS   3
 #define CHAN_BHE    0
 #define CHAN_BHN    1
 #define CHAN_BHZ    2
