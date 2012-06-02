@@ -49,6 +49,7 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
   realloc_matrix(&k->K, k->n, k->obs_n);
   realloc_matrix(&k->Ktmp, k->n, k->obs_n);
   realloc_vector(&k->p_weights, 2*L+1);
+  realloc_vector(&k->p_mean_update, L);
 
   return k->n - m;
 
@@ -73,7 +74,7 @@ void kalman_remove_AR_process(KalmanState_t * k, int m, int arridx) {
   realloc_matrix(&k->K, k->n, k->obs_n);
   realloc_matrix(&k->Ktmp, k->n, k->obs_n);
   realloc_vector(&k->p_weights, 2*L+1);
-
+  realloc_vector(&k->p_mean_update, L);
 }
 
 /* constructs the observation matrix for the current set of AR processes */
@@ -164,9 +165,9 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
     gsl_vector_view col = gsl_matrix_column(k->p_sigma_points, i);
     gsl_vector_memcpy(&col.vector, k->p_means);
   }
-  gsl_matrix_view add_points = gsl_matrix_submatrix(k->p_sigma_points, 1, 1, L, L);
+  gsl_matrix_view add_points = gsl_matrix_submatrix(k->p_sigma_points, 0, 1, L, L);
   gsl_matrix_add(&add_points.matrix, k->P);
-  gsl_matrix_view sub_points = gsl_matrix_submatrix(k->p_sigma_points, L+1, L+1, L, L);
+  gsl_matrix_view sub_points = gsl_matrix_submatrix(k->p_sigma_points, 0, L+1, L, L);
   gsl_matrix_sub(&sub_points.matrix, k->P);
 
   /* Pass the sigma points through the observation function, and
