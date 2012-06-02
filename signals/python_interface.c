@@ -19,13 +19,18 @@
 void convert_arrivals(PyObject * py_phaseids_list, PyObject * py_params_array, int *n, Arrival_t ** p_arrs, Arrival_t *** pp_arrs) {
 
   *n = PyList_Size(py_phaseids_list);
+  int n2 = PyArray_DIM(py_params_array, 0);
+
+
+  int nparams = PyArray_DIM(py_params_array, 1);
+  if ((n2 != *n) || (nparams != 6)) {
+    LogError("convert_arrivals passed invalid parameter array: %d params!\n", nparams);
+    exit(EXIT_FAILURE);
+  }
+
   *p_arrs = calloc(*n, sizeof(Arrival_t));
   *pp_arrs = calloc(*n, sizeof(Arrival_t *));
 
-  int nparams = PyArray_DIM(py_params_array, 1);
-  if (nparams != 6) {
-    LogError("convert_arrivals passed invalid parameter array: %d params!\n", nparams);
-  }
 
   for(int i=0; i < *n; ++i) {
     (*p_arrs)[i].time = ARRAY2(py_params_array, i, ARR_TIME_PARAM);
@@ -145,7 +150,7 @@ PyObject * py_segment_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   convert_arrivals(py_phaseids_list, py_params_array, &n, &p_arrs, &pp_arrs);
 
   SignalModel_t * p_model = &p_sigmodel->signal_model;
-  double ll = p_model->likelihood(p_sigmodel, &segment, 1, (const Arrival_t **)pp_arrs);
+  double ll = p_model->likelihood(p_sigmodel, &segment, n, (const Arrival_t **)pp_arrs);
 
   free(pp_arrs);
   free(p_arrs);
@@ -153,12 +158,13 @@ PyObject * py_segment_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 }
 
 PyObject * py_gen_segment(SigModel_t * self, PyObject * args, int sample) {
+  int canary = 0;
   double start_time, end_time, srate;
   int siteid;
   PyObject * py_phaseids_list;
   PyObject * py_params_array;
-    // def generate_trace(self, start_time, end_time, siteid,  srate, phaseids, params):
-  if (!PyArg_ParseTuple(args, "ddnddO!O!", &start_time, &end_time, &siteid, &srate, &PyList_Type, &py_phaseids_list, &PyArray_Type, &py_params_array))
+
+  if (!PyArg_ParseTuple(args, "ddndO!O!", &start_time, &end_time, &siteid, &srate, &PyList_Type, &py_phaseids_list, &PyArray_Type, &py_params_array))
       return NULL;
 
   Segment_t segment;
@@ -167,6 +173,8 @@ PyObject * py_gen_segment(SigModel_t * self, PyObject * args, int sample) {
   segment.start_time=start_time;
   segment.hz=srate;
   segment.siteid=siteid;
+
+  
   alloc_segment_inner(&segment);
 
   int n;
@@ -181,13 +189,19 @@ PyObject * py_gen_segment(SigModel_t * self, PyObject * args, int sample) {
   free(p_arrs);
   free(pp_arrs);
   free_segment_inner(&segment);
+  
+
   return py_seg;
 }
 
 PyObject * py_gen_logenvelope_segment(SigModel_t * self, PyObject * args) {
-  return py_gen_segment(self, args, FALSE);
+  int a = 0;
+
+  PyObject * s = py_gen_segment(self, args, FALSE);
+  return s;
 }
 
 PyObject * py_sample_segment(SigModel_t * self, PyObject * args) {
-  return py_gen_segment(self, args, FALSE);
+  PyObject * s =  py_gen_segment(self, args, TRUE);
+  return s;
 }

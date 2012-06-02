@@ -165,6 +165,7 @@ void alloc_segment_inner(Segment_t * p_segment) {
     p_channel->len = p_segment->len;
     p_channel->hz = p_segment->hz;
     p_channel->siteid = p_segment->siteid;
+    p_channel->chan = c;
     for (int b=0; b < NUM_BANDS; ++b) {
       p_channel->p_bands[b] = alloc_trace();
       Trace_t * p_band = p_channel->p_bands[b];
@@ -172,7 +173,13 @@ void alloc_segment_inner(Segment_t * p_segment) {
       p_band->len = p_segment->len;
       p_band->hz = p_segment->hz;
       p_band->siteid = p_segment->siteid;
+      p_band->chan = c;
+      p_band->band = b;
       p_band->p_data = calloc(p_band->len, sizeof(double));
+      if(p_band->p_data == NULL) {
+	LogError("memory allocation failed!");
+	exit(EXIT_FAILURE);
+      }
     }
   }
 }
@@ -389,6 +396,7 @@ PyObject * build_trace(Trace_t * p_trace) {
    PyObject * py_data;
    if (p_trace->py_array == NULL) {
      py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_trace->p_data);
+     p_trace->py_array = py_data;
    } else {
      py_data = (PyObject *)p_trace->py_array;
    }

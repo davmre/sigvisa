@@ -154,6 +154,15 @@ void kalman_predict(KalmanState_t * k) {
 
 }
 
+
+void collapse_vector(KalmanState_t *k, gsl_vector * p_orig, gsl_vector * p_collapsed) {
+  for(int i=0; i < k->np; ++i) {
+    int i_full = gsl_vector_get(k->p_process_indices, i);
+    double m = gsl_vector_get(p_orig, i_full);
+    gsl_vector_set(p_collapsed, i, m);
+  }
+}
+
 void collapse_state(KalmanState_t *k) {
   for(int i=0; i < k->np; ++i) {
     int i_full = gsl_vector_get(k->p_process_indices, i);
@@ -191,7 +200,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 
   gsl_matrix_memcpy(k->P, k->p_collapsed_covars);
 
-  double alpha = 0.001, kappa = 0, beta = 2;
+  double alpha = 0.01, kappa = 0, beta = 2;
   double lambda = alpha * alpha * (L + kappa) - L;
 
   /* First step in the unscented transform: 
@@ -270,11 +279,11 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 }
 
 /* sample a zero-mean Gaussian vector with the given variances */
-void sample_indep_gaussians(gsl_vector * p_variances, gsl_vector * p_result) {
+void sample_indep_gaussians(KalmanState_t *k, gsl_vector * p_variances, gsl_vector * p_result) {
   gsl_vector_set_zero(p_result);
   for(int i=0; i < p_result->size; ++i) {
     double std = sqrt(gsl_vector_get(p_variances, i));
-    double sample = (std > 1e-10) ? gsl_ran_gaussian(0, std) : 0;
+    double sample = (std > 1e-10) ? gsl_ran_gaussian(k->r, std) : 0;
     gsl_vector_set(p_result, i, sample);
   }
 }
@@ -283,17 +292,22 @@ void sample_indep_gaussians(gsl_vector * p_variances, gsl_vector * p_result) {
 void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...) {
   // sample a new hidden state
   gsl_blas_dgemv (CblasNoTrans, 1, k->p_transition, k->p_sample_state, 0, k->p_mean_update);
-  sample_indep_gaussians(k->p_process_noise, k->p_sample_state);
+  sample_indep_gaussians(k, k->p_process_noise, k->p_sample_state);
   gsl_vector_add (k->p_sample_state, k->p_mean_update);
   
+  // use p_collapsed_means as a temp vector for the collapsed state
+  collapse_vector(k, k->p_sample_state, k->p_collapsed_means);
+  //  printf("collapsed means %.3f, %.3f, %.3f\n", gsl_vector_get(k->p_collapsed_means, 0), gsl_vector_get(k->p_collapsed_means, 1), gsl_vector_get(k->p_collapsed_means, 2));
+
+
   // compute the deterministic observation (using optional extra arguments)
   va_list args;
   va_start(args, p_output);
-  (*k->p_obs_fn)(k->p_sample_state, p_output, &args);
+  (*k->p_obs_fn)(k->p_collapsed_means, p_output, &args);
   va_end(args);
 
   // add observation noise
-  sample_indep_gaussians(k->p_obs_noise, k->ytmp);
+  sample_indep_gaussians(k, k->p_obs_noise, k->ytmp);
   gsl_vector_add(p_output, k->ytmp);
 }
 
@@ -375,7 +389,9 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
   k->Sinv = gsl_matrix_alloc(obs_n, obs_n);
 
   k->p_obs_noise = gsl_vector_calloc(obs_n);
-
+  for(int i=0; i < k->obs_n; ++i) {
+    gsl_vector_set(k->p_obs_noise, i, .01);
+  }
   /* the other state matrices have varying sizes depending on the
      current state-space dimension, so they get (re)allocated when
      needed using kalman_add_AR_process and

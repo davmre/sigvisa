@@ -69,7 +69,7 @@
 #define DELTA_TIME 50                        /* in seconds */
 #define DELTA_DIST 5                         /* in degrees */
 
-static PyObject * traceClass_obj;
+PyObject * traceClass_obj;
 
 PyObject * py_srand(PyObject * self, PyObject * args);
 

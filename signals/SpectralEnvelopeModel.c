@@ -174,7 +174,6 @@ void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * 
 
     gsl_vector_set(obs, obs_i++, chan_output);
   }
-
 }
 
 void setup_noise_processes(BandModel_t * p_band, Segment_t * p_segment, KalmanState_t * k, int * noise_indices) {
@@ -227,7 +226,7 @@ void update_active_events(KalmanState_t * k, double time, ARWLists_t * arw) {
       for (ArrivalWaveform_t * a = arw->active_arrivals; a != NULL; a = a->next_active) {
 	if (a->active_id > arw->et_ptr->active_id) {
 	  LogTrace(" remove arridx %d, decrementing %d", arw->et_ptr->active_id, a->active_id);
-	  a->active_id -= arw->et_ptr->ar_process.order;
+	  a->active_id--;
 	} else {
 	  LogTrace(" remove arridx %d, not decrementing %d", arw->et_ptr->active_id, a->active_id);
 	}
@@ -236,6 +235,11 @@ void update_active_events(KalmanState_t * k, double time, ARWLists_t * arw) {
       }
       arw->et_ptr = arw->et_ptr->next_end;
     }
+
+    // advance all active arrivals
+    for (ArrivalWaveform_t * a = arw->active_arrivals; a != NULL; a = a->next_active){
+      if (a->idx < a->len) a->idx++;
+    }
 }
 
 
@@ -243,6 +247,10 @@ void update_active_events(KalmanState_t * k, double time, ARWLists_t * arw) {
 /* populate two linked lists, storing waveform info sorted by
    start_time and end_time respectively */
 void init_ArrivalWaveforms(BandModel_t * p_band, int hz, int num_arrivals, const Arrival_t ** pp_arrivals, ARWLists_t * arw) {
+
+  arw->st_head = NULL;
+  arw->et_head = NULL;
+
   for (int i=0; i < num_arrivals; ++i) {
 
     const Arrival_t * p_arr = *(pp_arrivals + i);
@@ -270,13 +278,14 @@ void init_ArrivalWaveforms(BandModel_t * p_band, int hz, int num_arrivals, const
     }
 
     // TODO: FIX COEFFS (shouldn't be normalized to BHZ, and should be distributed by some model...)
-    w->projection_coeffs[CHAN_BHE] = fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
-    w->projection_coeffs[CHAN_BHN] = fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
+    w->projection_coeffs[CHAN_BHE] = 1;
+      //fabs(SPHERE2X(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
+    w->projection_coeffs[CHAN_BHN] = 1;
+      //fabs(SPHERE2Y(p_arr->azi, iangle)) / fabs(SPHERE2Z(p_arr->azi, iangle));
     w->projection_coeffs[CHAN_BHZ] = 1;
 
-    arw->st_head = insert_st(arw->st_head, w);
-    arw->et_head = insert_et(arw->et_head, w);
-
+    arw->st_head = (arw->st_head == NULL) ? w : insert_st(arw->st_head, w);
+    arw->et_head = (arw->et_head == NULL) ? w : insert_et(arw->et_head, w);
   }
 
   arw->st_ptr = arw->st_head;
@@ -382,6 +391,7 @@ void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segme
   kalman_state_init(k, obs_n, FALSE, NULL, logsum_envelope_obsfn);
   int noise_indices[NUM_CHANS];
   setup_noise_processes(p_band, NULL, k, noise_indices);
+
   if (!sample_noise) {
     for (int c = 0; c < NUM_CHANS; ++c) {
       gsl_vector_set(k->p_process_noise, noise_indices[c], 0);
@@ -413,7 +423,7 @@ void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segme
 
     /* update the state with the new observation, and return the
        log-likelihood of the observation */
-    kalman_sample_forward(k, p_sample_obs, noise_indices, arw.active_arrivals);
+    kalman_sample_forward(k, p_sample_obs, noise_indices, p_band, arw.active_arrivals);
 
     /* save the sampled observation */
     for (int c=0; c < NUM_CHANS; ++c) {

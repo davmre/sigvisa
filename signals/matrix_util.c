@@ -51,20 +51,20 @@ void remove_matrix_slice(gsl_matrix ** pp_matrix, int slice_start, int slice_siz
   gsl_matrix * new_matrix = gsl_matrix_alloc(n-l, n-l);
 
   gsl_matrix_view topleft_block_old = gsl_matrix_submatrix(*pp_matrix, 0, 0, s, s);
-  gsl_matrix_view topleft_block_new = gsl_matrix_submatrix(*pp_matrix, 0, 0, s, s);
+  gsl_matrix_view topleft_block_new = gsl_matrix_submatrix(new_matrix, 0, 0, s, s);
   gsl_matrix_memcpy(&topleft_block_new.matrix, &topleft_block_old.matrix);
 
   if (s+l < n) {
     gsl_matrix_view topright_block_old = gsl_matrix_submatrix(*pp_matrix, 0, s+l, s, n-s-l);
-    gsl_matrix_view topright_block_new = gsl_matrix_submatrix(*pp_matrix, 0, s, s, n-s-l);
+    gsl_matrix_view topright_block_new = gsl_matrix_submatrix(new_matrix, 0, s, s, n-s-l);
     gsl_matrix_memcpy(&topright_block_new.matrix, &topright_block_old.matrix);
 
     gsl_matrix_view bottomleft_block_old = gsl_matrix_submatrix(*pp_matrix, s+l, 0, n-s-l, s);
-    gsl_matrix_view bottomleft_block_new = gsl_matrix_submatrix(*pp_matrix, s, 0, n-s-l, s);
+    gsl_matrix_view bottomleft_block_new = gsl_matrix_submatrix(new_matrix, s, 0, n-s-l, s);
     gsl_matrix_memcpy(&bottomleft_block_new.matrix, &bottomleft_block_old.matrix);
 
     gsl_matrix_view bottomright_block_old = gsl_matrix_submatrix(*pp_matrix, s+l, s+l, n-s-l, n-s-l);
-    gsl_matrix_view bottomright_block_new = gsl_matrix_submatrix(*pp_matrix, s, s, n-s-l, n-s-l);
+    gsl_matrix_view bottomright_block_new = gsl_matrix_submatrix(new_matrix, s, s, n-s-l, n-s-l);
     gsl_matrix_memcpy(&bottomright_block_new.matrix, &bottomright_block_old.matrix);
   }
 
@@ -250,7 +250,7 @@ void matrix_stabilize(gsl_matrix *m) {
 
 void pretty_print_vector(gsl_vector *m, char * format_str) {
   printf("***********************\n");
-  for (int i=0;i<m->size;i++)
+  for (int i=0;m!=NULL && i<m->size;i++)
     {
       printf(format_str,gsl_vector_get(m,i));
     }
@@ -259,7 +259,7 @@ void pretty_print_vector(gsl_vector *m, char * format_str) {
 
 void pretty_print_matrix(gsl_matrix *m, char * format_str) {
   printf("***********************\n");
-  for (int i=0;i<m->size1;i++)
+  for (int i=0;m!=NULL && i< m->size1;i++)
     {
       for (int j=0;j<m->size2;j++)
 	{
