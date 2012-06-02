@@ -287,6 +287,9 @@ static PyMethodDef sigvisaMethods[] = {
   {"canonical_channel_num", (PyCFunction)py_canonical_channel_num, METH_VARARGS,
    "canonical_channel_num(chan_name) "
    "-> channel_num\n"},
+  {"canonical_band_num", (PyCFunction)py_canonical_band_num, METH_VARARGS,
+   "canonical_band_num(band_name) "
+   "-> bandl_num\n"},
   {"srand", py_srand, METH_VARARGS,
     "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
@@ -465,6 +468,8 @@ int pydict_get_string(PyObject * py_dict, char * key, char ** value) {
   if (py_value != NULL) {
     *value = PyString_AsString(py_value);
     retcode = 1;
+  } else {
+    *value = NULL;
   }
   return retcode;
 }

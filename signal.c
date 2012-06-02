@@ -10,6 +10,7 @@
 */
 
  int canonical_band_num(char* band_str) {
+
    int result = -1;
    if (strcmp("narrow_logenvelope_0.50_0.70", band_str) == 0) {
      result = NARROW_05_07;
@@ -112,6 +113,14 @@ PyObject * py_canonical_channel_num(PyObject * self, PyObject * args) {
    return Py_BuildValue("n", result);
  }
 
+PyObject * py_canonical_band_num(PyObject * self, PyObject * args) {
+  PyObject * py_band_str;
+  if (!PyArg_ParseTuple(args, "O!", &PyString_Type, &py_band_str))
+    return NULL;
+
+   int result = canonical_band_num(PyString_AsString(py_band_str));
+   return Py_BuildValue("n", result);
+ }
 
 
 

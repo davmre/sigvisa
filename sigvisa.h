@@ -94,7 +94,6 @@ int pydict_get_string(PyObject * py_dict, char * key, char ** value);
 #include "logging.h"
 
 
-PyObject * py_canonical_channel_num(PyObject * self, PyObject * args);
 PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
 PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args);
 PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);

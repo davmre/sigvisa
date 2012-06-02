@@ -128,4 +128,7 @@ int trace_to_signal(PyObject * py_trace, Trace_t ** pp_trace);
 
 int py_segment_to_c_segment(PyObject * py_segment, Segment_t * p_segment);
 PyObject * c_segment_to_py_segment(Segment_t * p_segment);
+
+PyObject * py_canonical_channel_num(PyObject * self, PyObject * args);
+PyObject * py_canonical_band_num(PyObject * self, PyObject * args);
 #endif 
