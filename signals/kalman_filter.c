@@ -43,8 +43,6 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
     }
   }
 
-
-
   k->n += m;
   k->np++;
   

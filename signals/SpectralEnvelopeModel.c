@@ -170,7 +170,6 @@ void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * 
 
       // added to signals from other channels
       chan_output = LOGSUM(chan_output, signal);
-      aa = aa->next_active;
     }
 
     gsl_vector_set(obs, obs_i++, chan_output);
@@ -258,6 +257,7 @@ void init_ArrivalWaveforms(BandModel_t * p_band, int hz, int num_arrivals, const
     w->p_abstract_trace = calloc(1, sizeof(Trace_t));
     w->p_abstract_trace->hz = hz;
     abstract_spectral_logenv_raw(p_arr, w->p_abstract_trace);
+    w->len = w->p_abstract_trace->len;
 
     w->end_time = w->start_time + (double) w->len / hz;
 
@@ -326,8 +326,6 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
    */
   for (int t = 0; t < p_segment->len; ++t) {
     double time = p_segment->start_time + t/p_segment->hz;
-
-
 
     /* update the set of events active at this timestep (and the
        corresponding Kalman filter state). */
