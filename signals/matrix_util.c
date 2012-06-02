@@ -231,6 +231,21 @@ void matrix_add_to_diagonal(gsl_matrix * m, gsl_vector * v) {
   gsl_vector_add(&diag.vector, v);
 }
 
+
+// round off insignificant bits to prevent floating-point error from accumulating
+void matrix_stabilize(gsl_matrix *m) {
+
+  for(int i=0; i < m->size1; ++i) {
+    for(int j=0; j < m->size2; ++j) {
+      double v = gsl_matrix_get(m, i, j);
+      v *= 1e8;
+      v = round(v);
+      v /= 1e8;
+      gsl_matrix_set(m, i, j, v);
+    }
+  }
+}
+
 void pretty_print_vector(gsl_vector *m, char * format_str) {
   printf("***********************\n");
   for (int i=0;i<m->size;i++)

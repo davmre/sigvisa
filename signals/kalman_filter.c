@@ -22,10 +22,14 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
 
   int m = p->order;
 
+  /* fill in the index of the new process */
+  resize_vector(&k->p_process_indices, (k->np)+1);
+  gsl_vector_set(k->p_process_indices, k->np, k->n);
+
   resize_vector(&k->p_means, (k->n)+m);
   resize_vector(&k->p_process_noise, (k->n)+m);
   resize_vector(&k->p_sample_state, (k->n)+m);
-  resize_matrix(&k->p_covars, (k->n)+m, (k->n)+m, TRUE);
+  resize_matrix(&k->p_covars, (k->n)+m, (k->n)+m, FALSE);
   resize_matrix(&k->p_transition, (k->n)+m, (k->n)+m, FALSE);
 
   gsl_vector_set(k->p_process_noise, k->n, p->sigma2);
@@ -39,24 +43,34 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
     }
   }
 
-  k->n += m;
 
+
+  k->n += m;
+  k->np++;
+  
   // now resize all the temp matrices
-  int L = k->n;
+  int L = k->np;
   realloc_matrix(&k->P, L, L);
   realloc_matrix(&k->p_sigma_points, L, 2*L+1);
   realloc_matrix(&k->p_obs_points, k->obs_n, 2*L+1);
-  realloc_matrix(&k->K, k->n, k->obs_n);
-  realloc_matrix(&k->Ktmp, k->n, k->obs_n);
+  realloc_vector(&k->p_collapsed_means, k->np);
+  realloc_matrix(&k->p_collapsed_covars, k->np, k->np);
+  realloc_matrix(&k->K, k->np, k->obs_n);
+  realloc_matrix(&k->Ktmp, k->np, k->obs_n);
   realloc_vector(&k->p_weights, 2*L+1);
-  realloc_vector(&k->p_mean_update, L);
+  realloc_vector(&k->p_collapsed_mean_update, L);
+  realloc_vector(&k->p_mean_update, (k->n));
+  realloc_matrix(&k->p_covars_tmp, (k->n), (k->n));
 
-  return k->n - m;
+  return k->np - 1;
 
 }
 
 /* Removes the order-m AR process with specified index arridx from the mean vector and covariance matrix. */
-void kalman_remove_AR_process(KalmanState_t * k, int m, int arridx) {
+void kalman_remove_AR_process(KalmanState_t * k, int m, int process_idx) {
+
+  int arridx = gsl_vector_get(k->p_process_indices, process_idx);
+  remove_vector_slice(&k->p_process_indices, process_idx, 1);
 
   remove_vector_slice(&k->p_means, arridx, m);
   remove_vector_slice(&k->p_process_noise, arridx, m);
@@ -65,16 +79,20 @@ void kalman_remove_AR_process(KalmanState_t * k, int m, int arridx) {
   remove_matrix_slice(&k->p_transition, arridx, m);
 
   k->n -= m;
-
+  k->np--;
   // now resize all the temp matrices
-  int L = k->n;
+  int L = k->np;
   realloc_matrix(&k->P, L, L);
   realloc_matrix(&k->p_sigma_points, L, 2*L+1);
   realloc_matrix(&k->p_obs_points, k->obs_n, 2*L+1);
-  realloc_matrix(&k->K, k->n, k->obs_n);
-  realloc_matrix(&k->Ktmp, k->n, k->obs_n);
+  realloc_vector(&k->p_collapsed_means, k->np);
+  realloc_matrix(&k->p_collapsed_covars, k->np, k->np);
+  realloc_matrix(&k->K, k->np, k->obs_n);
+  realloc_matrix(&k->Ktmp, k->np, k->obs_n);
   realloc_vector(&k->p_weights, 2*L+1);
-  realloc_vector(&k->p_mean_update, L);
+  realloc_vector(&k->p_collapsed_mean_update, L);
+  realloc_vector(&k->p_mean_update, (k->n));
+  realloc_matrix(&k->p_covars_tmp, (k->n), (k->n));
 }
 
 /* constructs the observation matrix for the current set of AR processes */
@@ -129,24 +147,51 @@ void kalman_predict(KalmanState_t * k) {
 
 
   // propagate the covariance matrix
-  // use k->P as an nxn temp matrix
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->p_covars, k->p_transition, 0, k->P);  
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->p_transition, k->P, 0, k->p_covars);
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->p_covars, k->p_transition, 0, k->p_covars_tmp);  
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->p_transition, k->p_covars_tmp, 0, k->p_covars);
 
   /* add the process noise variance */
   gsl_vector_view covar_diag = gsl_matrix_diagonal(k->p_covars);
   gsl_vector_add(&covar_diag.vector, k->p_process_noise);
 
-
 }
 
+void collapse_state(KalmanState_t *k) {
+  for(int i=0; i < k->np; ++i) {
+    int i_full = gsl_vector_get(k->p_process_indices, i);
+    double m = gsl_vector_get(k->p_means, i_full);
+    gsl_vector_set(k->p_collapsed_means, i, m);
+
+    for(int j=0; j < k->np; ++j) {
+      int j_full = gsl_vector_get(k->p_process_indices, j);
+      double c = gsl_matrix_get(k->p_covars, i_full, j_full);
+      gsl_matrix_set(k->p_collapsed_covars, i, j, c);
+    }
+  }
+}
+
+void uncollapse_state(KalmanState_t *k) {
+for(int i=0; i < k->np; ++i) {
+    int i_full = gsl_vector_get(k->p_process_indices, i);
+    double m = gsl_vector_get(k->p_collapsed_means, i);
+    gsl_vector_set(k->p_means, i_full, m);
+
+    for(int j=0; j < k->np; ++j) {
+      int j_full = gsl_vector_get(k->p_process_indices, j);
+      double c = gsl_matrix_get(k->p_collapsed_covars, i, j);
+      gsl_matrix_set(k->p_covars, i_full, j_full, c);
+    }
+  }
+}
 
 /* Uses the unscented transform to compute the measurement mean and covariance; then uses these to update the Kalman filtering distribution. */
 double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) {
 
-  int L = k->p_means->size;
+  collapse_state(k);
+  int L = k->np;
 
-  gsl_matrix_memcpy(k->P, k->p_covars);
+
+  gsl_matrix_memcpy(k->P, k->p_collapsed_covars);
 
   double alpha = 0.001, kappa = 0, beta = 2;
   double lambda = alpha * alpha * (L + kappa) - L;
@@ -166,7 +211,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
      the above matrix from the augmented mean vector. */
   for (int i=0; i < 2*L+1; ++i) {
     gsl_vector_view col = gsl_matrix_column(k->p_sigma_points, i);
-    gsl_vector_memcpy(&col.vector, k->p_means);
+    gsl_vector_memcpy(&col.vector, k->p_collapsed_means);
   }
   gsl_matrix_view add_points = gsl_matrix_submatrix(k->p_sigma_points, 0, 1, L, L);
   gsl_matrix_add(&add_points.matrix, k->P);
@@ -197,7 +242,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   matrix_add_to_diagonal(k->S, k->p_obs_noise);
 
   /* finally, the state/measurement cross-covariance is used to get the Kalman gain */
-  weighted_cross_covar(k->p_sigma_points, k->p_means, k->p_obs_points, k->y, k->p_weights, k->Ktmp);
+  weighted_cross_covar(k->p_sigma_points, k->p_collapsed_means, k->p_obs_points, k->y, k->p_weights, k->Ktmp);
   double log_det_S = psdmatrix_inv_logdet(k->S, k->Sinv);
   gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->Ktmp, k->Sinv, 0, k->K);
 
@@ -205,14 +250,17 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   gsl_vector_sub(k->y, p_true_obs);
   gsl_vector_scale(k->y, -1); 
 
-  gsl_blas_dgemv(CblasNoTrans, 1, k->K, k->y, 0, k->p_mean_update);
-  gsl_vector_add(k->p_means, k->p_mean_update);
+  gsl_blas_dgemv(CblasNoTrans, 1, k->K, k->y, 0, k->p_collapsed_mean_update);
+  gsl_vector_add(k->p_collapsed_means, k->p_collapsed_mean_update);
 
   // update the filtering covariance: p_covars = p_covars - K*S*K^T
   // (uses k->Ktmp as a temp matrix)
   gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->K, k->S, 0, k->Ktmp); // Ktmp = (S*K^T)^T
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, -1, k->K, k->Ktmp, 1, k->p_covars); 
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, -1, k->K, k->Ktmp, 1, k->p_collapsed_covars); 
 
+  matrix_stabilize(k->p_collapsed_covars);
+
+  uncollapse_state(k);
   
   gsl_blas_dgemv(CblasNoTrans, 1, k->Sinv, k->y, 0, k->ytmp);
   double ex;
@@ -315,6 +363,7 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
   gsl_rng_set(k->r, time(NULL));
 
   k->n = 0;
+  k->np = 0;
   k->obs_n = obs_n;
 
   k->linear_obs = linear_obs;
@@ -346,6 +395,7 @@ void kalman_state_free(KalmanState_t * k) {
   if (k->p_transition != NULL) gsl_matrix_free(k->p_transition);
   if (k->p_process_noise != NULL) gsl_vector_free(k->p_process_noise);
   if (k->p_sample_state != NULL) gsl_vector_free(k->p_sample_state);
+  if (k->p_process_indices != NULL) gsl_vector_free(k->p_process_indices);
 
   if (k->p_linear_obs != NULL) gsl_matrix_free(k->p_linear_obs);
   if (k->p_obs_noise != NULL) gsl_vector_free(k->p_obs_noise);
@@ -362,6 +412,11 @@ void kalman_state_free(KalmanState_t * k) {
   if (k->p_obs_points != NULL) gsl_matrix_free(k->p_obs_points);
   if (k->p_weights != NULL) gsl_vector_free(k->p_weights);
   if (k->p_mean_update != NULL) gsl_vector_free(k->p_mean_update);
+  if (k->p_collapsed_mean_update != NULL) gsl_vector_free(k->p_collapsed_mean_update);
+  if (k->p_covars_tmp != NULL) gsl_matrix_free(k->p_covars_tmp);
+
+  if (k->p_collapsed_means != NULL) gsl_vector_free(k->p_collapsed_means);
+  if (k->p_collapsed_covars != NULL) gsl_matrix_free(k->p_collapsed_covars);
 
   if (k->K != NULL) gsl_matrix_free(k->K);
   if (k->Ktmp != NULL) gsl_matrix_free(k->Ktmp);

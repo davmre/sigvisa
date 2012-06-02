@@ -16,6 +16,7 @@ typedef struct KalmanState {
   */
   
   int n; // number of current state variables
+  int np; // number of current AR processes
   int obs_n; // number of current output variables
 
   gsl_vector * p_means;
@@ -31,6 +32,7 @@ typedef struct KalmanState {
   gsl_vector * p_sample_state; /* The true hidden state of the
 				    process; used when sampling from
 				    the model. (n) */
+  gsl_vector * p_process_indices; /* indices of the current AR processes (np) */
 
 
   int linear_obs; /* determines whether observations are a linear
@@ -51,14 +53,19 @@ typedef struct KalmanState {
   gsl_matrix * S; // predicted observation covariance (obs_n * obs_n)
   gsl_matrix * Sinv; // inverse of S (obs_n * obs_n)
 
-  gsl_matrix * P; // unscented transform tmp matrix (n x n)
-  gsl_matrix * p_sigma_points; // original sigma points (n x 2n+1)
-  gsl_matrix * p_obs_points; // sigma point observations (obs_n x 2n+1)
-  gsl_vector * p_weights; // weights for unscented transform (2n+1)
+  gsl_matrix * P; // unscented transform tmp matrix (np x np)
+  gsl_matrix * p_sigma_points; // original sigma points (np x 2np+1)
+  gsl_matrix * p_obs_points; // sigma point observations (obs_n x 2np+1)
+  gsl_vector * p_weights; // weights for unscented transform (2np+1)
   gsl_vector * p_mean_update; // tmp vector for mean update (n)
+  gsl_vector * p_collapsed_mean_update; // tmp vector for mean update (np)
+  gsl_vector * p_covars_tmp; //tmp vector for covar update (n x n)
 
-  gsl_matrix * K; // optimal Kalman gain matrix (n x obs_n)
-  gsl_matrix * Ktmp; // temp matrix, (n x obs_n)
+  gsl_vector * p_collapsed_means; // collapsed mean vector (np)
+  gsl_matrix * p_collapsed_covars; // collapsed covariance matrix (np x np)
+
+  gsl_matrix * K; // optimal Kalman gain matrix (np x obs_n)
+  gsl_matrix * Ktmp; // temp matrix, (np x obs_n)
 
 } KalmanState_t ;
 
@@ -73,6 +80,9 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...);
 void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...);
 
 void kalman_state_print(KalmanState_t * k);
+
+
+void matrix_stabilize(gsl_matrix *m);
 
 /* void kalman_observation(int n, int k, 
 		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
