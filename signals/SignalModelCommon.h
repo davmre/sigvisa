@@ -16,7 +16,6 @@ double Signal_Score_Event(SigModel_t * p_sigmodel, const Event_t * event, int nu
 
 PyObject * py_set_params(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_set_all_params(SigModel_t * p_sigmodel, PyObject * args);
-PyObject * py_arr_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 
 double det_likelihood(SigModel_t * p_sigmodel, int write_log);
 PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args);

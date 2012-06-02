@@ -34,9 +34,6 @@ static PyMethodDef SigModel_methods[] = {
   {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "
    "-> num_translated\n"},
-  {"arrival_likelihood", (PyCFunction)py_arr_likelihood, METH_VARARGS,
-   "arrival_likelihood(arrtime, arramp, arrazi, arrslo, arrphase, arrsiteid, write_log)"
-   "-> log likelihood\n"},
   {"set_noise_process", (PyCFunction)py_set_noise_process, METH_VARARGS,
    "set_noise_process(siteid, band, chan, noise_mean, noise_variance, noise_coeffs)"
    "-> ??\n"},
