@@ -46,10 +46,10 @@ typedef struct KalmanState {
 
   /* begin temp variables: these are not really part of the state, but are used repeatedly (mostly when updating) and so we keep them around to avoid allocating/deallocating */ 
 
-  gsl_vector * y; // the predicted observation (or obs residual)
-  gsl_vector * ytmp; // temp vector, same size as y
-  gsl_matrix * S; // predicted observation covariance
-  gsl_matrix * Sinv; // inverse of S
+  gsl_vector * y; // the predicted observation (or obs residual) (obs_n)
+  gsl_vector * ytmp; // temp vector (obs_n)
+  gsl_matrix * S; // predicted observation covariance (obs_n * obs_n)
+  gsl_matrix * Sinv; // inverse of S (obs_n * obs_n)
 
   gsl_matrix * P; // unscented transform tmp matrix (n x n)
   gsl_matrix * p_sigma_points; // original sigma points (n x 2n+1)
@@ -57,8 +57,8 @@ typedef struct KalmanState {
   gsl_vector * p_weights; // weights for unscented transform (2n+1)
   gsl_vector * p_mean_update; // tmp vector for mean update (n)
 
-  gsl_matrix * K; // optimal Kalman gain matrix
-  gsl_matrix * Ktmp; // temp matrix, same size as K
+  gsl_matrix * K; // optimal Kalman gain matrix (n x obs_n)
+  gsl_matrix * Ktmp; // temp matrix, (n x obs_n)
 
 } KalmanState_t ;
 
@@ -71,6 +71,8 @@ void kalman_predict(KalmanState_t * k);
 double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...);
 
 void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...);
+
+void kalman_state_print(KalmanState_t * k);
 
 /* void kalman_observation(int n, int k, 
 		    int n_arrs, ArrivalWaveform_t * active_arrivals, 

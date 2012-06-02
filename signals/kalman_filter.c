@@ -127,6 +127,7 @@ void kalman_predict(KalmanState_t * k) {
   gsl_blas_dgemv (CblasNoTrans, 1, k->p_transition, k->p_means, 0, k->p_mean_update);
   gsl_vector_memcpy(k->p_means, k->p_mean_update);
 
+
   // propagate the covariance matrix
   // use k->P as an nxn temp matrix
   gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->p_covars, k->p_transition, 0, k->P);  
@@ -135,6 +136,8 @@ void kalman_predict(KalmanState_t * k) {
   /* add the process noise variance */
   gsl_vector_view covar_diag = gsl_matrix_diagonal(k->p_covars);
   gsl_vector_add(&covar_diag.vector, k->p_process_noise);
+
+
 }
 
 
@@ -145,13 +148,13 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 
   gsl_matrix_memcpy(k->P, k->p_covars);
 
-
   double alpha = 0.001, kappa = 0, beta = 2;
   double lambda = alpha * alpha * (L + kappa) - L;
 
   /* First step in the unscented transform: 
      compute the matrix sqrt( (L+\lambda) * P ) */
   gsl_matrix_scale(k->P, L + lambda);
+
   gsl_linalg_cholesky_decomp(k->P);
   for (int i=0; i < L; ++i) {
     for (int j=i+1; j < L; ++j) {
@@ -161,7 +164,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 
   /* Generate sigma points by adding and subtracting the columns of
      the above matrix from the augmented mean vector. */
-  for (int i=0; i < 2L+1; ++i) {
+  for (int i=0; i < 2*L+1; ++i) {
     gsl_vector_view col = gsl_matrix_column(k->p_sigma_points, i);
     gsl_vector_memcpy(&col.vector, k->p_means);
   }
@@ -172,9 +175,9 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 
   /* Pass the sigma points through the observation function, and
      compute their associated weights. */
-  for (int i=0; i < 2L+1; ++i) {
+  for (int i=0; i < 2*L+1; ++i) {
      gsl_vector_view state_col = gsl_matrix_column(k->p_sigma_points, i);
-     gsl_vector_view obs_col = gsl_matrix_column(k->p_sigma_points, i);
+     gsl_vector_view obs_col = gsl_matrix_column(k->p_obs_points, i);
 
      // provide the observation function with any extra arguments we were passed
      va_list args;
@@ -184,7 +187,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 
      gsl_vector_set(k->p_weights, i, 1/(2*(L+lambda)));
   }
-
+ 
   /* Now, compute the weighted mean and covariance of the sigma points. */
   gsl_vector_set(k->p_weights, 0, lambda/(L+lambda));
   weighted_mean(k->p_obs_points, k->p_weights, k->y);
@@ -205,11 +208,12 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   gsl_blas_dgemv(CblasNoTrans, 1, k->K, k->y, 0, k->p_mean_update);
   gsl_vector_add(k->p_means, k->p_mean_update);
 
-  // update the filtering covariance: p_covars = p_covars - K*S*K^(-1)
-  // (uses k->P as an nxn temp matrix)
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->S, k->K, 0, k->P); // tmp = S*K^(-1)
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, k->K, k->P, 1, k->p_covars); 
+  // update the filtering covariance: p_covars = p_covars - K*S*K^T
+  // (uses k->Ktmp as a temp matrix)
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->K, k->S, 0, k->Ktmp); // Ktmp = (S*K^T)^T
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, -1, k->K, k->Ktmp, 1, k->p_covars); 
 
+  
   gsl_blas_dgemv(CblasNoTrans, 1, k->Sinv, k->y, 0, k->ytmp);
   double ex;
   gsl_blas_ddot(k->y, k->ytmp, &ex);
@@ -361,5 +365,25 @@ void kalman_state_free(KalmanState_t * k) {
 
   if (k->K != NULL) gsl_matrix_free(k->K);
   if (k->Ktmp != NULL) gsl_matrix_free(k->Ktmp);
+
+}
+
+void kalman_state_print(KalmanState_t * k) {
+
+  printf("p_means:\n");
+  pretty_print_vector(k->p_means,"%.2f ");
+
+  printf("p_covars:\n");
+  pretty_print_matrix(k->p_covars,"%.2f ");
+
+  printf("p_transition:\n");
+  pretty_print_matrix(k->p_transition,"%.2f ");
+
+  printf("p_process_noise:\n");
+  pretty_print_vector(k->p_process_noise,"%.2f ");
+
+  printf("p_sample_state:\n");
+  pretty_print_vector(k->p_sample_state,"%.2f ");
+
 
 }

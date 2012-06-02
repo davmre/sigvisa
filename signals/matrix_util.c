@@ -230,3 +230,25 @@ void matrix_add_to_diagonal(gsl_matrix * m, gsl_vector * v) {
   gsl_vector_view diag = gsl_matrix_diagonal(m);
   gsl_vector_add(&diag.vector, v);
 }
+
+void pretty_print_vector(gsl_vector *m, char * format_str) {
+  printf("***********************\n");
+  for (int i=0;i<m->size;i++)
+    {
+      printf(format_str,gsl_vector_get(m,i));
+    }
+  printf("\n***********************\n");
+}
+
+void pretty_print_matrix(gsl_matrix *m, char * format_str) {
+  printf("***********************\n");
+  for (int i=0;i<m->size1;i++)
+    {
+      for (int j=0;j<m->size2;j++)
+	{
+	  printf(format_str, gsl_matrix_get(m,i,j));
+	}
+      printf(";\n");
+    }
+  printf("\n***********************\n");
+}
