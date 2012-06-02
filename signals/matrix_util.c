@@ -75,8 +75,6 @@ void remove_matrix_slice(gsl_matrix ** pp_matrix, int slice_start, int slice_siz
    filled with zeros (if it is growing). */
 void resize_vector(gsl_vector ** pp_vector, int l) {
   
-  assert(l >= (*pp_vector)->size);
-
   if (*pp_vector == NULL) {
     *pp_vector = gsl_vector_alloc(l);
     gsl_vector_set_zero(*pp_vector);
