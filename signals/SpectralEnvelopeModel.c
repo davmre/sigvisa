@@ -255,7 +255,7 @@ void init_ArrivalWaveforms(BandModel_t * p_band, int hz, int num_arrivals, const
     w->idx = -1; // initialize to -1 since we will increment before the first use
 
     // for each arrival, get the predicted log-envelope
-    w->p_abstract_trace = calloc(1, sizeof(Trace));
+    w->p_abstract_trace = calloc(1, sizeof(Trace_t));
     w->p_abstract_trace->hz = hz;
     abstract_spectral_logenv_raw(p_arr, w->p_abstract_trace);
 
@@ -327,6 +327,8 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
   for (int t = 0; t < p_segment->len; ++t) {
     double time = p_segment->start_time + t/p_segment->hz;
 
+
+
     /* update the set of events active at this timestep (and the
        corresponding Kalman filter state). */
     update_active_events(k, time, &arw);
@@ -341,13 +343,12 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
     /* update the state with the new observation, and return the
        log-likelihood of the observation */
     kalman_predict(k);
-    ll -= kalman_nonlinear_update(k, p_true_obs, noise_indices, arw.active_arrivals);
+
+    ll -= kalman_nonlinear_update(k, p_true_obs, noise_indices, p_band, arw.active_arrivals);
   }
 
   /* Free memory before returning */
-  for(ArrivalWaveform_t * a = arw.st_head; a != NULL; ) {
-    a = free_ArrivalWaveform(a);
-  }
+  for(ArrivalWaveform_t * a = arw.st_head; a != NULL; a = free_ArrivalWaveform(a));
   kalman_state_free(k);
   gsl_vector_free(p_true_obs);
 
