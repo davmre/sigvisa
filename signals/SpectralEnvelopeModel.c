@@ -78,8 +78,6 @@ int Spectral_Envelope_Model_Has_Model(SigModel_t * p_sigmodel, int siteid, int c
   }
 
   else {
-    // LogTrace("checking var %lf for site %d chan %d", p_params->p_stations[siteid-1].chan_vars[chan], siteid, chan);
-    // LogTrace("p_model %p sta %p", p_params, p_params->p_stations + siteid-1);
     return (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].wiggle_model.coeffs != NULL) && (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].channel_noise_models[chan].coeffs != NULL);
   }
 
@@ -99,7 +97,7 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
   p_trace->p_data = (double *) calloc(p_trace->len, sizeof(double));
   double * d = p_trace->p_data;
   if (d == NULL) {
-    printf("error allocating memory for means in abstract_env, len %ld\n", p_trace->len);
+    printf("error allocating memory for means in abstract_env, len %ld from amp %f, decay %f, hz %f\n", p_trace->len, p_arrival->amp, p_arrival->coda_decay, p_trace->hz);
     exit(-1);
   }
 
