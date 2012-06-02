@@ -21,6 +21,12 @@ void convert_arrivals(PyObject * py_phaseids_list, PyObject * py_params_array, i
   *n = PyList_Size(py_phaseids_list);
   *p_arrs = calloc(*n, sizeof(Arrival_t));
   *pp_arrs = calloc(*n, sizeof(Arrival_t *));
+
+  int nparams = PyArray_DIM(py_params_array, 1);
+  if (nparams != 6) {
+    LogError("convert_arrivals passed invalid parameter array: %d params!\n", nparams);
+  }
+
   for(int i=0; i < *n; ++i) {
     (*p_arrs)[i].time = ARRAY2(py_params_array, i, ARR_TIME_PARAM);
     (*p_arrs)[i].peak_time = ARRAY2(py_params_array, i, PEAK_OFFSET_PARAM) + (*p_arrs)[i].time;
@@ -112,7 +118,8 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   Arrival_t ** pp_arrs;
   convert_arrivals(py_phaseids_list, py_params_array, &n, &p_arrs, &pp_arrs);
 
-  double ll = Spectral_Envelope_Model_Likelihood(p_sigmodel, &segment, n, (const Arrival_t **)pp_arrs);
+  SignalModel_t * p_model = &p_sigmodel->signal_model;
+  double ll = p_model->likelihood(p_sigmodel, &segment, 1, (const Arrival_t **)pp_arrs);
 
   free(pp_arrs);
   free(p_arrs);
@@ -121,7 +128,6 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 }
 
 PyObject * py_segment_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
-
 
   PyObject * py_segment;
   PyObject * py_phaseids_list;
@@ -138,7 +144,8 @@ PyObject * py_segment_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   Arrival_t ** pp_arrs;
   convert_arrivals(py_phaseids_list, py_params_array, &n, &p_arrs, &pp_arrs);
 
-  double ll = Spectral_Envelope_Model_Likelihood(p_sigmodel, &segment, n, (const Arrival_t **)pp_arrs);
+  SignalModel_t * p_model = &p_sigmodel->signal_model;
+  double ll = p_model->likelihood(p_sigmodel, &segment, 1, (const Arrival_t **)pp_arrs);
 
   free(pp_arrs);
   free(p_arrs);
@@ -168,6 +175,7 @@ PyObject * py_gen_segment(SigModel_t * self, PyObject * args, int sample) {
   convert_arrivals(py_phaseids_list, py_params_array, &n, &p_arrs, &pp_arrs);
 
   Spectral_Envelope_Model_Sample(self, &segment, n, (const Arrival_t **)pp_arrs, sample, sample);
+
 
   PyObject * py_seg = c_segment_to_py_segment(&segment);
   free(p_arrs);
