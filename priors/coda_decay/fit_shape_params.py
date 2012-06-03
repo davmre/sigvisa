@@ -40,7 +40,6 @@ def c_cost(sigmodel, smoothed, phaseids, params):
 #    noise_floor = params[-1]
 #    params = np.reshape(params[:-1], (len(phaseids), -1))
 
-    noise_floor = smoothed.stats.noise_floor
     params = np.reshape(params, (len(phaseids), -1))
 
     for i, pid in enumerate(phaseids):
@@ -116,9 +115,10 @@ def fit_elephant_envelope(sigmodel, arrivals, smoothed, defaults, fix_peak = Fal
 #        (peak_offset_time, peak_height) = arrival_peak_offset(smoothed, time - smoothed.stats.starttime_unix)
 
         a = defaults[i]
+        noise_floor = smoothed.stats.noise_model.c
 
-        fit_peak_height = subtract_noise(a[FIT_PEAK_HEIGHT], smoothed.stats.noise_floor)
-        fit_coda_height = subtract_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), smoothed.stats.noise_floor)
+        fit_peak_height = subtract_noise(a[FIT_PEAK_HEIGHT], noise_floor)
+        fit_coda_height = subtract_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), noise_floor)
 
         start_params[i, PEAK_OFFSET_PARAM] = ( a[FIT_PEAK_OFFSET] + smoothed.stats.starttime_unix) - time
         print "init peak offset to ", start_params[i, PEAK_OFFSET_PARAM], "for phase", i
@@ -131,7 +131,6 @@ def fit_elephant_envelope(sigmodel, arrivals, smoothed, defaults, fix_peak = Fal
         bounds_fp = bounds_fp + arr_bounds_fixed_peak
         phaseids.append(arr[AR_PHASEID_COL])
         arr_times[i] = time
-
 
     start_params = start_params[:, 1:]
 
@@ -146,7 +145,10 @@ def fit_elephant_envelope(sigmodel, arrivals, smoothed, defaults, fix_peak = Fal
 
     start_params = start_params.flatten()
 
-    
+    c = sigvisa.canonical_channel_num(smoothed.stats.channel)
+    b = sigvisa.canonical_channel_num(smoothed.stats.band)
+    arm = smoothed.stats_noise_model
+    self.sigmodel.set_noise_process(siteid, b, c, arm.c, arm.std, arm.params)
 
     f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params))
 
@@ -326,8 +328,7 @@ def main():
     detections, arid2num = read_detections(cursor, st, et, arrival_table="leb_arrival", noarrays=True)
     phasenames, phasetimedef = read_phases(cursor)
     earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
-    netmodel = learn.load_netvisa("parameters", st, et, detections, site_up, sites, phasenames, phasetimedef)
-    sigmodel = learn.load_netvisa("parameters", st, et, detections, "spectral_envelope", site_up, sites, phasenames, phasetimedef)
+    sigmodel = learn.load_sigvisa("parameters", st, et, "spectral_envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
 
     max_azi = get_densest_azi(cursor, siteid)
 

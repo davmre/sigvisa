@@ -13,6 +13,7 @@ import plot
 import sigvisa
 import learn, sigvisa_util
 import signals.SignalPrior
+from signals.armodel.learner import ARLearner
 from utils.waveform import *
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
@@ -289,8 +290,10 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False):
                 arrival_segment[0][chan][band].stats.p_phaseid = first_p_phaseid
                 arrival_segment[0][chan][band].stats.s_phaseid = first_s_phaseid
                 if load_noise:
-                    arrival_segment[0][chan][band].stats.noise_floor=np.mean(noise_segment[0][chan][band])
-
+                    noise = noise_segment[0][chan][band]
+                    ar_learner = ARLearner(noise.data, noise.sampling_rate)
+                    arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
+                    
         # test to make sure we have the necessary channels
         tr1 = arrival_segment[0]["BHZ"]
         tr2 = arrival_segment[0]["horiz_avg"]
