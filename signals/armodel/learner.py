@@ -12,18 +12,19 @@ perform aic
 
 class ARLearner:
     def __init__(self, data, sf=40):
-        self.data = data
+        self.c = np.mean(data)
+        self.norm_data = data - self.c
         self.n = len(data)
         self.params = {}
         self.std = {}
         self.sf = sf
             
-    #approximate params and std via yule-walker
+    #approximate params and mean/std via yule-walker
     def yulewalker(self, p):
         if p in self.params:
             return (self.params[p], self.std[p])
 
-        r = stat.autocorr(self.data)
+        r = stat.autocorr(self.norm_data)
         R = np.zeros([p,p])
         for row in range(p):
             for col in range(p):
@@ -41,45 +42,59 @@ class ARLearner:
         return (params, std)
     
     def psd(self):
-        y, x = matplotlib.mlab.psd(self.data, len(self.data), 1)
+        y, x = matplotlib.mlab.psd(self.norm_data, len(self.norm_data), 1)
         return (x*self.sf, np.log(y))
 
     def segment(self, n, j):
         assert j < n
-        l = len(self.data)
-        return self.data[(j*l)/n:((j+1)*l)/n]
+        l = len(self.norm_data)
+        return self.norm_data[(j*l)/n:((j+1)*l)/n]
     
     def aic(self, p, const=500):
-        lnr = ARLearner(self.data)
+        lnr = ARLearner(self.norm_data)
         params, std = lnr.yulewalker(p)
         em = model.ErrorModel(0, std)
         arm = model.ARModel(params, em)
-        return 2*(len(self.data)/const)*p-2*arm.lklhood(self.data)
+        return 2*(len(self.norm_data)/const)*p-2*arm.lklhood(self.norm_data)
 
+# use cross-validation to select the best model
+    def cv_select(self, max_p=30, skip=2):
+        best_ll = np.float('-inf')
+        best_p = 0
+        for p in np.array(range(0, max_p, skip))+1:
+            ll = self.crossval(p)
+            if ll > best_ll:
+                best_ll = ll
+                best_p = p
+
+        ar, std = self.yulewalker(best_p)
+        em = model.ErrorModel(0, std)
+        return model.ARModel(ar, em, c=self.c)
 
 # n-fold crossvalidation
     def crossval(self, p, n=5):
         sum_L = 0.0
-        l = len(self.data)
+        l = len(self.norm_data)
         d_segs = {}
         for i in range(n):
             d_segs[i] = self.segment(n, i)
     
         for i in range(n):
-            training_d = d_segs[i]
+            training_d = np.array(())
+            for j in range(n):
+                if j != i:
+                    training_d = np.concatenate([training_d, d_segs[j]])
             lnr = ARLearner(training_d)
             ar, std = lnr.yulewalker(p)
             em = model.ErrorModel(0, std)
             arm = model.ARModel(ar, em)
-            for j in range(n):
-                if i != j:
-                    test_d = d_segs[j]
-                    sum_L += arm.lklhood(test_d)
+            test_d = d_segs[i]
+            sum_L += arm.lklhood(test_d)
         return sum_L
     
     def psdcrossval(self, p, n=5):
         sum_L = 0.0
-        l = len(self.data)
+        l = len(self.norm_data)
         # i_th data segment for training
         # the rest for calculating likelihood
         psds = {}
