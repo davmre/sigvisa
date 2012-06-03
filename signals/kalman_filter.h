@@ -11,13 +11,15 @@ typedef void (*kalman_obs_fn)(const gsl_vector * state, gsl_vector * obs, va_lis
 typedef struct KalmanState {
   /* KalmanState invariants:
      -- n must equal the dimension of p_means, p_covars, p_transition, and p_process_noise (note that the matrices are all square), if they are non-NULL.
-     -- either p_linear_obs or p_obs_fn must be non-NULL, depending on whether linear_obs is set. 
+     -- either p_linear_obs or p_obs_fn must be non-NULL, depending on whether linear_obs is set.
      -- p_obs_noise must be defined (non-NULL).
   */
-  
+
   int n; // number of current state variables
   int np; // number of current AR processes
   int obs_n; // number of current output variables
+
+  gsl_vector * p_const;
 
   gsl_vector * p_means;
   gsl_matrix * p_covars;
@@ -46,7 +48,7 @@ typedef struct KalmanState {
 
   gsl_rng *r;
 
-  /* begin temp variables: these are not really part of the state, but are used repeatedly (mostly when updating) and so we keep them around to avoid allocating/deallocating */ 
+  /* begin temp variables: these are not really part of the state, but are used repeatedly (mostly when updating) and so we keep them around to avoid allocating/deallocating */
 
   gsl_vector * y; // the predicted observation (or obs residual) (obs_n)
   gsl_vector * ytmp; // temp vector (obs_n)
@@ -85,10 +87,10 @@ void kalman_state_print(KalmanState_t * k);
 
 void matrix_stabilize(gsl_matrix *m);
 void matrix_stabilize_zeros(gsl_matrix *m);
-/* void kalman_observation(int n, int k, 
-		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
+/* void kalman_observation(int n, int k,
+		    int n_arrs, ArrivalWaveform_t * active_arrivals,
 		    Segment_t * p_segment,
-		    gsl_matrix ** pp_obs); 
+		    gsl_matrix ** pp_obs);
 
 void kalman_update_linear(KalmanState_t *k,  gsl_vector * p_true_obs, gsl_vector ** y, gsl_matrix ** S);
 */

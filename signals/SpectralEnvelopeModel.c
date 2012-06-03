@@ -137,7 +137,7 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
 
 void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * args) {
 
-  /* Assume that we are passed two arguments: 
+  /* Assume that we are passed two arguments:
      1) an array of length NUM_CHANS, containing for each channel the index of the state variable corresponding to that channel's noise process
      2) the BandModel corresponding to the current band
      2) a linked list of currently active arriving waveforms
@@ -145,7 +145,7 @@ void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * 
   int * noise_indices = va_arg(*args, int *);
   BandModel_t * p_band = va_arg(*args, BandModel_t *);
   ArrivalWaveform_t * active_arrivals = va_arg(*args, ArrivalWaveform_t *);
- 
+
   int obs_i = 0;
   for(int c=0; c < NUM_CHANS; c++) {
 
@@ -154,11 +154,11 @@ void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * 
     }
 
     // the output of each channel starts with the noise process
-    double chan_output = gsl_vector_get(state, noise_indices[c]) + p_band->wiggle_model.mean;
+    double chan_output = gsl_vector_get(state, noise_indices[c]);
 
     // then, we add in the signal from each active arrival
-    for(ArrivalWaveform_t * aa = active_arrivals; 
-	aa != NULL; 
+    for(ArrivalWaveform_t * aa = active_arrivals;
+	aa != NULL;
 	aa = aa->next_active) {
 
       // signal is the log-envelope, plus AR wiggle process
@@ -318,7 +318,7 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
 
   // figure out how many channels we will be observing
   int obs_n=0;
-  int chan_indices[NUM_CHANS]; 
+  int chan_indices[NUM_CHANS];
   for(int i=0; i < NUM_CHANS; ++i) if (p_segment->p_channels[i] != NULL) chan_indices[obs_n++] = i;
   if( obs_n == 0 ) return 0;
 
@@ -414,7 +414,7 @@ void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segme
 
     /* if we're not sampling wiggles, then set all process noise vars
        to zero except those corresponding to the channel noise models
-       (controlled by "sample_noise" above) */ 
+       (controlled by "sample_noise" above) */
     for(int i=0; (!sample_wiggles) && i < k->n; ++i) {
       if (gsl_vector_get(k->p_process_noise, i) != 0) {
 	for (int c = 0; c < NUM_CHANS; ++c) if (i == noise_indices[c]) continue;
@@ -428,7 +428,7 @@ void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segme
 
     /* save the sampled observation */
     for (int c=0; c < NUM_CHANS; ++c) {
-      p_segment->p_channels[c]->p_bands[band]->p_data[t] = 
+      p_segment->p_channels[c]->p_bands[band]->p_data[t] =
 	gsl_vector_get(p_sample_obs, c);
     }
   }

@@ -29,7 +29,7 @@ def gen_random_segment(siteid, length):
         stats = {'network': 's' + str(siteid), 'station': 's' + str(siteid), 'location': '',
                  'channel': chan, 'band': 'narrow_logenvelope_2.00_3.00', 'npts': len(data), 'sampling_rate': 1,
                  'starttime_unix': 10000, 'siteid': siteid, 'chanid': chanid, 'starttime': UTCDateTime(10000)}
-        trace = Trace(data = data, header=stats)        
+        trace = Trace(data = data, header=stats)
         channels[chan] = {"narrow_logenvelope_2.00_3.00": trace}
     return channels
 
@@ -37,7 +37,7 @@ class TestPurePythonFunctions(unittest.TestCase):
     def setUp(self):
         pass
 
- 
+
 
 class TestLoadFunctions(unittest.TestCase):
     def setUp(self):
@@ -45,7 +45,7 @@ class TestLoadFunctions(unittest.TestCase):
         self.start_time = 1237680000
         self.end_time = self.start_time + 900
         self.stalist = [2, 5]
-        
+
     # Load a couple of brief waveforms from disk.
     def test_load_signals(self):
         segments = sigvisa_util.load_and_process_traces(self.cursor, self.start_time, self.end_time, stalist = self.stalist)
@@ -81,7 +81,7 @@ class TestCFunctions(unittest.TestCase):
         noise_var = .001
         wiggle_var = .001
 
-        self.ar_noise_model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(noise_mean, np.sqrt(noise_var)))
+        self.ar_noise_model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(0, np.sqrt(noise_var)), c=noise_mean)
 
         band = sigvisa.canonical_band_num("narrow_logenvelope_2.00_3.00")
         chan_BHZ = sigvisa.canonical_channel_num("BHZ")
@@ -96,13 +96,14 @@ class TestCFunctions(unittest.TestCase):
 
 
     def test_noise_trace_likelihood(self):
-        segments = gen_random_segments((2,), 1000)
+        segments = gen_random_segments((2,), 40)
         params = np.array(((100000, 1, 0, 1, 0, -0.02),))
 
         ll1 = self.sigmodel.trace_likelihood(segments[0]['BHZ']['narrow_logenvelope_2.00_3.00'], [1,], params)
         ll2 = self.ar_noise_model.lklhood(segments[0]['BHZ']['narrow_logenvelope_2.00_3.00'].data)
-        self.assertAlmostEqual(ll1, ll2, delta=.1)
-        
+        print ll1, ll2
+        self.assertAlmostEqual(ll1, ll2, places=1)
+
     def test_segment_likelihood(self):
         segments = gen_random_segments((2,), 1000)
         params = np.array(((10200, 4, 7, 2, 5, -0.02),))
@@ -110,12 +111,12 @@ class TestCFunctions(unittest.TestCase):
         ll = self.sigmodel.segment_likelihood(segments[0], [1,], params)
         print "got ll", ll
         self.assertTrue(ll < 0)
-        
+
     def test_sample_segment(self):
         params = np.array(((10200, 4, 7, 0, 7, -0.02),))
         seg_template = self.sigmodel.generate_segment(10000, 11000, 2, 1, [1,], params)
         seg_sample = self.sigmodel.sample_segment(10000, 11000, 2, 1, [1,], params)
-        
+
         pp = PdfPages(os.path.join('logs', "test_segments.pdf"))
         plot.plot_segment(seg_template, title="generated", band="narrow_logenvelope_2.00_3.00")
         pp.savefig()
@@ -133,7 +134,7 @@ class TestCFunctions(unittest.TestCase):
             segments_in = gen_random_segments(self.test_siteids, signal_len)
             self.sigmodel.set_signals(segments_in)
             segments_out = self.sigmodel.get_signals()
-        
+
             self.assertEqual(len(segments_in), len(segments_out))
             for (seg_in, seg_out) in zip(segments_in, segments_out):
                 self.assertEqual(len(seg_in), len(seg_out))
@@ -149,7 +150,7 @@ class TestCFunctions(unittest.TestCase):
 #        pass
 
     def test_learn_noise_params(self):
-        
+
         pass
 
     def test_learn_shape_params(self):
@@ -158,7 +159,7 @@ class TestCFunctions(unittest.TestCase):
         # verify that we learning *something*.
 
         self.set_default_params()
-        
+
         for siteid in self.test_siteids:
             self.sigmodel.set_fake_detections([ (1, siteid-1, 10005, 10, 1, 1, 1), ])
             self.sigmodel.set_signals(gen_random_segments((siteid,), 1000))
