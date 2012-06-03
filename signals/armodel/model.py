@@ -35,15 +35,16 @@ class ARModel:
     def lklhood(self, data):
         prob = 0
         for t in range(len(data)):
-            if t >= self.p:
-                expected = self.c
-                for i in range(self.p):
+            expected = self.c
+            for i in range(self.p):
+                if t > i:
                     expected += self.params[i] * data[t-i-1]
-                actual = data[t]
-                error = actual - expected
-                prob += self.em.lklhood(error)
+            actual = data[t]
+            error = actual - expected
+            prob += self.em.lklhood(error)
         # normalize the sum of probability (no dependency on p value)
-        return prob/(len(data)-self.p)*len(data)
+#        return prob/(len(data)-self.p)*len(data)
+        return prob
     
     #given data as argument, 
     def errors(self, data):
@@ -98,4 +99,5 @@ class ErrorModel:
     def lklhood(self, x):
         t1 = np.log(self.std) + 0.5 * np.log(2 * np.pi)
         t2 = 0.5 * np.square((x - self.mean) / self.std)
+
         return -(t1 + t2)
