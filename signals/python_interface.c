@@ -106,6 +106,9 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   segment.start_time = p_trace->start_time;
   segment.hz = p_trace->hz;
   segment.siteid = p_trace->siteid;
+  for (int i=0; i < NUM_CHANS; ++i) {
+    segment.p_channels[i] = NULL;
+  }
   Channel_t channel;
   segment.p_channels[p_trace->chan] = &channel;
   channel.len = p_trace->len;
@@ -116,7 +119,7 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
   // TODO: fix this once we start to handle bands properly
   //  channel.p_bands[p_trace->band] = p_trace;
-  channel.p_bands[BB_ENVELOPE] = p_trace;
+  channel.p_bands[DEFAULT_BAND] = p_trace;
   
   int n;
   Arrival_t * p_arrs;
@@ -124,7 +127,7 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   convert_arrivals(py_phaseids_list, py_params_array, &n, &p_arrs, &pp_arrs);
 
   SignalModel_t * p_model = &p_sigmodel->signal_model;
-  double ll = p_model->likelihood(p_sigmodel, &segment, 1, (const Arrival_t **)pp_arrs);
+  double ll = p_model->likelihood(p_sigmodel, &segment, n, (const Arrival_t **)pp_arrs);
 
   free(pp_arrs);
   free(p_arrs);

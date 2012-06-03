@@ -248,6 +248,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   /* add in the covariance of the observation noise */
   matrix_add_to_diagonal(k->S, k->p_obs_noise);
 
+
   /* finally, the state/measurement cross-covariance is used to get the Kalman gain */
   weighted_cross_covar(k->p_sigma_points, k->p_collapsed_means, k->p_obs_points, k->y, k->p_weights, k->Ktmp);
   double log_det_S = psdmatrix_inv_logdet(k->S, k->Sinv);
@@ -261,18 +262,31 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   gsl_vector_add(k->p_collapsed_means, k->p_collapsed_mean_update);
 
   // update the filtering covariance: p_covars = p_covars - K*S*K^T
-  // (uses k->Ktmp as a temp matrix)
+  // (uses k->Ktmp as temp matrix)
   gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->K, k->S, 0, k->Ktmp); // Ktmp = (S*K^T)^T
   gsl_blas_dgemm (CblasNoTrans, CblasTrans, -1, k->K, k->Ktmp, 1, k->p_collapsed_covars); 
-
-  matrix_stabilize(k->p_collapsed_covars);
-
+  matrix_stabilize_zeros(k->p_collapsed_covars); /* beat down those
+						    pesky
+						    slightly-nonzero
+						    covariances, for
+						    numerical
+						    stability */
   uncollapse_state(k);
   
   gsl_blas_dgemv(CblasNoTrans, 1, k->Sinv, k->y, 0, k->ytmp);
   double ex;
   gsl_blas_ddot(k->y, k->ytmp, &ex);
   double thisll = 0.5 * k->obs_n*log(2*PI) + .5 * log_det_S + 0.5 * ex;
+
+  /*double r = gsl_vector_get(k->y, 0);
+  double s2 = gsl_matrix_get(k->S, 0, 0);
+
+  double t1 = .5*log(s2) + 0.5 * log(2 * PI);
+  double t2 = 0.5 * r*r /s2;
+
+  printf("error likelihood %f of residual %f (logstd %f, .5*ex %f)", -1*(t1+t2), r, .5*log(s2), t2);
+  
+  printf("thisll %f for residual %f (obs_n %d, lds %f, .5*ex %f)\n", thisll, gsl_vector_get(k->y, 0), k->obs_n, log_det_S, .5*ex);*/
 
   return thisll;
 
@@ -390,7 +404,7 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
 
   k->p_obs_noise = gsl_vector_calloc(obs_n);
   for(int i=0; i < k->obs_n; ++i) {
-    gsl_vector_set(k->p_obs_noise, i, .01);
+    gsl_vector_set(k->p_obs_noise, i, 0);
   }
   /* the other state matrices have varying sizes depending on the
      current state-space dimension, so they get (re)allocated when

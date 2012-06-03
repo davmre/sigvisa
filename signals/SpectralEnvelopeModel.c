@@ -318,7 +318,8 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
 
   // figure out how many channels we will be observing
   int obs_n=0;
-  for(int i=0; i < NUM_CHANS; ++i) if (p_segment->p_channels[i] != NULL)  obs_n++;
+  int chan_indices[NUM_CHANS]; 
+  for(int i=0; i < NUM_CHANS; ++i) if (p_segment->p_channels[i] != NULL) chan_indices[obs_n++] = i;
   if( obs_n == 0 ) return 0;
 
   // initialize the Kalman filter with AR noise processes for each channel
@@ -342,8 +343,8 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
 
     // construct the observation vector
     int obs_i = 0;
-    for (int c = 0; c < NUM_CHANS; ++c) {
-      double obs  = p_segment->p_channels[c]->p_bands[band]->p_data[t];
+    for (int c = 0; c < obs_n; ++c) {
+      double obs  = p_segment->p_channels[chan_indices[c]]->p_bands[band]->p_data[t];
       gsl_vector_set(p_true_obs, obs_i++, obs);
     }
 

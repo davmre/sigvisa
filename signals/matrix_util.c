@@ -248,6 +248,21 @@ void matrix_stabilize(gsl_matrix *m) {
   }
 }
 
+// round off insignificant bits to prevent floating-point error from accumulating
+void matrix_stabilize_zeros(gsl_matrix *m) {
+  
+  const float TOL = 1e-4;
+
+  for(int i=0; i < m->size1; ++i) {
+    for(int j=0; j < m->size2; ++j) {
+      double v = gsl_matrix_get(m, i, j);
+      if (abs(v) < TOL) {
+	gsl_matrix_set(m, i, j, 0);
+      }
+    }
+  }
+}
+
 void pretty_print_vector(gsl_vector *m, char * format_str) {
   printf("***********************\n");
   for (int i=0;m!=NULL && i<m->size;i++)

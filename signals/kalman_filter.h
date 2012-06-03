@@ -59,13 +59,14 @@ typedef struct KalmanState {
   gsl_vector * p_weights; // weights for unscented transform (2np+1)
   gsl_vector * p_mean_update; // tmp vector for mean update (n)
   gsl_vector * p_collapsed_mean_update; // tmp vector for mean update (np)
-  gsl_vector * p_covars_tmp; //tmp vector for covar update (n x n)
+  gsl_matrix * p_covars_tmp; //tmp vector for covar update (n x n)
 
   gsl_vector * p_collapsed_means; // collapsed mean vector (np)
   gsl_matrix * p_collapsed_covars; // collapsed covariance matrix (np x np)
 
   gsl_matrix * K; // optimal Kalman gain matrix (np x obs_n)
   gsl_matrix * Ktmp; // temp matrix, (np x obs_n)
+
 
 } KalmanState_t ;
 
@@ -83,7 +84,7 @@ void kalman_state_print(KalmanState_t * k);
 
 
 void matrix_stabilize(gsl_matrix *m);
-
+void matrix_stabilize_zeros(gsl_matrix *m);
 /* void kalman_observation(int n, int k, 
 		    int n_arrs, ArrivalWaveform_t * active_arrivals, 
 		    Segment_t * p_segment,
