@@ -17,7 +17,7 @@
 #include <assert.h>
 
 /* define signal channels */
-#define NUM_CHANS   3
+#define NUM_CHANS   4
 #define CHAN_BHE    0
 #define CHAN_BHN    1
 #define CHAN_BHZ    2
@@ -131,4 +131,4 @@ PyObject * c_segment_to_py_segment(Segment_t * p_segment);
 
 PyObject * py_canonical_channel_num(PyObject * self, PyObject * args);
 PyObject * py_canonical_band_num(PyObject * self, PyObject * args);
-#endif 
+#endif

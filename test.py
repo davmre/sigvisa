@@ -87,11 +87,13 @@ class TestCFunctions(unittest.TestCase):
         chan_BHZ = sigvisa.canonical_channel_num("BHZ")
         chan_BHE = sigvisa.canonical_channel_num("BHE")
         chan_BHN = sigvisa.canonical_channel_num("BHN")
+        chan_ha = sigvisa.canonical_channel_num("horiz_avg")
 
         for siteid in self.test_siteids:
             self.sigmodel.set_noise_process(siteid, band, chan_BHZ, noise_mean, noise_var, arparams);
             self.sigmodel.set_noise_process(siteid, band, chan_BHE, noise_mean, noise_var, arparams);
             self.sigmodel.set_noise_process(siteid, band, chan_BHN, noise_mean, noise_var, arparams);
+            self.sigmodel.set_noise_process(siteid, band, chan_ha, noise_mean, noise_var, arparams);
             self.sigmodel.set_wiggle_process(siteid, band, noise_mean, wiggle_var, arparams);
 
 
