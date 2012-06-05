@@ -72,6 +72,9 @@ void kalman_remove_AR_process(KalmanState_t * k, int m, int process_idx) {
 
   int arridx = gsl_vector_get(k->p_process_indices, process_idx);
   remove_vector_slice(&k->p_process_indices, process_idx, 1);
+  for(int i=process_idx; i < k->p_process_indices->size; ++i) {
+    gsl_vector_set(k->p_process_indices, i, gsl_vector_get(k->p_process_indices, i) - m);
+  }
 
   remove_vector_slice(&k->p_const, process_idx, 1);
   remove_vector_slice(&k->p_means, arridx, m);
@@ -286,7 +289,12 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   gsl_blas_dgemv(CblasNoTrans, 1, k->Sinv, k->y, 0, k->ytmp);
   double ex;
   gsl_blas_ddot(k->y, k->ytmp, &ex);
-  double thisll = 0.5 * k->obs_n*log(2*PI) + .5 * log_det_S + 0.5 * ex;
+  double thisll = -0.5 * k->obs_n*log(2*PI) - 0.5 * log_det_S - 0.5 * ex;
+
+  if (thisll > 2) {
+    printf("thisll %f logdef %f ex %f\n", thisll, log_det_S, ex);
+    exit(1);
+  }
 
   /*double r = gsl_vector_get(k->y, 0);
   double s2 = gsl_matrix_get(k->S, 0, 0);
@@ -390,7 +398,7 @@ void kalman_update_linear(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector *
 
   }*/
 
-void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn) {
+void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise) {
 
   // initialize random number generator
   const gsl_rng_type * T;
@@ -415,7 +423,7 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
 
   k->p_obs_noise = gsl_vector_calloc(obs_n);
   for(int i=0; i < k->obs_n; ++i) {
-    gsl_vector_set(k->p_obs_noise, i, 0);
+    gsl_vector_set(k->p_obs_noise, i, obs_noise);
   }
   /* the other state matrices have varying sizes depending on the
      current state-space dimension, so they get (re)allocated when

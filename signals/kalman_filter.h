@@ -72,7 +72,7 @@ typedef struct KalmanState {
 
 } KalmanState_t ;
 
-void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn);
+void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise);
 void kalman_state_free(KalmanState_t * k);
 
 int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p);
