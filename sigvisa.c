@@ -442,7 +442,7 @@ PyObject * py_event_score(SigModel_t * p_sigmodel, PyObject * args) {
 int pydict_get_double(PyObject * py_dict, char * key, double *value) {
   int retcode = 0;
   PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
-  if (py_value != NULL) {
+  if (py_value != NULL && py_value != Py_None) {
     *value = PyFloat_AsDouble(py_value);
     retcode = 1;
   }
@@ -452,7 +452,7 @@ int pydict_get_double(PyObject * py_dict, char * key, double *value) {
 int pydict_get_int(PyObject * py_dict, char * key, long * value) {
   int retcode = 0;
   PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
-  if (py_value != NULL) {
+  if (py_value != NULL && py_value != Py_None) {
     *value = PyInt_AsLong(py_value);
     retcode = 1;
   }
@@ -462,7 +462,7 @@ int pydict_get_int(PyObject * py_dict, char * key, long * value) {
 int pydict_get_string(PyObject * py_dict, char * key, char ** value) {
   int retcode = 0;
   PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
-  if (py_value != NULL) {
+  if (py_value != NULL && py_value != Py_None) {
     *value = PyString_AsString(py_value);
     retcode = 1;
   } else {
@@ -502,7 +502,7 @@ PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
 
 /* Check to see if our sigmodel has a signal for a particular site at
-   a particular time */ 
+   a particular time */
 int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end_time) {
 
   for (int i=0; i < p_sigmodel->numsegments; ++i) {
