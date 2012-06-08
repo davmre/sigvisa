@@ -21,7 +21,6 @@ void convert_arrivals(PyObject * py_phaseids_list, PyObject * py_params_array, i
   *n = PyList_Size(py_phaseids_list);
   int n2 = PyArray_DIM(py_params_array, 0);
 
-
   int nparams = PyArray_DIM(py_params_array, 1);
   if ((n2 != *n) || (nparams != 6)) {
     LogError("convert_arrivals passed invalid parameter array: %d params!\n", nparams);
@@ -31,17 +30,16 @@ void convert_arrivals(PyObject * py_phaseids_list, PyObject * py_params_array, i
   *p_arrs = calloc(*n, sizeof(Arrival_t));
   *pp_arrs = calloc(*n, sizeof(Arrival_t *));
 
+    for(int i=0; i < *n; ++i) {
+      (*p_arrs)[i].time = ARRAY2(py_params_array, i, ARR_TIME_PARAM);
+      (*p_arrs)[i].peak_time = ARRAY2(py_params_array, i, PEAK_OFFSET_PARAM) + (*p_arrs)[i].time;
+      (*p_arrs)[i].peak_amp = ARRAY2(py_params_array, i, PEAK_HEIGHT_PARAM);
+      (*p_arrs)[i].peak_decay = ARRAY2(py_params_array, i, PEAK_DECAY_PARAM);
+      (*p_arrs)[i].amp = ARRAY2(py_params_array, i, CODA_HEIGHT_PARAM);
+      (*p_arrs)[i].coda_decay = ARRAY2(py_params_array, i, CODA_DECAY_PARAM);
 
-  for(int i=0; i < *n; ++i) {
-    (*p_arrs)[i].time = ARRAY2(py_params_array, i, ARR_TIME_PARAM);
-    (*p_arrs)[i].peak_time = ARRAY2(py_params_array, i, PEAK_OFFSET_PARAM) + (*p_arrs)[i].time;
-    (*p_arrs)[i].peak_amp = ARRAY2(py_params_array, i, PEAK_HEIGHT_PARAM);
-    (*p_arrs)[i].peak_decay = ARRAY2(py_params_array, i, PEAK_DECAY_PARAM);
-    (*p_arrs)[i].amp = ARRAY2(py_params_array, i, CODA_HEIGHT_PARAM);
-    (*p_arrs)[i].coda_decay = ARRAY2(py_params_array, i, CODA_DECAY_PARAM);
-
-    (*pp_arrs)[i] = (*p_arrs)+i;
-  }
+      (*pp_arrs)[i] = (*p_arrs)+i;
+    }
 
 }
 
@@ -100,7 +98,7 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
   Trace_t * p_trace;
   trace_to_signal(py_trace, &p_trace);
-  
+
   Segment_t segment;
   segment.len = p_trace->len;
   segment.start_time = p_trace->start_time;
@@ -120,7 +118,7 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   // TODO: fix this once we start to handle bands properly
   //  channel.p_bands[p_trace->band] = p_trace;
   channel.p_bands[DEFAULT_BAND] = p_trace;
-  
+
   int n;
   Arrival_t * p_arrs;
   Arrival_t ** pp_arrs;
@@ -171,14 +169,15 @@ PyObject * py_gen_segment(SigModel_t * self, PyObject * args, int sample) {
       return NULL;
 
   Segment_t segment;
+
   long len = (end_time-start_time)*srate;
   segment.len=len;
   segment.start_time=start_time;
   segment.hz=srate;
   segment.siteid=siteid;
-
-  
   alloc_segment_inner(&segment);
+
+
 
   int n;
   Arrival_t * p_arrs;
@@ -187,12 +186,11 @@ PyObject * py_gen_segment(SigModel_t * self, PyObject * args, int sample) {
 
   Spectral_Envelope_Model_Sample(self, &segment, n, (const Arrival_t **)pp_arrs, sample, sample);
 
-
   PyObject * py_seg = c_segment_to_py_segment(&segment);
   free(p_arrs);
   free(pp_arrs);
   free_segment_inner(&segment);
-  
+
 
   return py_seg;
 }
@@ -201,6 +199,7 @@ PyObject * py_gen_logenvelope_segment(SigModel_t * self, PyObject * args) {
   int a = 0;
 
   PyObject * s = py_gen_segment(self, args, FALSE);
+
   return s;
 }
 
