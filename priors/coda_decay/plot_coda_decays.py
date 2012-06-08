@@ -24,29 +24,45 @@ from priors.coda_decay.coda_decay_common import *
 from priors.coda_decay.train_coda_models import CodaModel
 
 
-def plot_channels_with_pred(pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None):
+def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None):
     fig = plt.figure(figsize = (8, 8))
 
     bhz_axes = plt.subplot(2, 1, 1)
+#    bhz_axes = plt.subplot(1, 1, 1)
 
     if title is not None:
         plt.title(title, fontsize=12)
 
-    plot_envelopes_with_pred(bhz_axes, vert_trace, phaseids, vert_params)
+    plot_envelopes_with_pred(sigmodel, bhz_axes, vert_trace, phaseids, vert_params)
     horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
-    plot_envelopes_with_pred(horiz_axes, horiz_trace, phaseids, horiz_params)
+    plot_envelopes_with_pred(sigmodel, horiz_axes, vert_trace, phaseids, vert_params, sample=True)
+#    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)
+
+
+#    horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
+#    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)
 
     pp.savefig()
     plt.close(fig)
 
-def plot_envelopes_with_pred(axes, trace, phaseids, params):
+def plot_envelopes_with_pred(sigmodel, axes, trace, phaseids, params, sample=False):
     srate = trace.stats['sampling_rate']
 
-    synth_trace = imitate_envelope(trace, phaseids, params)
+    st = trace.stats.starttime_unix
+    et = st + trace.stats.npts/srate
+    siteid = trace.stats.siteid
+    if sample:
+        synth_seg = sigmodel.sample_segment(st, et, siteid, srate, phaseids, params)
+    else:
+        synth_seg = sigmodel.generate_segment(st, et, siteid, srate, phaseids, params)
+    print synth_seg
+    synth_trace = synth_seg[trace.stats.channel][trace.stats.band]
+    print synth_trace.data
 
-    traces = [trace,synth_trace]
+    traces = [trace, synth_trace]
+
     formats = ["k-","g-"]
-    linewidths = [5,5]
+    linewidths = [1,1]
 
     plot.plot_traces_subplot(axes, traces, formats = formats, linewidths = linewidths)
 

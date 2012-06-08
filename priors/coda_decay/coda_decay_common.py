@@ -14,6 +14,7 @@ import sigvisa
 import learn, sigvisa_util
 import signals.SignalPrior
 from signals.armodel.learner import ARLearner
+from signals.armodel.model import ARModel, ErrorModel
 from utils.waveform import *
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
@@ -282,24 +283,84 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False):
 
         for chan in arrival_segment[0].keys():
             for band in arrival_segment[0][chan].keys():
-                arrival_segment[0][chan][band].data = arrival_segment[0][chan][band].data[arrival_segment[0][chan][band].stats.sampling_rate*70: - arrival_segment[0][chan][band].stats.sampling_rate*20]
-                arrival_segment[0][chan][band].stats.starttime_unix += 70
-                arrival_segment[0][chan][band].stats.npts = len(arrival_segment[0][chan][band].data)
-                arrival_segment[0][chan][band].stats.p_time = first_p_arrival
-                arrival_segment[0][chan][band].stats.s_time = first_s_arrival
-                arrival_segment[0][chan][band].stats.p_phaseid = first_p_phaseid
-                arrival_segment[0][chan][band].stats.s_phaseid = first_s_phaseid
+                a = arrival_segment[0][chan][band]
+                a.data = a.data[a.stats.sampling_rate*70: - a.stats.sampling_rate*20]
+                a.stats.starttime_unix += 70
+                a.stats.npts = len(a.data)
+                a.stats.p_time = first_p_arrival
+                a.stats.s_time = first_s_arrival
+                a.stats.p_phaseid = first_p_phaseid
+                a.stats.s_phaseid = first_s_phaseid
                 if load_noise:
                     noise = noise_segment[0][chan][band]
-                    ar_learner = ARLearner(noise.data, noise.sampling_rate)
-                    arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
-                    
+                    noise.data = noise.data[noise.stats.sampling_rate*5 : -noise.stats.sampling_rate*5]
+                    ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
+                    #arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
+                    params, std = ar_learner.yulewalker(17)
+                    em = ErrorModel(0, std)
+                    a.stats.noise_model = ARModel(params, em, c=ar_learner.c)
+                    a.stats.noise_floor = ar_learner.c
+
+                    smoothed_noise_data = smooth(noise.data, window_len=300, window="hamming")
+                    ar_learner = ARLearner(smoothed_noise_data, noise.stats.sampling_rate)
+                    params, std = ar_learner.yulewalker(17)
+                    em = ErrorModel(0, std)
+                    a.stats.smooth_noise_model = ARModel(params, em, c=ar_learner.c)
+                    a.stats.smooth_noise_floor = ar_learner.c
+
+                    """
+                    if band == "narrow_logenvelope_2.00_3.00" and chan=="BHZ":
+                        print "noise", noise.stats
+                        print "signal",a.stats
+                        print "model",a.stats.noise_model.params, a.stats.noise_model.em.std
+
+                        print "writing noise..."
+                        f = open('noise.dat', 'w')
+                        for d in noise.data[17:]:
+                            f.write(str(d) + "\n")
+                        print "writing signal..."
+                        f = open('signal.dat', 'w')
+                        for d in a.data[17:]:
+                            f.write(str(d) + "\n")
+
+                        expected_noise = [ (sum([params[k] * noise.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(noise.data))]
+                        expected_sig = [ (sum([params[k] * a.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(a.data))]
+
+                        f = open('noisepred.dat', 'w')
+                        for d in expected_noise:
+                            f.write(str(d) + "\n")
+
+                        f = open('signalpred.dat', 'w')
+                        for d in expected_sig:
+                            f.write(str(d) + "\n")
+
+                            f = open('envelope.dat', 'w')
+                        for d in arrival_segment[0][chan]["broadband_envelope"].data:
+                            f.write(str(d) + "\n")
+
+                        f = open('raw_signal.dat', 'w')
+                        for d in arrival_segment[0][chan]["broadband"].data:
+                            f.write(str(d) + "\n")
+
+                        f = open('noise_envelope.dat', 'w')
+                        for d in noise_segment[0][chan]["broadband_envelope"].data:
+                            f.write(str(d) + "\n")
+
+                        f = open('raw_noise.dat', 'w')
+                        for d in noise_segment[0][chan]["broadband"].data:
+                            f.write(str(d) + "\n")"""
+
+
+                    print "learned noise model for %s, %s" % (chan, band)
+
         # test to make sure we have the necessary channels
         tr1 = arrival_segment[0]["BHZ"]
         tr2 = arrival_segment[0]["horiz_avg"]
 
     except:
         raise
+
+    print "finished loading signal slice..."
 
     return (arrival_segment, noise_segment, other_arrivals, other_arrival_phases)
 
