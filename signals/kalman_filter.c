@@ -267,8 +267,6 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   gsl_vector_sub(k->y, p_true_obs);
   gsl_vector_scale(k->y, -1);
 
-  double pred_mean = gsl_vector_get(k->p_collapsed_means, 0);
-
   gsl_blas_dgemv(CblasNoTrans, 1, k->K, k->y, 0, k->p_collapsed_mean_update);
   gsl_vector_add(k->p_collapsed_means, k->p_collapsed_mean_update);
 
@@ -291,21 +289,12 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
   gsl_blas_ddot(k->y, k->ytmp, &ex);
   double thisll = -0.5 * k->obs_n*log(2*PI) - 0.5 * log_det_S - 0.5 * ex;
 
-  if (thisll > 2) {
-    printf("thisll %f logdef %f ex %f\n", thisll, log_det_S, ex);
-    exit(1);
+  if (k->debug_res_fp != NULL) {
+    fprint_vector(k->debug_res_fp, k->y, "%f ");
+    fprint_matrix(k->debug_var_fp, k->S, "%f ", FALSE);
+    fprint_matrix(k->debug_gain_fp, k->K, "%f ", FALSE);
+    fprint_vector(k->debug_state_fp, k->p_collapsed_means, "%f ");
   }
-
-  /*double r = gsl_vector_get(k->y, 0);
-  double s2 = gsl_matrix_get(k->S, 0, 0);
-
-  double t1 = .5*log(s2) + 0.5 * log(2 * PI);
-  double t2 = 0.5 * r*r /s2;
-
-  printf("error likelihood %f of residual %f (logstd %f, .5*ex %f)", -1*(t1+t2), r, .5*log(s2), t2);
-
-  printf("thisll %f for residual %f (obs_n %d, lds %f, .5*ex %f)\n", thisll, gsl_vector_get(k->y, 0), k->obs_n, log_det_S, .5*ex);*/
-
   return thisll;
 
 }
@@ -398,7 +387,9 @@ void kalman_update_linear(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector *
 
   }*/
 
-void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise) {
+void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise, char *debug_dir) {
+
+  k->verbose = 0;
 
   // initialize random number generator
   const gsl_rng_type * T;
@@ -430,6 +421,28 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
      needed using kalman_add_AR_process and
      kalman_remove_AR_process. */
 
+  /* open debug log files, if needed */
+  if (debug_dir != NULL) {
+    int l = strlen(debug_dir);
+    char resname[256], varname[256], gainname[256], statename[256];
+    snprintf(resname, 256, "%s/res.log", debug_dir);
+    snprintf(varname, 256, "%s/var.log", debug_dir);
+    snprintf(gainname, 256, "%s/gain.log", debug_dir);
+    snprintf(statename, 256, "%s/state.log", debug_dir);
+    k->debug_res_fp = fopen(resname, "w");
+    k->debug_var_fp = fopen(varname, "w");
+    k->debug_gain_fp = fopen(gainname, "w");
+    k->debug_state_fp = fopen(statename, "w");
+    if (!k->debug_res_fp || !k->debug_var_fp || !k->debug_gain_fp || !k->debug_state_fp) {
+      perror("error opening debug logfile");
+      exit(1);
+    }
+  } else {
+    k->debug_res_fp = NULL;
+    k->debug_var_fp = NULL;
+    k->debug_gain_fp = NULL;
+    k->debug_state_fp = NULL;
+  }
 }
 
 void kalman_state_free(KalmanState_t * k) {
@@ -469,24 +482,30 @@ void kalman_state_free(KalmanState_t * k) {
   if (k->K != NULL) gsl_matrix_free(k->K);
   if (k->Ktmp != NULL) gsl_matrix_free(k->Ktmp);
 
+  if (k->debug_res_fp != NULL) {
+    fclose(k->debug_res_fp);
+    fclose(k->debug_var_fp);
+    fclose(k->debug_gain_fp);
+    fclose(k->debug_state_fp);
+  }
+
 }
 
 void kalman_state_print(KalmanState_t * k) {
 
   printf("p_means:\n");
-  pretty_print_vector(k->p_means,"%.2f ");
+  pretty_print_vector(k->p_means);
 
   printf("p_covars:\n");
-  pretty_print_matrix(k->p_covars,"%.2f ");
+  pretty_print_matrix(k->p_covars);
 
   printf("p_transition:\n");
-  pretty_print_matrix(k->p_transition,"%.2f ");
+  pretty_print_matrix(k->p_transition);
 
   printf("p_process_noise:\n");
-  pretty_print_vector(k->p_process_noise,"%.2f ");
+  pretty_print_vector(k->p_process_noise);
 
   printf("p_sample_state:\n");
-  pretty_print_vector(k->p_sample_state,"%.2f ");
-
+  pretty_print_vector(k->p_sample_state);
 
 }

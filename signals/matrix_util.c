@@ -76,7 +76,7 @@ void remove_matrix_slice(gsl_matrix ** pp_matrix, int slice_start, int slice_siz
    are discarded (if the vector is shrinking) while new entries are
    filled with zeros (if it is growing). */
 void resize_vector(gsl_vector ** pp_vector, int l) {
-  
+
   if (*pp_vector == NULL) {
     *pp_vector = gsl_vector_alloc(l);
     gsl_vector_set_zero(*pp_vector);
@@ -115,7 +115,7 @@ void realloc_matrix(gsl_matrix ** pp_matrix, int rows, int cols) {
    or with the identity matrix, according to whether fill_identity is
    set. */
 void resize_matrix(gsl_matrix ** pp_matrix, int rows, int cols, int fill_identity) {
-  
+
   if (*pp_matrix == NULL) {
     *pp_matrix = gsl_matrix_alloc(rows,cols);
     if (fill_identity) {
@@ -164,13 +164,13 @@ double psdmatrix_inv_logdet(const gsl_matrix * A, gsl_matrix * invA) {
   gsl_matrix_memcpy(invA, A);
   gsl_linalg_cholesky_decomp(invA);
   gsl_vector_view diag = gsl_matrix_diagonal(invA);
-  
+
   double det = 0;
   for(int i=0; i < diag.vector.size; ++i) {
     det += 2* log(gsl_vector_get(&diag.vector, i));
   }
   gsl_linalg_cholesky_invert(invA);
-  
+
   return det;
 }
 
@@ -183,7 +183,7 @@ void weighted_mean(gsl_matrix * p_points, gsl_vector * p_weights, gsl_vector * p
     gsl_vector_view pt = gsl_matrix_column(p_points, i);
     gsl_blas_daxpy (gsl_vector_get(p_weights, i), &pt.vector, p_result);
   }
-  
+
 }
 
 void weighted_covar(gsl_matrix * p_points, gsl_vector * p_mean, gsl_vector * p_weights, gsl_matrix * p_result) {
@@ -200,7 +200,7 @@ void weighted_covar(gsl_matrix * p_points, gsl_vector * p_mean, gsl_vector * p_w
     gsl_blas_dsyr(CblasLower, gsl_vector_get(p_weights, i), r, p_result);
   }
   gsl_vector_free(r);
-  
+
 }
 
 void weighted_cross_covar(gsl_matrix * p_points1, gsl_vector * p_mean1, gsl_matrix * p_points2, gsl_vector * p_mean2, gsl_vector * p_weights, gsl_matrix * p_result) {
@@ -250,7 +250,7 @@ void matrix_stabilize(gsl_matrix *m) {
 
 // round off insignificant bits to prevent floating-point error from accumulating
 void matrix_stabilize_zeros(gsl_matrix *m) {
-  
+
   const float TOL = 1e-4;
 
   for(int i=0; i < m->size1; ++i) {
@@ -263,24 +263,45 @@ void matrix_stabilize_zeros(gsl_matrix *m) {
   }
 }
 
-void pretty_print_vector(gsl_vector *m, char * format_str) {
-  printf("***********************\n");
+
+void fprint_vector(FILE *fp, gsl_vector *m, char * format_str) {
+  if(m==NULL) {
+    fprintf(fp, "00000\n");
+    return;
+  }
+
   for (int i=0;m!=NULL && i<m->size;i++)
     {
-      printf(format_str,gsl_vector_get(m,i));
+      fprintf(fp, format_str,gsl_vector_get(m,i));
     }
-  printf("\n***********************\n");
+  fprintf(fp, "\n");
 }
 
-void pretty_print_matrix(gsl_matrix *m, char * format_str) {
-  printf("***********************\n");
+void fprint_matrix(FILE *fp, gsl_matrix *m, char * format_str, int line_break) {
+  if(m==NULL) {
+    fprintf(fp, "00000\n");
+    return;
+  }
   for (int i=0;m!=NULL && i< m->size1;i++)
     {
       for (int j=0;j<m->size2;j++)
 	{
-	  printf(format_str, gsl_matrix_get(m,i,j));
+	  fprintf(fp, format_str, gsl_matrix_get(m,i,j));
 	}
-      printf(";\n");
+      fprintf(fp, line_break ? ";\n" : ";");
     }
-  printf("\n***********************\n");
+  if(!line_break) fprintf(fp, "\n");
+}
+
+
+void pretty_print_vector(gsl_vector *m) {
+  printf("***********************\n");
+  fprint_vector(stdout, m, "%.3f ");
+  printf("***********************\n");
+}
+
+void pretty_print_matrix(gsl_matrix *m) {
+  printf("***********************\n");
+  fprint_matrix(stdout, m, "%.3f ", TRUE);
+  printf("***********************\n");
 }

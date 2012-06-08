@@ -1,6 +1,7 @@
 #ifndef MATRIX_UTIL
 #define MATRIX_UTIL
 
+#include <stdio.h>
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
@@ -25,7 +26,9 @@ void weighted_cross_covar(gsl_matrix * p_points1, gsl_vector * p_mean1, gsl_matr
 
 void matrix_add_to_diagonal(gsl_matrix * m, gsl_vector * v);
 
-void pretty_print_vector(gsl_vector *m, char * format_str);
-void pretty_print_matrix(gsl_matrix *m, char * format_str);
+void fprint_vector(FILE *fp, gsl_vector *m, char * format_str);
+void fprint_matrix(FILE *fp, gsl_matrix *m, char * format_str, int line_break);
+void pretty_print_vector(gsl_vector *m);
+void pretty_print_matrix(gsl_matrix *m);
 
-#endif 
+#endif
