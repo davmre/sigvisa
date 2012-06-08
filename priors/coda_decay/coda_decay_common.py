@@ -524,6 +524,24 @@ def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=No
     return bmap, (max_lon, max_lat)
 
 
-def subtract_noise(log_height, log_noise):
+def logsub_noise(log_height, log_noise):
     return np.log ( np.exp(log_height) - np.exp(log_noise) )
+
+def subtract_traces(tr, to_subtract):
+    l = np.min([len(tr.data), len(to_subtract.data)])
+
+    newdata = tr.data[:l] - to_subtract.data[:l]
+    newtrace = Trace(newdata, header=tr.stats.copy())
+    newtrace.stats.npts = len(newtrace.data)
+    return newtrace
+
+def get_template(sigmodel, trace, phaseids, params):
+    srate = trace.stats['sampling_rate']
+    st = trace.stats.starttime_unix
+    et = st + trace.stats.npts/srate
+    siteid = trace.stats.siteid
+    env = sigmodel.generate_segment(st, et, siteid, srate, phaseids, params)
+    env = env[trace.stats.channel][trace.stats.band]
+    return env
+
 

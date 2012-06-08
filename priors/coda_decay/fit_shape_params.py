@@ -103,7 +103,17 @@ def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
 #    print "trying heights ppeak %f pcoda %f speak %f scoda %f" % (params[0, PEAK_HEIGHT_PARAM], params[0, CODA_HEIGHT_PARAM], params[1, PEAK_HEIGHT_PARAM], params[1, CODA_HEIGHT_PARAM] )
 
     # we assume the noise params are already set...
-    c = sigmodel.trace_likelihood(smoothed, phaseids, params);
+
+    print "params"
+    print_params(params)
+
+    if iid:
+        env = get_template(sigmodel, smoothed, phaseids, params)
+        c = logenv_l1_cost(smoothed.data, env.data)
+    else:
+        c = -1 *sigmodel.trace_likelihood(smoothed, phaseids, params);
+
+    print "cost", c
 
     return c
 
@@ -137,7 +147,7 @@ def remove_peak(pp):
 
 def restore_peak(peakless_params):
     p = peakless_params
-    newp = np.zeros((p.shape[0], NUM_PARAMS))
+    newp = np.zeros((p.shape[0], NUM_PARAMS-1))
     newp[:, 0] = p[:, 0]
     newp[:, 1] = p[:, 1]
     newp[:, 2] = 1
@@ -145,10 +155,10 @@ def restore_peak(peakless_params):
     newp[:, 4] = p[:, 2]
     return newp
 
-def fit_elephant_envelope(sigmodel, arrivals, smoothed, defaults, fix_peak = False):
+def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_peak = True, evid=None):
 
-    arr_bounds = [ (0, 15), (0, None) , (0, None), (0, None), (-.2, 0) ]
-    arr_bounds_fixed_peak = [ (0, 15), (0, None), (-.2, 0) ]
+    arr_bounds = [ (0, 15), (0, 15) , (0, 10), (0, 15), (-.2, 0) ]
+    arr_bounds_fixed_peak = [ (0, 15), (0, 10), (-.15, 0) ]
     arrivals = [arr for arr in arrivals if arr is not None]
 
     start_params = np.zeros((len(arrivals), NUM_PARAMS))
@@ -163,8 +173,8 @@ def fit_elephant_envelope(sigmodel, arrivals, smoothed, defaults, fix_peak = Fal
         a = defaults[i]
         noise_floor = smoothed.stats.noise_model.c
 
-        fit_peak_height = subtract_noise(a[FIT_PEAK_HEIGHT], noise_floor)
-        fit_coda_height = subtract_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), noise_floor)
+        fit_peak_height = logsub_noise(a[FIT_PEAK_HEIGHT], noise_floor)
+        fit_coda_height = logsub_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), noise_floor)
 
         start_params[i, PEAK_OFFSET_PARAM] = ( a[FIT_PEAK_OFFSET] + smoothed.stats.starttime_unix) - time
         print "init peak offset to ", start_params[i, PEAK_OFFSET_PARAM], "for phase", i
@@ -486,7 +496,9 @@ def main():
             horiz_noise_floor = arrival_segment[0]["horiz_avg"][band].stats.noise_floor
 
             try:
+                vert, horiz = arrival_segment[0]["BHZ"][band], arrival_segment[0]["horiz_avg"][band]
                 vert_smoothed, horiz_smoothed = smoothed_traces(arrival_segment, band)
+
             except:
                 print traceback.format_exc()
                 continue
@@ -526,17 +538,20 @@ def main():
             # DO THE FITTING
             if elephant_model:
 
-                # DO THE FITTING
-                fit_vert_params, phaseids, vert_cost = fit_elephant_envelope(sigmodel, [first_p_arrival, first_s_arrival], vert_smoothed, [ x for x in [fit_p_vert, fit_s_vert] if x is not None])
-                fit_horiz_params, phaseids, horiz_cost = fit_elephant_envelope(sigmodel, [first_p_arrival, first_s_arrival], horiz_smoothed, [ x for x in [fit_p_horiz, fit_s_horiz] if x is not None])
-
-
                 # plot!
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
                 pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
-                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
+                # DO THE FITTING
+                fit_vert_params, phaseids, vert_cost = fit_elephant_envelope(sigmodel, pp, [first_p_arrival, first_s_arrival], vert, vert_smoothed, [ x for x in [fit_p_vert, fit_s_vert] if x is not None], evid = str(int(event[EV_EVID_COL])))
+#                fit_horiz_params, phaseids, horiz_cost = fit_elephant_envelope(sigmodel, [first_p_arrival, first_s_arrival], horiz, horiz_smoothed, [ x for x in [fit_p_horiz, fit_s_horiz] if x is not None])
+
+
+
+#                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
                 try:
-                    plot_channels_with_pred(pp, vert_smoothed, fit_vert_params, phaseids, horiz_smoothed, fit_horiz_params, title = gen_title(event, fit_vert_params))
+#                    plot_channels_with_pred(sigmodel, pp, vert_smoothed, fit_vert_params, phaseids, horiz_smoothed, fit_horiz_params, title = gen_title(event, fit_vert_params))
+#                 plot_channels_with_pred(sigmodel, pp, vert_smoothed, fit_vert_params, phaseids, horiz_smoothed, None, title = gen_title(event, fit_vert_params))
+                    pass
                 except:
                     print "error plotting:"
                     print traceback.format_exc()

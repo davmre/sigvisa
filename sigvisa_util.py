@@ -28,7 +28,7 @@ FREQ_BANDS = ((0.02, 0.03), (0.03, 0.05), (0.05, 0.1), (0.1, 0.2), (0.2, 0.3), (
 
 class MissingChannel(Exception):
   pass
-    
+
 def real_to_fake_det(det):
   return (det[dataset.DET_ARID_COL], det[dataset.DET_SITE_COL], det[dataset.DET_TIME_COL], det[dataset.DET_AMP_COL], det[dataset.DET_AZI_COL], det[dataset.DET_SLO_COL], det[dataset.DET_PHASE_COL])
 
@@ -36,12 +36,12 @@ def real_to_fake_det(det):
 def log_trace(trc, filename, format):
 
   real_fn = 'logs/%s.pdf' % (filename)
-  
+
 #  while (os.path.exists(real_fn)):
 #    real_fn = real_fn + "_"
 
-  print "logging to file", real_fn 
-  
+  print "logging to file", real_fn
+
   pp = PdfPages(real_fn)
 
   siteid = trc.stats["siteid"]
@@ -109,9 +109,9 @@ def aggregate_segments(segments):
     cutoff_threshold = 10
 
     min_len = 1
-    
+
     changed = True
-    
+
     while changed:
         changed = False
         for i in range(len(segments)-1):
@@ -121,7 +121,7 @@ def aggregate_segments(segments):
                 if j >= len(segments):
                     break
                 overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
-                
+
 
                 if overlap > aggregate_threshold:
 
@@ -138,14 +138,14 @@ def aggregate_segments(segments):
 
                     agg = buildsegment(chans1 + chans2, agg_start, agg_end)
 
-                    
+
                     if np.abs(agg_start - s1) > cutoff_threshold:
                         pre_agg = buildsegment(chans1, s1, agg_start)
                         insert_sorted(segments, pre_agg, i)
 
                     if agg_end-agg_start > min_len:
                       insert_sorted(segments, agg, i)
-                    
+
                     post_agg = None
                     if np.abs(e1 - agg_end) > cutoff_threshold:
                         post_agg = buildsegment(chans1, agg_end, e1)
@@ -153,7 +153,7 @@ def aggregate_segments(segments):
                         post_agg = buildsegment(chans2, agg_end, e2)
                     if post_agg is not None:
                         insert_sorted(segments, post_agg, i)
-                
+
                     changed = True
     return segments
 
@@ -185,11 +185,11 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, 
       sta = arr[12]
       stm = float(arr[2]) - 4
       etm = float(arr[2]) +30
-      
+
       segment_chans = dict()
 
       for chan in ("BHZ", "BHN", "BHE", "BH1", "BH2"):
-        print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}", 
+        print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}",
         try:
           trace = utils.waveform.fetch_waveform(sta, chan, stm, etm)
           if chan == "BH1":
@@ -210,9 +210,9 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, 
         except (utils.waveform.MissingWaveform, IOError):
           print " ... not found, skipping."
           continue
- 
+
       if len(segment_chans) > 0:
-        traces.append(segment_chans)      
+        traces.append(segment_chans)
 
     return traces
 
@@ -241,17 +241,17 @@ def load_traces(cursor, stations, start_time, end_time, process=None, downsample
             for (chan, st, et) in segment:
 
               stm = max(st, float(start_time))
-              
+
               etm = min(et, float(end_time))
 
               # TODO: figure out why this happens
               if etm <= stm:
                 continue
 
-              print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}", 
+              print "fetching waveform {sta: ", sta, ", chan: ", chan, ", start_time: ", stm, ", end_time: ", etm, "}",
               try:
                 trace = utils.waveform.fetch_waveform(sta, chan, stm, etm)
-            
+
 
                 if chan == "BH1":
                   trace.stats['channel'] = "BHE"
@@ -272,7 +272,7 @@ def load_traces(cursor, stations, start_time, end_time, process=None, downsample
               except (utils.waveform.MissingWaveform, IOError):
                 print " ... not found, skipping."
                 continue
- 
+
             traces.append(segment_chans)
 
    # print "fetched ", len(traces), " segments."
@@ -301,7 +301,7 @@ def enframe(x, win, inc):
     of inc. Each frame is multiplied by the window win().
     The length of the frames is given by the length of the window win().
     The centre of frame I is x((I-1)*inc+(length(win)+1)/2) for I=1,2,...
-    
+
     :param x: signal to split in frames
     :param win: window multiplied to each frame, length determines frame length
     :param inc: increment to shift frames, in samples
@@ -326,7 +326,7 @@ def enframe(x, win, inc):
         f = f * np.vstack([w] * nf)
     no_win, _ = f.shape
     return f, length, no_win
-    
+
 
 def estimate_azi_amp_slo(channel_bundle_det_window):
 
@@ -434,7 +434,7 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
         siteid = channel_bundle[0].stats["siteid"]
         samprate = channel_bundle[0].stats["sampling_rate"]
         start_time = channel_bundle[0].stats["starttime_unix"]
-            
+
         print "computing sta/lta and triggers at ", siteid
         max_data = max_over_channels(channel_bundle)
         cft_data = obspy.signal.recStalta(max_data, int(1.5 * samprate),
@@ -446,7 +446,7 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
         for (trigger_start, trigger_end) in triggers:
             det_id = len(detections)
             det_time = trigger_start / samprate + start_time
-            
+
             channel_bundle_window = map(lambda c : c[trigger_start:trigger_end], channel_bundle)
 
             try:
@@ -465,17 +465,18 @@ def fake_detections(traces, sta_high_thresholds, sta_low_thresholds):
 def compute_narrowband_envelopes(segments):
 
   for segment_chans in segments:
-    
+
     for (chan, chan_bands) in segment_chans.items():
 
       broadband_signal = chan_bands["broadband"]
-      
+
       # compute log envelope for each frequency band in this component
       for band in FREQ_BANDS:
         band_data = obspy.signal.filter.bandpass(broadband_signal.data, band[0], band[1], broadband_signal.stats['sampling_rate'], corners = 4, zerophase=True)
         band_env = obspy.signal.filter.envelope(band_data)
-        band_trace = Trace(np.log(band_env), dict(broadband_signal.stats.items() + [("freq_band", band)]))
-        chan_bands["narrow_logenvelope_%1.2f_%1.2f" % (band[0], band[1])] = band_trace
+        band_name = "narrow_logenvelope_%1.2f_%1.2f" % (band[0], band[1])
+        band_trace = Trace(np.log(band_env), dict(broadband_signal.stats.items() + [("band", band_name)]))
+        chan_bands[band_name] = band_trace
 
     # average the two horizonal components, if they're both present
     horiz_avg = None
@@ -512,7 +513,7 @@ def compute_narrowband_envelopes(segments):
 # single time window at a single statement, possibly by concatenating
 # several of the original segments
 def extract_timeslice_at_station(traces, start_time, end_time, siteid):
-  
+
   new_segment = dict()
   last_segment_end = float("NaN")
 
@@ -599,7 +600,7 @@ def trim_first_n_seconds(segments, n):
     for trc in segment.values():
       srate = trc.stats.sampling_rate
       npts = trc.stats.npts
-      
+
       to_trim = n*srate
 
       if to_trim < npts:
@@ -617,7 +618,7 @@ def print_trace(trace):
             prevx = x
 
 def main():
-    parser = OptionParser() 
+    parser = OptionParser()
     # make options for which set of events to load, and what time period
     parser.add_option("--window", dest="window_size", default=1,
                     type="int",
@@ -687,7 +688,7 @@ def main():
     sm = learn.load_sigvisa("parameters",
                                 options.start_time, options.end_time,
                                 site_up, sites, phasenames, phasetimedef)
-    
+
     print "sigvisa loaded, setting signals"
     sm.set_signals(energies)
 
@@ -701,7 +702,7 @@ def main():
     plt.show()
 
     return
-    
+
     sta_high_thresholds = dict()
     sta_low_thresholds = dict()
     for i in range(200):
@@ -718,7 +719,7 @@ def main():
     print "really reading events"
     events, orid2num = dataset.read_events(cursor, earliest_event_time, options.end_time, options.event_set, options.runid)
     print "loaded ", len(events), " events."
-    
+
     # read associations, as training data for learning
     evlist = dataset.read_assoc(cursor, earliest_event_time, options.end_time, orid2num, arid2num, options.event_set, options.runid)
     print "loaded associations for ", len(events), " events."
