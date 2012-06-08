@@ -1,3 +1,4 @@
+
 #include <math.h>
 #include <stdlib.h>
 
@@ -127,7 +128,7 @@ PyObject * py_canonical_band_num(PyObject * self, PyObject * args) {
 
 
 /* ****************************************************************
-   Constructors and Destructors 
+   Constructors and Destructors
    ****************************************************************
 */
 Trace_t * alloc_trace() {
@@ -436,6 +437,14 @@ PyObject * build_trace(Trace_t * p_trace) {
    Py_DECREF(key);
    Py_DECREF(value);
 
+   key = PyString_FromString("band");
+   value = canonical_band_name(p_trace->band);
+   assert(key != NULL && value != NULL);
+   PyDict_SetItem(py_stats, key, value);
+   Py_DECREF(key);
+   Py_DECREF(value);
+
+
    PyObject * args = Py_BuildValue("OO", py_data, py_stats);
    PyObject * trace =   PyEval_CallObject(traceClass_obj, args);
 
@@ -488,7 +497,7 @@ PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args) {
 }
 
 
-/* 
+/*
    ****************************************************************
    Signal Synthesis
    ****************************************************************
