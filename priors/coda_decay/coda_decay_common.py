@@ -27,10 +27,15 @@ P_PHASEIDS = [1,2]
 S_PHASES = ['S', 'Sn']
 S_PHASEIDS = [4, 5]
 
+MIN_SEGMENT_LENGTH = 40
+
 min_p_coda_length = 30
 min_s_coda_length = 45
 
 avg_cost_bound = 0.2
+
+bands = ["narrow_logenvelope_2.00_3.00",]
+chans = ["BHZ",]
 
 (EVID_COL, SITEID_COL, BANDID_COL, P_PHASEID_COL, S_PHASEID_COL, DISTANCE_COL, AZI_COL, LON_COL, LAT_COL, MB_COL, VERT_P_FIT_B, VERT_P_FIT_HEIGHT, VERT_P_FIT_PHASE_START_TIME, VERT_P_FIT_PHASE_LENGTH, VERT_P_FIT_PEAK_OFFSET, VERT_P_FIT_PEAK_HEIGHT, VERT_P_FIT_CODA_START_OFFSET, VERT_P_FIT_CODA_LENGTH, VERT_P_FIT_MAX_CODA_LENGTH, VERT_P_FIT_AVG_COST, HORIZ_P_FIT_B, HORIZ_P_FIT_HEIGHT, HORIZ_P_FIT_PHASE_START_TIME, HORIZ_P_FIT_PHASE_LENGTH, HORIZ_P_FIT_PEAK_OFFSET, HORIZ_P_FIT_PEAK_HEIGHT, HORIZ_P_FIT_CODA_START_OFFSET, HORIZ_P_FIT_CODA_LENGTH, HORIZ_P_FIT_MAX_CODA_LENGTH, HORIZ_P_FIT_AVG_COST, VERT_S_FIT_B, VERT_S_FIT_HEIGHT, VERT_S_FIT_PHASE_START_TIME, VERT_S_FIT_PHASE_LENGTH, VERT_S_FIT_PEAK_OFFSET, VERT_S_FIT_PEAK_HEIGHT, VERT_S_FIT_CODA_START_OFFSET, VERT_S_FIT_CODA_LENGTH, VERT_S_FIT_MAX_CODA_LENGTH, VERT_S_FIT_AVG_COST, HORIZ_S_FIT_B, HORIZ_S_FIT_HEIGHT, HORIZ_S_FIT_PHASE_START_TIME, HORIZ_S_FIT_PHASE_LENGTH, HORIZ_S_FIT_PEAK_OFFSET, HORIZ_S_FIT_PEAK_HEIGHT, HORIZ_S_FIT_CODA_START_OFFSET, HORIZ_S_FIT_CODA_LENGTH, HORIZ_S_FIT_MAX_CODA_LENGTH, HORIZ_S_FIT_AVG_COST, VERT_NOISE_FLOOR_COL, HORIZ_NOISE_FLOOR_COL, DEPTH_COL, EVTIME_COL, NUM_COLS) = range(54+1)
 
@@ -43,6 +48,12 @@ avg_cost_bound = 0.2
 # params for the envelope model
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
 
+def phaseid_to_name(phaseid):
+    for (ids, n) in ((P_PHASEIDS, P_PHASES), (S_PHASEIDS, S_PHASES)):
+        if phaseid in ids:
+            i = ids.index(phaseid)
+            return n[i]
+    raise Exception("unrecognized phaseids %s" % (phaseid,))
 
 def add_depth_time(cursor, r):
     print r.shape
@@ -207,42 +218,31 @@ def smooth(x,window_len=11,window='hanning'):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y
 
-# load the vertical and horizontal channels (intended for
-# analyzing P and S arrivals respectively), and establish
-# that they have the same start time, length, and sampling
-# rate.
-def smoothed_traces(arrival_segment, band):
-    try:
-        vert_trace = arrival_segment[0]["BHZ"][band]
-        horiz_trace = arrival_segment[0]["horiz_avg"][band]
-    except:
-        print "couldn't load trace, skipping..."
-        return None
+def smooth_segment(segment, bands=None, chans=None, window_len=300):
 
-    if np.abs(vert_trace.stats.starttime_unix - horiz_trace.stats.starttime_unix) > 0.01:
-        raise Exception("vertical and horizontal channels have different start times!")
-    if vert_trace.stats.npts != horiz_trace.stats.npts:
-        raise Exception("vertical and horizontal channels have different lengths!")
-    if vert_trace.stats.sampling_rate != horiz_trace.stats.sampling_rate:
-        raise Exception("vertical and horizontal channels have different sampling rates!")
+    if chans is None:
+        chans = segment[bands[0]].keys()
+    if bands is None:
+        bands = segment.keys()
 
-    # reject segments too short to do an accurate coda fit
-    npts = vert_trace.stats.npts
-    srate = vert_trace.stats.sampling_rate
-    if npts < srate * 15:
-        print "minimum segment length 15s, skipping segment with", npts/srate
-        return None
+    smoothed_segment = dict()
+    for chan in chans:
+        smoothed_segment[chan] = dict()
+        for band in bands:
 
-    # compute smoothed traces
-    vert_smoothed = Trace(smooth(vert_trace.data, window_len=300, window="hamming") , header=vert_trace.stats.copy())
-    vert_smoothed.stats.npts = len(vert_smoothed.data)
-    horiz_smoothed = Trace(smooth(horiz_trace.data, window_len=300, window="hamming") , header=horiz_trace.stats.copy())
-    horiz_smoothed.stats.npts = len(horiz_smoothed.data)
+            try:
+                tr = segment[chan][band]
+            except:
+                print "couldn't access band %s chan %s, skipping..." % (band, chan)
+                continue
 
-    return vert_smoothed, horiz_smoothed
-#    return vert_trace, horiz_trace
+            smoothed = Trace(smooth(tr.data, window_len=window_len, window="hamming") , header=tr.stats.copy())
+            smoothed.stats.npts = len(smoothed.data)
+            smoothed_segment[chan][band] = smoothed
 
-def load_signal_slice(cursor, evid, siteid, load_noise = False):
+    return smoothed_segment
+
+def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=False):
 
     sql_query="SELECT l.time, l.arid, pid.id FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba, static_phaseid pid where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase order by l.time" % (evid, siteid)
     cursor.execute(sql_query)
@@ -294,64 +294,67 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False):
                 if load_noise:
                     noise = noise_segment[0][chan][band]
                     noise.data = noise.data[noise.stats.sampling_rate*5 : -noise.stats.sampling_rate*5]
-                    ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
-                    #arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
-                    params, std = ar_learner.yulewalker(17)
-                    em = ErrorModel(0, std)
-                    a.stats.noise_model = ARModel(params, em, c=ar_learner.c)
-                    a.stats.noise_floor = ar_learner.c
 
-                    smoothed_noise_data = smooth(noise.data, window_len=300, window="hamming")
-                    ar_learner = ARLearner(smoothed_noise_data, noise.stats.sampling_rate)
-                    params, std = ar_learner.yulewalker(17)
-                    em = ErrorModel(0, std)
-                    a.stats.smooth_noise_model = ARModel(params, em, c=ar_learner.c)
-                    a.stats.smooth_noise_floor = ar_learner.c
+                    if not learn_noise:
+                        a.stats.noise_floor = np.mean(noise.data)
+                        a.stats.smooth_noise_floor = np.mean(noise.data)
+                    else:
+                        ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
+                        #arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
+                        params, std = ar_learner.yulewalker(17)
+                        em = ErrorModel(0, std)
+                        a.stats.noise_model = ARModel(params, em, c=ar_learner.c)
+                        a.stats.noise_floor = ar_learner.c
 
-                    """
-                    if band == "narrow_logenvelope_2.00_3.00" and chan=="BHZ":
-                        print "noise", noise.stats
-                        print "signal",a.stats
-                        print "model",a.stats.noise_model.params, a.stats.noise_model.em.std
+                        smoothed_noise_data = smooth(noise.data, window_len=300, window="hamming")
+                        ar_learner = ARLearner(smoothed_noise_data, noise.stats.sampling_rate)
+                        params, std = ar_learner.yulewalker(17)
+                        em = ErrorModel(0, std)
+                        a.stats.smooth_noise_model = ARModel(params, em, c=ar_learner.c)
+                        a.stats.smooth_noise_floor = ar_learner.c
 
-                        print "writing noise..."
-                        f = open('noise.dat', 'w')
-                        for d in noise.data[17:]:
-                            f.write(str(d) + "\n")
-                        print "writing signal..."
-                        f = open('signal.dat', 'w')
-                        for d in a.data[17:]:
-                            f.write(str(d) + "\n")
+                        """
+                        if band == "narrow_logenvelope_2.00_3.00" and chan=="BHZ":
+                            print "noise", noise.stats
+                            print "signal",a.stats
+                            print "model",a.stats.noise_model.params, a.stats.noise_model.em.std
 
-                        expected_noise = [ (sum([params[k] * noise.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(noise.data))]
-                        expected_sig = [ (sum([params[k] * a.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(a.data))]
+                            print "writing noise..."
+                            f = open('noise.dat', 'w')
+                            for d in noise.data[17:]:
+                                f.write(str(d) + "\n")
+                            print "writing signal..."
+                            f = open('signal.dat', 'w')
+                            for d in a.data[17:]:
+                                f.write(str(d) + "\n")
 
-                        f = open('noisepred.dat', 'w')
-                        for d in expected_noise:
-                            f.write(str(d) + "\n")
+                            expected_noise = [ (sum([params[k] * noise.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(noise.data))]
+                            expected_sig = [ (sum([params[k] * a.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(a.data))]
 
-                        f = open('signalpred.dat', 'w')
-                        for d in expected_sig:
-                            f.write(str(d) + "\n")
+                            f = open('noisepred.dat', 'w')
+                            for d in expected_noise:
+                                f.write(str(d) + "\n")
 
-                            f = open('envelope.dat', 'w')
-                        for d in arrival_segment[0][chan]["broadband_envelope"].data:
-                            f.write(str(d) + "\n")
+                            f = open('signalpred.dat', 'w')
+                            for d in expected_sig:
+                                f.write(str(d) + "\n")
 
-                        f = open('raw_signal.dat', 'w')
-                        for d in arrival_segment[0][chan]["broadband"].data:
-                            f.write(str(d) + "\n")
+                                f = open('envelope.dat', 'w')
+                            for d in arrival_segment[0][chan]["broadband_envelope"].data:
+                                f.write(str(d) + "\n")
 
-                        f = open('noise_envelope.dat', 'w')
-                        for d in noise_segment[0][chan]["broadband_envelope"].data:
-                            f.write(str(d) + "\n")
+                            f = open('raw_signal.dat', 'w')
+                            for d in arrival_segment[0][chan]["broadband"].data:
+                                f.write(str(d) + "\n")
 
-                        f = open('raw_noise.dat', 'w')
-                        for d in noise_segment[0][chan]["broadband"].data:
-                            f.write(str(d) + "\n")"""
+                            f = open('noise_envelope.dat', 'w')
+                            for d in noise_segment[0][chan]["broadband_envelope"].data:
+                                f.write(str(d) + "\n")
 
+                            f = open('raw_noise.dat', 'w')
+                            for d in noise_segment[0][chan]["broadband"].data:
+                                f.write(str(d) + "\n")"""
 
-                    print "learned noise model for %s, %s" % (chan, band)
 
         # test to make sure we have the necessary channels
         tr1 = arrival_segment[0]["BHZ"]

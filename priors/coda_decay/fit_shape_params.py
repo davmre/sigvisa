@@ -40,10 +40,103 @@ def print_params(params):
     for i in range(n):
         print "%d: st: %.1f pdelay: %.1f pheight: %.2f pdecay: %.4f cheight: %.2f cdecay: %.4f" % (i, params[i, 0], params[i, 1], params[i, 2], params[i, 3], params[i, 4], params[i, 5])
 
+
+
+def coord_descent(f, x0, converge=0.1, steps=None, maxiters=500):
+    ncoords = len(x0)
+    x = x0.copy()
+    v = f(x)
+    for i in range(maxiters):
+        incr = 0
+        for p in np.random.permutation(ncoords):
+
+            # try taking steps in both directions
+            step = steps[p]
+            x[p] = x[p] + step
+            v1 = f(x)
+            x[p] = x[p] - 2*step
+            v2 = f(x)
+            if v <= v1 and v <= v2:
+                x[p] = x[p] + step
+                continue
+
+            # continue stepping in the best direction, until there's
+            # no more improvement.
+            if v1 < v2:
+                vold = v1
+                x[p] = x[p] + 3 * step
+                sign = 1
+            else:
+                vold = v2
+                sign = -1
+                x[p] = x[p] - step
+            vnew = f(x)
+            while vnew <= vold:
+                x[p] = x[p] + sign*step
+                vold = vnew
+                vnew = f(x)
+
+            x[p] = x[p] - sign*step
+            incr = np.max([v - vold, incr])
+            v = vold
+        if incr < converge:
+            break
+    return x
+
+def minimize(f, x0, method="bfgs", bounds=None):
+    if method=="bfgs":
+        x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, x0, approx_grad=1, bounds=bounds, epsilon = 1e-1, factr=1e12)
+    elif method=="tnc":
+        x1, nfeval, rc = scipy.optimize.fmin_tnc(f, x0, approx_grad=1, bounds=bounds)
+        x1 = np.array(x1)
+    elif method=="simplex":
+        x1 = scipy.optimize.fmin(f, x0)
+    elif method=="anneal":
+        x1, jmin, T, feval, iters, accept, retval = scipy.optimize.anneal(f, x0)
+    elif method=="coord":
+        x1 = coord_descent(f, x0, steps=[.1, .1, .005])
+    else:
+        raise Exception("unknown optimization method %s" % (method))
+    return x1, f(x1)
+
+def optimize_by_phase(f, start_params, bounds, phaseids, method="bfgs", iters=3):
+    nphase_params = len(start_params) / len(phaseids)
+    params = start_params.copy()
+    for i in range(iters):
+        for (pidx, phaseid) in enumerate(phaseids):
+            sidx = pidx*nphase_params
+            eidx = (pidx+1)*nphase_params
+            phase_params = params[sidx:eidx]
+            phase_bounds = bounds[sidx:eidx]
+            apf = lambda pp : f(np.concatenate([params[:sidx], pp, params[eidx:]]))
+            phase_params, c = minimize(apf, phase_params, method=method, bounds=phase_bounds)
+            print "params", phase_params, "cost", c
+            params = np.concatenate([params[:sidx], phase_params, params[eidx:]])
+    return params, c
+
+def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
+
+    srate = tr.stats.sampling_rate
+    st = tr.stats.starttime_unix
+    nf = tr.stats.noise_floor
+
+    diff = subtract_traces(tr, tmpl)
+
+    wiggles = []
+    for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
+        start_wiggle = arrs["arrivals"][phase_idx] + 20
+        start_idx = np.ceil((start_wiggle - st)*srate)
+        for t in range(100):
+            end_idx = start_idx + np.ceil(srate*t)
+            if tmpl[end_idx] - nf < threshold:
+                break
+        wiggle = diff.data[start_idx:end_idx]
+        wiggles.append(wiggle)
+
+    return wiggles
+
+
 def learn_wiggle_params(sigmodel, env, smoothed, phaseids, params):
-    srate = env.stats.sampling_rate
-    st = env.stats.starttime_unix
-    nf = env.stats.noise_floor
 
 
     tmpl = get_template(sigmodel, env, phaseids, params)
@@ -104,8 +197,8 @@ def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
 
     # we assume the noise params are already set...
 
-    print "params"
-    print_params(params)
+#    print "params"
+#    print_params(params)
 
     if iid:
         env = get_template(sigmodel, smoothed, phaseids, params)
@@ -113,7 +206,7 @@ def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
     else:
         c = -1 *sigmodel.trace_likelihood(smoothed, phaseids, params);
 
-    print "cost", c
+#    print "cost", c
 
     return c
 
@@ -155,11 +248,37 @@ def restore_peak(peakless_params):
     newp[:, 4] = p[:, 2]
     return newp
 
-def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_peak = True, evid=None):
+def find_starting_params(arr, smoothed):
+    """ Uses various heuristics to come up with a good initialization
+    for the fitting process. Also constructs a list of bounds
+    appropriate for passing to a scipy optimization function."""
 
     arr_bounds = [ (0, 15), (0, 15) , (0, 10), (0, 15), (-.2, 0) ]
     arr_bounds_fixed_peak = [ (0, 15), (0, 10), (-.15, 0) ]
-    arrivals = [arr for arr in arrivals if arr is not None]
+
+    noise_floor = smoothed.stats.noise_floor
+    nf = lambda t : noise_floor
+    accept_p = False
+    accept_s = False
+
+    arrivals = []
+    defaults = []
+    if arr["first_p_arrival"] is not None:
+        fit_p = fit_phase_coda(arr["first_p_arrival"], smoothed, arr["arrivals"], arr["arrival_phases"], nf)
+        smoothed.stats.fit_p = fit_p
+        accept_p = accept_fit(smoothed.stats.fit_p, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
+        arrivals.append(arr["first_p_arrival"])
+        defaults.append(smoothed.stats.fit_p)
+
+    if arr["first_s_arrival"] is not None:
+        # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
+        if accept_p:
+            nf = lambda t : max(noise_floor, fit_p[FIT_HEIGHT] + fit_p[FIT_B]*(t - fit_p[FIT_CODA_START_OFFSET]))
+
+        fit_s = fit_phase_coda(arr["first_s_arrival"], smoothed, arr["arrivals"], arr["arrival_phases"], nf)
+        smoothed.stats.fit_s = fit_s
+        arrivals.append(arr["first_s_arrival"])
+        defaults.append(smoothed.stats.fit_s)
 
     start_params = np.zeros((len(arrivals), NUM_PARAMS))
     bounds = []
@@ -168,10 +287,9 @@ def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_p
     arr_times = np.zeros((len(arrivals), 1))
     for i, arr in enumerate(arrivals):
         time = arr[AR_TIME_COL]
-#        (peak_offset_time, peak_height) = arrival_peak_offset(smoothed, time - smoothed.stats.starttime_unix)
 
         a = defaults[i]
-        noise_floor = smoothed.stats.noise_model.c
+        noise_floor = smoothed.stats.noise_floor
 
         fit_peak_height = logsub_noise(a[FIT_PEAK_HEIGHT], noise_floor)
         fit_coda_height = logsub_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), noise_floor)
@@ -189,15 +307,22 @@ def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_p
         arr_times[i] = time
 
     start_params = start_params[:, 1:]
+    return start_params, phaseids, bounds, bounds_fp
+
+def fit_elephant_envelope(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs"):
+
+    start_params, phaseids, bounds, bounds_fp = find_starting_params(arrs, smoothed)
+    narrs = len(arrs["arrivals"])
+    arr_times = np.reshape(np.array(arrs["arrivals"]), (narrs, -1))
 
     if fix_peak:
         print start_params
         start_params = remove_peak(start_params)
         bounds = bounds_fp
         print start_params, bounds
-        assem_params = lambda params: np.hstack([arr_times, restore_peak(np.reshape(params, (len(arrivals), -1))) ])
+        assem_params = lambda params: np.hstack([arr_times, restore_peak(np.reshape(params, (narrs, -1)))])
     else:
-        assem_params = lambda params: np.hstack([arr_times, np.reshape(params, (len(arrivals), -1))])
+        assem_params = lambda params: np.hstack([arr_times, np.reshape(params, (narrs, -1))])
 
     start_params = start_params.flatten()
 
@@ -211,7 +336,7 @@ def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_p
     # learn from original data
     sigmodel.set_noise_process(smoothed.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
     sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 0, arm.em.std**2, np.array(arm.params))
-
+    """
     f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
 
     start_cost = f(start_params)
@@ -220,9 +345,7 @@ def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_p
 
 
     print "bounds", bounds
-
-#    best_params, best_cost, d = scipy.optimize.fmin_tnc(f, start_params, approx_grad=1, bounds=bounds)
-    best_params, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, start_params, approx_grad=1, bounds=bounds, epsilon = 1e-3, factr=1e12)
+    best_params, best_cost = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
     plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
 
     # learn from smoothed data w/ orig model
@@ -231,7 +354,7 @@ def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_p
 
     f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params))
 
-    best_params_smooth, best_cost_smooth, d = scipy.optimize.fmin_l_bfgs_b(f, start_params, approx_grad=1, bounds=bounds, epsilon = 1e-3, factr=1e12)
+    best_params_smooth, best_cost_smooth = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
     plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params_smooth), phaseids, None, None, title = "best hybrid (smooth data, original model) (cost %f, evid %s)" % (best_cost_smooth, evid))
 
     # learn from smoothed data
@@ -243,16 +366,17 @@ def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_p
     start_cost = f(start_params)
     print "start params cost (w/ smoothed data)", start_cost
     plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed (cost %f, evid %s)" % (start_cost, evid))
-    best_params_smooth, best_cost_smooth, d = scipy.optimize.fmin_l_bfgs_b(f, start_params, approx_grad=1, bounds=bounds, epsilon = 1e-3, factr=1e12)
+    best_params_smooth, best_cost_smooth = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
     plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params_smooth), phaseids, None, None, title = "best smoothed (cost %f, evid %s)" % (best_cost_smooth, evid))
-
+    """
     # learn from smoothed data w/ iid noise
     f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
 
     start_cost = f(start_params)
     print "start params cost (w/ smoothed data and iid noise)", start_cost
     plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
-    best_params_iid, best_cost_iid, d = scipy.optimize.fmin_l_bfgs_b(f, start_params, approx_grad=1, bounds=bounds, epsilon = 1e-3, factr=1e12)
+#    best_params_iid, best_cost_iid = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
+    best_params_iid, best_cost_iid = minimize(f, start_params, bounds=bounds, method=method)
     plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params_iid), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost_iid, evid))
 
 #    wrm = learn_wiggle_params(sigmodel, env, smoothed, phaseids, assem_params(true_params))
@@ -272,10 +396,10 @@ def fit_elephant_envelope(sigmodel, pp, arrivals, env, smoothed, defaults, fix_p
     plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "so-called best")
     """
 
-    return best_params, phaseids, best_cost
+    return best_params_iid, phaseids, best_cost_iid
 
 #######################################################
-# TODO: delete all of the stuff in the following region
+# Begin old fitting routines
 
 def fit_specific(trace, coda_start_time, coda_len):
     srate = trace.stats['sampling_rate']
@@ -315,7 +439,7 @@ def fit_logenvelope(trace, peak_offset_time, peak_height, max_coda_length, min_c
 #    print "returning", best_results, best_cost, best_start_time, best_length
     return best_results, best_cost, best_start_time, best_length
 
-def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases, noise_floor):
+def fit_phase_coda(phase_arrival, smoothed, arrivals, arrival_phases, noise_floor):
     npts = smoothed.stats.npts
     srate = smoothed.stats.sampling_rate
     stime = smoothed.stats.starttime_unix
@@ -323,8 +447,8 @@ def fit_phase_coda(phase_arrival, smoothed, other_arrivals, other_arrival_phases
     P = True if int(phase_arrival[AR_PHASEID_COL]) in P_PHASEIDS else False
 
     phase_length = 200
-    if other_arrivals.shape[0] > 0:
-        for (a, pa) in zip(other_arrivals, other_arrival_phases):
+    if len(arrivals) > 0:
+        for (a, pa) in zip(arrivals, arrival_phases):
             if a > phase_arrival[AR_TIME_COL] and pa != "LR":
                 phase_length = np.min([a - phase_arrival[AR_TIME_COL], phase_length])
 
@@ -378,24 +502,58 @@ def find_coda_max_length(trace, peak_offset_time, phase_end_time, noise_floor):
 # end old model region
 ####################################################
 
-def get_first_p_s_arrivals(cursor, event, siteid):
+def get_first_p_s_arrivals(cursor, evid, siteid):
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT l.time, l.azimuth, l.snr, pid.id, sid.id FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (event[EV_EVID_COL], phase_condition, siteid)
+    sql_query="SELECT l.time, l.azimuth, l.snr, pid.id, sid.id FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (evid, phase_condition, siteid)
     cursor.execute(sql_query)
     arrivals = np.array(cursor.fetchall())
 
     first_p_arrival = None
+    p_phaseid = None
     for arrival in arrivals:
         if int(arrival[AR_PHASEID_COL]) in P_PHASEIDS:
             first_p_arrival = arrival
+            p_phaseid = int(arrival[AR_PHASEID_COL])
             break
     first_s_arrival = None
+    s_phaseid = None
     for arrival in arrivals:
         if int(arrival[AR_PHASEID_COL]) in S_PHASEIDS:
             first_s_arrival = arrival
+            s_phaseid = int(arrival[AR_PHASEID_COL])
             break
 
-    return (first_p_arrival, first_s_arrival)
+    if first_p_arrival is not None and first_s_arrival is not None and first_p_arrival[AR_TIME_COL] > first_s_arrival[AR_TIME_COL]:
+        print "warning: %d S arrival comes before P, ignoring..." % (evid)
+        first_p_arrival=None
+        first_s_arrival=None
+
+    arrivals = [first_p_arrival, first_s_arrival]
+    arrivals = [x[AR_TIME_COL] for x in arrivals if x is not None]
+    phaseids = [p_phaseid, s_phaseid]
+    phases= [phaseid_to_name(x) for x in phaseids if x is not None]
+    return first_p_arrival, first_s_arrival, arrivals, phases
+
+def load_segments(cursor, evid, siteid, ar_noise=True):
+    (arrival_segment, noise_segment, all_arrivals, all_arrival_phases) = load_signal_slice(cursor, evid, siteid, load_noise = True, learn_noise=ar_noise)
+    arrival_segment = arrival_segment[0]
+
+    # reject segments too short to do an accurate coda fit
+    c = arrival_segment.keys()[0]
+    b = arrival_segment[c].keys()[0]
+    tr = arrival_segment[c][b]
+    npts = tr.stats.npts
+    srate = tr.stats.sampling_rate
+    if npts < srate * MIN_SEGMENT_LENGTH:
+        raise Exception("minimum segment length %.2fs, skipping segment withlength %.2f" % (MIN_SEGMENT_LENGTH,  npts/srate))
+
+    # package together information about arriving phases into a single
+    # dictionary
+    arrs = {"all_arrivals": all_arrivals, "all_arrival_phases": all_arrival_phases}
+    arrs["first_p_arrival"], arrs["first_s_arrival"], arrs["arrivals"], arrs["arrival_phases"] = get_first_p_s_arrivals(cursor, evid, siteid)
+
+    smoothed_segment = smooth_segment(arrival_segment, bands=bands, chans=chans)
+    return arrival_segment, smoothed_segment, arrs
 
 
 def get_densest_azi(cursor, siteid):
@@ -418,34 +576,86 @@ def get_densest_azi(cursor, siteid):
     return max_azi
 
 
+def demo_get_wiggles():
 
+    cursor, sigmodel, earthmodel, sites = sigvisa_util.init_sigmodel()
+    tr, smoothed, tmpl, phases, wiggles, wiggles_smooth = get_wiggles(cursor, sigmodel, 5301405, 2)
+    print tr
+    print smoothed
+    print tmpl
+    print phases
+    print wiggles
+    print wiggles_smooth
+
+def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_logenvelope_2.00_3.00', wiggle_threshold=2):
+    """
+
+    Arguments:
+    cursor, sigmodel: objects initialized with sigvisa_util.init_sigmodel()
+    evid, siteid: event ID (from leb_origin DB table) and site id (from static_siteid table)
+    chan, band: channel and band strings
+    wiggle_threshold: log-height above the noise level at which we cut off wiggle extraction (too close to the noise level and the fluctuations we see might be from noise rather than from wiggles). (TODO: determine this automatically using the learned noise variance)
+
+    Returns:
+    tr: A Trace object containing the log-envelope for the given band/channel, beginning 30 seconds before the first phase arrival associated with the given event, and continuing for 170 seconds after the final phase arrival.
+    smoothed: The same as tr, but smoothed using a moving average (currently a Hamming window of length approximately 7.5 seconds)
+    tmpl: A Trace object covering the same time period as tr and smoothed, but containing an empirically-fit log-envelope template.
+    phases: a list of strings, giving the phase names for which wiggles were extracted
+    wiggles: a list of wiggles (each in the form of an np.array object) extracted from the (unsmoothed) log-envelope.
+    wiggles_smooth: a list of wiggles extracted from the smoothed log-envelope.
+    """
+
+
+    # load the relevant traces
+    arrival_segment, smoothed_segment, arrs = load_segments(cursor, evid, siteid, ar_noise=False)
+    tr = arrival_segment[chan][band]
+    smoothed = smoothed_segment[chan][band]
+
+    # fit an envelope template
+    start_params, phaseids, bounds, bounds_fp = find_starting_params(arrs, smoothed)
+    start_params = remove_peak(start_params)
+    start_params = start_params.flatten()
+    bounds = bounds_fp
+
+    c = sigvisa.canonical_channel_num(chan)
+    b = sigvisa.canonical_band_num(band)
+    sigmodel.set_noise_process(siteid, b, c, smoothed.stats.noise_floor, 1, np.array((.8,)))
+    sigmodel.set_wiggle_process(siteid, b, 0, 1, np.array((.8,)))
+
+    narrs = len(arrs["arrivals"])
+    arr_times = np.reshape(np.array(arrs["arrivals"]), (narrs, -1))
+    assem_params = lambda params: np.hstack([arr_times, restore_peak(np.reshape(params, (narrs, -1)))])
+    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
+    best_params, best_cost = optimize_by_phase(f, start_params, bounds, phaseids, method="bfgs")
+
+    print "start params"
+    print_params(assem_params(start_params))
+    print "found params"
+    print_params(assem_params(best_params))
+
+    tmpl = get_template(sigmodel, tr, phaseids, assem_params(best_params))
+    tmpls = get_template(sigmodel, tr, phaseids, assem_params(start_params))
+    diff = subtract_traces(tr, tmpl)
+    diff_smooth = subtract_traces(smoothed, tmpl)
+
+    # p/s wiggles
+    wiggles = extract_wiggles(tr, tmpl, arrs, threshold=1)
+    wiggles_smooth = extract_wiggles(smoothed, tmpl, arrs, threshold=1)
+
+    return tr, smoothed, tmpl, arrs["arrival_phases"], wiggles, wiggles_smooth
 
 def main():
 # boilerplate initialization of various things
     siteid = int(sys.argv[1])
-    elephant_model = False
+    method="bfgs"
     if len(sys.argv) > 2:
+        method = sys.argv[2]
 
-        # "with five parameters I can fit an elephant"
-        if sys.argv[2] == "elephant":
-            elephant_model = True
-
-    cursor = db.connect().cursor()
-    sites = read_sites(cursor)
-    st  = 1237680000
-    et = st + 3600*24
-    site_up = read_uptime(cursor, st, et)
-    detections, arid2num = read_detections(cursor, st, et, arrival_table="leb_arrival", noarrays=True)
-    phasenames, phasetimedef = read_phases(cursor)
-    earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
-    sigmodel = learn.load_sigvisa("parameters", st, et, "spectral_envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
-
-    max_azi = get_densest_azi(cursor, siteid)
-
+    cursor, sigmodel, earthmodel, sites = sigvisa_util.init_sigmodel()
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
+    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and evid=5301405 and pid.phase=leba.phase" % (phase_condition, siteid)
 #5308821
 #5301405
 # and lebo.evid=5301449
@@ -456,165 +666,43 @@ def main():
 
 #    bands = ['narrow_logenvelope_4.00_6.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_1.00_1.50', 'narrow_logenvelope_0.70_1.00']
     bands = ['narrow_logenvelope_2.00_3.00']
+    chans = ['BHZ']
     short_bands = [b[19:] for b in bands]
 
     runid = int(time.time())
     base_coda_dir = get_base_dir(siteid, None, runid)
-    print "writing data to directory", base_coda_dir
-
-    f = open(os.path.join(base_coda_dir, 'all_data'), 'w')
-    for b in bands:
-        f.write(b + " ")
-    f.write("\n")
-
-    learned_p = [[] for b in bands]
-    learned_s = [[] for b in bands]
-    learned_sp = [[] for b in bands]
 
     for event in events:
 
         distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
         azimuth = utils.geog.azimuth((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
 
-        (first_p_arrival, first_s_arrival) = get_first_p_s_arrivals(cursor, event, siteid)
-
-        if first_p_arrival is not None and first_s_arrival is not None and first_p_arrival[AR_TIME_COL] > first_s_arrival[AR_TIME_COL]:
-            print "skipping evid %d because S comes before P..." % (event[EV_EVID_COL])
-            continue
-
         try:
-            (arrival_segment, noise_segment, other_arrivals, other_arrival_phases) = load_signal_slice(cursor, event[EV_EVID_COL], siteid, load_noise = True)
+            arrival_segment, smoothed_segment, arrs = load_segments(cursor, event[EV_EVID_COL], siteid)
+
+            for (band_idx, band) in enumerate(bands):
+                short_band = short_bands[band_idx]
+                pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
+                pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
+                for chan in chans:
+                    tr = arrival_segment[chan][band]
+                    smoothed = smoothed_segment[chan][band]
+
+                    # DO THE FITTING
+                    fit_params, phaseids, vert_cost = fit_elephant_envelope(sigmodel, pp, arrs, tr, smoothed, evid = str(int(event[EV_EVID_COL])), method=method)
+
+    #                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
+
+                    print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
+
+                pp.close()
+
+        except KeyboardInterrupt:
+            raise
         except:
             print traceback.format_exc()
             continue
 
-        for (band_idx, band) in enumerate(bands):
-            short_band = short_bands[band_idx]
-
-
-            vert_noise_floor = arrival_segment[0]["BHZ"][band].stats.noise_floor
-            horiz_noise_floor = arrival_segment[0]["horiz_avg"][band].stats.noise_floor
-
-            try:
-                vert, horiz = arrival_segment[0]["BHZ"][band], arrival_segment[0]["horiz_avg"][band]
-                vert_smoothed, horiz_smoothed = smoothed_traces(arrival_segment, band)
-
-            except:
-                print traceback.format_exc()
-                continue
-
-            vnf = lambda t : vert_noise_floor
-            hnf = lambda t : horiz_noise_floor
-            fit_p_vert = None
-            fit_p_horiz = None
-            fit_s_vert = None
-            fit_s_horiz = None
-            accept_p_vert = False
-            accept_p_horiz = False
-            accept_s_vert = False
-            accept_s_horiz = False
-            if first_p_arrival is not None:
-                fit_p_vert = fit_phase_coda(first_p_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
-                fit_p_horiz = fit_phase_coda(first_p_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
-                accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
-                accept_p_horiz = accept_fit(fit_p_horiz, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
-
-
-            if first_s_arrival is not None:
-
-                # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
-                if accept_p_vert:
-                    vnf = lambda t : max(vert_noise_floor, fit_p_vert[FIT_HEIGHT] + fit_p_vert[FIT_B]*(t - fit_p_vert[FIT_CODA_START_OFFSET]))
-                if accept_p_horiz:
-                    hnf = lambda t : max(horiz_noise_floor, fit_p_horiz[FIT_HEIGHT] + fit_p_horiz[FIT_B]*(t - fit_p_horiz[FIT_CODA_START_OFFSET]))
-
-                fit_s_vert = fit_phase_coda(first_s_arrival, vert_smoothed, other_arrivals, other_arrival_phases, vnf)
-                fit_s_horiz = fit_phase_coda(first_s_arrival, horiz_smoothed, other_arrivals, other_arrival_phases, hnf)
-                accept_s_vert = accept_fit(fit_s_vert, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
-                accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
-
-
-
-            # DO THE FITTING
-            if elephant_model:
-
-                # plot!
-                pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-                pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
-                # DO THE FITTING
-                fit_vert_params, phaseids, vert_cost = fit_elephant_envelope(sigmodel, pp, [first_p_arrival, first_s_arrival], vert, vert_smoothed, [ x for x in [fit_p_vert, fit_s_vert] if x is not None], evid = str(int(event[EV_EVID_COL])))
-#                fit_horiz_params, phaseids, horiz_cost = fit_elephant_envelope(sigmodel, [first_p_arrival, first_s_arrival], horiz, horiz_smoothed, [ x for x in [fit_p_horiz, fit_s_horiz] if x is not None])
-
-
-
-#                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
-                try:
-#                    plot_channels_with_pred(sigmodel, pp, vert_smoothed, fit_vert_params, phaseids, horiz_smoothed, fit_horiz_params, title = gen_title(event, fit_vert_params))
-#                 plot_channels_with_pred(sigmodel, pp, vert_smoothed, fit_vert_params, phaseids, horiz_smoothed, None, title = gen_title(event, fit_vert_params))
-                    pass
-                except:
-                    print "error plotting:"
-                    print traceback.format_exc()
-                print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
-
-#                pp.close()
-#                sys.exit(1)
-
-            else:
-
-
-        #        print first_p_arrival
-        #        print first_s_arrival
-        #        print "p vert" , fit_p_vert
-        #        print "s horiz", fit_s_horiz
-
-                if accept_p_vert:
-                    learned_p[band_idx].append((distance, azimuth, fit_p_vert[FIT_B]))
-                if accept_s_horiz:
-                    learned_s[band_idx].append((distance, azimuth, fit_s_horiz[FIT_B]))
-                if accept_p_vert and accept_s_horiz:
-                    learned_sp[band_idx].append((fit_p_horiz[FIT_B], fit_s_horiz[FIT_B]))
-
-
-                # plot!
-                pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-                pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
-                gen_title = lambda event, p_fit, s_fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_len %f \n s_b %f s_acost %f s_len %f " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, safe_lookup(p_fit, FIT_B), safe_lookup(p_fit, FIT_AVG_COST), safe_lookup(p_fit, FIT_CODA_LENGTH), safe_lookup(s_fit, FIT_B), safe_lookup(s_fit, FIT_AVG_COST), safe_lookup(s_fit, FIT_CODA_LENGTH))
-                try:
-                    plot_channels(pp, vert_smoothed, vert_noise_floor, [fit_p_vert, fit_s_vert], ["g-" if accept_p_vert else "r-", "g-" if accept_s_vert else "r-"], horiz_smoothed, horiz_noise_floor, [fit_p_horiz, fit_s_horiz], ["g-" if accept_p_horiz else "r-", "g-" if accept_s_horiz else "r-"], all_det_times = other_arrivals, all_det_labels = other_arrival_phases, title = gen_title(event, fit_p_vert, fit_s_horiz))
-                except:
-                    print "error plotting:"
-                    print traceback.format_exc()
-                print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
-
-
-                # write a line to the output file
-                f.write("%d %d %d %d %d %f %f %f %f %f " % (event[EV_EVID_COL], siteid, band_idx, first_p_arrival[AR_PHASEID_COL] if first_p_arrival is not None else -1, first_s_arrival[AR_PHASEID_COL] if first_s_arrival is not None else -1, distance, azimuth, event[EV_LON_COL], event[EV_LAT_COL], event[EV_MB_COL]))
-                write_fit = lambda f, fit: map(lambda x : f.write("%f " % (x) ), fit)
-                if first_p_arrival is not None:
-                    write_fit(f, fit_p_vert)
-                    write_fit(f, fit_p_horiz)
-                else:
-                    f.write("-1 " * FIT_NUM_COLS)
-                    f.write("-1 " * FIT_NUM_COLS)
-                if first_s_arrival is not None:
-                    write_fit(f, fit_s_vert)
-                    write_fit(f, fit_s_horiz)
-                else:
-                    f.write("-1 " * FIT_NUM_COLS)
-                    f.write("-1 " * FIT_NUM_COLS)
-
-                f.write("%f %f\n" % (vert_noise_floor, horiz_noise_floor))
-
-            pp.close()
-
-        del arrival_segment
-        del noise_segment
-        del other_arrivals
-        del other_arrival_phases
-    #    print hp.heap()
-
-    f.close()
 
 if __name__ == "__main__":
     main()

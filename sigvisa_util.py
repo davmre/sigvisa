@@ -33,6 +33,16 @@ def real_to_fake_det(det):
   return (det[dataset.DET_ARID_COL], det[dataset.DET_SITE_COL], det[dataset.DET_TIME_COL], det[dataset.DET_AMP_COL], det[dataset.DET_AZI_COL], det[dataset.DET_SLO_COL], det[dataset.DET_PHASE_COL])
 
 
+def init_sigmodel(st=1237680000, hours=24):
+  et = st + 3600*hours
+  cursor = db.connect().cursor()
+  sites = dataset.read_sites(cursor)
+  site_up = dataset.read_uptime(cursor, st, et)
+  phasenames, phasetimedef = dataset.read_phases(cursor)
+  earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
+  sigmodel = learn.load_sigvisa("parameters", st, et, "spectral_envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
+  return cursor, sigmodel, earthmodel, sites
+
 def log_trace(trc, filename, format):
 
   real_fn = 'logs/%s.pdf' % (filename)
