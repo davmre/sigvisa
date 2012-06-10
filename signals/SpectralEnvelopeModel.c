@@ -108,9 +108,9 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
 
   // generate onset
   long peak_idx = (p_arrival->peak_time - p_arrival->time) * p_trace->hz;
-  double onset_slope = p_arrival->peak_amp / peak_idx;
+  double onset_slope = (p_arrival->peak_amp - MIN_LOGENV_CUTOFF) / peak_idx;
   for (long t=0; t < peak_idx && t < p_trace->len; ++t) {
-    d[t] = t * onset_slope;
+    d[t] = MIN_LOGENV_CUTOFF + t * onset_slope;
   }
 
   // generate decay
@@ -206,7 +206,7 @@ void setup_noise_processes(BandModel_t * p_band, Segment_t * p_segment, KalmanSt
        actually have a model */
     ARProcess_t * chan_noise = &p_band->channel_noise_models[i];
     if (chan_noise->coeffs == NULL) {
-      LogInfo("no noise model for siteid %d, band ?, channel %d!", p_segment->siteid, i);
+      LogTrace("no noise model for siteid %d, band ?, channel %d!", p_segment->siteid, i);
       noise_indices[i] = -2;
       continue;
     }
