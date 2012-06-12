@@ -73,10 +73,12 @@ typedef struct KalmanState {
   int verbose;
 
   FILE * debug_res_fp;
+  FILE * debug_obs_fp;
   FILE * debug_var_fp;
   FILE * debug_gain_fp;
   FILE * debug_state_fp;
-
+  FILE * debug_state_covar_fp;
+  FILE * debug_processes_fp;
 } KalmanState_t ;
 
 void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise, char * debug_dir);

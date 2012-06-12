@@ -63,6 +63,10 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
   realloc_vector(&k->p_mean_update, (k->n));
   realloc_matrix(&k->p_covars_tmp, (k->n), (k->n));
 
+  if (k->debug_processes_fp != NULL) {
+    fprintf(k->debug_processes_fp, "add process id %d order %d mean %f std %f\n", k->np-1, p->order, p->mean, sqrt(p->sigma2));
+  }
+
   return k->np - 1;
 
 }
@@ -291,9 +295,11 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 
   if (k->debug_res_fp != NULL) {
     fprint_vector(k->debug_res_fp, k->y, "%f ");
+    fprint_vector(k->debug_obs_fp, p_true_obs, "%f ");
     fprint_matrix(k->debug_var_fp, k->S, "%f ", FALSE);
     fprint_matrix(k->debug_gain_fp, k->K, "%f ", FALSE);
     fprint_vector(k->debug_state_fp, k->p_collapsed_means, "%f ");
+    fprint_matrix(k->debug_state_covar_fp, k->p_collapsed_covars, "%f ", FALSE);
   }
   return thisll;
 
@@ -424,24 +430,33 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
   /* open debug log files, if needed */
   if (debug_dir != NULL) {
     int l = strlen(debug_dir);
-    char resname[256], varname[256], gainname[256], statename[256];
+    char resname[256], obsname[256], varname[256], gainname[256], statename[256], statecvname[256], processesname[256];
     snprintf(resname, 256, "%s/res.log", debug_dir);
+    snprintf(obsname, 256, "%s/obs.log", debug_dir);
     snprintf(varname, 256, "%s/var.log", debug_dir);
     snprintf(gainname, 256, "%s/gain.log", debug_dir);
     snprintf(statename, 256, "%s/state.log", debug_dir);
+    snprintf(statecvname, 256, "%s/state_covar.log", debug_dir);
+    snprintf(processesname, 256, "%s/processes.log", debug_dir);
     k->debug_res_fp = fopen(resname, "w");
+    k->debug_obs_fp = fopen(obsname, "w");
     k->debug_var_fp = fopen(varname, "w");
     k->debug_gain_fp = fopen(gainname, "w");
     k->debug_state_fp = fopen(statename, "w");
-    if (!k->debug_res_fp || !k->debug_var_fp || !k->debug_gain_fp || !k->debug_state_fp) {
+    k->debug_state_covar_fp = fopen(statecvname, "w");
+    k->debug_processes_fp = fopen(processesname, "w");
+    if (!k->debug_res_fp || !k->debug_obs_fp || !k->debug_var_fp || !k->debug_gain_fp || !k->debug_state_fp || !k->debug_state_covar_fp || !k->debug_processes_fp) {
       perror("error opening debug logfile");
       exit(1);
     }
   } else {
     k->debug_res_fp = NULL;
+    k->debug_obs_fp = NULL;
     k->debug_var_fp = NULL;
     k->debug_gain_fp = NULL;
     k->debug_state_fp = NULL;
+    k->debug_state_covar_fp = NULL;
+    k->debug_processes_fp = NULL;
   }
 }
 
@@ -484,11 +499,13 @@ void kalman_state_free(KalmanState_t * k) {
 
   if (k->debug_res_fp != NULL) {
     fclose(k->debug_res_fp);
+    fclose(k->debug_obs_fp);
     fclose(k->debug_var_fp);
     fclose(k->debug_gain_fp);
     fclose(k->debug_state_fp);
+    fclose(k->debug_state_covar_fp);
+    fclose(k->debug_processes_fp);
   }
-
 }
 
 void kalman_state_print(KalmanState_t * k) {
