@@ -98,7 +98,7 @@ def minimize(f, x0, method="bfgs", bounds=None, steps=None, maxfun=None):
         x1, nfeval, rc = scipy.optimize.fmin_tnc(f, x0, approx_grad=1, bounds=bounds, maxfun=maxfun)
         x1 = np.array(x1)
     elif method=="simplex":
-        x1 = scipy.optimize.fmin(f, x0, maxfun=maxfun)
+        x1 = scipy.optimize.fmin(f, x0, maxfun=maxfun, xtol=0.01, ftol=0.01)
     elif method=="anneal":
         x1, jmin, T, feval, iters, accept, retval = scipy.optimize.anneal(f, x0, maxeval=maxfun)
     elif method=="coord":
@@ -612,7 +612,7 @@ def main():
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and evid=5308821 and pid.phase=leba.phase" % (phase_condition, siteid)
+    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
 #5308821
 #5301405
 # and lebo.evid=5301449
@@ -664,7 +664,7 @@ def main():
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
                     wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
                     for (pidx, phaseid) in enumerate(phaseids):
-                        if wiggles[pidx] is None:
+                        if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
                             continue
                         else:
                             dirname = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)), short_band)
