@@ -110,12 +110,9 @@ def plot_envelopes(axes, trace, noise_floor, fits, formats, all_det_times = None
     axes.plot(xvals, [noise_floor, noise_floor], "g-")
 
 
-def plot_scatter(lp, ls, lsp, base_coda_dir, band):
+def plot_scatter(lp, ls, lsp, pp):
     try:
 
-        pdf_dir = get_dir(os.path.join(base_coda_dir, band[19:]))
-        pp = PdfPages(os.path.join(pdf_dir, "plots.pdf"))
-        print "opening pp in ", pdf_dir
 
         if lp is not None and len(lp.shape) == 2:
             plt.figure()
@@ -215,29 +212,71 @@ def plot_scatter(lp, ls, lsp, base_coda_dir, band):
             pp.savefig()
 
     except:
-        print "error plotting learned params for ", band
+        print "error plotting learned params"
         print traceback.format_exc()
     finally:
         pp.close()
 
+def plot_geog(band_data, pp, azistr):
 
-def generate_scatter_plots(all_data, bands, base_coda_dir):
+    cursor = db.connect().cursor()
+    sites = read_sites(cursor)
+    siteid = int(band_data[0, SITEID_COL])
+    site_lonlat = sites[siteid-1, 0:2]
+
+    print band_data.shape
+    
+    ev_lonlat = band_data[:, (LON_COL, LAT_COL)]
+    allll = np.vstack([ev_lonlat, site_lonlat])
+    (max_lon, max_lat) = np.max(allll, axis=0)
+    (min_lon, min_lat) = np.min(allll, axis=0)
+    max_lon=180
+    min_lon=-180
+    max_lat=90
+    min_lat=-90
+    
+    from utils.draw_earth import draw_earth, draw_events
+    bmap = draw_earth("",
+                  projection="cyl",
+                  resolution="l",
+                  llcrnrlon = min_lon, urcrnrlon = max_lon,
+                  llcrnrlat = min_lat, urcrnrlat = max_lat,
+                  nofillcontinents=True,
+                      figsize=(8,8))
+
+    for i,ev in enumerate(ev_lonlat):
+        draw_events(bmap, ((ev[0], ev[1]),), marker="o", ms=5, mfc="none", mec="yellow", mew=2)
+    draw_events(bmap, (site_lonlat,),  marker="x", ms=10, mfc="none", mec="purple", mew=5)
+
+    plt.title("siteid " + str(siteid) + " " + azistr)
+
+    pp.savefig()
+    pp.close()
+
+def generate_scatter_plots(all_data, bands, base_coda_dir, min_azi=0, max_azi=360):
     for (band_idx,band) in enumerate(bands):
         short_band = band[19:]
 
         band_data = extract_band(all_data, band_idx)
 
-#        print "band data", band_data
+        #        print "band data", band_data
+
+        accept_p_vert_data = []
 
         lp = None
         ls = None
         lsp = None
         for row in band_data:
+            if row[AZI_COL] < min_azi or row[AZI_COL] >max_azi:
+                continue
+            
             fit_p_vert = fit_from_row(row, P=True, vert=True)
             fit_s_horiz = fit_from_row(row, P=False, vert=False)
 
             accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
             if accept_p_vert:
+                accept_p_vert_data.append(row)
+                print "accepted azi %d" % (row[AZI_COL])
                 r = np.array((row[DISTANCE_COL], row[AZI_COL], row[DEPTH_COL], fit_p_vert[FIT_B]))
                 if lp == None:
                     lp = r
@@ -267,13 +306,21 @@ def generate_scatter_plots(all_data, bands, base_coda_dir):
                     lsp = np.vstack([lsp, r])
 
 #        print "plotting", base_coda_dir, band, lp.shape, ls.shape, lsp.shape
-        plot_scatter(lp, ls, lsp, base_coda_dir, band)
+        pdf_dir = get_dir(os.path.join(base_coda_dir, band[19:]))
 
+        fname = "plots_%d_%d.pdf" % (min_azi, max_azi) 
+        pp = PdfPages(os.path.join(pdf_dir, fname))
+        print "opening pp in ", pdf_dir
+        plot_scatter(lp, ls, lsp, pp)
 
+        fname = "geog_%d_%d.pdf" % (min_azi, max_azi) 
+        pp = PdfPages(os.path.join(pdf_dir, fname))
+        plot_geog(np.array(accept_p_vert_data), pp, "(%d, %d)" % (min_azi, max_azi))
 
-def merge_plots(base_coda_dir, bands):
+def merge_plots(base_coda_dir, bands, all_data, min_azi, max_azi):
     for (band_idx, band) in enumerate(bands):
         try:
+
             pdf_dir = os.path.join(base_coda_dir, bands[band_idx][19:])
 
             try:
@@ -281,7 +328,13 @@ def merge_plots(base_coda_dir, bands):
             except:
                 pass
 
-            cmd = "gs -dNOPAUSE -sDEVICE=pdfwrite -sOUTPUTFILE=%s -dBATCH `ls %s/*.pdf`" % (os.path.join(pdf_dir, "everything.pdf"), pdf_dir)
+            
+            band_data = extract_band(all_data, band_idx)
+            evlist = os.path.join(pdf_dir, "plots_%d_%d.pdf" % (min_azi, max_azi)) + " " + os.path.join(pdf_dir, "geog_%d_%d.pdf" % (min_azi, max_azi))
+            for row in band_data:
+                if row[AZI_COL] >= min_azi and row[AZI_COL] <= max_azi:
+                    evlist = evlist + " " + os.path.join(pdf_dir, str(int(row[EVID_COL])) + ".pdf")
+            cmd = "gs -dNOPAUSE -sDEVICE=pdfwrite -sOUTPUTFILE=%s -dBATCH %s" % (os.path.join(pdf_dir, "everything_%d_%d.pdf" % (min_azi, max_azi)), evlist)
             print "running", cmd
             os.popen(cmd)
         except:
@@ -343,6 +396,9 @@ def main():
     parser.add_option("--events", dest="events", default=False, action="store_true", help="(re)creates individual event coda plots (False)")
     parser.add_option("--pred_events", dest="pred_events", default=False, action="store_true", help="predicts individual event coda plots (False)")
     parser.add_option("--merge", dest="merge", default=False, action="store_true", help="merge all available plots for each band (False)")
+    
+    parser.add_option("--min_azi", dest="min_azi", default=0, type="int", help="exclude all events with azimuth less than this value (0)")
+    parser.add_option("--max_azi", dest="max_azi", default=360, type="int", help="exclude all events with azimuth greater than this value (360)")
 
     (options, args) = parser.parse_args()
 
@@ -364,7 +420,7 @@ def main():
     print "read data", all_data.shape
 
     if options.scatter:
-        generate_scatter_plots(all_data, bands, base_coda_dir)
+        generate_scatter_plots(all_data, bands, base_coda_dir, min_azi=options.min_azi, max_azi=options.max_azi)
 
 
     if options.events:
@@ -480,7 +536,11 @@ def main():
 
 
     if options.merge:
-        merge_plots(base_coda_dir, bands)
+
+        if options.min_azi != 0 or options.max_azi != 360:
+            merge_plots(base_coda_dir, bands, all_data, options.min_azi, options.max_azi)
+        else:
+            merge_plots(base_coda_dir, bands)
 
 if __name__ == "__main__":
     main()
