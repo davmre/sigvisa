@@ -35,13 +35,14 @@ def real_to_fake_det(det):
 
 def init_sigmodel(st=1237680000, hours=24):
   et = st + 3600*hours
-  cursor = db.connect().cursor()
+  dbconn = db.connect()
+  cursor = dbconn.cursor()
   sites = dataset.read_sites(cursor)
   site_up = dataset.read_uptime(cursor, st, et)
   phasenames, phasetimedef = dataset.read_phases(cursor)
   earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
   sigmodel = learn.load_sigvisa("parameters", st, et, "spectral_envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
-  return cursor, sigmodel, earthmodel, sites
+  return cursor, sigmodel, earthmodel, sites, dbconn
 
 def log_trace(trc, filename, format):
 
@@ -484,8 +485,8 @@ def compute_narrowband_envelopes(segments):
       for band in FREQ_BANDS:
         band_data = obspy.signal.filter.bandpass(broadband_signal.data, band[0], band[1], broadband_signal.stats['sampling_rate'], corners = 4, zerophase=True)
         band_env = obspy.signal.filter.envelope(band_data)
-        band_name = "narrow_logenvelope_%1.2f_%1.2f" % (band[0], band[1])
-        band_trace = Trace(np.log(band_env), dict(broadband_signal.stats.items() + [("band", band_name)]))
+        band_name = "narrow_envelope_%1.2f_%1.2f" % (band[0], band[1])
+        band_trace = Trace(band_env, dict(broadband_signal.stats.items() + [("band", band_name)]))
         chan_bands[band_name] = band_trace
 
     # average the two horizonal components, if they're both present
@@ -508,10 +509,10 @@ def compute_narrowband_envelopes(segments):
     if chan1 is not None and chan2 is not None:
       horiz_avg = dict()
       for band in chan1.keys():
-        if not band.startswith("narrow_logenvelope"):
+        if not band.startswith("narrow_envelope"):
           continue
 
-        horiz_avg_data = ( chan1[band].data + chan2[band].data ) /2
+        horiz_avg_data = np.exp(( np.log(chan1[band].data) + np.log(chan2[band].data) ) /2)
         horiz_avg_trace = Trace(horiz_avg_data, header = chan1[band].stats.copy())
         horiz_avg_trace.stats["channel"] = "horiz_avg"
         horiz_avg[band] = horiz_avg_trace

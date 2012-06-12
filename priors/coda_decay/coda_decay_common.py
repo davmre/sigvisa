@@ -34,7 +34,7 @@ min_s_coda_length = 45
 
 avg_cost_bound = 0.2
 
-bands = ["narrow_logenvelope_2.00_3.00",]
+bands = ["narrow_envelope_2.00_3.00",]
 chans = ["BHZ",]
 
 (EVID_COL, SITEID_COL, BANDID_COL, P_PHASEID_COL, S_PHASEID_COL, DISTANCE_COL, AZI_COL, LON_COL, LAT_COL, MB_COL, VERT_P_FIT_B, VERT_P_FIT_HEIGHT, VERT_P_FIT_PHASE_START_TIME, VERT_P_FIT_PHASE_LENGTH, VERT_P_FIT_PEAK_OFFSET, VERT_P_FIT_PEAK_HEIGHT, VERT_P_FIT_CODA_START_OFFSET, VERT_P_FIT_CODA_LENGTH, VERT_P_FIT_MAX_CODA_LENGTH, VERT_P_FIT_AVG_COST, HORIZ_P_FIT_B, HORIZ_P_FIT_HEIGHT, HORIZ_P_FIT_PHASE_START_TIME, HORIZ_P_FIT_PHASE_LENGTH, HORIZ_P_FIT_PEAK_OFFSET, HORIZ_P_FIT_PEAK_HEIGHT, HORIZ_P_FIT_CODA_START_OFFSET, HORIZ_P_FIT_CODA_LENGTH, HORIZ_P_FIT_MAX_CODA_LENGTH, HORIZ_P_FIT_AVG_COST, VERT_S_FIT_B, VERT_S_FIT_HEIGHT, VERT_S_FIT_PHASE_START_TIME, VERT_S_FIT_PHASE_LENGTH, VERT_S_FIT_PEAK_OFFSET, VERT_S_FIT_PEAK_HEIGHT, VERT_S_FIT_CODA_START_OFFSET, VERT_S_FIT_CODA_LENGTH, VERT_S_FIT_MAX_CODA_LENGTH, VERT_S_FIT_AVG_COST, HORIZ_S_FIT_B, HORIZ_S_FIT_HEIGHT, HORIZ_S_FIT_PHASE_START_TIME, HORIZ_S_FIT_PHASE_LENGTH, HORIZ_S_FIT_PEAK_OFFSET, HORIZ_S_FIT_PEAK_HEIGHT, HORIZ_S_FIT_CODA_START_OFFSET, HORIZ_S_FIT_CODA_LENGTH, HORIZ_S_FIT_MAX_CODA_LENGTH, HORIZ_S_FIT_AVG_COST, VERT_NOISE_FLOOR_COL, HORIZ_NOISE_FLOOR_COL, DEPTH_COL, EVTIME_COL, NUM_COLS) = range(54+1)
@@ -122,7 +122,7 @@ def get_dir(dname):
     return dname
 
 
-def get_base_dir(siteid, label, runid):
+def get_base_dir(siteid, runid, label=None):
     if label is not None:
         return get_dir(os.path.join("logs", "codas_%d_%s_%s" % (siteid, label, runid)))
     else:
@@ -242,12 +242,12 @@ def smooth_segment(segment, bands=None, chans=None, window_len=300):
 
     return smoothed_segment
 
-def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=False):
-
+def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=False, bands=None, chans=None):
     sql_query="SELECT l.time, l.arid, pid.id FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba, static_phaseid pid where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase order by l.time" % (evid, siteid)
     cursor.execute(sql_query)
     other_arrivals = np.array(cursor.fetchall())
     other_arrival_phaseids = other_arrivals[:, 2]
+    other_arrival_arids = other_arrivals[:, 1]
     other_arrivals = other_arrivals[:, 0]
     sql_query="SELECT leba.phase, l.arid FROM leb_arrival l, static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (evid, siteid)
     cursor.execute(sql_query)
@@ -276,13 +276,19 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
             return None
         sigvisa_util.compute_narrowband_envelopes(arrival_segment)
 
+
+        if chans is None:
+            chans = arrival_segment[0].keys()
+        if bands is None:
+            bands = arrival_segment[0][chans[0]].keys()
+
         noise_segment = None
         if load_noise:
             noise_segment = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)-150, np.min(other_arrivals)-50, stalist=[siteid,])
             sigvisa_util.compute_narrowband_envelopes(noise_segment)
 
-        for chan in arrival_segment[0].keys():
-            for band in arrival_segment[0][chan].keys():
+        for chan in chans:
+            for band in bands:
                 a = arrival_segment[0][chan][band]
                 a.data = a.data[a.stats.sampling_rate*70: - a.stats.sampling_rate*20]
                 a.stats.starttime_unix += 70
@@ -295,26 +301,27 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
                     noise = noise_segment[0][chan][band]
                     noise.data = noise.data[noise.stats.sampling_rate*5 : -noise.stats.sampling_rate*5]
 
-                    if not learn_noise:
-                        a.stats.noise_floor = np.mean(noise.data)
-                        a.stats.smooth_noise_floor = np.mean(noise.data)
-                    else:
+                    print "learning for band %s chan %s" % (band, chan)
+                    a.stats.noise_floor = np.mean(np.log(noise.data))
+                    a.stats.smooth_noise_floor = a.stats.noise_floor
+                    if learn_noise:
                         ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
+                        print ar_learner.c
                         #arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
                         params, std = ar_learner.yulewalker(17)
+                        print params, "std", std
                         em = ErrorModel(0, std)
                         a.stats.noise_model = ARModel(params, em, c=ar_learner.c)
-                        a.stats.noise_floor = ar_learner.c
 
                         smoothed_noise_data = smooth(noise.data, window_len=300, window="hamming")
                         ar_learner = ARLearner(smoothed_noise_data, noise.stats.sampling_rate)
+                        print ar_learner.c
                         params, std = ar_learner.yulewalker(17)
                         em = ErrorModel(0, std)
                         a.stats.smooth_noise_model = ARModel(params, em, c=ar_learner.c)
-                        a.stats.smooth_noise_floor = ar_learner.c
 
                         """
-                        if band == "narrow_logenvelope_2.00_3.00" and chan=="BHZ":
+                        if band == "narrow_envelope_2.00_3.00" and chan=="BHZ":
                             print "noise", noise.stats
                             print "signal",a.stats
                             print "model",a.stats.noise_model.params, a.stats.noise_model.em.std
@@ -365,7 +372,7 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
 
     print "finished loading signal slice..."
 
-    return (arrival_segment, noise_segment, other_arrivals, other_arrival_phases)
+    return (arrival_segment, noise_segment, other_arrivals, other_arrival_phases, other_arrival_arids)
 
 def extract_band(all_data, idx):
 
@@ -538,13 +545,14 @@ def subtract_traces(tr, to_subtract):
     newtrace.stats.npts = len(newtrace.data)
     return newtrace
 
-def get_template(sigmodel, trace, phaseids, params):
+def get_template(sigmodel, trace, phaseids, params, logscale=False):
     srate = trace.stats['sampling_rate']
     st = trace.stats.starttime_unix
     et = st + trace.stats.npts/srate
     siteid = trace.stats.siteid
     env = sigmodel.generate_segment(st, et, siteid, srate, phaseids, params)
     env = env[trace.stats.channel][trace.stats.band]
+    env.data = np.log(env.data) if logscale else env.data
     return env
 
 
