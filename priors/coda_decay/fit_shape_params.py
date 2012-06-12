@@ -261,7 +261,8 @@ def main():
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
+#    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
+    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where lebo.mb>5 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
     print sql_query
     cursor.execute(sql_query)
     events = np.array(cursor.fetchall())
@@ -392,21 +393,28 @@ def main():
                 # write a line to the output file
                 f.write("%d %d %d %d %d %f %f %f %f %f " % (event[EV_EVID_COL], siteid, band_idx, first_p_arrival[AR_PHASEID_COL] if first_p_arrival is not None else -1, first_s_arrival[AR_PHASEID_COL] if first_s_arrival is not None else -1, distance, azimuth, event[EV_LON_COL], event[EV_LAT_COL], event[EV_MB_COL]))
                 write_fit = lambda f, fit: map(lambda x : f.write("%f " % (x) ), fit)
-                if first_p_arrival is not None:
-                    write_fit(f, fit_p_vert)
-                    write_fit(f, fit_p_horiz)
-                else:
-                    f.write("-1 " * FIT_NUM_COLS)
-                    f.write("-1 " * FIT_NUM_COLS)
-                if first_s_arrival is not None:
-                    write_fit(f, fit_s_vert)
-                    write_fit(f, fit_s_horiz)
-                else:
-                    f.write("-1 " * FIT_NUM_COLS)
-                    f.write("-1 " * FIT_NUM_COLS)
 
-                f.write("%f %f\n" % (vert_noise_floor, horiz_noise_floor))
+                try:
+                    if first_p_arrival is not None:
+                        write_fit(f, fit_p_vert)
+                        write_fit(f, fit_p_horiz)
+                    else:
+                        f.write("-1 " * FIT_NUM_COLS)
+                        f.write("-1 " * FIT_NUM_COLS)
+                    if first_s_arrival is not None:
+                        write_fit(f, fit_s_vert)
+                        write_fit(f, fit_s_horiz)
+                    else:
+                        f.write("-1 " * FIT_NUM_COLS)
+                        f.write("-1 " * FIT_NUM_COLS)
 
+                    f.write("%f %f" % (vert_noise_floor, horiz_noise_floor))
+
+                except:
+                    continue
+                finally:
+                    f.write('\n')
+                    
             pp.close()
 
         del arrival_segment
