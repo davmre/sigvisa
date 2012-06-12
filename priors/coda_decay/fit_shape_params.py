@@ -633,7 +633,7 @@ def main():
     else:
         runid = int(runid)+1
 
-    base_coda_dir = get_base_dir(siteid, None, runid)
+    base_coda_dir = get_base_dir(siteid, runid)
 
     for event in events:
         evid = int(event[EV_EVID_COL])
