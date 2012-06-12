@@ -155,7 +155,7 @@ create table visa_assoc (
 create table sigvisa_coda_fits (
  runid    int,
  arid     int,
- chan	  varchar(3),
+ chan	  varchar(10),
  band	  varchar(10),
  peak_delay float(24),
  peak_height float(24),
@@ -169,6 +169,19 @@ create table sigvisa_coda_fits (
  acost	    float,
  dist	    float,
  azi	    float,
+ primary key(runid, arid)
+);
+
+create table sigvisa_wiggle_wfdisc (
+ runid 	  int,
+ arid     int,
+ siteid    int,
+ phaseid   int,
+ band	  varchar(10),
+ chan	  varchar(10),
+ evid 	  int,
+ fname	  varchar(255),
+ snr	  float,
  primary key(runid, arid)
 );
 

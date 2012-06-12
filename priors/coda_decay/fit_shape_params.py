@@ -135,9 +135,14 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
     for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
         start_wiggle = arrs["arrivals"][phase_idx] + 20
         start_idx = np.ceil((start_wiggle - st)*srate)
+
+        try:
+            next_phase_idx = np.ceil((arrs["arrivals"][phase_idx+1] - st)*srate)
+        except:
+            next_phase_idx = np.float('inf')
         for t in range(100):
             end_idx = start_idx + np.ceil(srate*t)
-            if tmpl[end_idx] - nf < threshold:
+            if (end_idx >= next_phase_idx) or (tmpl[end_idx] - nf < threshold):
                 break
         wiggle = diff.data[start_idx:end_idx]
         wiggles.append(wiggle)
@@ -324,6 +329,8 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
     sarm = smoothed.stats.smooth_noise_model
     sigmodel.set_noise_process(smoothed.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
     sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 1, 0.0001, np.array(arm.params))
+
+    #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
 
     if iid:
     # learn from smoothed data w/ iid noise
@@ -599,12 +606,13 @@ def main():
         method = sys.argv[2]
     iid=True
     by_phase=False
+    snr_threshold=2
 
     cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and evid=5301405 and pid.phase=leba.phase" % (phase_condition, siteid)
+    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and evid=5308821 and pid.phase=leba.phase" % (phase_condition, siteid)
 #5308821
 #5301405
 # and lebo.evid=5301449
@@ -628,7 +636,7 @@ def main():
     base_coda_dir = get_base_dir(siteid, None, runid)
 
     for event in events:
-
+        evid = int(event[EV_EVID_COL])
         distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
         azimuth = utils.geog.azimuth((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
 
@@ -638,7 +646,7 @@ def main():
             for (band_idx, band) in enumerate(bands):
                 short_band = short_bands[band_idx]
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-                pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
+                pp = PdfPages(os.path.join(pdf_dir, str(evid) + ".pdf"))
                 for chan in chans:
                     tr = arrival_segment[chan][band]
                     smoothed = smoothed_segment[chan][band]
@@ -650,18 +658,30 @@ def main():
 
 
                     # DO THE FITTING
-                    fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(int(event[EV_EVID_COL])), method=method, iid=iid, by_phase=by_phase)
-
-    #                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
-
+                    fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, iid=iid, by_phase=by_phase)
                     print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
+
+                    tmpl = get_template(sigmodel, tr, phaseids, fit_params)
+                    wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
+                    for (pidx, phaseid) in enumerate(phaseids):
+                        if wiggles[pidx] is None:
+                            continue
+                        else:
+                            dirname = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)), short_band)
+                            fname = os.path.join(dirname, "%d_%s.dat" % (evid, chan))
+                            get_dir(dirname)
+                            print "saving phase %d len %d" % (phaseid, len(wiggles[pidx]))
+                            np.savetxt(fname, np.array(wiggles[pidx]))
+                            sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, short_band, chan, evid, fname, snr_threshold)
+                            print sql_query
+                            cursor.execute(sql_query)
 
                     s = [method,]
                     if by_phase:
                         s.append('byphase')
                     method_str = '_'.join(s)
                     for (i, arid) in enumerate(arrs["all_arrival_arids"]):
-                        sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f);" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+                        sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
                         print sql_query
                         cursor.execute(sql_query)
                         cursor.execute("select * from sigvisa_coda_fits")
