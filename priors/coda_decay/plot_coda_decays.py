@@ -124,12 +124,8 @@ def plot_envelopes(axes, trace, noise_floor, fits, formats, all_det_times = None
     axes.plot(xvals, [noise_floor, noise_floor], "g-")
 
 
-def plot_scatter(lp, ls, base_coda_dir, short_band, chan):
+def plot_scatter(lp, ls, pp):
     try:
-
-        pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-        pp = PdfPages(os.path.join(pdf_dir, "plots_%s.pdf" % (chan)))
-        print "opening pp in ", pdf_dir
 
         if lp is not None and len(lp.shape) == 2:
             plt.figure()
@@ -227,14 +223,14 @@ def plot_scatter(lp, ls, base_coda_dir, short_band, chan):
         pp.close()
 
 
-def generate_scatter_plots(cursor, runid, acost_threshold, base_coda_dir):
+def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_threshold, base_coda_dir):
     for (chan_idx, chan) in enumerate(chans):
         for (band_idx,band) in enumerate(bands):
 
             short_band = band[16:]
 
             LON, LAT, DEPTH, PHASEID, PEAK_DELAY, CODA_HEIGHT, CODA_DECAY, DISTANCE, AZIMUTH = range(9)
-            sql_query = "select lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and fit.chan='%s' and fit.band='%s' and fit.runid=%d and fit.acost<%f" % (chan, short_band, runid, acost_threshold)
+            sql_query = "select lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and fit.chan='%s' and fit.band='%s' and sid.id=%d and sid.sta=l.sta and fit.runid=%d and fit.acost<%f and fit.peak_delay between -5 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f" % (chan, short_band, siteid, runid, acost_threshold, min_azi, max_azi)
             print sql_query
             cursor.execute(sql_query)
             orig_data = np.array(cursor.fetchall())
@@ -252,7 +248,14 @@ def generate_scatter_plots(cursor, runid, acost_threshold, base_coda_dir):
                     ls.append(r)
             lp = np.array(lp)
             ls = np.array(ls)
-            plot_scatter(lp, ls, base_coda_dir, short_band, chan)
+
+
+            pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
+            fname = os.path.join(pdf_dir, "plots_%s_%.0f_%.0f.pdf" % (chan, min_azi, max_azi))
+            pp = PdfPages(fname)
+            print "opening pp in ", fname
+
+            plot_scatter(lp, ls, pp)
 
 def merge_plots(base_coda_dir, bands):
     for (band_idx, band) in enumerate(bands):
@@ -321,6 +324,9 @@ def main():
     parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid of coda fits to examine")
     parser.add_option("--maxcost", dest="max_cost", default=0.5, type="float", help="consider only coda fits with average cost below this threshold (0.5)")
 
+    parser.add_option("--max_azi", dest="max_azi", default=360, type="float", help="(360)")
+    parser.add_option("--min_azi", dest="min_azi", default=0, type="float", help="(360)")
+
     parser.add_option("--scatter", dest="scatter", default=False, action="store_true", help="create scatter plots (False)")
     parser.add_option("--events", dest="events", default=False, action="store_true", help="(re)creates individual event coda plots (False)")
     parser.add_option("--pred_events", dest="pred_events", default=False, action="store_true", help="predicts individual event coda plots (False)")
@@ -336,7 +342,7 @@ def main():
     base_coda_dir = get_base_dir(int(siteid), int(runid))
 
     if options.scatter:
-        generate_scatter_plots(cursor, options.runid, options.max_cost, base_coda_dir)
+        generate_scatter_plots(cursor, options.runid, options.siteid, options.min_azi, options.max_azi, options.max_cost, base_coda_dir)
 
     if options.events:
         for row in all_data:
