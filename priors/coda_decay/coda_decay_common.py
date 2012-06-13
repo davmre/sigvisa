@@ -363,9 +363,6 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
                                 f.write(str(d) + "\n")"""
 
 
-        # test to make sure we have the necessary channels
-        tr1 = arrival_segment[0]["BHZ"]
-        tr2 = arrival_segment[0]["horiz_avg"]
 
     except:
         raise

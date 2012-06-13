@@ -607,6 +607,11 @@ def main():
     iid=True
     by_phase=False
     snr_threshold=2
+    evid_condition = ""
+    runid = None
+    if len(sys.argv) > 4:
+        evid_condition = "and evid=%d" % (int(sys.argv[3]))
+        runid = int(sys.argv[4])
 
     cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
@@ -622,16 +627,15 @@ def main():
     events = np.array(cursor.fetchall())
 
 #    bands = ['narrow_envelope_4.00_6.00', 'narrow_envelope_2.00_3.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
-    bands = ['narrow_envelope_2.00_3.00']
-    chans = ['BHZ']
     short_bands = [b[16:] for b in bands]
 
-    cursor.execute("select max(runid) from sigvisa_coda_fits")
-    runid, = cursor.fetchone()
     if runid is None:
-        runid=0
-    else:
-        runid = int(runid)+1
+        cursor.execute("select max(runid) from sigvisa_coda_fits")
+        runid, = cursor.fetchone()
+        if runid is None:
+            runid=0
+        else:
+            runid = int(runid)+1
 
     base_coda_dir = get_base_dir(siteid, runid)
 
@@ -646,8 +650,9 @@ def main():
             for (band_idx, band) in enumerate(bands):
                 short_band = short_bands[band_idx]
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-                pp = PdfPages(os.path.join(pdf_dir, str(evid) + ".pdf"))
+
                 for chan in chans:
+                    pp = PdfPages(os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan)))
                     tr = arrival_segment[chan][band]
                     smoothed = smoothed_segment[chan][band]
 
@@ -659,7 +664,7 @@ def main():
 
                     # DO THE FITTING
                     fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, iid=iid, by_phase=by_phase)
-                    print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
+                    print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
 
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
                     wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
@@ -684,10 +689,7 @@ def main():
                         sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
                         print sql_query
                         cursor.execute(sql_query)
-                        cursor.execute("select * from sigvisa_coda_fits")
-                        a = cursor.fetchall()
-                        print a
-
+                dbconn.commit()
                 pp.close()
 
         except KeyboardInterrupt:
@@ -695,7 +697,7 @@ def main():
         except:
             print traceback.format_exc()
             continue
-    dbconn.commit()
+
     dbconn.close()
 
 if __name__ == "__main__":
