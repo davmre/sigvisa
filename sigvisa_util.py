@@ -530,7 +530,9 @@ def extract_timeslice_at_station(traces, start_time, end_time, siteid):
 
   for segment in traces:
 
-    trc = segment['BHZ']['broadband']
+    c = segment.keys()[0]
+    b = segment[c].keys()[0]
+    trc = segment[c][b]
     if trc.stats.siteid != siteid:
       continue
 
@@ -575,7 +577,6 @@ def extract_timeslice_at_station(traces, start_time, end_time, siteid):
           new_trc.stats.npts = len(new_trc.data)
 
 
-  print new_segment['BHZ']['broadband']
   return [new_segment,]
 
 def load_and_process_traces(cursor, start_time, end_time, stalist=None, downsample_factor=1):
