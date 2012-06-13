@@ -169,7 +169,7 @@ create table sigvisa_coda_fits (
  acost	    float,
  dist	    float,
  azi	    float,
- primary key(runid, arid)
+ primary key(runid, arid, chan, band)
 );
 
 create table sigvisa_wiggle_wfdisc (
@@ -182,7 +182,7 @@ create table sigvisa_wiggle_wfdisc (
  evid 	  int,
  fname	  varchar(255),
  snr	  float,
- primary key(runid, arid)
+ primary key(runid, arid, band, chan)
 );
 
 
