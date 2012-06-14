@@ -54,8 +54,8 @@ class ARLearner:
         phi = np.dot(np.linalg.inv(R),r1)
         params = [phi[i][0] for i in range(p)]
         self.params[p] = params
-#        std = np.sqrt(r[0] - sum([params[k]*r[k+1] for k in range(p)]))
-        std = self.residual_std(p)
+        std = np.sqrt(r[0] - sum([params[k]*r[k+1] for k in range(p)]))
+#        std = self.residual_std(p)
         self.std[p] = std
         return (params, std)
 
