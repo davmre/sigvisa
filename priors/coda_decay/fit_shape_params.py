@@ -129,7 +129,7 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
     st = tr.stats.starttime_unix
     nf = tr.stats.noise_floor
 
-    diff = divide_traces(tr, tmpl)
+    diff = subtract_traces(tr, tmpl)
 
     wiggles = []
     for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
@@ -142,7 +142,7 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
             next_phase_idx = np.float('inf')
         for t in range(100):
             end_idx = start_idx + np.ceil(srate*t)
-            if (end_idx >= next_phase_idx) or (np.log(tmpl[end_idx]) - nf < threshold):
+            if (end_idx >= next_phase_idx) or (tmpl[end_idx] - nf < threshold):
                 break
         wiggle = diff.data[start_idx:end_idx]
         wiggles.append(wiggle)
@@ -328,38 +328,25 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
     arm = smoothed.stats.noise_model
     sarm = smoothed.stats.smooth_noise_model
     sigmodel.set_noise_process(smoothed.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, arm.c, (arm.em.std/2)**2, np.array(arm.params))
-
+    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 1, 0.0001, np.array(arm.params))
 
     #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
 
-
+    if iid:
     # learn from smoothed data w/ iid noise
-    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
-    start_cost = f(start_params)
-    print "start params cost (w/ smoothed data and iid noise)", start_cost
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
-    best_params_iid, best_cost_iid = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params_iid), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost_iid, evid))
+        f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
+        start_cost = f(start_params)
+        print "start params cost (w/ smoothed data and iid noise)", start_cost
+        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
+        best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
+        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
 
-
-    tmpl = get_template(sigmodel, env, phaseids, assem_params(best_params_iid))
-    wiggles = extract_wiggles(env, tmpl, arrs, threshold=2)
-    for (wi, wiggle) in enumerate(wiggles):
-        plt.plot(wiggle)
-        plt.title("wiggles %d" % (wi,))
-        pp.savefig()
-    wiggles = np.concatenate(wiggles)
-    ar_learner = ARLearner(wiggles, 40)
-    arparams, std = ar_learner.yulewalker(17)
-    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, ar_learner.c, std**2, np.array(arparams))
-    print "set wiggle process", ar_learner.c, std, arparams
-
-    f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
-    best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
-    plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
-    best_params_iid2, best_cost_iid2 = optimize(f, best_params_iid, bounds, method=method, phaseids= (phaseids if by_phase else None))
-    plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params_iid2), phaseids, None, None, title = "best orig-iid (cost %f, evid %s)" % (best_cost_iid2, evid))
+    else:
+        f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
+        start_cost = f(start_params)
+        plot_channels_with_pred(sigmodel, pp, env, assem_params(start_params), phaseids, None, None, title = "start orig (cost %f, evid %s)" % (start_cost, evid))
+        best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
+        plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
 
     return assem_params(best_params), phaseids, best_cost
 
@@ -630,7 +617,7 @@ def main():
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and evid=5308821 and pid.phase=leba.phase" % (phase_condition, siteid)
+    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
 #5308821
 #5301405
 # and lebo.evid=5301449
