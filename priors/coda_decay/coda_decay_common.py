@@ -270,8 +270,8 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
             break
 
     try:
-        traces = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)- 100, np.max(other_arrivals) + 170, stalist=[siteid,])
-        arrival_segment = sigvisa_util.extract_timeslice_at_station(traces, np.min(other_arrivals)-100, np.max(other_arrivals) + 170, siteid)
+        traces = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)- 100, np.max(other_arrivals) + 350, stalist=[siteid,])
+        arrival_segment = sigvisa_util.extract_timeslice_at_station(traces, np.min(other_arrivals)-100, np.max(other_arrivals) + 350, siteid)
         if arrival_segment is None:
             return None
         sigvisa_util.compute_narrowband_envelopes(arrival_segment)
