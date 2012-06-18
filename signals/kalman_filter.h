@@ -34,7 +34,8 @@ typedef struct KalmanState {
   gsl_vector * p_sample_state; /* The true hidden state of the
 				    process; used when sampling from
 				    the model. (n) */
-  gsl_vector * p_process_indices; /* indices of the current AR processes (np) */
+  gsl_vector * p_process_indices; /* map process indices to vector/matrix indices (np->n) */
+  gsl_vector * p_permanent_indices; /* map permanent indices to process indices (?? -> np) */
 
 
   int linear_obs; /* determines whether observations are a linear

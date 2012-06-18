@@ -21,10 +21,15 @@
 int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
 
   int m = p->order;
+  assert(m != 0);
 
   /* fill in the index of the new process */
-  resize_vector(&k->p_process_indices, (k->np)+1);
-  gsl_vector_set(k->p_process_indices, k->np, k->n);
+  int new_perm_idx = (k->p_permanent_indices == NULL) ? 0 : k->p_permanent_indices->size;
+  resize_vector(&k->p_permanent_indices, new_perm_idx+1);
+
+  gsl_vector_set(k->p_permanent_indices, new_perm_idx, k->np);
+  resize_vector(&k->p_process_indices, k->np+1);
+  gsl_vector_set(k->p_process_indices, k->np, (k->n));
 
   resize_vector(&k->p_const, (k->np)+1);
   resize_vector(&k->p_means, (k->n)+m);
@@ -67,20 +72,29 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
     fprintf(k->debug_processes_fp, "add process id %d order %d mean %f std %f\n", k->np-1, p->order, p->mean, sqrt(p->sigma2));
   }
 
-  return k->np - 1;
+  // return the permanent ID of the new process process
+  return new_perm_idx;
 
 }
 
 /* Removes the order-m AR process with specified index arridx from the mean vector and covariance matrix. */
-void kalman_remove_AR_process(KalmanState_t * k, int m, int process_idx) {
+void kalman_remove_AR_process(KalmanState_t * k, int m, int perm_idx) {
+
+  int process_idx = gsl_vector_get(k->p_permanent_indices, perm_idx);
+  gsl_vector_set(k->p_permanent_indices, perm_idx, -1);
 
   int arridx = gsl_vector_get(k->p_process_indices, process_idx);
-  remove_vector_slice(&k->p_process_indices, process_idx, 1);
-  for(int i=process_idx; i < k->p_process_indices->size; ++i) {
-    gsl_vector_set(k->p_process_indices, i, gsl_vector_get(k->p_process_indices, i) - m);
+  for(int i=0; i < k->p_permanent_indices->size; ++i) {
+    int other_process_idx = gsl_vector_get(k->p_permanent_indices, i);
+    if (other_process_idx > process_idx) {
+      int other_arr_idx = gsl_vector_get(k->p_process_indices, other_process_idx);
+      gsl_vector_set(k->p_permanent_indices, i, other_process_idx - 1);
+      gsl_vector_set(k->p_process_indices, other_process_idx, other_arr_idx - m);
+    }
   }
 
   remove_vector_slice(&k->p_const, process_idx, 1);
+
   remove_vector_slice(&k->p_means, arridx, m);
   remove_vector_slice(&k->p_process_noise, arridx, m);
   remove_vector_slice(&k->p_sample_state, arridx, m);
@@ -472,6 +486,7 @@ void kalman_state_free(KalmanState_t * k) {
   if (k->p_process_noise != NULL) gsl_vector_free(k->p_process_noise);
   if (k->p_sample_state != NULL) gsl_vector_free(k->p_sample_state);
   if (k->p_process_indices != NULL) gsl_vector_free(k->p_process_indices);
+  if (k->p_permanent_indices != NULL) gsl_vector_free(k->p_permanent_indices);
 
   if (k->p_linear_obs != NULL) gsl_matrix_free(k->p_linear_obs);
   if (k->p_obs_noise != NULL) gsl_vector_free(k->p_obs_noise);
