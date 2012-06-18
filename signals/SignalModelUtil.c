@@ -16,7 +16,7 @@
 #include "SignalModelUtil.h"
 
 
-ArrivalWaveform_t * append_active(ArrivalWaveform_t * p_head, 
+ArrivalWaveform_t * append_active(ArrivalWaveform_t * p_head,
 				  ArrivalWaveform_t * p_arr) {
   ArrivalWaveform_t * p_new_head;
   p_arr->next_active=NULL;
@@ -34,7 +34,7 @@ ArrivalWaveform_t * append_active(ArrivalWaveform_t * p_head,
   return p_new_head;
 }
 
-ArrivalWaveform_t * remove_active(ArrivalWaveform_t * p_head, 
+ArrivalWaveform_t * remove_active(ArrivalWaveform_t * p_head,
 				  ArrivalWaveform_t * p_arr) {
   ArrivalWaveform_t * p_new_head;
   if (p_head == NULL) {
@@ -51,7 +51,7 @@ ArrivalWaveform_t * remove_active(ArrivalWaveform_t * p_head,
   return p_new_head;
 }
 
-ArrivalWaveform_t * insert_st(ArrivalWaveform_t * p_head, 
+ArrivalWaveform_t * insert_st(ArrivalWaveform_t * p_head,
 			      ArrivalWaveform_t * p_arr) {
   ArrivalWaveform_t * p_new_head;
   p_arr->next_start=NULL;
@@ -73,7 +73,7 @@ ArrivalWaveform_t * insert_st(ArrivalWaveform_t * p_head,
   return p_new_head;
 }
 
-ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head, 
+ArrivalWaveform_t * insert_et(ArrivalWaveform_t * p_head,
 				 ArrivalWaveform_t * p_arr) {
   ArrivalWaveform_t * p_new_head;
   p_arr->next_end=NULL;
@@ -111,7 +111,8 @@ ArrivalWaveform_t * free_ArrivalWaveform(ArrivalWaveform_t * a) {
   if(a->p_abstract_trace != NULL) {
     free_trace(a->p_abstract_trace);
   }
-  if (a->ar_process.coeffs != NULL) free(a->ar_process.coeffs);
+  for(int c = 0; c < NUM_CHANS; ++c)
+    if (a->ar_processes[c].coeffs != NULL) free(a->ar_processes[c].coeffs);
 
   ArrivalWaveform_t * next_a = a->next_start;
   free(a);

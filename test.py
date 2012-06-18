@@ -27,10 +27,10 @@ def gen_random_segment(siteid, length):
     for (chan, chanid) in (('BHE', 0), ('BHN', 1), ('BHZ', 2)):
         data = np.random.random((length, 1))
         stats = {'network': 's' + str(siteid), 'station': 's' + str(siteid), 'location': '',
-                 'channel': chan, 'band': 'narrow_logenvelope_2.00_3.00', 'npts': len(data), 'sampling_rate': 1,
+                 'channel': chan, 'band': 'narrow_envelope_2.00_3.00', 'npts': len(data), 'sampling_rate': 1,
                  'starttime_unix': 10000, 'siteid': siteid, 'chanid': chanid, 'starttime': UTCDateTime(10000)}
         trace = Trace(data = data, header=stats)
-        channels[chan] = {"narrow_logenvelope_2.00_3.00": trace}
+        channels[chan] = {"narrow_envelope_2.00_3.00": trace}
     return channels
 
 class TestPurePythonFunctions(unittest.TestCase):
@@ -83,26 +83,24 @@ class TestCFunctions(unittest.TestCase):
 
         self.ar_noise_model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(0, np.sqrt(noise_var)), c=noise_mean)
 
-        band = sigvisa.canonical_band_num("narrow_logenvelope_2.00_3.00")
+        band = sigvisa.canonical_band_num("narrow_envelope_2.00_3.00")
         chan_BHZ = sigvisa.canonical_channel_num("BHZ")
         chan_BHE = sigvisa.canonical_channel_num("BHE")
         chan_BHN = sigvisa.canonical_channel_num("BHN")
         chan_ha = sigvisa.canonical_channel_num("horiz_avg")
 
         for siteid in self.test_siteids:
-            self.sigmodel.set_noise_process(siteid, band, chan_BHZ, noise_mean, noise_var, arparams);
-            self.sigmodel.set_noise_process(siteid, band, chan_BHE, noise_mean, noise_var, arparams);
-            self.sigmodel.set_noise_process(siteid, band, chan_BHN, noise_mean, noise_var, arparams);
-            self.sigmodel.set_noise_process(siteid, band, chan_ha, noise_mean, noise_var, arparams);
-            self.sigmodel.set_wiggle_process(siteid, band, noise_mean, wiggle_var, arparams);
+            for chan in [chan_BHZ, chan_BHE, chan_BHN, chan_ha]:
+                self.sigmodel.set_noise_process(siteid, band, chan, noise_mean, noise_var, arparams);
+                self.sigmodel.set_wiggle_process(siteid, band, chan, 1, noise_mean, wiggle_var, arparams);
 
 
     def test_noise_trace_likelihood(self):
         segments = gen_random_segments((2,), 40)
         params = np.array(((100000, 1, 0, 1, 0, -0.02),))
 
-        ll1 = self.sigmodel.trace_likelihood(segments[0]['BHZ']['narrow_logenvelope_2.00_3.00'], [1,], params)
-        ll2 = self.ar_noise_model.lklhood(segments[0]['BHZ']['narrow_logenvelope_2.00_3.00'].data)
+        ll1 = self.sigmodel.trace_likelihood(segments[0]['BHZ']['narrow_envelope_2.00_3.00'], [1,], params)
+        ll2 = self.ar_noise_model.lklhood(segments[0]['BHZ']['narrow_envelope_2.00_3.00'].data)
         print ll1, ll2
         self.assertAlmostEqual(ll1, ll2, places=1)
 
@@ -120,9 +118,9 @@ class TestCFunctions(unittest.TestCase):
         seg_sample = self.sigmodel.sample_segment(10000, 11000, 2, 1, [1,], params)
 
         pp = PdfPages(os.path.join('logs', "test_segments.pdf"))
-        plot.plot_segment(seg_template, title="generated", band="narrow_logenvelope_2.00_3.00")
+        plot.plot_segment(seg_template, title="generated", band="narrow_envelope_2.00_3.00")
         pp.savefig()
-        plot.plot_segment(seg_sample, title="sampled", band="narrow_logenvelope_2.00_3.00")
+        plot.plot_segment(seg_sample, title="sampled", band="narrow_envelope_2.00_3.00")
         pp.savefig()
         pp.close()
 

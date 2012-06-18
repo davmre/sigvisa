@@ -33,7 +33,7 @@ typedef struct Detection_t
 
 typedef struct Arrival_t {
 
-  int phase;
+  int phaseid;
   int siteid;
 
   double time;

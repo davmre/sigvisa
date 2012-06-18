@@ -38,7 +38,7 @@ static PyMethodDef SigModel_methods[] = {
    "set_noise_process(siteid, band, chan, noise_mean, noise_variance, noise_coeffs)"
    "-> ??\n"},
   {"set_wiggle_process", (PyCFunction)py_set_wiggle_process, METH_VARARGS,
-   "set_wiggle_process(siteid, band, noise_mean, noise_variance, noise_coeffs)"
+   "set_wiggle_process(siteid, band, chan, phaseid, noise_mean, noise_variance, noise_coeffs)"
    "-> ??\n"},
   {"set_signal_params", (PyCFunction)py_set_params, METH_VARARGS,
    "set_signal_params(siteid, param_dict)"

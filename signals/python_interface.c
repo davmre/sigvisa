@@ -38,6 +38,7 @@ void convert_arrivals(PyObject * py_phaseids_list, PyObject * py_params_array, i
       (*p_arrs)[i].amp = ARRAY2(py_params_array, i, CODA_HEIGHT_PARAM);
       (*p_arrs)[i].coda_decay = ARRAY2(py_params_array, i, CODA_DECAY_PARAM);
 
+      (*p_arrs)[i].phaseid = PyInt_AsLong(PyList_GET_ITEM(py_phaseids_list, i));
       (*pp_arrs)[i] = (*p_arrs)+i;
     }
 
@@ -71,13 +72,13 @@ PyObject * py_set_noise_process(SigModel_t * p_sigmodel, PyObject * args) {
 }
 
 PyObject * py_set_wiggle_process(SigModel_t * p_sigmodel, PyObject * args) {
-  int siteid, band;
+  int siteid, band, chan, phaseid;
   double noise_mean, noise_variance;
   PyArrayObject * py_coeffs;
-  if (!PyArg_ParseTuple(args, "iiddO!", &siteid, &band, &noise_mean, &noise_variance, &PyArray_Type, &py_coeffs))
+  if (!PyArg_ParseTuple(args, "iiiiddO!", &siteid, &band, &chan, &phaseid, &noise_mean, &noise_variance, &PyArray_Type, &py_coeffs))
       return NULL;
 
-  ARProcess_t * p_ar = &(((Spectral_Envelope_Model_t * )(p_sigmodel->signal_model.pv_params))->p_stations + siteid-1)->bands[band].wiggle_model;
+  ARProcess_t * p_ar = &(((Spectral_Envelope_Model_t * )(p_sigmodel->signal_model.pv_params))->p_stations + siteid-1)->bands[band].wiggle_model[chan][phaseid-1];
   if (p_ar->coeffs != NULL) {
     free(p_ar->coeffs);
     p_ar->coeffs = NULL;

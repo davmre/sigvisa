@@ -63,6 +63,12 @@
 
 #define MAX_ENVELOPE_LENGTH 300
 
+
+/* information about phases */
+#define NUM_TD_PHASES 14
+
+
+
 typedef struct Trace_t
 {
   long len;
