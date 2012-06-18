@@ -1,4 +1,3 @@
-
 import time
 import sys, struct
 import matplotlib
@@ -125,47 +124,52 @@ def aggregate_segments(segments):
 
     while changed:
         changed = False
-        for i in range(len(segments)-1):
-            if i >= len(segments)-1:
-                break
-            for j in range(i+1, min(i+4, len(segments))):
-                if j >= len(segments):
-                    break
-                overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
+
+        n = len(segments)
+        overlaps = np.zeros((n,n))
+
+        # merge segments in order of how much they overlap
+        for i in range(n-1):
+          for j in range(i+1, n):
+            overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
+            overlaps[i,j] = overlap
+        amax = np.argmax(overlaps)
+        i = amax/n
+        j = amax % n
+        overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
+
+        chans1 = getchans(segments[i])
+        chans2 = getchans(segments[j])
 
 
-                if overlap > aggregate_threshold:
+        if overlap > aggregate_threshold and len(set(chans1).intersection(set(chans2))) == 0:
 
-                    chans1 = getchans(segments[i])
-                    chans2 = getchans(segments[j])
+            agg_start = max(s1,s2)
+            agg_end = min(e1,e2)
 
-                    assert len(set(chans1).intersection(set(chans2))) == 0
+            del segments[j]
+            del segments[i]
 
-                    agg_start = max(s1,s2)
-                    agg_end = min(e1,e2)
-
-                    del segments[j]
-                    del segments[i]
-
-                    agg = buildsegment(chans1 + chans2, agg_start, agg_end)
+            agg = buildsegment(chans1 + chans2, agg_start, agg_end)
 
 
-                    if np.abs(agg_start - s1) > cutoff_threshold:
-                        pre_agg = buildsegment(chans1, s1, agg_start)
-                        insert_sorted(segments, pre_agg, i)
+            if np.abs(agg_start - s1) > cutoff_threshold:
+              pre_agg = buildsegment(chans1, s1, agg_start)
+              insert_sorted(segments, pre_agg, i)
 
-                    if agg_end-agg_start > min_len:
-                      insert_sorted(segments, agg, i)
+            if agg_end-agg_start > min_len:
+              insert_sorted(segments, agg, i)
 
-                    post_agg = None
-                    if np.abs(e1 - agg_end) > cutoff_threshold:
-                        post_agg = buildsegment(chans1, agg_end, e1)
-                    elif np.abs(e2 - agg_end) > cutoff_threshold:
-                        post_agg = buildsegment(chans2, agg_end, e2)
-                    if post_agg is not None:
-                        insert_sorted(segments, post_agg, i)
+            post_agg = None
+            if np.abs(e1 - agg_end) > cutoff_threshold:
+              post_agg = buildsegment(chans1, agg_end, e1)
+            elif np.abs(e2 - agg_end) > cutoff_threshold:
+              post_agg = buildsegment(chans2, agg_end, e2)
+              if post_agg is not None:
+                insert_sorted(segments, post_agg, i)
 
-                    changed = True
+            changed = True
+
     return segments
 
 def print_segments(segments):
@@ -232,7 +236,7 @@ def load_traces(cursor, stations, start_time, end_time, process=None, downsample
     traces = []
 
     for (idx, sta) in enumerate(stations):
-        sql = "select chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
+        sql = "select distinct chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
         cursor.execute(sql)
         wfdiscs = cursor.fetchall()
         wfdiscs = filter(lambda x: x[0] in ["BHE", "BHN", "BHZ", "BH1", "BH2"], wfdiscs)
