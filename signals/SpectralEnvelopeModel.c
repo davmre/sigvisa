@@ -272,6 +272,11 @@ void setup_noise_processes(BandModel_t * p_band, Segment_t * p_segment, KalmanSt
     }
     noise_indices[i] = kalman_add_AR_process(k, chan_noise);
   }
+  
+  if (k->np == 0) {
+    LogError("No noise processes added - are you sure you want this?");
+    exit(EXIT_FAILURE);
+  }
 }
 
 

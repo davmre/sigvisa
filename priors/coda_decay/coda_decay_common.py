@@ -34,7 +34,8 @@ min_s_coda_length = 45
 
 avg_cost_bound = 0.2
 
-bands = ["narrow_envelope_2.00_3.00",]
+bands = ['narrow_envelope_4.00_6.00', 'narrow_envelope_2.00_3.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
+#bands = ["narrow_envelope_2.00_3.00",]
 chans = ["BHZ","BHE", "BHN"]
 
 (EVID_COL, SITEID_COL, BANDID_COL, P_PHASEID_COL, S_PHASEID_COL, DISTANCE_COL, AZI_COL, LON_COL, LAT_COL, MB_COL, VERT_P_FIT_B, VERT_P_FIT_HEIGHT, VERT_P_FIT_PHASE_START_TIME, VERT_P_FIT_PHASE_LENGTH, VERT_P_FIT_PEAK_OFFSET, VERT_P_FIT_PEAK_HEIGHT, VERT_P_FIT_CODA_START_OFFSET, VERT_P_FIT_CODA_LENGTH, VERT_P_FIT_MAX_CODA_LENGTH, VERT_P_FIT_AVG_COST, HORIZ_P_FIT_B, HORIZ_P_FIT_HEIGHT, HORIZ_P_FIT_PHASE_START_TIME, HORIZ_P_FIT_PHASE_LENGTH, HORIZ_P_FIT_PEAK_OFFSET, HORIZ_P_FIT_PEAK_HEIGHT, HORIZ_P_FIT_CODA_START_OFFSET, HORIZ_P_FIT_CODA_LENGTH, HORIZ_P_FIT_MAX_CODA_LENGTH, HORIZ_P_FIT_AVG_COST, VERT_S_FIT_B, VERT_S_FIT_HEIGHT, VERT_S_FIT_PHASE_START_TIME, VERT_S_FIT_PHASE_LENGTH, VERT_S_FIT_PEAK_OFFSET, VERT_S_FIT_PEAK_HEIGHT, VERT_S_FIT_CODA_START_OFFSET, VERT_S_FIT_CODA_LENGTH, VERT_S_FIT_MAX_CODA_LENGTH, VERT_S_FIT_AVG_COST, HORIZ_S_FIT_B, HORIZ_S_FIT_HEIGHT, HORIZ_S_FIT_PHASE_START_TIME, HORIZ_S_FIT_PHASE_LENGTH, HORIZ_S_FIT_PEAK_OFFSET, HORIZ_S_FIT_PEAK_HEIGHT, HORIZ_S_FIT_CODA_START_OFFSET, HORIZ_S_FIT_CODA_LENGTH, HORIZ_S_FIT_MAX_CODA_LENGTH, HORIZ_S_FIT_AVG_COST, VERT_NOISE_FLOOR_COL, HORIZ_NOISE_FLOOR_COL, DEPTH_COL, EVTIME_COL, NUM_COLS) = range(54+1)
@@ -270,8 +271,8 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
             break
 
     try:
-        traces = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)- 100, np.max(other_arrivals) + 170, stalist=[siteid,])
-        arrival_segment = sigvisa_util.extract_timeslice_at_station(traces, np.min(other_arrivals)-100, np.max(other_arrivals) + 170, siteid)
+        traces = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)- 100, np.max(other_arrivals) + 350, stalist=[siteid,])
+        arrival_segment = sigvisa_util.extract_timeslice_at_station(traces, np.min(other_arrivals)-100, np.max(other_arrivals) + 350, siteid)
         if arrival_segment is None:
             return None
         sigvisa_util.compute_narrowband_envelopes(arrival_segment)

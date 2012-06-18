@@ -277,7 +277,7 @@ def fetch_waveform(station, chan, stime, etime):
       raise MissingWaveform("couldn't get siteid for station %s" % (station))
     
     # check the samprate is consistent for all waveforms in this interval
-    assert(samprate is None or samprate == waveform[SAMPRATE_COL])
+    assert(samprate is None or samprate == waveform['samprate'])
     if samprate is None:
       samprate = waveform['samprate']
     
