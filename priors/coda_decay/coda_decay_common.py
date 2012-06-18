@@ -34,7 +34,7 @@ min_s_coda_length = 45
 
 avg_cost_bound = 0.2
 
-bands = ['narrow_envelope_4.00_6.00', 'narrow_envelope_2.00_3.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
+bands = ['narrow_envelope_2.00_3.00', 'narrow_envelope_4.00_6.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
 #bands = ["narrow_envelope_2.00_3.00",]
 chans = ["BHZ","BHE", "BHN"]
 
@@ -543,13 +543,17 @@ def subtract_traces(tr, to_subtract):
     newtrace.stats.npts = len(newtrace.data)
     return newtrace
 
-def get_template(sigmodel, trace, phaseids, params, logscale=False):
+def get_template(sigmodel, trace, phaseids, params, logscale=False, sample=False):
     srate = trace.stats['sampling_rate']
     st = trace.stats.starttime_unix
     et = st + trace.stats.npts/srate
     siteid = trace.stats.siteid
-    env = sigmodel.generate_segment(st, et, siteid, srate, phaseids, params)
-    env = env[trace.stats.channel][trace.stats.band]
+    c = sigvisa.canonical_channel_num(trace.stats.channel)
+    b = sigvisa.canonical_band_num(trace.stats.band)
+    if not sample:
+        env = sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, params)
+    else:
+        env = sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, params)
     env.data = np.log(env.data) if logscale else env.data
     return env
 

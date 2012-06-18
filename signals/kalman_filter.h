@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include "signal_structures.h"
 
-typedef void (*kalman_obs_fn)(const gsl_vector * state, gsl_vector * obs, va_list *args);
+typedef void (*kalman_obs_fn)(const gsl_vector * state, gsl_vector * obs, void * void_k, va_list *args);
 
 typedef struct KalmanState {
   /* KalmanState invariants:

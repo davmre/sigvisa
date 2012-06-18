@@ -117,6 +117,7 @@ typedef struct Segment_t {
 
 
 Trace_t * alloc_trace(void);
+PyObject * build_trace(Trace_t * p_trace);
 void free_trace(Trace_t * p_trace);
 
 Channel_t * alloc_channel(Segment_t * p_segment);

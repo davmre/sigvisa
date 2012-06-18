@@ -262,7 +262,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
      // provide the observation function with any extra arguments we were passed
      va_list args;
      va_start(args, p_true_obs);
-     (*k->p_obs_fn)(&state_col.vector, &obs_col.vector, &args);
+     (*k->p_obs_fn)(&state_col.vector, &obs_col.vector, k, &args);
      va_end(args);
 
      gsl_vector_set(k->p_weights, i, 1/(2*(L+lambda)));
@@ -345,7 +345,7 @@ void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...) {
   // compute the deterministic observation (using optional extra arguments)
   va_list args;
   va_start(args, p_output);
-  (*k->p_obs_fn)(k->p_collapsed_means, p_output, &args);
+  (*k->p_obs_fn)(k->p_collapsed_means, p_output, k, &args);
   va_end(args);
 
   // add observation noise

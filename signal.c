@@ -203,6 +203,29 @@ void free_segment_inner(Segment_t * p_segment) {
   }
 }
 
+void init_dummy_segment(Trace_t * p_trace, Segment_t * p_segment) {
+    /*make sure segment has all necessary properties defined (really just hz) and arrays allocated */
+  p_segment->len = p_trace->len;
+  p_segment->hz = p_trace->hz;
+  p_segment->siteid = p_trace->siteid;
+  p_segment->start_time = p_trace->start_time;
+  for (int i=0; i < NUM_CHANS; ++i) {
+    p_segment->p_channels[i] = NULL;
+  }
+  Channel_t * channel = calloc(1, sizeof(Channel_t));
+  p_segment->p_channels[p_trace->chan] = channel;
+  channel->len = p_trace->len;
+  channel->start_time = p_trace->start_time;
+  channel->hz = p_trace->hz;
+  channel->siteid = p_trace->siteid;
+  channel->chan = p_trace->chan;
+  for (int i=0; i < NUM_BANDS; ++i) {
+    channel->p_bands[i] = NULL;
+  }
+  channel->p_bands[p_trace->band] = p_trace;
+
+}
+
 /*
 ****************************************************************
 py_set_signals and associated helper methods for converting Python
@@ -272,6 +295,9 @@ int py_segment_to_c_segment(PyObject * py_segment, Segment_t * p_segment) {
   p_segment->siteid = -1;
 
   int i;
+  for(i=0; i<NUM_CHANS; ++i) {
+    p_segment->p_channels[i] = 0;
+  }
 
   PyObject *py_key, *py_value;
   Py_ssize_t pos = 0;

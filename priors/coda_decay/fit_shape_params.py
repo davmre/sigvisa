@@ -329,7 +329,8 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
     sarm = smoothed.stats.smooth_noise_model
     print "setting noise and wiggles for chan %d band %d" % (c, b)
     sigmodel.set_noise_process(smoothed.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 1, 0.0001, np.array(arm.params))
+    for phaseid in phaseids:
+        sigmodel.set_wiggle_process(smoothed.stats.siteid, b, c, int(phaseid), 1, 0.0001, np.array(arm.params))
 
     #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
 
@@ -653,7 +654,9 @@ def main():
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
 
                 for chan in chans:
-                    pp = PdfPages(os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan)))
+                    fname = os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
+                    print "writing to %s..." % (fname,)
+                    pp = PdfPages(fname)
                     tr = arrival_segment[chan][band]
                     smoothed = smoothed_segment[chan][band]
 
@@ -698,6 +701,9 @@ def main():
         except:
             print traceback.format_exc()
             continue
+        finally:
+            dbconn.commit()
+            pp.close()
 
     dbconn.close()
 
