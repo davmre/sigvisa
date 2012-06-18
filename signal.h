@@ -24,17 +24,17 @@
 #define CHAN_HORIZ_AVG    3
 #define CHAN_OTHER  4
 
-#define NUM_BANDS   1
-#define NARROW_20_30 0
+#define NUM_BANDS   10
+
 #define DEFAULT_BAND NARROW_20_30
 
-#define BROADBAND       6 //fix
+#define BROADBAND       0
 #define BB_ENVELOPE     1
 #define NARROW_05_07    2
 #define NARROW_07_10    3
 #define NARROW_10_15    4
 #define NARROW_15_20    5
-//#define NARROW_20_30    6
+#define NARROW_20_30    6
 #define NARROW_30_40    7
 #define NARROW_40_60    8
 #define NARROW_60_80    9
