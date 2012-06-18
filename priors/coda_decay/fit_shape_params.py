@@ -608,7 +608,7 @@ def main():
     iid=True
     by_phase=False
     snr_threshold=2
-    evid_condition = ""
+    evid_condition = "and d.label='training' and l.time between d.start_time and d.end_time"
     runid = None
     if len(sys.argv) > 4:
         evid_condition = "and evid=%d" % (int(sys.argv[3]))
@@ -618,7 +618,7 @@ def main():
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where (l.time<1237680000 or l.time>1245456000) and lebo.mb>5 and leba.arid=l.arid and l.snr > 5 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
+    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where  lebo.mb>5 and leba.arid=l.arid and l.snr > 5 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
 #5308821
 #5301405
 # and lebo.evid=5301449
