@@ -1,9 +1,17 @@
 import numpy as np
 
 #autocorrelation function for wide-sense stationary process
-def autocorr(x):
-    result = np.correlate(x, x, mode='full')
-    return result[result.size/2:]/len(x)
+def autocorr(exes, p):
+
+    results = []
+    total_len = 0
+    for x in exes:
+        result = np.correlate(x, x, mode='full')
+        results.append(result[result.size/2:result.size/2+p+1])
+        total_len = total_len + len(x)
+    results = np.array(results)
+    results = np.sum(results, axis=0) / total_len
+    return results
 
 #the probability density function of normal distribution
 def normaldist(x, mean, std):

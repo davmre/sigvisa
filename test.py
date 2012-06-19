@@ -10,7 +10,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import plot
 
 import sigvisa, sigvisa_util, learn
-import signals.armodel.model
+import signals.armodel.model, signals.armodel.learner
 from database.dataset import *
 from database import db
 
@@ -37,7 +37,17 @@ class TestPurePythonFunctions(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test_learn_armodel(self):
+        arparams = np.array((1.531985598646, -1.0682484475528535, 1.0396481745808401, -1.3279255479118346, 0.98655767845516618, -0.83922136571517214, 0.76677157354780778, -0.59579319975231027, 0.36945613335446836, -0.17841016307209667))
+        model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(0, .1), c=0)
+        s1 = model.sample(100000)
+        s2 = model.sample(1000)
+        s3 = model.sample(55555)
+        ar_learner = signals.armodel.learner.ARLearner([s1,s2,s3], 40)
+        params, std = ar_learner.yulewalker(10)
 
+        for v in (np.array(params)-arparams):
+            self.assertAlmostEqual(v, 0, places=1)
 
 class TestLoadFunctions(unittest.TestCase):
     def setUp(self):
