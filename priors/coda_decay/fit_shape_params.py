@@ -270,7 +270,7 @@ def find_starting_params(arr, smoothed):
     if arr["first_s_arrival"] is not None:
         # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
         if accept_p:
-            nf = lambda t : max(noise_floor, fit_p[FIT_HEIGHT] + fit_p[FIT_B]*(t - fit_p[FIT_CODA_START_OFFSET]))
+            nf = lambda t : max(noise_floor, fit_p[HEURISTIC_FIT_HEIGHT] + fit_p[HEURISTIC_FIT_B]*(t - fit_p[HEURISTIC_FIT_CODA_START_OFFSET]))
 
         fit_s = fit_phase_coda(arr["first_s_arrival"], smoothed, arr["arrivals"], arr["arrival_phases"], nf)
         smoothed.stats.fit_s = fit_s
@@ -288,15 +288,15 @@ def find_starting_params(arr, smoothed):
         a = defaults[i]
         noise_floor = smoothed.stats.noise_floor
 
-        fit_peak_height = logsub_noise(a[FIT_PEAK_HEIGHT], noise_floor)
-        fit_coda_height = logsub_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), noise_floor)
+        fit_peak_height = logsub_noise(a[HEURISTIC_FIT_PEAK_HEIGHT], noise_floor)
+        fit_coda_height = logsub_noise(a[HEURISTIC_FIT_HEIGHT] - a[HEURISTIC_FIT_B] *(a[HEURISTIC_FIT_CODA_START_OFFSET] - a[HEURISTIC_FIT_PEAK_OFFSET]), noise_floor)
 
-        start_params[i, PEAK_OFFSET_PARAM] = ( a[FIT_PEAK_OFFSET] + smoothed.stats.starttime_unix) - time
+        start_params[i, PEAK_OFFSET_PARAM] = ( a[HEURISTIC_FIT_PEAK_OFFSET] + smoothed.stats.starttime_unix) - time
         print "init peak offset to ", start_params[i, PEAK_OFFSET_PARAM], "for phase", i
         start_params[i, PEAK_HEIGHT_PARAM] = fit_peak_height if fit_peak_height > 0 else 1
         start_params[i, PEAK_DECAY_PARAM] = 5
         start_params[i, CODA_HEIGHT_PARAM] = fit_coda_height if fit_coda_height > 0 else 1
-        start_params[i, CODA_DECAY_PARAM] = a[FIT_B] if a[FIT_B] < 0 else -0.03
+        start_params[i, CODA_DECAY_PARAM] = a[HEURISTIC_FIT_B] if a[HEURISTIC_FIT_B] < 0 else -0.03
 
         bounds = bounds + arr_bounds
         bounds_fp = bounds_fp + arr_bounds_fixed_peak
@@ -609,7 +609,7 @@ def main():
     iid=True
     by_phase=False
     snr_threshold=2
-    evid_condition = "and d.label='training' and l.time between d.start_time and d.end_time"
+    evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5"
     runid = None
     if len(sys.argv) > 4:
         evid_condition = "and evid=%d" % (int(sys.argv[3]))
@@ -619,7 +619,7 @@ def main():
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where  lebo.mb>5 and leba.arid=l.arid and l.snr > 5 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
+    sql_query="SELECT distinct lebo.lon, lebo.lat, lebo.depth, lebo.time, lebo.mb, lebo.orid, lebo.evid FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
 #5308821
 #5301405
 # and lebo.evid=5301449
@@ -693,17 +693,18 @@ def main():
                         sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
                         print sql_query
                         cursor.execute(sql_query)
-                dbconn.commit()
-                pp.close()
+                    dbconn.commit()
+                    pp.close()
 
         except KeyboardInterrupt:
-            raise
-        except:
-            print traceback.format_exc()
-            continue
-        finally:
             dbconn.commit()
             pp.close()
+            raise
+        except:
+            dbconn.commit()
+            pp.close()
+            print traceback.format_exc()
+            continue
 
     dbconn.close()
 

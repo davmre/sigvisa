@@ -87,7 +87,8 @@ typedef struct Site_t
 #define EV_TIME_COL  3
 #define EV_MB_COL    4
 #define EV_ORID_COL  5
-#define EV_NUM_COLS  6
+#define EV_EVID_COL  6
+#define EV_NUM_COLS  7
 
 /* site array columns */
 #define SITE_LON_COL      0

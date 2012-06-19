@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 import numpy as np
 from time import strftime, gmtime
 from math import ceil
@@ -37,8 +37,8 @@ from az_slow_corr import load_az_slow_corr
 
 # events
 
-EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL, EV_MB_COL, EV_ORID_COL, \
-    EV_NUM_COLS = range(6+1)
+EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL, EV_MB_COL, EV_ORID_COL, EV_EVID_COL, \
+    EV_NUM_COLS = range(7+1)
 
 # detections
 DET_SITE_COL, DET_ARID_COL, DET_TIME_COL, DET_DELTIM_COL, DET_AZI_COL,\
@@ -75,37 +75,37 @@ def read_timerange(cursor, label, hours, skip):
   if row is None:
     raise ValueError("Unknown label %s" % label)
   start_time, end_time = row
-  
+
   # compute the subset of time within the dataset to actually read
   if skip >= start_time and skip <= end_time:
     stime = skip
   else:
     stime = start_time + skip * 60 * 60
-    
+
   if hours is None:
     etime = end_time
   elif hours >= start_time and hours <= end_time:
     etime = hours
   else:
     etime = stime + hours * 60 * 60
-  
+
   if stime > end_time or stime < start_time or etime < start_time\
          or etime > end_time:
     raise ValueError("invalid skip %d and hours %d parameter"
                      % (skip, hours))
 
   return stime, etime
-  
+
 def read_events(cursor, start_time, end_time, evtype, runid=None):
   if runid is None:
-    cursor.execute("select lon, lat, depth, time, mb, orid from %s_origin "
+    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
                    "where time between %d and %d order by time"
                    % (evtype, start_time, end_time))
   else:
-    cursor.execute("select lon, lat, depth, time, mb, orid from %s_origin "
+    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
                    "where runid=%s and time between %d and %d order by time"
                    % (evtype, runid, start_time, end_time))
-    
+
   events = np.array(cursor.fetchall())
 
   # change -999 mb to MIN MAG
@@ -113,10 +113,10 @@ def read_events(cursor, start_time, end_time, evtype, runid=None):
     events[:, EV_MB_COL][events[:, EV_MB_COL] == -999] = MIN_MAGNITUDE
 
   orid2num = {}
-  
+
   for ev in events:
     orid2num[ev[EV_ORID_COL]] = len(orid2num)
-  
+
   return events, orid2num
 
 def read_isc_events(cursor, start_time, end_time, author):
@@ -130,25 +130,25 @@ def read_isc_events(cursor, start_time, end_time, author):
     cursor.execute("select lon, lat, depth, time, mb, eventid from "
                    "isc_events where author='%s' and time between %d "
                    "and %d order by time"% (author, start_time, end_time))
-    
+
   events = np.array(cursor.fetchall())
 
   # change -999 mb to MIN MAG and -999 depth to 0
   if len(events):
     events[:, EV_MB_COL][events[:, EV_MB_COL] == -999] = MIN_MAGNITUDE
     events[:, EV_DEPTH_COL][events[:, EV_DEPTH_COL] == -999] = 0
-  
+
   return events
 
 
 def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", noarrays=False):
-  
+
   print "reading detections... "
 
   sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s iarr, static_siteid site, static_phaseid ph where %s iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.time between %d and %d order by iarr.time, iarr.arid" %  (arrival_table, ("site.statype='ss' and " if noarrays else ""), start_time, end_time)
 
   cursor.execute(sql_query)
-  
+
   detections = np.array(cursor.fetchall())
 
   sql_query = "select sta from static_siteid site order by id"
@@ -156,9 +156,9 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", n
   sitenames = np.array(cursor.fetchall())[:,0]
   corr_dict = load_az_slow_corr(os.path.join('parameters', 'sasc'))
   #print len(corr_dict), "SASC corrections loaded"
-  
+
   arid2num = {}
-  
+
   for det in detections:
     arid2num[det[DET_ARID_COL]] = len(arid2num)
 
@@ -187,7 +187,7 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
                    "lass.orid=lori.orid and lass.phase=ph.phase and lori.time "
                    "between %f and %f"
                    % (evtype, evtype, start_time, end_time))
-  
+
   evlist = [[] for _ in range(len(orid2num))]
   for orid, arid, phaseid in cursor:
     if orid not in orid2num:
@@ -196,7 +196,7 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
     if arid in arid2num:
       detnum = arid2num[arid]
       evlist[evnum].append((int(phaseid), int(detnum)))
-        
+
   return evlist
 
 def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
@@ -206,7 +206,7 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
   uptime = np.zeros((numsites,
           int(ceil((MAX_TRAVEL_TIME + end_time - start_time) / UPTIME_QUANT))),
                     bool)
-  
+
   cursor.execute("select snum, hnum, count(*) from "
                  "(select site.id-1 snum,trunc((arr.time-%d)/%d, 0) hnum "
                  "from %s arr, static_siteid site "
@@ -214,10 +214,10 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
                  "arr.time between %d and %d) sitearr group by snum, hnum" %
                  (start_time, UPTIME_QUANT, arrival_table, start_time,
                   end_time + MAX_TRAVEL_TIME))
-  
+
   for (siteidx, timeidx, cnt) in cursor.fetchall():
     uptime[siteidx, timeidx] = True
-  
+
   return uptime
 
 def read_sites(cursor):
@@ -253,11 +253,11 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
 
 
   The data is divided into the following labels:
-  
+
   - validation
   - test
   - training
-  
+
   Setting 'hours' to None will return all the data from the specified
   dataset. 'skip' controls the number of initial hours to skip, for
   example for testing the second 2 hour window set hours=2
@@ -290,7 +290,7 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
     phasenum
     amp
     period
-    
+
   sites:
     o. lon, lat, elev, is_array?
 
@@ -308,7 +308,7 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
 
   if verbose:
     print "Reading SEL3 detections...",
-    
+
   det, arid2num = read_detections(cursor, start_time, end_time, noarrays=noarrays)
 
   if verbose:
@@ -341,7 +341,7 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
           % (len(leb_events), sum(len(e)>=3 for e in leb_evlist),
              sum(sum(p==0 for p,dnum in alist)>=3 for alist in leb_evlist))
     print "Reading SEL3 events and associations...",
-    
+
   sel3_events, sel3_orid2num = read_events(cursor, start_time, end_time,"sel3")
   sel3_evlist = read_assoc(cursor, start_time, end_time, sel3_orid2num,
                            arid2num, "sel3")
@@ -351,15 +351,15 @@ def read_data(label="training", hours=None, skip=0, verbose=1,
           % (len(sel3_events), sum(len(e)>=3 for e in sel3_evlist),
              sum(sum(p==0 for p,dnum in alist)>=3 for alist in sel3_evlist))
     print "Reading Uptime, site and phase info...",
-    
+
   site_up = read_uptime(cursor, start_time, end_time)
-  
+
   sites = read_sites(cursor)
-  
+
   phasenames, phasetimedef = read_phases(cursor)
 
   assert(len(phasenames) == len(phasetimedef))
-  
+
   if verbose:
     print "done (%d sites %d array, %d phases %d timedef)" \
           % (len(sites), sites[:,SITE_IS_ARRAY].sum(), len(phasenames),
