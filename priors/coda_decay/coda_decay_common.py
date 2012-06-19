@@ -38,7 +38,7 @@ bands = ['narrow_envelope_2.00_3.00', 'narrow_envelope_4.00_6.00', 'narrow_envel
 #bands = ["narrow_envelope_2.00_3.00",]
 chans = ["BHZ","BHE", "BHN"]
 
-(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_DISTANCE, FIT_AZIMUTH, FIT_NUM_COLS) = range(11+1)
+(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_NUM_COLS) = range(12+1)
 
 (AR_TIME_COL, AR_AZI_COL, AR_SNR_COL, AR_PHASEID_COL, AR_SITEID_COL, AR_NUM_COLS) = range(5+1)
 
@@ -46,6 +46,15 @@ chans = ["BHZ","BHE", "BHN"]
 
 # params for the envelope model
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
+
+def azi_difference(azi1, azi2):
+    """ Returns the *signed* difference between two angles. """
+    d = azi1-azi2
+    while (d < -180):
+        d = d+360
+    while (d > 180):
+        d = d-360
+    return d
 
 def phaseid_to_name(phaseid):
     for (ids, n) in ((P_PHASEIDS, P_PHASES), (S_PHASEIDS, S_PHASES)):
@@ -75,8 +84,20 @@ def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
 # print fit[HEURISTIC_FIT_B], fit[HEURISTIC_FIT_CODA_LENGTH], fit[HEURISTIC_FIT_AVG_COST]
     return fit[HEURISTIC_FIT_B] > -0.15 and fit[HEURISTIC_FIT_B] <= 0 and fit[HEURISTIC_FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[HEURISTIC_FIT_AVG_COST] <= max_avg_cost
 
-def load_shape_data(cursor, chan, short_band, siteid, runid, acost_threshold=10, min_azi=0, max_azi=360):
-    sql_query = "select lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and fit.chan='%s' and fit.band='%s' and sid.id=%d and sid.sta=l.sta and fit.runid=%d and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f" % (chan, short_band, siteid, runid, acost_threshold, min_azi, max_azi)
+def load_event(cursor, evid):
+    sql_query = "SELECT lon, lat, depth, time, mb, orid, evid from leb_origin where evid=%d" % (evid)
+    cursor.execute(sql_query)
+    return np.array(cursor.fetchone())
+
+def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, acost_threshold=10, min_azi=0, max_azi=360):
+
+    chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
+    band_cond = "and fit.band='%s'" % (short_band) if short_band is not None else ""
+    site_cond = "and sid.id=%d" % (siteid) if siteid is not None else ""
+    run_cond = "and fit.runid=%d" % (runid) if runid is not None else ""
+    phase_cond = "and (" + " or ".join(["pid.id = %d" % phaseid for phaseid in phaseids]) + ")" if phaseids is not None else ""
+
+    sql_query = "select lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, acost_threshold, min_azi, max_azi)
     cursor.execute(sql_query)
     shape_data = np.array(cursor.fetchall())
     return shape_data

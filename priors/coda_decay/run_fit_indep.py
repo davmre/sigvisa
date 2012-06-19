@@ -35,8 +35,8 @@ def main():
     cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
-    phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"        
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where (l.time<1237680000 or l.time > 1238889600) and lebo.mb>5 and leba.arid=l.arid and l.snr > 6 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
+    phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
+    sql_query="SELECT distinct lebo.lon, lebo.lat, lebo.depth, lebo.time, lebo.mb, lebo.orid, lebo.evid FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where (l.time<1237680000 or l.time > 1238889600) and lebo.mb>5 and leba.arid=l.arid and l.snr > 6 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (phase_condition, siteid)
 #5308821
 #5301405
 # and lebo.evid=5301449

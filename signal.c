@@ -13,21 +13,21 @@
  int canonical_band_num(char* band_str) {
 
    int result = -1;
-   if (strcmp("narrow_envelope_0.50_0.70", band_str) == 0) {
+   if (strcmp("narrow_envelope_0.50_0.70", band_str) == 0 || strcmp("0.50_0.70", band_str) == 0) {
      result = NARROW_05_07;
-   } else if (strcmp("narrow_envelope_0.70_1.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_0.70_1.00", band_str) == 0 || strcmp("0.70_1.00", band_str) == 0) {
      result = NARROW_07_10;
-   } else if (strcmp("narrow_envelope_1.00_1.50", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_1.00_1.50", band_str) == 0 || strcmp("1.00_1.50", band_str) == 0) {
      result = NARROW_10_15;
-   } else if (strcmp("narrow_envelope_1.50_2.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_1.50_2.00", band_str) == 0 || strcmp("1.50_2.00", band_str) == 0) {
      result = NARROW_15_20;
-   } else if (strcmp("narrow_envelope_2.00_3.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_2.00_3.00", band_str) == 0 || strcmp("2.00_3.00", band_str) == 0) {
      result = NARROW_20_30;
-   } else if (strcmp("narrow_envelope_3.00_4.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_3.00_4.00", band_str) == 0 || strcmp("3.00_4.00", band_str) == 0) {
      result = NARROW_30_40;
-   } else if (strcmp("narrow_envelope_4.00_6.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_4.00_6.00", band_str) == 0 || strcmp("4.00_6.00", band_str) == 0) {
      result = NARROW_40_60;
-   } else if (strcmp("narrow_envelope_6.00_8.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_6.00_8.00", band_str) == 0 || strcmp("6.00_8.00", band_str) == 0) {
      result = NARROW_60_80;
    } else if (strcmp("broadband", band_str) == 0) {
      result = BROADBAND;
