@@ -38,16 +38,23 @@ bands = ['narrow_envelope_2.00_3.00', 'narrow_envelope_4.00_6.00', 'narrow_envel
 #bands = ["narrow_envelope_2.00_3.00",]
 chans = ["BHZ","BHE", "BHN"]
 
-(EVID_COL, SITEID_COL, BANDID_COL, P_PHASEID_COL, S_PHASEID_COL, DISTANCE_COL, AZI_COL, LON_COL, LAT_COL, MB_COL, VERT_P_FIT_B, VERT_P_FIT_HEIGHT, VERT_P_FIT_PHASE_START_TIME, VERT_P_FIT_PHASE_LENGTH, VERT_P_FIT_PEAK_OFFSET, VERT_P_FIT_PEAK_HEIGHT, VERT_P_FIT_CODA_START_OFFSET, VERT_P_FIT_CODA_LENGTH, VERT_P_FIT_MAX_CODA_LENGTH, VERT_P_FIT_AVG_COST, HORIZ_P_FIT_B, HORIZ_P_FIT_HEIGHT, HORIZ_P_FIT_PHASE_START_TIME, HORIZ_P_FIT_PHASE_LENGTH, HORIZ_P_FIT_PEAK_OFFSET, HORIZ_P_FIT_PEAK_HEIGHT, HORIZ_P_FIT_CODA_START_OFFSET, HORIZ_P_FIT_CODA_LENGTH, HORIZ_P_FIT_MAX_CODA_LENGTH, HORIZ_P_FIT_AVG_COST, VERT_S_FIT_B, VERT_S_FIT_HEIGHT, VERT_S_FIT_PHASE_START_TIME, VERT_S_FIT_PHASE_LENGTH, VERT_S_FIT_PEAK_OFFSET, VERT_S_FIT_PEAK_HEIGHT, VERT_S_FIT_CODA_START_OFFSET, VERT_S_FIT_CODA_LENGTH, VERT_S_FIT_MAX_CODA_LENGTH, VERT_S_FIT_AVG_COST, HORIZ_S_FIT_B, HORIZ_S_FIT_HEIGHT, HORIZ_S_FIT_PHASE_START_TIME, HORIZ_S_FIT_PHASE_LENGTH, HORIZ_S_FIT_PEAK_OFFSET, HORIZ_S_FIT_PEAK_HEIGHT, HORIZ_S_FIT_CODA_START_OFFSET, HORIZ_S_FIT_CODA_LENGTH, HORIZ_S_FIT_MAX_CODA_LENGTH, HORIZ_S_FIT_AVG_COST, VERT_NOISE_FLOOR_COL, HORIZ_NOISE_FLOOR_COL, DEPTH_COL, EVTIME_COL, NUM_COLS) = range(54+1)
-
-(EV_MB_COL, EV_LON_COL, EV_LAT_COL, EV_EVID_COL, EV_TIME_COL, EV_DEPTH_COL, EV_NUM_COLS) = range(6+1)
+(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_NUM_COLS) = range(12+1)
 
 (AR_TIME_COL, AR_AZI_COL, AR_SNR_COL, AR_PHASEID_COL, AR_SITEID_COL, AR_NUM_COLS) = range(5+1)
 
-(FIT_B, FIT_HEIGHT, FIT_PHASE_START_TIME, FIT_PHASE_LENGTH, FIT_PEAK_OFFSET, FIT_PEAK_HEIGHT, FIT_CODA_START_OFFSET, FIT_CODA_LENGTH, FIT_MAX_CODA_LENGTH, FIT_AVG_COST, FIT_NUM_COLS) = range(10+1)
+(HEURISTIC_FIT_B, HEURISTIC_FIT_HEIGHT, HEURISTIC_FIT_PHASE_START_TIME, HEURISTIC_FIT_PHASE_LENGTH, HEURISTIC_FIT_PEAK_OFFSET, HEURISTIC_FIT_PEAK_HEIGHT, HEURISTIC_FIT_CODA_START_OFFSET, HEURISTIC_FIT_CODA_LENGTH, HEURISTIC_FIT_MAX_CODA_LENGTH, HEURISTIC_FIT_AVG_COST, HEURISTIC_FIT_NUM_COLS) = range(10+1)
 
 # params for the envelope model
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
+
+def azi_difference(azi1, azi2):
+    """ Returns the *signed* difference between two angles. """
+    d = azi1-azi2
+    while (d < -180):
+        d = d+360
+    while (d > 180):
+        d = d-360
+    return d
 
 def phaseid_to_name(phaseid):
     for (ids, n) in ((P_PHASEIDS, P_PHASES), (S_PHASEIDS, S_PHASES)):
@@ -55,62 +62,6 @@ def phaseid_to_name(phaseid):
             i = ids.index(phaseid)
             return n[i]
     raise Exception("unrecognized phaseids %s" % (phaseid,))
-
-def add_depth_time(cursor, r):
-    print r.shape
-    z =  np.zeros( (r.shape[0], 1) )
-    print z.shape
-    r = np.hstack((r,  z, z))
-    print r.shape
-
-    for (idx, row) in enumerate(r):
-        cursor.execute("select time, depth from leb_origin where evid=%d" % (row[EVID_COL]))
-        (t, d) = cursor.fetchone()
-        r[idx, DEPTH_COL] = d
-        r[idx, EVTIME_COL] = t
-    return r
-
-
-def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
-#    print fit[FIT_B], fit[FIT_CODA_LENGTH], fit[FIT_AVG_COST]
-    return fit[FIT_B] > -0.15 and fit[FIT_B] <= 0 and fit[FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[FIT_AVG_COST] <= max_avg_cost
-
-def clean_points(X, P=True, vert=True):
-
-    if X is None:
-        return np.array(())
-
-    if len(X.shape) < 2:
-        X = np.reshape(X, (1, X.shape[0]))
-
-    n = X.shape[0]
-
-#    f = lambda (a, ma) : True
-#    if filter_azi:
-#        f = lambda (a,ma) : np.mod(a-ma, 360) < 60
-
-    new_X = None
-    for row in X:
-        fit = fit_from_row(row, P, vert)
-        if accept_fit(fit, min_coda_length = (min_p_coda_length if P else min_s_coda_length)):
-            if new_X is None:
-                new_X = row
-            else:
-                new_X = np.vstack([new_X, row])
-
-    return new_X
-
-
-def read_shape_params(fname):
-    f = open(fname, 'r')
-    params = dict()
-
-    for line in f:
-        s = line[:-1].split()
-        k = " ".join(s[0:4])
-        params[k] = [float(s[4]), float(s[5])]
-
-    return params
 
 def get_dir(dname):
 
@@ -129,28 +80,27 @@ def get_base_dir(siteid, runid, label=None):
     else:
         return get_dir(os.path.join("logs", "codas_%d_%s" % (siteid, runid)))
 
-def read_shape_data(fname):
-    f = open(fname, 'r')
-    all_data = None
+def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
+# print fit[HEURISTIC_FIT_B], fit[HEURISTIC_FIT_CODA_LENGTH], fit[HEURISTIC_FIT_AVG_COST]
+    return fit[HEURISTIC_FIT_B] > -0.15 and fit[HEURISTIC_FIT_B] <= 0 and fit[HEURISTIC_FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[HEURISTIC_FIT_AVG_COST] <= max_avg_cost
 
-    bands = f.readline()[:-1].split()
+def load_event(cursor, evid):
+    sql_query = "SELECT lon, lat, depth, time, mb, orid, evid from leb_origin where evid=%d" % (evid)
+    cursor.execute(sql_query)
+    return np.array(cursor.fetchone())
 
-    line_no = 2
-    for line in f:
-        new_row = np.array(  map( lambda x : float(x), (line[:-1]).split()))
+def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, acost_threshold=10, min_azi=0, max_azi=360):
 
-        if all_data is None:
-            all_data = new_row
-        else:
-            try:
-                all_data = np.vstack([all_data, new_row])
-            except:
-                print "error reading line %d: %s" % (line_no, line)
-                continue
-            finally:
-                line_no += 1
-    return all_data, bands
+    chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
+    band_cond = "and fit.band='%s'" % (short_band) if short_band is not None else ""
+    site_cond = "and sid.id=%d" % (siteid) if siteid is not None else ""
+    run_cond = "and fit.runid=%d" % (runid) if runid is not None else ""
+    phase_cond = "and (" + " or ".join(["pid.id = %d" % phaseid for phaseid in phaseids]) + ")" if phaseids is not None else ""
 
+    sql_query = "select lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, acost_threshold, min_azi, max_azi)
+    cursor.execute(sql_query)
+    shape_data = np.array(cursor.fetchall())
+    return shape_data
 
 
 def gen_logenvelope(length, sampling_rate, peak_height, gamma, b):
@@ -372,21 +322,6 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
 
     return (arrival_segment, noise_segment, other_arrivals, other_arrival_phases, other_arrival_arids)
 
-def extract_band(all_data, idx):
-
-    band_data = None
-
-    for row in all_data:
-#        print row
-        if int(row[BANDID_COL]) == idx:
-            if band_data is None:
-                band_data = row
-            else:
-                band_data = np.vstack([band_data, row])
-
-    print band_data.shape
-    return band_data
-
 
 def safe_lookup(l, idx):
     if l is not None:
@@ -394,25 +329,10 @@ def safe_lookup(l, idx):
     else:
         return -1
 
-def fit_from_row(row, P, vert):
-    idx = VERT_P_FIT_B
-    if P and not vert:
-        idx += FIT_NUM_COLS
-    elif not P and vert:
-        idx += FIT_NUM_COLS*2
-    elif not P and not vert:
-        idx += FIT_NUM_COLS*3
-    return row[idx:idx+FIT_NUM_COLS]
-
 def load_event(cursor, evid):
-    sql_query="SELECT lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_origin lebo where lebo.evid=%d" % (evid)
+    sql_query="SELECT lon, lat, depth, time, mb, orid, evid FROM leb_origin where evid=%d" % (evid)
     cursor.execute(sql_query)
     return np.array(cursor.fetchone())
-
-def row_to_ev(cursor, row):
-    return load_event(cursor, row[EVID_COL])
-
-
 
 def pred_arrtime(cursor, r, netmodel, phaseid_col, phase_arr_time_col):
     cursor.execute("select time, depth from leb_origin where evid=%d" % (r[EVID_COL]))
@@ -431,24 +351,6 @@ def pred_arrtime(cursor, r, netmodel, phaseid_col, phase_arr_time_col):
     start_time = np.min(other_arrivals) - 30
 
     return (pred_arr_time - start_time) - r[phase_arr_time_col]
-
-def construct_output_generators(cursor, netmodel, P, vert):
-    if P and vert:
-        b_col = VERT_P_FIT_B
-    elif P and not vert:
-        b_col = HORIZ_P_FIT_B
-    elif not P and vert:
-        b_col = VERT_S_FIT_B
-    elif not P and not vert:
-        b_col = HORIZ_S_FIT_B
-    gen_decay = lambda x :x[b_col]
-    gen_onset = lambda x : pred_arrtime(cursor, x, netmodel, P_PHASEID_COL if P else S_PHASEID_COL, b_col + (VERT_P_FIT_PEAK_OFFSET - VERT_P_FIT_B))
-#    gen_amp = lambda x : (  (x[b_col + (VERT_P_FIT_HEIGHT - VERT_P_FIT_B)] - x[b_col] * (x[b_col + (VERT_P_FIT_CODA_START_OFFSET - VERT_P_FIT_B)] - x[b_col + (VERT_P_FIT_PEAK_OFFSET - VERT_P_FIT_B)]))  - x[VERT_NOISE_FLOOR_COL if vert else HORIZ_NOISE_FLOOR_COL]  )/ x[MB_COL]
-
-    gen_amp = lambda x : np.log (  np.exp( x[b_col + (VERT_P_FIT_PEAK_HEIGHT - VERT_P_FIT_B)] ) - np.exp ( x[VERT_NOISE_FLOOR_COL if vert else HORIZ_NOISE_FLOOR_COL])  ) -  x[MB_COL]
-
-    return b_col, gen_decay, gen_onset, gen_amp
-
 
 
 def logenv_linf_cost(true_env, logenv):

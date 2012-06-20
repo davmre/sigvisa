@@ -221,14 +221,8 @@ def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_thresh
 
             short_band = band[16:]
 
-            LON, LAT, DEPTH, PHASEID, PEAK_DELAY, CODA_HEIGHT, CODA_DECAY, DISTANCE, AZIMUTH = range(9)
-            sql_query = "select lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and fit.chan='%s' and fit.band='%s' and sid.id=%d and sid.sta=l.sta and fit.runid=%d and fit.acost<%f and fit.peak_delay between -5 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f" % (chan, short_band, siteid, runid, acost_threshold, min_azi, max_azi)
-            print sql_query
-            cursor.execute(sql_query)
-            orig_data = np.array(cursor.fetchall())
-            print orig_data
-            # need dist, azi, depth, coda_decay
-            # so load evt lat/lon/depth/ coda_decay, assume we're passed station lat/lon, and
+
+            orig_data = load_shape_data(cursor, chan, short_band, siteid, runid, acost_threshold, min_azi, max_azi)
 
             lp = []
             ls = []

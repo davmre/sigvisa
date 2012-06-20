@@ -12,9 +12,10 @@ perform aic
 
 class ARLearner:
     def __init__(self, data, sf=40):
-        self.c = np.mean(data)
-        self.norm_data = data - self.c
-        self.n = len(data)
+        if not isinstance(data, (list, tuple)):
+            data = [data,]
+        self.c = np.mean(np.concatenate(data))
+        self.norm_data = [d - self.c for d in data]
         self.params = {}
         self.std = {}
         self.sf = sf
@@ -22,13 +23,12 @@ class ARLearner:
     def residual_std(self, p):
         params = self.params[p]
         res = []
-        for t in range(p, self.n):
-            expected = sum([params[k] * self.norm_data[t-k-1] for k in range(p)])
-            actual = self.norm_data[t]
-            res.append(expected-actual)
+        for nd in self.norm_data:
+            for t in range(p, len(nd)):
+                expected = sum([params[k] * nd[t-k-1] for k in range(p)])
+                actual = nd[t]
+                res.append(expected-actual)
         res = np.array(res)
-
-
         std = np.std(res)
 
         # maximum absolute deviation: robust to outliers, scaled to be
@@ -41,7 +41,7 @@ class ARLearner:
         if p in self.params:
             return (self.params[p], self.std[p])
 
-        r = stat.autocorr(self.norm_data)
+        r = stat.autocorr(self.norm_data, p)
         R = np.zeros([p,p])
         for row in range(p):
             for col in range(p):
@@ -55,10 +55,13 @@ class ARLearner:
         params = [phi[i][0] for i in range(p)]
         self.params[p] = params
         std = np.sqrt(r[0] - sum([params[k]*r[k+1] for k in range(p)]))
+
 #        std = self.residual_std(p)
         self.std[p] = std
         return (params, std)
 
+
+    ############# WARNING: EVERYTHING BELOW IS BROKEN (since norm_data is now a list) ########
     def psd(self):
         y, x = matplotlib.mlab.psd(self.norm_data, len(self.norm_data), 1)
         return (x*self.sf, np.log(y))
