@@ -63,6 +63,9 @@ def phaseid_to_name(phaseid):
             return n[i]
     raise Exception("unrecognized phaseids %s" % (phaseid,))
 
+def gen_source_amp(row):
+    return row[FIT_CODA_HEIGHT] - row[FIT_MB]
+
 def get_dir(dname):
 
     try:
