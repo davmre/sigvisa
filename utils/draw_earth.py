@@ -263,8 +263,8 @@ def main():
       cursor.execute(sql_query)
       events = np.array(cursor.fetchall())
 
-      d = lambda ev : geog.dist_km((ev[1], ev[2]), (sites[siteid-1][0], sites[siteid-1][1]))
-      a = lambda ev : geog.azimuth((ev[1], ev[2]), (sites[siteid-1][0], sites[siteid-1][1]))
+      d = lambda ev : geog.dist_km((sites[siteid-1][0], sites[siteid-1][1]), (ev[1], ev[2]))
+      a = lambda ev : geog.azimuth((sites[siteid-1][0], sites[siteid-1][1]), (ev[1], ev[2]))
       distances = np.array([d(ev) for ev in events])
       azimuths = np.array([a(ev) for ev in events])
       dist_i = np.logical_and((distances >= options.min_dist), (distances <= options.max_dist))

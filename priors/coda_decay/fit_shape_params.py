@@ -644,7 +644,7 @@ def main():
     for event in events:
         evid = int(event[EV_EVID_COL])
         distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
-        azimuth = utils.geog.azimuth((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
+        azimuth = utils.geog.azimuth((sites[siteid-1][0], sites[siteid-1][1]), (event[EV_LON_COL], event[EV_LAT_COL]))
 
         try:
             arrival_segment, smoothed_segment, arrs = load_segments(cursor, event[EV_EVID_COL], siteid, bands=bands, chans=chans)

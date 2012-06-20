@@ -194,7 +194,7 @@ class CodaModel:
             return model_set['gp_loc'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
         elif model_type == self.MODEL_TYPE_GP_AD:
             if azimuth is None:
-                azimuth = utils.geog.azimuth((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
             return model_set['gp_ad'].predict((distance, azimuth, ev[EV_DEPTH_COL]))
         elif model_type == self.MODEL_TYPE_LINEAR:
             if distance < 1000:
@@ -227,7 +227,7 @@ class CodaModel:
             return model_set['gp_loc'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
         elif model_type == self.MODEL_TYPE_GP_AD:
             if azimuth is None:
-                azimuth = utils.geog.azimuth((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
             return model_set['gp_ad'].sample((distance, azimuth, ev[EV_DEPTH_COL]))
         elif model_type == self.MODEL_TYPE_LINEAR:
             raise RuntimeError("sampling not yet implemented for linear models")
@@ -261,7 +261,7 @@ class CodaModel:
             return model_set['gp_loc'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
         elif model_type == self.MODEL_TYPE_GP_AD:
             if azimuth is None:
-                azimuth = utils.geog.azimuth((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
             return model_set['gp_ad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
         elif model_type == self.MODEL_TYPE_LINEAR:
             raise RuntimeError("log likelihood not yet implemented for linear models")
