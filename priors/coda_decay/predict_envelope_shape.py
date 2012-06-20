@@ -98,7 +98,7 @@ def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = .001,
             row = fit_data[idx, :]
             true_decay = row[FIT_CODA_DECAY]
             true_onset = row[FIT_PEAK_DELAY]
-            true_amp = row[FIT_CODA_HEIGHT]
+            true_amp = gen_source_amp(row)
 
             gp_loc_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_GP_LOC, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_decay)
             gp_loc_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_GP_LOC, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_onset)

@@ -24,14 +24,17 @@ from utils.gp_regression import GaussianProcess, optimize_hyperparams
 from utils.kernels import InvGamma, LogNormal
 
 
-def learn_models(fit_data, earthmodel, target_col, sigma_n, sigma_f, w, pp, label):
+def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, label):
 
     fit_data = np.reshape(fit_data, (-1, FIT_NUM_COLS))
     n = fit_data.shape[0]
 
     Xll = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
     Xad = fit_data[:, [FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH]]
-    y = fit_data[:, target_col]
+
+    y = np.zeros((n,))
+    for i in range(n):
+        y[i] = gen_target_col(fit_data[i, :])
 
 
 #    best_params,v = optimize_hyperparams(X, y, kernel="distfn", start_kernel_params=[sigma_n, sigma_f, w], kernel_extra=distfn, kernel_priors = [InvGamma(1.0, 1.0), InvGamma(1.0, 1.0), LogNormal(3, 2.0)])
@@ -69,7 +72,7 @@ def learn_models(fit_data, earthmodel, target_col, sigma_n, sigma_f, w, pp, labe
     tele_y = []
     for i in range(n):
         d = fit_data[i, FIT_DISTANCE]
-        dy = fit_data[i, target_col]
+        dy = gen_target_col(fit_data[i, :])
         if d > 1000:
             tele_dist.append(d)
             tele_y.append(dy)
@@ -172,15 +175,15 @@ class CodaModel:
         self.onset_model = None
 
         # learn decay rate models
-        m = learn_models(fit_data, self.earthmodel, FIT_CODA_DECAY, sigma_n[0], sigma_f[0], w[0], pp, "decay phaseids=%s chan=%s" % (phaseids, chan))
+        m = learn_models(fit_data, self.earthmodel, lambda r: r[FIT_CODA_DECAY], sigma_n[0], sigma_f[0], w[0], pp, "decay phaseids=%s chan=%s" % (phaseids, chan))
         self.decay_models = m
 
         # learn onset time models
-        m = learn_models(fit_data, self.earthmodel, FIT_PEAK_DELAY, sigma_n[1], sigma_f[1], w[1], pp, "offset phaseids=%s chan=%s" % (phaseids, chan))
+        m = learn_models(fit_data, self.earthmodel, lambda r : r[FIT_PEAK_DELAY], sigma_n[1], sigma_f[1], w[1], pp, "offset phaseids=%s chan=%s" % (phaseids, chan))
         self.onset_models = m
 
         # learn peak height models
-        m = learn_models(fit_data, self.earthmodel, FIT_CODA_HEIGHT, sigma_n[2], sigma_f[2], w[2], pp, "amp phaseids=%s chan=%s" % (phaseids, chan))
+        m = learn_models(fit_data, self.earthmodel, gen_source_amp, sigma_n[2], sigma_f[2], w[2], pp, "amp phaseids=%s chan=%s" % (phaseids, chan))
         self.peak_amp_models = m
 
         if pp is not None:
