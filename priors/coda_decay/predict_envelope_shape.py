@@ -62,7 +62,7 @@ def cv_generator(n, k=5):
         test = folds[i]
         yield (train, test)
 
-def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = .001, sigma_f = 500, sigma_n = 0.00001):
+def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = None, sigma_f = None, sigma_n = None):
 
     gp_loc_decay_residuals = []
     gp_loc_onset_residuals = []
@@ -86,7 +86,7 @@ def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = .001,
     evids = np.array(list(set(fit_data[:, FIT_EVID])))
     for (train_indices, test_indices) in cv_generator(len(evids)):
         test_evids = evids[test_indices]
-        cm = CodaModel(fit_data, band_dir, phaseids, chan, ignore_evids = test_evids , earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, w = [w, w, w], sigma_n = [sigma_n,sigma_n,sigma_n], sigma_f = [sigma_f,sigma_f,sigma_f])
+        cm = CodaModel(fit_data, band_dir, phaseids, chan, ignore_evids = test_evids , earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, w = w, sigma_n = sigma_n, sigma_f = sigma_f, debug=False)
         earthmodel = cm.earthmodel
         sigmodel = cm.sigmodel
         sites = cm.sites
@@ -113,9 +113,6 @@ def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = .001,
             mean_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_GAUSSIAN, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_amp)
     #        print "cv evid %d / %d" % (evid, len(evids))
 
-
-    print gp_loc_onset_residuals
-    print mean_onset_residuals
 
 
     print "cross-validated %d events, found residuals:" % (len(evids))
@@ -155,51 +152,26 @@ def plot_linear(pp, data, b_col, title=""):
     pp.savefig()
 
 
-def plot_events_heat(pp, data, cm):
+def plot_events_heat(pp, fit_data, cm):
 
-    siteid = data[0, SITEID_COL]
-    X = data[ : , [LON_COL, LAT_COL] ]
-
-    mins = np.min(X, 0)
-    maxs = np.max(X, 0)
-
-#    if maxs[0]-mins[0] > 300:
-#        for i in range(X.shape[0]):
-#            X[i, 0] = ((X[i,0] + 360) % 360) - 180
-#        mins = np.min(X, 0)
-#        maxs = np.max(X, 0)
+    siteid = fit_data[0, FIT_SITEID]
+    X = fit_data[ : , [FIT_LON, FIT_LAT] ]
 
     cursor = database.db.connect().cursor()
 
     cursor.execute("SELECT lon, lat from static_siteid where id = %d" % (siteid))
     (slon, slat) = cursor.fetchone()
 
-    if maxs[0]-mins[0] > 300:
-        print "%f - %f = %f, rotating" % (maxs[0], mins[0], maxs[0] - mins[0])
-        new_slon = ((slon + 360) % 360) - 180
-        minlon = new_slon
-        maxlon = new_slon
-        print "starting with [%f %f]..." % (minlon, maxlon)
-        for i in range(X.shape[0]):
-            minlon = min(minlon, ((X[i, 0] + 360) % 360) - 180)
-            maxlon = max(maxlon, ((X[i, 0] + 360) % 360) - 180)
 
-        print "got lon [%f %f], rotating back..." % (minlon, maxlon)
+    f = lambda lon, lat: cm.predict_decay(np.array((lon, lat, 0, 0, 5.0, 0, 0)), CodaModel.MODEL_TYPE_GP_LOC)
+    bmap, (aa, bb) = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
 
-        min_lon = minlon - 180
-        max_lon = maxlon - 180
-    else:
-        min_lon = np.min([slon, mins[0]]) - 3
-        max_lon = np.max([slon, maxs[0]]) + 3
+    draw_events(bmap, ((slon, slat),),  marker="x", ms=50, mfc="none", mec="purple", mew=5)
+    draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="yellow", mew=2)
+    pp.savefig()
 
-    min_lat = np.min([slat, mins[1]]) - 3
-    max_lat = np.max([slat, maxs[1]]) + 3
-
-    print "mlon: %f - %f = %f" % (max_lon, min_lon, max_lon - min_lon)
-    print "mlat: %f - %f = %f" % (max_lat, min_lat, max_lat - min_lat)
-
-    f = lambda lon, lat: cm.predict_decay(np.array((5.0, lon, lat, -1, 0, 0)), CodaModel.MODEL_TYPE_GP)
-    bmap = plot_heat(pp, f, lonbounds=[min_lon-2, max_lon+2], latbounds=[min_lat-2, max_lat+2])
+    f = lambda lon, lat: cm.predict_decay(np.array((lon, lat, 0, 0, 5.0, 0, 0)), CodaModel.MODEL_TYPE_GP_AD)
+    bmap, (aa, bb) = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-90, 90], n=40)
 
     draw_events(bmap, ((slon, slat),),  marker="x", ms=50, mfc="none", mec="purple", mew=5)
     draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="yellow", mew=2)
@@ -232,12 +204,19 @@ def main():
     pp_s = PdfPages(s_fname)
     print "saving plots to", p_fname, s_fname
 
+    w = [1000,1000, 1000]
+    sigma_f = [0.01, 1, 1]
+    sigma_n = [0.01, 0.5, 0.5]
 
-    cv_external(cursor, p_fit_data, band_dir, P_PHASEIDS, options.chan, pp = pp_p, sigma_f=.01, w=100, sigma_n=.01)
+    cv_external(cursor, p_fit_data, band_dir, P_PHASEIDS, options.chan, pp = pp_p, sigma_f=sigma_f, w=w, sigma_n=sigma_n)
+    cm_p = CodaModel(p_fit_data, band_dir, P_PHASEIDS, options.chan, ignore_evids = [] , w = w, sigma_n = sigma_n, sigma_f = sigma_f)
+    plot_events_heat(pp_p, p_fit_data, cm_p)
     pp_p.close()
 
     print "doing s stuff now..."
-    cv_external(cursor, s_fit_data, band_dir, S_PHASEIDS, options.chan, pp = pp_s, sigma_f=.01, w=100, sigma_n=.01)
+ #   cv_external(cursor, s_fit_data, band_dir, S_PHASEIDS, options.chan, pp = pp_s, sigma_f=.01, w=100, sigma_n=.01)
+    cm_s = CodaModel(s_fit_data, band_dir, S_PHASEIDS, options.chan, ignore_evids = [] , w = w, sigma_n = sigma_n, sigma_f = sigma_f)
+    plot_events_heat(pp_s, s_fit_data, cm_s)
     pp_s.close()
 
 if __name__ == "__main__":
