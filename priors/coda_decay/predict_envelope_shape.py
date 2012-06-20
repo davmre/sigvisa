@@ -14,14 +14,14 @@ import plot
 import learn, sigvisa_util, sigvisa
 import signals.SignalPrior
 from utils.waveform import *
-from utils.plot_multi_station_params import *
+
 import utils.geog
 import obspy.signal.util
 
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
-
+from priors.coda_decay.plot_multi_station_params import *
 from priors.coda_decay.train_coda_models import CodaModel
 from priors.coda_decay.signal_likelihood import TraceModel
 
@@ -49,9 +49,8 @@ def plot_residuals(pp, quantity, phaseids, chan, residuals, labels):
         plt.title('%s %s Residual Distribution (phaseids=%s, chan=%s)' % (quantity, labels[i], phaseids, chan))
         pp.savefig()
 
-def cv_generator(data, k=5):
-    n = len(data)
-    k = min(k, n)
+def cv_generator(n, k=5):
+    data = np.random.permutation(n)
     fold_size = n/k
     folds = [data[i*fold_size:(i+1)*fold_size] for i in range(k)]
     folds[k-1] = data[(k-1)*fold_size:]
@@ -85,7 +84,7 @@ def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = .001,
     gen_decay = None
 
     evids = np.array(list(set(fit_data[:, FIT_EVID])))
-    for (train_indices, test_indices) in cv_generator(range(len(evids))):
+    for (train_indices, test_indices) in cv_generator(len(evids)):
         test_evids = evids[test_indices]
         cm = CodaModel(fit_data, band_dir, phaseids, chan, ignore_evids = test_evids , earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, w = [w, w, w], sigma_n = [sigma_n,sigma_n,sigma_n], sigma_f = [sigma_f,sigma_f,sigma_f])
         earthmodel = cm.earthmodel

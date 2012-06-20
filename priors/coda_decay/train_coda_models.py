@@ -84,27 +84,37 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
         regional_model = utils.LinearModel.LinearModel("regional", ["distance"],
                                                        [regional_dist,],
                                                        regional_y)
+    except ValueError:
+        print "regional model failed", regional_dist, regional_y
+        regional_model=None
+    try:
         tele_model = utils.LinearModel.LinearModel("tele", ["distance"],
                                                    [tele_dist,],
                                                    tele_y)
-        if pp is not None:
-            plt.figure()
-            plt.title(label + " linear")
-            plt.xlabel("distance (km)")
-            plt.ylabel("")
+    except ValueError:
+        print "tele model failed", tele_dist, tele_y
+        tele_model=None
+    
+
+    if pp is not None:
+        plt.figure()
+        plt.title(label + " linear")
+        plt.xlabel("distance (km)")
+        plt.ylabel("")
+        try:
             t = np.linspace(0, 1000, 50)
             pred = [ regional_model[tv] for tv in t ]
             plt.plot(t, pred, "k-")
+        except:
+            pass
+        try:
             t = np.linspace(1000, np.max(tele_dist), 50)
             pred = [ tele_model[tv] for tv in t ]
             plt.plot(t, pred, "k-")
-            plt.plot(np.concatenate([regional_dist, tele_dist]), np.concatenate([regional_y, tele_y]), 'ro')
-            pp.savefig()
-
-    except ValueError:
-        regional_model = None
-        tele_model = None
-
+        except:
+            pass
+        plt.plot(np.concatenate([regional_dist, tele_dist]), np.concatenate([regional_y, tele_y]), 'ro')
+        pp.savefig()
 
     regional_mean = np.mean(regional_y)
     regional_var = np.var(regional_y)
