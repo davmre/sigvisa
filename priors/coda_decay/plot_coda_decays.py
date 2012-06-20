@@ -222,15 +222,15 @@ def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_thresh
             short_band = band[16:]
 
 
-            orig_data = load_shape_data(cursor, chan, short_band, siteid, runid, acost_threshold, min_azi, max_azi)
+            orig_data = load_shape_data(cursor, chan=chan, short_band=short_band, siteid=siteid, runid=runid, acost_threshold=acost_threshold, min_azi=min_azi, max_azi=max_azi)
 
             lp = []
             ls = []
             for row in orig_data:
-                r = row[[DISTANCE, AZIMUTH, DEPTH, CODA_DECAY]]
-                if row[PHASEID] in P_PHASEIDS:
+                r = row[[FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH, FIT_CODA_DECAY]]
+                if row[FIT_PHASEID] in P_PHASEIDS:
                     lp.append(r)
-                elif row[PHASEID] in S_PHASEIDS:
+                elif row[FIT_PHASEID] in S_PHASEIDS:
                     ls.append(r)
             lp = np.array(lp)
             ls = np.array(ls)
