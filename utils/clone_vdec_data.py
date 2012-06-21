@@ -11,13 +11,21 @@ cursor = db.connect().cursor()
 def dump_table(cursor, table_name):
     sql_query = "select * from %s" % table_name
     cursor.execute(sql_query)
-    rows = cursor.fetchall()
+
     fname = '%s.csv' % table_name
     csvWriter = csv.writer(open(fname, 'wb'), delimiter=',',
                            quotechar="'", quoting=csv.QUOTE_MINIMAL)
-    for r in rows:
+
+    nrows = 0
+    print "writing table %s to %s..." % (table_name, fname)
+    for r in cursor:
         csvWriter.writerow(r)
-    print "wrote table %s to %s." % (table_name, fname)
+        nrows= nrows + 1
+        if nrows % 10000 == 0:
+            print "... wrote %d rows" % nrows
+    print "... wrote %d rows" % nrows
+    print "done."
+
 
 def clear_table(cursor, table_name):
     sql_query = "delete from %s" % table_name
