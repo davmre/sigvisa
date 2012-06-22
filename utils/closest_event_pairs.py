@@ -17,8 +17,8 @@ events = cursor.fetchall()
 
 evpairs = itertools.combinations(events, 2)
 
-p = [(utils.geog.dist_km((e1[0], e1[1]), (e2[0], e2[1])), e1[3], e2[3]) for (e1, e2) in evpairs]
+p = [(utils.geog.dist_km((e1[0], e1[1]), (e2[0], e2[1])), e1[2], e2[2], e1[3], e2[3]) for (e1, e2) in evpairs]
 p.sort()
 for pair in p[:40]:
-    print pair
+    print "evids %d, %d are at distance %.3fkm and have depths (%.3fkm, %.3fkm)" % (pair[3], pair[4], pair[0], pair[1], pair[2])
 
