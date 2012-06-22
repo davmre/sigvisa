@@ -1,6 +1,5 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
-from guppy import hpy; hp = hpy()
 
 from database.dataset import *
 from database import db
@@ -351,14 +350,23 @@ class TraceModel:
 
 def main():
 
+
+    parser = OptionParser()
+
+    parser.add_options("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
+    parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str", help="comma-separated list of station siteid's with which to locate the event")
+    parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="train models using fits from a specific runid (default is to use the most recent)")
+    parser.add_options("-w", "--map_width", dest="map_width", default=2, type="float", help="width in degrees of the plotted heat map (2)")
+
+    (options, args) = parser.parse_args()
+
     cursor = db.connect().cursor()
 
-    evid = int(sys.argv[1])
-    integrate_method = int(sys.argv[2]) # 0=none, 1=sequential, 2=lbfgs, 3=sampling
-    model_type = int(sys.argv[3]) # 0=1d gaussian, 1=GP
-    map_width = int(sys.argv[4]) # in degrees
+    evid = options.evid
+    siteids = [int(s) for s in options.siteids.split(',')]
+    map_width = options.map_width
 
-    base_coda_dir2 = get_base_dir(int(2), None, int(1332146399))
+    """    base_coda_dir2 = get_base_dir(int(2), None, int(1332146399))
     base_coda_dir109 = get_base_dir(int(109), None, int(1332146405))
 
     fname = os.path.join(base_coda_dir2, 'all_data')
@@ -389,7 +397,7 @@ def main():
     include_rows = np.array([(int(row[EVID_COL]) != evid) for row in clean_s_data109])
     clean_s_data109 = clean_s_data109[include_rows, :]
 #    for (band_idx, band) in enumerate(bands):
-
+"""
 
 
     out_fname = os.path.join("logs", "heatmap_lesscheat_%d_%d_%d_%d.pdf" % (evid, integrate_method, model_type, map_width))

@@ -21,10 +21,15 @@
 int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
 
   int m = p->order;
+  assert(m != 0);
 
   /* fill in the index of the new process */
-  resize_vector(&k->p_process_indices, (k->np)+1);
-  gsl_vector_set(k->p_process_indices, k->np, k->n);
+  int new_perm_idx = (k->p_permanent_indices == NULL) ? 0 : k->p_permanent_indices->size;
+  resize_vector(&k->p_permanent_indices, new_perm_idx+1);
+
+  gsl_vector_set(k->p_permanent_indices, new_perm_idx, k->np);
+  resize_vector(&k->p_process_indices, k->np+1);
+  gsl_vector_set(k->p_process_indices, k->np, (k->n));
 
   resize_vector(&k->p_const, (k->np)+1);
   resize_vector(&k->p_means, (k->n)+m);
@@ -63,20 +68,33 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
   realloc_vector(&k->p_mean_update, (k->n));
   realloc_matrix(&k->p_covars_tmp, (k->n), (k->n));
 
-  return k->np - 1;
+  if (k->debug_processes_fp != NULL) {
+    fprintf(k->debug_processes_fp, "add process id %d order %d mean %f std %f\n", k->np-1, p->order, p->mean, sqrt(p->sigma2));
+  }
+
+  // return the permanent ID of the new process process
+  return new_perm_idx;
 
 }
 
 /* Removes the order-m AR process with specified index arridx from the mean vector and covariance matrix. */
-void kalman_remove_AR_process(KalmanState_t * k, int m, int process_idx) {
+void kalman_remove_AR_process(KalmanState_t * k, int m, int perm_idx) {
+
+  int process_idx = gsl_vector_get(k->p_permanent_indices, perm_idx);
+  gsl_vector_set(k->p_permanent_indices, perm_idx, -1);
 
   int arridx = gsl_vector_get(k->p_process_indices, process_idx);
-  remove_vector_slice(&k->p_process_indices, process_idx, 1);
-  for(int i=process_idx; i < k->p_process_indices->size; ++i) {
-    gsl_vector_set(k->p_process_indices, i, gsl_vector_get(k->p_process_indices, i) - m);
+  for(int i=0; i < k->p_permanent_indices->size; ++i) {
+    int other_process_idx = gsl_vector_get(k->p_permanent_indices, i);
+    if (other_process_idx > process_idx) {
+      int other_arr_idx = gsl_vector_get(k->p_process_indices, other_process_idx);
+      gsl_vector_set(k->p_permanent_indices, i, other_process_idx - 1);
+      gsl_vector_set(k->p_process_indices, other_process_idx, other_arr_idx - m);
+    }
   }
 
   remove_vector_slice(&k->p_const, process_idx, 1);
+
   remove_vector_slice(&k->p_means, arridx, m);
   remove_vector_slice(&k->p_process_noise, arridx, m);
   remove_vector_slice(&k->p_sample_state, arridx, m);
@@ -244,7 +262,7 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
      // provide the observation function with any extra arguments we were passed
      va_list args;
      va_start(args, p_true_obs);
-     (*k->p_obs_fn)(&state_col.vector, &obs_col.vector, &args);
+     (*k->p_obs_fn)(&state_col.vector, &obs_col.vector, k, &args);
      va_end(args);
 
      gsl_vector_set(k->p_weights, i, 1/(2*(L+lambda)));
@@ -291,9 +309,11 @@ double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) 
 
   if (k->debug_res_fp != NULL) {
     fprint_vector(k->debug_res_fp, k->y, "%f ");
+    fprint_vector(k->debug_obs_fp, p_true_obs, "%f ");
     fprint_matrix(k->debug_var_fp, k->S, "%f ", FALSE);
     fprint_matrix(k->debug_gain_fp, k->K, "%f ", FALSE);
     fprint_vector(k->debug_state_fp, k->p_collapsed_means, "%f ");
+    fprint_matrix(k->debug_state_covar_fp, k->p_collapsed_covars, "%f ", FALSE);
   }
   return thisll;
 
@@ -325,7 +345,7 @@ void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...) {
   // compute the deterministic observation (using optional extra arguments)
   va_list args;
   va_start(args, p_output);
-  (*k->p_obs_fn)(k->p_collapsed_means, p_output, &args);
+  (*k->p_obs_fn)(k->p_collapsed_means, p_output, k, &args);
   va_end(args);
 
   // add observation noise
@@ -424,24 +444,33 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
   /* open debug log files, if needed */
   if (debug_dir != NULL) {
     int l = strlen(debug_dir);
-    char resname[256], varname[256], gainname[256], statename[256];
+    char resname[256], obsname[256], varname[256], gainname[256], statename[256], statecvname[256], processesname[256];
     snprintf(resname, 256, "%s/res.log", debug_dir);
+    snprintf(obsname, 256, "%s/obs.log", debug_dir);
     snprintf(varname, 256, "%s/var.log", debug_dir);
     snprintf(gainname, 256, "%s/gain.log", debug_dir);
     snprintf(statename, 256, "%s/state.log", debug_dir);
+    snprintf(statecvname, 256, "%s/state_covar.log", debug_dir);
+    snprintf(processesname, 256, "%s/processes.log", debug_dir);
     k->debug_res_fp = fopen(resname, "w");
+    k->debug_obs_fp = fopen(obsname, "w");
     k->debug_var_fp = fopen(varname, "w");
     k->debug_gain_fp = fopen(gainname, "w");
     k->debug_state_fp = fopen(statename, "w");
-    if (!k->debug_res_fp || !k->debug_var_fp || !k->debug_gain_fp || !k->debug_state_fp) {
+    k->debug_state_covar_fp = fopen(statecvname, "w");
+    k->debug_processes_fp = fopen(processesname, "w");
+    if (!k->debug_res_fp || !k->debug_obs_fp || !k->debug_var_fp || !k->debug_gain_fp || !k->debug_state_fp || !k->debug_state_covar_fp || !k->debug_processes_fp) {
       perror("error opening debug logfile");
       exit(1);
     }
   } else {
     k->debug_res_fp = NULL;
+    k->debug_obs_fp = NULL;
     k->debug_var_fp = NULL;
     k->debug_gain_fp = NULL;
     k->debug_state_fp = NULL;
+    k->debug_state_covar_fp = NULL;
+    k->debug_processes_fp = NULL;
   }
 }
 
@@ -457,6 +486,7 @@ void kalman_state_free(KalmanState_t * k) {
   if (k->p_process_noise != NULL) gsl_vector_free(k->p_process_noise);
   if (k->p_sample_state != NULL) gsl_vector_free(k->p_sample_state);
   if (k->p_process_indices != NULL) gsl_vector_free(k->p_process_indices);
+  if (k->p_permanent_indices != NULL) gsl_vector_free(k->p_permanent_indices);
 
   if (k->p_linear_obs != NULL) gsl_matrix_free(k->p_linear_obs);
   if (k->p_obs_noise != NULL) gsl_vector_free(k->p_obs_noise);
@@ -484,11 +514,13 @@ void kalman_state_free(KalmanState_t * k) {
 
   if (k->debug_res_fp != NULL) {
     fclose(k->debug_res_fp);
+    fclose(k->debug_obs_fp);
     fclose(k->debug_var_fp);
     fclose(k->debug_gain_fp);
     fclose(k->debug_state_fp);
+    fclose(k->debug_state_covar_fp);
+    fclose(k->debug_processes_fp);
   }
-
 }
 
 void kalman_state_print(KalmanState_t * k) {

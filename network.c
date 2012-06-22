@@ -338,7 +338,7 @@ Event_t * alloc_event_sig(SigModel_t * p_sigmodel)
                                        sizeof(*p_event->p_arrivals));
   for (int i=0; i < numsites; ++i) {
     for(int j=0; j < numtimedefphases; ++j) {
-      (p_event->p_arrivals + i*numtimedefphases + j)->phase = j;
+      (p_event->p_arrivals + i*numtimedefphases + j)->phaseid = j+1;
       (p_event->p_arrivals + i*numtimedefphases + j)->siteid = i+1;
     }
   }
@@ -393,28 +393,28 @@ void print_event_detections(EarthModel_t * p_earth, const Event_t * p_event)
   int numtimedefphases;
   int siteid;
   int phaseid;
-  
+
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-  
+
   detcnt = 0;
-  
+
   for (siteid = 0; siteid < numsites; siteid ++)
   {
     for (phaseid = 0; phaseid < numtimedefphases; phaseid ++)
     {
       int numdet;
-      
+
       numdet = p_event->p_num_dets[siteid * numtimedefphases + phaseid];
 
       if (numdet > 0)
       {
         int pos;
-        
+
         for (pos = 0; pos < numdet; pos ++)
         {
-          int detnum = p_event->p_all_detids[siteid * numtimedefphases 
-                                             * MAX_PHASE_DET 
+          int detnum = p_event->p_all_detids[siteid * numtimedefphases
+                                             * MAX_PHASE_DET
                                              + phaseid * MAX_PHASE_DET + pos];
           if (!detcnt)
           printf("[");

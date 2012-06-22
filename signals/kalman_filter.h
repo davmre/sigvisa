@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include "signal_structures.h"
 
-typedef void (*kalman_obs_fn)(const gsl_vector * state, gsl_vector * obs, va_list *args);
+typedef void (*kalman_obs_fn)(const gsl_vector * state, gsl_vector * obs, void * void_k, va_list *args);
 
 typedef struct KalmanState {
   /* KalmanState invariants:
@@ -34,7 +34,8 @@ typedef struct KalmanState {
   gsl_vector * p_sample_state; /* The true hidden state of the
 				    process; used when sampling from
 				    the model. (n) */
-  gsl_vector * p_process_indices; /* indices of the current AR processes (np) */
+  gsl_vector * p_process_indices; /* map process indices to vector/matrix indices (np->n) */
+  gsl_vector * p_permanent_indices; /* map permanent indices to process indices (?? -> np) */
 
 
   int linear_obs; /* determines whether observations are a linear
@@ -73,10 +74,12 @@ typedef struct KalmanState {
   int verbose;
 
   FILE * debug_res_fp;
+  FILE * debug_obs_fp;
   FILE * debug_var_fp;
   FILE * debug_gain_fp;
   FILE * debug_state_fp;
-
+  FILE * debug_state_covar_fp;
+  FILE * debug_processes_fp;
 } KalmanState_t ;
 
 void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise, char * debug_dir);

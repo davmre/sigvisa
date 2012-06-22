@@ -28,6 +28,10 @@ static PyMethodDef SigModel_methods[] = {
    "generate_segment(start_time, end_time, siteid, srate, phaseids, params) -> segment\n" },
   {"sample_segment", (PyCFunction) py_sample_segment, METH_VARARGS,
    "sample_segment(start_time, end_time, siteid, srate, phaseids, params) -> segment\n" },
+  {"generate_trace", (PyCFunction) py_gen_logenvelope_trace, METH_VARARGS,
+   "generate_trace(start_time, end_time, siteid, chan, band, srate, phaseids, params) -> trace\n" },
+  {"sample_trace", (PyCFunction) py_sample_trace, METH_VARARGS,
+   "sample_trace(start_time, end_time, siteid, chan, band, srate, phaseids, params) -> trace\n" },
   {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
    "get_signals() "
    "-> signals\n"},
@@ -38,7 +42,7 @@ static PyMethodDef SigModel_methods[] = {
    "set_noise_process(siteid, band, chan, noise_mean, noise_variance, noise_coeffs)"
    "-> ??\n"},
   {"set_wiggle_process", (PyCFunction)py_set_wiggle_process, METH_VARARGS,
-   "set_wiggle_process(siteid, band, noise_mean, noise_variance, noise_coeffs)"
+   "set_wiggle_process(siteid, band, chan, phaseid, noise_mean, noise_variance, noise_coeffs)"
    "-> ??\n"},
   {"set_signal_params", (PyCFunction)py_set_params, METH_VARARGS,
    "set_signal_params(siteid, param_dict)"

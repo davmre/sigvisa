@@ -38,6 +38,7 @@ void convert_arrivals(PyObject * py_phaseids_list, PyObject * py_params_array, i
       (*p_arrs)[i].amp = ARRAY2(py_params_array, i, CODA_HEIGHT_PARAM);
       (*p_arrs)[i].coda_decay = ARRAY2(py_params_array, i, CODA_DECAY_PARAM);
 
+      (*p_arrs)[i].phaseid = PyInt_AsLong(PyList_GET_ITEM(py_phaseids_list, i));
       (*pp_arrs)[i] = (*p_arrs)+i;
     }
 
@@ -61,6 +62,8 @@ PyObject * py_set_noise_process(SigModel_t * p_sigmodel, PyObject * args) {
   if (!PyArg_ParseTuple(args, "iiiddO!", &siteid, &band, &chan, &noise_mean, &noise_variance, &PyArray_Type, &py_coeffs))
       return NULL;
 
+  printf("set noise process for channel %d band %d\n", chan, band);
+
   ARProcess_t * p_ar = &(((Spectral_Envelope_Model_t * )(p_sigmodel->signal_model.pv_params))->p_stations + siteid-1)->bands[band].channel_noise_models[chan];
   if (p_ar->coeffs != NULL) {
     free(p_ar->coeffs);
@@ -71,13 +74,13 @@ PyObject * py_set_noise_process(SigModel_t * p_sigmodel, PyObject * args) {
 }
 
 PyObject * py_set_wiggle_process(SigModel_t * p_sigmodel, PyObject * args) {
-  int siteid, band;
+  int siteid, band, chan, phaseid;
   double noise_mean, noise_variance;
   PyArrayObject * py_coeffs;
-  if (!PyArg_ParseTuple(args, "iiddO!", &siteid, &band, &noise_mean, &noise_variance, &PyArray_Type, &py_coeffs))
+  if (!PyArg_ParseTuple(args, "iiiiddO!", &siteid, &band, &chan, &phaseid, &noise_mean, &noise_variance, &PyArray_Type, &py_coeffs))
       return NULL;
 
-  ARProcess_t * p_ar = &(((Spectral_Envelope_Model_t * )(p_sigmodel->signal_model.pv_params))->p_stations + siteid-1)->bands[band].wiggle_model;
+  ARProcess_t * p_ar = &(((Spectral_Envelope_Model_t * )(p_sigmodel->signal_model.pv_params))->p_stations + siteid-1)->bands[band].wiggle_model[chan][phaseid-1];
   if (p_ar->coeffs != NULL) {
     free(p_ar->coeffs);
     p_ar->coeffs = NULL;
@@ -92,7 +95,6 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   PyObject * py_trace;
   PyObject * py_phaseids_list;
   PyObject * py_params_array;
-    // def generate_trace(self, start_time, end_time, siteid,  srate, phaseids, params):
   if (!PyArg_ParseTuple(args, "OO!O!", &py_trace, &PyList_Type, &py_phaseids_list, &PyArray_Type, &py_params_array))
       return NULL;
 
@@ -100,24 +102,7 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
   trace_to_signal(py_trace, &p_trace);
 
   Segment_t segment;
-  segment.len = p_trace->len;
-  segment.start_time = p_trace->start_time;
-  segment.hz = p_trace->hz;
-  segment.siteid = p_trace->siteid;
-  for (int i=0; i < NUM_CHANS; ++i) {
-    segment.p_channels[i] = NULL;
-  }
-  Channel_t channel;
-  segment.p_channels[p_trace->chan] = &channel;
-  channel.len = p_trace->len;
-  channel.start_time = p_trace->start_time;
-  channel.hz = p_trace->hz;
-  channel.siteid = p_trace->siteid;
-  channel.chan = p_trace->chan;
-
-  // TODO: fix this once we start to handle bands properly
-  //  channel.p_bands[p_trace->band] = p_trace;
-  channel.p_bands[DEFAULT_BAND] = p_trace;
+  init_dummy_segment(p_trace, &segment);
 
   int n;
   Arrival_t * p_arrs;
@@ -129,7 +114,7 @@ PyObject * py_trace_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
   free(pp_arrs);
   free(p_arrs);
-  free(p_trace);
+  free_segment_inner(&segment);
   return Py_BuildValue("d", ll);
 }
 
@@ -178,7 +163,6 @@ PyObject * py_gen_segment(SigModel_t * self, PyObject * args, int sample) {
   alloc_segment_inner(&segment);
 
 
-
   int n;
   Arrival_t * p_arrs;
   Arrival_t ** pp_arrs;
@@ -205,5 +189,51 @@ PyObject * py_gen_logenvelope_segment(SigModel_t * self, PyObject * args) {
 
 PyObject * py_sample_segment(SigModel_t * self, PyObject * args) {
   PyObject * s =  py_gen_segment(self, args, TRUE);
+  return s;
+}
+
+PyObject * py_gen_trace(SigModel_t * self, PyObject * args, int sample) {
+  int canary = 0;
+  double start_time, end_time, srate;
+  int siteid, chan, band;
+  PyObject * py_phaseids_list;
+  PyObject * py_params_array;
+
+  if (!PyArg_ParseTuple(args, "ddiiidO!O!", &start_time, &end_time, &siteid, &band, &chan, &srate, &PyList_Type, &py_phaseids_list, &PyArray_Type, &py_params_array))
+      return NULL;
+
+  Trace_t * p_trace = alloc_trace();
+
+  long len = (end_time-start_time)*srate;
+  p_trace->p_data = calloc(len, sizeof(double));
+  p_trace->len=len;
+  p_trace->start_time=start_time;
+  p_trace->hz=srate;
+  p_trace->siteid=siteid;
+  p_trace->chan=chan;
+  p_trace->band=band;
+
+  int n;
+  Arrival_t * p_arrs;
+  Arrival_t ** pp_arrs;
+  convert_arrivals(py_phaseids_list, py_params_array, &n, &p_arrs, &pp_arrs);
+
+  Spectral_Envelope_Model_Sample_Trace(self, p_trace, n, (const Arrival_t **)pp_arrs, sample, sample);
+
+  PyObject * py_trace = build_trace(p_trace);
+  free(p_arrs);
+  free(pp_arrs);
+  free_trace(p_trace);
+
+  return py_trace;
+}
+
+PyObject * py_gen_logenvelope_trace(SigModel_t * self, PyObject * args) {
+  PyObject * s = py_gen_trace(self, args, FALSE);
+  return s;
+}
+
+PyObject * py_sample_trace(SigModel_t * self, PyObject * args) {
+  PyObject * s =  py_gen_trace(self, args, TRUE);
   return s;
 }

@@ -81,25 +81,34 @@ def coord_descent(f, x0, converge=0.1, steps=None, maxiters=500):
             v = vold
         if incr < converge:
             break
+        if i % 10 == 0:
+            print "coord iter %d incr %f" % (i, incr)
     return x
 
-def minimize(f, x0, method="bfgs", bounds=None):
+def optimize(f, start_params, bounds, method, phaseids=None, maxfun=None):
+    if phaseids is not None:
+        return optimize_by_phase(f, start_params, bounds, phaseids, method=method,maxfun=maxfun)
+    else:
+        return minimize(f, start_params, bounds=bounds, method=method, steps=[.1, .1, .005] * (len(start_params)/3), maxfun=maxfun)
+
+def minimize(f, x0, method="bfgs", bounds=None, steps=None, maxfun=None):
     if method=="bfgs":
-        x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, x0, approx_grad=1, bounds=bounds, epsilon = 1e-1, factr=1e12)
+        x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, x0, approx_grad=1, bounds=bounds, epsilon = 1e-1, factr=1e12, maxfun=maxfun)
     elif method=="tnc":
-        x1, nfeval, rc = scipy.optimize.fmin_tnc(f, x0, approx_grad=1, bounds=bounds)
+        x1, nfeval, rc = scipy.optimize.fmin_tnc(f, x0, approx_grad=1, bounds=bounds, maxfun=maxfun)
         x1 = np.array(x1)
     elif method=="simplex":
-        x1 = scipy.optimize.fmin(f, x0)
+        x1 = scipy.optimize.fmin(f, x0, maxfun=maxfun, xtol=0.01, ftol=0.01)
     elif method=="anneal":
-        x1, jmin, T, feval, iters, accept, retval = scipy.optimize.anneal(f, x0)
+        x1, jmin, T, feval, iters, accept, retval = scipy.optimize.anneal(f, x0, maxeval=maxfun)
     elif method=="coord":
-        x1 = coord_descent(f, x0, steps=[.1, .1, .005])
+        x1 = coord_descent(f, x0, steps=steps)
     else:
         raise Exception("unknown optimization method %s" % (method))
     return x1, f(x1)
 
-def optimize_by_phase(f, start_params, bounds, phaseids, method="bfgs", iters=3):
+
+def optimize_by_phase(f, start_params, bounds, phaseids, method="bfgs", iters=3, maxfun=None):
     nphase_params = len(start_params) / len(phaseids)
     params = start_params.copy()
     for i in range(iters):
@@ -109,7 +118,7 @@ def optimize_by_phase(f, start_params, bounds, phaseids, method="bfgs", iters=3)
             phase_params = params[sidx:eidx]
             phase_bounds = bounds[sidx:eidx]
             apf = lambda pp : f(np.concatenate([params[:sidx], pp, params[eidx:]]))
-            phase_params, c = minimize(apf, phase_params, method=method, bounds=phase_bounds)
+            phase_params, c = minimize(apf, phase_params, method=method, bounds=phase_bounds, steps = [.1, .1, .005], maxfun=maxfun)
             print "params", phase_params, "cost", c
             params = np.concatenate([params[:sidx], phase_params, params[eidx:]])
     return params, c
@@ -126,9 +135,14 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
     for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
         start_wiggle = arrs["arrivals"][phase_idx] + 20
         start_idx = np.ceil((start_wiggle - st)*srate)
+
+        try:
+            next_phase_idx = np.ceil((arrs["arrivals"][phase_idx+1] - st)*srate)
+        except:
+            next_phase_idx = np.float('inf')
         for t in range(100):
             end_idx = start_idx + np.ceil(srate*t)
-            if tmpl[end_idx] - nf < threshold:
+            if (end_idx >= next_phase_idx) or (tmpl[end_idx] - nf < threshold):
                 break
         wiggle = diff.data[start_idx:end_idx]
         wiggles.append(wiggle)
@@ -197,38 +211,19 @@ def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
 
     # we assume the noise params are already set...
 
-#    print "params"
-#    print_params(params)
+    print "params"
+    print_params(params)
 
     if iid:
-        env = get_template(sigmodel, smoothed, phaseids, params)
-        c = logenv_l1_cost(smoothed.data, env.data)
+        env = get_template(sigmodel, smoothed, phaseids, params, logscale=True)
+        c = logenv_l1_cost(np.log(smoothed.data), env.data)
     else:
         c = -1 *sigmodel.trace_likelihood(smoothed, phaseids, params);
 
-#    print "cost", c
+    print "cost", c
 
     return c
 
-
-#def coord_ascent(f, params, bounds):
-#
-#    # move through arrivals one by one
-#    # for each one, optimize coda height and decay
-#    # then optimize peak
-#
-#    n_arrivals = len(params)/NUM_PARAMS
-#
-#    best_params = np.copy(params)
-#    best_cost = f(best_params)
-#
-#    for i in range(1, 5):
-#
-#        for arr_idx in range(n_arrivals):
-#            i1 = arr_idx * NUM_PARAMS
-#
-#            for cdecay in [-.1, -.08, -0.07, -0.06, -0.05, -0.04, -0.03, -0.02, -0.01, -0.005]:
-#                for cheight in np.linspace[]
 
 # params with peak but without arrtime
 def remove_peak(pp):
@@ -253,6 +248,8 @@ def find_starting_params(arr, smoothed):
     for the fitting process. Also constructs a list of bounds
     appropriate for passing to a scipy optimization function."""
 
+    smoothed = Trace(np.log(smoothed.data), smoothed.stats.copy())
+
     arr_bounds = [ (0, 15), (0, 15) , (0, 10), (0, 15), (-.2, 0) ]
     arr_bounds_fixed_peak = [ (0, 15), (0, 10), (-.15, 0) ]
 
@@ -273,7 +270,7 @@ def find_starting_params(arr, smoothed):
     if arr["first_s_arrival"] is not None:
         # if we got a good fit to the P coda, use the continuing P coda as a secondary noise floor for the S coda
         if accept_p:
-            nf = lambda t : max(noise_floor, fit_p[FIT_HEIGHT] + fit_p[FIT_B]*(t - fit_p[FIT_CODA_START_OFFSET]))
+            nf = lambda t : max(noise_floor, fit_p[HEURISTIC_FIT_HEIGHT] + fit_p[HEURISTIC_FIT_B]*(t - fit_p[HEURISTIC_FIT_CODA_START_OFFSET]))
 
         fit_s = fit_phase_coda(arr["first_s_arrival"], smoothed, arr["arrivals"], arr["arrival_phases"], nf)
         smoothed.stats.fit_s = fit_s
@@ -291,15 +288,15 @@ def find_starting_params(arr, smoothed):
         a = defaults[i]
         noise_floor = smoothed.stats.noise_floor
 
-        fit_peak_height = logsub_noise(a[FIT_PEAK_HEIGHT], noise_floor)
-        fit_coda_height = logsub_noise(a[FIT_HEIGHT] - a[FIT_B] *(a[FIT_CODA_START_OFFSET] - a[FIT_PEAK_OFFSET]), noise_floor)
+        fit_peak_height = logsub_noise(a[HEURISTIC_FIT_PEAK_HEIGHT], noise_floor)
+        fit_coda_height = logsub_noise(a[HEURISTIC_FIT_HEIGHT] - a[HEURISTIC_FIT_B] *(a[HEURISTIC_FIT_CODA_START_OFFSET] - a[HEURISTIC_FIT_PEAK_OFFSET]), noise_floor)
 
-        start_params[i, PEAK_OFFSET_PARAM] = ( a[FIT_PEAK_OFFSET] + smoothed.stats.starttime_unix) - time
+        start_params[i, PEAK_OFFSET_PARAM] = ( a[HEURISTIC_FIT_PEAK_OFFSET] + smoothed.stats.starttime_unix) - time
         print "init peak offset to ", start_params[i, PEAK_OFFSET_PARAM], "for phase", i
         start_params[i, PEAK_HEIGHT_PARAM] = fit_peak_height if fit_peak_height > 0 else 1
         start_params[i, PEAK_DECAY_PARAM] = 5
         start_params[i, CODA_HEIGHT_PARAM] = fit_coda_height if fit_coda_height > 0 else 1
-        start_params[i, CODA_DECAY_PARAM] = a[FIT_B] if a[FIT_B] < 0 else -0.03
+        start_params[i, CODA_DECAY_PARAM] = a[HEURISTIC_FIT_B] if a[HEURISTIC_FIT_B] < 0 else -0.03
 
         bounds = bounds + arr_bounds
         bounds_fp = bounds_fp + arr_bounds_fixed_peak
@@ -309,17 +306,15 @@ def find_starting_params(arr, smoothed):
     start_params = start_params[:, 1:]
     return start_params, phaseids, bounds, bounds_fp
 
-def fit_elephant_envelope(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs"):
+def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs", by_phase=False, iid=True):
 
     start_params, phaseids, bounds, bounds_fp = find_starting_params(arrs, smoothed)
     narrs = len(arrs["arrivals"])
     arr_times = np.reshape(np.array(arrs["arrivals"]), (narrs, -1))
 
     if fix_peak:
-        print start_params
         start_params = remove_peak(start_params)
         bounds = bounds_fp
-        print start_params, bounds
         assem_params = lambda params: np.hstack([arr_times, restore_peak(np.reshape(params, (narrs, -1)))])
     else:
         assem_params = lambda params: np.hstack([arr_times, np.reshape(params, (narrs, -1))])
@@ -332,71 +327,30 @@ def fit_elephant_envelope(sigmodel, pp, arrs, env, smoothed, fix_peak = True, ev
     b = sigvisa.canonical_band_num(smoothed.stats.band)
     arm = smoothed.stats.noise_model
     sarm = smoothed.stats.smooth_noise_model
-
-    # learn from original data
+    print "setting noise and wiggles for chan %d band %d" % (c, b)
     sigmodel.set_noise_process(smoothed.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 0, arm.em.std**2, np.array(arm.params))
-    """
-    f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
+    for phaseid in phaseids:
+        sigmodel.set_wiggle_process(smoothed.stats.siteid, b, c, int(phaseid), 1, 0.0001, np.array(arm.params))
 
-    start_cost = f(start_params)
-    print "start params cost (w/ orig data)", start_cost
-    plot_channels_with_pred(sigmodel, pp, env, assem_params(start_params), phaseids, None, None, title = "start orig (cost %f, evid %s)" % (start_cost, evid))
+    #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
 
-
-    print "bounds", bounds
-    best_params, best_cost = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
-    plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
-
-    # learn from smoothed data w/ orig model
-    sigmodel.set_noise_process(smoothed.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 0, arm.em.std**2, np.array(arm.params))
-
-    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params))
-
-    best_params_smooth, best_cost_smooth = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params_smooth), phaseids, None, None, title = "best hybrid (smooth data, original model) (cost %f, evid %s)" % (best_cost_smooth, evid))
-
-    # learn from smoothed data
-    sigmodel.set_noise_process(smoothed.stats.siteid, b, c, sarm.c, sarm.em.std**2, np.array(sarm.params))
-    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 0, sarm.em.std**2, np.array(sarm.params))
-
-    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params))
-
-    start_cost = f(start_params)
-    print "start params cost (w/ smoothed data)", start_cost
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed (cost %f, evid %s)" % (start_cost, evid))
-    best_params_smooth, best_cost_smooth = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params_smooth), phaseids, None, None, title = "best smoothed (cost %f, evid %s)" % (best_cost_smooth, evid))
-    """
+    if iid:
     # learn from smoothed data w/ iid noise
-    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
+        f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
+        start_cost = f(start_params)
+        print "start params cost (w/ smoothed data and iid noise)", start_cost
+        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
+        best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
+        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
 
-    start_cost = f(start_params)
-    print "start params cost (w/ smoothed data and iid noise)", start_cost
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
-#    best_params_iid, best_cost_iid = optimize_by_phase(f, start_params, bounds, phaseids, method=method)
-    best_params_iid, best_cost_iid = minimize(f, start_params, bounds=bounds, method=method)
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params_iid), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost_iid, evid))
+    else:
+        f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
+        start_cost = f(start_params)
+        plot_channels_with_pred(sigmodel, pp, env, assem_params(start_params), phaseids, None, None, title = "start orig (cost %f, evid %s)" % (start_cost, evid))
+        best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
+        plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
 
-#    wrm = learn_wiggle_params(sigmodel, env, smoothed, phaseids, assem_params(true_params))
-#    wrm = wrm[1]
-#    sigmodel.set_wiggle_process(smoothed.stats.siteid, b, 0, wrm.em.std**2, np.array(wrm.params))
-#    sys.exit(1)
-
-
-    """true_params = (8, 2.8, -0.02, 14, 3.1, -0.06)
-    true_cost = f(true_params)
-    print "true params cost", true_cost
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(true_params), phaseids, None, None, title = "true")
-
-#    best_params = (9.3, 0, -.1, 14.5, 0, -.1)
-    best_cost = f(best_params)
-    print "best params cost", best_cost
-    plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "so-called best")
-    """
-
-    return best_params_iid, phaseids, best_cost_iid
+    return assem_params(best_params), phaseids, best_cost
 
 #######################################################
 # Begin old fitting routines
@@ -534,8 +488,10 @@ def get_first_p_s_arrivals(cursor, evid, siteid):
     phases= [phaseid_to_name(x) for x in phaseids if x is not None]
     return first_p_arrival, first_s_arrival, arrivals, phases
 
-def load_segments(cursor, evid, siteid, ar_noise=True):
-    (arrival_segment, noise_segment, all_arrivals, all_arrival_phases) = load_signal_slice(cursor, evid, siteid, load_noise = True, learn_noise=ar_noise)
+def load_segments(cursor, evid, siteid, ar_noise=True, chans=None, bands=None):
+    print "bands", bands
+    print "chans", chans
+    (arrival_segment, noise_segment, all_arrivals, all_arrival_phases, all_arrival_arids) = load_signal_slice(cursor, evid, siteid, load_noise = True, learn_noise=ar_noise, chans=chans, bands=bands)
     arrival_segment = arrival_segment[0]
 
     # reject segments too short to do an accurate coda fit
@@ -549,7 +505,7 @@ def load_segments(cursor, evid, siteid, ar_noise=True):
 
     # package together information about arriving phases into a single
     # dictionary
-    arrs = {"all_arrivals": all_arrivals, "all_arrival_phases": all_arrival_phases}
+    arrs = {"all_arrivals": all_arrivals, "all_arrival_phases": all_arrival_phases, "all_arrival_arids": all_arrival_arids}
     arrs["first_p_arrival"], arrs["first_s_arrival"], arrs["arrivals"], arrs["arrival_phases"] = get_first_p_s_arrivals(cursor, evid, siteid)
 
     smoothed_segment = smooth_segment(arrival_segment, bands=bands, chans=chans)
@@ -578,7 +534,7 @@ def get_densest_azi(cursor, siteid):
 
 def demo_get_wiggles():
 
-    cursor, sigmodel, earthmodel, sites = sigvisa_util.init_sigmodel()
+    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
     tr, smoothed, tmpl, phases, wiggles, wiggles_smooth = get_wiggles(cursor, sigmodel, 5301405, 2)
     print tr
     print smoothed
@@ -587,7 +543,7 @@ def demo_get_wiggles():
     print wiggles
     print wiggles_smooth
 
-def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_logenvelope_2.00_3.00', wiggle_threshold=2):
+def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_envelope_2.00_3.00', wiggle_threshold=2):
     """
 
     Arguments:
@@ -607,7 +563,7 @@ def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_logenve
 
 
     # load the relevant traces
-    arrival_segment, smoothed_segment, arrs = load_segments(cursor, evid, siteid, ar_noise=False)
+    arrival_segment, smoothed_segment, arrs = load_segments(cursor, evid, siteid, ar_noise=False, chans=[chan,], bands=[band,])
     tr = arrival_segment[chan][band]
     smoothed = smoothed_segment[chan][band]
 
@@ -620,13 +576,13 @@ def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_logenve
     c = sigvisa.canonical_channel_num(chan)
     b = sigvisa.canonical_band_num(band)
     sigmodel.set_noise_process(siteid, b, c, smoothed.stats.noise_floor, 1, np.array((.8,)))
-    sigmodel.set_wiggle_process(siteid, b, 0, 1, np.array((.8,)))
+    sigmodel.set_wiggle_process(siteid, b, 1, 1, np.array((.8,)))
 
     narrs = len(arrs["arrivals"])
     arr_times = np.reshape(np.array(arrs["arrivals"]), (narrs, -1))
     assem_params = lambda params: np.hstack([arr_times, restore_peak(np.reshape(params, (narrs, -1)))])
     f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
-    best_params, best_cost = optimize_by_phase(f, start_params, bounds, phaseids, method="bfgs")
+    best_params, best_cost = optimize(f, start_params, bounds, phaseids, method="simplex", by_phase=False)
 
     print "start params"
     print_params(assem_params(start_params))
@@ -650,12 +606,20 @@ def main():
     method="bfgs"
     if len(sys.argv) > 2:
         method = sys.argv[2]
+    iid=True
+    by_phase=False
+    snr_threshold=2
+    evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5"
+    runid = None
+    if len(sys.argv) > 4:
+        evid_condition = "and evid=%d" % (int(sys.argv[3]))
+        runid = int(sys.argv[4])
 
-    cursor, sigmodel, earthmodel, sites = sigvisa_util.init_sigmodel()
+    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between 1238889600 and 1245456000 and lebo.mb>4 and leba.arid=l.arid and l.snr > 2 and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and evid=5301405 and pid.phase=leba.phase" % (phase_condition, siteid)
+    sql_query="SELECT distinct lebo.lon, lebo.lat, lebo.depth, lebo.time, lebo.mb, lebo.orid, lebo.evid FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
 #5308821
 #5301405
 # and lebo.evid=5301449
@@ -664,45 +628,85 @@ def main():
     cursor.execute(sql_query)
     events = np.array(cursor.fetchall())
 
-#    bands = ['narrow_logenvelope_4.00_6.00', 'narrow_logenvelope_2.00_3.00', 'narrow_logenvelope_1.00_1.50', 'narrow_logenvelope_0.70_1.00']
-    bands = ['narrow_logenvelope_2.00_3.00']
-    chans = ['BHZ']
-    short_bands = [b[19:] for b in bands]
+#    bands = ['narrow_envelope_4.00_6.00', 'narrow_envelope_2.00_3.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
+    short_bands = [b[16:] for b in bands]
 
-    runid = int(time.time())
-    base_coda_dir = get_base_dir(siteid, None, runid)
+    if runid is None:
+        cursor.execute("select max(runid) from sigvisa_coda_fits")
+        runid, = cursor.fetchone()
+        if runid is None:
+            runid=0
+        else:
+            runid = int(runid)+1
+
+    base_coda_dir = get_base_dir(siteid, runid)
 
     for event in events:
-
+        evid = int(event[EV_EVID_COL])
         distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
-        azimuth = utils.geog.azimuth((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
+        azimuth = utils.geog.azimuth((sites[siteid-1][0], sites[siteid-1][1]), (event[EV_LON_COL], event[EV_LAT_COL]))
 
         try:
-            arrival_segment, smoothed_segment, arrs = load_segments(cursor, event[EV_EVID_COL], siteid)
+            arrival_segment, smoothed_segment, arrs = load_segments(cursor, event[EV_EVID_COL], siteid, bands=bands, chans=chans)
 
             for (band_idx, band) in enumerate(bands):
                 short_band = short_bands[band_idx]
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-                pp = PdfPages(os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf"))
+
                 for chan in chans:
+                    fname = os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
+                    print "writing to %s..." % (fname,)
+                    pp = PdfPages(fname)
                     tr = arrival_segment[chan][band]
                     smoothed = smoothed_segment[chan][band]
 
+                    st = tr.stats.starttime_unix
+                    srate = tr.stats.sampling_rate
+                    time_len = len(tr.data)/srate
+                    et = st + time_len
+
+
                     # DO THE FITTING
-                    fit_params, phaseids, vert_cost = fit_elephant_envelope(sigmodel, pp, arrs, tr, smoothed, evid = str(int(event[EV_EVID_COL])), method=method)
+                    fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, iid=iid, by_phase=by_phase)
+                    print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
 
-    #                gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
+                    tmpl = get_template(sigmodel, tr, phaseids, fit_params)
+                    wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
+                    for (pidx, phaseid) in enumerate(phaseids):
+                        if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
+                            continue
+                        else:
+                            dirname = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)), short_band)
+                            fname = os.path.join(dirname, "%d_%s.dat" % (evid, chan))
+                            get_dir(dirname)
+                            print "saving phase %d len %d" % (phaseid, len(wiggles[pidx]))
+                            np.savetxt(fname, np.array(wiggles[pidx]))
+                            sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, short_band, chan, evid, fname, snr_threshold)
+                            print sql_query
+                            cursor.execute(sql_query)
 
-                    print "wrote plot", os.path.join(pdf_dir, str(int(event[EV_EVID_COL])) + ".pdf")
-
-                pp.close()
+                    s = [method,]
+                    if by_phase:
+                        s.append('byphase')
+                    method_str = '_'.join(s)
+                    for (i, arid) in enumerate(arrs["all_arrival_arids"]):
+                        sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+                        print sql_query
+                        cursor.execute(sql_query)
+                    dbconn.commit()
+                    pp.close()
 
         except KeyboardInterrupt:
+            dbconn.commit()
+            pp.close()
             raise
         except:
+            dbconn.commit()
+            pp.close()
             print traceback.format_exc()
             continue
 
+    dbconn.close()
 
 if __name__ == "__main__":
     main()

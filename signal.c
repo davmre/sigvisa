@@ -13,21 +13,21 @@
  int canonical_band_num(char* band_str) {
 
    int result = -1;
-   if (strcmp("narrow_logenvelope_0.50_0.70", band_str) == 0) {
+   if (strcmp("narrow_envelope_0.50_0.70", band_str) == 0 || strcmp("0.50_0.70", band_str) == 0) {
      result = NARROW_05_07;
-   } else if (strcmp("narrow_logenvelope_0.70_1.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_0.70_1.00", band_str) == 0 || strcmp("0.70_1.00", band_str) == 0) {
      result = NARROW_07_10;
-   } else if (strcmp("narrow_logenvelope_1.00_1.50", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_1.00_1.50", band_str) == 0 || strcmp("1.00_1.50", band_str) == 0) {
      result = NARROW_10_15;
-   } else if (strcmp("narrow_logenvelope_1.50_2.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_1.50_2.00", band_str) == 0 || strcmp("1.50_2.00", band_str) == 0) {
      result = NARROW_15_20;
-   } else if (strcmp("narrow_logenvelope_2.00_3.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_2.00_3.00", band_str) == 0 || strcmp("2.00_3.00", band_str) == 0) {
      result = NARROW_20_30;
-   } else if (strcmp("narrow_logenvelope_3.00_4.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_3.00_4.00", band_str) == 0 || strcmp("3.00_4.00", band_str) == 0) {
      result = NARROW_30_40;
-   } else if (strcmp("narrow_logenvelope_4.00_6.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_4.00_6.00", band_str) == 0 || strcmp("4.00_6.00", band_str) == 0) {
      result = NARROW_40_60;
-   } else if (strcmp("narrow_logenvelope_6.00_8.00", band_str) == 0) {
+   } else if (strcmp("narrow_envelope_6.00_8.00", band_str) == 0 || strcmp("6.00_8.00", band_str) == 0) {
      result = NARROW_60_80;
    } else if (strcmp("broadband", band_str) == 0) {
      result = BROADBAND;
@@ -46,21 +46,21 @@ PyObject * canonical_band_name(int num) {
 
   switch(num) {
   case NARROW_05_07:
-    return PyString_FromString("narrow_logenvelope_0.50_0.70");
+    return PyString_FromString("narrow_envelope_0.50_0.70");
  case NARROW_07_10:
-    return PyString_FromString("narrow_logenvelope_0.70_1.00");
+    return PyString_FromString("narrow_envelope_0.70_1.00");
   case NARROW_10_15:
-    return PyString_FromString("narrow_logenvelope_1.00_1.50");
+    return PyString_FromString("narrow_envelope_1.00_1.50");
   case NARROW_15_20:
-    return PyString_FromString("narrow_logenvelope_1.50_2.00");
+    return PyString_FromString("narrow_envelope_1.50_2.00");
   case NARROW_20_30:
-    return PyString_FromString("narrow_logenvelope_2.00_3.00");
+    return PyString_FromString("narrow_envelope_2.00_3.00");
   case NARROW_30_40:
-    return PyString_FromString("narrow_logenvelope_3.00_4.0");
+    return PyString_FromString("narrow_envelope_3.00_4.0");
   case NARROW_40_60:
-    return PyString_FromString("narrow_logenvelope_4.00_6.00");
+    return PyString_FromString("narrow_envelope_4.00_6.00");
   case NARROW_60_80:
-    return PyString_FromString("narrow_logenvelope_6.00_8.00");
+    return PyString_FromString("narrow_envelope_6.00_8.00");
   case BROADBAND:
     return PyString_FromString("broadband");
   case BB_ENVELOPE:
@@ -203,6 +203,29 @@ void free_segment_inner(Segment_t * p_segment) {
   }
 }
 
+void init_dummy_segment(Trace_t * p_trace, Segment_t * p_segment) {
+    /*make sure segment has all necessary properties defined (really just hz) and arrays allocated */
+  p_segment->len = p_trace->len;
+  p_segment->hz = p_trace->hz;
+  p_segment->siteid = p_trace->siteid;
+  p_segment->start_time = p_trace->start_time;
+  for (int i=0; i < NUM_CHANS; ++i) {
+    p_segment->p_channels[i] = NULL;
+  }
+  Channel_t * channel = calloc(1, sizeof(Channel_t));
+  p_segment->p_channels[p_trace->chan] = channel;
+  channel->len = p_trace->len;
+  channel->start_time = p_trace->start_time;
+  channel->hz = p_trace->hz;
+  channel->siteid = p_trace->siteid;
+  channel->chan = p_trace->chan;
+  for (int i=0; i < NUM_BANDS; ++i) {
+    channel->p_bands[i] = NULL;
+  }
+  channel->p_bands[p_trace->band] = p_trace;
+
+}
+
 /*
 ****************************************************************
 py_set_signals and associated helper methods for converting Python
@@ -229,6 +252,7 @@ int trace_to_signal(PyObject * py_trace, Trace_t ** pp_trace) {
   *pp_trace = calloc(1, sizeof(Trace_t));
 
   PyArrayObject * py_array = (PyArrayObject *) PyArray_ContiguousFromAny(py_data, NPY_DOUBLE, 1,2);
+  CHECK_ERROR;
   Py_INCREF(py_array);
   Py_DECREF(py_data);
   CHECK_ERROR;
@@ -271,6 +295,9 @@ int py_segment_to_c_segment(PyObject * py_segment, Segment_t * p_segment) {
   p_segment->siteid = -1;
 
   int i;
+  for(i=0; i<NUM_CHANS; ++i) {
+    p_segment->p_channels[i] = 0;
+  }
 
   PyObject *py_key, *py_value;
   Py_ssize_t pos = 0;

@@ -5,11 +5,11 @@
 
 char * signal_str(Channel_t * signal) {
   char * str = malloc(200*sizeof(char));
-  snprintf(str, 200, "Signal: at station %d, sampling rate %f, samples %ld, start time %f, end time %f\n", 
-	   signal->siteid, 
-	   signal->hz, 
-	   signal->len, 
-	   signal->start_time, 
+  snprintf(str, 200, "Signal: at station %d, sampling rate %f, samples %ld, start time %f, end time %f\n",
+	   signal->siteid,
+	   signal->hz,
+	   signal->len,
+	   signal->start_time,
 	   signal->start_time + (signal->len)/(signal->hz));
   return str;
 }
@@ -24,9 +24,9 @@ int print_signal(Channel_t * signal) {
 
 char * arrival_str(const Arrival_t * p_arr) {
   char * str = malloc(100*sizeof(char));
-  snprintf(str, 100, "time %.4lf amp %.4lf azi %.4lf slo %.4lf %d %d",
-	   p_arr->time, p_arr->amp, p_arr->azi, p_arr->slo, 
-	   p_arr->phase, p_arr->siteid);
+  snprintf(str, 100, "time %.4lf amp %.4lf azi %.4lf slo %.4lf pid %d sid %d",
+	   p_arr->time, p_arr->amp, p_arr->azi, p_arr->slo,
+	   p_arr->phaseid, p_arr->siteid);
   return str;
 }
 
@@ -38,7 +38,7 @@ void print_arrival(const Arrival_t * p_arr) {
 
 char * event_str(const Event_t * p_event) {
   char * str = malloc(100*sizeof(char));
-  snprintf(str, 100, 
+  snprintf(str, 100,
 	   "%4.1f E %4.1f N %.0f km %.0f s %.1f mb score %.1f orid %d",
 	   p_event->evlon, p_event->evlat, p_event->evdepth,
 	   p_event->evtime, p_event->evmag, p_event->evscore,
@@ -68,8 +68,8 @@ int save_pdf_plot(SigModel_t * p_sigmodel, Channel_t * p_signal, int band, char 
   PyObject * py_text = Py_BuildValue("s", filename);
   PyObject * py_format = Py_BuildValue("s", format);
 
-  PyObject * retval = PyObject_CallFunction(p_sigmodel->log_trace_cb, 
-					    "OOO", 
+  PyObject * retval = PyObject_CallFunction(p_sigmodel->log_trace_cb,
+					    "OOO",
 					    p_trace,
 					    py_text, py_format);
   return (retval != NULL);
@@ -82,15 +82,15 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
   PyObject * eventsobj;
   PyObject * evarrlistobj;
   int i;
-  
+
   if(py_text == NULL) {
     py_text = Py_BuildValue("s", "");
   }
 
-  convert_events_arrs_to_pyobj(p_sigmodel, p_sigmodel->p_earth, 
-			       pp_events,numevents, 
+  convert_events_arrs_to_pyobj(p_sigmodel, p_sigmodel->p_earth,
+			       pp_events,numevents,
 			       &eventsobj, &evarrlistobj);
-  
+
   for (i = 0; i < p_sigmodel->numsegments; ++i) {
     LogTrace("logging segment %d", i);
 
@@ -121,7 +121,7 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
     PyObject * real_trace, * pred_trace;
     real_trace = channel_bundle_to_trace_bundle(p_real_segment);
     pred_trace = channel_bundle_to_trace_bundle(p_pred_segment);
-    retval = PyObject_CallFunction(log_segment_cb, "OOOOO", 
+    retval = PyObject_CallFunction(log_segment_cb, "OOOOO",
 				   eventsobj, evarrlistobj,
 				   real_trace,
 				   pred_trace,
@@ -137,10 +137,10 @@ void log_segments_events(SigModel_t * p_sigmodel, PyObject * log_segment_cb, int
     Py_DECREF(real_trace);
     Py_DECREF(pred_trace);
   }
- 
+
   Py_DECREF(eventsobj);
   Py_DECREF(evarrlistobj);
-  
+
 }
 
 static void log_segments(SigModel_t * p_sigmodel, World_t * p_world)

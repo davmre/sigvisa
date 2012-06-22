@@ -2,7 +2,7 @@
 
 void init_signal_model(SignalModel_t * p_model, char * model_name, int numsites) {
 
-   
+
   if (strcmp(model_name, "spectral_envelope") == 0) {
     p_model->set_params = (SMSetParams_f)&Spectral_Envelope_Model_Set_Params;
     p_model->has_model = (SMHasModel_f)&Spectral_Envelope_Model_Has_Model;
@@ -56,7 +56,7 @@ const Event_t ** augment_events(int numevents, const Event_t ** events, const Ev
    between a world where this event exists, and one where it
    doesn't. */
 double Signal_Score_Event_Site(SigModel_t * p_sigmodel, const Event_t * p_event, int siteid,int num_other_events, const Event_t ** pp_other_events) {
-  
+
   SignalModel_t * p_model = &p_sigmodel->signal_model;
 
   double score = 0;
@@ -85,7 +85,7 @@ double Signal_Score_Event_Site(SigModel_t * p_sigmodel, const Event_t * p_event,
 
     /* we compute scores for the background event set, and for an
        augmented event set which includes the specified event. */
-    
+
     int num_basic_arrivals, num_augmented_arrivals;
     Arrival_t ** pp_basic_arrivals;
     Arrival_t ** pp_augmented_arrivals;
@@ -116,13 +116,13 @@ double Signal_Score_Event_Site(SigModel_t * p_sigmodel, const Event_t * p_event,
    doesn't. */
 double Signal_Score_Event(SigModel_t * p_sigmodel, const Event_t * p_event, int num_other_events, const Event_t ** pp_other_events) {
 
-  
+
   int numsites = EarthModel_NumSites(p_sigmodel->p_earth);
 
   double score = 0;
   for (int siteid = 1; siteid <= numsites; ++siteid) {
-    score += Signal_Score_Event_Site(p_sigmodel, p_event, 
-					  siteid, num_other_events, 
+    score += Signal_Score_Event_Site(p_sigmodel, p_event,
+					  siteid, num_other_events,
 					  pp_other_events);
   }
 
@@ -133,9 +133,9 @@ double Signal_Score_Event(SigModel_t * p_sigmodel, const Event_t * p_event, int 
 
 /* given a sigmodel with a set of detections, and a signal segment
    from some station, creates a list of those arrivals detected at
-   that station within the time period of the segment*/ 
+   that station within the time period of the segment*/
 void det_arrivals(SigModel_t * p_sigmodel, Segment_t * p_segment, int * num_arrivals, Arrival_t *** ppp_arrivals) {
-  
+
 
   // for each segment, compute a list of arrivals
 
@@ -143,29 +143,29 @@ void det_arrivals(SigModel_t * p_sigmodel, Segment_t * p_segment, int * num_arri
   int num_alloced = 20;
   *ppp_arrivals = calloc(num_alloced, sizeof(Arrival_t *));
   CHECK_PTR(*ppp_arrivals);
-  
+
   for (int d = 0; d < p_sigmodel->numdetections; ++d) {
     Detection_t * p_det = p_sigmodel->p_detections + d;
-    
+
     if (p_segment != NULL) {
       if (p_det->site_det != p_segment->siteid-1) continue;
       if (p_det->time_det + MAX_ENVELOPE_LENGTH < p_segment->start_time) continue;
       if (p_det->time_det > Segment_EndTime(p_segment)) continue;
     }
-    
+
     if (++(*num_arrivals) > num_alloced) {
       num_alloced *= 2;
       *ppp_arrivals = realloc(*ppp_arrivals, num_alloced * sizeof(Arrival_t *));
       CHECK_PTR(*ppp_arrivals);
     }
-    
+
     Arrival_t * p_arr = calloc(1, sizeof(Arrival_t));
     *(*ppp_arrivals+(*num_arrivals)-1) = p_arr;
     p_arr->time = p_det->time_det;
     p_arr->amp = p_det->amp_det;
     p_arr->azi = p_det->azi_det;
     p_arr->slo = p_det->slo_det;
-    p_arr->phase = p_det->phase_det;
+    p_arr->phaseid = p_det->phase_det+1;
     p_arr->siteid = p_det->site_det+1;
   }
 }
@@ -174,9 +174,9 @@ void det_arrivals(SigModel_t * p_sigmodel, Segment_t * p_segment, int * num_arri
 double det_likelihood(SigModel_t * p_sigmodel, int write_log) {
 
 
-  
+
   SignalModel_t * p_model = &p_sigmodel->signal_model;
-  
+
 
   double ll = 0;
 
@@ -184,7 +184,7 @@ double det_likelihood(SigModel_t * p_sigmodel, int write_log) {
   LogTrace("called det_likelihood on %d segments", p_sigmodel->numsegments);
 
   for (int i=0; i < p_sigmodel->numsegments; ++i) {
-    
+
     Segment_t * p_segment = p_sigmodel->p_segments + i;
 
 
@@ -205,13 +205,13 @@ double det_likelihood(SigModel_t * p_sigmodel, int write_log) {
     pred_segment->hz = p_segment->hz;
     pred_segment->siteid = p_segment->siteid;
     pred_segment->len = p_segment->len;
-    p_model->sample(p_model->pv_params, 
+    p_model->sample(p_model->pv_params,
 		    p_sigmodel->p_earth,
 		    pred_segment,
 		    num_arrivals, (const Arrival_t **)pp_arrivals,
 		    0, 0);
     snprintf(desc, 50, "pred_signal_%d", i);
-    //save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-"); 
+    //save_pdf_plot(p_sigmodel, pred_segment->p_channels[CHAN_BHZ], desc, "r-");
     }
 
     /* ------------ end logging ------ */
@@ -234,7 +234,7 @@ double det_likelihood(SigModel_t * p_sigmodel, int write_log) {
 }
 
 PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
-  
+
   int write_log;
 
   if (!PyArg_ParseTuple(args, "i", &write_log))
@@ -251,7 +251,7 @@ PyObject * py_det_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
 
 /* given a list of events, extract the arrivals relevant to a particular siteid within a particular time range */
 void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double max_time, int num_events, const Event_t ** pp_events, int * num_arrivals, Arrival_t *** ppp_arrivals) {
-  
+
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
   *num_arrivals = 0;
@@ -277,7 +277,7 @@ void arrival_list(EarthModel_t * p_earth, int siteid, double min_time, double ma
 
 
 PyObject * py_set_params(SigModel_t * p_sigmodel, PyObject * args) {
-  
+
   SignalModel_t * p_model = &p_sigmodel->signal_model;
 
   int siteid;
@@ -291,7 +291,7 @@ PyObject * py_set_params(SigModel_t * p_sigmodel, PyObject * args) {
 }
 
 PyObject * py_set_all_params(SigModel_t * p_sigmodel, PyObject * args) {
-  
+
   SignalModel_t * p_model = &p_sigmodel->signal_model;
 
   PyObject * py_dict;

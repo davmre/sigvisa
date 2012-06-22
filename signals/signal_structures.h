@@ -29,7 +29,7 @@ typedef struct SignalModel_t
 
 
 typedef struct ARProcess_t {
-  
+
   double mean;
   int order;
   double * coeffs; // most recent first
@@ -48,10 +48,11 @@ typedef struct ArrivalWaveform {
   struct ArrivalWaveform * next_start;
   struct ArrivalWaveform * next_end;
   struct ArrivalWaveform * next_active;
-  int active_id;
 
+  ARProcess_t ar_processes[NUM_CHANS];
+  int wiggle_ids[NUM_CHANS];
   double projection_coeffs[NUM_CHANS];
-  ARProcess_t ar_process;
+
 
   // used for sampling
   double * last_perturbs;
@@ -62,18 +63,17 @@ typedef struct ARWLists_t {
 
   struct ArrivalWaveform * st_head;
   struct ArrivalWaveform * et_head;
-  
+
   struct ArrivalWaveform * st_ptr;
   struct ArrivalWaveform * et_ptr;
   struct ArrivalWaveform * active_arrivals;
 
 } ARWLists_t;
 
-
 typedef struct BandModel_t {
 
   ARProcess_t channel_noise_models[NUM_CHANS];
-  ARProcess_t wiggle_model;
+  ARProcess_t wiggle_model[NUM_CHANS][NUM_TD_PHASES];
 
   /* we will eventually need models for all of the envelope params,
      coda decay, etc., but at the moment those are python-only... */
@@ -82,7 +82,7 @@ typedef struct BandModel_t {
 typedef struct Spectral_StationModel_t {
 
   BandModel_t bands[NUM_BANDS];
-  
+
 } Spectral_StationModel_t;
 
 typedef struct Spectral_Envelope_Model_t

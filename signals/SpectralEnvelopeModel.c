@@ -23,7 +23,6 @@ void Spectral_Envelope_Model_Init_Params(Spectral_Envelope_Model_t * p_params,  
   /* using calloc (instead of malloc) is important here since we
      depend on the p_ar_coeffs pointer being NULL iff unallocated */
   p_params->p_stations = calloc(numsites, sizeof(Spectral_StationModel_t));
-
 }
 
 void Spectral_Envelope_Model_Set_Params(Spectral_Envelope_Model_t * p_params, int siteid, PyObject * py_dict) {
@@ -65,20 +64,29 @@ int Spectral_Envelope_Model_Has_Model(SigModel_t * p_sigmodel, int siteid, int c
   /* chan < 0 means return true if we have a model for any channel at
      this station */
   if (chan < 0) {
-    if (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].wiggle_model.coeffs == NULL) {
-      return FALSE;
-    }
 
     for (int i=0; i < NUM_CHANS; ++i) {
+
+      int chan_model = FALSE;
+      int wiggle_model = FALSE;
+
       if (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].channel_noise_models[i].coeffs != NULL) {
-	return TRUE;
+	chan_model = TRUE;
       }
+
+      for(int p=0; p < NUM_TD_PHASES; ++p) {
+	if (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].wiggle_model[i][p].coeffs != NULL) {
+	  wiggle_model = TRUE;
+	}
+      }
+
+      if (chan_model && wiggle_model) return TRUE;
     }
     return FALSE;
   }
 
   else {
-    return (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].wiggle_model.coeffs != NULL) && (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].channel_noise_models[chan].coeffs != NULL);
+    return (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].wiggle_model[chan][0].coeffs != NULL) && (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].channel_noise_models[chan].coeffs != NULL);
   }
 
 }
@@ -108,7 +116,10 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
 
   // generate onset
   long peak_idx = (p_arrival->peak_time - p_arrival->time) * p_trace->hz;
-  double onset_slope = (p_arrival->peak_amp - MIN_LOGENV_CUTOFF) / peak_idx;
+  double onset_slope;
+  if (peak_idx != 0) {
+    onset_slope = (p_arrival->peak_amp - MIN_LOGENV_CUTOFF) / peak_idx;
+  }
   for (long t=0; t < peak_idx && t < p_trace->len; ++t) {
     d[t] = MIN_LOGENV_CUTOFF + t * onset_slope;
   }
@@ -130,7 +141,7 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
   double P = exp(p_arrival->peak_amp);
   double F = p_arrival->peak_decay;
   double b = p_arrival->coda_decay;
-  for (long t=peak_idx; t < p_trace->len; ++t) {
+  for (long t=MAX(peak_idx, 0); t < p_trace->len; ++t) {
     double t_off = (t - peak_idx)/p_trace->hz;
     d[t] = log( (P-A) * exp( -1 * (t_off * t_off) / (F * F)) + A * exp( b * t_off));
   }
@@ -139,10 +150,11 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
 
 }
 
+void sum_envelope_obsfn(const gsl_vector *state, gsl_vector *obs, void *void_k, va_list * args) {
 
-void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * args) {
+  KalmanState_t *k = (KalmanState_t *)void_k;
 
-  /* Assume that we are passed two arguments:
+  /* Assume that we are passed three arguments:
      1) an array of length NUM_CHANS, containing for each channel the index of the state variable corresponding to that channel's noise process
      2) the BandModel corresponding to the current band
      2) a linked list of currently active arriving waveforms
@@ -150,6 +162,8 @@ void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * 
   int * noise_indices = va_arg(*args, int *);
   BandModel_t * p_band = va_arg(*args, BandModel_t *);
   ArrivalWaveform_t * active_arrivals = va_arg(*args, ArrivalWaveform_t *);
+
+
 
   int obs_i = 0;
   for(int c=0; c < NUM_CHANS; c++) {
@@ -168,7 +182,8 @@ void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * 
     }
 
     // the output of each channel starts with the noise process
-    double chan_output = gsl_vector_get(state, noise_indices[c]);
+    int id = gsl_vector_get(k->p_permanent_indices, noise_indices[c]);
+    double chan_output = gsl_vector_get(state, id);
 
     // then, we add in the signal from each active arrival
     for(ArrivalWaveform_t * aa = active_arrivals;
@@ -176,14 +191,15 @@ void logsum_envelope_obsfn(const gsl_vector * state, gsl_vector *obs, va_list * 
 	aa = aa->next_active) {
 
       // signal is the log-envelope, plus AR wiggle process
-      double signal = aa->p_abstract_trace->p_data[aa->idx];
-      signal += gsl_vector_get(state, aa->active_id);
+      double signal = exp(aa->p_abstract_trace->p_data[aa->idx]);
+      id = gsl_vector_get(k->p_permanent_indices, aa->wiggle_ids[c]);
+      signal *= gsl_vector_get(state, id);
 
       // projected onto the current channel
-      signal += log(aa->projection_coeffs[c]);
+      signal *= aa->projection_coeffs[c];
 
       // added to signals from other channels
-      chan_output = LOGSUM(chan_output, signal);
+      chan_output += signal;
     }
 
     gsl_vector_set(obs, obs_i++, chan_output);
@@ -212,44 +228,71 @@ void setup_noise_processes(BandModel_t * p_band, Segment_t * p_segment, KalmanSt
     }
     noise_indices[i] = kalman_add_AR_process(k, chan_noise);
   }
+
+  if (k->np == 0) {
+    LogError("No noise processes added - are you sure you want this?");
+    exit(EXIT_FAILURE);
+  }
 }
 
+
+void setup_noise_process(BandModel_t * p_band, int chan, KalmanState_t * k, int * noise_indices) {
+
+/* Set up the per-channel noise models. */
+  for(int i=0; i < NUM_CHANS; ++i) {
+
+    /* if we are passed an observed segment, we only generate noise
+       processes for the observed channels */
+    if (i != chan) {
+      noise_indices[i] = -1;
+      continue;
+    }
+
+    /* also, we only generate noise processes for channels where we
+       actually have a model */
+    ARProcess_t * chan_noise = &p_band->channel_noise_models[i];
+    if (chan_noise->coeffs == NULL) {
+      LogError("no noise model for channel %d!", i);
+      exit(1);
+    }
+    noise_indices[i] = kalman_add_AR_process(k, chan_noise);
+  }
+
+  if (k->np == 0) {
+    LogError("No noise processes added - are you sure you want this?");
+    exit(EXIT_FAILURE);
+  }
+}
 
 /* Update our position in the lists of arriving waveforms to reflect
    the current timestep, and update the Kalman state to reflect the
    currently active waveforms. */
-int update_active_events(KalmanState_t * k, double time, ARWLists_t * arw) {
+int update_active_events(KalmanState_t * k, double time, ARWLists_t * arw, int * chan_indices, int obs_n) {
 
   int changed = 0;
 
     // activate any events that are starting
-    while (arw->st_ptr != NULL && time >= arw->st_ptr->start_time) {
+  while (arw->st_ptr != NULL && time >= arw->st_ptr->start_time) {
       LogTrace(" activating arrivalwaveform w/ st %lf at time %lf", arw->st_ptr->start_time, time);
       changed = 1;
       arw->active_arrivals = append_active(arw->active_arrivals, arw->st_ptr);
-      arw->st_ptr->active_id = kalman_add_AR_process(k, &arw->st_ptr->ar_process);
+
+      for(int ci=0; ci < obs_n; ++ci) {
+	int c = chan_indices[ci];
+	arw->st_ptr->wiggle_ids[c] = kalman_add_AR_process(k, &(arw->st_ptr->ar_processes[c]));
+      }
       arw->st_ptr = arw->st_ptr->next_start;
     }
 
     // clean up any events that have finished
     while (arw->et_ptr != NULL && time >= arw->et_ptr->end_time) {
       LogTrace(" deactivating arrivalwaveform w/ et %lf at time %lf", arw->et_ptr->end_time, time);
-      changed = 1;
       arw->active_arrivals = remove_active(arw->active_arrivals, arw->et_ptr);
 
       // remove the wiggle process from the Kalman state
-      kalman_remove_AR_process(k, arw->et_ptr->ar_process.order, arw->et_ptr->active_id);
-
-      // surviving events now move up in the Kalman state
-      for (ArrivalWaveform_t * a = arw->active_arrivals; a != NULL; a = a->next_active) {
-	if (a->active_id > arw->et_ptr->active_id) {
-	  LogTrace(" remove arridx %d, decrementing %d", arw->et_ptr->active_id, a->active_id);
-	  a->active_id--;
-	} else {
-	  LogTrace(" remove arridx %d, not decrementing %d", arw->et_ptr->active_id, a->active_id);
-	}
-
-	if (a->idx < a->len) a->idx++;
+      for(int ci=0; ci < obs_n; ++ci) {
+	int c = chan_indices[ci];
+	kalman_remove_AR_process(k, arw->et_ptr->ar_processes[c].order, arw->et_ptr->wiggle_ids[c]);
       }
       arw->et_ptr = arw->et_ptr->next_end;
 
@@ -290,10 +333,12 @@ void init_ArrivalWaveforms(BandModel_t * p_band, double hz, int num_arrivals, co
 
     w->end_time = w->start_time + (double) w->len / hz;
 
-    copy_AR_process(&w->ar_process, &p_band->wiggle_model);
+    for(int c = 0; c < NUM_CHANS; ++c) {
+      copy_AR_process(&w->ar_processes[c], &p_band->wiggle_model[c][p_arr->phaseid-1]);
+    }
 
         double iangle;
-    if(!slowness_to_iangle(p_arr->slo, p_arr->phase, &iangle)) {
+    if(!slowness_to_iangle(p_arr->slo, p_arr->phaseid-1, &iangle)) {
       //LogTrace("iangle conversion failed from slowness %lf phaseid %d, setting default iangle 45.", p_arr->slo, phase);
       iangle = 45;
     }
@@ -347,7 +392,7 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
 
   // initialize the Kalman filter with AR noise processes for each channel
   KalmanState_t * k = calloc(1, sizeof(KalmanState_t));
-  kalman_state_init(k, obs_n, FALSE, NULL, logsum_envelope_obsfn, (obs_n == 1) ? 0 : 0.0001, NULL);
+  kalman_state_init(k, obs_n, FALSE, NULL, sum_envelope_obsfn, (obs_n == 1) ? 0 : 0.0001, NULL);
   int noise_indices[NUM_CHANS];
   setup_noise_processes(p_band, p_segment, k, noise_indices);
 
@@ -362,9 +407,7 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
 
     /* update the set of events active at this timestep (and the
        corresponding Kalman filter state). */
-    k->verbose = update_active_events(k, time, &arw);
-    if (k->verbose)
-      printf("time %d: ", t);
+    k->verbose = update_active_events(k, time, &arw, chan_indices, obs_n);
 
     // construct the observation vector
     int obs_i = 0;
@@ -391,32 +434,32 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
 }
 
 
-void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int sample_noise, int sample_wiggles) {
+void Spectral_Envelope_Model_Sample_Trace(SigModel_t * p_sigmodel, Trace_t * p_trace, int num_arrivals, const Arrival_t ** pp_arrivals, int sample_noise, int sample_wiggles) {
 
   SignalModel_t * p_model = &p_sigmodel->signal_model;
-  int siteid = p_segment->siteid;
+  int siteid = p_trace->siteid;
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
   Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t * )p_model->pv_params;
   Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
-  int band = DEFAULT_BAND;
+  int band = p_trace->band;
   BandModel_t * p_band = p_sta->bands + band;
 
-  /*make sure segment has all necessary properties defined (really just hz) and arrays allocated */
-  if (p_segment->hz == 0) p_segment->hz = DEFAULT_HZ;
-  // what to do here will depend on where the segments are coming from...
+  if (p_trace->hz == 0) p_trace->hz = DEFAULT_HZ;
 
   /* initialize lists of arriving waveforms, sorted by start time and end time
      respectively */
   ARWLists_t arw;
-  init_ArrivalWaveforms(p_band, p_segment->hz, num_arrivals, pp_arrivals, &arw);
+  init_ArrivalWaveforms(p_band, p_trace->hz, num_arrivals, pp_arrivals, &arw);
 
-  int obs_n=NUM_CHANS;
+  int obs_n=1;
+  int chan_indices[1];
+  chan_indices[0] = p_trace->chan;
 
   // initialize the Kalman filter with AR noise processes for each channel
   KalmanState_t * k = calloc(1, sizeof(KalmanState_t));
-  kalman_state_init(k, obs_n, FALSE, NULL, logsum_envelope_obsfn, 0, NULL);
+  kalman_state_init(k, obs_n, FALSE, NULL, sum_envelope_obsfn, 0, NULL);
   int noise_indices[NUM_CHANS];
-  setup_noise_processes(p_band, p_segment, k, noise_indices);
+  setup_noise_process(p_band, p_trace->chan, k, noise_indices);
 
   if (!sample_noise) {
     for (int c = 0; c < NUM_CHANS; ++c) {
@@ -432,20 +475,21 @@ void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segme
    *  Keep track of which arrivals are active at each point in time.
    *  Pass these to the KalmanState to compute a filtering distribution, thus likelihood.
    */
-  for (int t = 0; t < p_segment->len; ++t) {
-    double time = p_segment->start_time + t/p_segment->hz;
+  for (int t = 0; t < p_trace->len; ++t) {
+    double time = p_trace->start_time + t/p_trace->hz;
 
     /* update the set of events active at this timestep (and the
        corresponding Kalman filter state). */
-    update_active_events(k, time, &arw);
+    update_active_events(k, time, &arw, chan_indices, obs_n);
 
     /* if we're not sampling wiggles, then set all process noise vars
        to zero except those corresponding to the channel noise models
        (controlled by "sample_noise" above) */
     for(int i=0; (!sample_wiggles) && i < k->n; ++i) {
       if (gsl_vector_get(k->p_process_noise, i) != 0) {
-	for (int c = 0; c < NUM_CHANS; ++c) if (i == noise_indices[c]) continue;
-	gsl_vector_set(k->p_process_noise, i, 0);
+	int is_noise=FALSE;
+	for (int c = 0; c < NUM_CHANS; ++c) {if (i == noise_indices[c]) {is_noise = TRUE; break;} }
+	if (!is_noise) gsl_vector_set(k->p_process_noise, i, 0);
       }
     }
 
@@ -455,7 +499,7 @@ void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segme
 
     /* save the sampled observation */
     for (int c=0; c < obs_n; ++c) {
-      p_segment->p_channels[c]->p_bands[band]->p_data[t] =
+      p_trace->p_data[t] =
 	gsl_vector_get(p_sample_obs, c);
     }
   }
@@ -469,6 +513,22 @@ void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segme
 
 }
 
+void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int sample_noise, int sample_wiggles) {
+
+  // TODO: specify which (if any) bands to sample
+  for(int chan=0; chan < NUM_CHANS; ++chan) {
+    int band = DEFAULT_BAND;
+    Channel_t * p_chan = p_segment->p_channels[chan];
+    Trace_t * p_trace;
+    if (p_chan != NULL) {
+      p_trace = p_chan->p_bands[band];
+      assert(p_trace != NULL);
+    }
+    Spectral_Envelope_Model_Sample_Trace(p_sigmodel, p_trace, num_arrivals, pp_arrivals, sample_noise, sample_wiggles);
+  }
+}
+
+
 void Spectral_Envelope_Model_UnInit(Spectral_Envelope_Model_t * p_params) {
 
   double * coeffs;
@@ -479,10 +539,13 @@ void Spectral_Envelope_Model_UnInit(Spectral_Envelope_Model_t * p_params) {
 	if (coeffs != NULL) {
 	  free(coeffs);
 	}
-      }
-      coeffs = (p_params->p_stations + i)->bands[j].wiggle_model.coeffs;
-      if (coeffs != NULL) {
-	free(coeffs);
+
+	for(int p=0; p < NUM_TD_PHASES; ++p) {
+	  coeffs = (p_params->p_stations + i)->bands[j].wiggle_model[k][p].coeffs;
+	  if (coeffs != NULL) {
+	    free(coeffs);
+	  }
+	}
       }
     }
   }

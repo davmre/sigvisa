@@ -1,4 +1,3 @@
-
 import time
 import sys, struct
 import matplotlib
@@ -35,13 +34,14 @@ def real_to_fake_det(det):
 
 def init_sigmodel(st=1237680000, hours=24):
   et = st + 3600*hours
-  cursor = db.connect().cursor()
+  dbconn = db.connect()
+  cursor = dbconn.cursor()
   sites = dataset.read_sites(cursor)
   site_up = dataset.read_uptime(cursor, st, et)
   phasenames, phasetimedef = dataset.read_phases(cursor)
   earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
   sigmodel = learn.load_sigvisa("parameters", st, et, "spectral_envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
-  return cursor, sigmodel, earthmodel, sites
+  return cursor, sigmodel, earthmodel, sites, dbconn
 
 def log_trace(trc, filename, format):
 
@@ -124,47 +124,52 @@ def aggregate_segments(segments):
 
     while changed:
         changed = False
-        for i in range(len(segments)-1):
-            if i >= len(segments)-1:
-                break
-            for j in range(i+1, min(i+4, len(segments))):
-                if j >= len(segments):
-                    break
-                overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
+
+        n = len(segments)
+        overlaps = np.zeros((n,n))
+
+        # merge segments in order of how much they overlap
+        for i in range(n-1):
+          for j in range(i+1, n):
+            overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
+            overlaps[i,j] = overlap
+        amax = np.argmax(overlaps)
+        i = amax/n
+        j = amax % n
+        overlap,s1,e1,s2,e2 = seconds_overlap(segments[i], segments[j])
+
+        chans1 = getchans(segments[i])
+        chans2 = getchans(segments[j])
 
 
-                if overlap > aggregate_threshold:
+        if overlap > aggregate_threshold and len(set(chans1).intersection(set(chans2))) == 0:
 
-                    chans1 = getchans(segments[i])
-                    chans2 = getchans(segments[j])
+            agg_start = max(s1,s2)
+            agg_end = min(e1,e2)
 
-                    assert len(set(chans1).intersection(set(chans2))) == 0
+            del segments[j]
+            del segments[i]
 
-                    agg_start = max(s1,s2)
-                    agg_end = min(e1,e2)
-
-                    del segments[j]
-                    del segments[i]
-
-                    agg = buildsegment(chans1 + chans2, agg_start, agg_end)
+            agg = buildsegment(chans1 + chans2, agg_start, agg_end)
 
 
-                    if np.abs(agg_start - s1) > cutoff_threshold:
-                        pre_agg = buildsegment(chans1, s1, agg_start)
-                        insert_sorted(segments, pre_agg, i)
+            if np.abs(agg_start - s1) > cutoff_threshold:
+              pre_agg = buildsegment(chans1, s1, agg_start)
+              insert_sorted(segments, pre_agg, i)
 
-                    if agg_end-agg_start > min_len:
-                      insert_sorted(segments, agg, i)
+            if agg_end-agg_start > min_len:
+              insert_sorted(segments, agg, i)
 
-                    post_agg = None
-                    if np.abs(e1 - agg_end) > cutoff_threshold:
-                        post_agg = buildsegment(chans1, agg_end, e1)
-                    elif np.abs(e2 - agg_end) > cutoff_threshold:
-                        post_agg = buildsegment(chans2, agg_end, e2)
-                    if post_agg is not None:
-                        insert_sorted(segments, post_agg, i)
+            post_agg = None
+            if np.abs(e1 - agg_end) > cutoff_threshold:
+              post_agg = buildsegment(chans1, agg_end, e1)
+            elif np.abs(e2 - agg_end) > cutoff_threshold:
+              post_agg = buildsegment(chans2, agg_end, e2)
+              if post_agg is not None:
+                insert_sorted(segments, post_agg, i)
 
-                    changed = True
+            changed = True
+
     return segments
 
 def print_segments(segments):
@@ -231,7 +236,7 @@ def load_traces(cursor, stations, start_time, end_time, process=None, downsample
     traces = []
 
     for (idx, sta) in enumerate(stations):
-        sql = "select chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
+        sql = "select distinct chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
         cursor.execute(sql)
         wfdiscs = cursor.fetchall()
         wfdiscs = filter(lambda x: x[0] in ["BHE", "BHN", "BHZ", "BH1", "BH2"], wfdiscs)
@@ -484,8 +489,8 @@ def compute_narrowband_envelopes(segments):
       for band in FREQ_BANDS:
         band_data = obspy.signal.filter.bandpass(broadband_signal.data, band[0], band[1], broadband_signal.stats['sampling_rate'], corners = 4, zerophase=True)
         band_env = obspy.signal.filter.envelope(band_data)
-        band_name = "narrow_logenvelope_%1.2f_%1.2f" % (band[0], band[1])
-        band_trace = Trace(np.log(band_env), dict(broadband_signal.stats.items() + [("band", band_name)]))
+        band_name = "narrow_envelope_%1.2f_%1.2f" % (band[0], band[1])
+        band_trace = Trace(band_env, dict(broadband_signal.stats.items() + [("band", band_name)]))
         chan_bands[band_name] = band_trace
 
     # average the two horizonal components, if they're both present
@@ -508,10 +513,10 @@ def compute_narrowband_envelopes(segments):
     if chan1 is not None and chan2 is not None:
       horiz_avg = dict()
       for band in chan1.keys():
-        if not band.startswith("narrow_logenvelope"):
+        if not band.startswith("narrow_envelope"):
           continue
 
-        horiz_avg_data = ( chan1[band].data + chan2[band].data ) /2
+        horiz_avg_data = np.exp(( np.log(chan1[band].data) + np.log(chan2[band].data) ) /2)
         horiz_avg_trace = Trace(horiz_avg_data, header = chan1[band].stats.copy())
         horiz_avg_trace.stats["channel"] = "horiz_avg"
         horiz_avg[band] = horiz_avg_trace
@@ -529,7 +534,9 @@ def extract_timeslice_at_station(traces, start_time, end_time, siteid):
 
   for segment in traces:
 
-    trc = segment['BHZ']['broadband']
+    c = segment.keys()[0]
+    b = segment[c].keys()[0]
+    trc = segment[c][b]
     if trc.stats.siteid != siteid:
       continue
 
@@ -574,7 +581,6 @@ def extract_timeslice_at_station(traces, start_time, end_time, siteid):
           new_trc.stats.npts = len(new_trc.data)
 
 
-  print new_segment['BHZ']['broadband']
   return [new_segment,]
 
 def load_and_process_traces(cursor, start_time, end_time, stalist=None, downsample_factor=1):
