@@ -232,13 +232,14 @@ def main():
     parser.add_option("--max_depth", dest="max_depth", default=8000, type="float", help="exclude all events with depth greater than this value (8000)")
     parser.add_option("--min_mb", dest="min_mb", default=0, type="float", help="exclude all events with mb less than this value (0)")
     parser.add_option("--max_mb", dest="max_mb", default=10, type="float", help="exclude all events with mb greater than this value (10)")
-    parser.add_option("--start_time", dest="start_time", default=1238889600, type="float", help="exclude all events with time less than this value (1238889600)")
-    parser.add_option("--end_time", dest="end_time", default=1245456000, type="float", help="exclude all events with time greater than this value (1245456000)")
+    parser.add_option("--start_time", dest="start_time", default=0, type="float", help="exclude all events with time less than this value (0)")
+    parser.add_option("--end_time", dest="end_time", default=1237680000, type="float", help="exclude all events with time greater than this value (1237680000)")
+    parser.add_option("-o", "--outfile", dest="outfile", default="geog.pdf", type="str", help="name of output file (geog.pdf)")
 
     (options, args) = parser.parse_args()
 
 #    pp = PdfPages(os.path.join(pdf_dir, "geog.pdf"))
-    pp = PdfPages("geog.pdf")
+    pp = PdfPages(options.outfile)
 
     cursor = db.connect().cursor()
     sites = read_sites(cursor)
@@ -277,8 +278,9 @@ def main():
       ev_lonlat = events[i, 1:3]
 
       for i,ev in enumerate(ev_lonlat):
-        draw_events(bmap, ((ev[0], ev[1]),), marker="o", ms=2, mfc="none", mec="yellow", mew=1)
-      draw_events(bmap, (site_lonlat,),  marker="x", ms=5, mfc="none", mec="purple", mew=1)
+        print "drawing event at (%.2f, %.2f)" % (ev[0], ev[1])
+        draw_events(bmap, ((ev[0], ev[1]),), marker=".", ms=1, mfc="none", alpha=0.4, mec="red", mew=1)
+      draw_events(bmap, (site_lonlat,),  marker="x", ms=4, mfc="none", mec="purple", mew=2)
 
       plt.title("siteid %d azi (%d, %d) dist (%d, %d)\n mb (%.2f, %.2f) depth (%d, %d)" % (siteid, options.min_azi, options.max_azi, options.min_dist, options.max_dist, options.min_mb, options.max_mb, options.min_depth, options.max_depth))
 
