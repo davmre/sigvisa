@@ -16,6 +16,7 @@ from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
+from optparse import OptionParser
 
 import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
@@ -129,8 +130,6 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
     st = tr.stats.starttime_unix
     nf = tr.stats.noise_floor
 
-    diff = subtract_traces(tr, tmpl)
-
     wiggles = []
     for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
         start_wiggle = arrs["arrivals"][phase_idx] + 20
@@ -142,9 +141,10 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
             next_phase_idx = np.float('inf')
         for t in range(100):
             end_idx = start_idx + np.ceil(srate*t)
-            if (end_idx >= next_phase_idx) or (tmpl[end_idx] - nf < threshold):
+            if (end_idx >= next_phase_idx) or (tmpl[end_idx]/nf < exp(threshold) ):
                 break
-        wiggle = diff.data[start_idx:end_idx]
+
+        wiggle = tr[start_idx:end_idx] / tmpl[start_idx:end_idx]
         wiggles.append(wiggle)
 
     return wiggles
@@ -249,11 +249,12 @@ def find_starting_params(arr, smoothed):
     appropriate for passing to a scipy optimization function."""
 
     smoothed = Trace(np.log(smoothed.data), smoothed.stats.copy())
+    smoothed.stats.noise_floor = np.log(smoothed.stats.noise_floor)
+    noise_floor = smoothed.stats.noise_floor
 
     arr_bounds = [ (0, 15), (0, 15) , (0, 10), (0, 15), (-.2, 0) ]
     arr_bounds_fixed_peak = [ (0, 15), (0, 10), (-.15, 0) ]
 
-    noise_floor = smoothed.stats.noise_floor
     nf = lambda t : noise_floor
     accept_p = False
     accept_s = False
@@ -306,6 +307,16 @@ def find_starting_params(arr, smoothed):
     start_params = start_params[:, 1:]
     return start_params, phaseids, bounds, bounds_fp
 
+def load_template(cursor, evid, chan, band, runid, siteid):
+    sql_query = "select l.time, fit.peak_delay, fit.peak_height, fit.peak_decay, fit_coda_height, fit.coda_decay, fit.acost, pid.phaseid from sigvisa_coda_fits fit, leb_assoc leba, leb_origin lebo, static_siteid sid, static_phaseid pid where lebo.orid=leba.orid and leba.arid=fit.arid and leba.phase=pid.phase and l.sta=sid.sta and lebo.evid=%d and fit.chan='%s' and fit.band='%s' and fit.runid=%d and sid.id=%d" % (evid, chan, band, runid, siteid)
+    cursor.execute(sql_query)
+    rows = np.array(cursor.fetchall())
+    fit_params = rows[:, 0:6]
+    phaseids = rows[:, 7]
+    fit_cost = rows[0,6]
+    return fit_params, phaseids, fit_cost
+
+
 def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs", by_phase=False, iid=True):
 
     start_params, phaseids, bounds, bounds_fp = find_starting_params(arrs, smoothed)
@@ -339,16 +350,20 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
         f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
         start_cost = f(start_params)
         print "start params cost (w/ smoothed data and iid noise)", start_cost
-        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
+        if pp is not None:
+            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
         best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
-        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
+        if pp is not None:
+            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
 
     else:
         f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
         start_cost = f(start_params)
-        plot_channels_with_pred(sigmodel, pp, env, assem_params(start_params), phaseids, None, None, title = "start orig (cost %f, evid %s)" % (start_cost, evid))
+        if pp is not None:
+            plot_channels_with_pred(sigmodel, pp, env, assem_params(start_params), phaseids, None, None, title = "start orig (cost %f, evid %s)" % (start_cost, evid))
         best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
-        plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
+        if pp is not None:
+            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
 
     return assem_params(best_params), phaseids, best_cost
 
@@ -602,18 +617,28 @@ def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_envelop
 
 def main():
 # boilerplate initialization of various things
-    siteid = int(sys.argv[1])
-    method="bfgs"
-    if len(sys.argv) > 2:
-        method = sys.argv[2]
+
+
+    parser = OptionParser()
+
+    parser.add_option("-s", "--siteid", dest="siteid", default=None, type="int", help="siteid of station for which to fit templates")
+    parser.add_option("-m", "--method", dest="method", default="simplex", type="str", help="fitting method (iid)")
+    parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid")
+    parser.add_option("-e", "--evid", dest="siteid", default=None, type="int", help="event ID")
+    parser.add_option("--plot_fits", dest="plot_fits", default=False, action="store_true", help="save plots")
+
+    (options, args) = parser.parse_args()
+
+    siteid = options.siteid
+    method = options.method
+    runid = options.runid
+    evid = options.evid
+
     iid=True
     by_phase=False
     snr_threshold=2
-    evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5"
-    runid = None
-    if len(sys.argv) > 4:
-        evid_condition = "and evid=%d" % (int(sys.argv[3]))
-        runid = int(sys.argv[4])
+
+    evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5" if evid is None else "and evid=%d" % (evid)
 
     cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
@@ -654,9 +679,13 @@ def main():
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
 
                 for chan in chans:
-                    fname = os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
-                    print "writing to %s..." % (fname,)
-                    pp = PdfPages(fname)
+
+                    if options.plot_fits:
+                        fname = os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
+                        print "writing to %s..." % (fname,)
+                        pp = PdfPages(fname)
+                    else:
+                        pp = None
                     tr = arrival_segment[chan][band]
                     smoothed = smoothed_segment[chan][band]
 
@@ -665,10 +694,12 @@ def main():
                     time_len = len(tr.data)/srate
                     et = st + time_len
 
-
                     # DO THE FITTING
-                    fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, iid=iid, by_phase=by_phase)
-                    print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
+                    if method == "load":
+                        fit_params, phaseids, fit_cost = load_template(cursor, evid, chan, short_band, runid, siteid)
+                    else:
+                        fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, iid=iid, by_phase=by_phase)
+                        print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
 
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
                     wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
@@ -689,20 +720,24 @@ def main():
                     if by_phase:
                         s.append('byphase')
                     method_str = '_'.join(s)
-                    for (i, arid) in enumerate(arrs["all_arrival_arids"]):
-                        sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
-                        print sql_query
-                        cursor.execute(sql_query)
+                    if method != "load":
+                        for (i, arid) in enumerate(arrs["all_arrival_arids"]):
+                            sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+                            print sql_query
+                            cursor.execute(sql_query)
                     dbconn.commit()
-                    pp.close()
+                    if pp is not None:
+                        pp.close()
 
         except KeyboardInterrupt:
             dbconn.commit()
-            pp.close()
+            if pp is not None:
+                pp.close()
             raise
         except:
             dbconn.commit()
-            pp.close()
+            if pp is not None:
+                pp.close()
             print traceback.format_exc()
             continue
 
