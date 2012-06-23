@@ -315,8 +315,8 @@ def load_template(cursor, evid, chan, band, runid, siteid):
         if row[2] is None:
             row[2] = row[4]
             row[3] = 1
-            
-    fit_params = rows[:, 0:6]
+      
+    fit_params = np.asfarray(rows[:, 0:6])
     phaseids = list(rows[:, 7])
     fit_cost = rows[0,6]
     return fit_params, phaseids, fit_cost
@@ -655,6 +655,8 @@ def main():
 #5301405
 # and lebo.evid=5301449
 
+
+
     print sql_query
     cursor.execute(sql_query)
     events = np.array(cursor.fetchall())
@@ -674,6 +676,13 @@ def main():
 
     for event in events:
         evid = int(event[EV_EVID_COL])
+
+        if len(events)>1:
+            cmd_str = "python2.6 -m priors.coda_decay.fit_shape_params -r %d -e %d %s " % (runid, evid, " ".join(sys.argv[1:]))
+            print "running", cmd_str
+            os.system(cmd_str)
+            continue
+
         distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
         azimuth = utils.geog.azimuth((sites[siteid-1][0], sites[siteid-1][1]), (event[EV_LON_COL], event[EV_LAT_COL]))
 
