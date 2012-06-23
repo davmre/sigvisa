@@ -12,7 +12,7 @@ else:
 
 cursor = database.db.connect().cursor()
 sites = read_sites(cursor)
-cursor.execute("select distinct lebo.lon, lebo.lat, lebo.depth, lebo.evid from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit where leba.arid=fit.arid and leba.orid=lebo.orid and l.arid=leba.arid and l.sta='%s' and fit.acost<10 and leba.phase='P' and (fit.runid=3 or fit.runid=4)" % (sta))
+cursor.execute("select distinct lebo.lon, lebo.lat, lebo.depth, lebo.evid from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, sigvisa_wiggle_wfdisc wf where leba.arid=fit.arid and leba.orid=lebo.orid and l.arid=leba.arid and l.sta='%s' and fit.acost<10 and leba.phase='P' and (fit.runid=3 or fit.runid=4) and wf.arid=fit.arid and wf.band='1.00_1.50' and wf.chan='BHZ'" % (sta))
 events = cursor.fetchall()
 
 evpairs = itertools.combinations(events, 2)
