@@ -256,7 +256,7 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
                     noise.data = noise.data[noise.stats.sampling_rate*5 : -noise.stats.sampling_rate*5]
 
                     print "learning for band %s chan %s" % (band, chan)
-                    a.stats.noise_floor = np.mean(np.log(noise.data))
+                    a.stats.noise_floor = np.mean(noise.data)
                     a.stats.smooth_noise_floor = a.stats.noise_floor
                     if learn_noise:
                         ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
@@ -441,8 +441,7 @@ def logsub_noise(log_height, log_noise):
     return np.log ( np.exp(log_height) - np.exp(log_noise) )
 
 def subtract_traces(tr, to_subtract):
-    l = np.min([len(tr.data), len(to_subtract.data)])
-
+    l = np.min([len(tr.data), len(to_subtract.data)]
     newdata = tr.data[:l] - to_subtract.data[:l]
     newtrace = Trace(newdata, header=tr.stats.copy())
     newtrace.stats.npts = len(newtrace.data)
