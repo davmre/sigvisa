@@ -441,7 +441,7 @@ def logsub_noise(log_height, log_noise):
     return np.log ( np.exp(log_height) - np.exp(log_noise) )
 
 def subtract_traces(tr, to_subtract):
-    l = np.min([len(tr.data), len(to_subtract.data)]
+    l = np.min([len(tr.data), len(to_subtract.data)])
     newdata = tr.data[:l] - to_subtract.data[:l]
     newtrace = Trace(newdata, header=tr.stats.copy())
     newtrace.stats.npts = len(newtrace.data)

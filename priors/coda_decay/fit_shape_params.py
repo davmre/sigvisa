@@ -141,7 +141,7 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
             next_phase_idx = np.float('inf')
         for t in range(100):
             end_idx = start_idx + np.ceil(srate*t)
-            if (end_idx >= next_phase_idx) or (tmpl[end_idx]/nf < exp(threshold) ):
+            if (end_idx >= next_phase_idx) or (tmpl[end_idx]/nf < np.exp(threshold) ):
                 break
 
         wiggle = tr[start_idx:end_idx] / tmpl[start_idx:end_idx]
@@ -308,14 +308,27 @@ def find_starting_params(arr, smoothed):
     return start_params, phaseids, bounds, bounds_fp
 
 def load_template(cursor, evid, chan, band, runid, siteid):
-    sql_query = "select l.time, fit.peak_delay, fit.peak_height, fit.peak_decay, fit_coda_height, fit.coda_decay, fit.acost, pid.phaseid from sigvisa_coda_fits fit, leb_assoc leba, leb_origin lebo, static_siteid sid, static_phaseid pid where lebo.orid=leba.orid and leba.arid=fit.arid and leba.phase=pid.phase and l.sta=sid.sta and lebo.evid=%d and fit.chan='%s' and fit.band='%s' and fit.runid=%d and sid.id=%d" % (evid, chan, band, runid, siteid)
+    sql_query = "select l.time, fit.peak_delay, fit.peak_height, fit.peak_decay, fit.coda_height, fit.coda_decay, fit.acost, pid.id from sigvisa_coda_fits fit, leb_assoc leba, leb_origin lebo, static_siteid sid, static_phaseid pid, leb_arrival l where lebo.orid=leba.orid and leba.arid=fit.arid and leba.phase=pid.phase and l.arid=leba.arid and l.sta=sid.sta and lebo.evid=%d and fit.chan='%s' and fit.band='%s' and fit.runid=%d and sid.id=%d" % (evid, chan, band, runid, siteid)
     cursor.execute(sql_query)
     rows = np.array(cursor.fetchall())
+    for (i, row) in enumerate(rows):
+        if row[2] is None:
+            row[2] = row[4]
+            row[3] = 1
+            
     fit_params = rows[:, 0:6]
-    phaseids = rows[:, 7]
+    phaseids = list(rows[:, 7])
     fit_cost = rows[0,6]
     return fit_params, phaseids, fit_cost
 
+def set_ar_processes(sigmodel, tr, phaseids):
+    c = sigvisa.canonical_channel_num(tr.stats.channel)
+    b = sigvisa.canonical_band_num(tr.stats.band)
+    arm = tr.stats.noise_model
+    sigmodel.set_noise_process(tr.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
+    print "set noise process", arm.c, arm.em.std**2, np.array(arm.params)
+    for phaseid in phaseids:
+        sigmodel.set_wiggle_process(tr.stats.siteid, b, c, int(phaseid), 1, 0.0001, np.array(arm.params))
 
 def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs", by_phase=False, iid=True):
 
@@ -334,16 +347,9 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
 
     print "start params", start_params
 
-    c = sigvisa.canonical_channel_num(smoothed.stats.channel)
-    b = sigvisa.canonical_band_num(smoothed.stats.band)
-    arm = smoothed.stats.noise_model
-    sarm = smoothed.stats.smooth_noise_model
-    print "setting noise and wiggles for chan %d band %d" % (c, b)
-    sigmodel.set_noise_process(smoothed.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-    for phaseid in phaseids:
-        sigmodel.set_wiggle_process(smoothed.stats.siteid, b, c, int(phaseid), 1, 0.0001, np.array(arm.params))
-
     #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
+
+    set_ar_processes(sigmodel, env, phaseids)
 
     if iid:
     # learn from smoothed data w/ iid noise
@@ -624,7 +630,7 @@ def main():
     parser.add_option("-s", "--siteid", dest="siteid", default=None, type="int", help="siteid of station for which to fit templates")
     parser.add_option("-m", "--method", dest="method", default="simplex", type="str", help="fitting method (iid)")
     parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid")
-    parser.add_option("-e", "--evid", dest="siteid", default=None, type="int", help="event ID")
+    parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
     parser.add_option("--plot_fits", dest="plot_fits", default=False, action="store_true", help="save plots")
 
     (options, args) = parser.parse_args()
@@ -697,12 +703,18 @@ def main():
                     # DO THE FITTING
                     if method == "load":
                         fit_params, phaseids, fit_cost = load_template(cursor, evid, chan, short_band, runid, siteid)
+                        set_ar_processes(sigmodel, tr, phaseids)
+                        fit_cost = fit_cost * time_len
                     else:
                         fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, iid=iid, by_phase=by_phase)
-                        print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
+                        if pp is not None:
+                            print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
 
+                    print "fit params", fit_params
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
                     wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
+                    print "extracted wiggles", wiggles
+
                     for (pidx, phaseid) in enumerate(phaseids):
                         if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
                             continue

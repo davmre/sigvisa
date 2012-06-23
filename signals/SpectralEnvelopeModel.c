@@ -101,7 +101,7 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
   // calculate length of envelope to generate
   p_trace->len = (long)((MIN_LOGENV_CUTOFF- p_arrival->amp) / p_arrival->coda_decay * p_trace->hz);
 
-  if (p_trace->len > 800*(p_trace->hz)) {
+  if (p_trace->len > 800*(p_trace->hz) || p_trace->len < 0) {
     LogTrace("WARNING: truncating arrival length from %d to %d, (length based on amp %f, coda_decay %f, hz %f)", p_trace->len, (int) ((500)*(p_trace->hz)), p_arrival->amp, p_arrival->coda_decay, (p_trace->hz));
     p_trace->len = 500*p_trace->hz;
   }
