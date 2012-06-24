@@ -57,7 +57,7 @@ def azi_difference(azi1, azi2):
     return d
 
 def sta_to_siteid(sta, cursor):
-    cursor.execute("select id from static_siteid where sta=%s" % (sta))
+    cursor.execute("select id from static_siteid where sta='%s'" % (sta))
     return int(cursor.fetchone()[0])
 
 def siteid_to_sta(siteid, cursor):
@@ -275,16 +275,16 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
                     a.stats.smooth_noise_floor = a.stats.noise_floor
                     if learn_noise:
                         ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
-                        print ar_learner.c
+#                        print ar_learner.c
                         #arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
                         params, std = ar_learner.yulewalker(17)
-                        print params, "std", std
+#                        print params, "std", std
                         em = ErrorModel(0, std)
                         a.stats.noise_model = ARModel(params, em, c=ar_learner.c)
 
                         smoothed_noise_data = smooth(noise.data, window_len=300, window="hamming")
                         ar_learner = ARLearner(smoothed_noise_data, noise.stats.sampling_rate)
-                        print ar_learner.c
+#                        print ar_learner.c
                         params, std = ar_learner.yulewalker(17)
                         em = ErrorModel(0, std)
                         a.stats.smooth_noise_model = ARModel(params, em, c=ar_learner.c)

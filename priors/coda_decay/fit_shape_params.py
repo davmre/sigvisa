@@ -21,6 +21,7 @@ from optparse import OptionParser
 import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
 from priors.coda_decay.plot_coda_decays import *
+from priors.coda_decay.train_wiggles import *
 
 def arrival_peak_offset(trace, window_start_offset, window_end_offset = None):
     srate = trace.stats.sampling_rate
@@ -316,9 +317,12 @@ def load_template(cursor, evid, chan, band, runid, siteid):
             row[2] = row[4]
             row[3] = 1
 
-    fit_params = np.asfarray(rows[:, 0:6])
-    phaseids = list(rows[:, 7])
-    fit_cost = rows[0,6]
+    try:
+        fit_params = np.asfarray(rows[:, 0:6])
+        phaseids = list(rows[:, 7])
+        fit_cost = rows[0,6]
+    except IndexError:
+        return None, None, None
     return fit_params, phaseids, fit_cost
 
 def set_ar_processes(sigmodel, tr, phaseids):
@@ -329,7 +333,7 @@ def set_ar_processes(sigmodel, tr, phaseids):
     for phaseid in phaseids:
         sigmodel.set_wiggle_process(tr.stats.siteid, b, c, int(phaseid), 1, 0.0001, np.array(arm.params))
 
-def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs", by_phase=False, iid=True):
+def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs", by_phase=False, wiggles=None, cursor=None, init_runid=None):
 
     start_params, phaseids, bounds, bounds_fp = find_starting_params(arrs, smoothed)
     narrs = len(arrs["arrivals"])
@@ -350,25 +354,40 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
 
     set_ar_processes(sigmodel, env, phaseids)
 
-    if iid:
-    # learn from smoothed data w/ iid noise
-        f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
-        start_cost = f(start_params)
-        print "start params cost (w/ smoothed data and iid noise)", start_cost
-        if pp is not None:
-            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
+    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
+    start_cost = f(start_params)
+    print "start params cost (w/ smoothed data and iid noise)", start_cost
+    if pp is not None:
+        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
+
+    best_params = None
+    if init_runid is not None:
+        best_params, phaseids_loaded, fit_cost = load_template(cursor, int(evid), env.stats.channel, env.stats.short_band, init_runid, env.stats.siteid)
+        best_params = best_params[:, 1:]
+        if fix_peak:
+            best_params = remove_peak(best_params)
+        best_params = best_params.flatten()
+        print "loaded"
+        print_params(assem_params(best_params))
+
+        if phaseids_loaded != phaseids:
+            best_params = None
+        elif pp is not None:
+            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "loaded smoothed iid (cost %f, evid %s)" % (start_cost, evid))
+
+    if wiggles is None or best_params is None:
+        # learn from smoothed data w/ iid noise
         best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
         if pp is not None:
             plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
 
-    else:
+    if wiggles is not None:
+        load_wiggle_models(cursor, sigmodel, wiggles)
         f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
-        start_cost = f(start_params)
+        print "loaded cost is", f(best_params)
+        best_params, best_cost = optimize(f, best_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
         if pp is not None:
-            plot_channels_with_pred(sigmodel, pp, env, assem_params(start_params), phaseids, None, None, title = "start orig (cost %f, evid %s)" % (start_cost, evid))
-        best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
-        if pp is not None:
-            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best orig (cost %f, evid %s)" % (best_cost, evid))
+            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid))
 
     return assem_params(best_params), phaseids, best_cost
 
@@ -630,7 +649,9 @@ def main():
     parser.add_option("-m", "--method", dest="method", default="simplex", type="str", help="fitting method (iid)")
     parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid")
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
-    parser.add_option("--plot_fits", dest="plot_fits", default=False, action="store_true", help="save plots")
+    parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load (default is to ignore wiggle model and do iid fits)")
+    parser.add_option("--init_runid", dest="init_runid", default=None, type="int", help="initialize template fitting with results from this runid")
+    parser.add_option("-p", "--plot", dest="plot", default=False, action="store_true", help="save plots")
 
     (options, args) = parser.parse_args()
 
@@ -694,7 +715,7 @@ def main():
 
                 for chan in chans:
 
-                    if options.plot_fits:
+                    if options.plot:
                         fname = os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
                         print "writing to %s..." % (fname,)
                         pp = PdfPages(fname)
@@ -711,10 +732,13 @@ def main():
                     # DO THE FITTING
                     if method == "load":
                         fit_params, phaseids, fit_cost = load_template(cursor, evid, chan, short_band, runid, siteid)
+                        if fit_params is None:
+                            print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, runid, chan, short_band)
+                            continue
                         set_ar_processes(sigmodel, tr, phaseids)
                         fit_cost = fit_cost * time_len
                     else:
-                        fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, iid=iid, by_phase=by_phase)
+                        fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, wiggles=options.wiggles, by_phase=by_phase, cursor=cursor, init_runid=options.init_runid)
                         if pp is not None:
                             print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
 

@@ -490,7 +490,8 @@ def compute_narrowband_envelopes(segments):
         band_data = obspy.signal.filter.bandpass(broadband_signal.data, band[0], band[1], broadband_signal.stats['sampling_rate'], corners = 4, zerophase=True)
         band_env = obspy.signal.filter.envelope(band_data)
         band_name = "narrow_envelope_%1.2f_%1.2f" % (band[0], band[1])
-        band_trace = Trace(band_env, dict(broadband_signal.stats.items() + [("band", band_name)]))
+        short_band = "%1.2f_%1.2f" % (band[0], band[1])
+        band_trace = Trace(band_env, dict(broadband_signal.stats.items() + [("band", band_name)] + [("short_band", short_band)]))
         chan_bands[band_name] = band_trace
 
     # average the two horizonal components, if they're both present

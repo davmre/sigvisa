@@ -48,7 +48,7 @@ def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, hor
 def plot_envelopes_with_pred(sigmodel, axes, trace, phaseids, params, sample=False):
     srate = trace.stats['sampling_rate']
 
-    synth_trace = get_template(sigmodel, trace, phaseids, params)
+    synth_trace = get_template(sigmodel, trace, phaseids, params, sample=sample)
     traces = [trace, synth_trace]
 
     formats = ["k-","g-"]
