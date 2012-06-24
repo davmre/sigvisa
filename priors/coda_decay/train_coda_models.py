@@ -41,7 +41,7 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
     gpd = None
     gpt = None
 
-    best_params = [sigma_n, sigma_f, w]
+    best_params = [sigma_n, sigma_f, w*2]
     posdef = False
     while not posdef:
         try:
@@ -53,12 +53,15 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
             best_params[0] *= 1.5
             print "lin alg error, upping sigma_n to %f and tryign again" % (best_params[0])
 
-    best_params = [sigma_n, sigma_f, w]
+    best_params = [sigma_n, sigma_f, w/50]
     posdef = False
     while not posdef:
         try:
             # use gaussian covariance with features given by the cube roots of distance and depth, and azi/20
             distfn = lambda ad1, ad2: np.sqrt( abs(ad1[0]-ad2[0])**(2.0/3) + abs(azi_difference(ad1[1], ad2[1])/20)**2 + abs(ad1[2]-ad2[2])**(2.0/3))
+            # use gaussian covariance with features given by the cube roots of distance and depth, and azi/20
+            distfn = lambda ad1, ad2: abs(ad1[0]-ad2[0])**(1.0/3)
+
             print "training distance/azimuth-based GP w/ params", best_params #, "giving ll", v
             gp_ad = GaussianProcess(Xad, y, kernel="distfn", kernel_params=best_params, kernel_extra=distfn, ignore_pos_def_errors=False)
             posdef = True
@@ -79,6 +82,23 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
         else:
             regional_dist.append(d)
             regional_y.append(dy)
+
+    if pp is not None:
+        plt.figure()
+        plt.title(label + " GP_AD")
+        plt.xlabel("distance (km)")
+        plt.ylabel("")
+        ds = np.linspace(0, 10000, 150)
+        pred = np.array([ gp_ad.predict(np.array((d, 0, 0))) for d in ds])
+        try:
+            plt.plot(ds, pred, "k-")
+            plt.plot(np.concatenate([regional_dist, tele_dist]), np.concatenate([regional_y, tele_y]), 'ro')
+            pp.savefig()
+        except:
+            import pdb
+            pdb.set_trace()
+
+
 
     try:
         regional_model = utils.LinearModel.LinearModel("regional", ["distance"],
@@ -122,21 +142,26 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
     tele_var = np.var(tele_y)
 
     if pp is not None:
-        plt.figure()
-        plt.title(label + " regional gaussian mean %f sigma")
-        n, bins, patches = plt.hist(regional_y, normed=1)
-        bincenters = 0.5*(bins[1:]+bins[:-1])
-        y = mlab.normpdf( bincenters, regional_mean, np.sqrt(regional_var))
-        plt.plot(bincenters, y, 'r--', linewidth=1)
-        pp.savefig()
-
-        plt.figure()
-        plt.title(label + " tele gaussian")
-        n, bins, patches = plt.hist(tele_y, normed=1)
-        bincenters = 0.5*(bins[1:]+bins[:-1])
-        y = mlab.normpdf( bincenters, tele_mean, np.sqrt(tele_var))
-        plt.plot(bincenters, y, 'r--', linewidth=1)
-        pp.savefig()
+        try:
+            plt.figure()
+            plt.title(label + " regional gaussian mean %f sigma")
+            n, bins, patches = plt.hist(regional_y, normed=1)
+            bincenters = 0.5*(bins[1:]+bins[:-1])
+            y = mlab.normpdf( bincenters, regional_mean, np.sqrt(regional_var))
+            plt.plot(bincenters, y, 'r--', linewidth=1)
+            pp.savefig()
+        except:
+            pass
+        try:
+            plt.figure()
+            plt.title(label + " tele gaussian")
+            n, bins, patches = plt.hist(tele_y, normed=1)
+            bincenters = 0.5*(bins[1:]+bins[:-1])
+            y = mlab.normpdf( bincenters, tele_mean, np.sqrt(tele_var))
+            plt.plot(bincenters, y, 'r--', linewidth=1)
+            pp.savefig()
+        except:
+            pass
 
 
 #    print "outputs", y
@@ -155,7 +180,7 @@ class CodaModel:
 
     MODEL_TYPE_GP_LOC, MODEL_TYPE_GP_AD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(4)
 
-    def __init__(self, fit_data, band_dir, phaseids, chan, ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, sigma_f = [.001, .5, .5], w = [500, 500, 500], sigma_n = [0.00001, 0.5, 0.5]):
+    def __init__(self, fit_data, band_dir, phaseids, chan, ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, sigma_f = [.001, .5, .5], w = [500, 500, 500], sigma_n = [0.00001, 0.5, 0.5], debug=True):
 
         # assume that either earthmodel and sigmodel are both given, or neither given
         if sigmodel is None:
@@ -176,7 +201,7 @@ class CodaModel:
 
         outfile = os.path.join(band_dir, "model_fits_%s_%s.pdf" % (":".join([str(p) for p in phaseids]), chan))
         pp = None
-        if not os.path.exists(outfile):
+        if debug:
             pp = PdfPages(outfile)
             print "saving plots to", outfile
 
@@ -204,23 +229,23 @@ class CodaModel:
         if distance is None:
             distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
         if model_type == self.MODEL_TYPE_GP_LOC:
-            return model_set['gp_loc'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
+            return float(model_set['gp_loc'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL])))
         elif model_type == self.MODEL_TYPE_GP_AD:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return model_set['gp_ad'].predict((distance, azimuth, ev[EV_DEPTH_COL]))
+            return float(model_set['gp_ad'].predict((distance, azimuth, ev[EV_DEPTH_COL])))
         elif model_type == self.MODEL_TYPE_LINEAR:
             if distance < 1000:
                 model = model_set['regional_linear']
             else:
                 model = model_set['tele_linear']
-            return model[distance]
+            return float(model[distance])
         elif model_type == self.MODEL_TYPE_GAUSSIAN:
             if distance < 1000:
                 (mean, var) = model_set['regional_gaussian']
             else:
                 (mean, var) = model_set['tele_gaussian']
-            return mean
+            return float(mean)
 
     def predict_decay(self, ev, model_type, distance = None, azimuth=None):
         return self.predict(ev, model_type, self.decay_models, distance=distance, azimuth=azimuth)

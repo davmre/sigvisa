@@ -60,30 +60,18 @@ class ARLearner:
         self.std[p] = std
         return (params, std)
 
-
-    ############# WARNING: EVERYTHING BELOW IS BROKEN (since norm_data is now a list) ########
-    def psd(self):
-        y, x = matplotlib.mlab.psd(self.norm_data, len(self.norm_data), 1)
-        return (x*self.sf, np.log(y))
-
-    def segment(self, n, j):
+    def segment(self, data, n, j):
         assert j < n
-        l = len(self.norm_data)
-        return self.norm_data[(j*l)/n:((j+1)*l)/n]
+        l = len(data)
+        return data[(j*l)/n:((j+1)*l)/n]
 
-    def aic(self, p, const=500):
-        lnr = ARLearner(self.norm_data)
-        params, std = lnr.yulewalker(p)
-        em = model.ErrorModel(0, std)
-        arm = model.ARModel(params, em)
-        return 2*(len(self.norm_data)/const)*p-2*arm.lklhood(self.norm_data)
-
-# use cross-validation to select the best model
+    # use cross-validation to select the best model
     def cv_select(self, max_p=30, skip=2):
         best_ll = np.float('-inf')
         best_p = 0
         for p in np.array(range(0, max_p, skip))+1:
             ll = self.crossval(p)
+            print " model order %d gives ll %f" % (p, ll)
             if ll > best_ll:
                 best_ll = ll
                 best_p = p
@@ -95,23 +83,38 @@ class ARLearner:
 # n-fold crossvalidation
     def crossval(self, p, n=5):
         sum_L = 0.0
-        l = len(self.norm_data)
-        d_segs = {}
-        for i in range(n):
-            d_segs[i] = self.segment(n, i)
 
         for i in range(n):
-            training_d = np.array(())
-            for j in range(n):
-                if j != i:
-                    training_d = np.concatenate([training_d, d_segs[j]])
-            lnr = ARLearner(training_d)
+            training_list = []
+            test_list = []
+            for d in self.norm_data:
+                training_slice = np.array(())
+                for j in range(n):
+                    if j != i:
+                        training_slice = np.concatenate([training_slice, self.segment(d, n, j)])
+                training_list.append(training_slice)
+                test_list.append(self.segment(d, n, i))
+
+            lnr = ARLearner(training_list)
             ar, std = lnr.yulewalker(p)
             em = model.ErrorModel(0, std)
             arm = model.ARModel(ar, em)
-            test_d = d_segs[i]
-            sum_L += arm.lklhood(test_d)
+            sum_L += arm.lklhood(test_list)
         return sum_L
+
+
+    ############# WARNING: EVERYTHING BELOW IS BROKEN (since norm_data is now a list) ########
+    def psd(self):
+        y, x = matplotlib.mlab.psd(self.norm_data, len(self.norm_data), 1)
+        return (x*self.sf, np.log(y))
+
+    def aic(self, p, const=500):
+        lnr = ARLearner(self.norm_data)
+        params, std = lnr.yulewalker(p)
+        em = model.ErrorModel(0, std)
+        arm = model.ARModel(params, em)
+        return 2*(len(self.norm_data)/const)*p-2*arm.lklhood(self.norm_data)
+
 
     def psdcrossval(self, p, n=5):
         sum_L = 0.0

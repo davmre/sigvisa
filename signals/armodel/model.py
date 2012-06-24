@@ -33,17 +33,23 @@ class ARModel:
 
     # likelihood in log scale
     def lklhood(self, data):
+        if not isinstance(data, (list, tuple)):
+            data = [data,]
+
         prob = 0
-        for t in range(len(data)):
-            expected = self.c
-            for i in range(self.p):
-                if t > i:
-                    expected += self.params[i] * (data[t-i-1] - self.c)
-            actual = data[t]
-            error = actual - expected
-            prob += self.em.lklhood(error)
-        # normalize the sum of probability (no dependency on p value)
-#        return prob/(len(data)-self.p)*len(data)
+        for d in data:
+            d_prob = 0
+            for t in range(len(d)):
+                expected = self.c
+                for i in range(self.p):
+                    if t > i:
+                        expected += self.params[i] * (d[t-i-1] - self.c)
+                actual = d[t]
+                error = actual - expected
+                d_prob += self.em.lklhood(error)
+            # normalize the sum of probability (no dependency on p value)
+            prob += d_prob/(len(d)-self.p)*len(d)
+
         return prob
 
     #given data as argument,
