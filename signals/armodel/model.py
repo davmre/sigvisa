@@ -48,7 +48,8 @@ class ARModel:
                 error = actual - expected
                 d_prob += self.em.lklhood(error)
             # normalize the sum of probability (no dependency on p value)
-            prob += d_prob/(len(d)-self.p)*len(d)
+            # prob += d_prob/(len(d)-self.p)*len(d)
+            prob += d_prob
 
         return prob
 
