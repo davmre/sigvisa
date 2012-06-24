@@ -56,6 +56,21 @@ def azi_difference(azi1, azi2):
         d = d-360
     return d
 
+def sta_to_siteid(sta, cursor):
+    cursor.execute("select id from static_siteid where sta=%s" % (sta))
+    return int(cursor.fetchone()[0])
+
+def siteid_to_sta(siteid, cursor):
+    cursor.execute("select sta from static_siteid where id=%d" % (siteid))
+    return cursor.fetchone()[0]
+
+def phasename_to_id(phase):
+    for (phases, n) in ((P_PHASES, P_PHASEIDS), (S_PHASES, S_PHASEIDS)):
+        if phase in phases:
+            i = phases.index(phase)
+            return n[i]
+    raise Exception("unrecognized phases %s" % (phase,))
+
 def phaseid_to_name(phaseid):
     for (ids, n) in ((P_PHASEIDS, P_PHASES), (S_PHASEIDS, S_PHASES)):
         if phaseid in ids:
