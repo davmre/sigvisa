@@ -41,7 +41,7 @@ void convert_arrivals(PyObject * py_phaseids_list, PyObject * py_params_array, i
       (*p_arrs)[i].phaseid = PyInt_AsLong(PyList_GET_ITEM(py_phaseids_list, i));
       (*pp_arrs)[i] = (*p_arrs)+i;
 
-      printf("converted %f %f %f %f %f %f %d \n", (*p_arrs)[i].time, (*p_arrs)[i].peak_time, (*p_arrs)[i].peak_amp, (*p_arrs)[i].peak_decay, (*p_arrs)[i].amp, (*p_arrs)[i].coda_decay, (*p_arrs)[i].phaseid);
+      //            printf("converted %f %f %f %f %f %f %d \n", (*p_arrs)[i].time, (*p_arrs)[i].peak_time, (*p_arrs)[i].peak_amp, (*p_arrs)[i].peak_decay, (*p_arrs)[i].amp, (*p_arrs)[i].coda_decay, (*p_arrs)[i].phaseid);
     }
 
 }
