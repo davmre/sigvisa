@@ -315,7 +315,7 @@ def load_template(cursor, evid, chan, band, runid, siteid):
         if row[2] is None:
             row[2] = row[4]
             row[3] = 1
-      
+
     fit_params = np.asfarray(rows[:, 0:6])
     phaseids = list(rows[:, 7])
     fit_cost = rows[0,6]
@@ -326,7 +326,6 @@ def set_ar_processes(sigmodel, tr, phaseids):
     b = sigvisa.canonical_band_num(tr.stats.band)
     arm = tr.stats.noise_model
     sigmodel.set_noise_process(tr.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-    print "set noise process", arm.c, arm.em.std**2, np.array(arm.params)
     for phaseid in phaseids:
         sigmodel.set_wiggle_process(tr.stats.siteid, b, c, int(phaseid), 1, 0.0001, np.array(arm.params))
 
@@ -678,7 +677,7 @@ def main():
         evid = int(event[EV_EVID_COL])
 
         if len(events)>1:
-            cmd_str = "python2.6 -m priors.coda_decay.fit_shape_params -r %d -e %d %s " % (runid, evid, " ".join(sys.argv[1:]))
+            cmd_str = "python2.6 -m priors.coda_decay.fit_shape_params -r %d -e %d -m %s -s %d" % (runid, evid, method, siteid)
             print "running", cmd_str
             os.system(cmd_str)
             continue
@@ -719,11 +718,8 @@ def main():
                         if pp is not None:
                             print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
 
-                    print "fit params", fit_params
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
                     wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
-                    print "extracted wiggles", wiggles
-
                     for (pidx, phaseid) in enumerate(phaseids):
                         if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
                             continue
