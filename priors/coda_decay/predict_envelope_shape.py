@@ -62,31 +62,22 @@ def cv_generator(n, k=5):
         test = folds[i]
         yield (train, test)
 
-def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = None, sigma_f = None, sigma_n = None):
+def cv_external(cursor, fit_data, band_dir, phaseids, chan, target_str, pp = None, lld_params=None, dad_params=None):
 
-    gp_loc_decay_residuals = []
-    gp_loc_onset_residuals = []
-    gp_loc_amp_residuals = []
-    gp_ad_decay_residuals = []
-    gp_ad_onset_residuals = []
-    gp_ad_amp_residuals = []
-    lin_decay_residuals = []
-    lin_onset_residuals = []
-    lin_amp_residuals = []
-    mean_decay_residuals = []
-    mean_onset_residuals = []
-    mean_amp_residuals = []
+    gp_lld_residuals = []
+    gp_dad_residuals = []
+    lin_residuals = []
+    mean_residuals = []
 
     earthmodel = None
     sigmodel = None
     sites = None
 
-    gen_decay = None
-
-    evids = np.array(list(set(fit_data[:, FIT_EVID])))
+    evids = np.array(list(fit_data[:, FIT_EVID]))
     for (train_indices, test_indices) in cv_generator(len(evids)):
         test_evids = evids[test_indices]
-        cm = CodaModel(fit_data, band_dir, phaseids, chan, ignore_evids = test_evids , earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, w = w, sigma_n = sigma_n, sigma_f = sigma_f, debug=False)
+
+        cm = CodaModel(fit_data, band_dir, phaseids, chan, target_str=target_str, ignore_evids = test_evids , earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, lld_params=lld_params, dad_params=dad_params, debug=False)
         earthmodel = cm.earthmodel
         sigmodel = cm.sigmodel
         sites = cm.sites
@@ -95,43 +86,24 @@ def cv_external(cursor, fit_data, band_dir, phaseids, chan, pp = None, w = None,
             evid = evids[idx]
             ev = load_event(cursor, evid)
             row = fit_data[idx, :]
-            true_decay = row[FIT_CODA_DECAY]
-            true_onset = row[FIT_PEAK_DELAY]
-            true_amp = gen_source_amp(row)
+            true_output = target_fns[target_str](row)
 
-            gp_loc_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_GP_LOC, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_decay)
-            gp_loc_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_GP_LOC, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_onset)
-            gp_loc_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_GP_LOC, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_amp)
-            gp_ad_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_GP_AD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_decay)
-            gp_ad_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_GP_AD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_onset)
-            gp_ad_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_GP_AD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_amp)
-            lin_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_LINEAR, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_decay)
-            lin_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_LINEAR, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_onset)
-            lin_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_LINEAR, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_amp)
-            mean_decay_residuals.append(cm.predict_decay(ev, CodaModel.MODEL_TYPE_GAUSSIAN, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_decay)
-            mean_onset_residuals.append(cm.predict_peak_time(ev, CodaModel.MODEL_TYPE_GAUSSIAN, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_onset)
-            mean_amp_residuals.append(cm.predict_peak_amp(ev, CodaModel.MODEL_TYPE_GAUSSIAN, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_amp)
-    #        print "cv evid %d / %d" % (evid, len(evids))
+            gp_lld_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_LLD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
+
+            dad_pred = cm.predict(ev, CodaModel.MODEL_TYPE_GP_DAD, row[FIT_DISTANCE], row[FIT_AZIMUTH])
+            gp_dad_residuals.append(dad_pred - true_output)
+
+            lin_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_LINEAR, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
+            mean_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GAUSSIAN, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
 
 
-
-    print "cross-validated %d events, found residuals:" % (len(evids))
-    print "decay: gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_loc_decay_residuals)), np.mean(np.abs(gp_ad_decay_residuals)), np.mean(np.abs(lin_decay_residuals)), np.mean(np.abs(mean_decay_residuals)))
-    print "onset: gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_loc_onset_residuals)), np.mean(np.abs(gp_ad_onset_residuals)), np.mean(np.abs(lin_onset_residuals)), np.mean(np.abs(mean_onset_residuals)))
-    print "amp: gpd %f gpt %f lin %f mean %f" % (np.mean(np.abs(gp_loc_amp_residuals)), np.mean(np.abs(gp_ad_amp_residuals)), np.mean(np.abs(lin_amp_residuals)), np.mean(np.abs(mean_amp_residuals)))
+    print "cross-validated %d events, found residuals for %s:" % (len(evids), target_str)
+    print "mean: gp_lld %f gp_dad %f lin %f mean %f" % (np.mean(np.abs(gp_lld_residuals)), np.mean(np.abs(gp_dad_residuals)), np.mean(np.abs(lin_residuals)), np.mean(np.abs(mean_residuals)))
+    print "median: gp_lld %f gp_dad %f lin %f median %f" % (np.median(np.abs(gp_lld_residuals)), np.median(np.abs(gp_dad_residuals)), np.median(np.abs(lin_residuals)), np.median(np.abs(mean_residuals)))
 
     if pp is not None:
-        plot_residuals(pp, "Decay", phaseids, chan, [gp_loc_decay_residuals, gp_ad_decay_residuals, lin_decay_residuals, mean_decay_residuals], labels = ('GP-LOC', 'GP-AD', 'Linear', 'Const'))
-        plot_residuals(pp, "Onset", phaseids, chan, [gp_loc_onset_residuals, gp_ad_onset_residuals, lin_onset_residuals, mean_onset_residuals], labels = ('GP-LOC', 'GP-AD', 'Linear', 'Const'))
-        plot_residuals(pp, "Log Amplitude", phaseids, chan, [gp_loc_amp_residuals, gp_ad_amp_residuals, lin_amp_residuals, mean_amp_residuals], labels = ('GP-LOC', 'GP-AD', 'Linear', 'Const'))
+        plot_residuals(pp, target_str, phaseids, chan, [gp_lld_residuals, gp_dad_residuals, lin_residuals, mean_residuals], labels = ('GP-LLD', 'GP-DAD', 'Linear', 'Const'))
 
-#    print "onset: gp %f gpd %f lin %f mean %f" % (np.mean(np.abs(gp_onset_residuals)), np.mean(np.abs(gp_loc_onset_residuals)), np.mean(np.abs(lin_onset_residuals)), np.mean(np.abs(mean_onset_residuals)))
-#    print "amp: gp %f gpd %f lin %f mean %f" % (np.mean(np.abs(gp_amp_residuals)), np.mean(np.abs(gp_loc_amp_residuals)), np.mean(np.abs(lin_amp_residuals)), np.mean(np.abs(mean_amp_residuals)))
-
-
-
-#    cm = CodaModel(band_data, band_dir, P, chan, ignore_evids = None , earthmodel=earthmodel, sigmodel = sigmodel)
-#    return cm
 
 def plot_linear(pp, data, b_col, title=""):
 
@@ -152,7 +124,7 @@ def plot_linear(pp, data, b_col, title=""):
     pp.savefig()
 
 
-def plot_events_heat(pp, fit_data, cm):
+def plot_events_heat(pp, fit_data, cm, target_str = ""):
 
     siteid = fit_data[0, FIT_SITEID]
     X = fit_data[ : , [FIT_LON, FIT_LAT] ]
@@ -163,18 +135,20 @@ def plot_events_heat(pp, fit_data, cm):
     (slon, slat) = cursor.fetchone()
 
 
-    f = lambda lon, lat: cm.predict_decay(np.array((lon, lat, 0, 0, 5.0, 0, 0)), CodaModel.MODEL_TYPE_GP_LOC)
+    f = lambda lon, lat: cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), CodaModel.MODEL_TYPE_GP_LLD)
     bmap, (aa, bb) = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
 
     draw_events(bmap, ((slon, slat),),  marker="x", ms=50, mfc="none", mec="purple", mew=5)
     draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="yellow", mew=2)
+    plt.title(target_str + " LLD\n" + str(cm.lld_params))
     pp.savefig()
 
-    f = lambda lon, lat: cm.predict_decay(np.array((lon, lat, 0, 0, 5.0, 0, 0)), CodaModel.MODEL_TYPE_GP_AD)
+    f = lambda lon, lat: cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), CodaModel.MODEL_TYPE_GP_DAD)
     bmap, (aa, bb) = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-90, 90], n=40)
 
     draw_events(bmap, ((slon, slat),),  marker="x", ms=50, mfc="none", mec="purple", mew=5)
     draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="yellow", mew=2)
+    plt.title(target_str + " DAD\n" + str(cm.dad_params))
     pp.savefig()
 
 
@@ -192,40 +166,44 @@ def main():
 
     base_coda_dir = get_base_dir(int(options.siteid), int(options.runid))
 
-    p_fit_data = load_shape_data(cursor, chan=options.chan, short_band=options.short_band,siteid = options.siteid, runid=options.runid, phaseids = P_PHASEIDS)
-    s_fit_data = load_shape_data(cursor, chan=options.chan, short_band=options.short_band,siteid = options.siteid, runid=options.runid, phaseids = S_PHASEIDS)
+    for (phase_label, phaseids) in (('P', P_PHASEIDS), ('S', S_PHASEIDS)):
+
+        print "loading %s fit data... " % (phase_label),
+        fit_data = load_shape_data(cursor, chan=options.chan, short_band=options.short_band,siteid = options.siteid, runid=options.runid, phaseids = phaseids)
+        print str(fit_data.shape[0]) + "entries loaded"
+
+        band_dir = os.path.join(base_coda_dir, options.short_band)
+        fname = os.path.join(band_dir, "%s_predictions_%s.pdf" % (phase_label, options.chan))
+        pp = PdfPages(fname)
+
+        print "saving plots to", fname
+
+        lld_params = {"decay": [.01, .02, 800], "onset": [2, 4, 800], "amp": [.4, .4, 800]}
+#        dad_params = {"decay": [.02, .4, 2, .05, 1], "onset": [.02, .4, 2, .05, 1], "amp": [.02, .4, 2, .05, 1]}
+        dad_params = {"decay": [.01, .02, 2, 0.0001, 0.0001], "onset": [2, 5, 2, 0.0001, 0.0001], "amp": [.3, .8, 2, 0.0001, 0.0001]}
+
+        for target_str in ["decay", "onset", "amp"]:
+            print "evaluating starting hyperparams for", target_str
+            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = pp, lld_params = lld_params[target_str], dad_params=dad_params[target_str])
+            cm = CodaModel(fit_data, band_dir, phaseids, options.chan, target_str=target_str, ignore_evids = [] , lld_params = lld_params[target_str], dad_params=dad_params[target_str], optimize=False)
+            plot_events_heat(pp, fit_data, cm, target_str)
+            cm = CodaModel(fit_data, band_dir, phaseids, options.chan, target_str=target_str, ignore_evids = [] , lld_params = lld_params[target_str], dad_params=dad_params[target_str], optimize=True)
+            print "evaluating learned hyperparams for", target_str
+            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = pp, lld_params=cm.lld_params, dad_params=cm.dad_params)
+            plot_events_heat(pp, fit_data, cm, target_str)
 
 
-    band_dir = os.path.join(base_coda_dir, options.short_band)
-    p_fname = os.path.join(band_dir, "p_predictions_%s.pdf" % options.chan)
-    pp_p = PdfPages(p_fname)
+        pp.close()
 
-    s_fname = os.path.join(band_dir, "s_predictions_%s.pdf" % options.chan)
-    pp_s = PdfPages(s_fname)
-    print "saving plots to", p_fname, s_fname
-
-    w = [1000,1000, 1000]
-    sigma_f = [0.01, 1, 1]
-    sigma_n = [0.01, 0.5, 0.5]
-
-    cv_external(cursor, p_fit_data, band_dir, P_PHASEIDS, options.chan, pp = pp_p, sigma_f=sigma_f, w=w, sigma_n=sigma_n)
-    cm_p = CodaModel(p_fit_data, band_dir, P_PHASEIDS, options.chan, ignore_evids = [] , w = w, sigma_n = sigma_n, sigma_f = sigma_f)
-    plot_events_heat(pp_p, p_fit_data, cm_p)
-    pp_p.close()
-
-    print "doing s stuff now..."
- #   cv_external(cursor, s_fit_data, band_dir, S_PHASEIDS, options.chan, pp = pp_s, sigma_f=.01, w=100, sigma_n=.01)
-    cm_s = CodaModel(s_fit_data, band_dir, S_PHASEIDS, options.chan, ignore_evids = [] , w = w, sigma_n = sigma_n, sigma_f = sigma_f)
-    plot_events_heat(pp_s, s_fit_data, cm_s)
-    pp_s.close()
 
 if __name__ == "__main__":
     main()
 
 
-
-
-
-
-
+def gridsearch_dad(cursor, fit_data, band_dir, phaseids, chan, target_str, pp):
+    sigma_n_vals = [.01, .05, .5, 1, 3]
+    sigma_f_vals = [.01, .05, .5, 1, 3]
+    w_vals = [.5, 1, 2]
+    azi_scale_vals = [.0001, ]
+    depth_scale_vals = [.0001,]
 

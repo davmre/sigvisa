@@ -47,14 +47,7 @@ chans = ["BHZ","BHE", "BHN"]
 # params for the envelope model
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
 
-def azi_difference(azi1, azi2):
-    """ Returns the *signed* difference between two angles. """
-    d = azi1-azi2
-    while (d < -180):
-        d = d+360
-    while (d > 180):
-        d = d-360
-    return d
+target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB]}
 
 def sta_to_siteid(sta, cursor):
     cursor.execute("select id from static_siteid where sta='%s'" % (sta))
@@ -78,8 +71,6 @@ def phaseid_to_name(phaseid):
             return n[i]
     raise Exception("unrecognized phaseids %s" % (phaseid,))
 
-def gen_source_amp(row):
-    return row[FIT_CODA_HEIGHT] - row[FIT_MB]
 
 def get_dir(dname):
 
