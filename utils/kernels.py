@@ -8,7 +8,6 @@ def gen_pairwise_matrix(f, X1, X2):
     if X1 is X2:
         for i in range(n1):
             for j in range(i, n2):
-#                print X1[i, :], X2[j,:]
                 K[i, j] = f(X1[i,:], X2[j,:])
         K = K + K.T - np.diag(np.diag(K))
     else:
@@ -60,10 +59,10 @@ class Kernel(object):
         raise RuntimeError( "Needs to be implemented in base class" )
 
     def param_prior_ll(self):
-        return np.sum([b.logpdf(a) for (a,b) in zip(self.params, self.priors)])
+        return np.sum([b.logpdf(a) if b is not None else 0 for (a,b) in zip(self.params, self.priors)])
 
     def param_prior_grad(self):
-        return np.asarray([b.logpdf_dx(a) for (a,b) in zip(self.params, self.priors)])
+        return np.asarray([b.logpdf_dx(a) if b is not None else 0 for (a,b) in zip(self.params, self.priors)])
 
 class SumKernel(Kernel):
     def __init__(self, lhs, rhs):
@@ -148,26 +147,40 @@ class SEKernel(Kernel):
             raise RuntimeError("Unknown parameter index %d (out of %d) for SEKernel." % (i, self.nparams))
         return dK
 
-
 class DistFNKernel(Kernel):
-    def __init__(self, params, distfn, priors = None):
+    def __init__(self, params, distfn, priors = None, deriv=None):
         super(DistFNKernel, self).__init__(params, priors)
         self.sigma_f = params[0]
         self.w = params[1]
-        self.distfn = distfn
+        self.df_params = params[2:]
+        self.distfn = lambda a,b: distfn(a,b,self.df_params)
+        self.distfn_deriv_i = None if deriv is None else lambda i, a, b: deriv(i, a, b, self.df_params)
 
     def __call__(self, X1, X2):
         X1, X2 = self._check_args(X1,X2)
+
+        if self.w == 0 or self.sigma_f ==0:
+            print "warning: invalid kernel parameter, returning 0", self.w, self.sigma_f
+            return np.zeros((X1.shape[0], X1.shape[0]))
+
         D = gen_pairwise_matrix(self.distfn, X1, X2)
         return self.sigma_f**2 * np.exp(-1 * D**2 / self.w**2)
 
     def derivative_wrt_i(self, i, X1, X2):
         X1, X2 = self._check_args(X1,X2)
-        D2 = gen_pairwise_matrix(self.distfn, X1, X2)**2
+        D = gen_pairwise_matrix(self.distfn, X1, X2)
+
+        if self.w == 0 or self.sigma_f ==0:
+            print "warning: invalid kernel parameter, returning 0 matrix:", self.w, self.sigma_f
+            return np.zeros((X1.shape[0], X1.shape[0]))
+
         if i==0:
-            dK = 2*self.sigma_f * np.exp(-1 * D2 / self.w**2)
+            dK = 2*self.sigma_f * np.exp(-1 * D**2 / self.w**2)
         elif i == 1:
-            dK = 2 * self.sigma_f**2 * np.exp(-1*D2 / self.w**2) * D2 / (self.w**3)
+            dK = 2 * self.sigma_f**2 * np.exp(-1*D**2 / self.w**2) * D**2 / (self.w**3)
+        elif i > 1:
+            dD = gen_pairwise_matrix(lambda x1, x2 : self.distfn_deriv_i(i-2, x1, x2), X1, X2)
+            dK = -2 * self.sigma_f**2 * np.exp(-1*D**2 / self.w**2) * D / (self.w**2) * dD
         else:
             raise RuntimeError("Unknown parameter index %d (out of %d) for DistFNKernel." % (i, self.nparams))
 
@@ -263,8 +276,17 @@ def setup_kernel(name, params, extra, priors=None):
         sigma_n = params[0]
         sigma_f = params[1]
         w = params[2]
-        distfn = extra
-        k = DiagonalKernel([sigma_n,], priors = np.asarray(priors[0:1])) + DistFNKernel([sigma_f, w], distfn, priors = priors[1:])
+        if len(params) > 3:
+            distfn = extra[0]
+            distfn_deriv_i = extra[1]
+        else:
+            distfn = extra
+            distfn_deriv_i = None
+        distfn_params = list(params[3:])
+
+        k = DiagonalKernel([sigma_n,], priors = np.asarray(priors[0:1])) + DistFNKernel([sigma_f, w] + distfn_params, distfn, priors = priors[1:], deriv = distfn_deriv_i)
+
+
     else:
         raise RuntimeError("unrecognized kernel name %s." % (name))
     return k
@@ -287,7 +309,11 @@ class Gamma(Distribution):
     def logpdf(self, x):
         alpha = self.alpha
         beta = self.beta
-        if 0.0 >= x: return np.log(1e-300)
+
+        if x < 0.0: return np.log(1e-300)
+        # the special case of an exponential distribution is defined even when x==0
+        if alpha == 1: return np.log(beta) - beta*x
+        if x == 0.0: return np.log(1e-300)
         lp = alpha*np.log(beta) - scipy.special.gammaln(alpha) + (alpha-1)*np.log(x) - beta*x
         if np.isnan(lp):
             lp = np.float("-inf")
