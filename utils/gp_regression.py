@@ -318,17 +318,28 @@ def optimize_hyperparams(X, y, kernel, start_kernel_params, kernel_extra=None, k
 
     llgrad = lambda params: gp_nll_ngrad(X, y, kernel, params, kernel_extra, kernel_priors)
 
-    nll, grad = llgrad(start_kernel_params)
-    if np.isinf(nll):
-        raise ValueError("initial param settings are infeasible!")
+    skp = np.asarray(start_kernel_params)
+    std = skp/4
+    start_param_set = [skp, skp + np.random.randn(len(skp)) * std, skp + np.random.randn(len(skp)) * std, skp + np.random.randn(len(skp)) * std]
+
+    best_params = skp
+    nll, grad = llgrad(skp)
+    best_cost = nll
+
+    for params in start_param_set:
 
 #    best_params, v, d = scipy.optimize.fmin_l_bfgs_b(func=llgrad, x0=start_kernel_params, bounds= [(1e-20, None),]*len(start_kernel_params))
-    best_params, v, d = scipy.optimize.fmin_l_bfgs_b(func=llgrad, x0=start_kernel_params, bounds= [(1e-20, None),]*len(start_kernel_params))
-    print "found best params", best_params
-    print "ll", v
-    print "d", d
+        opt_params, v, d = scipy.optimize.fmin_l_bfgs_b(func=llgrad, x0=start_kernel_params, bounds= [(1e-20, None),]*len(start_kernel_params))
+
+        if v < best_cost:
+            best_cost = v
+            best_params = opt_params
+
 #    print "start ll", ll(start_kernel_params)
 #    print "best ll", ll(best_params)
+
+    print "OPTIMZIATION FINISHED: found best params", best_params
+    print "ll", v
     return best_params, v
 
 def plot_interpolated_surface(gp, X, y):
