@@ -50,13 +50,13 @@ def main():
     parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str", help="siteid of station for which to learn wiggle model (default: all)")
     parser.add_option("-r", "--runids", dest="runids", default=None, type="str", help="runid of the extracted wiggles to use")
     parser.add_option("-p", "--phaseids", dest="phaseids", default=None, type="str", help="phaseids (P_PHASES)")
-    parser.add_option("-c", "--channels", dest="channels", default=None, type="str", help="channels (BHZ)")
+    parser.add_option("-c", "--channels", dest="channels", default=None, type="str", help="channels (all)")
     parser.add_option("-o", "--outfile", dest="outfile", default="parameters/signal_wiggles.txt", type="str", help="filename to save output (parameters/signal_wiggles.txt)")
     (options, args) = parser.parse_args()
 
     runids = [int(r) for r in options.runids.split(',')]
     phaseids = P_PHASEIDS if options.phaseids is None else [int(r) for r in options.phaseids.split(',')]
-    channels = ['BHZ'] if options.channels is None else [s for s in options.channels.split(',')]
+    channels = chans if options.channels is None else [s for s in options.channels.split(',')]
     siteids = None if options.siteids is None else [int(s) for s in options.siteids.split(',')]
     runid_cond = "(" + " or ".join(["runid=%d" % r for r in runids])  + ")"
     print runid_cond
