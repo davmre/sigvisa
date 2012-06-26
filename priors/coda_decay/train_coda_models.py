@@ -35,6 +35,19 @@ def dist_azi_depth_distfn(dad1, dad2, params):
     r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
     return r
 
+def dist_distfn(lldda1, lldda2, params=None):
+    return lldda1[3]**(1.0/3)-lldda2[3]**(1.0/3)
+
+def depth_distfn(lldda1, lldda2, params=None):
+    return lldda1[2]**(1.0/3)-lldda2[2]**(1.0/3)
+
+def azi_distfn(lldda1, lldda2, params=None):
+    avg_dist = (lldda1[2]+lldda2[2])/2
+    return utils.geog.degdiff(lldda1[4], lldda2[4]) * avg_dist**(1.0/3)
+
+def ll_distfn(lldda1, lldda2, params=None):
+    return utils.geog.dist_km(lldda1[0:2], lldda2[0:2])
+
 def dist_azi_depth_distfn_deriv(i, dad1, dad2, params):
     azi_scale = params[0]
     depth_scale = params[1]
@@ -59,11 +72,12 @@ def lon_lat_depth_distfn(lld1, lld2, params=None):
     r = np.sqrt(ll**2 + depth**2)
     return r
 
-def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, optimize, pp, label):
+def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_sum_params, lldda_prod_params, optimize, pp, label):
 
     fit_data = np.reshape(fit_data, (-1, FIT_NUM_COLS))
     n = fit_data.shape[0]
 
+    X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
     Xll = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
     Xad = fit_data[:, [FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH]]
 
@@ -79,18 +93,35 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, optimi
 #    dad_priors = [InvGamma(.2, .5), InvGamma(.2, .5), LogNormal(1.0, 3.0), LogNormal(-3.0, 5.0), LogNormal(0.0, 5.0)]
     dad_priors = [None, None, None, None, None]
 
-    if optimize:
-        print "optimizing location-based GP..."
-        lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
-        print "got params", lld_params, "giving ll", v
+    lldda_sum_priors = [None, None, None, None, None, None, None, None, None]
+    lldda_prod_priors = [None, None, None, None, None, None]
 
-        print "optimizing distance/azimuth-based GP..."
-        dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
+    if optimize:
+        print "optimizing prod-composite GP..."
+        lldda_prod_params,v = optimize_hyperparams(X, y, kernel="distfns_prod", start_kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors)
         print "got params", dad_params , "giving ll", v
+
+#        print "optimizing location-based GP..."
+#        lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
+#        print "got params", lld_params, "giving ll", v
+
+#        print "optimizing distance/azimuth-based GP..."
+#        dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
+#        print "got params", dad_params , "giving ll", v
+
+#        print "optimizing sum-composite GP..."
+#        lldda_sum_params,v = optimize_hyperparams(X, y, kernel="distfns_sum", start_kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_sum_priors)
+#        print "got params", dad_params , "giving ll", v
+
 
     gp_lld = GaussianProcess(Xll, y, kernel="distfn", kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn)
 
     gp_dad = GaussianProcess(Xad, y, kernel="distfn", kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], ignore_pos_def_errors=False)
+
+    gp_lldda_sum = GaussianProcess(X, y, kernel="distfns_sum", kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], ignore_pos_def_errors=False)
+
+    gp_lldda_prod = GaussianProcess(X, y, kernel="distfns_prod", kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors, ignore_pos_def_errors=False)
+
 
     regional_dist = []
     regional_y = []
@@ -197,17 +228,19 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, optimi
     m = dict()
     m["gp_lld"] = gp_lld
     m["gp_dad"] = gp_dad
+    m["gp_lldda_sum"] = gp_lldda_sum
+    m["gp_lldda_prod"] = gp_lldda_prod
     m["regional_linear"] = regional_model
     m["tele_linear"] = tele_model
     m["regional_gaussian"] = (regional_mean, regional_var)
     m["tele_gaussian"] = (tele_mean, tele_var)
-    return m, lld_params, dad_params
+    return m, lld_params, dad_params, lldda_sum_params, lldda_prod_params
 
 class CodaModel:
 
-    MODEL_TYPE_GP_LLD, MODEL_TYPE_GP_DAD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(4)
+    MODEL_TYPE_GP_LLD, MODEL_TYPE_GP_DAD, MODEL_TYPE_GP_LLDDA_SUM, MODEL_TYPE_GP_LLDDA_PROD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(6)
 
-    def __init__(self, fit_data, band_dir, phaseids, chan, target_str="decay", ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, lld_params=[], dad_params=[], optimize=False, debug=True):
+    def __init__(self, fit_data, band_dir, phaseids, chan, target_str="decay", ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, lld_params=[], dad_params=[], lldda_sum_params = [], lldda_prod_params = [], optimize=False, debug=True):
 
         if target_str not in target_fns.keys():
             raise Exception("invalid target str %s" % target_str)
@@ -239,7 +272,7 @@ class CodaModel:
             print "saving plots to", outfile
 
         # learn decay rate models
-        self.models, self.lld_params, self.dad_params = learn_models(fit_data, self.earthmodel, target_fn=self.target_fn, lld_params=lld_params, dad_params=dad_params, pp=pp, label="%s phaseids=%s chan=%s" % (target_str, phaseids, chan), optimize=optimize)
+        self.models, self.lld_params, self.dad_params, self.lldda_sum_params, self.lldda_prod_params = learn_models(fit_data, self.earthmodel, target_fn=self.target_fn, lld_params=lld_params, dad_params=dad_params, lldda_sum_params = lldda_sum_params, lldda_prod_params = lldda_prod_params, pp=pp, label="%s phaseids=%s chan=%s" % (target_str, phaseids, chan), optimize=optimize)
         if pp is not None:
             pp.close()
 
@@ -253,6 +286,14 @@ class CodaModel:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
             return float(self.models['gp_dad'].predict((distance, azimuth, ev[EV_DEPTH_COL])))
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            return float(self.models['gp_lldda_sum'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_PROD:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            return float(self.models['gp_lldda_prod'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
         elif model_type == self.MODEL_TYPE_LINEAR:
             if distance < 2000:
                 model = self.models['regional_linear']
@@ -261,7 +302,7 @@ class CodaModel:
             try:
                 return float(model[(distance, 1)])
             except:
-                return self.predict(ev, MODEL_TYPE_GAUSSIAN, distance=distance, azimuth=azimuth)
+                return self.predict(ev, self.MODEL_TYPE_GAUSSIAN, distance=distance, azimuth=azimuth)
         elif model_type == self.MODEL_TYPE_GAUSSIAN:
             if distance < 2000:
                 (mean, var) = self.models['regional_gaussian']
