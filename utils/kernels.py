@@ -87,6 +87,29 @@ class SumKernel(Kernel):
         g = np.concatenate([self.lhs.param_prior_grad(), self.rhs.param_prior_grad()])
         return g
 
+class ProductKernel(Kernel):
+    def __init__(self, lhs, rhs):
+        self.lhs=lhs
+        self.rhs=rhs
+        self.nparams = lhs.nparams + rhs.nparams
+        self.param_split = lhs.nparams
+
+    def __call__(self, X1, X2):
+        return self.lhs(X1, X2)*self.rhs(X1, X2)
+
+    def derivative_wrt_i(self, i, X1, X2):
+        if i < self.lhs.nparams:
+            return self.lhs.derivative_wrt_i(i, X1, X2) * self.rhs(X1,X2)
+        else:
+            return self.rhs.derivative_wrt_i(i-self.lhs.nparams, X1,X2) * self.lhs(X1, X2)
+
+    def param_prior_ll(self):
+        return self.lhs.param_prior_ll() + self.rhs.param_prior_ll()
+
+    def param_prior_grad(self):
+        g = np.concatenate([self.lhs.param_prior_grad(), self.rhs.param_prior_grad()])
+        return g
+
 
 class LinearKernel(Kernel):
 
@@ -150,9 +173,16 @@ class SEKernel(Kernel):
 class DistFNKernel(Kernel):
     def __init__(self, params, distfn, priors = None, deriv=None):
         super(DistFNKernel, self).__init__(params, priors)
-        self.sigma_f = params[0]
-        self.w = params[1]
-        self.df_params = params[2:]
+
+        if len(params) == 1:
+            self.sigma_f = 1
+            self.w = params[0]
+            self.df_params = []
+        else:
+            self.sigma_f = params[0]
+            self.w = params[1]
+            self.df_params = params[2:]
+
         self.distfn = lambda a,b: distfn(a,b,self.df_params)
         self.distfn_deriv_i = None if deriv is None else lambda i, a, b: deriv(i, a, b, self.df_params)
 
@@ -174,9 +204,11 @@ class DistFNKernel(Kernel):
             print "warning: invalid kernel parameter, returning 0 matrix:", self.w, self.sigma_f
             return np.zeros((X1.shape[0], X1.shape[0]))
 
-        if i==0:
+        if i==0 and len(self.params) > 1:
+            # deriv wrt sigma_f
             dK = 2*self.sigma_f * np.exp(-1 * D**2 / self.w**2)
-        elif i == 1:
+        elif i == 1 or len(self.params) == 1:
+            # deriv wrt w
             dK = 2 * self.sigma_f**2 * np.exp(-1*D**2 / self.w**2) * D**2 / (self.w**3)
         elif i > 1:
             dD = gen_pairwise_matrix(lambda x1, x2 : self.distfn_deriv_i(i-2, x1, x2), X1, X2)
@@ -286,6 +318,49 @@ def setup_kernel(name, params, extra, priors=None):
 
         k = DiagonalKernel([sigma_n,], priors = np.asarray(priors[0:1])) + DistFNKernel([sigma_f, w] + distfn_params, distfn, priors = priors[1:], deriv = distfn_deriv_i)
 
+    elif name == "distfns_sum":
+        # composite kernel of the form sum_i alpha_i *
+        # exp(-r_i(x1,x2)^2 / beta_i^2) where each r_i is a distance
+        # function and alpha_i and beta_i are magnitude and
+        # length-scale parameters respectively.
+
+        # here "params" is a list of 2n+1 entries. The first entry is
+        # sigma_n. The ith subsequent pair of entries gives alpha and
+        # beta for the ith distance function. "priors" has the same
+        # structure and semantics as "params".
+        pass
+        # "extra" is a list of n tuples of the form (distfn,
+        # distfn_deriv). distfn_deriv can be None if there are no
+        # special params to the distance function.
+
+        sigma_n = params[0]
+        composite_kernel = DiagonalKernel([sigma_n,], priors = [priors[0],])
+        for (i, (distfn, distfn_deriv_i)) in enumerate(extra):
+            si = 2*i+1
+            kparams = params[si:si+2]
+            kpriors = priors[si:si+2]
+            k = DistFNKernel(kparams, distfn, priors = kpriors, deriv = distfn_deriv_i)
+            composite_kernel += k
+        k = composite_kernel
+
+    elif name == "distfns_prod":
+        # similar to above, except that we construct a product of
+        # distfn kernels, so there is only a single sigma_f magnitude
+        # parameter (specified after sigma_n) instead of an alpha param
+        # for each kernel.
+
+        sigma_n = params[0]
+        noise_kernel = DiagonalKernel([sigma_n,], priors = [priors[0], ])
+
+        sigma_f = params[1]
+        composite_kernel = DistFNKernel([sigma_f, 1], lambda a,b,p : 0, priors = [priors[1],], deriv = None)
+        for (i, (distfn, distfn_deriv_i)) in enumerate(extra):
+            si = i+2
+            kparams = params[si:si+1]
+            kpriors = priors[si:si+1]
+            k = DistFNKernel(kparams, distfn, priors = kpriors, deriv = distfn_deriv_i)
+            composite_kernel *= k
+        k = composite_kernel + noise_kernel
 
     else:
         raise RuntimeError("unrecognized kernel name %s." % (name))
