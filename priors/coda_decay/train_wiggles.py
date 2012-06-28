@@ -50,7 +50,7 @@ def main():
     parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str", help="siteid of station for which to learn wiggle model (default: all)")
     parser.add_option("-r", "--runids", dest="runids", default=None, type="str", help="runid of the extracted wiggles to use")
     parser.add_option("-p", "--phaseids", dest="phaseids", default=None, type="str", help="phaseids (P_PHASES)")
-    parser.add_option("-c", "--channels", dest="channels", default=None, type="str", help="channels (BHZ)")
+    parser.add_option("-c", "--channels", dest="channels", default=None, type="str", help="channels (all)")
     parser.add_option("-o", "--outfile", dest="outfile", default="parameters/signal_wiggles.txt", type="str", help="filename to save output (parameters/signal_wiggles.txt)")
     (options, args) = parser.parse_args()
 

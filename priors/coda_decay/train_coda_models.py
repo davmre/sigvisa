@@ -24,50 +24,104 @@ from utils.gp_regression import GaussianProcess, optimize_hyperparams
 from utils.kernels import InvGamma, LogNormal
 
 
-def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, label):
+def dist_azi_depth_distfn(dad1, dad2, params):
+    azi_scale = params[0]
+    depth_scale = params[1]
+    dist = dad1[0]**(1.0/3)-dad2[0]**(1.0/3)
+    avg_dist = (dad1[0]+dad2[0])/2
+    azi = utils.geog.degdiff(dad1[1], dad2[1]) * avg_dist**(1.0/3)
+    depth = dad1[2]**(1.0/3)- dad2[2]**(1.0/3)
+
+    r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
+    return r
+
+def dist_distfn(lldda1, lldda2, params=None):
+    return lldda1[3]**(1.0/3)-lldda2[3]**(1.0/3)
+
+def depth_distfn(lldda1, lldda2, params=None):
+    return lldda1[2]**(1.0/3)-lldda2[2]**(1.0/3)
+
+def azi_distfn(lldda1, lldda2, params=None):
+    avg_dist = (lldda1[2]+lldda2[2])/2
+    return utils.geog.degdiff(lldda1[4], lldda2[4]) * avg_dist**(1.0/3)
+
+def ll_distfn(lldda1, lldda2, params=None):
+    return utils.geog.dist_km(lldda1[0:2], lldda2[0:2])
+
+def dist_azi_depth_distfn_deriv(i, dad1, dad2, params):
+    azi_scale = params[0]
+    depth_scale = params[1]
+    dist = dad1[0]**(1.0/3)-dad2[0]**(1.0/3)
+    avg_dist = (dad1[0]+dad2[0])/2
+    azi = utils.geog.degdiff(dad1[1], dad2[1]) * avg_dist**(1.0/3)
+    depth = dad1[2]**(1.0/3)- dad2[2]**(1.0/3)
+    r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
+
+    if i==0: # deriv wrt azi_scale
+        deriv = azi_scale * azi**2 / r if r != 0 else 0
+    elif i==1: # deriv wrt depth_scale
+        deriv = depth_scale * depth**2 / r if r != 0 else 0
+    else:
+        raise Exception("unknown parameter number %d" % i)
+
+    return deriv
+
+def lon_lat_depth_distfn(lld1, lld2, params=None):
+    ll = utils.geog.dist_km(lld1[0:2], lld2[0:2])
+    depth = lld1[2] - lld2[2]
+    r = np.sqrt(ll**2 + depth**2)
+    return r
+
+def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_sum_params, lldda_prod_params, optimize, pp, label):
 
     fit_data = np.reshape(fit_data, (-1, FIT_NUM_COLS))
     n = fit_data.shape[0]
 
+    X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
     Xll = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
     Xad = fit_data[:, [FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH]]
 
     y = np.zeros((n,))
     for i in range(n):
-        y[i] = gen_target_col(fit_data[i, :])
+        y[i] = target_fn(fit_data[i, :])
 
-
-#    best_params,v = optimize_hyperparams(X, y, kernel="distfn", start_kernel_params=[sigma_n, sigma_f, w], kernel_extra=distfn, kernel_priors = [InvGamma(1.0, 1.0), InvGamma(1.0, 1.0), LogNormal(3, 2.0)])
     gpd = None
     gpt = None
 
-    best_params = [sigma_n, sigma_f, w*2]
-    posdef = False
-    while not posdef:
-        try:
-            distfn = lambda ll1, ll2: np.sqrt(utils.geog.dist_km(ll1[0:2], ll2[0:2])**2 + (ll1[2] - ll2[2])**2)
-            print "training location-based GP w/ params", best_params #, "giving ll", v
-            gp_loc = GaussianProcess(Xll, y, kernel="distfn", kernel_params=best_params, kernel_extra=distfn)
-            posdef=True
-        except np.linalg.linalg.LinAlgError:
-            best_params[0] *= 1.5
-            print "lin alg error, upping sigma_n to %f and tryign again" % (best_params[0])
+#    lld_priors = [InvGamma(.2, .5), InvGamma(.2, .5), LogNormal(5.0, 3.0)]
+    lld_priors = [None, None, None]
+#    dad_priors = [InvGamma(.2, .5), InvGamma(.2, .5), LogNormal(1.0, 3.0), LogNormal(-3.0, 5.0), LogNormal(0.0, 5.0)]
+    dad_priors = [None, None, None, None, None]
 
-    best_params = [sigma_n, sigma_f, w/50]
-    posdef = False
-    while not posdef:
-        try:
-            # use gaussian covariance with features given by the cube roots of distance and depth, and azi/20
-            distfn = lambda ad1, ad2: np.sqrt( abs(ad1[0]-ad2[0])**(2.0/3) + abs(azi_difference(ad1[1], ad2[1])/20)**2 + abs(ad1[2]-ad2[2])**(2.0/3))
-            # use gaussian covariance with features given by the cube roots of distance and depth, and azi/20
-            distfn = lambda ad1, ad2: abs(ad1[0]-ad2[0])**(1.0/3)
+    lldda_sum_priors = [None, None, None, None, None, None, None, None, None]
+    lldda_prod_priors = [None, None, None, None, None, None]
 
-            print "training distance/azimuth-based GP w/ params", best_params #, "giving ll", v
-            gp_ad = GaussianProcess(Xad, y, kernel="distfn", kernel_params=best_params, kernel_extra=distfn, ignore_pos_def_errors=False)
-            posdef = True
-        except np.linalg.linalg.LinAlgError:
-            best_params[0] *= 1.5
-            print "lin alg error, upping sigma_n to %f and tryign again" % (best_params[0])
+    if optimize:
+        print "optimizing prod-composite GP..."
+        lldda_prod_params,v = optimize_hyperparams(X, y, kernel="distfns_prod", start_kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors)
+        print "got params", dad_params , "giving ll", v
+
+#        print "optimizing location-based GP..."
+#        lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
+#        print "got params", lld_params, "giving ll", v
+
+#        print "optimizing distance/azimuth-based GP..."
+#        dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
+#        print "got params", dad_params , "giving ll", v
+
+#        print "optimizing sum-composite GP..."
+#        lldda_sum_params,v = optimize_hyperparams(X, y, kernel="distfns_sum", start_kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_sum_priors)
+#        print "got params", dad_params , "giving ll", v
+
+
+    gp_lld = GaussianProcess(Xll, y, kernel="distfn", kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn)
+
+    gp_dad = GaussianProcess(Xad, y, kernel="distfn", kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], ignore_pos_def_errors=False)
+
+    gp_lldda_sum = GaussianProcess(X, y, kernel="distfns_sum", kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], ignore_pos_def_errors=False)
+
+    gp_lldda_prod = GaussianProcess(X, y, kernel="distfns_prod", kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors, ignore_pos_def_errors=False)
+
 
     regional_dist = []
     regional_y = []
@@ -75,21 +129,25 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
     tele_y = []
     for i in range(n):
         d = fit_data[i, FIT_DISTANCE]
-        dy = gen_target_col(fit_data[i, :])
-        if d > 1000:
+        dy = target_fn(fit_data[i, :])
+        if d > 2000:
             tele_dist.append(d)
             tele_y.append(dy)
         else:
             regional_dist.append(d)
             regional_y.append(dy)
 
+    regional_dist = np.array(regional_dist)
+    tele_dist = np.array(tele_dist)
+
+
     if pp is not None:
         plt.figure()
-        plt.title(label + " GP_AD")
+        plt.title(label + " GP_DAD + \n%s" % dad_params)
         plt.xlabel("distance (km)")
         plt.ylabel("")
         ds = np.linspace(0, 10000, 150)
-        pred = np.array([ gp_ad.predict(np.array((d, 0, 0))) for d in ds])
+        pred = np.array([ gp_dad.predict(np.array((d, 0, 0))) for d in ds])
         try:
             plt.plot(ds, pred, "k-")
             plt.plot(np.concatenate([regional_dist, tele_dist]), np.concatenate([regional_y, tele_y]), 'ro')
@@ -99,22 +157,21 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
             pdb.set_trace()
 
 
-
     try:
-        regional_model = utils.LinearModel.LinearModel("regional", ["distance"],
-                                                       [regional_dist,],
+        regional_model = utils.LinearModel.LinearModel("regional", ["distance", "const"],
+                                                       [regional_dist,np.ones((len(regional_dist),))],
                                                        regional_y)
     except ValueError:
         print "regional model failed", regional_dist, regional_y
         regional_model=None
     try:
-        tele_model = utils.LinearModel.LinearModel("tele", ["distance"],
-                                                   [tele_dist,],
+        tele_model = utils.LinearModel.LinearModel("tele", ["distance", "const"],
+                                                   [tele_dist,np.ones((len(tele_dist),))],
                                                    tele_y)
     except ValueError:
         print "tele model failed", tele_dist, tele_y
         tele_model=None
-    
+
 
     if pp is not None:
         plt.figure()
@@ -122,14 +179,15 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
         plt.xlabel("distance (km)")
         plt.ylabel("")
         try:
-            t = np.linspace(0, 1000, 50)
-            pred = [ regional_model[tv] for tv in t ]
+            t = np.linspace(0, 2000, 50)
+            pred = [ regional_model[(tv,1)] for tv in t ]
             plt.plot(t, pred, "k-")
         except:
             pass
         try:
-            t = np.linspace(1000, np.max(tele_dist), 50)
-            pred = [ tele_model[tv] for tv in t ]
+
+            t = np.linspace(2000, np.max(tele_dist), 50)
+            pred = [ tele_model[(tv, 1)] for tv in t ]
             plt.plot(t, pred, "k-")
         except:
             pass
@@ -168,19 +226,26 @@ def learn_models(fit_data, earthmodel, gen_target_col, sigma_n, sigma_f, w, pp, 
 #    print "learned means ", (regional_mean, regional_var), (tele_mean, tele_var)
 
     m = dict()
-    m["gp_loc"] = gp_loc
-    m["gp_ad"] = gp_ad
+    m["gp_lld"] = gp_lld
+    m["gp_dad"] = gp_dad
+    m["gp_lldda_sum"] = gp_lldda_sum
+    m["gp_lldda_prod"] = gp_lldda_prod
     m["regional_linear"] = regional_model
     m["tele_linear"] = tele_model
     m["regional_gaussian"] = (regional_mean, regional_var)
     m["tele_gaussian"] = (tele_mean, tele_var)
-    return m
+    return m, lld_params, dad_params, lldda_sum_params, lldda_prod_params
 
 class CodaModel:
 
-    MODEL_TYPE_GP_LOC, MODEL_TYPE_GP_AD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(4)
+    MODEL_TYPE_GP_LLD, MODEL_TYPE_GP_DAD, MODEL_TYPE_GP_LLDDA_SUM, MODEL_TYPE_GP_LLDDA_PROD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(6)
 
-    def __init__(self, fit_data, band_dir, phaseids, chan, ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, sigma_f = [.001, .5, .5], w = [500, 500, 500], sigma_n = [0.00001, 0.5, 0.5], debug=True):
+    def __init__(self, fit_data, band_dir, phaseids, chan, target_str="decay", ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, lld_params=[], dad_params=[], lldda_sum_params = [], lldda_prod_params = [], optimize=False, debug=True):
+
+        if target_str not in target_fns.keys():
+            raise Exception("invalid target str %s" % target_str)
+        else:
+             self.target_fn = target_fns[target_str]
 
         # assume that either earthmodel and sigmodel are both given, or neither given
         if sigmodel is None:
@@ -190,6 +255,7 @@ class CodaModel:
             self.sigmodel = sigmodel
             self.sites=sites
 
+        # used for cross-validation
         if ignore_evids is not None:
             good_rows = np.array([int(fit_data[i, FIT_EVID]) not in ignore_evids for i in range(fit_data.shape[0])])
             fit_data_n = fit_data[good_rows, :]
@@ -199,131 +265,102 @@ class CodaModel:
         self.slon = self.sites[self.siteid-1, 0]
         self.slat = self.sites[self.siteid-1, 1]
 
-        outfile = os.path.join(band_dir, "model_fits_%s_%s.pdf" % (":".join([str(p) for p in phaseids]), chan))
+        outfile = os.path.join(band_dir, "model_%s_fits_%s_%s.pdf" % (target_str, ":".join([str(p) for p in phaseids]), chan))
         pp = None
         if debug:
             pp = PdfPages(outfile)
             print "saving plots to", outfile
 
-        self.decay_models = None
-        self.peak_amp_model = None
-        self.onset_model = None
-
         # learn decay rate models
-        m = learn_models(fit_data, self.earthmodel, lambda r: r[FIT_CODA_DECAY], sigma_n[0], sigma_f[0], w[0], pp, "decay phaseids=%s chan=%s" % (phaseids, chan))
-        self.decay_models = m
-
-        # learn onset time models
-        m = learn_models(fit_data, self.earthmodel, lambda r : r[FIT_PEAK_DELAY], sigma_n[1], sigma_f[1], w[1], pp, "offset phaseids=%s chan=%s" % (phaseids, chan))
-        self.onset_models = m
-
-        # learn peak height models
-        m = learn_models(fit_data, self.earthmodel, gen_source_amp, sigma_n[2], sigma_f[2], w[2], pp, "amp phaseids=%s chan=%s" % (phaseids, chan))
-        self.peak_amp_models = m
-
+        self.models, self.lld_params, self.dad_params, self.lldda_sum_params, self.lldda_prod_params = learn_models(fit_data, self.earthmodel, target_fn=self.target_fn, lld_params=lld_params, dad_params=dad_params, lldda_sum_params = lldda_sum_params, lldda_prod_params = lldda_prod_params, pp=pp, label="%s phaseids=%s chan=%s" % (target_str, phaseids, chan), optimize=optimize)
         if pp is not None:
             pp.close()
 
-    def predict(self, ev, model_type, model_set, distance = None, azimuth=None):
+    def predict(self, ev, model_type, distance = None, azimuth=None):
 
         if distance is None:
             distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
-        if model_type == self.MODEL_TYPE_GP_LOC:
-            return float(model_set['gp_loc'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL])))
-        elif model_type == self.MODEL_TYPE_GP_AD:
+        if model_type == self.MODEL_TYPE_GP_LLD:
+            return float(self.models['gp_lld'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL])))
+        elif model_type == self.MODEL_TYPE_GP_DAD:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return float(model_set['gp_ad'].predict((distance, azimuth, ev[EV_DEPTH_COL])))
+            return float(self.models['gp_dad'].predict((distance, azimuth, ev[EV_DEPTH_COL])))
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            return float(self.models['gp_lldda_sum'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_PROD:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            return float(self.models['gp_lldda_prod'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
         elif model_type == self.MODEL_TYPE_LINEAR:
-            if distance < 1000:
-                model = model_set['regional_linear']
+            if distance < 2000:
+                model = self.models['regional_linear']
             else:
-                model = model_set['tele_linear']
-            return float(model[distance])
+                model = self.models['tele_linear']
+            try:
+                return float(model[(distance, 1)])
+            except:
+                return self.predict(ev, self.MODEL_TYPE_GAUSSIAN, distance=distance, azimuth=azimuth)
         elif model_type == self.MODEL_TYPE_GAUSSIAN:
-            if distance < 1000:
-                (mean, var) = model_set['regional_gaussian']
+            if distance < 2000:
+                (mean, var) = self.models['regional_gaussian']
             else:
-                (mean, var) = model_set['tele_gaussian']
+                (mean, var) = self.models['tele_gaussian']
             return float(mean)
 
-    def predict_decay(self, ev, model_type, distance = None, azimuth=None):
-        return self.predict(ev, model_type, self.decay_models, distance=distance, azimuth=azimuth)
-
-    def predict_peak_time(self, ev, model_type, distance = None, azimuth=None):
-        return self.predict(ev, model_type, self.onset_models, distance=distance, azimuth=azimuth)
-
-    def predict_peak_amp(self, ev, model_type, distance = None, azimuth=None):
-        return self.predict(ev, model_type, self.peak_amp_models, distance=distance, azimuth=azimuth)
-
-    def sample(self, ev, model_type, model_set, distance = None, azimuth=None):
+    def sample(self, ev, model_type, distance = None, azimuth=None):
 
         if distance is None:
             distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
 
-        if model_type == self.MODEL_TYPE_GP_LOC:
-            return model_set['gp_loc'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
-        elif model_type == self.MODEL_TYPE_GP_AD:
+        if model_type == self.MODEL_TYPE_GP_LLD:
+            return self.models['gp_lld'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
+        elif model_type == self.MODEL_TYPE_GP_DAD:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return model_set['gp_ad'].sample((distance, azimuth, ev[EV_DEPTH_COL]))
+            return self.models['gp_dad'].sample((distance, azimuth, ev[EV_DEPTH_COL]))
         elif model_type == self.MODEL_TYPE_LINEAR:
             raise RuntimeError("sampling not yet implemented for linear models")
-            if distance < 1000:
-                model = model_set['regional_linear']
+            if distance < 2000:
+                model = self.models['regional_linear']
             else:
-                model = model_set['tele_linear']
+                model = self.models['tele_linear']
 
         elif model_type == self.MODEL_TYPE_GAUSSIAN:
-            if distance < 1000:
-                (mean, var) = model_set['regional_gaussian']
+            if distance < 2000:
+                (mean, var) = self.models['regional_gaussian']
             else:
-                (mean, var) = model_set['tele_gaussian']
+                (mean, var) = self.models['tele_gaussian']
             return mean + np.random.randn() * np.sqrt(var)
 
-    def sample_decay(self, ev, model_type, distance = None, azimuth = None):
-        return self.sample(ev, model_type, self.decay_models, distance=distance, azimuth=azimuth)
-
-    def sample_peak_time(self, ev, model_type, distance = None, azimuth = None):
-        return self.sample(ev, model_type, self.onset_models, distance=distance, azimuth=azimuth)
-
-    def sample_peak_amp(self, ev, model_type, distance = None, azimuth = None):
-        return self.sample(ev, model_type, self.peak_amp_models, distance=distance, azimuth=azimuth)
-
-    def log_likelihood(self, val, ev, model_type, model_set, distance = None, azimuth = None):
+    def log_likelihood(self, val, ev, model_type, distance = None, azimuth = None):
 
         if distance is None:
             distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
 
-        if model_type == self.MODEL_TYPE_GP_LOC:
-            return model_set['gp_loc'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
-        elif model_type == self.MODEL_TYPE_GP_AD:
+        if model_type == self.MODEL_TYPE_GP_LLD:
+            return self.models['gp_lld'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
+        elif model_type == self.MODEL_TYPE_GP_DAD:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return model_set['gp_ad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
+            return self.models['gp_dad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
         elif model_type == self.MODEL_TYPE_LINEAR:
             raise RuntimeError("log likelihood not yet implemented for linear models")
-            if distance < 1000:
-                model = model_set['regional_linear']
+            if distance < 2000:
+                model = self.models['regional_linear']
             else:
-                model = model_set['tele_linear']
+                model = self.models['tele_linear']
 
         elif model_type == self.MODEL_TYPE_GAUSSIAN:
-            if distance < 1000:
-                (mean, var) = model_set['regional_gaussian']
+            if distance < 2000:
+                (mean, var) = self.models['regional_gaussian']
             else:
-                (mean, var) = model_set['tele_gaussian']
+                (mean, var) = self.models['tele_gaussian']
             return -.5 *np.log(2*np.pi*var) - .5 *(val-mean)**2 / var
 
 
-    def log_likelihood_decay(self, val, ev, model_type, distance = None, azimuth = None):
-        return self.log_likelihood(val, ev, model_type, self.decay_models, distance=distance, azimuth=azimuth)
-
-    def log_likelihood_peak_time(self, val, ev, model_type, distance = None, azimuth = None):
-        return self.log_likelihood(val, ev, model_type, self.onset_models, distance=distance, azimuth=azimuth)
-
-    def log_likelihood_peak_amp(self, val, ev, model_type, distance = None, azimuth = None):
-        return self.log_likelihood(val, ev, model_type, self.peak_amp_models, distance=distance, azimuth=azimuth)
 
 
 def main():
