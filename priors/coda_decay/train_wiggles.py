@@ -56,7 +56,7 @@ def main():
 
     runids = [int(r) for r in options.runids.split(',')]
     phaseids = P_PHASEIDS if options.phaseids is None else [int(r) for r in options.phaseids.split(',')]
-    channels = ['BHZ'] if options.channels is None else [s for s in options.channels.split(',')]
+    channels = chans if options.channels is None else [s for s in options.channels.split(',')]
     siteids = None if options.siteids is None else [int(s) for s in options.siteids.split(',')]
     runid_cond = "(" + " or ".join(["runid=%d" % r for r in runids])  + ")"
     print runid_cond
