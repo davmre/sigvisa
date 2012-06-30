@@ -194,7 +194,12 @@ class DistFNKernel(Kernel):
             return np.zeros((X1.shape[0], X1.shape[0]))
 
         D = gen_pairwise_matrix(self.distfn, X1, X2)
-        return self.sigma_f**2 * np.exp(-1 * D**2 / self.w**2)
+        try:
+            d = self.sigma_f**2 * np.exp(-1 * D**2 / self.w**2)
+        except AttributeError:
+            import pdb
+            pdb.set_trace()
+        return d
 
     def derivative_wrt_i(self, i, X1, X2):
         X1, X2 = self._check_args(X1,X2)
