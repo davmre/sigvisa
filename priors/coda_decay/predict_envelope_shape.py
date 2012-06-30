@@ -182,7 +182,6 @@ def main():
             np.savetxt(fname, fit_data)
         print str(fit_data.shape[0]) + " entries loaded"
 
-
         band_dir = os.path.join(base_coda_dir, options.short_band)
         fname = os.path.join(band_dir, "%s_predictions_%s.pdf" % (phase_label, options.chan))
         pp = PdfPages(fname)
@@ -194,12 +193,13 @@ def main():
         dad_params = {"decay": [.01, .02, 2, 0.0001, 0.0001], "onset": [2, 5, 2, 0.0001, 0.0001], "amp": [.3, .8, 2, 0.0001, 0.0001]}
 
         # sigma_n dist_mag dist_scale azi_mag azi_scale depth_mag depth_scale ll_mag ll_scale
-        lldda_sum_params = {"decay": [.01, .05, 1, 0.00001, 20, 0.000001, 1, .05, 300], "onset": [2, 5, 1, 0.00001, 20, 0.000001, 1, 5, 300], "amp": [.3, .8, 1, 0.00001, 20, 0.000001, 1, .8, 300] }
+        lldda_sum_params = {"decay": [.01, .05, 1, 0.00001, 20, 0.000001, 1, .05, 300], "onset": [2, 5, 1, 0.00001, 20, 0.000001, 1, 5, 300], "amp": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] }
 
         # sigma_n sigma_f dist_scale azi_scale depth_scale ll_scale
         lldda_prod_params = {"decay": [.01, .02, 1, 200, 10, 300], "onset": [2, 5, 1, 200, 10, 300], "amp": [.3, .8, 1, 200, 10, 300] }
 
-        for target_str in ["amp"]:
+
+        for target_str in ["decay", "amp", "onset"]:
             print "evaluating starting hyperparams for", target_str
             cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = pp, lld_params = lld_params[target_str], dad_params=dad_params[target_str], lldda_sum_params=lldda_sum_params[target_str], lldda_prod_params=lldda_prod_params[target_str])
             cm = CodaModel(fit_data, band_dir, phaseids, options.chan, target_str=target_str, ignore_evids = [] , lld_params = lld_params[target_str], dad_params=dad_params[target_str], lldda_sum_params=lldda_sum_params[target_str], lldda_prod_params=lldda_prod_params[target_str], optimize=False)
@@ -208,7 +208,6 @@ def main():
             print "evaluating learned hyperparams for", target_str
             cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = pp, lld_params=cm.lld_params, dad_params=cm.dad_params, lldda_sum_params=cm.lldda_sum_params, lldda_prod_params=cm.lldda_prod_params)
             plot_events_heat(pp, fit_data, cm, target_str)
-
 
         pp.close()
 

@@ -97,21 +97,21 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
     lldda_prod_priors = [None, None, None, None, None, None]
 
     if optimize:
-        print "optimizing prod-composite GP..."
-        lldda_prod_params,v = optimize_hyperparams(X, y, kernel="distfns_prod", start_kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors)
+#        print "optimizing prod-composite GP..."
+#        lldda_prod_params,v = optimize_hyperparams(X, y, kernel="distfns_prod", start_kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors)
+ #       print "got params", lldda_prod_params , "giving ll", v
+
+        print "optimizing location-based GP..."
+        lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
+        print "got params", lld_params, "giving ll", v
+
+        print "optimizing distance/azimuth-based GP..."
+        dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
         print "got params", dad_params , "giving ll", v
 
-#        print "optimizing location-based GP..."
-#        lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
-#        print "got params", lld_params, "giving ll", v
-
-#        print "optimizing distance/azimuth-based GP..."
-#        dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
-#        print "got params", dad_params , "giving ll", v
-
-#        print "optimizing sum-composite GP..."
-#        lldda_sum_params,v = optimize_hyperparams(X, y, kernel="distfns_sum", start_kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_sum_priors)
-#        print "got params", dad_params , "giving ll", v
+        print "optimizing sum-composite GP..."
+        lldda_sum_params,v = optimize_hyperparams(X, y, kernel="distfns_sum", start_kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_sum_priors)
+        print "got params", lldda_sum_params , "giving ll", v
 
 
     gp_lld = GaussianProcess(Xll, y, kernel="distfn", kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn)
@@ -120,7 +120,7 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
 
     gp_lldda_sum = GaussianProcess(X, y, kernel="distfns_sum", kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], ignore_pos_def_errors=False)
 
-    gp_lldda_prod = GaussianProcess(X, y, kernel="distfns_prod", kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors, ignore_pos_def_errors=False)
+#    gp_lldda_prod = GaussianProcess(X, y, kernel="distfns_prod", kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors, ignore_pos_def_errors=False)
 
 
     regional_dist = []
@@ -229,7 +229,7 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
     m["gp_lld"] = gp_lld
     m["gp_dad"] = gp_dad
     m["gp_lldda_sum"] = gp_lldda_sum
-    m["gp_lldda_prod"] = gp_lldda_prod
+    m["gp_lldda_prod"] = gp_lldda_sum
     m["regional_linear"] = regional_model
     m["tele_linear"] = tele_model
     m["regional_gaussian"] = (regional_mean, regional_var)
