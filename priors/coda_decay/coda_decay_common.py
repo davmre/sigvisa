@@ -21,6 +21,8 @@ import utils.geog
 import obspy.signal.util
 
 
+
+
 P_PHASES = ['P', 'Pn']
 P_PHASEIDS = [1,2]
 
@@ -48,6 +50,12 @@ chans = ["BHZ","BHE", "BHN"]
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
 
 target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB]}
+
+class NestedDict(dict):
+    def __getitem__(self, key):
+        if key in self: return self.get(key)
+        return self.setdefault(key, NestedDict())
+
 
 def sta_to_siteid(sta, cursor):
     cursor.execute("select id from static_siteid where sta='%s'" % (sta))
@@ -133,7 +141,7 @@ def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=N
     return np.array(new_data)
 
 
-def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, acost_threshold=10, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
+def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, exclude_evids=None, acost_threshold=20, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 
     chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
     band_cond = "and fit.band='%s'" % (short_band) if short_band is not None else ""
@@ -141,6 +149,7 @@ def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runid=None,
     run_cond = "and fit.runid=%d" % (runid) if runid is not None else ""
     phase_cond = "and (" + " or ".join(["pid.id = %d" % phaseid for phaseid in phaseids]) + ")" if phaseids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
+    evid_cond = "and (" + " or ".join(["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
 
     sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and lebo.mb between %f and %f and fit.dist between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, acost_threshold, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
     cursor.execute(sql_query)
@@ -478,7 +487,6 @@ def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=No
 
     return bmap, (max_lon, max_lat)
 
-
 def logsub_noise(log_height, log_noise):
     return np.log ( np.exp(log_height) - np.exp(log_noise) )
 
@@ -488,19 +496,4 @@ def subtract_traces(tr, to_subtract):
     newtrace = Trace(newdata, header=tr.stats.copy())
     newtrace.stats.npts = len(newtrace.data)
     return newtrace
-
-def get_template(sigmodel, trace, phaseids, params, logscale=False, sample=False):
-    srate = trace.stats['sampling_rate']
-    st = trace.stats.starttime_unix
-    et = st + trace.stats.npts/srate
-    siteid = trace.stats.siteid
-    c = sigvisa.canonical_channel_num(trace.stats.channel)
-    b = sigvisa.canonical_band_num(trace.stats.band)
-    if not sample:
-        env = sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, params)
-    else:
-        env = sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, params)
-    env.data = np.log(env.data) if logscale else env.data
-    return env
-
 
