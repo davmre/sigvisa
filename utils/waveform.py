@@ -363,13 +363,14 @@ def plot_focused_arr(earthmodel, event, siteid, window):
 
 
 def main(param_dirname):
-  if len(sys.argv) not in [3,4] or (len(sys.argv)==3 and sys.argv[1] != "leb" and sys.argv[1] != "leb_evid")\
-         or (len(sys.argv)==4 and sys.argv[1] != "visa"):
-    print "Usage: python waveform.py leb leb-orid | visa run-id orid"
-    sys.exit(1)
+#  if len(sys.argv) not in [3,4] or (len(sys.argv)==3 and sys.argv[1] != "leb" and sys.argv[1] != "leb_evid")\
+#         or (len(sys.argv)==4 and sys.argv[1] != "visa"):
+#    print "Usage: python waveform.py leb leb-orid | visa run-id orid"
+#    sys.exit(1)
 
   cursor = database.db.connect().cursor()
   evtype = sys.argv[1]
+  siteids = None
   if evtype == "leb":
     leb_orid = int(sys.argv[2])
     fname = "logs/%do_detections.pdf" % leb_orid
@@ -379,6 +380,7 @@ def main(param_dirname):
     cursor.execute("select orid from leb_origin where evid=%d" % leb_evid)
     leb_orid = int(cursor.fetchone()[0])
     fname = "logs/%d_detections.pdf" % leb_evid
+    siteids = [int(x) for x in sys.argv[3].split(',')]
   else:
     visa_runid = int(sys.argv[2])
     visa_orid= int(sys.argv[3])
@@ -432,8 +434,14 @@ def main(param_dirname):
 
   # find the travel-time of the event to all the stations that are up
   all_site_arrtimes = []
-  for siteid, site in enumerate(sites):
 
+  if siteids is None:
+    zipped_siteids = [(siteid, site) for siteid, site in enumerate(sites)]
+  else:
+    # this code uses 0-indexed siteids -- CONFUSING
+    zipped_siteids = [(siteid-1, sites[siteid-1]) for siteid in siteids]
+
+  for siteid, site in enumerate(sites):
     arrtime = earthmodel.ArrivalTime(event[ EV_LON_COL],
                                      event[ EV_LAT_COL],
                                      event[ EV_DEPTH_COL],
