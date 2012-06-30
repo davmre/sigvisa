@@ -215,8 +215,17 @@ def plot_scatter(lp, ls, pp):
         pp.close()
 
 
-def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_threshold, base_coda_dir):
+def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_threshold, base_coda_dir, target_str):
+
+    if target_str == "decay":
+        t = FIT_CODA_DECAY
+    elif target_str == "onset":
+        t = FIT_PEAK_DELAY
+    elif target_str == "amp":
+        t = FIT_CODA_HEIGHT
+
     for (chan_idx, chan) in enumerate(chans):
+        if chan != "BHZ": continue
         for (band_idx,band) in enumerate(bands):
 
             short_band = band[16:]
@@ -227,7 +236,8 @@ def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_thresh
             lp = []
             ls = []
             for row in orig_data:
-                r = row[[FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH, FIT_CODA_DECAY]]
+
+                r = row[[FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH, t]]
                 if row[FIT_PHASEID] in P_PHASEIDS:
                     lp.append(r)
                 elif row[FIT_PHASEID] in S_PHASEIDS:
@@ -237,7 +247,7 @@ def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_thresh
 
 
             pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-            fname = os.path.join(pdf_dir, "plots_%s_%.0f_%.0f.pdf" % (chan, min_azi, max_azi))
+            fname = os.path.join(pdf_dir, "plots_%s_%s_%.0f_%.0f.pdf" % (chan, target_str, min_azi, max_azi))
             pp = PdfPages(fname)
             print "opening pp in ", fname
 
@@ -308,7 +318,7 @@ def main():
 
     parser.add_option("-s", "--siteid", dest="siteid", default=None, type="int", help="siteid of station for which to generate plots")
     parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid of coda fits to examine")
-    parser.add_option("--maxcost", dest="max_cost", default=0.5, type="float", help="consider only coda fits with average cost below this threshold (0.5)")
+    parser.add_option("--maxcost", dest="max_cost", default=10, type="float", help="consider only coda fits with average cost below this threshold (10)")
 
     parser.add_option("--max_azi", dest="max_azi", default=360, type="float", help="(360)")
     parser.add_option("--min_azi", dest="min_azi", default=0, type="float", help="(360)")
@@ -317,6 +327,9 @@ def main():
     parser.add_option("--events", dest="events", default=False, action="store_true", help="(re)creates individual event coda plots (False)")
     parser.add_option("--pred_events", dest="pred_events", default=False, action="store_true", help="predicts individual event coda plots (False)")
     parser.add_option("--merge", dest="merge", default=False, action="store_true", help="merge all available plots for each band (False)")
+
+    parser.add_option("--target", dest="target", default="decay", help="decay, onset, or amp (decay)")
+
 
     (options, args) = parser.parse_args()
 
@@ -328,7 +341,7 @@ def main():
     base_coda_dir = get_base_dir(int(siteid), int(runid))
 
     if options.scatter:
-        generate_scatter_plots(cursor, options.runid, options.siteid, options.min_azi, options.max_azi, options.max_cost, base_coda_dir)
+        generate_scatter_plots(cursor, options.runid, options.siteid, options.min_azi, options.max_azi, options.max_cost, base_coda_dir, options.target)
 
     if options.events:
         for row in all_data:
