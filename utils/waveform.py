@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,11 +24,15 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # draw the waveforms for an LEB event at some of the stations
 
 import sys, struct
+import matplotlib
+matplotlib.use('PDF')
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
 import gzip
 
 from obspy.core import Trace, Stream, UTCDateTime
@@ -82,7 +86,7 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
       axes = plt.subplot(len(chans), 1, 1)
     else:
       plt.subplot(len(chans), 1, chidx+1, sharex=axes)
-      
+
     plt.ylabel(sta+" - "+chan)
     try:
       trc = fetch_waveform(sta, chan, start_time, end_time)
@@ -94,7 +98,7 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
                zerophase=True)
     env = sig_filter.envelope(trc.data)
 
-    
+
     timevals = np.arange(0, trc.stats.npts/trc.stats.sampling_rate,
                          1.0 /trc.stats.sampling_rate)
     plt.plot(timevals, trc.data, 'k')
@@ -110,7 +114,7 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
 
     for arrtime, phname in zip(all_phase_times, all_phase_names):
       plt.text(arrtime, 0, phname)
-    
+
     #st.plot(color='k')
 
 
@@ -141,7 +145,7 @@ def fetch_array_elements(siteid):
 
 def plot_fk_arr(siteid, start_time, end_time):
   sta, chan, arrsta = fetch_array_elements(siteid)
-  
+
   # query waveforms from all the array elements
   trcs = []
   for arridx in range(len(arrsta)):
@@ -150,13 +154,13 @@ def plot_fk_arr(siteid, start_time, end_time):
     except MissingWaveform:
       print "Warning: station %s, chan %s missing" % (arrsta[arridx, 0], chan)
       continue
-    
+
     trc.stats.network, trc.stats.station = sta, arrsta[arridx, 0]
     trc.stats.coordinates = {"longitude": float(arrsta[arridx, 1]),
                              "latitude": float(arrsta[arridx, 2]),
                              "elevation": float(arrsta[arridx, 3])}
     trcs.append(trc)
-  
+
   if len(trcs) == 0:
     raise MissingWaveform("Can't find data for array sta %s"
                             % (sta))
@@ -189,7 +193,7 @@ def plot_fk_arr(siteid, start_time, end_time):
   fig.autofmt_xdate()
   fig.subplots_adjust(top=0.95, right=0.95, bottom=0.2, hspace=0)
 
-  
+
   return
 
 
@@ -219,7 +223,7 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
   datafile.close()
 
   # now convert the bytes into an array of integers
-  
+
   data = np.ndarray((read_samples,), int)
 
   if waveform['datatype'] == "s4":
@@ -246,8 +250,8 @@ def dict_cursor(cursor):
   description = [x[0] for x in cursor.description]
   for row in cursor:
     yield dict(zip(description, row))
-                
-  
+
+
 def fetch_waveform(station, chan, stime, etime):
   """
   Returns a single obspy trace corresponding to the waveform for the given
@@ -268,19 +272,19 @@ def fetch_waveform(station, chan, stime, etime):
     if waveform_values is None:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
                             % (station, chan, stime))
-    
+
     waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
     cursor.execute("select id from static_siteid where sta = '%s'" % (station))
     try:
       siteid = cursor.fetchone()[0]
     except:
       raise MissingWaveform("couldn't get siteid for station %s" % (station))
-    
+
     # check the samprate is consistent for all waveforms in this interval
     assert(samprate is None or samprate == waveform['samprate'])
     if samprate is None:
       samprate = waveform['samprate']
-    
+
     # at which offset should we start collecting samples
     first_off = int((stime-waveform['time'])*samprate)
     # how many samples are needed remaining
@@ -296,11 +300,11 @@ def fetch_waveform(station, chan, stime, etime):
                             % (station, chan, stime))
 
     data.extend(segment)
-    
+
     # do we have all the data that we need
     if desired_samples <= available_samples:
       break
-    
+
     # otherwise move the start time forward for the next file
     stime = waveform['endtime']
     # and adust the end time to ensure that the correct number of samples
@@ -317,13 +321,13 @@ def fetch_waveform(station, chan, stime, etime):
   return Trace(data=np.array(data), header=stats)
 
   #return samprate, np.array(data)
-  
 
-  
-  
+
+
+
 def plot_focused_arr(earthmodel, event, siteid, window):
   sta, chan, arrsta = fetch_array_elements(siteid)
-  
+
   # for each array element fetch the waveform in a window around the
   # arrival time at that station
   trcs = []
@@ -348,7 +352,7 @@ def plot_focused_arr(earthmodel, event, siteid, window):
   # now sum up all the waveforms
   sumdata = sum([x.data for x in trcs])
   env = sig_filter.envelope(sumdata)
-  
+
   plt.figure()
   plt.xlabel("Time (s)")
   plt.ylabel(sta + " - " + chan)
@@ -356,21 +360,31 @@ def plot_focused_arr(earthmodel, event, siteid, window):
                        1.0 /trcs[0].stats.sampling_rate)
   plt.plot(timevals, sumdata, 'k')
   plt.plot(timevals, env, 'k:')
-  
+
 
 def main(param_dirname):
-  if len(sys.argv) not in [3,4] or (len(sys.argv)==3 and sys.argv[1] != "leb")\
+  if len(sys.argv) not in [3,4] or (len(sys.argv)==3 and sys.argv[1] != "leb" and sys.argv[1] != "leb_evid")\
          or (len(sys.argv)==4 and sys.argv[1] != "visa"):
     print "Usage: python waveform.py leb leb-orid | visa run-id orid"
     sys.exit(1)
 
+  cursor = database.db.connect().cursor()
   evtype = sys.argv[1]
   if evtype == "leb":
     leb_orid = int(sys.argv[2])
+    fname = "logs/%do_detections.pdf" % leb_orid
+  elif evtype == "leb_evid":
+    evtype = "leb"
+    leb_evid = int(sys.argv[2])
+    cursor.execute("select orid from leb_origin where evid=%d" % leb_evid)
+    leb_orid = int(cursor.fetchone()[0])
+    fname = "logs/%d_detections.pdf" % leb_evid
   else:
     visa_runid = int(sys.argv[2])
     visa_orid= int(sys.argv[3])
-  
+    fname = "visa.pdf"
+
+
   # load the event
   cursor = database.db.connect().cursor()
   if evtype == "leb":
@@ -383,10 +397,10 @@ def main(param_dirname):
     print "Event not found"
     sys.exit(2)
   evtime, = fetch
-  
+
   # start a dataset from 5 minutes before the event to 1 hour after
   start_time, end_time = evtime - 5 * 60, evtime + 60*60
-  
+
   detections, arid2num = read_detections(cursor, start_time, end_time)
   if evtype == "leb":
     leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "leb")
@@ -403,23 +417,19 @@ def main(param_dirname):
     evnum = visa_orid2num[visa_orid]
     event = visa_events[evnum]
     event_detlist = visa_evlist[evnum]
-    
+
   sites = read_sites(cursor)
   site_up = read_uptime(cursor, start_time, end_time)
   phasenames, phasetimedef = read_phases(cursor)
   cursor.execute("select sta from static_siteid site order by id")
   sitenames = np.array(cursor.fetchall())[:,0]
-  
-  # load the earthmodel and the NET-VISA model
+
+  # load the earthmodel
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
-  netmodel = learn.load_netvisa(param_dirname,
-                                start_time, end_time,
-                                detections, site_up, sites, phasenames,
-                                phasetimedef)
 
   print "Ev Mag %.1f Ev Time %.1f" % (event[ EV_MB_COL],
                                       event[ EV_TIME_COL])
-  
+
   # find the travel-time of the event to all the stations that are up
   all_site_arrtimes = []
   for siteid, site in enumerate(sites):
@@ -440,7 +450,7 @@ def main(param_dirname):
         if phaseid == 0 and int(detections[detid, DET_SITE_COL]) == siteid:
           isdet = True
           break
-        
+
       all_site_arrtimes.append((arrtime, siteid, isdet))
 
   all_site_arrtimes.sort()
@@ -448,12 +458,12 @@ def main(param_dirname):
   print "Detected At:"
   last_det_idx = -1
   for idx, (arrtime, siteid, isdet) in enumerate(all_site_arrtimes):
-    
+
     if sites[siteid, SITE_IS_ARRAY]:
       site_type = "ARR"
     else:
       site_type = "3-C"
-    
+
     if isdet:
       if idx > (last_det_idx+1):
         print "..... missed by %d sites" % (idx - last_det_idx - 1)
@@ -466,11 +476,13 @@ def main(param_dirname):
                        sites[siteid, [SITE_LON_COL, SITE_LAT_COL]]))
       last_det_idx = idx
 
-  if idx > last_det_idx:
-    print "..... missed by %d sites" % (idx - last_det_idx)
+    if idx > last_det_idx:
+      print "..... missed by %d sites" % (idx - last_det_idx)
 
   print "Total sites which were up:", len(all_site_arrtimes)
-  # for the first site which detected the event draw the waveform
+
+  # open the output file
+  pp = PdfPages(fname)
 
   # plot the waveforms at all the sites where it was detected
   for arrtime, siteid, isdet in all_site_arrtimes:
@@ -481,11 +493,12 @@ def main(param_dirname):
                           earthmodel, event)
         else:
           plot_fk_arr(siteid, arrtime-20, arrtime+20)
-        #plot_focused_arr(earthmodel, event, siteid, 20)
+        pp.savefig()
+
     except MissingWaveform as e:
       print e
-  plt.show()
-  
+#  plt.show()
+
 if __name__ == "__main__":
   try:
     main("parameters")
@@ -497,4 +510,4 @@ if __name__ == "__main__":
     pdb.post_mortem(sys.exc_traceback)
     raise
 
-  
+
