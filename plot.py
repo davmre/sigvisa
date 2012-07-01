@@ -7,24 +7,28 @@ import database.db
 import learn
 from utils.geog import dist_deg, azimuth
 
-def plot_det_times(trc, all_det_times, all_det_labels):
+def plot_det_times(trc, all_det_times, all_det_labels, logscale=False):
   if trc == None or all_det_times == None:
     return
 
   if all_det_times is not None:
     maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+    if logscale:
+      (maxtrc, mintrc) = (np.log(maxtrc), np.log(mintrc))
     plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
             width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
     if all_det_labels is not None:
       for (t, lbl) in zip(all_det_times, all_det_labels):
         plt.text(t+3, maxtrc - (maxtrc-mintrc)*0.1, lbl, color="red", fontsize=4)
 
-def subplot_det_times(axes, trc, all_det_times, all_det_labels):
+def subplot_det_times(axes, trc, all_det_times, all_det_labels, logscale=False):
   if trc == None or all_det_times == None:
     return
 
   if all_det_times is not None:
     maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+    if logscale:
+      (maxtrc, mintrc) = (np.log(maxtrc), np.log(mintrc))
     axes.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
             width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
     if all_det_labels is not None:
@@ -34,11 +38,12 @@ def subplot_det_times(axes, trc, all_det_times, all_det_labels):
 
 
 # does not save for you - you need to call savefig() yourself!
-def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None, band="broadband_envelope", format = "k-"):
+def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None, band="broadband_envelope", format = "k-", chans=None, logscale=False):
   plt.figure()
   plt.xlabel("Time (s)")
 
-  for chidx, chan in enumerate(sorted(chan_dict.keys())):
+  chans = chan_dict.keys() if chans is None else chans
+  for chidx, chan in enumerate(sorted(chans)):
     if chidx == 0:
       axes = plt.subplot(len(chan_dict), 1, 1)
       if title is not None:
@@ -54,8 +59,10 @@ def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None,
     stime = trc.stats["starttime_unix"]
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
-    plt.plot(timevals, trc, format)
-    plot_det_times(trc, all_det_times, all_det_labels)
+    trc_data = np.log(trc.data) if logscale else trc.data
+
+    plt.plot(timevals, trc_data, format)
+    plot_det_times(trc, all_det_times, all_det_labels, logscale=logscale)
 
 def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format="k-"):
   fig = plt.figure()
