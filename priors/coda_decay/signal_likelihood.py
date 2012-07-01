@@ -53,7 +53,7 @@ class TraceModel:
 
         set_noise_processes(self.sigmodel, segment)
 
-        params = NestedDict()
+        all_params = NestedDict()
 
         for chan in chans:
             for band in bands:
@@ -94,7 +94,7 @@ class TraceModel:
                     for i in range(n):
                         params = self.__sample_params(phaseids, event, siteid, chan, band)
                         ll = f(params)
-                        sum_ll = np.logaddexp(sum_ll, ll)
+                        sum_ll = np.logaddexp(sum_ll, ll) if not (ll < 1e-300) else sum_ll
 
                         if ll > best_param_ll:
                             best_params = params
@@ -104,7 +104,7 @@ class TraceModel:
                             import pdb
                             pdb.set_trace()
 
-                    params[chan][band] = best_params
+                    all_params[chan][band] = best_params
 
                     ll = sum_ll - np.log(n)
                     print "got ll", ll
@@ -112,7 +112,7 @@ class TraceModel:
 
                 total_ll += ll
 
-        return total_ll, params
+        return total_ll, all_params
 
     def __generate_params(self, phaseids, ev, siteid, chan, band, tt_f, template_f):
         """ Either predict or sample template parameters (plus arrival
@@ -292,7 +292,11 @@ class TraceModel:
             ll2, params2 = self.log_likelihood(segment, null_event, pp=pp, marginalize_method="mode")
             ll1, params1 = self.log_likelihood(segment, event, pp=pp, marginalize_method=marginalize_method)
             print "best sampled params"
-            print_params(params2)
+            for c in params1.keys():
+                for b in params1[c].keys():
+                    print c,b
+                    print params1[c][b]
+                    print_params(params1[c][b])
 
             print "segment from %d gives signal ll %f vs noise ll %f" % (segment[chans[0]][bands[0]].stats.siteid, ll1, ll2)
 
@@ -337,7 +341,7 @@ class TraceModel:
         best_event[2] = max_lonlat[1]
         for s in segments:
 
-            band = 'narrow_logenvelope_2.00_3.00'
+            band = 'narrow_envelope_2.00_3.00'
             chan = 'BHZ'
             tr = s[chan][band]
 
