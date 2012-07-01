@@ -106,7 +106,26 @@ def load_event(cursor, evid):
     cursor.execute(sql_query)
     return np.array(cursor.fetchone())
 
+def load_event_arrivals(cursor, evid, siteid):
+    sql_query = "select l.time from leb_arrival l, leb_origin lebo, leb_assoc leba, static_siteid sid where l.arid=leba.arid and leba.orid=lebo.orid and lebo.evid=%d and l.sta=sid.sta and sid.id=%d" % (evid, siteid)
+    cursor.execute(sql_query)
+    return np.array(cursor.fetchall())[:,0]
 
+
+def predict_event_arrivals(cursor, earthmodel, evid, siteid, phaseids=[1,5]):
+
+    event = load_event(cursor, evid)
+
+    arrivals = []
+    for pid in phaseids:
+        arrivals.append(earthmodel.ArrivalTime(event[ EV_LON_COL],
+                                       event[ EV_LAT_COL],
+                                       event[ EV_DEPTH_COL],
+                                       event[ EV_TIME_COL],
+                                               pid-1, 
+                                       siteid-1))
+
+    return np.array(arrivals), phaseids
 
 def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 
@@ -247,17 +266,27 @@ def smooth_segment(segment, bands=None, chans=None, window_len=300):
 
     return smoothed_segment
 
-def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=False, bands=None, chans=None):
+def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=False, bands=None, chans=None, earthmodel=None):
     sql_query="SELECT l.time, l.arid, pid.id FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba, static_phaseid pid where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase order by l.time" % (evid, siteid)
     cursor.execute(sql_query)
     other_arrivals = np.array(cursor.fetchall())
-    other_arrival_phaseids = other_arrivals[:, 2]
-    other_arrival_arids = other_arrivals[:, 1]
-    other_arrivals = other_arrivals[:, 0]
-    sql_query="SELECT leba.phase, l.arid FROM leb_arrival l, static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (evid, siteid)
-    cursor.execute(sql_query)
-    other_arrival_phases = np.array(cursor.fetchall())
-    other_arrival_phases = other_arrival_phases[:,0]
+
+    if len(other_arrivals) > 0:
+        other_arrival_phaseids = other_arrivals[:, 2]
+        other_arrival_arids = other_arrivals[:, 1]
+        other_arrivals = other_arrivals[:, 0]
+        sql_query="SELECT leba.phase, l.arid FROM leb_arrival l, static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (evid, siteid)
+        cursor.execute(sql_query)
+        other_arrival_phases = np.array(cursor.fetchall())
+        other_arrival_phases = other_arrival_phases[:,0]
+    else:
+        if earthmodel is None:
+            raise Exception("trying to load signal slice for undetected event, but no earthmodel was passed!")
+        event = load_event(cursor, evid)
+        other_arrival_phaseids = [1,5]
+        other_arrival_phases = ['P', 'S']
+        other_arrivals, p = predict_event_arrivals(cursor, earthmodel, evid, siteid, other_arrival_phaseids)
+        other_arrival_arids = None
 
     first_p_arrival = None
     first_p_phaseid = 1
@@ -281,6 +310,9 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
             return None
         sigvisa_util.compute_narrowband_envelopes(arrival_segment)
 
+        if len(traces) == 0:
+            import pdb
+            pdb.set_trace()
 
         if chans is None:
             chans = arrival_segment[0].keys()
