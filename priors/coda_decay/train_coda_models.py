@@ -373,7 +373,7 @@ class CodaModel:
         elif model_type == self.MODEL_TYPE_GP_DAD:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            l = self.models['gp_dad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
+            ll = self.models['gp_dad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
         elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
