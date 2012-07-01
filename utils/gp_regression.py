@@ -302,7 +302,7 @@ def gp_nll_ngrad(X, y, kernel, kernel_params, kernel_extra, kernel_priors):
         nll += npll
         ngrad += npgrad
 
-        print "optimizing params", kernel_params, "ll", nll, "grad", ngrad
+        print "optimizing params", kernel_params, "ll", -1 *nll, "grad", ngrad
 
     except np.linalg.linalg.LinAlgError:
         print "warning: lin alg error in likelihood computation (%f, %f), returning inf" % (nll, npll)
@@ -319,8 +319,11 @@ def optimize_hyperparams(X, y, kernel, start_kernel_params, kernel_extra=None, k
     llgrad = lambda params: gp_nll_ngrad(X, y, kernel, params, kernel_extra, kernel_priors)
 
     skp = np.asarray(start_kernel_params)
-    std = skp/4
-    start_param_set = [skp, skp + np.random.randn(len(skp)) * std, skp + np.random.randn(len(skp)) * std, skp + np.random.randn(len(skp)) * std]
+    new_params = lambda  :  np.exp(np.log(skp) + np.random.randn(len(skp)) * 2)
+    start_param_set = [skp,] + [new_params() for i in range(3)]
+
+    print "start param set"
+    print start_param_set
 
     best_params = skp
     nll, grad = llgrad(skp)
