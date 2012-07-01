@@ -8,7 +8,8 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 
 PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args);
-
+static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,PyObject *args);
+static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
 
 static PyMethodDef SigModel_methods[] = {
   {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
@@ -35,6 +36,12 @@ static PyMethodDef SigModel_methods[] = {
   {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
    "get_signals() "
    "-> signals\n"},
+  {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
+   "mean_travel_time(evlon, evlat, evdepth, siteid, phaseid)"
+   " -> travel time in seconds"},
+  {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
+   "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid, phaseid)"
+   " -> log probability"},
   {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "
    "-> num_translated\n"},
@@ -502,8 +509,52 @@ PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
     return Py_BuildValue("d", score);
 }
 
+static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
+                                      PyObject * args)
+{
+  double evlon, evlat, evdepth;
+  int siteid;
+  int phaseid;
+  double trvtime;
 
+  EarthModel_t * p_earth;
 
+  if (!PyArg_ParseTuple(args, "dddii", &evlon, &evlat, &evdepth,
+                        &siteid, &phaseid))
+    return NULL;
+
+  p_earth = p_sigmodel->p_earth;
+
+  trvtime = EarthModel_ArrivalTime(p_earth, evlon, evlat, evdepth, 0, phaseid,
+                                   siteid);
+
+  trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,
+                                           siteid, phaseid);
+
+  return Py_BuildValue("d", trvtime);
+}
+
+static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,
+                                     PyObject * args)
+{
+  double arrtime;
+  double pred_arrtime;
+  double det_deltime;
+  int siteid;
+  int phaseid;
+
+  double logprob;
+
+  if (!PyArg_ParseTuple(args, "dddii", &arrtime, &pred_arrtime, &det_deltime,
+                        &siteid, &phaseid))
+    return NULL;
+
+  logprob = ArrivalTimePrior_LogProb(&p_sigmodel->arr_time_joint_prior.single_prior,
+                                     arrtime, pred_arrtime,
+                                     det_deltime, siteid, phaseid);
+
+  return Py_BuildValue("d", logprob);
+}
 
 /* Check to see if our sigmodel has a signal for a particular site at
    a particular time */
