@@ -5,20 +5,25 @@ import learn
 import sys
 import numpy as np
 
+from collections import defaultdict
+
 from optparse import OptionParser
 
 from priors.coda_decay.coda_decay_common import *
 
 
-def print_event_set(cursor, evids, siteids, stas, sites):
+def print_event_set(cursor, evids, siteids, stas, sites, runids_source, runids_cond, exclude_sta=""):
 
     print "evid\tmb\tdepth\tsta\tdistance\tphase\tttime\tamp\tsnr"
     for evid in evids:
         sta_cond = "(" + " or ".join(["l.sta='%s'" % sta for sta in stas]) + ")"
-        sql_query = "select lebo.lon, lebo.lat, lebo.depth, lebo.mb, leba.phase, l.sta, l.amp, lebo.time, l.time, l.snr from leb_origin lebo, leb_assoc leba, leb_arrival l where lebo.evid=%d and %s and lebo.orid=leba.orid and leba.arid=l.arid" % (evid, sta_cond)
+        sql_query = "select distinct lebo.lon, lebo.lat, lebo.depth, lebo.mb, leba.phase, l.sta, l.amp, lebo.time, l.time, l.snr from leb_origin lebo, leb_assoc leba, leb_arrival l %s where lebo.evid=%d and %s and lebo.orid=leba.orid and leba.arid=l.arid %s" % (runids_source, evid, sta_cond, runids_cond)
         cursor.execute(sql_query)
         rows = cursor.fetchall()
         for r in rows:
+            if r[5] == exclude_sta:
+                import pdb
+                pdb.set_trace()
             siteid = siteids[stas.index(r[5])]
             sll = sites[siteid-1][0:2]
             dist = utils.geog.dist_km(r[0:2], sll)
@@ -40,30 +45,13 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
+
     if options.siteids is not None:
         siteids = [int(s) for s in options.siteids.split(',')]
     else:
         siteids = []
-
-
-    # first want  events which are detected at all stations - print the evid, magnitude, station list (all phases at each station, each with amp/snr)
-
-    cursor = db.connect().cursor()
-    sites = read_sites(cursor)
-    """
-
-    stations_cond = " and ".join(["exists (select ll.arid from leb_arrival ll, leb_origin llebo, leb_assoc lleba %s, static_siteid lsid where llebo.evid=lebo.evid and llebo.orid=lleba.orid and ll.arid=lleba.arid and ll.sta=lsid.sta and lsid.id=%d %s)" % (runids_source, siteid, runids_cond) for siteid in siteids])
-
-
-
-    sql_query = "select lebo.evid, lebo.mb from leb_origin lebo where lebo.mb > %f and lebo.mb < %f and lebo.time > %f and lebo.time < %f and %s" % (options.min_mb, options.max_mb, options.start_time, options.end_time, stations_cond)
-
-    print sql_query
-    cursor.execute(sql_query)
-    a = cursor.fetchall()
-    print a
-    """
-
+    
     if options.runids is not None:
         runids = [int(s) for s in options.runids.split(',')]
         runids_source = ", sigvisa_coda_fits fit"
@@ -73,7 +61,7 @@ def main():
         runids_source = ""
         runids_cond = ""
 
-
+    # first find events detected at all stations
     evids = dict()
     stas = []
     overlap = None
@@ -88,19 +76,33 @@ def main():
 
     print "events detected at all stations"
     print overlap
-#    print_event_set(cursor, overlap, siteids, stas, sites)
+    print_event_set(cursor, overlap, siteids, stas, sites, runids_source, runids_cond)
     print
 
+    # next, find events which are missed by one station
 
-    overlaps_except = dict()
+    # the first step is to find events that each station could
+    # plausibly have detected (i.e., events for which we know the
+    # station has waveform data)
+
+
+    all_evids = reduce(lambda a,b : a.union(b), evids.values())
+
+   
     for sta in stas:
-        overlaps_except[sta] = None
+        siteid = siteids[stas.index(sta)]
+        potential_examples = all_evids
+
         for sta2 in stas:
             if sta2 != sta:
-                overlaps_except[sta] = evids[sta2] if overlaps_except[sta] is None else overlaps_except[sta].intersection(evids[sta2])
+                potential_examples= potential_examples.intersection(evids[sta2])
+
+
+        print "checking %d possible examples at sta %s" % (len(potential_examples), sta)
+        confirmed_examples = [evid for evid in potential_examples if sigvisa_util.has_trace(cursor, siteid=siteid, sta=sta, evid=evid, earthmodel=earthmodel)]
+                
         print "events detected everywhere except %s:" % sta
-        print overlaps_except[sta]
-        print_event_set(cursor, overlaps_except[sta], siteids, stas, sites)
+        print_event_set(cursor, confirmed_examples, siteids, stas, sites, runids_source, runids_cond, exclude_sta=sta)
 
 
 if __name__ == "__main__":

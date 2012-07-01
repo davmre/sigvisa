@@ -18,6 +18,8 @@ import plot
 import learn
 import sys, os
 
+from priors.coda_decay.coda_decay_common import *
+
 # Frequency bands in Hz. From Mayeda et. al., "Stable and Transportable Regional Magnitudes Based on Coda-Derived Moment-Rate Spectra". (2003)
 #FREQ_BANDS = ((0.02, 0.03), (0.03, 0.05), (0.05, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.5), (0.5, 0.7), (0.7, 1.0), (0.7, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 6.0), (6.0, 8.0))
 
@@ -121,6 +123,9 @@ def aggregate_segments(segments):
     min_len = 1
 
     changed = True
+
+    if len(segments) == 0:
+      return segments
 
     while changed:
         changed = False
@@ -230,6 +235,29 @@ def load_event_traces(cursor, evids, evtype="leb", stations=None, process=None, 
         traces.append(segment_chans)
 
     return traces
+
+
+def has_trace(cursor, sta=None, start_time=None, end_time=None, evid=None, earthmodel=None, siteid=None):
+
+    if start_time is None or end_time is None:
+      arr_times, phaseids = predict_event_arrivals(cursor, earthmodel, evid, siteid, [1,2,4,5])
+      arr_times = [a for a in arr_times if a > 0]
+      start_time = np.min(arr_times)-5
+      end_time = np.max(arr_times) + 300
+
+    if sta is None:
+        sta = siteid_to_sta(siteid, cursor)
+
+    sql = "select distinct chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
+    cursor.execute(sql)
+    wfdiscs = cursor.fetchall()
+    wfdiscs = filter(lambda x: x[0] in ["BHE", "BHN", "BHZ", "BH1", "BH2"], wfdiscs)
+
+    s1 = map(lambda x: [x], wfdiscs)
+    s2 = reduce(lambda a,b : a+b, aggregate_segments(s1), [])
+    s3 = [s for s in s2 if max(s[1], float(start_time)) < min(s[2], float(end_time))]
+
+    return len(s3) > 0
 
 
 def load_traces(cursor, stations, start_time, end_time, process=None, downsample_factor = 1):
@@ -583,6 +611,8 @@ def extract_timeslice_at_station(traces, start_time, end_time, siteid):
 
 
   return [new_segment,]
+
+
 
 def load_and_process_traces(cursor, start_time, end_time, stalist=None, downsample_factor=1):
 
