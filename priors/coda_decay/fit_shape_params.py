@@ -251,13 +251,6 @@ def find_starting_params(arr, smoothed):
     return start_params, phaseids, bounds, bounds_fp
 
 
-def set_ar_processes(sigmodel, tr, phaseids):
-    c = sigvisa.canonical_channel_num(tr.stats.channel)
-    b = sigvisa.canonical_band_num(tr.stats.band)
-    arm = tr.stats.noise_model
-    sigmodel.set_noise_process(tr.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-    for phaseid in phaseids:
-        sigmodel.set_wiggle_process(tr.stats.siteid, b, c, int(phaseid), 1, 0.0001, np.array(arm.params))
 
 def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, method="bfgs", by_phase=False, wiggles=None, cursor=None, init_runid=None):
 

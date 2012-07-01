@@ -64,7 +64,7 @@ PyObject * py_set_noise_process(SigModel_t * p_sigmodel, PyObject * args) {
   if (!PyArg_ParseTuple(args, "iiiddO!", &siteid, &band, &chan, &noise_mean, &noise_variance, &PyArray_Type, &py_coeffs))
       return NULL;
 
-  printf("set noise process for channel %d band %d\n", chan, band);
+  // printf("set noise process for channel %d band %d\n", chan, band);
 
   ARProcess_t * p_ar = &(((Spectral_Envelope_Model_t * )(p_sigmodel->signal_model.pv_params))->p_stations + siteid-1)->bands[band].channel_noise_models[chan];
   if (p_ar->coeffs != NULL) {

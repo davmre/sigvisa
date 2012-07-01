@@ -1,4 +1,4 @@
-import os, errno, sys, time, traceback
+import os, errno, sys, time, traceback, hashlib
 import numpy as np, scipy, scipy.stats
 
 from database.dataset import *
@@ -20,9 +20,6 @@ from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
 import obspy.signal.util
 
-
-
-
 P_PHASES = ['P', 'Pn']
 P_PHASEIDS = [1,2]
 
@@ -36,11 +33,12 @@ min_s_coda_length = 45
 
 avg_cost_bound = 0.2
 
-bands = ['narrow_envelope_2.00_3.00', 'narrow_envelope_4.00_6.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
-#bands = ["narrow_envelope_2.00_3.00",]
-chans = ["BHZ","BHE", "BHN"]
+#bands = ['narrow_envelope_2.00_3.00', 'narrow_envelope_4.00_6.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
+bands = ["narrow_envelope_2.00_3.00",]
+#chans = ["BHZ","BHE", "BHN"]
+chans = ["BHZ",]
 
-(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_NUM_COLS) = range(12+1)
+(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_BANDID, FIT_NUM_COLS) = range(13+1)
 
 (AR_TIME_COL, AR_AZI_COL, AR_SNR_COL, AR_PHASEID_COL, AR_SITEID_COL, AR_NUM_COLS) = range(5+1)
 
@@ -49,13 +47,19 @@ chans = ["BHZ","BHE", "BHN"]
 # params for the envelope model
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
 
-target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB]}
+
 
 class NestedDict(dict):
     def __getitem__(self, key):
         if key in self: return self.get(key)
         return self.setdefault(key, NestedDict())
 
+
+def bandid_to_short_band(bandid):
+    for band in bands:
+        if sigvisa.canonical_band_num(band) == bandid:
+            return band[16:]
+    raise Exception("unrecognized bandid %d" % bandid)
 
 def sta_to_siteid(sta, cursor):
     cursor.execute("select id from static_siteid where sta='%s'" % (sta))
@@ -135,7 +139,8 @@ def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=N
             if row[FIT_CHAN] != chan:
                 continue
         if short_band is not None:
-            if row[FIT_BAND] != short_band:
+            b  = sigvisa.canonical_band_num(short_band)
+            if int(row[FIT_BANDID]) != b:
                 continue
         if siteid is not None:
             if int(row[FIT_SITEID]) != siteid:
@@ -160,19 +165,29 @@ def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=N
     return np.array(new_data)
 
 
-def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, exclude_evids=None, acost_threshold=20, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
+def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runids=None, phaseids=None, evids=None, exclude_evids=None, acost_threshold=20, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 
     chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
     band_cond = "and fit.band='%s'" % (short_band) if short_band is not None else ""
     site_cond = "and sid.id=%d" % (siteid) if siteid is not None else ""
-    run_cond = "and fit.runid=%d" % (runid) if runid is not None else ""
+    run_cond = "and (" + " or ".join(["fit.runid = %d" % runid for runid in runids]) + ")" if runids is not None else ""
     phase_cond = "and (" + " or ".join(["pid.id = %d" % phaseid for phaseid in phaseids]) + ")" if phaseids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and lebo.mb between %f and %f and fit.dist between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, acost_threshold, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
-    cursor.execute(sql_query)
-    shape_data = np.array(cursor.fetchall())
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi, fit.band from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and lebo.mb between %f and %f and fit.dist between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, acost_threshold, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
+
+    fname = "db_cache/%s.txt" % str(hashlib.md5(sql_query).hexdigest())
+    try:
+
+        shape_data = np.loadtxt(fname, dtype=float)
+    except:
+        cursor.execute(sql_query)
+        shape_data = np.array(cursor.fetchall(), dtype=object)
+        shape_data[:, FIT_BANDID] = np.asarray([sigvisa.canonical_band_num(band) for band in shape_data[:, FIT_BANDID]])
+        shape_data = np.array(shape_data, dtype=float)
+        np.savetxt(fname, shape_data)
+
     return shape_data
 
 
@@ -338,10 +353,10 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
                     noise = noise_segment[0][chan][band]
                     noise.data = noise.data[noise.stats.sampling_rate*5 : -noise.stats.sampling_rate*5]
 
-                    print "learning for band %s chan %s" % (band, chan)
                     a.stats.noise_floor = np.mean(noise.data)
                     a.stats.smooth_noise_floor = a.stats.noise_floor
                     if learn_noise:
+#                        print "learning for band %s chan %s" % (band, chan)
                         ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
 #                        print ar_learner.c
                         #arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()

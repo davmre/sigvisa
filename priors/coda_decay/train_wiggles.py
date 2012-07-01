@@ -38,7 +38,6 @@ def load_wiggle_models(cursor, sigmodel, filename):
         std = float(entries[5])
         order = int(entries[6])
         params = [float(x) for x in entries[7:7+order]]
-        print "loading wiggle model for ", siteid, phaseid, c, b
         sigmodel.set_wiggle_process(siteid, b, c, phaseid, mean, std, np.asfarray(params))
 
 
