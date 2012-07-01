@@ -88,23 +88,26 @@ def cv_external(cursor, fit_data, band_dir, phaseids, chan, target_str, pp = Non
             evid = evids[idx]
             ev = load_event(cursor, evid)
             row = fit_data[idx, :]
-            true_output = target_fns[target_str](row)
+            true_output = cm.target_fns[target_str](row)
 
-            gp_lld_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_LLD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
+#            gp_lld_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_LLD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
             gp_dad_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_DAD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
-            gp_lldda_sum_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_LLDDA_SUM, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
-            gp_lldda_prod_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_LLDDA_PROD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
+#            gp_lldda_sum_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_LLDDA_SUM, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
+#            gp_lldda_prod_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GP_LLDDA_PROD, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
 
             lin_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_LINEAR, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
             mean_residuals.append(cm.predict(ev, CodaModel.MODEL_TYPE_GAUSSIAN, row[FIT_DISTANCE], row[FIT_AZIMUTH]) - true_output)
 
 
     print "cross-validated %d events, found residuals for %s:" % (len(evids), target_str)
-    print "mean: gp_lld %f gp_dad %f gp_lldda_sum %f gp_lldda_prod %f lin %f mean %f" % (np.mean(np.abs(gp_lld_residuals)), np.mean(np.abs(gp_dad_residuals)), np.mean(np.abs(gp_lldda_sum_residuals)), np.mean(np.abs(gp_lldda_prod_residuals)), np.mean(np.abs(lin_residuals)), np.mean(np.abs(mean_residuals)))
-    print "median: gp_lld %f gp_dad %f gp_lldda_sum %f gp_lldda_prod %f lin %f median %f" % (np.median(np.abs(gp_lld_residuals)), np.median(np.abs(gp_dad_residuals)), np.median(np.abs(gp_lldda_sum_residuals)),np.median(np.abs(gp_lldda_prod_residuals)), np.median(np.abs(lin_residuals)), np.median(np.abs(mean_residuals)))
+#    print "mean: gp_lld %f gp_dad %f gp_lldda_sum %f gp_lldda_prod %f lin %f mean %f" % (np.mean(np.abs(gp_lld_residuals)), np.mean(np.abs(gp_dad_residuals)), np.mean(np.abs(gp_lldda_sum_residuals)), np.mean(np.abs(gp_lldda_prod_residuals)), np.mean(np.abs(lin_residuals)), np.mean(np.abs(mean_residuals)))
+#    print "median: gp_lld %f gp_dad %f gp_lldda_sum %f gp_lldda_prod %f lin %f median %f" % (np.median(np.abs(gp_lld_residuals)), np.median(np.abs(gp_dad_residuals)), np.median(np.abs(gp_lldda_sum_residuals)),np.median(np.abs(gp_lldda_prod_residuals)), np.median(np.abs(lin_residuals)), np.median(np.abs(mean_residuals)))
+    print "mean: gp_dad %f lin %f mean %f" % (np.mean(np.abs(gp_dad_residuals)), np.mean(np.abs(lin_residuals)), np.mean(np.abs(mean_residuals)))
+    print "median: gp_dad %f lin %f mean %f" % (np.median(np.abs(gp_dad_residuals)), np.median(np.abs(lin_residuals)), np.median(np.abs(mean_residuals)))
 
     if pp is not None:
         plot_residuals(pp, target_str, phaseids, chan, [gp_lld_residuals, gp_dad_residuals, gp_lldda_sum_residuals, gp_lldda_prod_residuals, lin_residuals, mean_residuals], labels = ('GP-LLD', 'GP-DAD', 'GP-LLDDA (Sum)', 'GP-LLDDA (Prod)', 'Linear', 'Const'))
+
 
 def plot_linear(pp, data, b_col, title=""):
 
@@ -174,12 +177,7 @@ def main():
         print "loading %s fit data... " % (phase_label),
 
         # cache data for faster development
-        fname = "fit_data_%d_%d_%s.txt" % (options.siteid, options.runid, phase_label)
-        try:
-            fit_data = np.loadtxt(fname)
-        except:
-            fit_data = load_shape_data(cursor, chan=options.chan, short_band=options.short_band,siteid = options.siteid, runid=options.runid, phaseids = phaseids)
-            np.savetxt(fname, fit_data)
+        fit_data = load_shape_data(cursor, chan=options.chan, short_band=options.short_band,siteid = options.siteid, runids=[options.runid,], phaseids = phaseids)
         print str(fit_data.shape[0]) + " entries loaded"
 
         band_dir = os.path.join(base_coda_dir, options.short_band)
@@ -188,26 +186,24 @@ def main():
 
         print "saving plots to", fname
 
-        lld_params = {"decay": [.01, .02, 800], "onset": [2, 4, 800], "amp": [.4, .4, 800]}
-#        dad_params = {"decay": [.02, .4, 2, .05, 1], "onset": [.02, .4, 2, .05, 1], "amp": [.02, .4, 2, .05, 1]}
-        dad_params = {"decay": [.01, .02, 2, 0.0001, 0.0001], "onset": [2, 5, 2, 0.0001, 0.0001], "amp": [.3, .8, 2, 0.0001, 0.0001]}
+        lld_params = {"decay": [.01, .02, 100], "onset": [4.67, 2.3866, 800], "amp_transfer": [.4, .4, 100]}
+#        dad_params = {"decay": [.02, .4, 2, .05, 1], "onset": [.02, .4, 2, .05, 1], "amp_transfer": [.02, .4, 2, .05, 1]}
+        dad_params = {"decay": [.01, .02, 2, 0.0001, 0.0001], "onset": [2, 5, 2, 0.0001, 0.0001], "amp_transfer": [.3, .8, 2, 0.0001, 0.0001]}
 
         # sigma_n dist_mag dist_scale azi_mag azi_scale depth_mag depth_scale ll_mag ll_scale
-        lldda_sum_params = {"decay": [.01, .05, 1, 0.00001, 20, 0.000001, 1, .05, 300], "onset": [2, 5, 1, 0.00001, 20, 0.000001, 1, 5, 300], "amp": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] }
+        lldda_sum_params = {"decay": [.01, .05, 1, 0.00001, 20, 0.000001, 1, .05, 300], "onset": [2, 5, 1, 0.00001, 20, 0.000001, 1, 5, 300], "amp_transfer": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] }
 
         # sigma_n sigma_f dist_scale azi_scale depth_scale ll_scale
-        lldda_prod_params = {"decay": [.01, .02, 1, 200, 10, 300], "onset": [2, 5, 1, 200, 10, 300], "amp": [.3, .8, 1, 200, 10, 300] }
+        lldda_prod_params = {"decay": [.01, .02, 1, 200, 10, 300], "onset": [2, 5, 1, 200, 10, 300], "amp_transfer": [.3, .8, 1, 200, 10, 300] }
 
 
-        for target_str in ["decay", "amp", "onset"]:
+        for target_str in ["decay", "amp_transfer", "onset"]:
             print "evaluating starting hyperparams for", target_str
-            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = pp, lld_params = lld_params[target_str], dad_params=dad_params[target_str], lldda_sum_params=lldda_sum_params[target_str], lldda_prod_params=lldda_prod_params[target_str])
-            cm = CodaModel(fit_data, band_dir, phaseids, options.chan, target_str=target_str, ignore_evids = [] , lld_params = lld_params[target_str], dad_params=dad_params[target_str], lldda_sum_params=lldda_sum_params[target_str], lldda_prod_params=lldda_prod_params[target_str], optimize=False)
-            plot_events_heat(pp, fit_data, cm, target_str)
-            cm = CodaModel(fit_data, band_dir, phaseids, options.chan, target_str=target_str, ignore_evids = [] , lld_params = lld_params[target_str], dad_params=dad_params[target_str], lldda_sum_params=lldda_sum_params[target_str], lldda_prod_params=lldda_prod_params[target_str], optimize=True)
+            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = None, dad_params=dad_params[target_str])
+            cm = CodaModel(fit_data, band_dir, phaseids, options.chan, target_str=target_str, ignore_evids = [] , dad_params=dad_params[target_str], optimize=True)
             print "evaluating learned hyperparams for", target_str
-            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = pp, lld_params=cm.lld_params, dad_params=cm.dad_params, lldda_sum_params=cm.lldda_sum_params, lldda_prod_params=cm.lldda_prod_params)
-            plot_events_heat(pp, fit_data, cm, target_str)
+            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = None, dad_params=cm.dad_params)
+#            plot_events_heat(pp, fit_data, cm, target_str)
 
         pp.close()
 
