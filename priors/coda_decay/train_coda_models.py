@@ -19,6 +19,7 @@ import scipy.linalg
 import hashlib
 
 from priors.coda_decay.coda_decay_common import *
+from priors.coda_decay.source_spectrum import *
 
 from utils.gp_regression import GaussianProcess, optimize_hyperparams
 from utils.kernels import InvGamma, LogNormal
@@ -83,7 +84,12 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
 
     y = np.zeros((n,))
     for i in range(n):
-        y[i] = target_fn(fit_data[i, :])
+        try:
+            y[i] = target_fn(fit_data[i, :])
+        except:
+            import pdb, traceback
+            traceback.print_exc()
+            pdb.set_trace()
 
     gpd = None
     gpt = None
@@ -101,27 +107,34 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
 #        lldda_prod_params,v = optimize_hyperparams(X, y, kernel="distfns_prod", start_kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors)
  #       print "got params", lldda_prod_params , "giving ll", v
 
-        print "optimizing location-based GP..."
-        lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
-        print "got params", lld_params, "giving ll", v
+        if lld_params is not None:
+            print "optimizing location-based GP..."
+            lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
+            print "got params", lld_params, "giving ll", v
 
-        print "optimizing distance/azimuth-based GP..."
-        dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
-        print "got params", dad_params , "giving ll", v
+        if dad_params is not None:
+            print "optimizing distance/azimuth-based GP..."
+            dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
+            print "got params", dad_params , "giving ll", v
 
-        print "optimizing sum-composite GP..."
-        lldda_sum_params,v = optimize_hyperparams(X, y, kernel="distfns_sum", start_kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_sum_priors)
-        print "got params", lldda_sum_params , "giving ll", v
+        if lldda_sum_params is not None:
+            print "optimizing sum-composite GP..."
+            lldda_sum_params,v = optimize_hyperparams(X, y, kernel="distfns_sum", start_kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_sum_priors)
+            print "got params", lldda_sum_params , "giving ll", v
 
+    gp_lld = None
+    if lld_params is not None:
+        gp_lld = GaussianProcess(Xll, y, kernel="distfn", kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn)
 
-    gp_lld = GaussianProcess(Xll, y, kernel="distfn", kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn)
+    gp_dad = None
+    if dad_params is not None:
+        gp_dad = GaussianProcess(Xad, y, kernel="distfn", kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], ignore_pos_def_errors=False)
 
-    gp_dad = GaussianProcess(Xad, y, kernel="distfn", kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], ignore_pos_def_errors=False)
-
-    gp_lldda_sum = GaussianProcess(X, y, kernel="distfns_sum", kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], ignore_pos_def_errors=False)
+    gp_lldda_sum = None
+    if lldda_sum_params is not None:
+        gp_lldda_sum = GaussianProcess(X, y, kernel="distfns_sum", kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], ignore_pos_def_errors=False)
 
 #    gp_lldda_prod = GaussianProcess(X, y, kernel="distfns_prod", kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors, ignore_pos_def_errors=False)
-
 
     regional_dist = []
     regional_y = []
@@ -240,12 +253,16 @@ class CodaModel:
 
     MODEL_TYPE_GP_LLD, MODEL_TYPE_GP_DAD, MODEL_TYPE_GP_LLDDA_SUM, MODEL_TYPE_GP_LLDDA_PROD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(6)
 
-    def __init__(self, fit_data, band_dir, phaseids, chan, target_str="decay", ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, lld_params=[], dad_params=[], lldda_sum_params = [], lldda_prod_params = [], optimize=False, debug=True):
 
-        if target_str not in target_fns.keys():
+    target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB], "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] - SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]), bandid=int(r[FIT_BANDID]))}
+
+
+    def __init__(self, fit_data, band_dir, phaseids, chan, target_str="decay", ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, lld_params=None, dad_params=None, lldda_sum_params = None, lldda_prod_params = None, optimize=False, debug=True):
+
+        if target_str not in self.target_fns.keys():
             raise Exception("invalid target str %s" % target_str)
         else:
-             self.target_fn = target_fns[target_str]
+             self.target_fn = self.target_fns[target_str]
 
         # assume that either earthmodel and sigmodel are both given, or neither given
         if sigmodel is None:
@@ -265,9 +282,10 @@ class CodaModel:
         self.slon = self.sites[self.siteid-1, 0]
         self.slat = self.sites[self.siteid-1, 1]
 
-        outfile = os.path.join(band_dir, "model_%s_fits_%s_%s.pdf" % (target_str, ":".join([str(p) for p in phaseids]), chan))
+
         pp = None
         if debug:
+            outfile = os.path.join(band_dir, "model_%s_fits_%s_%s.pdf" % (target_str, ":".join([str(p) for p in phaseids]), chan))
             pp = PdfPages(outfile)
             print "saving plots to", outfile
 
@@ -321,6 +339,14 @@ class CodaModel:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
             return self.models['gp_dad'].sample((distance, azimuth, ev[EV_DEPTH_COL]))
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            return float(self.models['gp_lldda_sum'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_PROD:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            return float(self.models['gp_lldda_prod'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
         elif model_type == self.MODEL_TYPE_LINEAR:
             raise RuntimeError("sampling not yet implemented for linear models")
             if distance < 2000:
@@ -337,30 +363,44 @@ class CodaModel:
 
     def log_likelihood(self, val, ev, model_type, distance = None, azimuth = None):
 
+        ll = None
+
         if distance is None:
             distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
 
         if model_type == self.MODEL_TYPE_GP_LLD:
-            return self.models['gp_lld'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
+            ll = self.models['gp_lld'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
         elif model_type == self.MODEL_TYPE_GP_DAD:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return self.models['gp_dad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
+            l = self.models['gp_dad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            ll = self.models['gp_lldda_sum'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth), val)
+        elif model_type == self.MODEL_TYPE_GP_LLDDA_PROD:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            ll = self.models['gp_lldda_prod'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth), val)
         elif model_type == self.MODEL_TYPE_LINEAR:
             raise RuntimeError("log likelihood not yet implemented for linear models")
             if distance < 2000:
                 model = self.models['regional_linear']
             else:
                 model = self.models['tele_linear']
-
         elif model_type == self.MODEL_TYPE_GAUSSIAN:
             if distance < 2000:
                 (mean, var) = self.models['regional_gaussian']
             else:
                 (mean, var) = self.models['tele_gaussian']
-            return -.5 *np.log(2*np.pi*var) - .5 *(val-mean)**2 / var
+            ll -.5 *np.log(2*np.pi*var) - .5 *(val-mean)**2 / var
 
+        if ll is None or np.isnan(ll):
+            print "error: invalid ll", ll
+            import pdb
+            pdb.set_trace()
 
+        return ll
 
 
 def main():
