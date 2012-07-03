@@ -126,6 +126,7 @@ def get_template(sigmodel, trace, phaseids, params, logscale=False, sample=False
     else:
         env = sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, params)
     env.data = np.log(env.data) if logscale else env.data
+    env.stats.noise_floor = trace.stats.noise_floor
     return env
 
 

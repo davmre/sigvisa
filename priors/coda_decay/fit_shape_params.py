@@ -126,18 +126,18 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
 
     srate = tr.stats.sampling_rate
     st = tr.stats.starttime_unix
-    nf = tr.stats.noise_floor
+    nf = tmpl.stats.noise_floor
 
     wiggles = []
     for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
-        start_wiggle = arrs["arrivals"][phase_idx] + 20
+        start_wiggle = arrs["arrivals"][phase_idx]+1
         start_idx = np.ceil((start_wiggle - st)*srate)
 
         try:
             next_phase_idx = np.ceil((arrs["arrivals"][phase_idx+1] - st)*srate)
         except:
             next_phase_idx = np.float('inf')
-        for t in range(100):
+        for t in range(150):
             end_idx = start_idx + np.ceil(srate*t)
             if (end_idx >= next_phase_idx) or (tmpl[end_idx]/nf < np.exp(threshold) ):
                 break
@@ -586,7 +586,8 @@ def main():
     evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5" if evid is None else "and evid=%d" % (evid)
 
     cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
-
+    load_wiggle_models(cursor, sigmodel, "parameters/signal_wiggles.txt")
+    
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
     sql_query="SELECT distinct lebo.lon, lebo.lat, lebo.depth, lebo.time, lebo.mb, lebo.orid, lebo.evid FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
@@ -650,11 +651,11 @@ def main():
 
                     # DO THE FITTING
                     if method == "load":
-                        fit_params, phaseids, fit_cost = load_template(cursor, evid, chan, short_band, runid, siteid)
+                        fit_params, phaseids, fit_cost = load_template_params(cursor, evid, chan, short_band, options.init_runid, siteid)
                         if fit_params is None:
                             print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, runid, chan, short_band)
                             continue
-                        set_ar_processes(sigmodel, tr, phaseids)
+                        set_noise_process(sigmodel, tr)
                         fit_cost = fit_cost * time_len
                     else:
                         fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, wiggles=options.wiggles, by_phase=by_phase, cursor=cursor, init_runid=options.init_runid)
@@ -663,17 +664,24 @@ def main():
 
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
                     wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
+                    wiggles2 = extract_wiggles(arrival_segment[chan]['broadband'], tmpl, arrs, threshold=snr_threshold)
                     for (pidx, phaseid) in enumerate(phaseids):
                         if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
                             continue
                         else:
                             dirname = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)), short_band)
+                            dirname2 = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)))
                             fname = os.path.join(dirname, "%d_%s.dat" % (evid, chan))
+                            fname2 = os.path.join(dirname2, "%d_%s_raw.dat" % (evid, chan))
                             get_dir(dirname)
+                            get_dir(dirname2)
                             print "saving phase %d len %d" % (phaseid, len(wiggles[pidx]))
                             np.savetxt(fname, np.array(wiggles[pidx]))
                             sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, short_band, chan, evid, fname, snr_threshold)
-                            print sql_query
+                            cursor.execute(sql_query)
+
+                            np.savetxt(fname2, np.array(wiggles2[pidx]))
+                            sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, "broadband", chan, evid, fname, snr_threshold)
                             cursor.execute(sql_query)
 
                     s = [method,]
