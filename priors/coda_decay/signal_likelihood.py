@@ -26,6 +26,31 @@ from priors.coda_decay.source_spectrum import *
 from priors.coda_decay.templates import *
 from priors.coda_decay.train_coda_models import CodaModel
 
+
+def load_gp_params(fname, model_type):
+    # file format:
+    # sta is_p chan band target_str model_type params
+
+    param_dict = NestedDict()
+
+    f = open(fname, 'r')
+
+    for line in f:
+        entries=line.split()
+        #        siteid = sta_to_siteid(entries[0], cursor)
+        siteid = int(entries[0])
+        phase_class = entries[1]
+        chan = entries[2]
+        short_band = entries[3]
+        my_model_type = entries[4]
+        target = entries[5]
+        params =np.array([float(x) for x in entries[6:]])
+        
+        if my_model_type == model_type:
+            param_dict[siteid][phase_class][chan][short_band][target] = params
+    f.close()
+    return param_dict
+
 class TraceModel:
 
     def __init__(self, cursor, sigmodel, model_dict, model_type=CodaModel.MODEL_TYPE_GAUSSIAN):
@@ -78,10 +103,17 @@ class TraceModel:
 
                     pshape = params.shape
                     sf = lambda flat_params : -1 * f(np.reshape(flat_params, pshape))
-                    x, nll, d = scipy.optimize.fmin(sf, params.flatten(), maxfun=30)
-                    ll = -1 * nll
-                    print "found best ll", ll
-                    params = np.reshape(x, pshape)
+                    x = scipy.optimize.fmin(sf, params.flatten(), maxfun=1)
+                    print x.shape
+                    print params
+                    print pshape
+                    try:
+                        params = np.reshape(x, pshape)
+                    except:
+                        import pdb
+                        pdb.set_trace()
+                    ll = f(params)
+                    print "found best value", ll
 
                 elif marginalize_method == "monte_carlo": # do a monte carlo integral over parameters.
 
@@ -156,7 +188,7 @@ class TraceModel:
 
     def __predict_params(self, phaseids, ev, siteid, chan, band):
 
-        tt_f = lambda ev, siteid, phaseid : self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, phaseid-1) + ev[EV_TIME_COL]
+        tt_f = lambda ev, siteid, phaseid : self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, phaseid-1)
         template_f = lambda cm, ev, model_type : cm.predict(ev, model_type)
 
         return self.__generate_params(phaseids, ev, siteid, chan, band, tt_f=tt_f, template_f=template_f)
@@ -199,9 +231,10 @@ class TraceModel:
             else:
                 raise Exception("unknown phaseid %d" % phaseid)
 
+
             predtt = self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, phaseid-1)
             tt = params[phaseidx, ARR_TIME_PARAM] - ev[EV_TIME_COL]
-            ll =+ self.sigmodel.arrtime_logprob(tt, predtt, 0, siteid-1, phaseid-1)
+            ll += self.sigmodel.arrtime_logprob(tt, predtt, 0, siteid-1, phaseid-1)
 
             onset_time = params[phaseidx, PEAK_OFFSET_PARAM]
             ll += models["onset"].log_likelihood(onset_time, ev, self.model_type)
@@ -279,7 +312,7 @@ class TraceModel:
 
         return maxll
 
-    def sensitivity(self, pp, segments, event, marginalize_method="monte_carlo"):
+    def sensitivity(self, pp, segments, event, marginalize_method="optimize"):
         """ Find whether each segment contributes to the likelihood of
         the event, by comparing p(segment|noise) to p(segment|true
         event). """
@@ -300,7 +333,7 @@ class TraceModel:
 
             print "segment from %d gives signal ll %f vs noise ll %f" % (segment[chans[0]][bands[0]].stats.siteid, ll1, ll2)
 
-    def event_heat_map(self, pp, segments, base_event, map_width=5, marginalize_method="monte_carlo", n=20, true_params = None):
+    def event_heat_map(self, pp, segments, base_event, map_width=3, marginalize_method="optimize", n=20, true_params = None):
 
         evlon = base_event[EV_LON_COL]
         evlat = base_event[EV_LAT_COL]
@@ -369,6 +402,8 @@ def train_param_models(siteids, runids, evid):
 
     lldda_sum_params = {"decay": [.01, .05, 1, 0.00001, 20, 0.000001, 1, .05, 300], "onset": [2, 5, 1, 0.00001, 20, 0.000001, 1, 5, 300], "amp": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] , "amp_transfer": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] }
 
+    gp_params = load_gp_params("parameters/gp_hyperparams.txt", "dad")
+
     model_dict = NestedDict()
 
     for siteid in siteids:
@@ -380,14 +415,20 @@ def train_param_models(siteids, runids, evid):
                     short_band = band[16:]
                     fit_data = load_shape_data(cursor, chan=chan, short_band=short_band, siteid=siteid, runids=runids, phaseids=PSids, exclude_evids = [evid,])
 
+                    loaded_dad_params = gp_params[siteid]["S" if is_s else "P"][chan][short_band]
+                    if len(loaded_dad_params.keys()) > 0:
+                        my_dad_params = loaded_dad_params
+                    else:
+                        my_dad_params = dad_params
+
                     try:
-                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="decay", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=dad_params["decay"], debug=False)
+                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="decay", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=my_dad_params["decay"], debug=False)
                         model_dict[siteid][band][chan][is_s]["decay"] = cm
 
-                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="onset", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=dad_params["onset"], debug=False)
+                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="onset", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=my_dad_params["onset"], debug=False)
                         model_dict[siteid][band][chan][is_s]["onset"] = cm
 
-                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="amp_transfer", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=dad_params["amp_transfer"], debug=False)
+                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="amp_transfer", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=my_dad_params["amp_transfer"], debug=False)
                         model_dict[siteid][band][chan][is_s]["amp_transfer"] = cm
 
                     except:
@@ -430,13 +471,8 @@ def main():
     print "loading signals..."
     signals = []
     for siteid in siteids:
-        s, n, o, op, oa = load_signal_slice(cursor, evid, 2, load_noise=True, learn_noise=True)
+        s, n, o, op, oa = load_signal_slice(cursor, evid, 2, load_noise=True, learn_noise=True, earthmodel=earthmodel)
         signals.append(s[0])
-
-
-        true_params, phaseids, fit_cost = load_template_params(cursor, evid, 'BHZ', '2.00_3.00', 3, siteid)
-        print "true template params for bhz, 2-3hz:"
-        print_params(true_params)
 
         fig = plot.plot_trace(s[0]['BHZ']['narrow_envelope_2.00_3.00'])
         pp.savefig()
