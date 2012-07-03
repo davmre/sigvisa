@@ -282,7 +282,10 @@ def fetch_waveform(station, chan, stime, etime):
     waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
     cursor.execute("select id from static_siteid where sta = '%s'" % (station))
     try:
-      siteid = cursor.fetchone()[0]
+      if station=="MK31":
+        siteid=66
+      else:
+        siteid = cursor.fetchone()[0]
     except:
       raise MissingWaveform("couldn't get siteid for station %s" % (station))
 
@@ -375,11 +378,18 @@ def main(param_dirname):
 
   parser.add_option("-s", "--siteids", dest="siteids", default="", type="str")
   parser.add_option("-e", "--evid", dest="evid", default=None, type="int")
+  parser.add_option("--orid", dest="orid", default=None, type="int")
   parser.add_option("-o", "--outfile", dest="outfile", default=None, type="str")
 
   (options, args) = parser.parse_args()
+  cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
-  evid = options.evid
+  if options.orid is not None:
+    cursor.execute("select evid from leb_origin where orid=%d" % options.orid)
+    evid = cursor.fetchone()[0]
+    print "using evid %d for orid %d" % (evid, options.orid)
+  else:
+      evid = options.evid
   siteids = [int(x) for x in options.siteids.split(',')]
 
   if options.outfile is None:
@@ -389,7 +399,6 @@ def main(param_dirname):
   pp = PdfPages(outfile)
   print "saving to %s..." % (outfile)
 
-  cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
 
   cursor.execute("select sta from static_siteid site order by id")
@@ -421,7 +430,7 @@ def main(param_dirname):
         continue
   finally:
     pp.close()
-  
+
 #  plt.show()
 
 if __name__ == "__main__":
