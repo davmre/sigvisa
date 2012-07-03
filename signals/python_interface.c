@@ -52,9 +52,13 @@ void ARProcess_py_to_c(double noise_mean, double noise_variance, PyArrayObject *
   p_ar_process->mean = noise_mean;
   p_ar_process->sigma2 = noise_variance;
   p_ar_process->coeffs = calloc(n, sizeof(double));
+
+  //  printf("setting ar process of order %d: ", n);
   for (int i=0; i < n; ++i) {
     p_ar_process->coeffs[i] = ARRAY1(py_coeffs, i);
+    printf("%f " , p_ar_process->coeffs[i]);
   }
+  printf("\n");
 }
 
 PyObject * py_set_noise_process(SigModel_t * p_sigmodel, PyObject * args) {

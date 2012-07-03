@@ -21,6 +21,7 @@ import obspy.signal.util
 
 import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
+from priors.coda_decay.templates import *
 from priors.coda_decay.train_coda_models import CodaModel
 
 

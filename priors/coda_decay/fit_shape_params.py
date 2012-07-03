@@ -133,16 +133,22 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
         start_wiggle = arrs["arrivals"][phase_idx]+1
         start_idx = np.ceil((start_wiggle - st)*srate)
 
+        if tmpl is not None:
+            snr_test = lambda end_idx : tmpl[end_idx]/nf < np.exp(threshold)
+        else:
+            snr_test = lambda end_idx : np.mean(tr[end_idx-40:end_idx])/nf < np.exp(threshold)
+
         try:
             next_phase_idx = np.ceil((arrs["arrivals"][phase_idx+1] - st)*srate)
         except:
             next_phase_idx = np.float('inf')
         for t in range(150):
             end_idx = start_idx + np.ceil(srate*t)
-            if (end_idx >= next_phase_idx) or (tmpl[end_idx]/nf < np.exp(threshold) ):
+            if (end_idx >= next_phase_idx) or ():
                 break
 
-        wiggle = tr[start_idx:end_idx] / tmpl[start_idx:end_idx]
+        if tmpl is not None:
+            wiggle = tr[start_idx:end_idx] / tmpl[start_idx:end_idx]
         wiggles.append(wiggle)
 
     return wiggles
@@ -256,7 +262,12 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
 
     start_params, phaseids, bounds, bounds_fp = find_starting_params(arrs, smoothed)
     narrs = len(arrs["arrivals"])
-    arr_times = np.reshape(np.array(arrs["arrivals"]), (narrs, -1))
+    try:
+        arr_times = np.reshape(np.array(arrs["arrivals"]), (narrs, -1))
+    except:
+        import pdb, traceback
+        traceback.print_exc()
+        pdb.set_trace()
 
     if fix_peak:
         start_params = remove_peak(start_params)
@@ -271,7 +282,9 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
 
     #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
 
-    set_ar_processes(sigmodel, env, phaseids)
+    set_noise_process(sigmodel, env)
+    print "setting dummy params"
+    set_dummy_wiggles(sigmodel, env, phaseids)
 
     f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
     start_cost = f(start_params)
@@ -416,7 +429,7 @@ def find_coda_max_length(trace, peak_offset_time, phase_end_time, noise_floor):
 
 def get_first_p_s_arrivals(cursor, evid, siteid):
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT l.time, l.azimuth, l.snr, pid.id, sid.id FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (evid, phase_condition, siteid)
+    sql_query="SELECT l.time, l.azimuth, l.snr, pid.id, sid.id FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase" % (evid, phase_condition, siteid)
     cursor.execute(sql_query)
     arrivals = np.array(cursor.fetchall())
 
@@ -590,13 +603,13 @@ def main():
 
     iid=True
     by_phase=False
-    snr_threshold=2
+    snr_threshold=1
 
     evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5" if evid is None else "and evid=%d" % (evid)
 
 
     load_wiggle_models(cursor, sigmodel, "parameters/signal_wiggles.txt")
-    
+
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
     sql_query="SELECT distinct lebo.lon, lebo.lat, lebo.depth, lebo.time, lebo.mb, lebo.orid, lebo.evid FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
@@ -674,10 +687,12 @@ def main():
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
                     wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
                     wiggles2 = extract_wiggles(arrival_segment[chan]['broadband'], tmpl, arrs, threshold=snr_threshold)
+
                     for (pidx, phaseid) in enumerate(phaseids):
                         if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
                             continue
                         else:
+                            print "saving wiggles for phaseid", phaseid
                             dirname = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)), short_band)
                             dirname2 = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)))
                             fname = os.path.join(dirname, "%d_%s.dat" % (evid, chan))
@@ -686,12 +701,17 @@ def main():
                             get_dir(dirname2)
                             print "saving phase %d len %d" % (phaseid, len(wiggles[pidx]))
                             np.savetxt(fname, np.array(wiggles[pidx]))
-                            sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, short_band, chan, evid, fname, snr_threshold)
-                            cursor.execute(sql_query)
-
                             np.savetxt(fname2, np.array(wiggles2[pidx]))
-                            sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, "broadband", chan, evid, fname, snr_threshold)
-                            cursor.execute(sql_query)
+                            try:
+                                sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, short_band, chan, evid, fname, snr_threshold)
+                                cursor.execute(sql_query)
+
+
+                                sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, "broadband", chan, evid, fname, snr_threshold)
+                                cursor.execute(sql_query)
+                            except:
+                                print "DB error inserting fits (probably duplicate key), continuing..."
+                                pass
 
                     s = [method,]
                     if by_phase:
@@ -701,7 +721,11 @@ def main():
                         for (i, arid) in enumerate(arrs["all_arrival_arids"]):
                             sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
                             print sql_query
-                            cursor.execute(sql_query)
+                            try:
+                                cursor.execute(sql_query)
+                            except:
+                                print "DB error inserting fits (probably duplicate key), continuing..."
+                                pass
                     dbconn.commit()
                     if pp is not None:
                         pp.close()

@@ -26,6 +26,12 @@ def print_params(params):
     for i in range(n):
         print "%d: st: %.1f pdelay: %.1f pheight: %.2f pdecay: %.4f cheight: %.2f cdecay: %.4f" % (i, params[i, 0], params[i, 1], params[i, 2], params[i, 3], params[i, 4], params[i, 5])
 
+def set_dummy_wiggles(sigmodel, tr, phaseids):
+    c = sigvisa.canonical_channel_num(tr.stats.channel)
+    b = sigvisa.canonical_band_num(tr.stats.band)
+    for pid in phaseids:
+        sigmodel.set_wiggle_process(tr.stats.siteid, b, c, pid, 1, 0.05, np.array([.8,-.2]))
+
 def set_noise_process(sigmodel, tr):
     c = sigvisa.canonical_channel_num(tr.stats.channel)
     b = sigvisa.canonical_band_num(tr.stats.band)

@@ -626,7 +626,10 @@ def load_and_process_traces(cursor, start_time, end_time, stalist=None, downsamp
             cursor.execute("select sta, id from static_siteid where id=%d" % (siteid))
             a = cursor.fetchone()
             if a is not None:
-                stations.append(np.array(a)[0])
+              sta = np.array(a)[0]
+              if sta=="MKAR":
+                sta = 'MK31'
+              stations.append(sta)
         print "loading traces from stations", stations
     opts = dict()
     f = lambda trace: obspy.signal.filter.envelope(trace.data)
