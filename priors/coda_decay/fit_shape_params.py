@@ -568,16 +568,25 @@ def main():
     parser.add_option("-m", "--method", dest="method", default="simplex", type="str", help="fitting method (iid)")
     parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid")
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
+    parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
     parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load (default is to ignore wiggle model and do iid fits)")
     parser.add_option("--init_runid", dest="init_runid", default=None, type="int", help="initialize template fitting with results from this runid")
     parser.add_option("-p", "--plot", dest="plot", default=False, action="store_true", help="save plots")
 
     (options, args) = parser.parse_args()
 
+    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
+
     siteid = options.siteid
     method = options.method
     runid = options.runid
-    evid = options.evid
+
+    if options.orid is not None:
+        cursor.execute("select evid from leb_origin where orid=%d" % options.orid)
+        evid = cursor.fetchone()[0]
+        print "using evid %d for orid %d" % (evid, options.orid)
+    else:
+        evid = options.evid
 
     iid=True
     by_phase=False
@@ -585,12 +594,12 @@ def main():
 
     evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5" if evid is None else "and evid=%d" % (evid)
 
-    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
+
     load_wiggle_models(cursor, sigmodel, "parameters/signal_wiggles.txt")
     
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-    sql_query="SELECT distinct lebo.lon, lebo.lat, lebo.depth, lebo.time, lebo.mb, lebo.orid, lebo.evid FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.statype='ss' and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
+    sql_query="SELECT distinct lebo.lon, lebo.lat, lebo.depth, lebo.time, lebo.mb, lebo.orid, lebo.evid FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid and %s and sid.sta=l.sta and sid.id=%d %s and pid.phase=leba.phase" % (phase_condition, siteid, evid_condition)
 #5308821
 #5301405
 # and lebo.evid=5301449
