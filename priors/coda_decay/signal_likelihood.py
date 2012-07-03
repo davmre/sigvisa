@@ -62,7 +62,7 @@ class TraceModel:
         self.sites = read_sites(cursor)
         self.ssm = SourceSpectrumModel()
 
-    def log_likelihood(self, segment, event, pp=None, marginalize_method = "monte_carlo"):
+    def log_likelihood(self, segment, event, pp=None, marginalize_method = "monte_carlo", iid=False):
         """ Evaluate the marginal log-probability density of a
         segment, given a particular event. If marginalize_method is
         "monte_carlo", integrate out the template parameters. If
@@ -89,10 +89,12 @@ class TraceModel:
                 siteid = tr.stats.siteid
                 noise_floor = tr.stats.noise_floor
 
+                print "ll for siteid", siteid, "event", event
+
                 phaseids = [1,5]
 
                 # compute p(trace | template)p(template|event)
-                f = lambda params: -1 * c_cost(self.sigmodel, tr, phaseids, params, iid=False) + self.__param_log_likelihood(phaseids, event, siteid, chan, band, params)
+                f = lambda params: -1 * c_cost(self.sigmodel, tr, phaseids, params, iid=iid) + self.__param_log_likelihood(phaseids, event, siteid, chan, band, params)
 
                 if marginalize_method == "mode": #just use the mean parameters
                     params = self.__predict_params(phaseids, event, siteid, chan, band)
@@ -269,7 +271,7 @@ class TraceModel:
         return ev2
 
     # get the likelihood of an event location, if we don't know the event time.
-    def event_location_likelihood(self, ev, segments, pp, marginalize_method, true_ev_loc):
+    def event_location_likelihood(self, ev, segments, pp, marginalize_method, true_ev_loc, iid=False):
 
         evlon = ev[EV_LON_COL]
         evlat = ev[EV_LAT_COL]
@@ -296,14 +298,20 @@ class TraceModel:
             if dist < 300:
                 print "siteid %d, lat %f lon %f, distance from true %f, backprojecting p_error %f s_error %f" % (siteid, evlon, evlat, dist, p_projection-ev[EV_TIME_COL], s_projection-ev[EV_TIME_COL])
 
-            event_time_proposals.append(p_projection)
-            event_time_proposals.append(s_projection)
+
+            is_new = lambda l, x : (len(l) == 0 or np.min([np.abs(lx - x) for lx in l]) > 1.5)
+            if is_new(event_time_proposals, p_projection):
+                event_time_proposals.append(p_projection)
+            if is_new(event_time_proposals, s_projection):
+                event_time_proposals.append(s_projection)
+
+            
 
         # find the event time that maximizes the likelihood
         maxll = np.float("-inf")
         maxt = 0
 
-        f = lambda t: np.sum([self.log_likelihood(s, self.__move_event_to(ev, t=t), pp=pp, marginalize_method=marginalize_method)[0] for s in segments])
+        f = lambda t: np.sum([self.log_likelihood(s, self.__move_event_to(ev, t=t), pp=pp, marginalize_method=marginalize_method, iid=iid)[0] for s in segments])
         for proposed_t in event_time_proposals:
             ll = f(proposed_t)
             if ll > maxll:
@@ -333,7 +341,7 @@ class TraceModel:
 
             print "segment from %d gives signal ll %f vs noise ll %f" % (segment[chans[0]][bands[0]].stats.siteid, ll1, ll2)
 
-    def event_heat_map(self, pp, segments, base_event, map_width=3, marginalize_method="optimize", n=20, true_params = None):
+    def event_heat_map(self, pp, segments, base_event, map_width=3, marginalize_method="optimize", n=20, true_params = None, iid=False):
 
         evlon = base_event[EV_LON_COL]
         evlat = base_event[EV_LAT_COL]
@@ -344,7 +352,7 @@ class TraceModel:
         evid = base_event[EV_EVID_COL]
 
         # this is more legit -- propose the event time based on the arrival time and event location
-        timed_f = lambda lon, lat: self.event_location_likelihood(self.__move_event_to(base_event, lon=lon, lat=lat), segments, pp=pp, marginalize_method=marginalize_method, true_ev_loc=(evlon, evlat))
+        timed_f = lambda lon, lat: self.event_location_likelihood(self.__move_event_to(base_event, lon=lon, lat=lat), segments, pp=pp, marginalize_method=marginalize_method, true_ev_loc=(evlon, evlat), iid=iid)
         f = timed_f
 
         # plot the likelihood heat map
@@ -416,7 +424,7 @@ def train_param_models(siteids, runids, evid):
                     fit_data = load_shape_data(cursor, chan=chan, short_band=short_band, siteid=siteid, runids=runids, phaseids=PSids, exclude_evids = [evid,])
 
                     loaded_dad_params = gp_params[siteid]["S" if is_s else "P"][chan][short_band]
-                    if len(loaded_dad_params.keys()) > 0:
+                    if len(loaded_dad_params.keys()) == 3:
                         my_dad_params = loaded_dad_params
                     else:
                         my_dad_params = dad_params
@@ -446,6 +454,8 @@ def main():
     parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str", help="comma-separated list of station siteid's with which to locate the event")
     parser.add_option("-r", "--runids", dest="runids", default=None, type="str", help="train models using fits from a specific runid (default is to use the most recent)")
     parser.add_option("-w", "--map_width", dest="map_width", default=2, type="float", help="width in degrees of the plotted heat map (2)")
+    parser.add_option("--iid", dest="iid", default=False, action="store_true", help="use a uniform iid noise model (instead of AR)")
+    parser.add_option("--method", dest="method", default="monte_carlo", help="method for signal likelihood computation (monte_carlo)")
 
     (options, args) = parser.parse_args()
 
@@ -471,18 +481,18 @@ def main():
     print "loading signals..."
     signals = []
     for siteid in siteids:
-        s, n, o, op, oa = load_signal_slice(cursor, evid, 2, load_noise=True, learn_noise=True, earthmodel=earthmodel)
+        s, n, o, op, oa = load_signal_slice(cursor, evid, siteid, load_noise=True, learn_noise=True, earthmodel=earthmodel)
         signals.append(s[0])
 
         fig = plot.plot_trace(s[0]['BHZ']['narrow_envelope_2.00_3.00'])
         pp.savefig()
         plt.close(fig)
 
-    print "computing sensitivity..."
-    tm.sensitivity(pp, signals, ev)
+#    print "computing sensitivity..."
+#    tm.sensitivity(pp, signals, ev)
 
     print "computing heat map..."
-    tm.event_heat_map(pp, signals, ev, map_width=map_width, n=19)
+    tm.event_heat_map(pp, signals, ev, map_width=map_width, n=19, iid=options.iid, marginalize_method=options.method)
     pp.close()
 
 if __name__ == "__main__":
