@@ -105,7 +105,7 @@ class TraceModel:
 
                     pshape = params.shape
                     sf = lambda flat_params : -1 * f(np.reshape(flat_params, pshape))
-                    x = scipy.optimize.fmin(sf, params.flatten(), maxfun=1)
+                    x = scipy.optimize.fmin(sf, params.flatten(), maxfun=30)
                     print x.shape
                     print params
                     print pshape
@@ -287,23 +287,32 @@ class TraceModel:
             siteid = int(tr.stats.siteid)
             p_arrival = tr.stats.p_time
             s_arrival = tr.stats.s_time
-            p_phaseid = int(tr.stats.p_phaseid)
-            s_phaseid = int(tr.stats.s_phaseid)
-
-            p_projection = p_arrival - self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, p_phaseid-1)
-            s_projection = s_arrival - self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, s_phaseid-1)
 
             dist = utils.geog.dist_km((evlon, evlat), true_ev_loc)
-
-            if dist < 300:
-                print "siteid %d, lat %f lon %f, distance from true %f, backprojecting p_error %f s_error %f" % (siteid, evlon, evlat, dist, p_projection-ev[EV_TIME_COL], s_projection-ev[EV_TIME_COL])
-
-
             is_new = lambda l, x : (len(l) == 0 or np.min([np.abs(lx - x) for lx in l]) > 1.5)
-            if is_new(event_time_proposals, p_projection):
-                event_time_proposals.append(p_projection)
-            if is_new(event_time_proposals, s_projection):
-                event_time_proposals.append(s_projection)
+
+            try:
+                p_phaseid = int(tr.stats.p_phaseid)
+                p_projection = p_arrival - self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, p_phaseid-1)
+                if is_new(event_time_proposals, p_projection):
+                    event_time_proposals.append(p_projection)
+            except:
+                pass
+
+            try:
+                s_phaseid = int(tr.stats.s_phaseid)
+                s_projection = s_arrival - self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, s_phaseid-1)
+
+                if is_new(event_time_proposals, s_projection):
+                    event_time_proposals.append(s_projection)
+            except:
+                pass
+    
+
+            print "siteid %d, lat %f lon %f, distance from true %f, backprojecting p_error %f s_error %f" % (siteid, evlon, evlat, dist, p_projection-ev[EV_TIME_COL], s_projection-ev[EV_TIME_COL])
+
+
+            
 
             
 
