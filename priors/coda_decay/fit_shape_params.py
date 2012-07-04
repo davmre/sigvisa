@@ -122,36 +122,41 @@ def optimize_by_phase(f, start_params, bounds, phaseids, method="bfgs", iters=3,
             params = np.concatenate([params[:sidx], phase_params, params[eidx:]])
     return params, c
 
-def extract_wiggles(tr, tmpl, arrs, threshold=2.5):
+def extract_wiggles(tr, tmpl, arrs, threshold=2.5, length=None):
 
     srate = tr.stats.sampling_rate
     st = tr.stats.starttime_unix
-    nf = tmpl.stats.noise_floor
 
+    if tmpl is not None:
+        nf = tmpl.stats.noise_floor
+    
     wiggles = []
     for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
-        start_wiggle = arrs["arrivals"][phase_idx]+1
+        start_wiggle = arrs["arrivals"][phase_idx]-5
         start_idx = np.ceil((start_wiggle - st)*srate)
 
         if tmpl is not None:
             snr_test = lambda end_idx : tmpl[end_idx]/nf < np.exp(threshold)
         else:
-            snr_test = lambda end_idx : np.mean(tr[end_idx-40:end_idx])/nf < np.exp(threshold)
+            snr_test = lambda end_idx : (end_idx - start_idx)/srate > length
+        snr_test = lambda end_idx : False
 
         try:
             next_phase_idx = np.ceil((arrs["arrivals"][phase_idx+1] - st)*srate)
         except:
             next_phase_idx = np.float('inf')
-        for t in range(150):
+        for t in range(45):
             end_idx = start_idx + np.ceil(srate*t)
-            if (end_idx >= next_phase_idx) or ():
+            if (end_idx >= next_phase_idx) or (snr_test(end_idx)):
                 break
 
         if tmpl is not None:
             wiggle = tr[start_idx:end_idx] / tmpl[start_idx:end_idx]
+        else:
+            wiggle = tr[start_idx:end_idx]
         wiggles.append(wiggle)
 
-    return wiggles
+    return wiggles, (end_idx - start_idx)/srate
 
 
 def learn_wiggle_params(sigmodel, env, smoothed, phaseids, params):
@@ -585,7 +590,11 @@ def main():
     parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load (default is to ignore wiggle model and do iid fits)")
     parser.add_option("--init_runid", dest="init_runid", default=None, type="int", help="initialize template fitting with results from this runid")
     parser.add_option("-p", "--plot", dest="plot", default=False, action="store_true", help="save plots")
-
+    parser.add_option("--min_mb", dest="min_mb", default=5, type="float", help="exclude all events with mb less than this value (0)")
+    parser.add_option("--max_mb", dest="max_mb", default=10, type="float", help="exclude all events with mb greater than this value (10)")
+    parser.add_option("--start_time", dest="start_time", default=None, type="float", help="exclude all events with time less than this value (0)")
+    parser.add_option("--end_time", dest="end_time", default=None, type="float", help="exclude all events with time greater than this value (1237680000)")
+                 
     (options, args) = parser.parse_args()
 
     cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
@@ -605,7 +614,14 @@ def main():
     by_phase=False
     snr_threshold=1
 
-    evid_condition = "and lebo.mb>5 and d.label='training' and l.time between d.start_time and d.end_time and l.snr > 5" if evid is None else "and evid=%d" % (evid)
+    if options.start_time is None:
+        cursor.execute("select start_time, end_time from dataset where label='training'")
+        (st, et) = cursor.fetchone()
+    else:
+        st = options.start_time
+        et = options.end_time
+
+    evid_condition = "and l.time between %f and %f and lebo.mb between %f and %f and l.snr > 5" % (st, et, options.min_mb, options.max_mb) if evid is None else "and evid=%d" % (evid)
 
 
     load_wiggle_models(cursor, sigmodel, "parameters/signal_wiggles.txt")
@@ -685,8 +701,9 @@ def main():
                             print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
 
                     tmpl = get_template(sigmodel, tr, phaseids, fit_params)
-                    wiggles = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
-                    wiggles2 = extract_wiggles(arrival_segment[chan]['broadband'], tmpl, arrs, threshold=snr_threshold)
+                    wiggles, l = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
+                    print "got nwiggle length l", l
+                    wiggles2, l2 = extract_wiggles(arrival_segment[chan]['broadband'], None, arrs, threshold=snr_threshold, length=l)
 
                     for (pidx, phaseid) in enumerate(phaseids):
                         if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
