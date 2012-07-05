@@ -51,6 +51,36 @@ def set_noise_processes(sigmodel, seg):
                 continue
             sigmodel.set_noise_process(siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
 
+
+def logenv_linf_cost(true_env, logenv):
+    c = np.max (np.abs(true_env - logenv))
+    return c
+
+def logenv_l1_cost(true_env, logenv):
+    n = len(true_env)
+    n2 = len(logenv)
+    if n != n2:
+        if np.abs(n-n2) > 5:
+            print "warning: comparing unequal-length traces (%d vs %d)" % (n, n2)
+        n = np.min([n, n2])
+    c = np.sum (np.abs(true_env[:n] - logenv[:n]))
+    return c
+
+def logenv_ar_cost(true_env, logenv):
+    diff = true_env - logenv
+
+    ar_n = 3
+    ar_params = [0.1, 0.1, 0.8]
+    ll = 0
+
+    last_n = diff[0:ar_n]
+    for x in diff:
+        pred = np.sum(last_n * ar_params)
+        ll = ll - (x-pred)**2
+
+    return ll
+
+
 def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
 
 #    noise_floor = params[-1]
@@ -82,6 +112,10 @@ def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
         c = -1 *sigmodel.trace_likelihood(smoothed, phaseids, params);
 
     print "cost", c
+
+    if c < 0:
+        import pdb
+        pdb.set_trace()
 
     return c
 
