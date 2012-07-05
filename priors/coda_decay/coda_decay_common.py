@@ -83,6 +83,8 @@ def phaseid_to_name(phaseid):
             return n[i]
     raise Exception("unrecognized phaseids %s" % (phaseid,))
 
+def almost_equal(f1, f2, eps = 0.00001):
+    return np.abs(f1-f2) < eps
 
 def get_dir(dname):
 
@@ -326,8 +328,9 @@ def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=Fals
         sigvisa_util.compute_narrowband_envelopes(arrival_segment)
 
         if len(traces) == 0:
-            import pdb
-            pdb.set_trace()
+            raise Exception("no traces found for siteid %d between %f and %f" % (siteid,  np.min(other_arrivals)- 100, np.max(other_arrivals) + 350))
+            #import pdb
+            #pdb.set_trace()
 
         if chans is None:
             chans = arrival_segment[0].keys()
@@ -454,36 +457,9 @@ def pred_arrtime(cursor, r, netmodel, phaseid_col, phase_arr_time_col):
     return (pred_arr_time - start_time) - r[phase_arr_time_col]
 
 
-def logenv_linf_cost(true_env, logenv):
-    c = np.max (np.abs(true_env - logenv))
-    return c
-
-def logenv_l1_cost(true_env, logenv):
-    n = len(true_env)
-    n2 = len(logenv)
-    if n != n2:
-        if np.abs(n-n2) > 5:
-            print "warning: comparing unequal-length traces (%d vs %d)" % (n, n2)
-        n = np.min([n, n2])
-    c = np.sum (np.abs(true_env[:n] - logenv[:n]))
-    return c
-
-def logenv_ar_cost(true_env, logenv):
-    diff = true_env - logenv
-
-    ar_n = 3
-    ar_params = [0.1, 0.1, 0.8]
-    ll = 0
-
-    last_n = diff[0:ar_n]
-    for x in diff:
-        pred = np.sum(last_n * ar_params)
-        ll = ll - (x-pred)**2
-
-    return ll
 
 
-def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=None, title=""):
+def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=None, title="", fname=None):
 
     if lonbounds is not None and latbounds is not None:
         min_lon = lonbounds[0]
@@ -510,15 +486,58 @@ def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=No
 
     lon_arr = np.linspace(min_lon, max_lon, n)
     lat_arr = np.linspace(min_lat, max_lat, n)
+    out = np.zeros((len(lon_arr), len(lat_arr)))
 
+    data_file = None
+    if fname is not None:
+        get_dir(os.path.dirname(fname))
+
+        # if file exists, open it and read the saved values
+        try:
+            data_file = open(fname, 'r')
+            meta_info = data_file.readline()
+            fmin_lon, fmax_lon, fmin_lat, fmax_lat, fn = [float(x) for x in meta_info.split()]
+            if not (almost_equal(fmin_lon, min_lon) and
+                    almost_equal(fmax_lon, max_lon) and
+                    almost_equal(fmin_lat, min_lat) and
+                    almost_equal(fmax_lat, max_lat) and
+                    int(fn) == n):
+                print '%f %f %f %f %d\n' % (min_lon, max_lon, min_lat, max_lat, n)
+                print '%f %f %f %f %d\n' % (fmin_lon, fmax_lon, fmin_lat, fmax_lat, fn)
+                raise Exception("output file %s already exists, but the parameters don't match!")
+
+            for l in data_file:
+                v = l.split()
+                loni = int(v[0])
+                lati = int(v[1])
+                fval = float(v[2])
+                out[loni, lati] = fval
+            data_file.close()
+            
+        # otherwise, start a new file
+        except IOError:
+            data_file = open(fname, 'w')
+            data_file.write('%f %f %f %f %d\n' % (min_lon, max_lon, min_lat, max_lat, n))
+            data_file.close()
+            
+        data_file = open(fname, 'a')
+        print "saving heat map values to %s" % fname
 
     max_val = np.float("-inf")
     max_lon = 0
     max_lat = 0
-    out = np.zeros((len(lon_arr), len(lat_arr)))
     for loni, lon in enumerate(lon_arr):
         for lati, lat in enumerate(lat_arr):
-            out[loni, lati] = f(lon, lat)
+
+            # if the function value at this location wasn't in the file, compute it and save to file
+            if out[loni, lati] == 0:
+                out[loni, lati] = f(lon, lat)
+
+                if data_file is not None:
+                    data_file.write('%d %d %f\n' % (loni, lati, out[loni, lati]))
+                    data_file.flush()
+            else:
+                print "using value loaded from file: %f at (%.2f, %.2f)" % (out[loni, lati], lon, lat)
 
             if out[loni, lati] > max_val:
                 max_lon = lon

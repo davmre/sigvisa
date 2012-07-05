@@ -99,22 +99,22 @@ class TraceModel:
                 if marginalize_method == "mode": #just use the mean parameters
                     params = self.__predict_params(phaseids, event, siteid, chan, band)
                     ll = f(params)
+                    all_params[chan][band] = params
 
                 elif marginalize_method == "optimize": # delegate optimziation to scipy
                     params = self.__predict_params(phaseids, event, siteid, chan, band)
 
-                    pshape = params.shape
-                    sf = lambda flat_params : -1 * f(np.reshape(flat_params, pshape))
-                    x = scipy.optimize.fmin(sf, params.flatten(), maxfun=30)
-                    print x.shape
-                    print params
-                    print pshape
+                    pparams = remove_peak(params)
+                    pshape = pparams.shape
+                    sf = lambda flat_params : -1 * f(restore_peak(np.reshape(flat_params, pshape)))
+                    x = scipy.optimize.fmin(sf, pparams.flatten(), maxfun=30)
                     try:
-                        params = np.reshape(x, pshape)
+                        params = restore_peak(np.reshape(x, pshape))
                     except:
                         import pdb
                         pdb.set_trace()
                     ll = f(params)
+                    all_params[chan][band] = params
                     print "found best value", ll
 
                 elif marginalize_method == "monte_carlo": # do a monte carlo integral over parameters.
@@ -135,6 +135,7 @@ class TraceModel:
                             best_param_ll = ll
 
                         if np.isnan(sum_ll):
+                            print "sum_ll is nan!!"
                             import pdb
                             pdb.set_trace()
 
@@ -291,6 +292,8 @@ class TraceModel:
             dist = utils.geog.dist_km((evlon, evlat), true_ev_loc)
             is_new = lambda l, x : (len(l) == 0 or np.min([np.abs(lx - x) for lx in l]) > 1.5)
 
+            p_projection = 0
+            s_projection = 0
             try:
                 p_phaseid = int(tr.stats.p_phaseid)
                 p_projection = p_arrival - self.sigmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid-1, p_phaseid-1)
@@ -350,7 +353,7 @@ class TraceModel:
 
             print "segment from %d gives signal ll %f vs noise ll %f" % (segment[chans[0]][bands[0]].stats.siteid, ll1, ll2)
 
-    def event_heat_map(self, pp, segments, base_event, map_width=3, marginalize_method="optimize", n=20, true_params = None, iid=False):
+    def event_heat_map(self, pp, segments, base_event, map_width=3, marginalize_method="optimize", n=20, true_params = None, iid=False, run_label=None):
 
         evlon = base_event[EV_LON_COL]
         evlat = base_event[EV_LAT_COL]
@@ -365,7 +368,8 @@ class TraceModel:
         f = timed_f
 
         # plot the likelihood heat map
-        bmap, max_lonlat = plot_heat(pp, f, center=(evlon, evlat), width = map_width, title=("%d" % (evid)), n=n)
+        fname = None if run_label is None else "logs/heatmap_%s_values.txt" % run_label
+        bmap, max_lonlat = plot_heat(pp, f, center=(evlon, evlat), width = map_width, title=("%d" % (evid)), n=n, fname=fname)
         print "got maxlonlat", max_lonlat, "vs true", (evlon, evlat)
 
         # plot the true event, the likelihood peak, and the station locations
@@ -379,36 +383,33 @@ class TraceModel:
 
             draw_events(bmap, ((slon, slat),),  marker="x", ms=50, mfc="none", mec="red", mew=5)
 
+        print "evaluating bestll and basell"
+        print max_lonlat
         bestll = f(max_lonlat[0], max_lonlat[1])
+        print "got bestll", bestll
+        print evlon, evlat
         basell = f(evlon, evlat)
         plt.title("map width %d deg\n best lon %f lat %f ll %f\n true lon %f lat %f ll %f" % (map_width, max_lonlat[0], max_lonlat[1], bestll, evlon, evlat, basell))
         pp.savefig()
-
 
         # plot the signals predicted by the event location
         best_event = np.copy(np.array(base_event))
         best_event[1] = max_lonlat[0]
         best_event[2] = max_lonlat[1]
-        for s in segments:
+        return best_event
 
-            band = 'narrow_envelope_2.00_3.00'
-            chan = 'BHZ'
-            tr = s[chan][band]
+    def plot_predicted_signal(self, s, event, pp, iid=False, band='narrow_envelope_2.00_3.00', chan='BHZ'):
 
-            start_time = tr.stats.starttime_unix
-            end_time = start_time + tr.stats.npts / tr.stats.sampling_rate
-            siteid = tr.stats.siteid
-            noise_floor = tr.stats.noise_floor
-
-            params=None
-            ll  = self.log_likelihood(s, best_event, pp=pp, marginalize_method="mode")
-            if params is not None and true_params is not None:
-
-#                gen_seg = self.sigmodel.generate_segment(start_time, end_time, siteid, tr.stats.sampling_rate, [1,5], params)
-                gen_tr = self.sigmodel.generate_trace(start_time, end_time, siteid, chan, band, tr.stats.sampling_rate, [1,5], params)
-                fig = plot.plot_trace(gen_tr, title="siteid %d ll %f \n p_arr %f p_height %f decay %f\n true p_arr %f height %f decay %f" % (siteid, ll, params[0, ARR_TIME_PARAM], params[0, CODA_HEIGHT_PARAM], params[0, CODA_DECAY_PARAM], true_params[siteid][0, ARR_TIME_PARAM], true_params[siteid][0, CODA_HEIGHT_PARAM], true_params[siteid][0, CODA_DECAY_PARAM]))
-                pp.savefig()
-                plt.close(fig)
+        tr = s[chan][band]
+        siteid = tr.stats.siteid
+        
+        ll, pdict  = self.log_likelihood(s, event, pp=pp, marginalize_method="mode", iid=iid)
+        params = pdict[chan][band]
+        if params is not None and not isinstance(params, NestedDict):
+            gen_tr = get_template(self.sigmodel, tr, [1, 5], params)
+            fig = plot.plot_trace(gen_tr, title="siteid %d ll %f \n p_arr %f p_height %f decay %f" % (siteid, ll, params[0, ARR_TIME_PARAM], params[0, CODA_HEIGHT_PARAM], params[0, CODA_DECAY_PARAM]))
+            pp.savefig()
+            plt.close(fig)
 
 def train_param_models(siteids, runids, evid):
 
@@ -477,14 +478,22 @@ def main():
 
     mt = CodaModel.MODEL_TYPE_GP_DAD #if model_type == 1 else CodaModel.MODEL_TYPE_GAUSSIAN
 
-    out_fname = os.path.join("logs", "heatmap_%d_%d.pdf" % (evid, map_width))
+    # train / load coda models
+    model_dict, cursor, sigmodel, earthmodel, sites = train_param_models(siteids, runids, evid)
+
+    sta_string = ":".join([siteid_to_sta(sid,cursor) for sid in siteids])
+    run_label = "%d_%d_%s_%s_%s" % (evid, map_width, sta_string, options.method, "iid" if options.iid else "arwiggle")
+    out_fname = os.path.join("logs", "heatmap_%s.pdf" % run_label)
     pp = PdfPages(out_fname)
     print "saving plots to", out_fname
 
-    # train / load coda models
-    model_dict, cursor, sigmodel, earthmodel, sites = train_param_models(siteids, runids, evid)
+
     load_wiggle_models(cursor, sigmodel, "parameters/signal_wiggles.txt")
     tm = TraceModel(cursor, sigmodel, model_dict, model_type=mt)
+
+    plot_band = 'narrow_envelope_2.00_3.00'
+    plot_chan = 'BHZ'
+
 
     ev = load_event(cursor, evid)
     print "loading signals..."
@@ -493,7 +502,10 @@ def main():
         s, n, o, op, oa = load_signal_slice(cursor, evid, siteid, load_noise=True, learn_noise=True, earthmodel=earthmodel)
         signals.append(s[0])
 
-        fig = plot.plot_trace(s[0]['BHZ']['narrow_envelope_2.00_3.00'])
+        tr = s[0][plot_chan][plot_band]
+        fig = plot.plot_trace(tr)
+        tm.plot_predicted_signal(s[0], ev, pp, iid=True, chan=plot_chan, band=plot_band)
+        
         pp.savefig()
         plt.close(fig)
 
@@ -501,8 +513,14 @@ def main():
 #    tm.sensitivity(pp, signals, ev)
 
     print "computing heat map..."
-    tm.event_heat_map(pp, signals, ev, map_width=map_width, n=19, iid=options.iid, marginalize_method=options.method)
-    pp.close()
+    try:
+        best_event = tm.event_heat_map(pp, signals, ev, map_width=map_width, n=19, iid=options.iid, marginalize_method=options.method, run_label=run_label)
+
+        for s in signals:
+            tm.plot_predicted_signal(s, best_event, pp, iid=True, chan=plot_chan, band=plot_band)
+
+    finally:
+        pp.close()
 
 if __name__ == "__main__":
     main()
