@@ -129,7 +129,7 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5, length=None):
 
     if tmpl is not None:
         nf = tmpl.stats.noise_floor
-    
+
     wiggles = []
     for (phase_idx, phase) in enumerate(arrs["arrival_phases"]):
         start_wiggle = arrs["arrivals"][phase_idx]-5
@@ -297,6 +297,8 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
     if pp is not None:
         plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
 
+    load_wiggle_models(cursor, sigmodel, wiggles)
+
     best_params = None
     if init_runid is not None:
         best_params, phaseids_loaded, fit_cost = load_template_params(cursor, int(evid), env.stats.channel, env.stats.short_band, init_runid, env.stats.siteid)
@@ -317,14 +319,21 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
         best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
         if pp is not None:
             plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
+            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "")
+            load_wiggle_models(cursor, sigmodel, wiggles)
+            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
 
     if wiggles is not None:
-        load_wiggle_models(cursor, sigmodel, wiggles)
         f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
         print "loaded cost is", f(best_params)
-        best_params, best_cost = optimize(f, best_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
+#        best_params, best_cost = optimize(f, best_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
         if pp is not None:
             plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid))
+            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid))
+
+            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid), logscale=False)
+            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid), logscale=False)
+
 
     return assem_params(best_params), phaseids, best_cost
 
@@ -594,7 +603,7 @@ def main():
     parser.add_option("--max_mb", dest="max_mb", default=10, type="float", help="exclude all events with mb greater than this value (10)")
     parser.add_option("--start_time", dest="start_time", default=None, type="float", help="exclude all events with time less than this value (0)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float", help="exclude all events with time greater than this value (1237680000)")
-                 
+
     (options, args) = parser.parse_args()
 
     cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
@@ -624,7 +633,8 @@ def main():
     evid_condition = "and l.time between %f and %f and lebo.mb between %f and %f and l.snr > 5" % (st, et, options.min_mb, options.max_mb) if evid is None else "and evid=%d" % (evid)
 
 
-    load_wiggle_models(cursor, sigmodel, "parameters/signal_wiggles.txt")
+    if options.wiggles is not None:
+        load_wiggle_models(cursor, sigmodel, options.wiggles)
 
 # want to select all events, with certain properties, which have a P or S phase detected at this station
     phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
