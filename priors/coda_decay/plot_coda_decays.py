@@ -25,7 +25,7 @@ from priors.coda_decay.templates import *
 from priors.coda_decay.train_coda_models import CodaModel
 
 
-def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None):
+def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):
     fig = plt.figure(figsize = (8, 8))
 
     bhz_axes = plt.subplot(2, 1, 1)
@@ -34,9 +34,9 @@ def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, hor
     if title is not None:
         plt.title(title, fontsize=12)
 
-    plot_envelopes_with_pred(sigmodel, bhz_axes, vert_trace, phaseids, vert_params)
+    plot_envelopes_with_pred(sigmodel, bhz_axes, vert_trace, phaseids, vert_params, logscale=logscale)
     horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
-    plot_envelopes_with_pred(sigmodel, horiz_axes, vert_trace, phaseids, vert_params, sample=True)
+    plot_envelopes_with_pred(sigmodel, horiz_axes, vert_trace, phaseids, vert_params, sample=True, logscale=logscale)
 #    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)
 
 
@@ -46,16 +46,16 @@ def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, hor
     pp.savefig()
     plt.close(fig)
 
-def plot_envelopes_with_pred(sigmodel, axes, trace, phaseids, params, sample=False):
+def plot_envelopes_with_pred(sigmodel, axes, trace, phaseids, params, sample=False, logscale=True):
     srate = trace.stats['sampling_rate']
 
     synth_trace = get_template(sigmodel, trace, phaseids, params, sample=sample)
     traces = [trace, synth_trace]
 
-    formats = ["k-","g-"]
+    formats = ["w-","k-"]
     linewidths = [1,1]
 
-    plot.plot_traces_subplot(axes, traces, formats = formats, linewidths = linewidths, logscale=True)
+    plot.plot_traces_subplot(axes, traces, formats = formats, linewidths = linewidths, logscale=logscale)
 
 def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, all_det_times = None, all_det_labels = None, title = None):
     fig = plt.figure(figsize = (8, 8))
