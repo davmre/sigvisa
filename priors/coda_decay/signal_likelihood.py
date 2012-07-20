@@ -104,12 +104,16 @@ class TraceModel:
                 elif marginalize_method == "optimize": # delegate optimziation to scipy
                     params = self.__predict_params(phaseids, event, siteid, chan, band)
 
-                    pparams = remove_peak(params)
+                    atimes = params[:, 0]
+                    timeless_params = params[:, 1:]
+                    pparams = remove_peak(timeless_params)
                     pshape = pparams.shape
-                    sf = lambda flat_params : -1 * f(restore_peak(np.reshape(flat_params, pshape)))
+                    assem_params = lambda p : np.hstack([np.reshape(atimes, (-1, 1)), restore_peak(np.reshape(p, pshape))])
+
+                    sf = lambda flat_params : -1 * f(assem_params(flat_params))
                     x = scipy.optimize.fmin(sf, pparams.flatten(), maxfun=30)
                     try:
-                        params = restore_peak(np.reshape(x, pshape))
+                        params = assem_params(x)
                     except:
                         import pdb
                         pdb.set_trace()
