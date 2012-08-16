@@ -260,9 +260,24 @@ def main():
       siteid = options.siteid
       site_lonlat = sites[siteid-1, 0:2]
 
-      sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between %f and %f and lebo.mb between %f and %f and lebo.depth between %f and %f and leba.arid=l.arid and lebo.orid=leba.orid and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (options.start_time, options.end_time, options.min_mb, options.max_mb, options.min_depth, options.max_depth, options.siteid)
-      cursor.execute(sql_query)
-      events = np.array(cursor.fetchall())
+
+      f = open("pn_evids", 'r')
+      events = []
+      for l in f:
+
+        try:
+          orid = int(l)
+        except:
+          continue
+        sql_query="SELECT distinct mb, lon, lat, evid, time, depth FROM leb_origin where evid=%d" % (orid)
+        cursor.execute(sql_query)
+        ev = cursor.fetchone()
+        events.append(ev)
+      events = np.array(events)
+
+#      sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between %f and %f and lebo.mb between %f and %f and lebo.depth between %f and %f and leba.arid=l.arid and lebo.orid=leba.orid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase" % (options.start_time, options.end_time, options.min_mb, options.max_mb, options.min_depth, options.max_depth, options.siteid)
+#      cursor.execute(sql_query)
+#      events = np.array(cursor.fetchall())
 
       d = lambda ev : geog.dist_km((sites[siteid-1][0], sites[siteid-1][1]), (ev[1], ev[2]))
       a = lambda ev : geog.azimuth((sites[siteid-1][0], sites[siteid-1][1]), (ev[1], ev[2]))
