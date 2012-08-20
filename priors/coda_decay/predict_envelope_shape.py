@@ -1,4 +1,4 @@
-import os, sys, traceback
+import os, sys, traceback, pdb
 import numpy as np, scipy
 
 
@@ -18,12 +18,15 @@ from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
+
+
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
 from priors.coda_decay.plot_multi_station_params import *
 from priors.coda_decay.train_coda_models import CodaModel
 from priors.coda_decay.signal_likelihood import TraceModel
+from priors.coda_decay.signal_likelihood import load_gp_params
 
 def plot_residuals(pp, quantity, phaseids, chan, residuals, labels):
 
@@ -128,16 +131,32 @@ def plot_linear(pp, data, b_col, title=""):
     pp.savefig()
 
 
-def plot_events_heat_single(pp, fit_data, cm, X, sll, model_type, title):
 
-    f = lambda lon, lat: cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type)
-    bmap, (aa, bb) = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
-    draw_events(bmap, (sll,),  marker="x", ms=50, mfc="none", mec="purple", mew=5)
-    draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="yellow", mew=2)
+def plot_event_location_heat(pp, val, cm, X, sll, model_type, title):
+
+    # plot the conditional likelihood of event locations given the event parameters
+    f = lambda lon, lat: np.exp(cm.log_likelihood(val, np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type))
+    bmap, (aa, bb), density, lon_arr, lat_arr = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
+
+    draw_events(bmap, (sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+    draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="red", mew=2)
     plt.title(title)
     pp.savefig()
 
+    return density, lon_arr, lat_arr
 
+
+def plot_events_heat_single(pp, cm, X, sll, model_type, title):
+
+    if model_type == cm.MODEL_TYPE_GP_DAD:
+        f = lambda lon, lat: min(cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type), 0)
+    else:
+        f = lambda lon, lat: cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type)
+    bmap = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)[0]
+    print "drawing", sll
+    draw_events(bmap, (sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+    draw_events(bmap, X, marker=".", ms=2, mfc="none", mec="red", mew=2, alpha=0.6)
+    pp.savefig()
 
 def plot_events_heat(pp, fit_data, cm, target_str = ""):
 
@@ -145,71 +164,178 @@ def plot_events_heat(pp, fit_data, cm, target_str = ""):
     X = fit_data[ : , [FIT_LON, FIT_LAT] ]
 
     cursor = database.db.connect().cursor()
-
     cursor.execute("SELECT lon, lat from static_siteid where id = %d" % (siteid))
     (slon, slat) = cursor.fetchone()
 
-    model_list = [("LLD", CodaModel.MODEL_TYPE_GP_LLD, cm.lld_params),
+    model_list = [#("LLD", CodaModel.MODEL_TYPE_GP_LLD, cm.lld_params),
                   ("DAD", CodaModel.MODEL_TYPE_GP_DAD, cm.dad_params),
-                  ("LLDDA_SUM", CodaModel.MODEL_TYPE_GP_LLDDA_SUM, cm.lldda_sum_params),
-                  ("LLDDA_PROD", CodaModel.MODEL_TYPE_GP_LLDDA_PROD, cm.lldda_prod_params)]
+                  #("LLDDA_SUM", CodaModel.MODEL_TYPE_GP_LLDDA_SUM, cm.lldda_sum_params),
+                  #("LLDDA_PROD", CodaModel.MODEL_TYPE_GP_LLDDA_PROD, cm.lldda_prod_params)
+                  ]
     for (model_str, model_type, params) in model_list:
         title = target_str + " " + model_str + "\n" + str(cm.lld_params)
-        plot_events_heat_single(pp, fit_data, cm, X, (slon, slat), model_type, title)
+        plot_events_heat_single(pp, cm, X, (slon, slat), model_type, title)
+
+
+
+def locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, short_band, chan, (phase_label, phaseids), runid, target_str):
+
+    siteid = fit_data[0, FIT_SITEID]
+    # need to get event lcoation to pass as X
+
+    try:
+        evrow = [r for r in fit_data if r[FIT_EVID]==evid and r[FIT_PHASEID] in phaseids][0]
+    except IndexError:
+        raise Exception("event %d not found at station %d" % (evid, siteid))
+    evll = evrow[2:4]
+
+    cursor = database.db.connect().cursor()
+    cursor.execute("SELECT lon, lat from static_siteid where id = %d" % (siteid))
+    (slon, slat) = cursor.fetchone()
+
+
+    # train coda model excluding this event
+    cm = CodaModel(fit_data, band_dir, phaseids, chan, target_str=target_str, ignore_evids = [evid,] , dad_params=dad_params, optimize=False, debug=False)
+
+    val = CodaModel.target_fns[target_str](evrow)
+
+    density, lon_arr, lat_arr = plot_event_location_heat(pp, val, cm, (evll,), (slon, slat), CodaModel.MODEL_TYPE_GP_DAD, "event %d location from %s\nsid %d rid %d band %s chan %s phase %s" % (evid, target_str, siteid, runid, short_band, chan, phase_label))
+
+    return density, lon_arr, lat_arr
+
+def eval_spatial_model(fit_data, dad_params, pp, band_dir, short_band, chan, (phase_label, phaseids), runid, target_str):
+
+
+    #            print "evaluating starting hyperparams for", target_str
+    #            cv_external(cursor, fit_data, band_dir, phaseids, chan, target_str=target_str, pp = None, dad_params=dad_params[target_str])
+    cm = CodaModel(fit_data, band_dir, phaseids, chan, target_str=target_str, ignore_evids = [] , dad_params=dad_params, optimize=False)
+    #            print "evaluating learned hyperparams for", target_str
+    #            cv_external(cursor, fit_data, band_dir, phaseids, chan, target_str=target_str, pp = None, dad_params=cm.dad_params)
+    plot_events_heat(pp, fit_data, cm, target_str)
+
+
 
 
 def main():
     parser = OptionParser()
 
-    parser.add_option("-s", "--siteid", dest="siteid", default=None, type="int", help="siteid of station for which to generate plots")
-    parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid of coda fits to examine")
+    parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str", help="comma-separated list of siteids for which to generate plots")
+#    parser.add_option("-r", "--runids", dest="runids", default=None, type="str", help="comma-separated list of coda fit runids to examine")
+    parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="coda fit runids to examine")
+    parser.add_option("-e", "--evids", dest="evids", default=None, type="str", help="evids of event to locate using its template params")
     parser.add_option("-c", "--channel", dest="chan", default="BHZ", type="str", help="name of channel to examine (BHZ)")
     parser.add_option("-n", "--band", dest="short_band", default="2.00_3.00", type="str", help="name of band to examine (2.00_3.00)")
+    parser.add_option("-t", "--targets", dest="targets", default="decay,amp_transfer,onset", type="str", help="comma-separated list of target parameter names (decay,amp_transfer,onset)")
 
     (options, args) = parser.parse_args()
 
     cursor = db.connect().cursor()
 
-    base_coda_dir = get_base_dir(int(options.siteid), int(options.runid))
+    density = NestedDict()
 
-    for (phase_label, phaseids) in (('P', P_PHASEIDS),):
+    siteids = [int(s) for s in options.siteids.split(',')]
+    if options.evids == "all":
+        evids="all"
+    elif options.evids is None:
+        evids = None
+    else:
+        evids = [int(e) for e in options.evids.split(',')]
+    runid=options.runid
+    target_strs = [t for t in options.targets.split(',')]
 
-        print "loading %s fit data... " % (phase_label),
+    for siteid in siteids:
+        for (phase_label, phaseids) in (('P', P_PHASEIDS),):
+            for target_str in target_strs:
+                # cache data for faster development
+                print "loading %s fit data... " % (phase_label),
+                fit_data = load_shape_data(cursor, chan=options.chan, short_band=options.short_band,siteid = siteid, runids=[runid,], phaseids = phaseids)
+                print str(fit_data.shape[0]) + " entries loaded"
 
-        # cache data for faster development
-        fit_data = load_shape_data(cursor, chan=options.chan, short_band=options.short_band,siteid = options.siteid, runids=[options.runid,], phaseids = phaseids)
-        print str(fit_data.shape[0]) + " entries loaded"
+                if evids == "all":
+                    evids = fit_data[:, 0]
+                    print "setting evids to", evids
 
-        band_dir = os.path.join(base_coda_dir, options.short_band)
-        fname = os.path.join(band_dir, "%s_predictions_%s.pdf" % (phase_label, options.chan))
-        pp = PdfPages(fname)
+                param_dict = load_gp_params("parameters/gp_hyperparams.txt", "dad")
+                dad_params = param_dict[int(siteid)][phase_label]["BHZ"]["2.00_3.00"][target_str]
+                print dad_params
 
-        print "saving plots to", fname
+                base_coda_dir = get_base_dir(int(siteid), int(runid))
+                band_dir = os.path.join(base_coda_dir, options.short_band)
 
-        lld_params = {"decay": [.01, .02, 100], "onset": [4.67, 2.3866, 800], "amp_transfer": [.4, .4, 100]}
-#        dad_params = {"decay": [.02, .4, 2, .05, 1], "onset": [.02, .4, 2, .05, 1], "amp_transfer": [.02, .4, 2, .05, 1]}
-        dad_params = {"decay": [.01, .02, 2, 0.0001, 0.0001], "onset": [2, 5, 2, 0.0001, 0.0001], "amp_transfer": [.3, .8, 2, 0.0001, 0.0001]}
+                if options.evids is None:
+                    # if no specific event specified, train a model for each station based on all events from that station and evaluate/plot its predictions
+                    fname = os.path.join(band_dir, "%s_predictions_%s.pdf" % (phase_label, options.chan))
+                    pp = PdfPages(fname)
+                    print "saving heat map(s) to", fname
+                    eval_spatial_model(fit_data, dad_params, pp, band_dir, options.short_band, options.chan, (phase_label, phaseids), runid, target_str)
+                    pp.close()
+                else:
+                    for evid in evids:
+                        # if a specific event is specified, train a model for each station based on all other events, then try to plot the event location
+                        fname = os.path.join(band_dir, "%s_%s_location_%s_%d.pdf" % (phase_label, target_str, options.chan, evid))
+                        pp = PdfPages(fname)
+                        print "saving heat map(s) to", fname
 
-        # sigma_n dist_mag dist_scale azi_mag azi_scale depth_mag depth_scale ll_mag ll_scale
-        lldda_sum_params = {"decay": [.01, .05, 1, 0.00001, 20, 0.000001, 1, .05, 300], "onset": [2, 5, 1, 0.00001, 20, 0.000001, 1, 5, 300], "amp_transfer": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] }
-
-        # sigma_n sigma_f dist_scale azi_scale depth_scale ll_scale
-        lldda_prod_params = {"decay": [.01, .02, 1, 200, 10, 300], "onset": [2, 5, 1, 200, 10, 300], "amp_transfer": [.3, .8, 1, 200, 10, 300] }
+                        density[evid][siteid][phase_label], lon_arr, lat_arr = locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, options.short_band, options.chan, (phase_label, phaseids), runid, target_str)
+                        pp.close()
 
 
-        for target_str in ["decay", "amp_transfer", "onset"]:
-            print "evaluating starting hyperparams for", target_str
-            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = None, dad_params=dad_params[target_str])
-            cm = CodaModel(fit_data, band_dir, phaseids, options.chan, target_str=target_str, ignore_evids = [] , dad_params=dad_params[target_str], optimize=True)
-            print "evaluating learned hyperparams for", target_str
-            cv_external(cursor, fit_data, band_dir, phaseids, options.chan, target_str=target_str, pp = None, dad_params=cm.dad_params)
-#            plot_events_heat(pp, fit_data, cm, target_str)
+    if evids is not None:
+        for evid in evids:
 
-        pp.close()
 
+
+            pp = PdfPages("logs/density_%d.pdf" % (evid))
+
+            print "calculating overall density for %d, saved to %s" % (evid, "logs/density_%d.pdf" % (evid))
+            od = None
+
+            for sid in density[evid].keys():
+                for pl in density[evid][sid].keys():
+                    d = density[evid][sid][pl]
+                    od = d if od is None else d * od
+
+
+            bmap = draw_earth("",
+                              #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
+                              #"SEL3(red), NET-VISA(blue)",
+                              projection="cyl",
+                              resolution="l",
+                              llcrnrlon = lon_arr[0], urcrnrlon = lon_arr[-1],
+                              llcrnrlat = lat_arr[0], urcrnrlat = lat_arr[-1],
+                              nofillcontinents=True,
+                              figsize=(8,8))
+
+            minlevel = scipy.stats.scoreatpercentile(od.flatten(), 20)
+            levels = np.linspace(minlevel, np.max(od), 10)
+
+            draw_density(bmap, lon_arr, lat_arr, od, levels = levels, colorbar=True)
+
+
+            cursor.execute("SELECT lon, lat from static_siteid where id = %d" % (siteid))
+            (slon, slat) = cursor.fetchone()
+            cursor.execute("SELECT lon, lat from leb_origin where evid = %d" % (evid))
+            (evlon, evlat) = cursor.fetchone()
+
+            draw_events(bmap, ((slon,slat),),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+            draw_events(bmap, ((evlon, evlat),), marker="o", ms=5, mfc="none", mec="red", mew=2)
+
+
+
+            pp.savefig()
+            pp.close()
 
 if __name__ == "__main__":
-    main()
+
+    try:
+        main()
+    except KeyboardInterrupt:
+        raise
+    except:
+        type, value, tb = sys.exc_info()
+        traceback.print_exc()
+        pdb.post_mortem(tb)
+
 
 
 def gridsearch_dad(cursor, fit_data, band_dir, phaseids, chan, target_str, pp):
