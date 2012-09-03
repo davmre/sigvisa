@@ -20,11 +20,11 @@ import utils.geog
 import obspy.signal.util
 
 
-from priors.coda_decay.train_wiggles import *
-from priors.coda_decay.coda_decay_common import *
-from priors.coda_decay.source_spectrum import *
-from priors.coda_decay.templates import *
-from priors.coda_decay.train_coda_models import CodaModel
+from signals.train_wiggles import *
+from signals.coda_decay_common import *
+from signals.source_spectrum import *
+from signals.templates import *
+from signals.train_coda_models import CodaModel
 
 
 def load_gp_params(fname, model_type):

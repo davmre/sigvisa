@@ -6,7 +6,7 @@ import numpy as np
 import wave
 
 """
-phase = 0.70_1.00, 1.00_1.50, 
+phase = 0.70_1.00, 1.00_1.50,
 """
 
 class Location(object):
@@ -18,10 +18,10 @@ class Location(object):
             self.pos = self.getpos()
         else:
             self.pos = pos
-            
+
     def dist(self, e):
         return np.sqrt(sum(np.square(self.pos-e.pos)))
-    
+
     def getpos(self):
         R = 6356.8
         r = R-self.depth
@@ -29,8 +29,8 @@ class Location(object):
         y = r*np.cos(np.radians(self.lat))*np.sin(np.radians(self.lon))
         z = r*np.sin(np.radians(self.lat))
         return np.array([x,y,z])
-        
-            
+
+
 class Event(Location):
     def __init__(self, evid, feature=None, phase=None, normalize=True):
         evid = int(evid)
@@ -44,7 +44,7 @@ class Event(Location):
         where evid=%d" %evid
         cursor.execute(command)
         runid, siteid, phaseid = cursor.fetchall()[0]
-        prefix="../sigvisa_data/wiggles"
+        prefix=os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
         suffix="_BHZ.dat"
         if phase==None:
             suffix = "_BHZ_raw.dat"
@@ -60,7 +60,7 @@ class Event(Location):
         except:
             self.data=None
             self.x=None
-        
+
         if self.data != None:
             self.y = self.feature(self.data)
         else:
@@ -69,7 +69,8 @@ class Event(Location):
         cursor.execute(command)
         self.lon, self.lat, self.depth = cursor.fetchall()[0]
         self.pos = self.getpos()
-        
+
+
         self.gpval = self.feature(self.x)
 """
         R = 6356.8 # radius of earth, in km
@@ -78,8 +79,8 @@ class Event(Location):
         y = r*np.cos(np.radians(self.lat))*np.sin(np.radians(self.lon))
         z = r*np.sin(np.radians(self.lat))
         self.pos = np.array([x,y,z])
-"""     
-        
+"""
+
 
 # return evid numbers which meet criteria as in utils.closest_event_pairs
 def validevids(sta):
@@ -121,7 +122,7 @@ def validevents2(ex=None,feature=None):
             if ex != evid:
                 events.append(e)
     return events
-    
+
 
 #LPAZ, GNI, AFI, JNU
 
@@ -148,7 +149,7 @@ def closest2(evid=None):
         e = Event(evid)
         for ei in events:
             list.append((e.dist(ei),ei.evid))
-            
+
     list.sort()
     return list
 

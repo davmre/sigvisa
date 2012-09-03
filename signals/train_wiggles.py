@@ -21,7 +21,7 @@ import utils.geog
 import obspy.signal.util
 import itertools
 
-from priors.coda_decay.coda_decay_common import *
+from signals.coda_decay_common import *
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel
 

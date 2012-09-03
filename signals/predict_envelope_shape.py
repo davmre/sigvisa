@@ -22,11 +22,11 @@ import obspy.signal.util
 
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.nonparametric_regression as nr
-from priors.coda_decay.coda_decay_common import *
-from priors.coda_decay.plot_multi_station_params import *
-from priors.coda_decay.train_coda_models import CodaModel
-from priors.coda_decay.signal_likelihood import TraceModel
-from priors.coda_decay.signal_likelihood import load_gp_params
+from signals.coda_decay_common import *
+from signals.plot_multi_station_params import *
+from signals.train_coda_models import CodaModel
+from signals.signal_likelihood import TraceModel
+from signals.signal_likelihood import load_gp_params
 
 def plot_residuals(pp, quantity, phaseids, chan, residuals, labels):
 

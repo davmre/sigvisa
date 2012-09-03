@@ -19,10 +19,10 @@ import obspy.signal.util
 from optparse import OptionParser
 
 import utils.nonparametric_regression as nr
-from priors.coda_decay.coda_decay_common import *
-from priors.coda_decay.plot_coda_decays import *
-from priors.coda_decay.train_wiggles import *
-from priors.coda_decay.templates import *
+from signals.coda_decay_common import *
+from signals.plot_coda_decays import *
+from signals.train_wiggles import *
+from signals.templates import *
 
 def arrival_peak_offset(trace, window_start_offset, window_end_offset = None):
     srate = trace.stats.sampling_rate
@@ -288,18 +288,10 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
     #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
 
     set_noise_process(sigmodel, env)
-    print "setting dummy params"
-    set_dummy_wiggles(sigmodel, env, phaseids)
-
-    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
-    start_cost = f(start_params)
-    print "start params cost (w/ smoothed data and iid noise)", start_cost
-    if pp is not None:
-        plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(start_params), phaseids, None, None, title = "start smoothed iid (cost %f, evid %s)" % (start_cost, evid))
-
     load_wiggle_models(cursor, sigmodel, wiggles)
-
     best_params = None
+
+    # initialize the search using the outcome of a previous run
     if init_runid is not None:
         best_params, phaseids_loaded, fit_cost = load_template_params(cursor, int(evid), env.stats.channel, env.stats.short_band, init_runid, env.stats.siteid)
         best_params = best_params[:, 1:]
@@ -666,7 +658,7 @@ def main():
         evid = int(event[EV_EVID_COL])
 
         if len(events)>1:
-            cmd_str = "python2.6 -m priors.coda_decay.fit_shape_params -r %d -e %d -m %s -s %d" % (runid, evid, method, siteid)
+            cmd_str = "python2.6 -m signals.fit_shape_params -r %d -e %d -m %s -s %d" % (runid, evid, method, siteid)
             print "running", cmd_str
             os.system(cmd_str)
             continue

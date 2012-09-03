@@ -16,7 +16,7 @@ from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
-from priors.coda_decay.coda_decay_common import *
+from signals.coda_decay_common import *
 
 
 
@@ -112,10 +112,6 @@ def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
         c = -1 *sigmodel.trace_likelihood(smoothed, phaseids, params);
 
     print "cost", c
-
-    if c < 0:
-        import pdb
-        pdb.set_trace()
 
     return c
 

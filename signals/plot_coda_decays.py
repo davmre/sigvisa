@@ -20,9 +20,9 @@ import obspy.signal.util
 
 
 import utils.nonparametric_regression as nr
-from priors.coda_decay.coda_decay_common import *
-from priors.coda_decay.templates import *
-from priors.coda_decay.train_coda_models import CodaModel
+from signals.coda_decay_common import *
+from signals.templates import *
+from signals.train_coda_models import CodaModel
 
 
 def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):

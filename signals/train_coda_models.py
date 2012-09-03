@@ -18,8 +18,8 @@ import numpy as np
 import scipy.linalg
 import hashlib
 
-from priors.coda_decay.coda_decay_common import *
-from priors.coda_decay.source_spectrum import *
+from signals.coda_decay_common import *
+from signals.source_spectrum import *
 
 from utils.gp_regression import GaussianProcess, optimize_hyperparams
 from utils.kernels import InvGamma, LogNormal

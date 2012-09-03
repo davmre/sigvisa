@@ -55,6 +55,9 @@ class NestedDict(dict):
         return self.setdefault(key, NestedDict())
 
 
+def sql_multi(key, values):
+    return "(" + " or ".join(["%s=%s" % (key, val) for val in values])  + ")"
+
 def bandid_to_short_band(bandid):
     for band in bands:
         if sigvisa.canonical_band_num(band) == bandid:
@@ -128,7 +131,7 @@ def predict_event_arrivals(cursor, earthmodel, evid, siteid, phaseids=[1,5]):
                                        event[ EV_LAT_COL],
                                        event[ EV_DEPTH_COL],
                                        event[ EV_TIME_COL],
-                                               pid-1, 
+                                               pid-1,
                                        siteid-1))
 
     return np.array(arrivals), phaseids
@@ -186,6 +189,7 @@ def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runids=None
     except:
         cursor.execute(sql_query)
         shape_data = np.array(cursor.fetchall(), dtype=object)
+        print shape_data.size
         shape_data[:, FIT_BANDID] = np.asarray([sigvisa.canonical_band_num(band) for band in shape_data[:, FIT_BANDID]])
         shape_data = np.array(shape_data, dtype=float)
         np.savetxt(fname, shape_data)
@@ -513,13 +517,13 @@ def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=No
                 fval = float(v[2])
                 out[loni, lati] = fval
             data_file.close()
-            
+
         # otherwise, start a new file
         except IOError:
             data_file = open(fname, 'w')
             data_file.write('%f %f %f %f %d\n' % (min_lon, max_lon, min_lat, max_lat, n))
             data_file.close()
-            
+
         data_file = open(fname, 'a')
         print "saving heat map values to %s" % fname
 
@@ -551,7 +555,7 @@ def plot_heat(pp, f, n=20, center=None, width=None, lonbounds=None, latbounds=No
 
     plt.title(title)
 
-    return bmap, (max_lon, max_lat)
+    return bmap, (max_lon, max_lat), out, lon_arr, lat_arr
 
 def logsub_noise(log_height, log_noise):
     return np.log ( np.exp(log_height) - np.exp(log_noise) )

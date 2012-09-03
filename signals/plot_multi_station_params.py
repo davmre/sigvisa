@@ -17,7 +17,7 @@ from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
-from priors.coda_decay.coda_decay_common import *
+from signals.coda_decay_common import *
 
 
 
