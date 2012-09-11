@@ -18,7 +18,7 @@ from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
-
+from plotting.heatmap import Heatmap
 
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.nonparametric_regression as nr
@@ -136,14 +136,16 @@ def plot_event_location_heat(pp, val, cm, X, sll, model_type, title):
 
     # plot the conditional likelihood of event locations given the event parameters
     f = lambda lon, lat: np.exp(cm.log_likelihood(val, np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type))
-    bmap, (aa, bb), density, lon_arr, lat_arr = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
 
-    draw_events(bmap, (sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
-    draw_events(bmap, X, marker="o", ms=5, mfc="none", mec="red", mew=2)
+    hm = Heatmap(f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
+    hm.calc(checkpoint="logs/%s.heat" % str(hashlib.md5(title).hexdigest()))
+    hm.plot_density()
+    hm.plot_locations((sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+    hm.plot_locations(X, marker="o", ms=5, mfc="none", mec="red", mew=2)
     plt.title(title)
     pp.savefig()
 
-    return density, lon_arr, lat_arr
+    return hm
 
 
 def plot_events_heat_single(pp, cm, X, sll, model_type, title):
@@ -152,10 +154,14 @@ def plot_events_heat_single(pp, cm, X, sll, model_type, title):
         f = lambda lon, lat: min(cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type), 0)
     else:
         f = lambda lon, lat: cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type)
-    bmap = plot_heat(pp, f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)[0]
-    print "drawing", sll
-    draw_events(bmap, (sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
-    draw_events(bmap, X, marker=".", ms=2, mfc="none", mec="red", mew=2, alpha=0.6)
+
+    hm = Heatmap(f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
+    hm.calc(checkpoint="logs/%s.heat" % str(hashlib.md5(title).hexdigest()))
+    hm.plot_density()
+    hm.plot_locations((sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+    hm.plot_locations(X, marker=".", ms=2, mfc="none", mec="red", mew=2, alpha=0.6)
+
+    plt.title(title)
     pp.savefig()
 
 def plot_events_heat(pp, fit_data, cm, target_str = ""):
@@ -199,9 +205,9 @@ def locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, short_band
 
     val = CodaModel.target_fns[target_str](evrow)
 
-    density, lon_arr, lat_arr = plot_event_location_heat(pp, val, cm, (evll,), (slon, slat), CodaModel.MODEL_TYPE_GP_DAD, "event %d location from %s\nsid %d rid %d band %s chan %s phase %s" % (evid, target_str, siteid, runid, short_band, chan, phase_label))
+    hm = plot_event_location_heat(pp, val, cm, (evll,), (slon, slat), CodaModel.MODEL_TYPE_GP_DAD, "event %d location from %s\nsid %d rid %d band %s chan %s phase %s" % (evid, target_str, siteid, runid, short_band, chan, phase_label))
 
-    return density, lon_arr, lat_arr
+    return hm
 
 def eval_spatial_model(fit_data, dad_params, pp, band_dir, short_band, chan, (phase_label, phaseids), runid, target_str):
 
@@ -276,7 +282,7 @@ def main():
                         pp = PdfPages(fname)
                         print "saving heat map(s) to", fname
 
-                        density[evid][siteid][phase_label], lon_arr, lat_arr = locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, options.short_band, options.chan, (phase_label, phaseids), runid, target_str)
+                        density[evid][siteid][phase_label] = locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, options.short_band, options.chan, (phase_label, phaseids), runid, target_str)
                         pp.close()
 
 
@@ -296,31 +302,15 @@ def main():
                     od = d if od is None else d * od
 
 
-            bmap = draw_earth("",
-                              #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
-                              #"SEL3(red), NET-VISA(blue)",
-                              projection="cyl",
-                              resolution="l",
-                              llcrnrlon = lon_arr[0], urcrnrlon = lon_arr[-1],
-                              llcrnrlat = lat_arr[0], urcrnrlat = lat_arr[-1],
-                              nofillcontinents=True,
-                              figsize=(8,8))
-
-            minlevel = scipy.stats.scoreatpercentile(od.flatten(), 20)
-            levels = np.linspace(minlevel, np.max(od), 10)
-
-            draw_density(bmap, lon_arr, lat_arr, od, levels = levels, colorbar=True)
-
+            od.plot_density()
 
             cursor.execute("SELECT lon, lat from static_siteid where id = %d" % (siteid))
             (slon, slat) = cursor.fetchone()
             cursor.execute("SELECT lon, lat from leb_origin where evid = %d" % (evid))
             (evlon, evlat) = cursor.fetchone()
 
-            draw_events(bmap, ((slon,slat),),  marker="x", ms=7, mfc="none", mec="white", mew=2)
-            draw_events(bmap, ((evlon, evlat),), marker="o", ms=5, mfc="none", mec="red", mew=2)
-
-
+            od.plot_locations(((slon,slat),),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+            od.plot_locations(((evlon, evlat),), marker="o", ms=5, mfc="none", mec="red", mew=2)
 
             pp.savefig()
             pp.close()
