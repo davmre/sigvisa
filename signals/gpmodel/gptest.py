@@ -62,25 +62,150 @@ def draw2d(pdgrid, gridmin, gridmax, testevid):
     actual = Location(event.lat, event.lon, 0)
     return predicted.dist(actual)
 
+def princomp(A):
+    """ performs principal components analysis
+    (PCA) on the n-by-p data matrix A
+    Rows of A correspond to observations, columns to variables.
+
+    Returns :
+    coeff :
+    is a p-by-p matrix, each column containing coefficients
+    for one principal component.
+    score :
+    the principal component scores; that is, the representation
+    of A in the principal component space. Rows of SCORE
+    correspond to observations, columns to components.
+    latent :
+    a vector containing the eigenvalues
+    of the covariance matrix of A.
+    """
+ # computing eigenvalues and eigenvectors of covariance matrix
+    M = (A-np.mean(A.T,axis=1)).T # subtract the mean (along columns)
+    [latent,coeff] = np.linalg.eig(np.cov(M)) # attention:not always sorted
+
+    # sort the components
+    idx = latent.argsort()[::-1]
+    latent = latent[idx]
+    coeff = coeff[:,idx]
+
+    score = np.dot(coeff.T,M) # projection of the data in the new space
+    return coeff,score,latent
+
+def test20():
+    testevid = 4653310
+
+    ncomponents = 15
+
+    events = validevents2(ex=testevid,feature=wave.psd)
+    X = event_signal_matrix(events)
+    print X.shape
+    coeff, score,latent = princomp(X)
+    print "computed principle components"
+
+    feature = lambda data: wave.eigbasis(coeff[:, ncomponents:], data)
+    events = validevents2(ex=testevid,feature=feature)
+
+    params = (0.4, 1, 0.1) # length, vs, vn
+    gridmin = [32.5,80] # lat, lon min
+    gridmax = [37.5,85] # lat, lon max
+    os.system("mkdir outputs/%d_eigen" %testevid) # saves results to outputs folder
+
+    pdgrid = np.ones([101,101]) # cumulative prob distribution grid
+
+    for index in range(ncomponents): # 'index' indexes values computed by feature function
+        currpdgrid = gp2d(testevid,feature,index,params,gridmin,gridmax)
+        dist = draw2d(currpdgrid,gridmin,gridmax,testevid) # distance between maxima and actual
+        plt.title("distance = %f" %dist)
+        plt.savefig("outputs/%d_eigen/%d.png" %(testevid,index))
+        plt.close()
+        pdgrid *= currpdgrid
+
+        dist = draw2d(pdgrid,gridmin,gridmax,testevid)
+        plt.title("distance = %f" %dist)
+        plt.savefig("outputs/%d_eigen/total_%d_components.png" % (testevid, index))
+        plt.close()
+
+    dist = draw2d(pdgrid,gridmin,gridmax,testevid)
+    plt.title("distance = %f" %dist)
+    plt.savefig("outputs/%d_eigen/total.png" %testevid)
+    plt.close()
+
+
+def test19():
+
+    testevid = 4689462
+    compevid = 4686108
+
+    gridmin = [32.5,80] # lat, lon min
+    gridmax = [37.5,85] # lat, lon max
+
+    ncomponents = 15
+
+    pdgrid = np.ones([101,101]) # cumulative prob distribution grid
+
+    feature = wave.psd
+    events = validevents2(feature=feature)
+    X = event_signal_matrix(events)
+    print X.shape
+    coeff, score,latent = princomp(X)
+#    coeff = np.loadtxt("coeff.np") #(principle components)
+#    score = np.loadtxt("score.np") #(coefficients for each training example
+#    latent = np.loadtxt("latent.np") #eigenvalues for the components
+
+    feature = lambda data: wave.eigbasis(coeff[:, 0:ncomponents], data)
+    events = validevents2(ex=testevid,feature=feature)
+
+    te = Event(testevid, feature=feature)
+    ce = Event(compevid, feature=feature)
+
+    plt.plot(te.gpval)
+    plt.plot(ce.gpval)
+    plt.savefig("outputs/test19/features_sidebyside.png")
+    plt.close()
+
+#    for e in events:
+    for i in range(1):
+        e = te
+
+        plt.plot(e.gpval)
+        plt.savefig("outputs/test19/%d_features.png" % e.evid)
+        plt.close()
+
+        plt.plot(e.x)
+        plt.savefig("outputs/test19/%d_wave.png" % e.evid)
+        plt.close()
+
+        plt.plot(wave.reconstruct(coeff, e.gpval))
+        plt.savefig("outputs/test19/%d_reconstruct.png" % e.evid)
+        plt.close()
+
+    for i in range(ncomponents):
+        plt.plot(coeff[:, i])
+        plt.savefig("outputs/test19/component_%d.png" % i)
+        plt.close()
+
+
+
 # for quickly viewing how feature function transform the real data
 def test18():
     testevid = 4689462
     compevid = 4686108
     te = Event(testevid, feature=wave.psd)
     ce = Event(compevid, feature=wave.psd)
-    plt.plot(te.gpval)
-    plt.plot(ce.gpval)
+    x = np.linspace(1.25, 2.5, len(te.gpval))
+    plt.plot(x, te.gpval)
+    plt.plot(x, ce.gpval)
     print te.dist(ce)
-    plt.show()
+    plt.savefig("outputs/test18.png")
 
 
 def test17():
     testevid = 4653310
-    feature = wave.psd # feature function used
+    feature = wave.rawpsd # feature function used
     params = (0.4, 1, 0.1) # length, vs, vn
     gridmin = [32.5,80] # lat, lon min
     gridmax = [37.5,85] # lat, lon max
-    os.system("mkdir outputs/%d" %testevid) # saves results to outputs folder
+    os.system("mkdir outputs/%d_raw" %testevid) # saves results to outputs folder
 
     pdgrid = np.ones([101,101]) # cumulative prob distribution grid
 
@@ -88,13 +213,13 @@ def test17():
         currpdgrid = gp2d(testevid,feature,index,params,gridmin,gridmax)
         dist = draw2d(currpdgrid,gridmin,gridmax,testevid) # distance between maxima and actual
         plt.title("distance = %f" %dist)
-        plt.savefig("outputs/%d/%d.png" %(testevid,index))
+        plt.savefig("outputs/%d_raw/%d.png" %(testevid,index))
         plt.close()
         pdgrid *= currpdgrid
 
     dist = draw2d(pdgrid,gridmin,gridmax,testevid)
     plt.title("distance = %f" %dist)
-    plt.savefig("outputs/%d/total.png" %testevid)
+    plt.savefig("outputs/%d_raw/total.png" %testevid)
     plt.close()
 
 

@@ -82,6 +82,13 @@ class Event(Location):
 """
 
 
+def event_signal_matrix(events):
+    n = len(events)
+    evtdata = []
+    for event in events:
+        evtdata.append(event.x)
+    return np.array(evtdata)
+
 # return evid numbers which meet criteria as in utils.closest_event_pairs
 def validevids(sta):
     command ="select distinct lebo.evid from leb_origin lebo, leb_assoc leba, \
@@ -165,3 +172,4 @@ def gpvals(events, index):
     for i in range(len(events)):
         outputs[i] = events[i].gpval[index]
     return outputs
+
