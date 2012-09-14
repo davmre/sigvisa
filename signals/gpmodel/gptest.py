@@ -32,13 +32,16 @@ def pd4test(fmodel, tmodel, testdom, trndom, i, grid):
     pd = testlnr.lklhood(grid,testrange)
     return pd, fullrange
 
-def gp2d(testevid, feature, index, params, gridmin, gridmax, res=101):
+
+
+def gp2d(testevid, feature, index, params, gridmin, gridmax, res=40):
     events = validevents2(ex=testevid,feature=feature)
     teste = Event(testevid,feature=feature)
     input = [teste.lat, teste.lon]
     output = teste.gpval[index]
     inputs = inputs2d(events)
     outputs = gpvals(events, index)
+
     gpm = GPModel(inputs,params=params)
     gpl = GPLearner(gpm, outputs)
     ingrid = makegrid(gridmin, gridmax, res=res)
@@ -91,8 +94,24 @@ def princomp(A):
     score = np.dot(coeff.T,M) # projection of the data in the new space
     return coeff,score,latent
 
+def testmega():
+
+    evids = open("events_sorted.txt", 'r')
+    out = open("outputs/locations.txt", 'a')
+    for evid in evids:
+        evid = int(evid)
+        print "testing evid", evid
+        dist1 = test_psd(evid)
+        dist2, dist0, dist5 = testeigen(evid)
+        out.write("%d %.2f %.2f %.2f %.2f\n" % (evid, dist1, dist2, dist0, dist5))
+    out.close()
+
 def test20():
     testevid = 4653310
+    testeigen(testevid)
+
+def testeigen(testevid):
+
 
     ncomponents = 15
 
@@ -110,8 +129,10 @@ def test20():
     gridmax = [37.5,85] # lat, lon max
     os.system("mkdir outputs/%d_eigen" %testevid) # saves results to outputs folder
 
-    pdgrid = np.ones([101,101]) # cumulative prob distribution grid
+    pdgrid = np.ones([40,40]) # cumulative prob distribution grid
 
+    dist0 = 0
+    dist5 = 0
     for index in range(ncomponents): # 'index' indexes values computed by feature function
         currpdgrid = gp2d(testevid,feature,index,params,gridmin,gridmax)
         dist = draw2d(currpdgrid,gridmin,gridmax,testevid) # distance between maxima and actual
@@ -125,11 +146,16 @@ def test20():
         plt.savefig("outputs/%d_eigen/total_%d_components.png" % (testevid, index))
         plt.close()
 
+        if index == 0:
+            dist0 = dist
+        if index == 5:
+            dist5 = dist
+
     dist = draw2d(pdgrid,gridmin,gridmax,testevid)
     plt.title("distance = %f" %dist)
     plt.savefig("outputs/%d_eigen/total.png" %testevid)
     plt.close()
-
+    return dist, dist0, dist5
 
 def test19():
 
@@ -141,7 +167,7 @@ def test19():
 
     ncomponents = 15
 
-    pdgrid = np.ones([101,101]) # cumulative prob distribution grid
+    pdgrid = np.ones([40,40]) # cumulative prob distribution grid
 
     feature = wave.psd
     events = validevents2(feature=feature)
@@ -153,7 +179,7 @@ def test19():
 #    latent = np.loadtxt("latent.np") #eigenvalues for the components
 
     feature = lambda data: wave.eigbasis(coeff[:, 0:ncomponents], data)
-    events = validevents2(ex=testevid,feature=feature)
+    events = validevents2(feature=feature)
 
     te = Event(testevid, feature=feature)
     ce = Event(compevid, feature=feature)
@@ -163,9 +189,9 @@ def test19():
     plt.savefig("outputs/test19/features_sidebyside.png")
     plt.close()
 
-#    for e in events:
-    for i in range(1):
-        e = te
+    for e in events:
+#    for i in range(1):
+#        e = te
 
         plt.plot(e.gpval)
         plt.savefig("outputs/test19/%d_features.png" % e.evid)
@@ -198,30 +224,33 @@ def test18():
     print te.dist(ce)
     plt.savefig("outputs/test18.png")
 
-
 def test17():
     testevid = 4653310
-    feature = wave.rawpsd # feature function used
+    test_psd(testevid)
+
+def test_psd(testevid):
+
+    feature = wave.psd # feature function used
     params = (0.4, 1, 0.1) # length, vs, vn
     gridmin = [32.5,80] # lat, lon min
     gridmax = [37.5,85] # lat, lon max
-    os.system("mkdir outputs/%d_raw" %testevid) # saves results to outputs folder
+    os.system("mkdir outputs/%d" %testevid) # saves results to outputs folder
 
-    pdgrid = np.ones([101,101]) # cumulative prob distribution grid
+    pdgrid = np.ones([40,40]) # cumulative prob distribution grid
 
     for index in range(20): # 'index' indexes values computed by feature function
         currpdgrid = gp2d(testevid,feature,index,params,gridmin,gridmax)
         dist = draw2d(currpdgrid,gridmin,gridmax,testevid) # distance between maxima and actual
         plt.title("distance = %f" %dist)
-        plt.savefig("outputs/%d_raw/%d.png" %(testevid,index))
+        plt.savefig("outputs/%d/%d.png" %(testevid,index))
         plt.close()
         pdgrid *= currpdgrid
 
     dist = draw2d(pdgrid,gridmin,gridmax,testevid)
     plt.title("distance = %f" %dist)
-    plt.savefig("outputs/%d_raw/total.png" %testevid)
+    plt.savefig("outputs/%d/total.png" %testevid)
     plt.close()
-
+    return dist
 
 def test16():
     evid1 = 4686108

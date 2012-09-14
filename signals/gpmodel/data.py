@@ -5,6 +5,8 @@ import sys
 import numpy as np
 import wave
 
+import obspy.signal.filter
+
 """
 phase = 0.70_1.00, 1.00_1.50,
 """
@@ -47,19 +49,23 @@ class Event(Location):
         prefix=os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
         suffix="_BHZ.dat"
         if phase==None:
-            suffix = "_BHZ_raw.dat"
-            addr="%s/%s/%s/%s/%s%s"%(prefix,runid,siteid,phaseid,evid,suffix)
+            suffix = "_BHZ_band13.dat"
+            filtered_addr="%s/%s/%s/%s/%s%s"%(prefix,runid,siteid,phaseid,evid,suffix)
         else:
-            addr="%s/%s/%s/%s/%s/%s%s"%(prefix,runid,siteid,phaseid,phase,evid,suffix)
+            filtered_addr="%s/%s/%s/%s/%s/%s%s"%(prefix,runid,siteid,phaseid,phase,evid,suffix)
+
         try:
-            self.data=np.loadtxt(addr)
+            self.data=np.loadtxt(filtered_addr)
+#            self.data = obspy.signal.filter.bandpass(self.data, 1, 3, 40, corners=4, zerophase=True)
+
             if normalize:
                 self.x=(self.data-np.mean(self.data))/np.std(self.data) # normalized
             else:
                 self.x = self.data
         except:
-            self.data=None
-            self.x=None
+            raise
+#            self.data=None
+#            self.x=None
 
         if self.data != None:
             self.y = self.feature(self.data)
