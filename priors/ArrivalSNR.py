@@ -1,68 +1,109 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
+import numpy as np
+import matplotlib.pyplot as plt
+
 from utils import LogNormal
 
 from database.dataset import *
 
-NUM_PRIOR = 10                          # number of prior points
+SNR_STEP = 1
+SNR_BINS = np.arange(0, 100, SNR_STEP)
 
 def learn(param_filename, options, earthmodel, detections, leb_events,
-          leb_evlist):
-  # separate the true and false detections
-  true_dets = set()
+          leb_evlist, false_dets):
+  # learn the phase-SNR distribution for true detections
+  true_bins = np.zeros((earthmodel.NumTimeDefPhases(), len(SNR_BINS)))
   for detlist in leb_evlist:
     for phase, detnum in detlist:
-      true_dets.add(detnum)
+      snr = int(detections[detnum, DET_SNR_COL] // SNR_STEP)
+      if snr >= len(SNR_BINS):
+        snr = len(SNR_BINS) - 1
+      true_bins[phase, snr] += 1
   
-  false_dets = set(i for i in range(len(detections)) if i not in true_dets)
+  # smooth the distribution by add one smoothing
+  true_bins += 1.
+  # normalize
+  true_bins = (true_bins.T / true_bins.T.sum(axis=0)).T
 
-  # learn the overall distribution of SNR and sample some points for
-  # an empirical Bayes prior
-  true_mean, true_sigma = LogNormal.estimate([detections[detnum, DET_SNR_COL]
-                                              for detnum in true_dets])
+  # REPEAT for false detections
 
-  false_mean, false_sigma = LogNormal.estimate([detections[detnum, DET_SNR_COL]
-                                                for detnum in false_dets])
-  
-
-  true_prior = [LogNormal.sample(true_mean, true_sigma)
-                for _ in xrange(NUM_PRIOR)]
-  false_prior = [LogNormal.sample(false_mean, false_sigma)
-                 for _ in xrange(NUM_PRIOR)]
-
-  if options.verbose:
-    print "True SNR: Overall mean, sigma:", true_mean, true_sigma
-    print "False SNR: Overall mean, sigma:", false_mean, false_sigma
-    
-  site_true = dict((siteid, []) for siteid in range(earthmodel.NumSites()))
-  site_false = dict((siteid, []) for siteid in range(earthmodel.NumSites()))
-  
-  for detnum in true_dets:
-    site_true[int(detections[detnum, DET_SITE_COL])].append(detections[detnum,
-                                                                DET_SNR_COL])
-  
+  false_bins = np.zeros(len(SNR_BINS))
+  # learn the false detections distribution
   for detnum in false_dets:
-    site_false[int(detections[detnum, DET_SITE_COL])].append(detections[detnum,
-                                                                DET_SNR_COL])
+    snr = int(detections[detnum, DET_SNR_COL] // SNR_STEP)
+    if snr >= len(SNR_BINS):
+      snr = len(SNR_BINS) - 1
+    false_bins[snr] += 1
+  
+  # smooth the distribution by add one smoothing
+  false_bins += 1.
+  # normalize
+  false_bins /= false_bins.sum()
 
-  if options.verbose:
-    print "Site specific SNR true mean, sigma, false mean, sigma"
+  np.set_printoptions(precision=2, threshold=10000)
+  print "True phase -- SNR  distribution:"
+  print true_bins
+  print "False detection SNR distribution:"
+  print false_bins
+  np.set_printoptions()                 # restore defaults
 
   fp = open(param_filename, "w")
+  print >> fp, SNR_STEP, len(SNR_BINS), earthmodel.NumTimeDefPhases()
 
-  print >>fp, earthmodel.NumSites()
+  def print_arr(fp, arr):
+    for x in arr:
+      print >>fp, x,
+    print >> fp
   
-  for siteid in range(earthmodel.NumSites()):
-    site_true_mean, site_true_sigma = LogNormal.estimate(site_true[siteid]
-                                                         + true_prior)
-    
-    site_false_mean, site_false_sigma = LogNormal.estimate(site_false[siteid]
-                                                           + false_prior)
-
-    if options.verbose:
-      print "[%d]: True %.2f +- %.2f  False %.2f +- %.2f" \
-            % (siteid, site_true_mean, site_true_sigma, site_false_mean,
-               site_false_sigma)
-    
-    print >>fp, site_true_mean, site_true_sigma, site_false_mean, \
-          site_false_sigma
+  print_arr(fp, false_bins)
+  for phase in range(earthmodel.NumTimeDefPhases()):
+    print_arr(fp, true_bins[phase])
   
   fp.close()
+
+  if options.gui:
+    plt.figure(figsize=(8, 4.8))
+    if not options.type1:
+      plt.title("SNR for true and false detections -- all sites")
+    plt.plot(SNR_BINS, false_bins, linewidth=3, label="False")
+    for phase in range(earthmodel.NumTimeDefPhases()):
+      plt.plot(SNR_BINS, true_bins[phase], linewidth=3,
+               label = earthmodel.PhaseName(phase))
+      if phase > 2:
+        break
+    plt.legend()
+    plt.xlabel("SNR")
+    plt.ylabel("Probability")
+    if options.writefig is not None:
+      basename = os.path.join(options.writefig, "ArrivalSNR")
+      if options.type1:
+        plt.savefig(basename+".pdf")
+      else:
+        plt.savefig(basename+".png")
+    

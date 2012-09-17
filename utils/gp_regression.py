@@ -93,7 +93,7 @@ class GaussianProcess:
             self.load_trained_model(fname)
         else:
             self.kernel_name = kernel
-            self.kernel_params = kernel_params
+            self.kernel_params = np.asarray(kernel_params)
             self.kernel_priors = kernel_priors
             self.kernel = kernels.setup_kernel(kernel, kernel_params, kernel_extra, kernel_priors)
             self.X = X
@@ -128,16 +128,20 @@ class GaussianProcess:
                     self.posdef=False
                     return
                 else:
-                    # print traceback.format_exc(limit=100)
-                    # u,v = np.linalg.eig(self.K)
-                    # print self.K, u
+                     raise
 
-                    print "raising"
-#                    import pdb
-#                    pdb.set_trace()
-#                    sys.exit(1)
+#                     u,v = np.linalg.eig(self.K)
+#                     print self.K, u
 
-                    raise
+#                     import pdb
+#                     pdb.set_trace()
+#                     sys.exit(1)
+            except ValueError:
+                raise
+
+#                import pdb
+#                pdb.set_trace()
+#                self.K = self.kernel(X, X)
 
             if inv:
                 self.__invert_kernel_matrix()
@@ -217,6 +221,7 @@ class GaussianProcess:
         ld2 = np.log(np.diag(self.L)).sum()
         ll =  -.5 * (np.dot(self.y.T, self.alpha) + self.n * np.log(2*np.pi)) - ld2
 #        print "params", self.kernel_params
+
 #        print "returning ll %f = -.5 * (%f + %f + %f)" % (ll, np.dot(self.y.T, self.alpha), ld, self.n * np.log(2*np.pi))
 
         return ll
@@ -242,7 +247,7 @@ class GaussianProcess:
 #            print "alt is %f" % (alt)
 
             grad[i] = dlldi
-        print self.kernel_params, "returning grad", grad
+#        print self.kernel_params, "returning grad", grad
         return grad
 
     def save_trained_model(self, filename):
@@ -297,9 +302,13 @@ def gp_nll_ngrad(X, y, kernel, kernel_params, kernel_extra, kernel_priors):
         nll += npll
         ngrad += npgrad
 
+        print "optimizing params", kernel_params, "ll", -1 *nll, "grad", ngrad
+
     except np.linalg.linalg.LinAlgError:
+        print "warning: lin alg error in likelihood computation (%f, %f), returning inf" % (nll, npll)
         nll = np.float("inf")
         ngrad = np.zeros(kernel_params.shape)
+
     return nll, ngrad
 
 def optimize_hyperparams(X, y, kernel, start_kernel_params, kernel_extra=None, kernel_priors=None):
@@ -308,12 +317,32 @@ def optimize_hyperparams(X, y, kernel, start_kernel_params, kernel_extra=None, k
 #    best_params = scipy.optimize.fmin_bfgs(f=ll, x0=start_kernel_params, fprime=grad)
 
     llgrad = lambda params: gp_nll_ngrad(X, y, kernel, params, kernel_extra, kernel_priors)
-    best_params, v, d = scipy.optimize.fmin_l_bfgs_b(func=llgrad, x0=start_kernel_params, bounds= [(0, None),]*len(start_kernel_params))
-    print "found best params", best_params
-    print "ll", v
-    print "d", d
+
+    skp = np.asarray(start_kernel_params)
+    new_params = lambda  :  np.exp(np.log(skp) + np.random.randn(len(skp)) * 2)
+    start_param_set = [skp,] + [new_params() for i in range(3)]
+
+    print "start param set"
+    print start_param_set
+
+    best_params = skp
+    nll, grad = llgrad(skp)
+    best_cost = nll
+
+    for params in start_param_set:
+
+#    best_params, v, d = scipy.optimize.fmin_l_bfgs_b(func=llgrad, x0=start_kernel_params, bounds= [(1e-20, None),]*len(start_kernel_params))
+        opt_params, v, d = scipy.optimize.fmin_l_bfgs_b(func=llgrad, x0=start_kernel_params, bounds= [(1e-20, None),]*len(start_kernel_params))
+
+        if v < best_cost:
+            best_cost = v
+            best_params = opt_params
+
 #    print "start ll", ll(start_kernel_params)
 #    print "best ll", ll(best_params)
+
+    print "OPTIMZIATION FINISHED: found best params", best_params
+    print "ll", v
     return best_params, v
 
 def plot_interpolated_surface(gp, X, y):

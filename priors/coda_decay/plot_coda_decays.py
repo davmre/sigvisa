@@ -21,34 +21,41 @@ import obspy.signal.util
 
 import utils.nonparametric_regression as nr
 from priors.coda_decay.coda_decay_common import *
+from priors.coda_decay.templates import *
 from priors.coda_decay.train_coda_models import CodaModel
 
 
-def plot_channels_with_pred(pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None):
+def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):
     fig = plt.figure(figsize = (8, 8))
 
     bhz_axes = plt.subplot(2, 1, 1)
+#    bhz_axes = plt.subplot(1, 1, 1)
 
     if title is not None:
         plt.title(title, fontsize=12)
 
-    plot_envelopes_with_pred(bhz_axes, vert_trace, phaseids, vert_params)
+    plot_envelopes_with_pred(sigmodel, bhz_axes, vert_trace, phaseids, vert_params, logscale=logscale)
     horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
-    plot_envelopes_with_pred(horiz_axes, horiz_trace, phaseids, horiz_params)
+    plot_envelopes_with_pred(sigmodel, horiz_axes, vert_trace, phaseids, vert_params, sample=True, logscale=logscale)
+#    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)
+
+
+#    horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
+#    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)
 
     pp.savefig()
     plt.close(fig)
 
-def plot_envelopes_with_pred(axes, trace, phaseids, params):
+def plot_envelopes_with_pred(sigmodel, axes, trace, phaseids, params, sample=False, logscale=True):
     srate = trace.stats['sampling_rate']
 
-    synth_trace = imitate_envelope(trace, phaseids, params)
+    synth_trace = get_template(sigmodel, trace, phaseids, params, sample=sample)
+    traces = [trace, synth_trace]
 
-    traces = [trace,synth_trace]
-    formats = ["k-","g-"]
-    linewidths = [5,5]
+    formats = ["w-","k-"]
+    linewidths = [1,1]
 
-    plot.plot_traces_subplot(axes, traces, formats = formats, linewidths = linewidths)
+    plot.plot_traces_subplot(axes, traces, formats = formats, linewidths = linewidths, logscale=logscale)
 
 def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, all_det_times = None, all_det_labels = None, title = None):
     fig = plt.figure(figsize = (8, 8))
@@ -110,9 +117,8 @@ def plot_envelopes(axes, trace, noise_floor, fits, formats, all_det_times = None
     axes.plot(xvals, [noise_floor, noise_floor], "g-")
 
 
-def plot_scatter(lp, ls, lsp, pp):
+def plot_scatter(lp, ls, pp):
     try:
-
 
         if lp is not None and len(lp.shape) == 2:
             plt.figure()
@@ -203,14 +209,6 @@ def plot_scatter(lp, ls, lsp, pp):
             plt.plot(ls[:, 1], ls[:, 3], 'ro')
             pp.savefig()
 
-        if lsp is not None and len(lsp.shape) == 2:
-            plt.figure()
-            plt.title("P vs S")
-            plt.xlabel("b (P coda)")
-            plt.ylabel("b (S coda)")
-            plt.plot(lsp[:, 0], lsp[:, 1], 'ro')
-            pp.savefig()
-
     except:
         print "error plotting learned params"
         print traceback.format_exc()
@@ -250,72 +248,42 @@ def plot_geog(band_data, pp, azistr):
 
     plt.title("siteid " + str(siteid) + " " + azistr)
 
-    pp.savefig()
-    pp.close()
+def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_threshold, base_coda_dir, target_str):
 
-def generate_scatter_plots(all_data, bands, base_coda_dir, min_azi=0, max_azi=360):
-    for (band_idx,band) in enumerate(bands):
-        short_band = band[19:]
+    if target_str == "decay":
+        t = FIT_CODA_DECAY
+    elif target_str == "onset":
+        t = FIT_PEAK_DELAY
+    elif target_str == "amp":
+        t = FIT_CODA_HEIGHT
 
-        band_data = extract_band(all_data, band_idx)
+    for (chan_idx, chan) in enumerate(chans):
+        if chan != "BHZ": continue
+        for (band_idx,band) in enumerate(bands):
 
-        #        print "band data", band_data
+            short_band = band[16:]
 
-        accept_p_vert_data = []
 
-        lp = None
-        ls = None
-        lsp = None
-        for row in band_data:
-            if row[AZI_COL] < min_azi or row[AZI_COL] >max_azi:
-                continue
-            
-            fit_p_vert = fit_from_row(row, P=True, vert=True)
-            fit_s_horiz = fit_from_row(row, P=False, vert=False)
+            orig_data = load_shape_data(cursor, chan=chan, short_band=short_band, siteid=siteid, runid=runid, acost_threshold=acost_threshold, min_azi=min_azi, max_azi=max_azi)
 
-            accept_p_vert = accept_fit(fit_p_vert, min_coda_length=min_p_coda_length, max_avg_cost = avg_cost_bound)
-            if accept_p_vert:
-                accept_p_vert_data.append(row)
-                print "accepted azi %d" % (row[AZI_COL])
-                r = np.array((row[DISTANCE_COL], row[AZI_COL], row[DEPTH_COL], fit_p_vert[FIT_B]))
-                if lp == None:
-                    lp = r
-                else:
-                    lp = np.vstack([lp, r])
+            lp = []
+            ls = []
+            for row in orig_data:
 
-                print "%s: accepted p for %d" % (short_band, row[EVID_COL])
-            else:
-                print "%s: rejected p for %d" % (short_band, row[EVID_COL])
+                r = row[[FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH, t]]
+                if row[FIT_PHASEID] in P_PHASEIDS:
+                    lp.append(r)
+                elif row[FIT_PHASEID] in S_PHASEIDS:
+                    ls.append(r)
+            lp = np.array(lp)
+            ls = np.array(ls)
 
-            accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
-            if accept_s_horiz:
-                r = np.array((row[DISTANCE_COL], row[AZI_COL], row[DEPTH_COL], fit_s_horiz[FIT_B]))
-                if ls == None:
-                    ls = r
-                else:
-                    ls = np.vstack([ls, r])
-#                print "%s: accepted s for %d" % (short_band, row[EVID_COL])
-#            else:
-#                print "%s: rejected s for %d" % (short_band, row[EVID_COL])
+            pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
+            fname = os.path.join(pdf_dir, "plots_%s_%s_%.0f_%.0f.pdf" % (chan, target_str, min_azi, max_azi))
+            pp = PdfPages(fname)
+            print "opening pp in ", fname
 
-            if accept_p_vert and accept_s_horiz:
-                r = np.array((fit_p_vert[FIT_B], fit_s_horiz[FIT_B]))
-                if lsp == None:
-                    lsp = r
-                else:
-                    lsp = np.vstack([lsp, r])
-
-#        print "plotting", base_coda_dir, band, lp.shape, ls.shape, lsp.shape
-        pdf_dir = get_dir(os.path.join(base_coda_dir, band[19:]))
-
-        fname = "plots_%d_%d.pdf" % (min_azi, max_azi) 
-        pp = PdfPages(os.path.join(pdf_dir, fname))
-        print "opening pp in ", pdf_dir
-        plot_scatter(lp, ls, lsp, pp)
-
-        fname = "geog_%d_%d.pdf" % (min_azi, max_azi) 
-        pp = PdfPages(os.path.join(pdf_dir, fname))
-        plot_geog(np.array(accept_p_vert_data), pp, "(%d, %d)" % (min_azi, max_azi))
+            plot_scatter(lp, ls, pp)
 
 def merge_plots(base_coda_dir, bands, all_data, min_azi, max_azi):
     for (band_idx, band) in enumerate(bands):
@@ -388,9 +356,11 @@ def main():
 
 
     parser.add_option("-s", "--siteid", dest="siteid", default=None, type="int", help="siteid of station for which to generate plots")
-    parser.add_option("-f", "--full", dest="full", default=False, action="store_true", help="use the full coda window, all the way down to the noise floor (False)")
     parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid of coda fits to examine")
-    parser.add_option("-b", "--basedir", dest="basedir", default=None, type=str, help="")
+    parser.add_option("--maxcost", dest="max_cost", default=10, type="float", help="consider only coda fits with average cost below this threshold (10)")
+
+    parser.add_option("--max_azi", dest="max_azi", default=360, type="float", help="(360)")
+    parser.add_option("--min_azi", dest="min_azi", default=0, type="float", help="(360)")
 
     parser.add_option("--scatter", dest="scatter", default=False, action="store_true", help="create scatter plots (False)")
     parser.add_option("--events", dest="events", default=False, action="store_true", help="(re)creates individual event coda plots (False)")
@@ -400,28 +370,20 @@ def main():
     parser.add_option("--min_azi", dest="min_azi", default=0, type="int", help="exclude all events with azimuth less than this value (0)")
     parser.add_option("--max_azi", dest="max_azi", default=360, type="int", help="exclude all events with azimuth greater than this value (360)")
 
+    parser.add_option("--target", dest="target", default="decay", help="decay, onset, or amp (decay)")
+
+
     (options, args) = parser.parse_args()
 
     cursor = db.connect().cursor()
 
-    if options.basedir is None:
-        siteid = options.siteid
-        full_label = "full" if options.full else "notfull"
-        runid = options.runid
+    siteid = options.siteid
+    runid = options.runid
 
-        base_coda_dir = get_base_dir(int(siteid), full_label, int(runid))
-    else:
-        base_coda_dir = options.basedir
-    fname = os.path.join(base_coda_dir, 'all_data')
-    all_data, bands = read_shape_data(fname)
-    all_data = add_depth_time(cursor, all_data)
-#    print fname
-#    print bands
-    print "read data", all_data.shape
+    base_coda_dir = get_base_dir(int(siteid), int(runid))
 
     if options.scatter:
-        generate_scatter_plots(all_data, bands, base_coda_dir, min_azi=options.min_azi, max_azi=options.max_azi)
-
+        generate_scatter_plots(cursor, options.runid, options.siteid, options.min_azi, options.max_azi, options.max_cost, base_coda_dir, options.target)
 
     if options.events:
         for row in all_data:

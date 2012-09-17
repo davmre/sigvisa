@@ -3,10 +3,17 @@ import unittest
 import numpy as np
 from obspy.core import Trace, Stream, UTCDateTime
 
-import netvisa, sigvisa, sigvisa_util, learn
-import priors.SignalPrior
+import matplotlib
+matplotlib.use('PDF')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+import plot
+
+import sigvisa, sigvisa_util, learn
+import signals.armodel.model, signals.armodel.learner
 from database.dataset import *
 from database import db
+
 
 
 def gen_random_segments(siteids, length):
@@ -20,17 +27,27 @@ def gen_random_segment(siteid, length):
     for (chan, chanid) in (('BHE', 0), ('BHN', 1), ('BHZ', 2)):
         data = np.random.random((length, 1))
         stats = {'network': 's' + str(siteid), 'station': 's' + str(siteid), 'location': '',
-                 'channel': chan, 'npts': len(data), 'sampling_rate': 5,
+                 'channel': chan, 'band': 'narrow_envelope_2.00_3.00', 'npts': len(data), 'sampling_rate': 1,
                  'starttime_unix': 10000, 'siteid': siteid, 'chanid': chanid, 'starttime': UTCDateTime(10000)}
-        trace = Trace(data = data, header=stats)        
-        channels[chan] = {"broadband_envelope": trace}
+        trace = Trace(data = data, header=stats)
+        channels[chan] = {"narrow_envelope_2.00_3.00": trace}
     return channels
 
 class TestPurePythonFunctions(unittest.TestCase):
     def setUp(self):
         pass
 
- 
+    def test_learn_armodel(self):
+        arparams = np.array((1.531985598646, -1.0682484475528535, 1.0396481745808401, -1.3279255479118346, 0.98655767845516618, -0.83922136571517214, 0.76677157354780778, -0.59579319975231027, 0.36945613335446836, -0.17841016307209667))
+        model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(0, .1), c=0)
+        s1 = model.sample(100000)
+        s2 = model.sample(1000)
+        s3 = model.sample(55555)
+        ar_learner = signals.armodel.learner.ARLearner([s1,s2,s3], 40)
+        params, std = ar_learner.yulewalker(10)
+
+        for v in (np.array(params)-arparams):
+            self.assertAlmostEqual(v, 0, places=1)
 
 class TestLoadFunctions(unittest.TestCase):
     def setUp(self):
@@ -38,7 +55,7 @@ class TestLoadFunctions(unittest.TestCase):
         self.start_time = 1237680000
         self.end_time = self.start_time + 900
         self.stalist = [2, 5]
-        
+
     # Load a couple of brief waveforms from disk.
     def test_load_signals(self):
         segments = sigvisa_util.load_and_process_traces(self.cursor, self.start_time, self.end_time, stalist = self.stalist)
@@ -64,22 +81,58 @@ class TestCFunctions(unittest.TestCase):
             sel3_evlist, site_up, sites, phasenames, phasetimedef, arid2num \
             = read_data(hours=self.hours)
 
-        self.sigmodel = learn.load_sigvisa("parameters", start_time, end_time, "envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
+        self.sigmodel = learn.load_sigvisa("parameters", start_time, end_time, "spectral_envelope", site_up, sites, phasenames, phasetimedef, load_signal_params = False)
         self.test_siteids = (2,5)
         self.set_default_params()
 
     def set_default_params(self):
-        site_params = {"chan_mean_BHZ": 0, "chan_var_BHZ": 1, "chan_mean_BHE": 0, "chan_var_BHE": 1, "chan_mean_BHN": 0, "chan_var_BHN": 1, "env_p_height": 1, "env_p_onset": 0.8, "env_p_decay": 0.04, "env_s_height": 1, "env_s_onset": 0.8, "env_s_decay": 0.04, "ar_noise_sigma2": 0.05, "ar_coeffs": (0.8,)}    
-        self.params = dict()
-        for siteid in self.test_siteids:
-            self.params[siteid] = site_params.copy()
-        self.sigmodel.set_all_signal_params(self.params)
+        arparams = np.array((1.531985598646, -1.0682484475528535, 1.0396481745808401, -1.3279255479118346, 0.98655767845516618, -0.83922136571517214, 0.76677157354780778, -0.59579319975231027, 0.36945613335446836, -0.17841016307209667))
+        noise_mean = 0
+        noise_var = .001
+        wiggle_var = .001
 
-    def test_arrival_likelihood(self):
-        self.sigmodel.set_signals(gen_random_segments((2,), 1000))
-        ll = self.sigmodel.arrival_likelihood(10500, 8, 360, 10, 0, 2, 0)
+        self.ar_noise_model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(0, np.sqrt(noise_var)), c=noise_mean)
+
+        band = sigvisa.canonical_band_num("narrow_envelope_2.00_3.00")
+        chan_BHZ = sigvisa.canonical_channel_num("BHZ")
+        chan_BHE = sigvisa.canonical_channel_num("BHE")
+        chan_BHN = sigvisa.canonical_channel_num("BHN")
+        chan_ha = sigvisa.canonical_channel_num("horiz_avg")
+
+        for siteid in self.test_siteids:
+            for chan in [chan_BHZ, chan_BHE, chan_BHN, chan_ha]:
+                self.sigmodel.set_noise_process(siteid, band, chan, noise_mean, noise_var, arparams);
+                self.sigmodel.set_wiggle_process(siteid, band, chan, 1, noise_mean, wiggle_var, arparams);
+
+
+    def test_noise_trace_likelihood(self):
+        segments = gen_random_segments((2,), 40)
+        params = np.array(((100000, 1, 0, 1, 0, -0.02),))
+
+        ll1 = self.sigmodel.trace_likelihood(segments[0]['BHZ']['narrow_envelope_2.00_3.00'], [1,], params)
+        ll2 = self.ar_noise_model.lklhood(segments[0]['BHZ']['narrow_envelope_2.00_3.00'].data)
+        print ll1, ll2
+        self.assertAlmostEqual(ll1, ll2, places=1)
+
+    def test_segment_likelihood(self):
+        segments = gen_random_segments((2,), 1000)
+        params = np.array(((10200, 4, 7, 2, 5, -0.02),))
+
+        ll = self.sigmodel.segment_likelihood(segments[0], [1,], params)
+        print "got ll", ll
         self.assertTrue(ll < 0)
-        
+
+    def test_sample_segment(self):
+        params = np.array(((10200, 4, 7, 0, 7, -0.02),))
+        seg_template = self.sigmodel.generate_segment(10000, 11000, 2, 1, [1,], params)
+        seg_sample = self.sigmodel.sample_segment(10000, 11000, 2, 1, [1,], params)
+
+        pp = PdfPages(os.path.join('logs', "test_segments.pdf"))
+        plot.plot_segment(seg_template, title="generated", band="narrow_envelope_2.00_3.00")
+        pp.savefig()
+        plot.plot_segment(seg_sample, title="sampled", band="narrow_envelope_2.00_3.00")
+        pp.savefig()
+        pp.close()
 
     # Generate a couple of random signals, pass them to Sigmodel to be
     # converted to C structures, and then try to retrieve them. We
@@ -91,7 +144,7 @@ class TestCFunctions(unittest.TestCase):
             segments_in = gen_random_segments(self.test_siteids, signal_len)
             self.sigmodel.set_signals(segments_in)
             segments_out = self.sigmodel.get_signals()
-        
+
             self.assertEqual(len(segments_in), len(segments_out))
             for (seg_in, seg_out) in zip(segments_in, segments_out):
                 self.assertEqual(len(seg_in), len(seg_out))
@@ -107,7 +160,7 @@ class TestCFunctions(unittest.TestCase):
 #        pass
 
     def test_learn_noise_params(self):
-        
+
         pass
 
     def test_learn_shape_params(self):
@@ -116,7 +169,7 @@ class TestCFunctions(unittest.TestCase):
         # verify that we learning *something*.
 
         self.set_default_params()
-        
+
         for siteid in self.test_siteids:
             self.sigmodel.set_fake_detections([ (1, siteid-1, 10005, 10, 1, 1, 1), ])
             self.sigmodel.set_signals(gen_random_segments((siteid,), 1000))

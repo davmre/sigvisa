@@ -7,3 +7,7 @@ utils/bgjob
 build
 database/*.csv
 \#*\#
+*.dat
+*.pdf
+*.aux
+*.log

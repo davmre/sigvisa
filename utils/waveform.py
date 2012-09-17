@@ -1,7 +1,38 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
 # draw the waveforms for an LEB event at some of the stations
 
 import sys, struct
+import matplotlib
+matplotlib.use('PDF')
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
 import gzip
 
 from obspy.core import Trace, Stream, UTCDateTime
@@ -10,8 +41,14 @@ from obspy.signal.array_analysis import sonic
 
 from database.dataset import *
 import database.db
-import learn, netvisa
+import learn
 from utils.geog import dist_deg, azimuth
+
+from priors.coda_decay.coda_decay_common import *
+from plot import *
+
+from optparse import OptionParser
+
 
 class MissingWaveform(Exception):
   pass
@@ -24,7 +61,7 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
   print "Station:", sta
 
   cursor.execute("select distinct chan from idcx_wfdisc where sta='%s'" % sta)
-  chans = [x for x, in cursor.fetchall()]
+  chans = [x for x, in cursor.fetchall() if x in priors.coda_decay.coda_decay_common.chans]
   print "Channels:", chans
 
   # get the times of all the arrivals at this site within the window
@@ -55,7 +92,7 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
       axes = plt.subplot(len(chans), 1, 1)
     else:
       plt.subplot(len(chans), 1, chidx+1, sharex=axes)
-      
+
     plt.ylabel(sta+" - "+chan)
     try:
       trc = fetch_waveform(sta, chan, start_time, end_time)
@@ -67,11 +104,11 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
                zerophase=True)
     env = sig_filter.envelope(trc.data)
 
-    
+
     timevals = np.arange(0, trc.stats.npts/trc.stats.sampling_rate,
                          1.0 /trc.stats.sampling_rate)
-    plt.plot(timevals, trc.data, 'k')
-    plt.plot(timevals, env, 'k:')
+    plt.plot(timevals, trc.data, 'k:')
+    plt.plot(timevals, env, 'r')
 
     maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
     plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
@@ -83,7 +120,7 @@ def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
 
     for arrtime, phname in zip(all_phase_times, all_phase_names):
       plt.text(arrtime, 0, phname)
-    
+
     #st.plot(color='k')
 
 
@@ -114,7 +151,7 @@ def fetch_array_elements(siteid):
 
 def plot_fk_arr(siteid, start_time, end_time):
   sta, chan, arrsta = fetch_array_elements(siteid)
-  
+
   # query waveforms from all the array elements
   trcs = []
   for arridx in range(len(arrsta)):
@@ -123,13 +160,13 @@ def plot_fk_arr(siteid, start_time, end_time):
     except MissingWaveform:
       print "Warning: station %s, chan %s missing" % (arrsta[arridx, 0], chan)
       continue
-    
+
     trc.stats.network, trc.stats.station = sta, arrsta[arridx, 0]
     trc.stats.coordinates = {"longitude": float(arrsta[arridx, 1]),
                              "latitude": float(arrsta[arridx, 2]),
                              "elevation": float(arrsta[arridx, 3])}
     trcs.append(trc)
-  
+
   if len(trcs) == 0:
     raise MissingWaveform("Can't find data for array sta %s"
                             % (sta))
@@ -162,7 +199,7 @@ def plot_fk_arr(siteid, start_time, end_time):
   fig.autofmt_xdate()
   fig.subplots_adjust(top=0.95, right=0.95, bottom=0.2, hspace=0)
 
-  
+
   return
 
 
@@ -192,7 +229,7 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
   datafile.close()
 
   # now convert the bytes into an array of integers
-  
+
   data = np.ndarray((read_samples,), int)
 
   if waveform['datatype'] == "s4":
@@ -219,8 +256,8 @@ def dict_cursor(cursor):
   description = [x[0] for x in cursor.description]
   for row in cursor:
     yield dict(zip(description, row))
-                
-  
+
+
 def fetch_waveform(station, chan, stime, etime):
   """
   Returns a single obspy trace corresponding to the waveform for the given
@@ -241,19 +278,22 @@ def fetch_waveform(station, chan, stime, etime):
     if waveform_values is None:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
                             % (station, chan, stime))
-    
+
     waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
     cursor.execute("select id from static_siteid where sta = '%s'" % (station))
     try:
-      siteid = cursor.fetchone()[0]
+      if station=="MK31":
+        siteid=66
+      else:
+        siteid = cursor.fetchone()[0]
     except:
       raise MissingWaveform("couldn't get siteid for station %s" % (station))
-    
+
     # check the samprate is consistent for all waveforms in this interval
-    assert(samprate is None or samprate == waveform[SAMPRATE_COL])
+    assert(samprate is None or samprate == waveform['samprate'])
     if samprate is None:
       samprate = waveform['samprate']
-    
+
     # at which offset should we start collecting samples
     first_off = int((stime-waveform['time'])*samprate)
     # how many samples are needed remaining
@@ -269,11 +309,11 @@ def fetch_waveform(station, chan, stime, etime):
                             % (station, chan, stime))
 
     data.extend(segment)
-    
+
     # do we have all the data that we need
     if desired_samples <= available_samples:
       break
-    
+
     # otherwise move the start time forward for the next file
     stime = waveform['endtime']
     # and adust the end time to ensure that the correct number of samples
@@ -290,13 +330,13 @@ def fetch_waveform(station, chan, stime, etime):
   return Trace(data=np.array(data), header=stats)
 
   #return samprate, np.array(data)
-  
 
-  
-  
+
+
+
 def plot_focused_arr(earthmodel, event, siteid, window):
   sta, chan, arrsta = fetch_array_elements(siteid)
-  
+
   # for each array element fetch the waveform in a window around the
   # arrival time at that station
   trcs = []
@@ -321,7 +361,7 @@ def plot_focused_arr(earthmodel, event, siteid, window):
   # now sum up all the waveforms
   sumdata = sum([x.data for x in trcs])
   env = sig_filter.envelope(sumdata)
-  
+
   plt.figure()
   plt.xlabel("Time (s)")
   plt.ylabel(sta + " - " + chan)
@@ -329,136 +369,70 @@ def plot_focused_arr(earthmodel, event, siteid, window):
                        1.0 /trcs[0].stats.sampling_rate)
   plt.plot(timevals, sumdata, 'k')
   plt.plot(timevals, env, 'k:')
-  
+
 
 def main(param_dirname):
-  if len(sys.argv) not in [3,4] or (len(sys.argv)==3 and sys.argv[1] != "leb")\
-         or (len(sys.argv)==4 and sys.argv[1] != "visa"):
-    print "Usage: python waveform.py leb leb-orid | visa run-id orid"
-    sys.exit(1)
 
-  evtype = sys.argv[1]
-  if evtype == "leb":
-    leb_orid = int(sys.argv[2])
+
+  parser = OptionParser()
+
+  parser.add_option("-s", "--siteids", dest="siteids", default="", type="str")
+  parser.add_option("-e", "--evid", dest="evid", default=None, type="int")
+  parser.add_option("--orid", dest="orid", default=None, type="int")
+  parser.add_option("-o", "--outfile", dest="outfile", default=None, type="str")
+
+  (options, args) = parser.parse_args()
+  cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
+
+  if options.orid is not None:
+    cursor.execute("select evid from leb_origin where orid=%d" % options.orid)
+    evid = cursor.fetchone()[0]
+    print "using evid %d for orid %d" % (evid, options.orid)
   else:
-    visa_runid = int(sys.argv[2])
-    visa_orid= int(sys.argv[3])
-  
-  # load the event
-  cursor = database.db.connect().cursor()
-  if evtype == "leb":
-    cursor.execute("select time from leb_origin where orid=%d" % (leb_orid,))
+      evid = options.evid
+  siteids = [int(x) for x in options.siteids.split(',')]
+
+  if options.outfile is None:
+    outfile = "logs/%d_detections.pdf" % (evid)
   else:
-    cursor.execute("select time from visa_origin where runid=%d and orid=%d" %
-                   (visa_runid, visa_orid))
-  fetch = cursor.fetchone()
-  if fetch is None:
-    print "Event not found"
-    sys.exit(2)
-  evtime, = fetch
-  
-  # start a dataset from 5 minutes before the event to 1 hour after
-  start_time, end_time = evtime - 5 * 60, evtime + 60*60
-  
-  detections, arid2num = read_detections(cursor, start_time, end_time)
-  if evtype == "leb":
-    leb_events, leb_orid2num = read_events(cursor, start_time, end_time, "leb")
-    leb_evlist = read_assoc(cursor, start_time, end_time, leb_orid2num,
-                            arid2num, "leb")
-    evnum = leb_orid2num[leb_orid]
-    event = leb_events[evnum]
-    event_detlist = leb_evlist[evnum]
-  else:
-    visa_events, visa_orid2num = read_events(cursor, start_time, end_time,
-                                             "visa", runid = visa_runid)
-    visa_evlist = read_assoc(cursor, start_time, end_time, visa_orid2num,
-                             arid2num, "visa", runid = visa_runid)
-    evnum = visa_orid2num[visa_orid]
-    event = visa_events[evnum]
-    event_detlist = visa_evlist[evnum]
-    
-  sites = read_sites(cursor)
-  site_up = read_uptime(cursor, start_time, end_time)
-  phasenames, phasetimedef = read_phases(cursor)
+    outfile=options.outfile
+  pp = PdfPages(outfile)
+  print "saving to %s..." % (outfile)
+
+
+
   cursor.execute("select sta from static_siteid site order by id")
   sitenames = np.array(cursor.fetchall())[:,0]
-  
-  # load the earthmodel and the NET-VISA model
-  earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
-  netmodel = learn.load_netvisa(param_dirname,
-                                start_time, end_time,
-                                detections, site_up, sites, phasenames,
-                                phasetimedef)
 
+
+  event = load_event(cursor, evid)
   print "Ev Mag %.1f Ev Time %.1f" % (event[ EV_MB_COL],
                                       event[ EV_TIME_COL])
-  
-  # find the travel-time of the event to all the stations that are up
-  all_site_arrtimes = []
-  for siteid, site in enumerate(sites):
 
-    arrtime = earthmodel.ArrivalTime(event[ EV_LON_COL],
-                                     event[ EV_LAT_COL],
-                                     event[ EV_DEPTH_COL],
-                                     event[ EV_TIME_COL],
-                                     0, # P-phase
-                                     siteid)
+  try:
+    for siteid in siteids:
+      (arrival_segment, noise_segment, all_arrivals, all_arrival_phases, all_arrival_arids) = load_signal_slice(cursor, evid, siteid, bands=["narrow_envelope_2.00_3.00"], earthmodel=earthmodel)
 
-    # is the site up at the time the P wave is expected to arrive?
-    if arrtime > 0 \
-           and site_up[siteid, int((arrtime-start_time) // UPTIME_QUANT)]:
-      # find this site in the detections of the event
-      isdet = False
-      for phaseid, detid in event_detlist:
-        if phaseid == 0 and int(detections[detid, DET_SITE_COL]) == siteid:
-          isdet = True
-          break
-        
-      all_site_arrtimes.append((arrtime, siteid, isdet))
+      if len(arrival_segment[0]) == 0:
+        print "no signal at siteid %d"
+        continue
 
-  all_site_arrtimes.sort()
+      try:
+        plot_segment(arrival_segment[0], title = sitenames[siteid-1], all_det_times = all_arrivals, all_det_labels=all_arrival_phases, band="narrow_envelope_2.00_3.00", chans=["BHZ", "BHE", "BHN"], logscale=False)
+        pp.savefig()
+        plot_segment(arrival_segment[0], title = sitenames[siteid-1] + " (log)", all_det_times = all_arrivals, all_det_labels=all_arrival_phases, band="narrow_envelope_2.00_3.00", chans=["BHZ", "BHE", "BHN"], logscale=True)
+        pp.savefig()
+      except KeyboardInterrupt:
+        raise
+      except:
+        import traceback, pdb
+        traceback.print_exc()
+        continue
+  finally:
+    pp.close()
 
-  print "Detected At:"
-  last_det_idx = -1
-  for idx, (arrtime, siteid, isdet) in enumerate(all_site_arrtimes):
-    
-    if sites[siteid, SITE_IS_ARRAY]:
-      site_type = "ARR"
-    else:
-      site_type = "3-C"
-    
-    if isdet:
-      if idx > (last_det_idx+1):
-        print "..... missed by %d sites" % (idx - last_det_idx - 1)
-      print "ttime %d, %s (%s, siteid %d) seaz %d esaz %d" \
-            % (arrtime - event[ EV_TIME_COL],
-               sitenames[siteid], site_type, siteid,
-               azimuth(sites[siteid, [SITE_LON_COL, SITE_LAT_COL]],
-                       event[ [EV_LON_COL, EV_LAT_COL]]),
-               azimuth(event[ [EV_LON_COL, EV_LAT_COL]],
-                       sites[siteid, [SITE_LON_COL, SITE_LAT_COL]]))
-      last_det_idx = idx
+#  plt.show()
 
-  if idx > last_det_idx:
-    print "..... missed by %d sites" % (idx - last_det_idx)
-
-  print "Total sites which were up:", len(all_site_arrtimes)
-  # for the first site which detected the event draw the waveform
-
-  # plot the waveforms at all the sites where it was detected
-  for arrtime, siteid, isdet in all_site_arrtimes:
-    try:
-      if isdet:
-        if not sites[siteid, SITE_IS_ARRAY]:
-          plot_ss_waveforms(siteid, arrtime-20, arrtime+20, detections,
-                          earthmodel, event)
-        else:
-          plot_fk_arr(siteid, arrtime-20, arrtime+20)
-        #plot_focused_arr(earthmodel, event, siteid, 20)
-    except MissingWaveform as e:
-      print e
-  plt.show()
-  
 if __name__ == "__main__":
   try:
     main("parameters")
@@ -470,4 +444,4 @@ if __name__ == "__main__":
     pdb.post_mortem(sys.exc_traceback)
     raise
 
-  
+

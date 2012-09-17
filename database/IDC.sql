@@ -87,6 +87,7 @@ create table isc_events (
  ndef        int,
  nsta        int,
  gap         int,
+ ml          float not null,
  primary key (eventid, author)
 );
 create index isc_events_time on isc_events(time);
@@ -149,7 +150,42 @@ create table visa_assoc (
  slores   float(24),
  primary key(runid, orid, arid)
 );
- 
+
+
+create table sigvisa_coda_fits (
+ runid    int,
+ arid     int,
+ chan	  varchar(10),
+ band	  varchar(10),
+ peak_delay float(24),
+ peak_height float(24),
+ peak_decay float(24),
+ coda_height float(24),
+ coda_decay  float(24),
+ optim_method  varchar(15),
+ iid	    int,
+ stime	    float,
+ etime	    float,
+ acost	    float,
+ dist	    float,
+ azi	    float,
+ primary key(runid, arid, chan, band)
+);
+
+create table sigvisa_wiggle_wfdisc (
+ runid 	  int,
+ arid     int,
+ siteid    int,
+ phaseid   int,
+ band	  varchar(10),
+ chan	  varchar(10),
+ evid 	  int,
+ fname	  varchar(255),
+ snr	  float,
+ primary key(runid, arid, band, chan)
+);
+
+
 
 /* ESSENTIAL FUNCTIONS */
 CREATE OR REPLACE FUNCTION now RETURN DATE
@@ -225,7 +261,7 @@ is
 begin
     l_output := utl_file.fopen( p_dir, p_filename, 'w' );
     execute immediate 'alter session set nls_date_format=''yyyy-mm-dd hh24:mi:ss''';
-    
+
     dbms_sql.parse(  l_theCursor,  l_query, dbms_sql.native );
     dbms_sql.describe_columns( l_theCursor, l_colCnt, l_descTbl );
 

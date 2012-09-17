@@ -4,48 +4,53 @@ from obspy.core import Trace, Stream, UTCDateTime
 
 from database.dataset import *
 import database.db
-import learn, netvisa
+import learn
 from utils.geog import dist_deg, azimuth
 
-def plot_det_times(trc, all_det_times, all_det_labels):
+def plot_det_times(trc, all_det_times, all_det_labels, logscale=False):
   if trc == None or all_det_times == None:
     return
 
   if all_det_times is not None:
     maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+    if logscale:
+      (maxtrc, mintrc) = (np.log(maxtrc), np.log(mintrc))
     plt.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
             width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
     if all_det_labels is not None:
       for (t, lbl) in zip(all_det_times, all_det_labels):
         plt.text(t+3, maxtrc - (maxtrc-mintrc)*0.1, lbl, color="red", fontsize=4)
 
-def subplot_det_times(axes, trc, all_det_times, all_det_labels):
+def subplot_det_times(axes, trc, all_det_times, all_det_labels, logscale=False):
   if trc == None or all_det_times == None:
     return
 
   if all_det_times is not None:
     maxtrc, mintrc = float(max(trc.data)), float(min(trc.data))
+    if logscale:
+      (maxtrc, mintrc) = (np.log(maxtrc), np.log(mintrc))
     axes.bar(left=all_det_times, height=[maxtrc-mintrc for _ in all_det_times],
             width=.25, bottom=mintrc, color="red", linewidth=0, alpha=.5)
     if all_det_labels is not None:
       for (t, lbl) in zip(all_det_times, all_det_labels):
         axes.text(t+3, maxtrc - (maxtrc-mintrc)*0.1, lbl, color="red", fontsize=4)
 
-  
+
 
 # does not save for you - you need to call savefig() yourself!
-def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None, band="broadband_envelope", format = "k-"):
+def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None, band="broadband_envelope", format = "k-", chans=None, logscale=False):
   plt.figure()
   plt.xlabel("Time (s)")
 
-  for chidx, chan in enumerate(sorted(chan_dict.keys())):
+  chans = chan_dict.keys() if chans is None else chans
+  for chidx, chan in enumerate(sorted(chans)):
     if chidx == 0:
       axes = plt.subplot(len(chan_dict), 1, 1)
       if title is not None:
         plt.title(title)
     else:
       plt.subplot(len(chan_dict), 1, chidx+1, sharex=axes)
-      
+
     plt.ylabel(chan)
 
     trc = chan_dict[chan][band]
@@ -54,8 +59,10 @@ def plot_segment(chan_dict, title=None, all_det_times=None, all_det_labels=None,
     stime = trc.stats["starttime_unix"]
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
-    plt.plot(timevals, trc, format)
-    plot_det_times(trc, all_det_times, all_det_labels)
+    trc_data = np.log(trc.data) if logscale else trc.data
+
+    plt.plot(timevals, trc_data, format)
+    plot_det_times(trc, all_det_times, all_det_labels, logscale=logscale)
 
 def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format="k-"):
   fig = plt.figure()
@@ -63,7 +70,7 @@ def plot_trace(trc, title=None, all_det_times=None, all_det_labels=None, format=
 
   if title is not None:
     plt.title(title)
-      
+
   chan_name = trc.stats["channel"]
 
   plt.ylabel(chan_name)
@@ -81,10 +88,10 @@ def plot_traces(traces, title=None, all_det_times=None, all_det_labels=None, for
   plt.figure()
   if title is not None:
     plt.title(title, fontsize=12)
-      
+
   plot_traces_subplot(plt.subplot(1,1,1), traces, all_det_times, all_det_labels, formats, linewidths)
 
-def plot_traces_subplot(axes, traces, all_det_times=None, all_det_labels=None, formats=None, linewidths=None):
+def plot_traces_subplot(axes, traces, all_det_times=None, all_det_labels=None, formats=None, linewidths=None, logscale=False):
 
   if formats is None:
     if len(traces) == 1:
@@ -108,8 +115,9 @@ def plot_traces_subplot(axes, traces, all_det_times=None, all_det_labels=None, f
     npts = len(trc.data)
     stime = trc.stats["starttime_unix"]
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
+    tdata = np.log(trc.data) if logscale else trc.data
 
-    axes.plot(timevals, trc, formats[i], linewidth = linewidths[i])
+    axes.plot(timevals, tdata, formats[i], linewidth = linewidths[i])
 
   subplot_det_times(axes, traces[0], all_det_times, all_det_labels)
 
@@ -117,7 +125,7 @@ def plot_traces_subplot(axes, traces, all_det_times=None, all_det_labels=None, f
 # does not save for you - you need to call savefig() yourself!
 def plot_bands(bands_dict, title=None, all_det_times=None, all_det_labels=None):
   format = "k-"
-    
+
   plt.figure(figsize=(12, 30))
   plt.xlabel("Time (s)")
 
@@ -128,7 +136,7 @@ def plot_bands(bands_dict, title=None, all_det_times=None, all_det_labels=None):
         plt.title(title)
     else:
       plt.subplot(len(bands_dict), 1, bidx+1, sharex=axes)
-      
+
     if band.startswith("narrow_logenvelope_"):
         yl = band[19:]
     else:
@@ -141,7 +149,7 @@ def plot_bands(bands_dict, title=None, all_det_times=None, all_det_labels=None):
     stime = trc.stats["starttime_unix"]
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
 
-    
+
     for (i, n) in enumerate(trc.data):
         if np.isnan(n) or not np.isfinite(n):
             trc.data[i] = 0

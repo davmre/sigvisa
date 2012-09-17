@@ -1,3 +1,30 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
 
 import matplotlib
 matplotlib.use("PDF")
@@ -13,7 +40,6 @@ import geog
 
 from database.dataset import *
 from database import db
-
 
 def draw_earth(title, **args):
   """
@@ -109,13 +135,13 @@ def draw_events(bmap, events, labels = None, **args):
       args[argname] = argval[enum]
     bmap.plot([x], [y], **args)
 
+
     if labels is not None:
       plt.annotate(
         labels[enum][0],
         xy = (x, y),
         size=4,
         arrowprops = None)
-
 
 def draw_events_mag(bmap, events, **args):
   """
@@ -140,8 +166,10 @@ def draw_vectors(bmap, vectors, scale, **args):
     x2, y2 = bmap(lon2, lat2)
     plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
 
+
 def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
-                 nolines = False):
+                 nolines = False, colorbar_orientation="vertical",
+                 colorbar_shrink = 0.9):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
 
@@ -158,7 +186,8 @@ def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
                                                           plt.cm.jet.N))
 
   if colorbar:
-    plt.colorbar(cs2, orientation="vertical", drawedges=True)
+    plt.colorbar(cs2, orientation=colorbar_orientation, drawedges=True,
+                 shrink = colorbar_shrink)
 
 def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
   """
@@ -185,7 +214,6 @@ def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
   draw_events(bmap, sites, marker="^", ms=10, mfc="none", mec="green",
               mew=2, zorder=3)
 
-
 def show():
   plt.show()
 
@@ -204,13 +232,14 @@ def main():
     parser.add_option("--max_depth", dest="max_depth", default=8000, type="float", help="exclude all events with depth greater than this value (8000)")
     parser.add_option("--min_mb", dest="min_mb", default=0, type="float", help="exclude all events with mb less than this value (0)")
     parser.add_option("--max_mb", dest="max_mb", default=10, type="float", help="exclude all events with mb greater than this value (10)")
-    parser.add_option("--start_time", dest="start_time", default=1238889600, type="float", help="exclude all events with time less than this value (1238889600)")
-    parser.add_option("--end_time", dest="end_time", default=1245456000, type="float", help="exclude all events with time greater than this value (1245456000)")
+    parser.add_option("--start_time", dest="start_time", default=0, type="float", help="exclude all events with time less than this value (0)")
+    parser.add_option("--end_time", dest="end_time", default=1237680000, type="float", help="exclude all events with time greater than this value (1237680000)")
+    parser.add_option("-o", "--outfile", dest="outfile", default="geog.pdf", type="str", help="name of output file (geog.pdf)")
 
     (options, args) = parser.parse_args()
 
 #    pp = PdfPages(os.path.join(pdf_dir, "geog.pdf"))
-    pp = PdfPages("geog.pdf")
+    pp = PdfPages(options.outfile)
 
     cursor = db.connect().cursor()
     sites = read_sites(cursor)
@@ -231,12 +260,27 @@ def main():
       siteid = options.siteid
       site_lonlat = sites[siteid-1, 0:2]
 
-      sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between %f and %f and lebo.mb between %f and %f and lebo.depth between %f and %f and leba.arid=l.arid and lebo.orid=leba.orid and sid.sta=l.sta and sid.statype='ss' and sid.id=%d and pid.phase=leba.phase" % (options.start_time, options.end_time, options.min_mb, options.max_mb, options.min_depth, options.max_depth, options.siteid)
-      cursor.execute(sql_query)
-      events = np.array(cursor.fetchall())
 
-      d = lambda ev : geog.dist_km((ev[1], ev[2]), (sites[siteid-1][0], sites[siteid-1][1]))
-      a = lambda ev : geog.azimuth((ev[1], ev[2]), (sites[siteid-1][0], sites[siteid-1][1]))
+      f = open("pn_evids", 'r')
+      events = []
+      for l in f:
+
+        try:
+          orid = int(l)
+        except:
+          continue
+        sql_query="SELECT distinct mb, lon, lat, evid, time, depth FROM leb_origin where evid=%d" % (orid)
+        cursor.execute(sql_query)
+        ev = cursor.fetchone()
+        events.append(ev)
+      events = np.array(events)
+
+#      sql_query="SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between %f and %f and lebo.mb between %f and %f and lebo.depth between %f and %f and leba.arid=l.arid and lebo.orid=leba.orid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase" % (options.start_time, options.end_time, options.min_mb, options.max_mb, options.min_depth, options.max_depth, options.siteid)
+#      cursor.execute(sql_query)
+#      events = np.array(cursor.fetchall())
+
+      d = lambda ev : geog.dist_km((sites[siteid-1][0], sites[siteid-1][1]), (ev[1], ev[2]))
+      a = lambda ev : geog.azimuth((sites[siteid-1][0], sites[siteid-1][1]), (ev[1], ev[2]))
       distances = np.array([d(ev) for ev in events])
       azimuths = np.array([a(ev) for ev in events])
       dist_i = np.logical_and((distances >= options.min_dist), (distances <= options.max_dist))
@@ -249,8 +293,9 @@ def main():
       ev_lonlat = events[i, 1:3]
 
       for i,ev in enumerate(ev_lonlat):
-        draw_events(bmap, ((ev[0], ev[1]),), marker="o", ms=2, mfc="none", mec="yellow", mew=1)
-      draw_events(bmap, (site_lonlat,),  marker="x", ms=5, mfc="none", mec="purple", mew=1)
+        print "drawing event at (%.2f, %.2f)" % (ev[0], ev[1])
+        draw_events(bmap, ((ev[0], ev[1]),), marker=".", ms=1, mfc="none", alpha=0.4, mec="red", mew=1)
+      draw_events(bmap, (site_lonlat,),  marker="x", ms=4, mfc="none", mec="purple", mew=2)
 
       plt.title("siteid %d azi (%d, %d) dist (%d, %d)\n mb (%.2f, %.2f) depth (%d, %d)" % (siteid, options.min_azi, options.max_azi, options.min_dist, options.max_dist, options.min_mb, options.max_mb, options.min_depth, options.max_depth))
 

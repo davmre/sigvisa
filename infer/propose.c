@@ -61,18 +61,17 @@ struct thread_data {
   int det_high;
   int *p_skip_inv;
   int *p_skip_det;
-  
+
   int num_step;
   double degree_step;
   double time_low;
   double time_high;
-  
-  NetModel_t *p_netmodel;
+
   SigModel_t *p_sigmodel;
   Event_t *p_inv_events;
   Event_t *p_event;
   EarthModel_t *p_earth;
-  
+
   int num_other_events;
   const Event_t ** pp_other_events;
   PyObject * log_segment_cb;
@@ -96,11 +95,11 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
   int numsites = EarthModel_NumSites(p_earth);
   int numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
-  
+
 
   for (int siteid = 1; siteid <= numsites; ++siteid) {
 
-    
+
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
       if (!USE_PHASE(phase)) continue;
       double pred_arrtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
@@ -113,7 +112,7 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
       if (pred_arrtime < 0) {
 	continue;
       }
-      
+
 
 
     /* check if the site is up */
@@ -124,36 +123,36 @@ void initialize_mean_arrivals(SigModel_t * p_sigmodel,
       }*/
 
 
-      Arrival_t * p_arr = p_event->p_arrivals + 
+      Arrival_t * p_arr = p_event->p_arrivals +
 	(siteid-1)*numtimedefphases + phase;
 
-      p_arr->phase = phase;
+      p_arr->phaseid = phase+1;
       p_arr->siteid = siteid;
-      
-      p_arr->time = EarthModel_ArrivalTime(p_earth, 
-					   p_event->evlon, 
-					   p_event->evlat, 
-					   p_event->evdepth, 
-					   p_event->evtime, 
+
+      p_arr->time = EarthModel_ArrivalTime(p_earth,
+					   p_event->evlon,
+					   p_event->evlat,
+					   p_event->evdepth,
+					   p_event->evtime,
 					   phase, siteid-1);
-      
+
       p_arr->amp = ArrivalAmplitudePrior_Point(&p_sigmodel->arr_amp_prior,
-					       p_event->evmag, 
-					       p_event->evdepth, 
-					       p_arr->time - p_event->evtime, 
+					       p_event->evmag,
+					       p_event->evdepth,
+					       p_arr->time - p_event->evtime,
 					       siteid-1, phase);
 
-      p_arr->azi = EarthModel_ArrivalAzimuth(p_earth, 
-					     p_event->evlon, 
-					     p_event->evlat, 
+      p_arr->azi = EarthModel_ArrivalAzimuth(p_earth,
+					     p_event->evlon,
+					     p_event->evlat,
 					     siteid-1);
-      p_arr->slo = EarthModel_ArrivalSlowness(p_earth, 
-					      p_event->evlon, 
-					      p_event->evlat, 
-					      p_event->evdepth, 
-					      phase, siteid-1); 
+      p_arr->slo = EarthModel_ArrivalSlowness(p_earth,
+					      p_event->evlon,
+					      p_event->evlat,
+					      p_event->evdepth,
+					      phase, siteid-1);
 
-      LogTrace("got arrival time %lf amp %lf azi %lf slo %lf for evtime %lf phase %d siteid %d", p_arr->time,  p_arr->amp,  p_arr->azi,  p_arr->slo, p_event->evtime, phase, siteid);      
+      LogTrace("got arrival time %lf amp %lf azi %lf slo %lf for evtime %lf phase %d siteid %d", p_arr->time,  p_arr->amp,  p_arr->azi,  p_arr->slo, p_event->evtime, phase, siteid);
     }
   }
 }
@@ -170,7 +169,7 @@ double optimize_arrivals_sta_grid(SigModel_t * p_sigmodel,
   int numsites;
   int numtimedefphases;
   int numarrivals;
-  
+
   clock_t start, local_start, end;
   double dif;
   start = local_start = clock();
@@ -179,13 +178,13 @@ double optimize_arrivals_sta_grid(SigModel_t * p_sigmodel,
 
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-  numarrivals = numtimedefphases;  
+  numarrivals = numtimedefphases;
 
   /* for each site and phase, estimate arrival info from the relevant priors */
 
   Arrival_t * sta_arrivals = p_event->p_arrivals + (siteid-1)*numtimedefphases;
 
-  Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t)); 
+  Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t));
   memcpy(base, sta_arrivals, numarrivals * sizeof(Arrival_t));
 
   LogTrace("    optimizing arrivals at site %d, given %d other events, for event %s ", siteid, num_other_events, event_str(p_event));
@@ -193,7 +192,7 @@ double optimize_arrivals_sta_grid(SigModel_t * p_sigmodel,
 
   //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
   //printf("    naive score is %lf\n", p_event->evscore);
-  
+
 
   Arrival_t * best = calloc(numarrivals, sizeof(Arrival_t));
   memcpy(best, base, numarrivals * sizeof(Arrival_t));
@@ -201,7 +200,7 @@ double optimize_arrivals_sta_grid(SigModel_t * p_sigmodel,
   double best_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
   LogTrace("    naive sta score is %lf", best_score);
   /* then try a grid search over arrival info */
-  
+
   const double time_step = .5;
   const double num_time_steps = 10;
   const double amp_step = 0.3;
@@ -219,36 +218,36 @@ double optimize_arrivals_sta_grid(SigModel_t * p_sigmodel,
 	  continue;
 	}
 
-	for (double time = (base+phase)->time - time_step * num_time_steps; time < (base+phase)->time + time_step * num_time_steps; time += time_step) { 
+	for (double time = (base+phase)->time - time_step * num_time_steps; time < (base+phase)->time + time_step * num_time_steps; time += time_step) {
 
 	  double min_amp = MAX((base+phase)->amp-amp_step*num_amp_steps, 0.05);
 	double max_amp = MAX((base+phase)->amp+amp_step*num_amp_steps, 0.1);
 
-	for (double amp = min_amp; amp <= max_amp; amp += amp_step) { 
+	for (double amp = min_amp; amp <= max_amp; amp += amp_step) {
 
 	double min_azi = 0;
 	double max_azi = 360;
 	double azi_step = 36;
 
-	for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
+	for (double azi = min_azi; azi <= max_azi; azi += azi_step) {
 
 	double min_slo = 0;
 	double max_slo;
 	iangle_to_slowness(90, phase, &max_slo);
 	double slo_step = 5;
 
-	for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
+	for (double slo = min_slo; slo <= max_slo; slo += slo_step) {
 
 
 	  Arrival_t * p_arr = sta_arrivals + phase;
-	  p_arr->time = time;	      
-	  p_arr->amp = amp;	      
-	  p_arr->azi = azi;	      
-	  p_arr->slo = slo;	      
-	  
+	  p_arr->time = time;
+	  p_arr->amp = amp;
+	  p_arr->azi = azi;
+	  p_arr->slo = slo;
+
 
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
-	  
+
 	  LogTrace("phase %d time %lf amp %lf azi %lf slo %lf score %lf", phase, time, amp, azi, slo, ev_sta_score);
 
 	  if (ev_sta_score > best_score) {
@@ -264,22 +263,22 @@ double optimize_arrivals_sta_grid(SigModel_t * p_sigmodel,
 
 	// use the best arrival time for this phase/station while searching at the next
 	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
-    
-   
+
+
     }
     memcpy(base, best, numarrivals * sizeof(Arrival_t));
   }
 
-  
+
 
   end = clock();
   dif = (end - start) / (double)CLOCKS_PER_SEC;
 
-  
+
   double final_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
   //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
   //printf("    final score is %lf\n", p_event->evscore);
-  
+
 
   if (isnan(final_score)) {
     LogError("score is nan! %lf %lf\n", final_score, best_score);
@@ -306,7 +305,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   int numsites;
   int numtimedefphases;
   int numarrivals;
-  
+
   clock_t start, local_start, end;
   double dif;
   start = local_start = clock();
@@ -315,13 +314,13 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-  numarrivals = numtimedefphases;  
+  numarrivals = numtimedefphases;
 
   /* for each site and phase, estimate arrival info from the relevant priors */
 
   Arrival_t * sta_arrivals = p_event->p_arrivals + (siteid-1)*numtimedefphases;
 
-  Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t)); 
+  Arrival_t * base = calloc(numarrivals, sizeof(Arrival_t));
   memcpy(base, sta_arrivals, numarrivals * sizeof(Arrival_t));
 
   LogTrace("    optimizing arrivals at site %d, given %d other events, for event %s ", siteid, num_other_events, event_str(p_event));
@@ -329,7 +328,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 
   //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
   //printf("    naive score is %lf\n", p_event->evscore);
-  
+
 
   Arrival_t * best = calloc(numarrivals, sizeof(Arrival_t));
   memcpy(best, base, numarrivals * sizeof(Arrival_t));
@@ -337,7 +336,7 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
   double best_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
   LogTrace("    naive sta score is %lf", best_score);
   /* then try a grid search over arrival info */
-  
+
   const double time_step = 1;
   const double num_time_steps = 8;
   const double amp_step = 1.5;
@@ -355,13 +354,13 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 	  continue;
 	}
 
-	for (double time = (base+phase)->time - time_step * num_time_steps; time < (base+phase)->time + time_step * num_time_steps; time += time_step) { 
-	  
+	for (double time = (base+phase)->time - time_step * num_time_steps; time < (base+phase)->time + time_step * num_time_steps; time += time_step) {
+
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->time = time;
-	      
+
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
-	  
+
 	  if (ev_sta_score > best_score) {
 	    LogTrace("new arrival time %lf at %d for phase %d has score %lf better than best %lf", time, siteid, phase, ev_sta_score, best_score);
 	    best_score = ev_sta_score;
@@ -371,8 +370,8 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 
 	// use the best arrival time for this phase/station while searching at the next
 	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
-    
-   
+
+
     }
 
     for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
@@ -383,57 +382,57 @@ double optimize_arrivals_sta(SigModel_t * p_sigmodel,
 	  continue;
 	}
 
-	
+
 
 	double min_amp = MAX((base+phase)->amp*pow(amp_step, -1*num_amp_steps), 0.05);
 	double max_amp = MAX((base+phase)->amp*pow(amp_step, num_amp_steps), 0.1);
 
-	for (double amp = min_amp; amp <= max_amp; amp *= amp_step) { 
+	for (double amp = min_amp; amp <= max_amp; amp *= amp_step) {
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->amp = amp;
 
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
-	  
+
 	  if (ev_sta_score > best_score) {
 	    best_score = ev_sta_score;
 	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
 	  }
-  
+
 	}
 
 	// use the best arrival time for this phase/station while searching at the next
 	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
-    
+
     }
- 
+
 for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
   if (!USE_PHASE(phase)) continue;
 	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
 	  continue;
 	}
-	
+
 	//double min_azi = (base+phase)->azi-azi_step*num_azi_steps;
 	//double max_azi = (base+phase)->azi+azi_step*num_azi_steps;
 	double min_azi = 0;
 	double max_azi = 360;
 	double azi_step = 36;
 
-	for (double azi = min_azi; azi <= max_azi; azi += azi_step) { 
+	for (double azi = min_azi; azi <= max_azi; azi += azi_step) {
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->azi = azi;
 
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
-	  
+
 	  if (ev_sta_score > best_score) {
 	    best_score = ev_sta_score;
 	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
 	  }
-  
+
 	}
 
 	// use the best arrival time for this phase/station while searching at the next
 	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
-    
+
     }
 
 for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
@@ -443,7 +442,7 @@ for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
 	if (!have_signal(p_sigmodel, siteid, (base+phase)->time - 5, (base+phase)->time+MAX_ENVELOPE_LENGTH)) {
 	  continue;
 	}
-	
+
 	//double min_slo = (base+phase)->slo-slo_step*num_slo_steps;
 	//double max_slo = (base+phase)->slo+slo_step*num_slo_steps;
 	double min_slo = 0;
@@ -451,31 +450,31 @@ for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
 	iangle_to_slowness(90, phase, &max_slo);
 	double slo_step = 5;
 
-	for (double slo = min_slo; slo <= max_slo; slo += slo_step) { 
+	for (double slo = min_slo; slo <= max_slo; slo += slo_step) {
 	  Arrival_t * p_arr = sta_arrivals + phase;
 	  p_arr->slo = slo;
 
 	  double ev_sta_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
-	  
+
 	  if (ev_sta_score > best_score) {
 	    best_score = ev_sta_score;
 	    memcpy(best, sta_arrivals, numarrivals * sizeof(Arrival_t));
 	  }
-  
+
 	}
 
 	// use the best arrival time for this phase/station while searching at the next
 	memcpy(sta_arrivals, best, numarrivals * sizeof(Arrival_t));
-    
+
     }
 
     // TODO: re-enable optimizing slowness and azimuth once I've actually told the signal model to care about them
     /*
     for (int site = 0; site < numsites; ++site) {
       for (int phase = 0; phase < numtimedefphases; ++phase) {
-	
-	int idx = site*numtimedefphases+phase;	
-	
+
+	int idx = site*numtimedefphases+phase;
+
 
 	............
     */
@@ -483,16 +482,16 @@ for (int phase = 0; phase < MAX_PHASE(numtimedefphases); ++phase) {
     memcpy(base, best, numarrivals * sizeof(Arrival_t));
   }
 
-  
+
 
   end = clock();
   dif = (end - start) / (double)CLOCKS_PER_SEC;
 
-  
+
   double final_score = score_event_sta_sig(p_sigmodel, p_event, siteid, num_other_events, pp_other_events);
   //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
   //printf("    final score is %lf\n", p_event->evscore);
-  
+
 
   if (isnan(final_score)) {
     LogError("score is nan! %lf %lf\n", final_score, best_score);
@@ -541,7 +540,7 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
     /* check if the site is in the shadow zone for the event - phase */
     if (pred_arrtime < 0)
       continue;
-    
+
     /* check if the site is up */
     //if (!SigModel_IsSiteUp(p_sigmodel, siteid, pred_arrtime))
     //continue;
@@ -557,147 +556,27 @@ void optimize_arrivals(SigModel_t * p_sigmodel,
   }
 
   evscore += score_event_evprior(p_sigmodel, p_event);
- 
+
   //score_event_sig(p_sigmodel, p_event, num_other_events, pp_other_events);
   p_event->evscore = evscore;
   LogTrace("post-optimize score is %lf", p_event->evscore);
-  
+
 
 }
 
-
-/* find the best set of detection from the available ones to build the
- * event and find its best possible score */
-static void propose_best_detections(NetModel_t * p_netmodel,
-                                    Event_t * p_event,
-                                    int det_low, int det_high,
-                                    int * p_skip_det,
-                                    int P_phase_only)
-{
-  EarthModel_t * p_earth;
-  int numsites;
-  int numtimedefphases;
-  int i;
-  int detnum;
-  int * p_event_best_detids;
-  double * p_event_best_score;
-  
-  p_earth = p_netmodel->p_earth;
-
-  numsites = EarthModel_NumSites(p_earth);
-  numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
-
-  p_event_best_detids = (int *) malloc(numsites * numtimedefphases 
-                                       * sizeof (*p_event_best_score));
-  p_event_best_score = (double *) malloc(numsites * numtimedefphases 
-                                         * sizeof (*p_event_best_score));  
-
-  /* find the best set of available detections for this event */
-  for (i=0; i < numsites * numtimedefphases; i++)
-  {
-    p_event_best_detids[i] = -1;
-    p_event_best_score[i] = 0;
-  }
-
-
-  /* for each detection find the best phase at the event */
-  for (detnum = det_low; detnum < det_high; detnum ++)
-  {
-    Detection_t * p_det;
-    int best_phase;
-    double best_phase_score;
-    int siteid;
-    int phase;
-    double distance, pred_az;
-    
-    if (p_skip_det[detnum])
-      continue;
-    
-    p_det = p_netmodel->p_detections + detnum;
-
-    siteid = p_det->site_det;
-  
-    best_phase = -1;
-    best_phase_score = 0;
-
-    distance = EarthModel_Delta(p_earth, p_event->evlon,
-                                p_event->evlat, siteid);
-
-    pred_az = EarthModel_ArrivalAzimuth(p_earth, p_event->evlon,
-                                        p_event->evlat, siteid);
-  
-    /* find the best phase for this detection if it is to match the event */
-    for (phase=0; phase < numtimedefphases; phase++)
-    {
-      int poss;
-      double detscore;
-
-      /* we assume P phase is phasenum 0 */
-      if (P_phase_only && (phase > 0))
-        continue;
-      
-      p_event->p_num_dets[(siteid-1) * numtimedefphases + phase] = 1;
-      p_event->p_all_detids[((siteid-1) * numtimedefphases + phase)*MAX_PHASE_DET]
-        = detnum;
-      
-      poss = score_event_site_phase(p_netmodel, p_event, siteid, phase,
-                                    distance, pred_az, &detscore);
-
-      if (poss && (detscore > 0)
-          && ((-1 == best_phase) || (detscore > best_phase_score)))
-      {
-        best_phase = phase;
-        best_phase_score = detscore;
-      }
-    }
-
-    /* check if this detection-phase is the best detection for this phase at
-     * the site */
-    if ((-1 != best_phase)
-        && ((-1 == p_event_best_detids[(siteid-1) * numtimedefphases 
-                                       + best_phase])
-            || (best_phase_score 
-                > p_event_best_score[(siteid-1)  * numtimedefphases 
-                                     + best_phase])))
-    {
-      p_event_best_detids[(siteid-1)  * numtimedefphases + best_phase] 
-        = detnum;
-      p_event_best_score[(siteid-1)  * numtimedefphases + best_phase] 
-        = best_phase_score;
-    }
-  }
-  
-  /* score the best such event */
-  for (i=0; i < numsites * numtimedefphases; i++)
-  {
-    if (-1 == p_event_best_detids[i])
-      p_event->p_num_dets[i] = 0;
-    else
-    {
-      p_event->p_num_dets[i] = 1;
-      p_event->p_all_detids[i * MAX_PHASE_DET] = p_event_best_detids[i];
-    }
-  }
-  p_event->evscore = score_event(p_netmodel, p_event);
-
-  free(p_event_best_detids);
-  free(p_event_best_score);
-}
 
 void *propose_best_event_helper(void *args)
 {
   struct thread_data *params = (struct thread_data *) args;
-  
+
   int det_low = params->det_low;
   int det_high = params->det_high;
   int *p_skip_det = params->p_skip_det;
-  
+
   double time_low = params->time_low;
   double time_high = params->time_high;
 
-  NetModel_t * p_netmodel = params->p_netmodel;
   SigModel_t * p_sigmodel = params->p_sigmodel;
-  assert(p_netmodel == NULL || p_sigmodel == NULL);
 
   Event_t *p_event = params->p_event;
   Event_t *p_curr_event = params->p_curr_event;
@@ -713,42 +592,38 @@ void *propose_best_event_helper(void *args)
     FIXUP_EVLON(p_event);
     p_event->evlat = p_curr_event->evlat + RAND_UNIFORM(-scale, scale) * 5.0;
     FIXUP_EVLAT(p_event);
-    p_event->evdepth = RAND_UNIFORM(MAX(MIN_DEPTH, 
-                                        p_curr_event->evdepth-100*scale), 
+    p_event->evdepth = RAND_UNIFORM(MAX(MIN_DEPTH,
+                                        p_curr_event->evdepth-100*scale),
                                     MIN(MAX_DEPTH,
                                         p_curr_event->evdepth+100*scale));
-    p_event->evtime = RAND_UNIFORM(MAX(p_curr_event->evtime - scale * 50, 
+    p_event->evtime = RAND_UNIFORM(MAX(p_curr_event->evtime - scale * 50,
                                        time_low),
                                    MIN(p_curr_event->evtime + scale * 50,
                                        time_high));
-    
-    p_event->evmag = RAND_UNIFORM(MAX(MIN_MAGNITUDE, 
-                                      p_curr_event->evmag - scale), 
+
+    p_event->evmag = RAND_UNIFORM(MAX(MIN_MAGNITUDE,
+                                      p_curr_event->evmag - scale),
                                   MIN(MAX_MAGNITUDE,
                                       p_curr_event->evmag + scale));
 
-    if (p_netmodel != NULL) 
-      propose_best_detections(p_netmodel, p_event, det_low, det_high,
-			      p_skip_det, 0);
-    else
-      optimize_arrivals(p_sigmodel, p_event,  params->num_other_events, params->pp_other_events);
+    optimize_arrivals(p_sigmodel, p_event,  params->num_other_events, params->pp_other_events);
 
     /* maintain the overall best event */
     if (p_event->evscore > params->p_best_event->evscore) {
       LogTrace(" new score %lf is better than old best score %lf", p_event->evscore, params->p_best_event->evscore);
-      COPY_EVENT(p_netmodel, p_sigmodel, params->p_best_event, p_event);
+      COPY_EVENT(p_sigmodel, params->p_best_event, p_event);
     }
 
     if (p_event->evscore > p_curr_event->evscore)
-      COPY_EVENT(p_netmodel, p_sigmodel, p_curr_event, p_event);
+      COPY_EVENT(p_sigmodel, p_curr_event, p_event);
 
-#ifdef SIM_ANNEAL    
+#ifdef SIM_ANNEAL
     else
     {
       double temp = 20.0 / log(params->N+2);
-      
+
       if (RAND_DOUBLE < exp((p_event->evscore - p_curr_event->evscore) / temp))
-        COPY_EVENT(p_netmodel, p_sigmodel, p_event, p_curr_event);
+        COPY_EVENT(p_sigmodel, p_event, p_curr_event);
     }
 #endif
 
@@ -756,8 +631,7 @@ void *propose_best_event_helper(void *args)
   return NULL;
 }
 
-static void propose_best_event(NetModel_t * p_netmodel,
-			       SigModel_t * p_sigmodel,
+static void propose_best_event(SigModel_t * p_sigmodel,
                                Event_t * p_event,
 			       int num_other_events, const Event_t ** pp_other_events,
                                int det_low, int det_high,
@@ -767,18 +641,16 @@ static void propose_best_event(NetModel_t * p_netmodel,
 {
   Event_t * p_best_event;
   Event_t * p_curr_event;
-  
+
   // TODO: make it feasible to set this back to 1000
   const int N = 10;
-  
-  assert(p_netmodel == NULL || p_sigmodel == NULL);
 
-  p_best_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
-  p_curr_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
+  p_best_event = ALLOC_EVENT(p_sigmodel);
+  p_curr_event = ALLOC_EVENT(p_sigmodel);
 
   /* the initial event is the starting event as well as the initial best */
-  COPY_EVENT(p_netmodel, p_sigmodel, p_best_event, p_event);
-  COPY_EVENT(p_netmodel, p_sigmodel, p_curr_event, p_event);
+  COPY_EVENT(p_sigmodel, p_best_event, p_event);
+  COPY_EVENT(p_sigmodel, p_curr_event, p_event);
 
 
 
@@ -797,18 +669,17 @@ static void propose_best_event(NetModel_t * p_netmodel,
     thread_args[i].time_low = time_low;
     thread_args[i].time_high = time_high;
 
-    thread_args[i].p_netmodel = p_netmodel;
     thread_args[i].p_sigmodel = p_sigmodel;
-    thread_args[i].p_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
-    COPY_EVENT(p_netmodel, p_sigmodel, thread_args[i].p_event, p_event);
-    thread_args[i].p_curr_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
-    COPY_EVENT(p_netmodel, p_sigmodel, thread_args[i].p_curr_event, p_curr_event);
-    thread_args[i].p_best_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
-    COPY_EVENT(p_netmodel, p_sigmodel, thread_args[i].p_best_event, p_best_event);
+    thread_args[i].p_event = ALLOC_EVENT(p_sigmodel);
+    COPY_EVENT(p_sigmodel, thread_args[i].p_event, p_event);
+    thread_args[i].p_curr_event = ALLOC_EVENT(p_sigmodel);
+    COPY_EVENT(p_sigmodel, thread_args[i].p_curr_event, p_curr_event);
+    thread_args[i].p_best_event = ALLOC_EVENT(p_sigmodel);
+    COPY_EVENT(p_sigmodel, thread_args[i].p_best_event, p_best_event);
 
     thread_args[i].num_other_events = num_other_events;
     thread_args[i].pp_other_events = pp_other_events;
-    
+
     thread_args[i].N = N/numthreads+1;
     thread_args[i].scale = scale;
     thread_args[i].tid = i;
@@ -826,7 +697,7 @@ static void propose_best_event(NetModel_t * p_netmodel,
   for (int i = 0; i < numthreads; i++)
   {
     if (thread_args[i].p_best_event->evscore > p_best_event->evscore) {
-      COPY_EVENT(p_netmodel, p_sigmodel, p_best_event, thread_args[i].p_best_event);
+      COPY_EVENT(p_sigmodel, p_best_event, thread_args[i].p_best_event);
     }
     free_event(thread_args[i].p_event);
     free_event(thread_args[i].p_curr_event);
@@ -834,7 +705,7 @@ static void propose_best_event(NetModel_t * p_netmodel,
   }
 
   /* return the overall best event */
-  COPY_EVENT(p_netmodel, p_sigmodel, p_event, p_best_event);
+  COPY_EVENT(p_sigmodel, p_event, p_best_event);
 
   free_event(p_curr_event);
   free_event(p_best_event);
@@ -861,9 +732,7 @@ void *propose_invert_step_helper(void *args)
   const Event_t ** pp_other_events = params->pp_other_events;
   PyObject * log_segment_cb = params->log_segment_cb;
 
-  NetModel_t * p_netmodel = params->p_netmodel;
   SigModel_t * p_sigmodel = params->p_sigmodel;
-  assert(p_netmodel == NULL || p_sigmodel == NULL);
 
   Event_t *p_inv_events = params->p_inv_events;
   Event_t *p_event = params->p_event;
@@ -878,20 +747,19 @@ void *propose_invert_step_helper(void *args)
 
   /* Loop increments by NUM_THREADS to ensure that each thread gets a
    * different datum */
-  for (inv_detnum = det_low+tid; inv_detnum < det_high; 
+  for (inv_detnum = det_low+tid; inv_detnum < det_high;
        inv_detnum += numthreads)
   {
     Detection_t * p_inv_det;
     int det_off = inv_detnum - det_low;
 
-    Event_t * p_best_nonzero_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
+    Event_t * p_best_nonzero_event = ALLOC_EVENT(p_sigmodel);
     p_best_nonzero_event->evscore = -1 * DBL_MAX;
 
     if (p_skip_inv[det_off])
       continue;
 
-    if (p_netmodel != NULL) p_inv_det = p_netmodel->p_detections + inv_detnum;
-    else p_inv_det = p_sigmodel->p_detections + inv_detnum;
+    p_inv_det = p_sigmodel->p_detections + inv_detnum;
 
     /* save the longitude and latitude */
     lon = (p_inv_events + det_off)->evlon;
@@ -921,7 +789,7 @@ void *propose_invert_step_helper(void *args)
 
 	  for (int phase = 0; phase < EarthModel_NumTimeDefPhases(p_sigmodel->p_earth); ++phase) {
 	    if(!USE_PHASE(phase)) continue;
-	    
+
 
 	    trvtime = EarthModel_ArrivalTime(p_earth, p_event->evlon,
                                            p_event->evlat, p_event->evdepth,0,
@@ -938,20 +806,14 @@ void *propose_invert_step_helper(void *args)
           }
 
 
-	  if (p_netmodel != NULL) {
-          /* score this event using the best detections available */
-	    propose_best_detections(p_netmodel, p_event, det_low, det_high,
-				    p_skip_det, 0 /* all phases */);
-	  } else {
-	    LogDebug("optimizing arrivals for %s", event_str(p_event));
-	    optimize_arrivals(p_sigmodel, p_event, num_other_events, pp_other_events);
-	  }
+	  LogDebug("optimizing arrivals for %s", event_str(p_event));
+	  optimize_arrivals(p_sigmodel, p_event, num_other_events, pp_other_events);
 
 	  //Compare to the score in p_best_events with index tid (for this thread)
           if (p_event->evscore > params->p_best_event->evscore)
           {
 
-	    COPY_EVENT(p_netmodel, p_sigmodel, params->p_best_event, p_event);
+	    COPY_EVENT(p_sigmodel, params->p_best_event, p_event);
 
             LogDebug("CURR BEST: %s", event_str(params->p_best_event));
           } else {
@@ -961,13 +823,13 @@ void *propose_invert_step_helper(void *args)
 	  if (p_event->evscore > p_best_nonzero_event->evscore)
           {
 
-	    COPY_EVENT(p_netmodel, p_sigmodel, p_best_nonzero_event, p_event);
+	    COPY_EVENT(p_sigmodel, p_best_nonzero_event, p_event);
           }
         }
       }
       }
-      
-      
+
+
 
     }
     /*
@@ -987,49 +849,44 @@ void *propose_invert_step_helper(void *args)
 
   }
 
-  
+
   return NULL;
 }
 
 /* propose events by inverting detections and keeping the best
- * inverted detections 
+ * inverted detections
  * this version does a fixed number of steps per detection */
 /* can be very slow when there are a large number of detections, for example:
   python -m utils.check_propose -k 1299822400 -l tohoku -d 2.5 -w 1800  -r 1.2
 */
-int propose_invert_step(NetModel_t * p_netmodel, 
-			SigModel_t * p_sigmodel,
+int propose_invert_step(SigModel_t * p_sigmodel,
 			Event_t **pp_events,
                         double time_low, double time_high, int det_low,
                         int det_high, double degree_step, int num_step,
-                        int numthreads, 
+                        int numthreads,
 			int runid, PyObject * log_segment_cb)
 {
   EarthModel_t * p_earth;
   int numsites;
   int numtimedefphases;
-  
+
   int detnum, inv_detnum;
 
   int numevents;
 
   Event_t * p_best_event;
   int * p_skip_det;                          /* numdetections */
-  
+
   Event_t * p_inv_events;
   int * p_skip_inv;
 
-  if (p_netmodel != NULL)  p_earth = p_netmodel->p_earth;
-  else p_earth = p_sigmodel->p_earth;
-  
+  p_earth = p_sigmodel->p_earth;
+
   numsites = EarthModel_NumSites(p_earth);
   numtimedefphases = EarthModel_NumTimeDefPhases(p_earth);
 
-  if (p_netmodel != NULL)
-    p_skip_det = (int *) calloc(p_netmodel->numdetections, sizeof(*p_skip_det));
-  else
-    p_skip_det = (int *) calloc(p_sigmodel->numdetections, sizeof(*p_skip_det));
-  
+  p_skip_det = (int *) calloc(p_sigmodel->numdetections, sizeof(*p_skip_det));
+
   if (!p_skip_det)
   {
     return -1;
@@ -1040,7 +897,7 @@ int propose_invert_step(NetModel_t * p_netmodel,
   {
     return -1;
   }
-  
+
   /* initialize to 0 to indicate that the detection is not to be skipped */
   p_skip_inv = (int *)calloc(det_high - det_low, sizeof(*p_skip_inv));
   if (!p_skip_inv)
@@ -1055,13 +912,12 @@ int propose_invert_step(NetModel_t * p_netmodel,
     int inv_status;
     int det_off = inv_detnum - det_low;
     Event_t * p_event;
-    
-    
-    if (p_netmodel != NULL) p_inv_det = p_netmodel->p_detections + inv_detnum;
-    else p_inv_det = p_sigmodel->p_detections + inv_detnum;
+
+
+    p_inv_det = p_sigmodel->p_detections + inv_detnum;
 
     p_event = p_inv_events+det_off;
-    
+
     inv_status = invert_detection(p_earth, p_inv_det, p_event,
                                   0 /* don't perturb */);
 
@@ -1075,9 +931,9 @@ int propose_invert_step(NetModel_t * p_netmodel,
       p_skip_inv[det_off] = 1;
     }
   }
-  
 
-  
+
+
   numevents = 0;
 
   /* Allocate space for threads and args, initialize starting values */
@@ -1097,7 +953,6 @@ int propose_invert_step(NetModel_t * p_netmodel,
 	thread_args[i].time_low = time_low;
 	thread_args[i].time_high = time_high;
 	thread_args[i].numthreads = numthreads;
-	thread_args[i].p_netmodel = p_netmodel;
 	thread_args[i].p_sigmodel = p_sigmodel;
 	thread_args[i].num_other_events = numevents;
 	thread_args[i].pp_other_events = (const Event_t **)pp_events;
@@ -1120,15 +975,15 @@ int propose_invert_step(NetModel_t * p_netmodel,
     LogInfo("spawning %d proposal threads", numthreads);
 
     /* Initialize what will be the overall best event */
-    p_best_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
+    p_best_event = ALLOC_EVENT(p_sigmodel);
 
     p_best_event->evscore = 0;
 
     /* Create threads and have them run the proposal loop */
     for (int i = 0; i < numthreads; i++)
     {
-      thread_args[i].p_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
-      thread_args[i].p_best_event = ALLOC_EVENT(p_netmodel, p_sigmodel);
+      thread_args[i].p_event = ALLOC_EVENT(p_sigmodel);
+      thread_args[i].p_best_event = ALLOC_EVENT(p_sigmodel);
       thread_args[i].p_best_event->evscore = 0;
       pthread_create(&threads[i], NULL, propose_invert_step_helper,
                      (void *) &thread_args[i]);
@@ -1141,13 +996,13 @@ int propose_invert_step(NetModel_t * p_netmodel,
     }
 
     LogInfo("all proposal threads have finished!");
-	
+
     /* Get the best event from all threads combined */
     for (int i = 0; i < numthreads; ++i)
     {
       if (thread_args[i].p_best_event->evscore > p_best_event->evscore)
       {
-	COPY_EVENT(p_netmodel, p_sigmodel, p_best_event, thread_args[i].p_best_event);
+	COPY_EVENT(p_sigmodel, p_best_event, thread_args[i].p_best_event);
 
       } else {
 	LogTrace("thread %d score %lf is not better than best %lf", i, thread_args[i].p_best_event->evscore, p_best_event->evscore);
@@ -1155,8 +1010,8 @@ int propose_invert_step(NetModel_t * p_netmodel,
         free_event(thread_args[i].p_best_event);
         free_event(thread_args[i].p_event);
     }
-    
-    
+
+
 
     LogDebug("best proposed event is %s", event_str(p_best_event));
 
@@ -1167,137 +1022,51 @@ int propose_invert_step(NetModel_t * p_netmodel,
       free_event(p_best_event);
       break;
     }
-    
+
     /* now, improve this event to take advantage of its detections */
 
     LogDebug("now improving this event ...");
-      
+
     clock_t improve_start = clock();
 
-    propose_best_event(p_netmodel, p_sigmodel, p_best_event, 
-		       numevents, (const Event_t **)pp_events, 
+    propose_best_event(p_sigmodel, p_best_event,
+		       numevents, (const Event_t **)pp_events,
 		       det_low, det_high,
 			 p_skip_det, time_low, time_high, 1, numthreads);
-    
+
     LogDebug("improvement round 1 done, time %lf, resulting best event %s", (clock() - improve_start) / (double)CLOCKS_PER_SEC, event_str(p_best_event));
     improve_start = clock();
 
-    propose_best_event(p_netmodel, p_sigmodel, p_best_event, 
-		       numevents, (const Event_t **)pp_events,  
+    propose_best_event(p_sigmodel, p_best_event,
+		       numevents, (const Event_t **)pp_events,
 		       det_low, det_high,
 			 p_skip_det, time_low, time_high, .1, numthreads);
 
     LogDebug("improvement round 2 done, time %lf, resulting best event %s", (clock() - improve_start) / (double)CLOCKS_PER_SEC, event_str(p_best_event));
 
-    if (p_netmodel != NULL) {
-      /* and, once more find the best detections for this event */
-      propose_best_detections(p_netmodel, p_best_event, det_low, det_high,
-			      p_skip_det, 0 /* all phases */);
-    } else {
       //printf("now optimizing arrivals...\n");
-      optimize_arrivals(p_sigmodel, p_best_event, numevents, 
+      optimize_arrivals(p_sigmodel, p_best_event, numevents,
 			(const Event_t **)pp_events);
-    }
-    
-    
+
+
     LogInfo("BEST: %s", event_str(p_best_event));
-    
-    if (p_netmodel != NULL) {
-      printf("Best detections ");
-      print_event_detections(p_earth, p_best_event);
 
 
-      /*
-       * we will identify the detections used by the best event and
-       * make them off-limits for future events
-       */
-      for (siteid = 0; siteid < numsites; siteid ++) {
-	for (phase = 0; phase < MAX_PHASE(numtimedefphases); phase ++) {
-	  if (!USE_PHASE(phase)) continue;
-	  if (p_best_event->p_num_dets[(siteid-1) * numtimedefphases + phase] > 0) {
-	    detnum = p_best_event->p_all_detids[((siteid-1) * numtimedefphases
-						 + phase)*MAX_PHASE_DET];
-	    p_skip_det[detnum] = 1;
-	  }
-	}
-      }
-    }
-    
-    
     LogDebug("adding best event, and the cycle repeats!\n");
     /* add the best event to the list of events */
     pp_events[numevents ++] = p_best_event;
 
-    
-    
+
+
   } while (1);
-  
+
   free(thread_args);
   free(threads);
 
   free(p_skip_inv);
   free(p_inv_events);
   free(p_skip_det);
-  
+
   return numevents;
 }
 
-
-PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args)
-{
-  double time_low;
-  double time_high;
-  int det_low;
-  int det_high;
-  double degree_delta;
-  int num_step;
-  
-  PyObject * eventsobj;
-  PyObject * evdetlistobj;
-  PyObject * retobj;
-  int i;
-  int numevents;
-  Event_t ** pp_events;
-  
-  if (!PyArg_ParseTuple(args, "ddiidi", &time_low, &time_high, &det_low,
-                        &det_high, &degree_delta, &num_step))
-    return NULL;
-
-  pp_events = (Event_t **) calloc(p_netmodel->numdetections,
-                                  sizeof(*pp_events));
-
-  numevents = propose_invert_step(p_netmodel, NULL, pp_events, 
-				  time_low, time_high, det_low, det_high,
-				  degree_delta, num_step,1, 0, NULL);
-
-  if (numevents < 0)
-  {
-    retobj = PyErr_NoMemory();
-    goto free_pp_events;
-  }
-
-  convert_events_dets_to_pyobj(p_netmodel->p_earth,
-                          (const Event_t **)pp_events,
-                          numevents, &eventsobj, &evdetlistobj);
-  
-  retobj = Py_BuildValue("(OO)", eventsobj, evdetlistobj);
-
-  /* BuildValue increments the ref count so we need to decrement our ref */
-  Py_DECREF(eventsobj);
-  Py_DECREF(evdetlistobj);
-  
-  for (i=0; i<numevents; i++)
-  {
-    Event_t * p_event;
-    
-    p_event = pp_events[i];
-
-    free_event(p_event);
-  }
-
- free_pp_events:
-
-  free(pp_events);
-
-  return retobj;
-}

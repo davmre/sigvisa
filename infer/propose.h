@@ -1,6 +1,5 @@
-PyObject * py_propose(NetModel_t * p_netmodel, PyObject * args);
 
-int propose_invert_step(NetModel_t * p_netmodel, SigModel_t * p_sigmodel,
+int propose_invert_step(SigModel_t * p_sigmodel,
 			Event_t **pp_events,
                         double time_low, double time_high, int det_low,
                         int det_high, double degree_step, int num_step,

@@ -1,11 +1,114 @@
-import sys, struct
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
+
+import sys, struct, time
 import numpy as np
 import gzip
+
 
 import database.db
 
 class MissingWaveform(Exception):
   pass
+
+class MissingSite(Exception):
+  pass
+
+def read_site(cursor, sta, epoch):
+  """
+  reads the static site table for this station around the epoch time
+  raises MissingSite
+  """
+  epochtime = time.gmtime(epoch)
+  yrday = epochtime.tm_year * 1000 + epochtime.tm_yday
+  rowcnt = cursor.execute("select lon, lat, elev, statype, refsta, "
+                          "dnorth, deast, staname from static_site where "
+                          "((%d <= offdate and %d >= ondate) "
+                          " or (offdate=-1 and %d >= ondate))"
+                          "and sta='%s' order by ondate"
+                          % (yrday, yrday, yrday, sta))
+  if not rowcnt:
+    raise MissingSite()
+
+  lon, lat, elev, statype, refsta, dnorth, deast, staname = cursor.fetchone()
+
+  return {"lon":lon, "lat":lat, "elev":elev, "statype": statype,
+          "refsta":refsta, "dnorth":dnorth, "deast":deast, "staname":staname}
+
+def read_site_ss(cursor, refsta, epoch):
+  """
+  reads the all the static site records for single station sites
+  which have this refsta around the epoch
+  
+  raises MissingSite
+  """
+  epochtime = time.gmtime(epoch)
+  yrday = epochtime.tm_year * 1000 + epochtime.tm_yday
+  rowcnt = cursor.execute("select lon, lat, elev, sta, "
+                          "dnorth, deast, staname from static_site where "
+                          "((%d <= offdate and %d >= ondate) "
+                          " or (offdate=-1 and %d >= ondate))"
+                          "and refsta='%s' and statype='ss' order by ondate"
+                          % (yrday, yrday, yrday, refsta))
+  if not rowcnt:
+    raise MissingSite()
+
+  seen_sta = set()
+  retval = []
+  for lon, lat, elev, sta, dnorth, deast, staname in cursor.fetchall():
+    if sta not in seen_sta:
+      seen_sta.add(sta)
+      retval.append({"lon":lon, "lat":lat, "elev":elev,
+                     "sta":sta, "dnorth":dnorth, "deast":deast,
+                     "staname":staname})
+  return retval
+
+def read_sitechan(cursor, sta, epoch):
+  """
+  returns all the static sitechan table for this station around the epoch time
+  """
+  epochtime = time.gmtime(epoch)
+  yrday = epochtime.tm_year * 1000 + epochtime.tm_yday
+  rowcnt = cursor.execute("select chan, ctype, edepth, hang, vang, descrip "
+                          "from static_sitechan where sta='%s' and "
+                          "((%d <= offdate and %d >= ondate) "
+                          " or (offdate=-1 and %d >= ondate))"
+                          " order by ondate"
+                          % (sta, yrday, yrday, yrday))
+  seen_chan = set()
+  retval = []
+  for chan, ctype, edepth, hang, vang, descrip in cursor.fetchall():
+    if chan not in seen_chan:
+      seen_chan.add(chan)
+      retval.append({"chan":chan, "ctype":ctype, "edepth":edepth, "hang":hang,
+                     "vang":vang, "descrip":descrip})
+
+  return retval
 
 def _read_waveform_from_file(waveform, skip_samples, read_samples):
   """
@@ -77,6 +180,7 @@ def fetch_waveform(station, chan, stime, etime):
     waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
     print cursor.description
     print waveform
+
     # check the samprate is consistent for all waveforms in this interval
     assert(samprate is None or samprate == waveform['samprate'])
     if samprate is None:
@@ -105,7 +209,6 @@ def fetch_waveform(station, chan, stime, etime):
 
   return data, samprate
 
-
 # http://en.wikipedia.org/wiki/High-pass_filter
 def highpass_filter(data, samprate, cutoff_freq):
   """
@@ -132,4 +235,3 @@ def lowpass_filter(data, samprate, cutoff_freq):
   for i in xrange(1, len(data)):
     output[i] = (1-alpha) * output[i-1] + alpha * data[i]
   return output
-

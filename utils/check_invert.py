@@ -1,3 +1,30 @@
+# Copyright (c) 2012, Bayesian Logic, Inc.
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#     * Neither the name of Bayesian Logic, Inc. nor the
+#       names of its contributors may be used to endorse or promote products
+#       derived from this software without specific prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+# USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+# 
 #checks whether invert detection works correctly
 
 import os, sys, time
@@ -5,6 +32,7 @@ import numpy as np
 from optparse import OptionParser
 
 from database.dataset import *
+from learn import read_datafile_and_sitephase
 from database.db import connect
 import netvisa, learn
 from results.compare import *
@@ -81,14 +109,24 @@ def main(param_dirname):
   parser.add_option("-i", "--runid", dest="runid", default=None,
                     type="int",
                     help = "the run-identifier to treat as LEB (None)")
+  parser.add_option("--datafile", dest="datafile", default=None,
+                    help = "tar file with data (None)", metavar="FILE")  
 
   (options, args) = parser.parse_args()
 
   netvisa.srand(options.seed)
-  
-  start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
-         sel3_evlist, site_up, sites, phasenames, phasetimedef \
-         = read_data("validation", hours=options.hours, skip=options.skip)
+  if options.datafile:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef, \
+                sitenames = read_datafile_and_sitephase(options.datafile,
+                                                        param_dirname,
+                                                        hours = options.hours,
+                                                        skip = options.skip)
+  else:
+    start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
+                sel3_evlist, site_up, sites, phasenames, phasetimedef \
+                = read_data("validation", hours=options.hours,
+                            skip=options.skip)
 
   # treat a VISA run as LEB
   if options.runid is not None:
@@ -106,8 +144,13 @@ def main(param_dirname):
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
 
+  invloc_to_event = []
+  event_to_nearest_invloc = []
+  invloc_to_event_arr = []
+  invloc_to_event_3c = []
+  
   t1 = time.time()
-  tot_leb, pos_leb, nearby_inv, pos_inv = 0, 0, 0, 0
+  tot_leb, pos_leb, nearby_inv = 0, 0, 0
   for leb_evnum, leb_event in enumerate(leb_events):
     leb_detlist = leb_evlist[leb_evnum]
     tot_leb += 1
@@ -115,64 +158,68 @@ def main(param_dirname):
       pos_leb += 1
 
     has_nearby_inv = False
-    has_pos_inv = False
+    dist_invlocs = []
     
     for phaseid, detid in leb_detlist:
       inv_ev = netmodel.invert_det(detid, 0)
-      if (inv_ev is None or (inv_ev[EV_TIME_COL] - leb_event[EV_TIME_COL] > 100)
-          or (dist_deg((inv_ev[EV_LON_COL], inv_ev[EV_LAT_COL]),
-                      (leb_event[EV_LON_COL], leb_event[EV_LAT_COL])) > 10)):
+      if inv_ev is None \
+             or (inv_ev[EV_TIME_COL] - leb_event[EV_TIME_COL] > 100):
+        continue
+      dist = dist_deg((inv_ev[EV_LON_COL], inv_ev[EV_LAT_COL]),
+                      (leb_event[EV_LON_COL], leb_event[EV_LAT_COL]))
+      if dist > 10:
         continue
       else:
+        invloc_to_event.append(dist)
+        dist_invlocs.append(dist)
+        
+        if sites[detections[detid][DET_SITE_COL]][SITE_IS_ARRAY]:
+          invloc_to_event_arr.append(dist)
+        else:
+          invloc_to_event_3c.append(dist)
+        
+        
         has_nearby_inv = True
         
-        tmp_ev = leb_event.copy()
-        tmp_ev[[EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_TIME_COL]] = inv_ev
-
-        for mag in [3.,]:
-          tmp_ev[EV_MB_COL] = mag
-          
-          for loni in range(-5,6):
-            tmp_ev[EV_LON_COL] = inv_ev[EV_LON_COL] + loni * 1.0
-            fixup_event_lon(tmp_ev)
-            
-            for lati in range(-5,6):
-              tmp_ev[EV_LAT_COL] = inv_ev[EV_LAT_COL] + lati * 1.0
-              fixup_event_lat(tmp_ev)
-
-              trvtime = earthmodel.ArrivalTime(
-                tmp_ev[EV_LON_COL], tmp_ev[EV_LAT_COL], tmp_ev[EV_DEPTH_COL],
-                0, 0, int(detections[detid, DET_SITE_COL]))
-
-              if trvtime is None or trvtime < 0:
-                continue
-
-              tmp_ev[EV_TIME_COL] = detections[detid, DET_TIME_COL] - trvtime
-        
-              if tmp_ev[EV_TIME_COL] < start_time \
-                     or tmp_ev[EV_TIME_COL] > end_time:
-                continue
-            
-              inv_score = netmodel.score_event(tmp_ev, leb_detlist)
-
-              if inv_score > 0:
-                has_pos_inv = True
-
+    if len(dist_invlocs):
+      event_to_nearest_invloc.append(min(dist_invlocs))
+    
     if has_nearby_inv:
       nearby_inv += 1
     
-    if has_pos_inv:
-      pos_inv += 1
-
   t2 = time.time()
   print "%.1f secs elapsed" % (t2 - t1)
   print "%.1f %% LEB events had +ve score"\
         % (pos_leb * 100. / tot_leb)
   print "%.1f %% LEB events had a nearby invert"\
         % (nearby_inv * 100. / tot_leb)
-  print "%.1f %% LEB events had +ve score from some nearby invert"\
-        % (pos_inv * 100. / tot_leb)
+
+  import matplotlib.pyplot as plt
+  import numpy as np
+  plt.rcParams['text.usetex'] = True    # type 1 fonts for publication
   
+  bins = np.arange(0,10,.1)
+  plt.figure()
+  plt.title("Distance from inverted location to LEB event")
+  plt.hist(invloc_to_event, bins)
+  plt.xlabel("Distance (degrees)")
+
+  plt.figure()
+  plt.title("Distance form LEB event to nearest inverted location")
+  plt.hist(event_to_nearest_invloc, bins)
+  plt.xlabel("Distance (degrees)")
+
+  plt.figure()
+  plt.title("Distance from inverted location to LEB event (Arrays)")
+  plt.hist(invloc_to_event_arr, bins)
+  plt.xlabel("Distance (degrees)")
+
+  plt.figure()
+  plt.title("Distance from inverted location to LEB event (3-C)")
+  plt.hist(invloc_to_event_3c, bins)
+  plt.xlabel("Distance (degrees)")
+
+  plt.show()
   
 if __name__ == "__main__":
   main("parameters")
