@@ -140,8 +140,15 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
     regional_y = []
     tele_dist = []
     tele_y = []
+
+    azi1 = []
+    azi1_y = []
+    azi2 = []
+    azi2_y = []
+    
     for i in range(n):
         d = fit_data[i, FIT_DISTANCE]
+        a = fit_data[i, FIT_AZIMUTH]
         dy = target_fn(fit_data[i, :])
         if d > 2000:
             tele_dist.append(d)
@@ -150,24 +157,69 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
             regional_dist.append(d)
             regional_y.append(dy)
 
+        azi1.append(a)
+
+        azi2.append(d)
+        azi2_y.append(dy)
+
     regional_dist = np.array(regional_dist)
     tele_dist = np.array(tele_dist)
 
 
     if pp is not None:
         plt.figure()
-        plt.title(label + " GP_DAD + \n%s" % dad_params)
+#        plt.title(label + " GP_DAD + \n%s" % dad_params)
         plt.xlabel("distance (km)")
-        plt.ylabel("")
+        plt.ylabel("coda decay (b)")
         ds = np.linspace(0, 10000, 150)
-        pred = np.array([ gp_dad.predict(np.array((d, 0, 0))) for d in ds])
         try:
+
+            plt.ylim([-0.06, 0])
+            plt.xlim([0, 10000])
+            pred = np.array([ gp_dad.predict(np.array((d, 0, 0))) for d in ds]).flatten()
             plt.plot(ds, pred, "k-")
-            plt.plot(np.concatenate([regional_dist, tele_dist]), np.concatenate([regional_y, tele_y]), 'ro')
+
+            std = np.sqrt(np.array([ gp_dad.variance(np.array((d, 0, 0)))[0][0] for d in ds]))
+
+            var_x = np.concatenate((ds, ds[::-1]))
+            var_y = np.concatenate((pred + std, (pred - std)[::-1]))
+            p = plt.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3')
+
+
+            plt.plot(azi2, azi2_y, 'ro')
             pp.savefig()
         except:
-            import pdb
+            import pdb, traceback
+            traceback.print_exc()
             pdb.set_trace()
+
+    if pp is not None:
+        plt.figure()
+#        plt.title(label + " GP_DAD + \n%s" % dad_params)
+        plt.xlabel("azimuth(deg)")
+        plt.ylabel("coda decay (b)")
+        das = np.linspace(0, 360, 360)
+        try:
+
+            plt.ylim([-0.06, 0])
+            plt.xlim([0, 360])
+            pred = np.array([ gp_dad.predict(np.array((2700, a, 0))) for a in das]).flatten()
+            plt.plot(das, pred, "k-")
+
+            std = np.sqrt(np.array([ gp_dad.variance(np.array((2700, a, 0)))[0][0] for a in das]))
+
+            var_x = np.concatenate((das, das[::-1]))
+            var_y = np.concatenate((pred + std, (pred - std)[::-1]))
+            p = plt.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3')
+
+
+            plt.plot(azi1, azi2_y, 'ro')
+            pp.savefig()
+        except:
+            import pdb, traceback
+            traceback.print_exc()
+            pdb.set_trace()
+
 
 
     try:
@@ -191,6 +243,8 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
         plt.title(label + " linear")
         plt.xlabel("distance (km)")
         plt.ylabel("")
+        plt.ylim([-0.06, 0])
+        plt.xlim([0, 10000])
         try:
             t = np.linspace(0, 2000, 50)
             pred = [ regional_model[(tv,1)] for tv in t ]
@@ -251,7 +305,7 @@ def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_
 
 class CodaModel:
 
-    MODEL_TYPE_GP_LLD, MODEL_TYPE_GP_DAD, MODEL_TYPE_GP_LLDDA_SUM, MODEL_TYPE_GP_LLDDA_PROD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN = range(6)
+    MODEL_TYPE_GP_LLD, MODEL_TYPE_GP_DAD, MODEL_TYPE_GP_LLDDA_SUM, MODEL_TYPE_GP_LLDDA_PROD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN, MODEL_TYPE_GP_DAD_VAR = range(7)
 
 
     target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB], "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] - SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]), bandid=int(r[FIT_BANDID]))}
@@ -304,6 +358,10 @@ class CodaModel:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
             return float(self.models['gp_dad'].predict((distance, azimuth, ev[EV_DEPTH_COL])))
+        elif model_type == self.MODEL_TYPE_GP_DAD_VAR:
+            if azimuth is None:
+                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
+            return float(self.models['gp_dad'].variance((distance, azimuth, ev[EV_DEPTH_COL])))
         elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
             if azimuth is None:
                 azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
