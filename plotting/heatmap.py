@@ -154,11 +154,10 @@ class Heatmap(object):
         except:
             self.plot_earth()
 
-        if colorbar:
-            minlevel = scipy.stats.scoreatpercentile([v for v in self.fvals.flatten() if not np.isnan(v)], 20)
-            levels = np.linspace(minlevel, np.max(self.fvals), 10)
-        else:
-            levels = None
+        minlevel = scipy.stats.scoreatpercentile([v for v in self.fvals.flatten() if not np.isnan(v)], 20)
+        levels = np.linspace(minlevel, np.max(self.fvals), 10)
+#        else:
+#            levels = None
 
         draw_density(self.bmap, self.lon_arr, self.lat_arr, self.fvals,
                      levels = levels, colorbar=colorbar)
