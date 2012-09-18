@@ -376,7 +376,7 @@ def main(param_dirname):
 
   parser = OptionParser()
 
-  parser.add_option("-s", "--siteids", dest="siteids", default="", type="str")
+  parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str")
   parser.add_option("-e", "--evid", dest="evid", default=None, type="int")
   parser.add_option("--orid", dest="orid", default=None, type="int")
   parser.add_option("-o", "--outfile", dest="outfile", default=None, type="str")
@@ -390,7 +390,13 @@ def main(param_dirname):
     print "using evid %d for orid %d" % (evid, options.orid)
   else:
       evid = options.evid
-  siteids = [int(x) for x in options.siteids.split(',')]
+
+  if options.siteids is not None:
+    siteids = [int(x) for x in options.siteids.split(',')]
+  else:
+    cursor.execute("select sid.id from static_siteid sid, leb_origin lebo, leb_assoc leba, leb_arrival l where sid.sta=l.sta and l.arid=leba.arid and leba.orid=lebo.orid and lebo.evid=%d" % evid)
+    siteids = [int(s[0]) for s in cursor.fetchall()]
+    print siteids
 
   if options.outfile is None:
     outfile = "logs/%d_detections.pdf" % (evid)

@@ -136,7 +136,7 @@ def draw_events(bmap, events, labels = None, **args):
     bmap.plot([x], [y], **args)
 
 
-    if labels is not None:
+    if labels is not None and labels[enum] is not None:
       plt.annotate(
         labels[enum][0],
         xy = (x, y),
