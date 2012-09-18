@@ -220,6 +220,14 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
 
   return uptime
 
+def read_sites_by_name(cursor):
+  sites = read_sites(cursor)
+  cursor.execute("select sta from static_siteid order by id")
+  names = [r[0] for r in cursor.fetchall()]
+
+  return dict(zip(names, sites))
+
+
 def read_sites(cursor):
   cursor.execute("select lon, lat, elev, "
                  "(case statype when 'ar' then 1 else 0 end) "

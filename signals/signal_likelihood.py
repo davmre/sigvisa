@@ -27,35 +27,12 @@ from signals.templates import *
 from signals.train_coda_models import CodaModel
 
 
-def load_gp_params(fname, model_type):
-    # file format:
-    # sta is_p chan band target_str model_type params
-
-    param_dict = NestedDict()
-
-    f = open(fname, 'r')
-
-    for line in f:
-        entries=line.split()
-        #        siteid = sta_to_siteid(entries[0], cursor)
-        siteid = int(entries[0])
-        phase_class = entries[1]
-        chan = entries[2]
-        short_band = entries[3]
-        my_model_type = entries[4]
-        target = entries[5]
-        params =np.array([float(x) for x in entries[6:]])
-        
-        if my_model_type == model_type:
-            param_dict[siteid][phase_class][chan][short_band][target] = params
-    f.close()
-    return param_dict
-
 class TraceModel:
 
     def __init__(self, cursor, sigmodel, model_dict, model_type=CodaModel.MODEL_TYPE_GAUSSIAN):
         self.cursor=cursor
         self.sigmodel = sigmodel
+
         self.model_dict = model_dict
         self.model_type = model_type
 
@@ -359,6 +336,7 @@ class TraceModel:
 
     def event_heat_map(self, pp, segments, base_event, map_width=3, marginalize_method="optimize", n=20, true_params = None, iid=False, run_label=None):
 
+
         evlon = base_event[EV_LON_COL]
         evlat = base_event[EV_LAT_COL]
         depth = base_event[EV_DEPTH_COL]
@@ -367,25 +345,15 @@ class TraceModel:
         orid = base_event[EV_ORID_COL]
         evid = base_event[EV_EVID_COL]
 
-        # this is more legit -- propose the event time based on the arrival time and event location
-        timed_f = lambda lon, lat: self.event_location_likelihood(self.__move_event_to(base_event, lon=lon, lat=lat), segments, pp=pp, marginalize_method=marginalize_method, true_ev_loc=(evlon, evlat), iid=iid)
-        f = timed_f
+        f = lambda lon, lat: self.event_location_likelihood(self.__move_event_to(base_event, lon=lon, lat=lat), segments, pp=pp, marginalize_method=marginalize_method, true_ev_loc=(evlon, evlat), iid=iid)
 
-        # plot the likelihood heat map
         fname = None if run_label is None else "logs/heatmap_%s_values.txt" % run_label
-        bmap, max_lonlat = plot_heat(pp, f, center=(evlon, evlat), width = map_width, title=("%d" % (evid)), n=n, fname=fname)
-        print "got maxlonlat", max_lonlat, "vs true", (evlon, evlat)
+        hm = EventHeatmap(f=f, n=n, center=(evlon, evlat), width=map_width, fname=fname)
 
-        # plot the true event, the likelihood peak, and the station locations
-        from utils.draw_earth import draw_events
-        draw_events(bmap, ((evlon, evlat),), marker="o", ms=5, mfc="none", mec="yellow", mew=2)
-        draw_events(bmap, (max_lonlat,), marker="o", ms=5, mfc="none", mec="blue", mew=2)
+        hm.set_true_event((evlon, evlat))
 
-        for s in segments:
-            sid = s['BHZ']['narrow_envelope_2.00_3.00'].stats.siteid
-            (slon, slat, selev, ar) = self.sites[sid - 1]
-
-            draw_events(bmap, ((slon, slat),),  marker="x", ms=50, mfc="none", mec="red", mew=5)
+        # assume new-style segment...
+        hm.add_stations([s['sta'] for s in segments])
 
         print "evaluating bestll and basell"
         print max_lonlat
