@@ -32,11 +32,11 @@ class GPModel:
         else:
             self.l, self.vs, self.vn = params
         self.K = self.covmat(self.X, self.X, same=True)
-    
+
     def covvec(self, x1, x2, same=False):
         if x1.shape != x2.shape:
             raise Exception("Vectors need to have the same dimension.")
-        
+
         n = np.size(x1,0)
         M = 1/np.square(self.l)*np.eye(n)
         t1 = -0.5*np.dot(np.transpose(x1-x2), np.dot(M, x1-x2))
@@ -48,7 +48,7 @@ class GPModel:
     def covmat(self, X1, X2, same=False):
         if np.size(X1,0,) != np.size(X2,0):
             raise Exception("Matrices need to have the same input dimension.")
-        
+
         n1 = np.size(X1, 1)
         n2 = np.size(X2, 1)
         K = np.zeros([n1, n2])
@@ -56,10 +56,10 @@ class GPModel:
             for j in range(n2):
                 K[i][j] = self.covvec(X1[:,i:i+1], X2[:,j:j+1], same and i==j)
         return K
-    
+
     def cov(self, x):
         return self.covmat(self.X, x)
-    
+
     def sample(self, means=None):
         d = np.size(self.X,1)
         if means == None:
@@ -93,10 +93,10 @@ class GPLearner:
         self.vs = gpm.vs
         self.vn = gpm.vn
         self.n = gpm.n
-    
+
     """
     calculate predicted output means and variances for each test input points
-    
+
     tp: test points indexed by row
     """
     def predict(self, tp):
@@ -112,21 +112,21 @@ class GPLearner:
         else:
             raise Exception("test points need to be 2D at most.")
         xd, m = xs.shape
-        
+
         if xd != self.gpm.xd:
             raise Exception("input dimension mismatch.")
-        
+
         # misc. values
         L = np.linalg.cholesky(self.K+self.vn*np.eye(self.n))
         L_inv = np.linalg.inv(L)
         L_t_inv = np.linalg.inv(np.transpose(L))
         a = np.dot(L_t_inv,np.dot(L_inv,self.y))
-    
-        # log(p(y|X)) 
+
+        # log(p(y|X))
         logp1 = -0.5*np.dot(np.transpose(self.y),a)-(self.n/2)*np.log(2*np.pi)
         logp2 = np.sum([L[i][i] for i in range(self.n)])
         logp = logp1-logp2
-    
+
         # means and variances of xs
         f_bars = np.zeros(m)
         vars = np.zeros(m)
@@ -138,20 +138,24 @@ class GPLearner:
             var = self.gpm.covvec(x,x, same=True)-np.dot(np.transpose(v),v)
             f_bars[i] = f_bar
             vars[i] = var
-        
+
         return (f_bars, vars, logp)
 
     def lklhood(self, tp, target):
         n = len(tp)
         pd = np.zeros(n)
-        
+
+
+
         def single_lklhood(mean, var, x):
             c = 1/(np.sqrt(2*np.pi*var))
             e = -0.5*np.square(x-mean)/var
             return c*np.exp(e)
-        
+
         f_bars, vars, logp = self.predict(tp)
-        
+
+
         for i in range(n):
             pd[i] = single_lklhood(f_bars[i], vars[i], target)
+
         return pd

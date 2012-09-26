@@ -95,6 +95,12 @@ def event_signal_matrix(events):
         evtdata.append(event.x)
     return np.array(evtdata)
 
+def event_locations(events):
+    locations = []
+    for event in events:
+        locations.append((event.lon, event.lat))
+    return np.array(locations)
+
 # return evid numbers which meet criteria as in utils.closest_event_pairs
 def validevids(sta):
     command ="select distinct lebo.evid from leb_origin lebo, leb_assoc leba, \

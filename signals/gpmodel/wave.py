@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import pywt
 import gaussian as gs
 
-
 def eigbasis(components, data):
     # "components" has principle components as columns
     return np.dot(components.T, data)
@@ -13,13 +12,29 @@ def reconstruct(components, eigfeatures):
 
 def rawpsd(data):
 
+
+
     cA1, cD1 = pywt.dwt(data,'db1') #cA1 0-10 Hz
     cA2, cD2 = pywt.dwt(cA1,'db1') #cA2 0-5 Hz
     cA3, cD3 = pywt.dwt(cA2, 'db1') #cA3 0-2.5Hz
     cA4, cD4 = pywt.dwt(cA3, 'db1') #cD4 1.25-2.5 Hz
-#    cA5, cD5 = pywt.dwt(cD4, 'db1') #cA5 1.25-1.875 Hz
+    cA5, cD5 = pywt.dwt(cD4, 'db1') #cA5 1.25-1.875 Hz
     y = np.abs(np.fft.rfft(cD4))
-    return y[5:-5]/15.0
+
+#    fund = 11
+#    y = np.abs(np.fft.rfft(data))
+#    n = len(y)
+#    idx = np.arange(fund,n,fund)[3:12]
+#    freqs = np.fft.fftfreq(len(data), 1.0/40)
+
+#    print freqs[idx]
+#    harmonics = y[idx]
+#    print len(harmonics)
+
+
+    a = y[5:-5]/15.0
+    return a[-20:]
+#    return y[idx]/15.0
 #    return np.log(np.abs(np.fft.rfft(data)))[20:100]
 
 
