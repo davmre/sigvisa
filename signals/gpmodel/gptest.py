@@ -10,10 +10,13 @@ from matplotlib.backends.backend_pdf import PdfPages
 import database.db
 from database.dataset import *
 import utils.geog
+from plotting.event_heatmap import EventHeatmap
 import sys
 import matplotlib.mlab as mlab
 import wave
 import os
+import traceback, pdb
+
 
 def mpd4test(fmodel, trnmodel, testdom, trndom, i, grid, n):
     margin = 0.2
@@ -33,6 +36,29 @@ def pd4test(fmodel, tmodel, testdom, trndom, i, grid):
     return pd, fullrange
 
 
+
+def gp_likelihood_fn(testevid, feature, index, params, events=None):
+    """
+    Given a test evid, train a GP on all remaining events, using
+    representation "feature" and params "param", and targeting the
+    specific feature specified by "index".
+
+    Return a function f : (lon, lat) -> likelihood of testevid's feature value at that location.
+
+    """
+    if events is None:
+        events = validevents2(ex=testevid,feature=feature)
+    inputs = inputs2d(events)
+    outputs = gpvals(events, index)
+    gpm = GPModel(inputs,params=params)
+    gpl = GPLearner(gpm, outputs)
+
+    teste = Event(testevid,feature=feature)
+    output = teste.gpval[index]
+
+    fn = lambda lon, lat : gpl.lklhood(np.array([(lat, lon),]), output)
+
+    return fn
 
 def gp2d(testevid, feature, index, params, gridmin, gridmax, res=40):
     events = validevents2(ex=testevid,feature=feature)
@@ -94,6 +120,7 @@ def princomp(A):
     score = np.dot(coeff.T,M) # projection of the data in the new space
     return coeff,score,latent
 
+
 def testmega():
 
     evids = open("events_sorted.txt", 'r')
@@ -101,61 +128,178 @@ def testmega():
     for evid in evids:
         evid = int(evid)
         print "testing evid", evid
-        dist1 = test_psd(evid)
+        dist1,dist0,dist5 = test_psd(evid)
         dist2, dist0, dist5 = testeigen(evid)
-        out.write("%d %.2f %.2f %.2f %.2f\n" % (evid, dist1, dist2, dist0, dist5))
+        out.write("%d %.2f %.2f %.2f %.2f\n" % (evid, dist1, 0, dist0, dist5))
     out.close()
 
-def test20():
-    testevid = 4653310
-    testeigen(testevid)
 
-def testeigen(testevid):
+def testmegap1():
+
+    evids = open("events_sorted1.txt", 'r')
+    out = open("outputs/locations_p1.txt", 'a')
+    for evid in evids:
+        evid = int(evid)
+        print "testing evid", evid
+        dist1,dist0,dist5 = test_psd(evid)
+        out.write("%d %.2f %.2f %.2f\n" % (evid, dist1, dist0, dist5))
+    out.close()
+
+def testmegae1():
+
+    evids = open("events_sorted1.txt", 'r')
+    out = open("outputs/locations_e1.txt", 'a')
+    for evid in evids:
+        evid = int(evid)
+        print "testing evid", evid
+        dist1,dist0,dist5 = testeigen(evid)
+        out.write("%d %.2f %.2f %.2f\n" % (evid, dist1, dist0, dist5))
+    out.close()
 
 
-    ncomponents = 15
 
-    events = validevents2(ex=testevid,feature=wave.psd)
+def testmegap2():
+
+    evids = open("events_sorted2.txt", 'r')
+    out = open("outputs/locations_p2.txt", 'a')
+    for evid in evids:
+        evid = int(evid)
+        print "testing evid", evid
+        dist1,dist0,dist5 = test_psd(evid)
+        out.write("%d %.2f %.2f %.2f\n" % (evid, dist1, dist0, dist5))
+    out.close()
+
+def testmegae2():
+
+    evids = open("events_sorted2.txt", 'r')
+    out = open("outputs/locations_e2.txt", 'a')
+    for evid in evids:
+        evid = int(evid)
+        print "testing evid", evid
+        dist1,dist0,dist5 = testeigen(evid)
+        out.write("%d %.2f %.2f %.2f\n" % (evid, dist1, dist0, dist5))
+    out.close()
+
+
+
+def testgeteigenvalues():
+    events = validevents2(ex=None)
     X = event_signal_matrix(events)
-    print X.shape
     coeff, score,latent = princomp(X)
     print "computed principle components"
+    np.savetxt('coeff.txt', coeff)
+    np.savetxt('score.txt', score)
+    np.savetxt('latent.txt', latent)
 
-    feature = lambda data: wave.eigbasis(coeff[:, ncomponents:], data)
+def get_pca_events(testevid, ncomponents):
+
+    try:
+        data = np.load('%d.npz' % testevid)
+        coeff =  data['coeff']
+        feature = lambda data: wave.eigbasis(coeff[:, :ncomponents], data)
+        print "loaded principle components from file"
+    except:
+        print "computing principle components"
+        events = validevents2(ex=testevid,feature=wave.psd)
+        X = event_signal_matrix(events)
+        print X.shape
+        coeff, score,latent = princomp(X)
+        print "computed principle components"
+        feature = lambda data: wave.eigbasis(coeff[:, :ncomponents], data)
+        np.savez("%d.npz"%testevid, coeff=coeff)
+
+
     events = validevents2(ex=testevid,feature=feature)
+    return events, feature
 
-    params = (0.4, 1, 0.1) # length, vs, vn
-    gridmin = [32.5,80] # lat, lon min
-    gridmax = [37.5,85] # lat, lon max
-    os.system("mkdir outputs/%d_eigen" %testevid) # saves results to outputs folder
+def test21():
+    testevid = 4689462
+    compevid = 4686108
+    otherevid = 4657242
+    ncomponents = 15
 
-    pdgrid = np.ones([40,40]) # cumulative prob distribution grid
+    events, feature = get_pca_events(testevid, ncomponents)
+    te = Event(testevid, feature=feature)
+    ce = Event(compevid, feature=feature)
+    oe = Event(otherevid, feature=feature)
 
-    dist0 = 0
-    dist5 = 0
-    for index in range(ncomponents): # 'index' indexes values computed by feature function
-        currpdgrid = gp2d(testevid,feature,index,params,gridmin,gridmax)
-        dist = draw2d(currpdgrid,gridmin,gridmax,testevid) # distance between maxima and actual
-        plt.title("distance = %f" %dist)
-        plt.savefig("outputs/%d_eigen/%d.png" %(testevid,index))
-        plt.close()
-        pdgrid *= currpdgrid
-
-        dist = draw2d(pdgrid,gridmin,gridmax,testevid)
-        plt.title("distance = %f" %dist)
-        plt.savefig("outputs/%d_eigen/total_%d_components.png" % (testevid, index))
-        plt.close()
-
-        if index == 0:
-            dist0 = dist
-        if index == 5:
-            dist5 = dist
-
-    dist = draw2d(pdgrid,gridmin,gridmax,testevid)
-    plt.title("distance = %f" %dist)
-    plt.savefig("outputs/%d_eigen/total.png" %testevid)
+    plt.plot(te.gpval[0:ncomponents])
+    plt.plot(ce.gpval[0:ncomponents])
+    plt.plot(oe.gpval[0:ncomponents])
+    plt.savefig("outputs/%d_eigensimple/features_sidebyside.png" % testevid)
     plt.close()
+
+    simple_events = [ce, oe]
+
+    params = (0.8, 1, 0.1) # length, vs, vn
+
+    lonbounds = [80.5, 83]
+    latbounds = [34.2, 36.8]
+    res = 100
+
+    plot_by_feature("eigensimple", simple_events, feature, testevid, params, res, lonbounds, latbounds, ncomponents)
+
+
+def test20():
+    testevid = 4689462 #4653310
+    testeigen(testevid)
+
+def plot_by_feature(label, events, feature, testevid, params, res, lonbounds, latbounds, ncomponents):
+    te = Event(testevid, feature=feature)
+
+    total_hm = EventHeatmap(f = lambda lon, lat : 1, n=res, lonbounds=lonbounds, latbounds =latbounds)
+    total_hm.add_stations("MKAR")
+    total_hm.add_events(event_locations(events))
+    total_hm.set_true_event(te.lon, te.lat)
+
+    dist0 =  999
+    dist5 = 999
+    os.system("mkdir outputs/%d_%s" %(testevid,label)) # saves results to outputs folder
+    for index in range(ncomponents): # 'index' indexes values computed by feature function
+        gp_lklhood = gp_likelihood_fn(testevid,feature,index,params, events=events)
+        hm = EventHeatmap(gp_lklhood, n=res, lonbounds=lonbounds, latbounds = latbounds)
+        hm.add_stations("MKAR")
+        hm.add_events(event_locations(events))
+        dist = hm.set_true_event(te.lon, te.lat)
+
+        total_hm = hm * total_hm
+
+        hm.savefig("outputs/%d_%s/%d.png" %(testevid,label,index), event_alpha=1, title="", colorbar=False)
+        total_hm.savefig("outputs/%d_%s/total_%d_components.png" % (testevid,label, index), event_alpha=1, title="", colorbar=False)
+        print "saved component %d, dist %.2f" % (index, dist)
+
+        if index==0:
+            dist0= total_hm.set_true_event(te.lon, te.lat)
+        if index==4:
+            dist5= total_hm.set_true_event(te.lon, te.lat)
+
+    total_hm.savefig("outputs/%d_%s/total.png" %(testevid, label), title="", colorbar=False)
+
+    dist = total_hm.set_true_event(te.lon, te.lat)
     return dist, dist0, dist5
+
+
+def testeigen(testevid):
+    ncomponents = 10
+
+    events, feature = get_pca_events(testevid, ncomponents)
+
+
+    params = (0.2, 2, 0.2) # length, vs, vn
+
+
+    locations = event_locations(events)
+    print locations
+    min_locations = np.min(locations, axis=0)
+    max_locations = np.max(locations, axis=0)
+    lonbounds = [min_locations[0], max_locations[0]]
+    latbounds = [min_locations[1], max_locations[1]]
+
+#    lonbounds = [75, 88]
+#    latbounds = [32.5, 45]
+    res = 50
+
+    return plot_by_feature("eigen", events, feature, testevid, params, res, lonbounds, latbounds, ncomponents)
 
 def test19():
 
@@ -225,32 +369,51 @@ def test18():
     plt.savefig("outputs/test18.png")
 
 def test17():
-    testevid = 4653310
+#    testevid = 4653310
+    testevid = 4689462
     test_psd(testevid)
 
 def test_psd(testevid):
 
+    print "loading events...",
     feature = wave.psd # feature function used
-    params = (0.4, 1, 0.1) # length, vs, vn
-    gridmin = [32.5,80] # lat, lon min
-    gridmax = [37.5,85] # lat, lon max
-    os.system("mkdir outputs/%d" %testevid) # saves results to outputs folder
+    events = validevents2(ex=testevid,feature=feature)
+#    compevid = 4686108
+#    otherevid = 4653310
+#    otherevids = [4649838, 4755120, 4695731, 4706242, 4649673, 4677818]
+    te = Event(testevid, feature=feature)
+#    ce = Event(compevid, feature=feature)
+#    oe = Event(otherevid, feature=feature)
+#    events = [ce, oe]
+#    for oevid in otherevids:
+#        oe = Event(oevid, feature=feature)
+#        events.append(oe)
 
-    pdgrid = np.ones([40,40]) # cumulative prob distribution grid
 
-    for index in range(20): # 'index' indexes values computed by feature function
-        currpdgrid = gp2d(testevid,feature,index,params,gridmin,gridmax)
-        dist = draw2d(currpdgrid,gridmin,gridmax,testevid) # distance between maxima and actual
-        plt.title("distance = %f" %dist)
-        plt.savefig("outputs/%d/%d.png" %(testevid,index))
-        plt.close()
-        pdgrid *= currpdgrid
+#    plt.clf()
+#    plt.plot(te.gpval)
+#    plt.plot(ce.gpval)
+#    plt.plot(oe.gpval)
+#    plt.savefig("outputs/%d_psd/features_sidebyside.png" % testevid)
 
-    dist = draw2d(pdgrid,gridmin,gridmax,testevid)
-    plt.title("distance = %f" %dist)
-    plt.savefig("outputs/%d/total.png" %testevid)
-    plt.close()
-    return dist
+
+    locations = event_locations(events)
+    print locations
+    min_locations = np.min(locations, axis=0)
+    max_locations = np.max(locations, axis=0)
+    lonbounds = [min_locations[0], max_locations[0]]
+    latbounds = [min_locations[1], max_locations[1]]
+
+    params = (.2, 1, 0.1) # length, vs, vn
+    print "done"
+
+    lonbounds = [80.5, 83]
+    latbounds = [33.5, 36.5]
+    res = 50
+#    ncomponents=len(te.gpval)
+    ncomponents=20
+
+    return plot_by_feature("psd", events, feature, testevid, params, res, lonbounds, latbounds, ncomponents)
 
 def test16():
     evid1 = 4686108
@@ -739,6 +902,20 @@ def test1():
 
     plt.show()
 
-num = sys.argv[1]
-method = "test%s" %num
-getattr(sys.modules[__name__], method)()
+
+def main():
+    num = sys.argv[1]
+    method = "test%s" %num
+    getattr(sys.modules[__name__], method)()
+
+
+if __name__ == "__main__":
+
+    try:
+        main()
+    except KeyboardInterrupt:
+        raise
+    except:
+        type, value, tb = sys.exc_info()
+        traceback.print_exc()
+        pdb.post_mortem(tb)

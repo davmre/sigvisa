@@ -11,3 +11,13 @@ database/*.csv
 *.pdf
 *.aux
 *.log
+*.tgz
+*.gz
+*.txt
+*.csv
+*.npz
+*.png
+*.txt2
+*.out
+*.heatmap
+*.DS_Store
