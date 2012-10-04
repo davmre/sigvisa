@@ -26,20 +26,6 @@ from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel
 
 
-def load_wiggle_models(cursor, sigmodel, filename):
-    f = open(filename, 'r')
-    for line in f:
-        entries = line.split()
-        siteid = sta_to_siteid(entries[0], cursor)
-        phaseid = phasename_to_id(entries[1])
-        c = sigvisa.canonical_channel_num(entries[2])
-        b = sigvisa.canonical_band_num(entries[3])
-        mean = float(entries[4])
-        std = float(entries[5])
-        order = int(entries[6])
-        params = [float(x) for x in entries[7:7+order]]
-        sigmodel.set_wiggle_process(siteid, b, c, phaseid, mean, std, np.asfarray(params))
-
 
 def main():
 

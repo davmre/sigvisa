@@ -9,7 +9,7 @@
 #include <assert.h>
 
 #include "priors/EarthModel.h"
-#include "signals/signal_structures.h"
+#include "signals/envelope_likelihood/signal_structures.h"
 
 
 #include "priors/NumEventPrior.h"

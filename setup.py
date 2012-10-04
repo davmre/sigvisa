@@ -62,7 +62,7 @@ main_sources = ['sigvisa.c', 'network.c', 'signal.c']
 infer_sources = ['infer.c', 'propose.c', 'quickselect.c']
 misc_sources = ['logging.c']
 
-sigvisa_module = Extension('sigvisa',
+sigvisa_module = Extension('sigvisa_c',
                            sources = ([os.path.join("priors", f)
                                        for f in priors_sources]
                                       + [os.path.join("signals", f)

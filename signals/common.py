@@ -22,9 +22,10 @@ class Waveform(object):
             self.my_stats = my_stats
         else:
             self.my_stats = my_stats_entries 
-            my_stats_entries.update({"filtering" : "", 
+            my_stats_entries.update({"filter_str" : "", 
                                      "freq_low": 0.0, 
-                                     "freq_high": self.segment_stats["srate"]/2.0})
+                                     "freq_high": self.segment_stats["srate"]/2.0,
+                                     "fraction_valid": np.sum([int(v) for v in self.data.mask])/float(len(self.data))})
 
         self.filtered = dict()
 
@@ -76,12 +77,21 @@ class Waveform(object):
         # numeric indices return raw waveform data
         if isinstance(key, slice):
             return self.data[key]
-
         # otherwise, we pull from the stats
         elif key in self.segment_stats:
             return self.segment_stats[key]
         elif key in self.my_stats:
             return self.my_stats[key]
+
+        # if we don't have arrivals for this waveform, look them up and cache them
+        elif key == "arrivals": # default to LEB arrivals
+            arrivals = read_arrivals(sta=self['sta'], stime=self['stime'], etime=self['etime'], evtype="leb")
+            self.segment_stats['arrivals'] = arrivals
+            return arrivals
+        elif key == "arrivals_idcx":
+            arrivals = read_arrivals(sta=self['sta'], stime=self['stime'], etime=self['etime'], evtype="idcx")
+            self.segment_stats['arrivals_idcx'] = arrivals
+            return arrivals
         else:
             raise KeyError("waveform didn't recognized key %s" % key)
 
@@ -96,7 +106,7 @@ class Waveform(object):
         name = pieces[0]
 
         fstats = self.my_stats.copy()
-        fstats["filtering"] += ";" + filter_str         
+        fstats["filter_str"] += ";" + filter_str         
 
         f = None
         if name == "env":
@@ -160,19 +170,24 @@ class Segment(object):
         new_self.filter_str = self.filter_str + ';' + filter_str
         return new_self
 
-    def as_old_style_segment(self):
+    def as_old_style_segment(self, bands=None):
         # return a dictionary mapping channels to obspy Trace objects with attributes squashed appropriately. 
         # this copies dictionaries but hopefully not data.
 
+        if bands is None:
+            bands = Sigvisa.bands
+
         old_segment = dict()
         for chan in self.chans.keys():
-            old_segment[chan] = self.chans[chan].filter(self.filter_str).as_obspy_trace()
+            old_segment[chan] = dict()
+            for band in bands:
+                old_segment[chan][band] = self.chans[chan].filter(band + ';' + self.filter_str).as_obspy_trace()
         return old_segment
 
     def __getitem__(self, key):
         if key in self.chans:
             return self.chans[key].filter(self.filter_str)
-        elif key == "filter":
+        elif key == "filter_str":
             return self.filter_str
         elif key in self.stats:
             return self.stats[key]

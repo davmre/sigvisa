@@ -1,3 +1,10 @@
+"""
+
+Code for computing the cost/likelihood of an envelope template with respect to a waveform. 
+
+"""
+
+
 import os, errno, sys, time, traceback
 import numpy as np, scipy
 
@@ -114,24 +121,6 @@ def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
     print "cost", c
 
     return c
-
-# params with peak but without arrtime
-def remove_peak(pp):
-    newp = np.zeros((pp.shape[0], NUM_PARAMS-3))
-    newp[:, 0] = pp[:, PEAK_OFFSET_PARAM-1]
-    newp[:, 1] = pp[:, CODA_HEIGHT_PARAM-1]
-    newp[:, 2] = pp[:, CODA_DECAY_PARAM-1]
-    return newp
-
-def restore_peak(peakless_params):
-    p = peakless_params
-    newp = np.zeros((p.shape[0], NUM_PARAMS-1))
-    newp[:, 0] = p[:, 0]
-    newp[:, 1] = p[:, 1]
-    newp[:, 2] = 1
-    newp[:, 3] = p[:, 1]
-    newp[:, 4] = p[:, 2]
-    return newp
 
 def load_template_params(cursor, evid, chan, band, runid, siteid):
     sql_query = "select l.time, fit.peak_delay, fit.peak_height, fit.peak_decay, fit.coda_height, fit.coda_decay, fit.acost, pid.id from sigvisa_coda_fits fit, leb_assoc leba, leb_origin lebo, static_siteid sid, static_phaseid pid, leb_arrival l where lebo.orid=leba.orid and leba.arid=fit.arid and leba.phase=pid.phase and l.arid=leba.arid and l.sta=sid.sta and lebo.evid=%d and fit.chan='%s' and fit.band='%s' and fit.runid=%d and sid.id=%d" % (evid, chan, band, runid, siteid)

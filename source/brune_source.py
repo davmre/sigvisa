@@ -1,3 +1,9 @@
+# Implements a Brune source spectrum model for natural seismic events.
+#
+# these routines refer to:
+# Sipkin, "A Correction to Body-wave Magnitude mb Based on Moment Magnitude MW". Seismological Research Letters, 2003.
+# Myers et al, "Lithospheric-scale structure across the Bolivian Andes". Journal of Geophysical Research, 1998.
+
 import numpy as np
 
 import matplotlib
@@ -5,162 +11,68 @@ matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-
-from coda_decay_common import *
-from database.dataset import *
+from source.common import *
+from sigvisa import Sigvisa
 
 def short_band_to_hz(short_band):
-    return np.median([float(x) for x in short_band.split('_')])
+    return np.median([float(x) for x in short_band.split('_')[1:]])
 
 
-class SourceSpectrumModel:
+def mb_to_M0(mb):
+    # eqn (2) in Sipkin
+    MW = 1.48*mb - 2.42
 
-    # these routines refer to:
-    # Sipkin, "A Correction to Body-wave Magnitude mb Based on Moment Magnitude MW". Seismological Research Letters, 2003.
-    # Myers et al, "Lithospheric-scale structure across the Bolivian Andes". Journal of Geophysical Research, 1998.
+    # eqn (5) in Myers
+    M0 = np.exp(1.5*MW +9.1)
 
+    return M0
 
+def source_freq_logamp(event, f, phase):
 
+    s = Sigvisa()
+    M0 = mb_to_M0(event.mb)
+    
+    rho_s = 2700 # source density, kg/m^3
+    rho_r = 2500 # receiver density, kg/m^3
+    if phase in s.P_phases:
+        R = 0.44  # radiation pattern coefficient
+        v_s = 6100 # source velocity, m/s
+        v_r = 5000 # receiver velocity, m/s
+#        sq = np.sqrt(rho_s * rho_r * v_s**5 * v_r)
+        sq = 533901911953403.5
 
-    def mb_to_M0(self, mb):
-        # eqn (2) in Sipkin
-        MW = 1.48*mb - 2.42
+        K = 1.5
 
-        # eqn (5) in Myers
-        M0 = np.exp(1.5*MW +9.1)
+    else:
+        R = 0.60
+        v_s = 3526
+        v_r = 2890
+        sq = 103111374869011.25
 
-        return M0
+        K = 0.33
+        
+    # f_0 = corner frequency
+#    c = 0.41 if phase in Sigvisa().P_phases else 0.49
+#    sigma = 10 # assume stress drop of 10
+#    f_0 = c * v_s * (sigma / M0)**(1.0/3.0)
 
+    # myers version of coda frequency
+    dsigma = 10.0 # assume stress drop of 10 bars
+    beta = 4.5 # S-wave velocity in km/s
+    f_0 = K * beta * (16 * dsigma / (7 * M0))**(1.0/3.0)
 
-    def corner_freq(self, mb, phaseid):
+    F = R / (4*np.pi * sq)
 
-        # following eqn (4) in Myers
+    logS = np.log(M0) + np.log(F)
+    logShape = np.log(1 + (f/f_0)**2   ) 
+    logamp = logS - logShape
 
-        if phaseid not in P_PHASEIDS and phaseid not in S_PHASEIDS:
-            raise Exception("unknown phaseid %d" % phaseids)
+    return logamp, f_0
 
-        dsigma = 10.0 # assume stress drop of 10 bars
-        beta = 4.5 # S-wave velocity in km/s
-        K = 1.5 if phaseid in P_PHASEIDS else 0.33
-        M0 = self.mb_to_M0(mb)
-
-        f0 = K * beta**3 * np.sqrt(16 * dsigma / (7 * M0))
-
-        return f0
-
-    def source_logamp(self, mb, phaseid, short_band=None, bandid=None):
-
-        if short_band is None:
-            short_band = bandid_to_short_band(bandid)
-
-        f = short_band_to_hz(short_band)
-        f0 = self.corner_freq(mb, phaseid)
-        M0 = self.mb_to_M0(mb)
-        W0 = 1.0 * M0 # should really be F*M0 where F is a
-                      # phase-specific constant describing the
-                      # radiation pattern, but we fold this into the
-                      # learned transfer function instead
-
-        return self.brune_logamp(W0, f, f0)
-
-    def brune_logamp(self, W0, f, f0):
-        return np.log(W0) -  2* np.log(1.0 + (f/f0))
-
-    def fit_brune(self, spectrum_dict):
-
-        fv = [(short_band_to_hz(sb), spectrum_dict[sb]) for sb in spectrum_dict.keys()]
-        cost = lambda (f0, lW0): np.sum([(v - self.brune_logamp(np.exp(lW0), f, f0))**2 for (f, v) in fv])
-
-        (f0, lW0) = scipy.optimize.fmin(func = cost, x0 = [1, 10])
-        print "best params ", f0, lW0, "give cost", cost((f0, lW0))
-
-        return (f0, np.exp(lW0))
-
-
-def plot_spectrum_dict(pp, spectrum_dict):
-    xyl = sorted([(np.log(short_band_to_hz(sb)), spectrum_dict[sb], sb) for sb in spectrum_dict.keys()])
-    x = [a[0] for a in xyl]
-    y = [a[1] for a in xyl]
-    labels = [a[2] for a in xyl]
-
-    plt.plot(x, y)
-    plt.xticks(x, labels)
-
-def plot_spectrum_params(pp, f0, W0):
-    ssm = SourceSpectrumModel()
-    x = [x for x in np.linspace(np.log(0.5), np.log(6), 80)]
-    y = [ssm.brune_logamp(W0, np.exp(lf), f0) for lf in x]
-    plt.plot(x, y)
-
-    ticks = np.linspace(np.log(0.5), np.log(6), 6)
-    plt.xticks(ticks, ["%.2f" % t for t in np.exp(ticks)])
-
-def plot_spectrum(pp, spectrum_dict=None, title="", fits=None):
-
-    f = plt.figure()
-    plt.title(title)
-
-    if spectrum_dict is not None:
-        plot_spectrum_dict(pp, spectrum_dict)
-    if fits is not None:
-        plot_spectrum_params(pp, fits[0], fits[1])
-
-    pp.savefig()
-    plt.close(f)
-
-def plot_source_spectra(siteid=58, runid=3):
-
-    cursor = db.connect().cursor()
-    ssm = SourceSpectrumModel()
-
-    short_bands = [b[16:] for b in bands]
-    chan="BHZ"
-
-    stuff = load_shape_data(cursor, chan=chan, runid=runid, short_band="4.00_6.00")
-    evids = set(stuff[:, FIT_EVID])
-
-    for evid in evids:
-
-        ev = load_event(cursor, evid)
-        evid_stuff = filter_shape_data(stuff, evids=[evid,])
-        phaseids = set(evid_stuff[:, FIT_PHASEID])
-
-        base_coda_dir = get_base_dir(int(siteid), int(runid))
-        fname = os.path.join(base_coda_dir, "spectra_%d.pdf" % (evid,))
-        pp = None
-
-        print "phaseids", phaseids
-
-        for phaseid in phaseids:
-
-            source_spec = dict()
-            reciever_spec = dict()
-            for short_band in short_bands:
-
-                source_spec[short_band] = ssm.source_logamp(ev[EV_MB_COL], phaseid, short_band)
-
-    #            sql_query = "select fit.coda_height from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta and sid.id=%d and lebo.evid=%d and pid.id=%d and fit.chan='%s'" % (siteid, evid, phaseid, chan)
-
-                plot=True
-                try:
-                    sdata = load_shape_data(cursor, chan=chan, short_band=short_band, runid=runid, phaseids=[phaseid,], evids=[evid,])
-                    print "got", sdata, "for", short_band, phaseid
-                    reciever_spec[short_band] = sdata[0][FIT_CODA_HEIGHT]
-                except:
-                    plot=False
-                    break
-
-            if plot:
-                if pp is None:
-                    pp = PdfPages(fname)
-
-                corner = ssm.corner_freq(ev[EV_MB_COL], phaseid)
-                plot_spectrum(pp, title="source site %d evid %d phase %d\n mb %f corner %f" % (siteid, evid, phaseid, ev[EV_MB_COL], corner), fits=(corner, 1.0))
-                (f0, W0) = ssm.fit_brune(reciever_spec)
-                plot_spectrum(pp, spectrum_dict=reciever_spec, title="recieved site %d evid %d phase %d\n mb %f f0 %f W0 %f" % (siteid, evid, phaseid, ev[EV_MB_COL], f0, np.log(W0)), fits=(f0, W0))
-
-        if pp is not None:
-            pp.close()
+def source_logamp(event, band, phase):
+    f = band_to_hz(band)
+    amp, corner = source_freq_logamp(event, f, phase)
+    return amp
 
 def main():
 
