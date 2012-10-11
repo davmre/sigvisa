@@ -14,9 +14,14 @@ def source_logamp(event, band, phase):
 
     return amp
 
-def source_freq_logamp(event, f, phase):
+def mm_source_logamp(event, f, phase):
 
     # Generally follows Fisk (2006)
+
+
+    P_phases = ['P', 'Pn']
+    S_phases = ['S', 'Sn']
+
 
     # P and S wave source velocities in granite, m/s
     V_sP = 5500.0
@@ -29,11 +34,13 @@ def source_freq_logamp(event, f, phase):
     w = 2 * np.pi * f
 
     # yield as a function of MB
-    W = np.exp((event.mb - 4.45)/.75)
+    W = np.exp(((event.mb - 4.45)/.75)*np.log(10))
 
     # scaled depth as a function of yield
     # h = 122 * W**(1.3/3.0)
-    h = event.depth * 1000
+    # The scaling relationship should be 
+    h = 122*pow(W,1.0/3)
+    #h = event.depth * 1000
 
     # medium density in granite kg/m^3
     rho  = 2550
@@ -42,8 +49,8 @@ def source_freq_logamp(event, f, phase):
     R_e = 162325 * W**(1.0/3.0) * (rho*g*h)**-0.417 # the initial coefficients here are magic constants inferred from the calibration event given in Fisk
     w_1 = 10914.0/R_e
 
-    # angular corner frequency
-    V_s = V_sP if phase in Sigvisa().P_phases else V_sS
+    # angular corner frequency (depends on phase type following "Fisk conjecture")
+    V_s = V_sP if phase in P_phases else V_sS
     w_0 = V_s / R_e
 
     # cavity radius
@@ -60,7 +67,7 @@ def source_freq_logamp(event, f, phase):
     # compute log-amplitude; eqn (5) in Fisk
     top = gamma * P_p * R_e * np.sqrt(w**2 + (w_1 * P_0/P_p)**2)
     bottom = ( rho * V_sP * np.sqrt(w**2 + w_1**2) * np.sqrt( (w_0**2 - gamma * w**2)**2 + w_0**2 * w**2  )  )       
-    logamp = np.log(top) - np.log(bottom)
+    logamp = (np.log(top) - np.log(bottom)) / np.log(10)
 
     # other notes from fisk:
     # might be necssary to increase the P corner frequency by 30% for larger events (above mb 5.0 or so).

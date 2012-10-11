@@ -23,51 +23,65 @@ def mb_to_M0(mb):
     MW = 1.48*mb - 2.42
 
     # eqn (5) in Myers
-    M0 = np.exp(1.5*MW +9.1)
+    M0 = np.exp((1.5*MW +9.1)*np.log(10))
 
     return M0
 
-def source_freq_logamp(event, f, phase):
 
-    s = Sigvisa()
+def brune_source_logamp(event, f, phase):
+
+    # notation roughly follows eqn (2) in Fisk, and most constants are from Fisk as well
+
+    P_phases = ['P', 'Pn']
+    S_phases = ['S', 'Sn', 'Lg']
+
     M0 = mb_to_M0(event.mb)
     
     rho_s = 2700 # source density, kg/m^3
     rho_r = 2500 # receiver density, kg/m^3
-    if phase in s.P_phases:
+
+    # choose velocities and other coefficients according to P vs S phase
+    if phase in P_phases:
         R = 0.44  # radiation pattern coefficient
         v_s = 6100 # source velocity, m/s
         v_r = 5000 # receiver velocity, m/s
-#        sq = np.sqrt(rho_s * rho_r * v_s**5 * v_r)
+
+        # hard-code the value for this term since the fifth power is
+        # annoying to compute explicitly.
+        #sq = np.sqrt(rho_s * rho_r * v_s**5 * v_r)
         sq = 533901911953403.5
+        K = 1.5 # corner frequency constant, from Myers
+        cp = 0.41
 
-        K = 1.5
-
-    else:
+    elif phase in S_phases:
         R = 0.60
         v_s = 3526
         v_r = 2890
         sq = 103111374869011.25
-
         K = 0.33
+        cp = 0.49
         
-    # f_0 = corner frequency
-#    c = 0.41 if phase in Sigvisa().P_phases else 0.49
-#    sigma = 10 # assume stress drop of 10
+    # Fisk version of corner frequency calculation:
+#    c = 0.41 if phase in P_phases else 0.49
+#    sigma = 10 # assume stress drop of 10 bars
 #    f_0 = c * v_s * (sigma / M0)**(1.0/3.0)
 
-    # myers version of coda frequency
+    # Myers version of coda frequency calculation:
     dsigma = 10.0 # assume stress drop of 10 bars
-    beta = 4.5 # S-wave velocity in km/s
-    f_0 = K * beta * (16 * dsigma / (7 * M0))**(1.0/3.0)
+    #beta = 4.5 # S-wave velocity in km/s
+    #f_0 = K * beta * (16 * dsigma / (7 * M0))**(1.0/3.0)
+    # 1 bar = 10**5 N/m**2
+    f_0 = cp * v_s*(dsigma*100000/(M0))**(1.0/3.0)
 
     F = R / (4*np.pi * sq)
 
-    logS = np.log(M0) + np.log(F)
-    logShape = np.log(1 + (f/f_0)**2   ) 
+    logS = (np.log(M0) + np.log(F)) / np.log(10)
+    logShape = (np.log(1 + (f/f_0)**2   ) ) / np.log(10)
     logamp = logS - logShape
 
-    return logamp, f_0
+    return logamp, f_0, M0
+
+
 
 def source_logamp(event, band, phase):
     f = band_to_hz(band)
