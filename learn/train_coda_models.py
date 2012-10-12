@@ -24,55 +24,6 @@ from signals.source_spectrum import *
 from utils.gp_regression import GaussianProcess, optimize_hyperparams
 from utils.kernels import InvGamma, LogNormal
 
-
-def dist_azi_depth_distfn(dad1, dad2, params):
-    azi_scale = params[0]
-    depth_scale = params[1]
-    dist = dad1[0]**(1.0/3)-dad2[0]**(1.0/3)
-    avg_dist = (dad1[0]+dad2[0])/2
-    azi = utils.geog.degdiff(dad1[1], dad2[1]) * avg_dist**(1.0/3)
-    depth = dad1[2]**(1.0/3)- dad2[2]**(1.0/3)
-
-    r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
-    return r
-
-def dist_distfn(lldda1, lldda2, params=None):
-    return lldda1[3]**(1.0/3)-lldda2[3]**(1.0/3)
-
-def depth_distfn(lldda1, lldda2, params=None):
-    return lldda1[2]**(1.0/3)-lldda2[2]**(1.0/3)
-
-def azi_distfn(lldda1, lldda2, params=None):
-    avg_dist = (lldda1[2]+lldda2[2])/2
-    return utils.geog.degdiff(lldda1[4], lldda2[4]) * avg_dist**(1.0/3)
-
-def ll_distfn(lldda1, lldda2, params=None):
-    return utils.geog.dist_km(lldda1[0:2], lldda2[0:2])
-
-def dist_azi_depth_distfn_deriv(i, dad1, dad2, params):
-    azi_scale = params[0]
-    depth_scale = params[1]
-    dist = dad1[0]**(1.0/3)-dad2[0]**(1.0/3)
-    avg_dist = (dad1[0]+dad2[0])/2
-    azi = utils.geog.degdiff(dad1[1], dad2[1]) * avg_dist**(1.0/3)
-    depth = dad1[2]**(1.0/3)- dad2[2]**(1.0/3)
-    r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
-
-    if i==0: # deriv wrt azi_scale
-        deriv = azi_scale * azi**2 / r if r != 0 else 0
-    elif i==1: # deriv wrt depth_scale
-        deriv = depth_scale * depth**2 / r if r != 0 else 0
-    else:
-        raise Exception("unknown parameter number %d" % i)
-
-    return deriv
-
-def lon_lat_depth_distfn(lld1, lld2, params=None):
-    ll = utils.geog.dist_km(lld1[0:2], lld2[0:2])
-    depth = lld1[2] - lld2[2]
-    r = np.sqrt(ll**2 + depth**2)
-    return r
-
 def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_sum_params, lldda_prod_params, optimize, pp, label):
 
     fit_data = np.reshape(fit_data, (-1, FIT_NUM_COLS))

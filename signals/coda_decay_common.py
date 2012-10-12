@@ -49,10 +49,6 @@ ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEI
 
 
 
-class NestedDict(dict):
-    def __getitem__(self, key):
-        if key in self: return self.get(key)
-        return self.setdefault(key, NestedDict())
 
 
 def sql_multi(key, values):
@@ -110,10 +106,6 @@ def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
 # print fit[HEURISTIC_FIT_B], fit[HEURISTIC_FIT_CODA_LENGTH], fit[HEURISTIC_FIT_AVG_COST]
     return fit[HEURISTIC_FIT_B] > -0.15 and fit[HEURISTIC_FIT_B] <= 0 and fit[HEURISTIC_FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[HEURISTIC_FIT_AVG_COST] <= max_avg_cost
 
-def load_event(cursor, evid):
-    sql_query = "SELECT lon, lat, depth, time, mb, orid, evid from leb_origin where evid=%d" % (evid)
-    cursor.execute(sql_query)
-    return np.array(cursor.fetchone())
 
 def load_event_arrivals(cursor, evid, siteid):
     sql_query = "select l.time from leb_arrival l, leb_origin lebo, leb_assoc leba, static_siteid sid where l.arid=leba.arid and leba.orid=lebo.orid and lebo.evid=%d and l.sta=sid.sta and sid.id=%d" % (evid, siteid)

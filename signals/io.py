@@ -1,0 +1,222 @@
+import time
+import sys, struct
+import matplotlib
+matplotlib.use('PDF')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+import numpy as np
+import numpy.ma as ma
+import scipy.optimize
+
+from optparse import OptionParser
+from obspy.core import Trace, Stream, UTCDateTime
+import obspy.signal.filter
+from obspy.signal.trigger import triggerOnset
+
+from database import db, dataset
+import utils.waveform
+import plot
+import learn
+import sys, os
+
+from signals.coda_decay_common import *
+
+
+def load_event_station(cursor, evid, sta, evtype="leb"):
+  arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
+  arrival_times = arrivals[:, DET_TIME_COL]
+  seg = load_segments(cursor, (sta,), np.min(arrival_times)-10, np.max(arrival_times)+200)[0]
+  seg.stats['arrivals'] = arrivals
+
+  return seg
+
+def has_trace(cursor, sta=None, start_time=None, end_time=None, evid=None, earthmodel=None, siteid=None):
+
+    if start_time is None or end_time is None:
+      arr_times, phaseids = predict_event_arrivals(cursor, earthmodel, evid, siteid, [1,2,4,5])
+      arr_times = [a for a in arr_times if a > 0]
+      start_time = np.min(arr_times)-5
+      end_time = np.max(arr_times) + 300
+
+    if sta is None:
+        sta = siteid_to_sta(siteid, cursor)
+
+    sql = "select distinct chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (sta, start_time, end_time)
+    cursor.execute(sql)
+    wfdiscs = cursor.fetchall()
+    wfdiscs = filter(lambda x: x[0] in ["BHE", "BHN", "BHZ", "BH1", "BH2"], wfdiscs)
+
+    s1 = map(lambda x: [x], wfdiscs)
+    s2 = reduce(lambda a,b : a+b, aggregate_segments(s1), [])
+    s3 = [s for s in s2 if max(s[1], float(start_time)) < min(s[2], float(end_time))]
+
+    return len(s3) > 0
+
+
+def load_segments(cursor, stations, start_time, end_time, chans=None):
+  """
+  Return a list of waveform segments corresponding to the given channels
+  at the given stations over the given time period.
+  """
+
+  segments = []
+
+  if chans is None:
+    chans = Sigvisa.chans
+
+  # standardize channel names to avoid duplicates
+  chans = [canonical_channel_name(c)[0] for c in chans]
+
+  for (idx, sta) in enumerate(stations):
+
+    waves = []
+
+    for (chanidx, chan) in enumerate(chans):
+        try:
+          wave = utils.waveform.fetch_waveform(sta, chan, start_time, end_time)
+          print trace
+          print " ... successfully loaded."
+        except (utils.waveform.MissingWaveform, IOError):
+          print " ... not found, skipping."
+          continue
+        waves.append(wave)
+
+    segment = Segment(waves)
+    segments.append(segment)
+
+  return segments
+
+
+
+def fetch_waveform(station, chan, stime, etime):
+  """
+  Returns a single Waveform for the given channel at the station in
+  the given interval. If there are periods for which data are not
+  available, they are marked as missing data.
+  """
+  cursor = database.db.connect().cursor()
+
+  # scan the waveforms for the given interval
+  samprate = None
+
+  # the global_data array is initialized below once we know the
+  # samprate.za
+  global_data = None
+  global_stime = stime
+  global_etime = etime
+
+  chan, chan_list = canonical_channel_name(chan)
+
+  while True:
+
+    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_values("chan", chan_list), stime, stime)
+
+    cursor.execute(sql)
+    waveform_values = cursor.fetchone()
+
+    if waveform_values is None:
+      raise MissingWaveform("Can't find data for sta %s chan %s time %d"
+                            % (station, chan, stime))
+
+    waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
+    cursor.execute("select id from static_siteid where sta = '%s'" % (station))
+    try:
+      if station=="MK31":
+        siteid=66
+      else:
+        siteid = cursor.fetchone()[0]
+    except:
+      raise MissingWaveform("couldn't get siteid for station %s" % (station))
+
+    # check the samprate is consistent for all waveforms in this interval
+    assert(samprate is None or samprate == waveform['samprate'])
+    if samprate is None:
+      samprate = waveform['samprate']
+
+      # initialize the data array full of nans.
+      # these will be replace by signals that we load.
+      global_data = np.empty((int((global_etime-global_stime)*samprate),))
+      global_data.fill(np.nan)
+
+    # at which offset should we start collecting samples
+    first_off = int((stime-waveform['time'])*samprate)
+    # how many samples are needed remaining
+    desired_samples = int(round((etime - stime) * samprate))
+    # how many samples are actually available
+    available_samples = waveform['nsamp'] - first_off
+    # grab the available and needed samples
+    try:
+      wave = _read_waveform_from_file(waveform, first_off,
+                                       min(desired_samples, available_samples))
+    except IOError:
+      raise MissingWaveform("Can't find data for sta %s chan %s time %d"
+                            % (station, chan, stime))
+
+    # copy the data we loaded into the global array
+    t_start = max(0, int((waveform['time'] - global_stime) *samprate))
+    t_end = t_start + len(wave)
+    global_data[t_start:t_end] = wave
+
+    # do we have all the data that we need
+    if desired_samples <= available_samples:
+      break
+
+    # otherwise move the start time forward for the next file
+    stime = waveform['endtime']
+    # and adust the end time to ensure that the correct number of samples
+    # will be selected in the next file
+    etime = stime + (desired_samples - available_samples) / float(samprate)
+
+  masked_data = ma.masked_invalid(global_data)
+
+  return Waveform(data=np.array(masked_data), sta=station, stime=stime, srate=samprate, chan=chan)
+
+  #return samprate, np.array(data)
+
+def _read_waveform_from_file(waveform, skip_samples, read_samples):
+  """
+  waveform -- row queried from wfdisc table
+  """
+  # open the waveform file
+  #filename = os.path.join(*(waveform['dir'].split("/")
+  #                          + [waveform['dfile']]))
+  filename = waveform['dir'] + waveform['dfile']
+  try:
+    datafile = open(filename, "rb")
+  except IOError, e:
+    print "cannot open file ", filename
+    # the file could be compressed try .gz extension
+    datafile = gzip.open(filename+".gz")
+
+  assert(waveform['datatype'] in ["s3", "s4"])
+  bytes_per_sample = int(waveform['datatype'][-1])
+
+  # seek to the desired offset
+  datafile.seek(waveform['foff'] + skip_samples * bytes_per_sample)
+  # and read the number of bytes required
+  assert(read_samples <= waveform['nsamp'])
+  bytes = datafile.read(read_samples * bytes_per_sample)
+  datafile.close()
+
+  # now convert the bytes into an array of integers
+
+  data = np.ndarray((read_samples,), int)
+
+  if waveform['datatype'] == "s4":
+    data = struct.unpack(">%di" % read_samples, bytes)
+
+  else:
+    # s3
+    for dest in xrange(read_samples):
+      src = dest * 3
+
+      # if the first byte's MSB is set then add an FF to the number
+      first = struct.unpack("B", bytes[src])[0]
+      if first >= 128:
+        data[dest] = struct.unpack(">i", "\xff" + bytes[src:src+3])[0]
+      else:
+        data[dest] = struct.unpack(">i", "\x00" + bytes[src:src+3])[0]
+
+  # convert the raw values into nm (nanometers)
+  calib = float(waveform['calib'])
+  return [float(x) * calib for x in data]

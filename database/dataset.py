@@ -29,7 +29,6 @@ import numpy as np
 from time import strftime, gmtime
 from math import ceil
 import os
-from obspy.core import Trace, Stream, UTCDateTime
 
 # local imports
 import db
@@ -180,6 +179,53 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", n
 
   return detections, arid2num
 
+
+def read_event(cursor, evid, evtype="leb"):
+    sql_query = "SELECT lon, lat, depth, time, mb, orid, evid from %s_origin where evid=%d" % (evtype, evid)
+    cursor.execute(sql_query)
+    return np.array(cursor.fetchone())
+
+def read_event_detections(cursor, evid, stations=None, evtype="leb"):
+
+    if stations is not None:
+      stalist_str = str(stations).replace('[', '(').replace(']', ')')
+      sta_cmd = "site.sta in " + stalist_str
+    else:
+      sta_cmd = "site.statype='ss'"
+
+
+      sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" %  (evtype, evtype, evtype, int(evid), sta_cmd)
+      cursor.execute(sql_query)
+      detections = np.array(cursor.fetchall())
+      return np.array(detections)
+
+def read_station_detections(cursor, sta, start_time, end_time,arrival_table="idcx_arrival"):
+
+  print "reading detections... "
+
+  sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s iarr, static_siteid site, static_phaseid ph where site.sta='%f' iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.time between %d and %d order by iarr.time, iarr.arid" %  (arrival_table, sta, start_time, end_time)
+
+  cursor.execute(sql_query)
+
+  detections = np.array(cursor.fetchall())
+
+  sql_query = "select sta from static_siteid site order by id"
+  cursor.execute(sql_query)
+  sitenames = np.array(cursor.fetchall())[:,0]
+  corr_dict = load_az_slow_corr(os.path.join('parameters', 'sasc'))
+  #print len(corr_dict), "SASC corrections loaded"
+
+  for det in detections:
+
+    # apply SASC correction
+    (det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
+     det[DET_DELSLO_COL]) = corr_dict[sitenames[det[DET_SITE_COL]]].correct(
+      det[DET_AZI_COL], det[DET_SLO_COL], det[DET_DELAZ_COL],
+      det[DET_DELSLO_COL])
+
+  return detections
+
+
 def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
                runid=None):
   if evtype == "visa":
@@ -235,9 +281,7 @@ def read_sites_by_name(cursor):
   cursor.execute("select sta from static_siteid order by id")
   names = [r[0] for r in cursor.fetchall()]
 
-  name2site = dict(zip(names, sites))
-
-  return name2site, names
+  return dict(zip(names, sites)), dict(zip(names, range(len(names))))
 
 
 def read_sites(cursor):

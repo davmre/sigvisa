@@ -465,27 +465,40 @@ def get_first_p_s_arrivals(cursor, evid, siteid):
     phases= [phaseid_to_name(x) for x in phaseids if x is not None]
     return first_p_arrival, first_s_arrival, arrivals, phases
 
-def load_segments(cursor, evid, siteid, ar_noise=True, chans=None, bands=None):
-    print "bands", bands
-    print "chans", chans
-    (arrival_segment, noise_segment, all_arrivals, all_arrival_phases, all_arrival_arids) = load_signal_slice(cursor, evid, siteid, load_noise = True, learn_noise=ar_noise, chans=chans, bands=bands)
-    arrival_segment = arrival_segment[0]
+def load_segments(cursor, evid, sta, ar_noise=True, chans=None, bands=None):
 
-    # reject segments too short to do an accurate coda fit
-    c = arrival_segment.keys()[0]
-    b = arrival_segment[c].keys()[0]
-    tr = arrival_segment[c][b]
-    npts = tr.stats.npts
-    srate = tr.stats.sampling_rate
-    if npts < srate * MIN_SEGMENT_LENGTH:
-        raise Exception("minimum segment length %.2fs, skipping segment withlength %.2f" % (MIN_SEGMENT_LENGTH,  npts/srate))
+    seg = load_event_station(cursor, evid, sta).filter("env")
+    if seg['real_len'] < MIN_SEGMENT_LENGTH
+        raise Exception("minimum segment length %.2fs, skipping segment withlength %.2f" % (MIN_SEGMENT_LENGTH,  npts/srate))    
+
+    arrival_segment = seg.as_old_style_segment(bands)
+
+
+    for chan in arrival_segment.keys():
+        for band in arrival_segment[chan].keys():
+            a = arrival_segment[chan][band]
+            armodel = Sigvisa().get_noise_model(sta=sta, chan=chan, filter_str= (band + ";env"), time=seg['stime'])
+            a.stats.noise_floor = armodel.c
+            a.stats.noise_model = armodel
+
+    smoothed_segment = seg.filter("smooth").as_old_style_segment(bands)
+    for chan in arrival_segment.keys():
+        for band in arrival_segment[chan].keys():
+            a = arrival_segment[chan][band]
+            armodel = Sigvisa().get_noise_model(sta=sta, chan=chan, filter_str= (band + ";env;smooth"), time=seg['stime'])
+            a.stats.noise_floor = armodel.c
+            a.stats.noise_model = armodel
+
+    arrivals = seg['arrivals']
+    all_arrivals = arrivals[:, DET_TIME_COL]
+    all_arrival_phases = Sigvisa().phasenames(arrivals[:, DET_PHASE_COL])
+    all_arrival_arids = arrivals[:, DET_ARID_COL]
 
     # package together information about arriving phases into a single
     # dictionary
     arrs = {"all_arrivals": all_arrivals, "all_arrival_phases": all_arrival_phases, "all_arrival_arids": all_arrival_arids}
     arrs["first_p_arrival"], arrs["first_s_arrival"], arrs["arrivals"], arrs["arrival_phases"] = get_first_p_s_arrivals(cursor, evid, siteid)
 
-    smoothed_segment = smooth_segment(arrival_segment, bands=bands, chans=chans)
     return arrival_segment, smoothed_segment, arrs
 
 
@@ -540,6 +553,7 @@ def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_envelop
 
 
     # load the relevant traces
+
     arrival_segment, smoothed_segment, arrs = load_segments(cursor, evid, siteid, ar_noise=False, chans=[chan,], bands=[band,])
     tr = arrival_segment[chan][band]
     smoothed = smoothed_segment[chan][band]

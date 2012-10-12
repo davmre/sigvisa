@@ -21,3 +21,15 @@ database/*.csv
 *.out
 *.heatmap
 *.DS_Store
+/TAGS
+/earthmodel.c
+/logs/codas_2_1338747082/all_data
+/res1
+/signals/orphaned_code.py
+/signals/scratch
+/start_time,
+/testfn
+/testfn.c
+/tests.c
+/valgrind-python.supp
+/vg

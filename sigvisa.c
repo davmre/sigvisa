@@ -37,10 +37,10 @@ static PyMethodDef SigModel_methods[] = {
    "get_signals() "
    "-> signals\n"},
   {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
-   "mean_travel_time(evlon, evlat, evdepth, siteid, phaseid)"
+   "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1)"
    " -> travel time in seconds"},
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
-   "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid, phaseid)"
+   "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid-1, phaseid-1)"
    " -> log probability"},
   {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
    "set_fake_detections(fake_detections) "

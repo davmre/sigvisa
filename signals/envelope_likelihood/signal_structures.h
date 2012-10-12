@@ -1,7 +1,7 @@
 #ifndef SIGNAL_STRUCTURES_H
 #define SIGNAL_STRUCTURES_H
 
-#include "../signal.h"
+#include "../../signal.h"
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 

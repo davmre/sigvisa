@@ -105,6 +105,7 @@ shortd1 = d1.data[2000:4000] - np.mean(d1.data)
 shortd2 = d2.data[:1024] - np.mean(d2.data)
 longd1 = d1.data[:10000] - np.mean(d1.data)
 
+d1list = [d1.data[:2000], d1.data[2000:4000], d1.data[4000:6000]]
 
 def ploterror(data, p, loc, test, numbin=100):
     lnr = learner.ARLearner(data)
@@ -186,13 +187,14 @@ def plotaic(data, d, loc):
 
 #plotaic(longd1, 50, 'MBAR')
 #ploterror(longd1, 20, 'MBAR', longd1)
-plotcompare(longd1, 20, 'MBAR')
+#plotcompare(longd1, 20, 'MBAR')
 
 #hello hi
 #resolved
 
 #plotpsd(shortd1,3,'MBAR')
 #plotcv(shortd1,50,'psd','MBAR')
-#plotcv(shortd1,50,'raw','MBAR')
+
+plotcv(d1list,50,'raw','MBAR')
 
 
