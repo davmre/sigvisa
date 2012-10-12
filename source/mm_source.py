@@ -2,7 +2,7 @@ import numpy as np
 
 from source.common import *
 
-from sigvisa import Sigvisa
+# from sigvisa import Sigvisa
 
 
 
@@ -14,7 +14,7 @@ def source_logamp(event, band, phase):
 
     return amp
 
-def mm_source_logamp(event, f, phase):
+def source_freq_logamp(event, f, phase):
 
     # Generally follows Fisk (2006)
 

@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 from source.common import *
-from sigvisa import Sigvisa
+# from sigvisa import Sigvisa
 
 def short_band_to_hz(short_band):
     return np.median([float(x) for x in short_band.split('_')[1:]])
@@ -28,7 +28,7 @@ def mb_to_M0(mb):
     return M0
 
 
-def brune_source_logamp(event, f, phase):
+def source_freq_logamp(event, f, phase):
 
     # notation roughly follows eqn (2) in Fisk, and most constants are from Fisk as well
 
