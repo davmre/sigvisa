@@ -13,7 +13,7 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 
-#include "../sigvisa.h"
+#include "../../sigvisa.h"
 #include "matrix_util.h"
 #include "kalman_filter.h"
 

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 
 from distutils.core import setup, Extension
 import numpy as np
@@ -48,11 +48,11 @@ extra_compile_args = ['-std=c99', '-g', '-O0']
 extra_link_args = []
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
-                  'EventMagPrior.c', 
+                  'EventMagPrior.c',
                   'EarthModel.c', 'ArrivalTimePrior.c', 'ArrivalTimeJointPrior.c',
                   'ArrivalAzimuthPrior.c', 'ArrivalSlownessPrior.c',
                   'ArrivalAmplitudePrior.c',
-                  'Poisson.c', 
+                  'Poisson.c',
                   'Gaussian.c', 'Gamma.c']
 
 signals_sources = ['SignalModelCommon.c', 'SignalModelUtil.c', 'SpectralEnvelopeModel.c', 'matrix_util.c', 'score_sig.c', 'kalman_filter.c', 'python_interface.c']
@@ -65,7 +65,7 @@ misc_sources = ['logging.c']
 sigvisa_module = Extension('sigvisa_c',
                            sources = ([os.path.join("priors", f)
                                        for f in priors_sources]
-                                      + [os.path.join("signals", f)
+                                      + [os.path.join("signals/envelope_likelihood", f)
                                        for f in signals_sources]
                                       + [os.path.join("infer", f)
                                          for f in infer_sources]

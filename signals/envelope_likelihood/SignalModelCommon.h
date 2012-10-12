@@ -2,7 +2,7 @@
 #define SIGNAL_MODEL_COMMON
 
 #include <Python.h>
-#include "../sigvisa.h"
+#include "../../sigvisa.h"
 
 void init_signal_model(SignalModel_t * p_model, char * model_name, int numsites);
 void uninit_signal_model(SignalModel_t * p_model);

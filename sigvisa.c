@@ -304,7 +304,7 @@ static PyMethodDef sigvisaMethods[] = {
 };
 
 
-void initsigvisa(void)
+void initsigvisa_c(void)
 {
   PyObject * m;
 
@@ -317,7 +317,7 @@ void initsigvisa(void)
     return;
 
 
-  m = Py_InitModule3("sigvisa", sigvisaMethods,
+  m = Py_InitModule3("sigvisa_c", sigvisaMethods,
                      "Signal-Based Vertically Integrated Seismological Processing");
   import_array();/* Must be present for NumPy. Called first after above line.*/
 

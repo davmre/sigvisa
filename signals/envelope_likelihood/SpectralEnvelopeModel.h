@@ -1,7 +1,7 @@
 
 #include <Python.h>
 
-#include "../sigvisa.h"
+#include "../../sigvisa.h"
 
 
 void Spectral_Envelope_Model_Init_Params(Spectral_Envelope_Model_t * p_params, int numsites);

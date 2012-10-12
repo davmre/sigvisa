@@ -83,10 +83,9 @@ int pydict_get_string(PyObject * py_dict, char * key, char ** value);
 
 #include "signal.h"
 
-#include "signals/SignalPrior.h"
-#include "signals/SpectralEnvelopeModel.h"
-#include "signals/SignalModelCommon.h"
-#include "signals/python_interface.h"
+#include "signals/envelope_likelihood/SpectralEnvelopeModel.h"
+#include "signals/envelope_likelihood/SignalModelCommon.h"
+#include "signals/envelope_likelihood/python_interface.h"
 
 #include "priors/score_sig.h"
 #include "infer/infer.h"
