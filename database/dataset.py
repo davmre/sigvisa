@@ -96,6 +96,16 @@ def read_timerange(cursor, label, hours, skip):
 
   return stime, etime
 
+def read_event(cursor, evid, evtype="leb", runid=None):
+  if runid is None:
+    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
+                   "where evid=%d" % (evtype, int(evid)))
+  else:
+    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
+                   "where evid=%d" % (evtype, int(evid)))
+  event = np.array(cursor.fetchone())
+  return event
+
 def read_events(cursor, start_time, end_time, evtype, runid=None):
   if runid is None:
     cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
@@ -225,7 +235,9 @@ def read_sites_by_name(cursor):
   cursor.execute("select sta from static_siteid order by id")
   names = [r[0] for r in cursor.fetchall()]
 
-  return dict(zip(names, sites))
+  name2site = dict(zip(names, sites))
+
+  return name2site, names
 
 
 def read_sites(cursor):
