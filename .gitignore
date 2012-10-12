@@ -1,4 +1,5 @@
 *~
+.#*
 *.pyc
 *.so
 parameters/*.txt
@@ -33,3 +34,19 @@ database/*.csv
 /tests.c
 /valgrind-python.supp
 /vg
+*all_data
+*all_data.bak
+*.data
+*.data_backup
+*.heat
+/data
+/docs/design.idx
+/docs/design.lof
+/docs/design.lot
+/docs/design.toc
+/pn_evids
+/python_old
+/logs/duplicates
+/test_orids
+/gen_templates.sh
+/test_orids3
