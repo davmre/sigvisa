@@ -71,7 +71,26 @@ class TestSegments(unittest.TestCase):
         filter_str = "freq_2.0_3.0;env;smooth"
         s1 = self.seg.with_filter(filter_str)
         s2 = self.seg.with_filter(filter_str)
-        self.assertIs(s1['BHZ'], s2['BHZ'])
+        self.assertIs(s1, s2)
+
+    def test_segment_filter_order(self):
+        filter_str = "freq_2.0_3.0;env;smooth"
+        reorder_str = "env;freq_2.0_3.0;smooth"
+
+        partial_str1 = "freq_2.0_3.0"
+        partial_str2 = "env;smooth"
+
+        s1 = self.seg.with_filter(filter_str)
+        s2 = self.seg.with_filter(reorder_str)
+        s3 = self.seg.with_filter(partial_str1).with_filter(partial_str2)
+        s4 = self.seg.with_filter(partial_str2).with_filter(partial_str1)
+
+        self.assertIs(s1, s2)
+        self.assertIs(s1, s3)
+        self.assertIs(s1, s4)
+
+        s5 = self.seg.with_filter(partial_str2)
+        self.assertIsNot(s1, s5)
 
     def test_waveform_filter_caching_full(self):
         filter_str = "freq_2.0_3.0;env;smooth"
