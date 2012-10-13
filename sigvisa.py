@@ -1,6 +1,6 @@
 import numpy as np
-
-#from database import db, dataset
+import learn
+from database import db, dataset
 
 class NestedDict(dict):
     def __getitem__(self, key):
@@ -24,20 +24,20 @@ class Sigvisa(object):
         et = st + 24 * 3600
         dbconn = db.connect()
         self.cursor = dbconn.cursor()
-        self.sites = dataset.read_sites(cursor)
-        self.stations, self.siteids = dataset.read_sites_by_name(cursor)
-        self.site_up = dataset.read_uptime(cursor, st, et)
-        self.phasenames, self.phasetimedef = dataset.read_phases(cursor)
+        self.sites = dataset.read_sites(self.cursor)
+        self.stations, self.siteids = dataset.read_sites_by_name(self.cursor)
+        self.site_up = dataset.read_uptime(self.cursor, st, et)
+        self.phasenames, self.phasetimedef = dataset.read_phases(self.cursor)
         self.phaseids = dict(zip(self.phasenames, range(len(self.phasenames))))
         self.earthmodel = learn.load_earth("parameters", self.sites, self.phasenames, self.phasetimedef)
         self.sigmodel = learn.load_sigvisa("parameters", st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
-        
+
 
 
         self.noise_models = NestedDict()
 
 
-        self.bands = ("freq_2_3",)
+        self.bands = ("freq_2.0_3.0",)
         self.chans = ('BHZ',)
         self.phases = ('P', 'Pn', 'Pg', 'S', 'Sn', 'Lg')
 
@@ -75,7 +75,7 @@ class Sigvisa(object):
         else:
             if sta is None or chan is None or filter_str is None or time is None:
                 raise Exception("missing argument to get_noise_model!")
-        
+
 
         hour = int(time/3600)
 
@@ -90,7 +90,7 @@ class Sigvisa(object):
         arrivals = read_station_detections(sta, chan, noise_hour_start, noise_hour_end)
         arrival_times = arrivals[:, DET_TIME_COL]
 
-        # load waveforms for five minutes within the previous hour 
+        # load waveforms for five minutes within the previous hour
         waves = []
         while len(waves) < 5:
             minute = np.random.randint(60)*60+noise_hour_start
@@ -119,13 +119,12 @@ class Sigvisa(object):
         armodel = ARModel(params, em, c = ar_learner.c)
         self.noise_models[sta][chan][filter_str][order][hour] = armodel
         return armodel
-    
-        
-    def arriving_phases(self, event, sta):
 
+
+    def arriving_phases(self, event, sta):
         siteid = self.siteids[sta]
-        phases = [p for p in self.phases where self.sigvisa.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, self.phaseids[phase]-1) > 0]
+        phases = [p for p in self.phases if self.sigvisa.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, self.phaseids[phase]-1) > 0 ]
         return phases
 
 
-                
+

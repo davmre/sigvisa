@@ -21,10 +21,40 @@ import priors.ArrivalPhasePrior
 import priors.ArrivalSNR
 import priors.ArrivalAmplitudePrior
 
-import sigvisa, sigvisa_util
+import sigvisa_c, sigvisa
+
+def log_trace(trc, filename, format):
+
+  real_fn = 'logs/%s.pdf' % (filename)
+
+#  while (os.path.exists(real_fn)):
+#    real_fn = real_fn + "_"
+
+  print "logging to file", real_fn
+
+  pp = PdfPages(real_fn)
+
+  siteid = trc.stats["siteid"]
+  start_time = trc.stats["starttime_unix"]
+  if trc.stats["window_size"] is not None:
+    srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
+    npts = trc.stats.npts_processed
+  else:
+    srate = trc.stats.sampling_rate
+    npts = trc.stats.npts
+  end_time = start_time + npts/srate
+
+  text = "%s: siteid %d" % (filename, siteid)
+  print text
+  utils.waveform.plot_trace(trc, title = text, format=format)
+  pp.savefig()
+  pp.close()
+
+  return True
+
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
-  model = sigvisa.EarthModel(sites, phasenames, phasetimedef,
+  model = sigvisa_c.EarthModel(sites, phasenames, phasetimedef,
                              os.path.join(param_dirname, "ttime", "iasp91."),
                              "",
                              os.path.join(param_dirname,"GA_dist_depth_ranges"),
@@ -37,7 +67,7 @@ def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up
                  sites, phasenames, phasetimedef, load_signal_params = True):
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
-  sigmodel = sigvisa.SigModel(earthmodel, start_time, end_time, signal_model_name,
+  sigmodel = sigvisa_c.SigModel(earthmodel, start_time, end_time, signal_model_name,
                               os.path.join(param_dirname, "NumEventPrior.txt"),
                               os.path.join(param_dirname, "EventLocationPrior.txt"),
                               os.path.join(param_dirname, "EventMagPrior.txt"),
@@ -45,7 +75,7 @@ def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up
                               os.path.join(param_dirname, "ArrivalAzimuthPrior.txt"),
                               os.path.join(param_dirname, "ArrivalSlownessPrior.txt"),
                               os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
-                              sigvisa_util.log_trace)
+                              log_trace)
 
 #  if (load_signal_params):
 #    sigmodel.set_all_signal_params(priors.SignalPrior.read_params(os.path.join(param_dirname, "EnvelopeSignalModel.txt")))
