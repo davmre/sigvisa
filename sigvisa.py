@@ -25,7 +25,7 @@ class Sigvisa(object):
         dbconn = db.connect()
         self.cursor = dbconn.cursor()
         self.sites = dataset.read_sites(self.cursor)
-        self.stations, self.siteids = dataset.read_sites_by_name(self.cursor)
+        self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(self.cursor)
         self.site_up = dataset.read_uptime(self.cursor, st, et)
         self.phasenames, self.phasetimedef = dataset.read_phases(self.cursor)
         self.phaseids = dict(zip(self.phasenames, range(len(self.phasenames))))
@@ -122,7 +122,7 @@ class Sigvisa(object):
 
 
     def arriving_phases(self, event, sta):
-        siteid = self.siteids[sta]
+        siteid = self.name_to_siteid_minus1[sta] + 1
         phases = [p for p in self.phases if self.sigvisa.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, self.phaseids[phase]-1) > 0 ]
         return phases
 

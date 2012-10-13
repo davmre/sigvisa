@@ -18,7 +18,7 @@ evid = options.evid
 cursor = database.db.connect().cursor()
 phases = read_phases(cursor)[0]
 
-name2site, sitenames = read_sites_by_name(cursor)
+sites, name2siteid, siteid2name = read_sites_by_name(cursor)
 
 ev = read_event(cursor, evid)
 
@@ -31,9 +31,9 @@ dets = cursor.fetchall()
 
 print "sta\tsiteid\tarr\tphase\tsnr\tdist\t|\ttime\t\tamp\tazi\tslo"
 for det in dets:
-    sta = sitenames[det[DET_SITE_COL]]
-    site_ll = name2site[sta][0:2]
-    site_type = 'ar' if name2site[sta][3]==1 else 'ss'
+    sta = siteid2name[det[DET_SITE_COL]]
+    site_ll = sites[sta][0:2]
+    site_type = 'ar' if sites[sta][3]==1 else 'ss'
     ev_ll = ev[0:2]
     dist = utils.geog.dist_km(site_ll, ev_ll)
     phase = phases[det[DET_PHASE_COL]]
