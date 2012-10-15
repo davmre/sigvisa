@@ -1,3 +1,6 @@
+# Given a set of stations, find events whihch are detected at all stations. Also find events which are detected at all but one station.
+
+
 import database.db
 from database.dataset import *
 import time
@@ -51,7 +54,7 @@ def main():
         siteids = [int(s) for s in options.siteids.split(',')]
     else:
         siteids = []
-    
+
     if options.runids is not None:
         runids = [int(s) for s in options.runids.split(',')]
         runids_source = ", sigvisa_coda_fits fit"
@@ -88,7 +91,7 @@ def main():
 
     all_evids = reduce(lambda a,b : a.union(b), evids.values())
 
-   
+
     for sta in stas:
         siteid = siteids[stas.index(sta)]
         potential_examples = all_evids
@@ -100,7 +103,7 @@ def main():
 
         print "checking %d possible examples at sta %s" % (len(potential_examples), sta)
         confirmed_examples = [evid for evid in potential_examples if sigvisa_util.has_trace(cursor, siteid=siteid, sta=sta, evid=evid, earthmodel=earthmodel)]
-                
+
         print "events detected everywhere except %s:" % sta
         print_event_set(cursor, confirmed_examples, siteids, stas, sites, runids_source, runids_cond, exclude_sta=sta)
 

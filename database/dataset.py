@@ -66,6 +66,12 @@ MAX_DEPTH = 700.0
 
 AVG_EARTH_RADIUS_KM = 6371.0            # when modeled as a sphere
 
+def sql_multi(key, values):
+    return "(" + " or ".join(["%s=%s" % (key, val) for val in values])  + ")"
+
+def sql_multi_str(key, values):
+    return "(" + " or ".join(["%s='%s'" % (key, val) for val in values])  + ")"
+
 def read_timerange(cursor, label, hours, skip):
   # determine the start and end time for the specified label
   cursor.execute("select start_time, end_time from dataset where "
@@ -94,6 +100,16 @@ def read_timerange(cursor, label, hours, skip):
                      % (skip, hours))
 
   return stime, etime
+
+def read_event(cursor, evid, evtype="leb", runid=None):
+  if runid is None:
+    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
+                   "where evid=%d" % (evtype, int(evid)))
+  else:
+    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
+                   "where evid=%d" % (evtype, int(evid)))
+  event = np.array(cursor.fetchone())
+  return event
 
 def read_events(cursor, start_time, end_time, evtype, runid=None):
   if runid is None:
@@ -177,17 +193,19 @@ def read_event(cursor, evid, evtype="leb"):
 
 def read_event_detections(cursor, evid, stations=None, evtype="leb"):
 
-    if stations is not None:
-      stalist_str = str(stations).replace('[', '(').replace(']', ')')
-      sta_cmd = "site.sta in " + stalist_str
-    else:
-      sta_cmd = "site.statype='ss'"
+  if stations is not None:
+    s = str(stations)
+    stalist_str = s.replace('[', '(').replace(']', ')').replace(',)', ')')
+    sta_cmd = "site.sta in " + stalist_str
+  else:
+    sta_cmd = "site.statype='ss'"
 
+  sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" %  (evtype, evtype, evtype, int(evid), sta_cmd)
 
-      sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" %  (evtype, evtype, evtype, int(evid), sta_cmd)
-      cursor.execute(sql_query)
-      detections = np.array(cursor.fetchall())
-      return np.array(detections)
+  cursor.execute(sql_query)
+  detections = np.array(cursor.fetchall())
+
+  return np.array(detections)
 
 def read_station_detections(cursor, sta, start_time, end_time,arrival_table="idcx_arrival"):
 
@@ -271,7 +289,9 @@ def read_sites_by_name(cursor):
   cursor.execute("select sta from static_siteid order by id")
   names = [r[0] for r in cursor.fetchall()]
 
-  return dict(zip(names, sites)), dict(zip(names, range(len(names))))
+
+  # returns stations, name_to_siteid_minus1, siteid_minus1_to_name
+  return dict(zip(names, sites)), dict(zip(names, range(len(names)))), names
 
 
 def read_sites(cursor):

@@ -12,7 +12,7 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 
-#include "../sigvisa.h"
+#include "../../sigvisa.h"
 #include "SignalModelUtil.h"
 
 

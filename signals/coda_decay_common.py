@@ -11,7 +11,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
 import sigvisa
-import learn, sigvisa_util
+import learn
 import signals.SignalPrior
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel, ErrorModel
@@ -51,8 +51,6 @@ ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEI
 
 
 
-def sql_multi(key, values):
-    return "(" + " or ".join(["%s=%s" % (key, val) for val in values])  + ")"
 
 def bandid_to_short_band(bandid):
     for band in bands:
@@ -278,150 +276,6 @@ def smooth_segment(segment, bands=None, chans=None, window_len=300):
             smoothed_segment[chan][band] = smoothed
 
     return smoothed_segment
-
-def load_signal_slice(cursor, evid, siteid, load_noise = False, learn_noise=False, bands=None, chans=None, earthmodel=None):
-    sql_query="SELECT l.time, l.arid, pid.id FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba, static_phaseid pid where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase order by l.time" % (evid, siteid)
-    cursor.execute(sql_query)
-    other_arrivals = np.array(cursor.fetchall())
-
-    if len(other_arrivals) > 0:
-        other_arrival_phaseids = other_arrivals[:, 2]
-        other_arrival_arids = other_arrivals[:, 1]
-        other_arrivals = other_arrivals[:, 0]
-        sql_query="SELECT leba.phase, l.arid FROM leb_arrival l, static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=%d and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=%d order by l.time" % (evid, siteid)
-        cursor.execute(sql_query)
-        other_arrival_phases = np.array(cursor.fetchall())
-        other_arrival_phases = other_arrival_phases[:,0]
-    else:
-        if earthmodel is None:
-            raise Exception("trying to load signal slice for undetected event, but no earthmodel was passed!")
-        event = load_event(cursor, evid)
-        other_arrival_phaseids = [1,5]
-        other_arrival_phases = ['P', 'S']
-        other_arrivals, p = predict_event_arrivals(cursor, earthmodel, evid, siteid, other_arrival_phaseids)
-        other_arrival_arids = None
-
-    first_p_arrival = None
-    first_p_phaseid = 1
-    for i, arrival in enumerate(other_arrivals):
-        if int(other_arrival_phaseids[i]) in P_PHASEIDS:
-            first_p_arrival = arrival
-            first_p_phaseid = other_arrival_phaseids[i]
-            break
-    first_s_arrival = None
-    first_s_phaseid = None
-    for i, arrival in enumerate(other_arrivals):
-        if int(other_arrival_phaseids[i]) in S_PHASEIDS:
-            first_s_arrival = arrival
-            first_s_phaseid = other_arrival_phaseids[i]
-            break
-
-    try:
-        traces = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)- 100, np.max(other_arrivals) + 350, stalist=[siteid,])
-        arrival_segment = sigvisa_util.extract_timeslice_at_station(traces, np.min(other_arrivals)-100, np.max(other_arrivals) + 350, siteid)
-        if arrival_segment is None:
-            return None
-        sigvisa_util.compute_narrowband_envelopes(arrival_segment)
-
-        if len(traces) == 0:
-            raise Exception("no traces found for siteid %d between %f and %f" % (siteid,  np.min(other_arrivals)- 100, np.max(other_arrivals) + 350))
-            #import pdb
-            #pdb.set_trace()
-
-        if chans is None:
-            chans = arrival_segment[0].keys()
-        if bands is None:
-            bands = arrival_segment[0][chans[0]].keys()
-
-        noise_segment = None
-        if load_noise:
-            noise_segment = sigvisa_util.load_and_process_traces(cursor, np.min(other_arrivals)-150, np.min(other_arrivals)-50, stalist=[siteid,])
-            sigvisa_util.compute_narrowband_envelopes(noise_segment)
-
-        for chan in chans:
-            for band in bands:
-                a = arrival_segment[0][chan][band]
-                a.data = a.data[a.stats.sampling_rate*70: - a.stats.sampling_rate*20]
-                a.stats.starttime_unix += 70
-                a.stats.npts = len(a.data)
-                a.stats.p_time = first_p_arrival
-                a.stats.s_time = first_s_arrival
-                a.stats.p_phaseid = first_p_phaseid
-                a.stats.s_phaseid = first_s_phaseid
-                if load_noise:
-                    noise = noise_segment[0][chan][band]
-                    noise.data = noise.data[noise.stats.sampling_rate*5 : -noise.stats.sampling_rate*5]
-
-                    a.stats.noise_floor = np.mean(noise.data)
-                    a.stats.smooth_noise_floor = a.stats.noise_floor
-                    if learn_noise:
-#                        print "learning for band %s chan %s" % (band, chan)
-                        ar_learner = ARLearner(noise.data, noise.stats.sampling_rate)
-#                        print ar_learner.c
-                        #arrival_segment[0][chan][band].stats.noise_model = ar_learner.cv_select()
-                        params, std = ar_learner.yulewalker(17)
-#                        print params, "std", std
-                        em = ErrorModel(0, std)
-                        a.stats.noise_model = ARModel(params, em, c=ar_learner.c)
-
-                        smoothed_noise_data = smooth(noise.data, window_len=300, window="hamming")
-                        ar_learner = ARLearner(smoothed_noise_data, noise.stats.sampling_rate)
-#                        print ar_learner.c
-                        params, std = ar_learner.yulewalker(17)
-                        em = ErrorModel(0, std)
-                        a.stats.smooth_noise_model = ARModel(params, em, c=ar_learner.c)
-
-                        """
-                        if band == "narrow_envelope_2.00_3.00" and chan=="BHZ":
-                            print "noise", noise.stats
-                            print "signal",a.stats
-                            print "model",a.stats.noise_model.params, a.stats.noise_model.em.std
-
-                            print "writing noise..."
-                            f = open('noise.dat', 'w')
-                            for d in noise.data[17:]:
-                                f.write(str(d) + "\n")
-                            print "writing signal..."
-                            f = open('signal.dat', 'w')
-                            for d in a.data[17:]:
-                                f.write(str(d) + "\n")
-
-                            expected_noise = [ (sum([params[k] * noise.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(noise.data))]
-                            expected_sig = [ (sum([params[k] * a.data[t-k-1] for k in range(len(params))])) for t in range(len(params), len(a.data))]
-
-                            f = open('noisepred.dat', 'w')
-                            for d in expected_noise:
-                                f.write(str(d) + "\n")
-
-                            f = open('signalpred.dat', 'w')
-                            for d in expected_sig:
-                                f.write(str(d) + "\n")
-
-                                f = open('envelope.dat', 'w')
-                            for d in arrival_segment[0][chan]["broadband_envelope"].data:
-                                f.write(str(d) + "\n")
-
-                            f = open('raw_signal.dat', 'w')
-                            for d in arrival_segment[0][chan]["broadband"].data:
-                                f.write(str(d) + "\n")
-
-                            f = open('noise_envelope.dat', 'w')
-                            for d in noise_segment[0][chan]["broadband_envelope"].data:
-                                f.write(str(d) + "\n")
-
-                            f = open('raw_noise.dat', 'w')
-                            for d in noise_segment[0][chan]["broadband"].data:
-                                f.write(str(d) + "\n")"""
-
-
-
-    except:
-        raise
-
-    print "finished loading signal slice..."
-
-    return (arrival_segment, noise_segment, other_arrivals, other_arrival_phases, other_arrival_arids)
-
 
 def safe_lookup(l, idx):
     if l is not None:

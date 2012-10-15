@@ -1,6 +1,6 @@
 #include "matrix_util.h"
 
-#include "../sigvisa.h"
+#include "../../sigvisa.h"
 #include "math.h"
 
 /* Removes a slice from a vector, starting at the given index. */

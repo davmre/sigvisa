@@ -1,4 +1,4 @@
-#include "../sigvisa.h"
+#include "../../sigvisa.h"
 
 void init_signal_model(SignalModel_t * p_model, char * model_name, int numsites) {
 

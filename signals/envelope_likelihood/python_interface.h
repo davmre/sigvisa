@@ -2,7 +2,7 @@
 #define SIGNALS_PYTHON_INTERFACE_H
 
 #include <Python.h>
-#include "../sigmodel.h"
+#include "../../sigmodel.h"
 
 PyObject * py_set_noise_process(SigModel_t * p_sigmodel, PyObject * args);
 PyObject * py_set_wiggle_process(SigModel_t * p_sigmodel, PyObject * args);

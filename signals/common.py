@@ -1,5 +1,10 @@
 import numpy as np
+import numpy.ma as ma
 import time, copy
+from sigvisa import Sigvisa
+
+import obspy.signal.filter
+from obspy.core.trace import Trace
 
 class Waveform(object):
     """
@@ -7,7 +12,13 @@ class Waveform(object):
     """
 
     def __init__(self, data, srate = None, stime=None, sta = None, segment_stats = None, my_stats = None, **my_stats_entries):
-        self.data = np.asarray(data)
+        if isinstance(data, ma.MaskedArray):
+            self.data = data
+        else:
+            a = np.asarray(data)
+            m = ma.masked_array(a)
+            self.data = m
+
 
         # stats that can be shared with other waveforms in a segment
         if segment_stats is not None:
@@ -21,11 +32,17 @@ class Waveform(object):
         if my_stats is not None:
             self.my_stats = my_stats
         else:
-            self.my_stats = my_stats_entries 
-            my_stats_entries.update({"filter_str" : "", 
-                                     "freq_low": 0.0, 
+            self.my_stats = my_stats_entries
+
+            try:
+                fraction_valid = np.sum([int(v) for v in self.data.mask])/float(len(self.data))
+            except TypeError:
+                fraction_valid = 1
+
+            my_stats_entries.update({"filter_str" : "",
+                                     "freq_low": 0.0,
                                      "freq_high": self.segment_stats["srate"]/2.0,
-                                     "fraction_valid": np.sum([int(v) for v in self.data.mask])/float(len(self.data))})
+                                     "fraction_valid": fraction_valid })
 
         self.filtered = dict()
 
@@ -33,8 +50,8 @@ class Waveform(object):
         allstats = dict(self.segment_stats.items() + self.my_stats.items())
         return Trace(header=allstats, data=self.data)
 
-    def filter(self, filter_str, preserve_intermediate=True):
-        """ 
+    def filter(self, filter_str, preserve_intermediate=False):
+        """
         Recursive method to generate a filtered waveform.
 
         Accepts filter strings of the form "freq_2.0_3.0;env;smooth"
@@ -55,21 +72,30 @@ class Waveform(object):
         if filter_str == "":
             return self
 
+        # return result from cache if we have it
+        if filter_str in self.filtered:
+            return self.filtered[filter_str]
+
+        # pick out the first filter to apply
         filters = filter_str.split(';')
         first_filter = filters[0]
         other_filters = ';'.join(filters[1:])
 
-        f, fstats = self.__filter_by_desc(first_filter)
-        if filter_str not in self.filtered:
+        # apply the first filter
+        if first_filter in self.filtered:
+            first_filtered = self.filtered[first_filter]
+        else:
+            f, fstats = self.__filter_by_desc(first_filter)
             filtered_data = f(self.data)
-            filtered_wf = Waveform(filtered_data, my_stats=fstats)
-            first_filtered = filtered_wf
+            first_filtered = Waveform(filtered_data, segment_stats=self.segment_stats, my_stats=fstats)
+
+        # then apply the others recursively
+        final_filtered = first_filtered.filter(other_filters, preserve_intermediate=preserve_intermediate)
 
         if preserve_intermediate:
-             self.filtered[first_filter] = first_filtered
-        final_filtered = first_filtered.filter(other_filters)
-        if not preserve_intermediate:
-            self.filtered[filter_str] = final_filtered
+            self.filtered[first_filter] = first_filtered
+        self.filtered[filter_str] = final_filtered
+
         return final_filtered
 
     def __getitem__(self, key):
@@ -99,25 +125,29 @@ class Waveform(object):
         """
         Given a string describing a single filter, return the function
         implementing that filter, along with a new copy of my_stats
-        reflecting the filter's application.  
+        reflecting the filter's application.
         """
-        
+
         pieces = desc.split("_")
         name = pieces[0]
 
         fstats = self.my_stats.copy()
-        fstats["filter_str"] += ";" + filter_str         
+        fstats["filter_str"] += ";" + desc
 
         f = None
         if name == "env":
             f = lambda x: obspy.signal.filter.envelope(x)
         elif name == "smooth":
-            window_len = int(pieces[1])
+            if len(pieces) > 1:
+                window_len = int(pieces[1])
+            else:
+                window_len = 11
+
             f = lambda x: smooth(x, window_len)
-        elif name == "freqband":
+        elif name == "freq":
             low = float(pieces[1])
             high = float(pieces[2])
-            f = lambda x : obspy.signal.filter.bandpass(x, low, high, self.segment_stats['srate'], corners = 4, zerophase=True)            
+            f = lambda x : obspy.signal.filter.bandpass(x, low, high, self.segment_stats['srate'], corners = 4, zerophase=True)
             fstats["freq_low"] = low
             fstats["freq_high"] = high
         else:
@@ -136,16 +166,21 @@ class Segment(object):
 
     STANDARD_STATS = ["srate", "sta", "stime", "etime", "npts"]
 
+    filter_order = ['freq', 'env', 'smooth']
+
     def __init__(self, waveforms = []):
-        self.chans = dict()
+        self.__chans = dict()
         self.stats = None
         self.filter_str = ""
+
+        self.filtered = dict()
 
         for wf in waveforms:
             self.addWaveform(wf)
 
+
     def addWaveform(self, wf):
-        if wf["chan"] in self.chans:
+        if wf["chan"] in self.__chans:
             raise Exception("this segment already has a waveform for channel %s! (%s)" % (chan))
 
         if self.stats is None:
@@ -154,7 +189,7 @@ class Segment(object):
                 if stat not in wf.segment_stats:
                     raise Exception("waveform is missing metadata %s, cannot add to segment" % (stat))
             self.stats = wf.segment_stats
-            
+
         else:
             # check to make sure this waveform is compatible with the
             # other waveforms in this segment.
@@ -163,30 +198,45 @@ class Segment(object):
                     raise Exception("waveform conflicts with segment stat %s (%s vs %s)" % (stat, wf[stat], self[stat]))
 
         # add the waveform to the segment!
-        self.chans[wf["chan"]] = wf
+        self.__chans[wf["chan"]] = wf
 
-    def filter(self, filter_str):
-        new_self = copy.copy(self)
-        new_self.filter_str = self.filter_str + ';' + filter_str
+    def with_filter(self, filter_str):
+        new_filters = filter_str.split(';')
+        filters = [x for x in (self.filter_str.split(';') + new_filters) if len(x) > 0]
+        sorted_filters = []
+        for filter_pattern in self.filter_order:
+            for filter_name in filters:
+                if filter_name.startswith(filter_pattern):
+                    sorted_filters.append(filter_name)
+
+        new_filter_str = ';'.join(sorted_filters)
+        if new_filter_str in self.filtered:
+            new_self = self.filtered[new_filter_str]
+        else:
+            new_self = copy.copy(self)
+            new_self.filter_str = new_filter_str
+            self.filtered[new_filter_str] = new_self
+
         return new_self
 
     def as_old_style_segment(self, bands=None):
-        # return a dictionary mapping channels to obspy Trace objects with attributes squashed appropriately. 
+        # return a dictionary mapping channels to obspy Trace objects with attributes squashed appropriately.
         # this copies dictionaries but hopefully not data.
 
         if bands is None:
-            bands = Sigvisa.bands
+            bands = Sigvisa().bands
 
         old_segment = dict()
-        for chan in self.chans.keys():
+        for chan in self.__chans.keys():
             old_segment[chan] = dict()
             for band in bands:
-                old_segment[chan][band] = self.chans[chan].filter(band + ';' + self.filter_str).as_obspy_trace()
+                filtered = self.with_filter(band)
+                old_segment[chan][band] = filtered[chan].as_obspy_trace()
         return old_segment
 
     def __getitem__(self, key):
-        if key in self.chans:
-            return self.chans[key].filter(self.filter_str)
+        if key in self.__chans:
+            return self.__chans[key].filter(self.filter_str)
         elif key == "filter_str":
             return self.filter_str
         elif key in self.stats:
@@ -198,7 +248,7 @@ class Segment(object):
         s = "wave pts %d @ %d Hz. " % (self['npts'], self['srate'])
 
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s += "time: %s. sta: %s, chans: %s. " % (timestr, self['sta'], ','.join(sorted(self.chans.keys())))
+        s += "time: %s. sta: %s, chans: %s. " % (timestr, self['sta'], ','.join(sorted(self.__chans.keys())))
         s += 'filter: %s' % self.filter_str
         return s
 

@@ -11,7 +11,7 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 
-#include "../sigvisa.h"
+#include "../../sigvisa.h"
 #include "signal_structures.h"
 #include "SignalModelUtil.h"
 #include "kalman_filter.h"
