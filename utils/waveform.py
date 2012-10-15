@@ -50,8 +50,6 @@ from plot import *
 from optparse import OptionParser
 
 
-class MissingWaveform(Exception):
-  pass
 
 def plot_ss_waveforms(siteid, start_time, end_time, detections, earthmodel,
                       event):

@@ -9,6 +9,14 @@ class NestedDict(dict):
 
 class Sigvisa(object):
 
+    # some channels are referred to by multiple names, i.e. the
+    # north-south channel can be BHN or BH2.  here we define a
+    # canonical name for each channel. the sigvisa.equivalent_channels(chan)
+    # method (defined below) returns a list of all channel names
+    # equivalent to a particular channel.
+    canonical_channel_name = {"BHZ": "BHZ", "BHN": "BHN", "BHE": "BHE", "BH1": "BHE", "BH2":"BHN"}
+    __equivalent_channels = {"BHZ" : ["BHZ"], "BHE": ["BHE", "BH1"], "BHN": ["BHN", "BH2"]}
+
     # singleton pattern -- only initialize once
     _instance = None
     def __new__(cls, *args, **kwargs):
@@ -126,5 +134,7 @@ class Sigvisa(object):
         phases = [p for p in self.phases if self.sigvisa.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, self.phaseids[phase]-1) > 0 ]
         return phases
 
-
-
+    def equivalent_channels(self, chan):
+        canonical = self.canonical_channel_name[chan]
+        equiv = self.__equivalent_channels[canonical]
+        return equiv

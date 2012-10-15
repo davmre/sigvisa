@@ -6,6 +6,7 @@ import numpy.ma as ma
 from sigvisa import Sigvisa
 
 from signals.common import Waveform, Segment
+from signals.io import load_event_station
 
 
 class TestWaveform(unittest.TestCase):
@@ -117,6 +118,17 @@ class TestSegments(unittest.TestCase):
         old_seg = self.seg.as_old_style_segment()
         a =  self.seg.with_filter('freq_2.0_3.0')
         self.assertIs(a['BHN'].data, old_seg['BHN']['freq_2.0_3.0'].data)
+
+
+class TestIO(unittest.TestCase):
+
+    def test_load_event_station(self):
+
+        seg = load_event_station(Sigvisa().cursor, evid=5301405, sta="URZ")
+        print seg
+
+        assertEqual(seg['sta'], "URZ")
+
 
 
 if __name__ == '__main__':

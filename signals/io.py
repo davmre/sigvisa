@@ -1,5 +1,5 @@
 import time
-import sys, struct
+import sys, struct, sys, os, gzip
 import matplotlib
 matplotlib.use('PDF')
 import matplotlib.pyplot as plt
@@ -13,13 +13,17 @@ from obspy.core import Trace, Stream, UTCDateTime
 import obspy.signal.filter
 from obspy.signal.trigger import triggerOnset
 
-from database import db, dataset
-import utils.waveform
+from database.dataset import *
 import plot
-import learn
-import sys, os
 
-from signals.coda_decay_common import *
+from signals.common import *
+
+# from signals.coda_decay_common import *
+
+from sigvisa import Sigvisa
+
+class MissingWaveform(Exception):
+  pass
 
 
 def load_event_station(cursor, evid, sta, evtype="leb"):
@@ -62,10 +66,10 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
   segments = []
 
   if chans is None:
-    chans = Sigvisa.chans
+    chans = Sigvisa().chans
 
   # standardize channel names to avoid duplicates
-  chans = [canonical_channel_name(c)[0] for c in chans]
+  chans = [Sigvisa().canonical_channel_name[c] for c in chans]
 
   for (idx, sta) in enumerate(stations):
 
@@ -73,16 +77,17 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
 
     for (chanidx, chan) in enumerate(chans):
         try:
-          wave = utils.waveform.fetch_waveform(sta, chan, start_time, end_time)
+          wave = fetch_waveform(sta, chan, start_time, end_time)
           print trace
           print " ... successfully loaded."
-        except (utils.waveform.MissingWaveform, IOError):
+        except (MissingWaveform, IOError):
           print " ... not found, skipping."
           continue
         waves.append(wave)
 
-    segment = Segment(waves)
-    segments.append(segment)
+    if len(waves) > 0:
+      segment = Segment(waves)
+      segments.append(segment)
 
   return segments
 
@@ -94,7 +99,8 @@ def fetch_waveform(station, chan, stime, etime):
   the given interval. If there are periods for which data are not
   available, they are marked as missing data.
   """
-  cursor = database.db.connect().cursor()
+  s = Sigvisa()
+  cursor = s.cursor
 
   # scan the waveforms for the given interval
   samprate = None
@@ -105,11 +111,13 @@ def fetch_waveform(station, chan, stime, etime):
   global_stime = stime
   global_etime = etime
 
-  chan, chan_list = canonical_channel_name(chan)
+
+  chan = s.canonical_channel_name[chan]
+  chan_list = s.equivalent_channels(chan)
 
   while True:
 
-    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_values("chan", chan_list), stime, stime)
+    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), stime, stime)
 
     cursor.execute(sql)
     waveform_values = cursor.fetchone()
@@ -184,7 +192,7 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
   try:
     datafile = open(filename, "rb")
   except IOError, e:
-    print "cannot open file ", filename
+    print "cannot open file ", filename,
     # the file could be compressed try .gz extension
     datafile = gzip.open(filename+".gz")
 

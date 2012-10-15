@@ -66,6 +66,12 @@ MAX_DEPTH = 700.0
 
 AVG_EARTH_RADIUS_KM = 6371.0            # when modeled as a sphere
 
+def sql_multi(key, values):
+    return "(" + " or ".join(["%s=%s" % (key, val) for val in values])  + ")"
+
+def sql_multi_str(key, values):
+    return "(" + " or ".join(["%s='%s'" % (key, val) for val in values])  + ")"
+
 def read_timerange(cursor, label, hours, skip):
   # determine the start and end time for the specified label
   cursor.execute("select start_time, end_time from dataset where "
