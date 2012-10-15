@@ -10,6 +10,7 @@ static void py_sig_model_dealloc(SigModel_t * self);
 PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
+static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,PyObject *args);
 
 static PyMethodDef SigModel_methods[] = {
   {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
@@ -65,7 +66,11 @@ static PyMethodDef SigModel_methods[] = {
    "-> log likelihood\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
-   "write_cb, log_cb)\n -> events, ev_detlist"},/*
+   "write_cb, log_cb)\n -> events, ev_detlist"},
+  {"event_location_prior_logprob", (PyCFunction)py_event_location_prior_logprob, METH_VARARGS,
+   "event_location_prior_logprob(evlon, evlat, evdepth)"
+   " -> log prior probability of event location"},
+  /*
   {"propose", (PyCFunction)py_propose, METH_VARARGS,
    "propose(time_low, time_high, det_low, det_high, degree_step, num_step)\n"
    " -> events, ev_detlist"},*/
@@ -533,6 +538,24 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
 
   return Py_BuildValue("d", trvtime);
 }
+
+static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,
+						  PyObject * args)
+{
+  double lon;
+  double lat;
+  double depth;
+
+  double logprob;
+
+  if (!PyArg_ParseTuple(args, "ddd", &lon, &lat, &depth))
+    return NULL;
+
+  logprob = EventLocationPrior_LogProb(&p_sigmodel->event_location_prior,
+				       lon, lat, depth);
+  return Py_BuildValue("d", logprob);
+}
+
 
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,
                                      PyObject * args)

@@ -137,15 +137,26 @@ def plot_event_location_heat(pp, val, cm, X, sll, model_type, title):
     # plot the conditional likelihood of event locations given the event parameters
     f = lambda lon, lat: np.exp(cm.log_likelihood(val, np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type))
 
-    hm = Heatmap(f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
+    heatfile = "logs/%s.heat" % str(hashlib.md5(title).hexdigest())
+    try:
+        hm = Heatmap(f, fname=heatfile)
+    except:
+        hm = Heatmap(f, lonbounds=[100, 220], latbounds=[-70, 70], n=20)
+        hm.calc(checkpoint=heatfile)
     hm.calc(checkpoint="logs/%s.heat" % str(hashlib.md5(title).hexdigest()))
     hm.plot_density()
     hm.plot_locations((sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
     hm.plot_locations(X, marker="o", ms=5, mfc="none", mec="red", mew=2)
-    plt.title(title)
+
+    
+    maxlon, maxlat, maxval = hm.max()
+    hm.plot_locations(((maxlon, maxlat),), marker="*", ms=5, mfc="none", mec="green", mew=2)
+    dist = utils.geog.dist_km((maxlon, maxlat), X[0])
+    
+    plt.title(title + "\n distance: %.2f km" % dist)
     pp.savefig()
 
-    return hm
+    return hm, dist
 
 
 def plot_events_heat_single(pp, cm, X, sll, model_type, title):
@@ -155,8 +166,12 @@ def plot_events_heat_single(pp, cm, X, sll, model_type, title):
     else:
         f = lambda lon, lat: cm.predict(np.array((lon, lat, 0, 0, 5.0, 0, 0)), model_type)
 
-    hm = Heatmap(f, lonbounds=[-180, 180], latbounds=[-70, 70], n=40)
-    hm.calc(checkpoint="logs/%s.heat" % str(hashlib.md5(title).hexdigest()))
+    heatfile = "logs/%s.heat" % str(hashlib.md5(title).hexdigest())
+    try:
+        hm = Heatmap(f, fname=heatfile)
+    except:
+        hm = Heatmap(f, lonbounds=[100, 220], latbounds=[-70, 70], n=20)
+        hm.calc(checkpoint=heatfile)
     hm.plot_density()
     hm.plot_locations((sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
     hm.plot_locations(X, marker=".", ms=2, mfc="none", mec="red", mew=2, alpha=0.6)
@@ -183,7 +198,6 @@ def plot_events_heat(pp, fit_data, cm, target_str = ""):
         plot_events_heat_single(pp, cm, X, (slon, slat), model_type, title)
 
 
-
 def locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, short_band, chan, (phase_label, phaseids), runid, target_str):
 
     siteid = fit_data[0, FIT_SITEID]
@@ -205,9 +219,9 @@ def locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, short_band
 
     val = CodaModel.target_fns[target_str](evrow)
 
-    hm = plot_event_location_heat(pp, val, cm, (evll,), (slon, slat), CodaModel.MODEL_TYPE_GP_DAD, "event %d location from %s\nsid %d rid %d band %s chan %s phase %s" % (evid, target_str, siteid, runid, short_band, chan, phase_label))
+    hm, dist = plot_event_location_heat(pp, val, cm, (evll,), (slon, slat), CodaModel.MODEL_TYPE_GP_DAD, "event %d location from %s\nsid %d rid %d band %s chan %s phase %s" % (evid, target_str, siteid, runid, short_band, chan, phase_label))
 
-    return hm
+    return hm, dist
 
 def eval_spatial_model(fit_data, dad_params, pp, band_dir, short_band, chan, (phase_label, phaseids), runid, target_str):
 
@@ -235,7 +249,7 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    cursor = db.connect().cursor()
+    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
 
     density = NestedDict()
 
@@ -269,7 +283,11 @@ def main():
                 band_dir = os.path.join(base_coda_dir, options.short_band)
 
                 if options.evids is None:
-                    # if no specific event specified, train a model for each station based on all events from that station and evaluate/plot its predictions
+
+                    # if no specific event specified, train a model
+                    # for each station based on all events from that
+                    # station and evaluate/plot its predictions
+                    
                     fname = os.path.join(band_dir, "%s_predictions_%s.pdf" % (phase_label, options.chan))
                     pp = PdfPages(fname)
                     print "saving heat map(s) to", fname
@@ -277,12 +295,16 @@ def main():
                     pp.close()
                 else:
                     for evid in evids:
-                        # if a specific event is specified, train a model for each station based on all other events, then try to plot the event location
+                        
+                        # if a specific event is specified, train a
+                        # model for each station based on all other
+                        # events, then try to plot the event location
+                        
                         fname = os.path.join(band_dir, "%s_%s_location_%s_%d.pdf" % (phase_label, target_str, options.chan, evid))
                         pp = PdfPages(fname)
                         print "saving heat map(s) to", fname
 
-                        density[evid][siteid][phase_label] = locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, options.short_band, options.chan, (phase_label, phaseids), runid, target_str)
+                        density[evid][siteid][phase_label], dist = locate_event_from_model(evid, fit_data, dad_params, pp, band_dir, options.short_band, options.chan, (phase_label, phaseids), runid, target_str)
                         pp.close()
 
 
@@ -290,29 +312,68 @@ def main():
         for evid in evids:
 
 
+            fname = "logs/density_%d_%s.pdf" % (evid, target_str)
+            pp = PdfPages(fname)
 
-            pp = PdfPages("logs/density_%d.pdf" % (evid))
-
-            print "calculating overall density for %d, saved to %s" % (evid, "logs/density_%d.pdf" % (evid))
+            print "calculating overall density for %d, saved to %s" % (evid, fname)
             od = None
+
 
             for sid in density[evid].keys():
                 for pl in density[evid][sid].keys():
                     d = density[evid][sid][pl]
                     od = d if od is None else d * od
 
-
-            od.plot_density()
+            priorfn = lambda lon, lat : np.exp(sigmodel.event_location_prior_logprob( (lon + 180) % 360 - 180, lat, 0))
+            prior = Heatmap(fn = priorfn, n = od.n, lonbounds=[od.min_lon, od.max_lon],
+                            latbounds=[od.min_lat, od.max_lat])
+            prior.calc()
 
             cursor.execute("SELECT lon, lat from static_siteid where id = %d" % (siteid))
             (slon, slat) = cursor.fetchone()
             cursor.execute("SELECT lon, lat from leb_origin where evid = %d" % (evid))
             (evlon, evlat) = cursor.fetchone()
 
+            prior.plot_density()
+            prior.plot_locations(((slon,slat),),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+            prior.plot_locations(((evlon, evlat),), marker="o", ms=5, mfc="none", mec="red", mew=2)
+            maxlon, maxlat, maxval = prior.max()
+            prior.plot_locations(((maxlon, maxlat),), marker="*", ms=5, mfc="none", mec="green", mew=2)
+            dist = utils.geog.dist_km((maxlon, maxlat), (evlon, evlat))
+            title = "%d prior: dist %.2f km" % (evid, dist)
+            print title
+            plt.title(title)
+           
+            pp.savefig()
+            plt.clf()
+
+            od.init_bmap()
+            od.plot_density()
             od.plot_locations(((slon,slat),),  marker="x", ms=7, mfc="none", mec="white", mew=2)
             od.plot_locations(((evlon, evlat),), marker="o", ms=5, mfc="none", mec="red", mew=2)
+            maxlon, maxlat, maxval = od.max()
+            od.plot_locations(((maxlon, maxlat),), marker="*", ms=5, mfc="none", mec="green", mew=2)
+            dist = utils.geog.dist_km((maxlon, maxlat), (evlon, evlat))
+            title = "%d likelihood: dist %.2f km" % (evid, dist)
+            print title
+            plt.title(title)
 
             pp.savefig()
+            plt.clf()
+
+            posterior = prior * od
+            posterior.plot_density()
+            posterior.plot_locations(((slon,slat),),  marker="x", ms=7, mfc="none", mec="white", mew=2)
+            posterior.plot_locations(((evlon, evlat),), marker="o", ms=5, mfc="none", mec="red", mew=2)
+            maxlon, maxlat, maxval = posterior.max()
+            posterior.plot_locations(((maxlon, maxlat),), marker="*", ms=5, mfc="none", mec="green", mew=2)
+            dist = utils.geog.dist_km((maxlon, maxlat), (evlon, evlat))
+            title = "%d posterior: dist %.2f km" % (evid, dist)
+            print title
+            plt.title(title)
+
+            pp.savefig()
+
             pp.close()
 
 if __name__ == "__main__":

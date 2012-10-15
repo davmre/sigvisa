@@ -31,7 +31,7 @@ MIN_SEGMENT_LENGTH = 40
 min_p_coda_length = 30
 min_s_coda_length = 45
 
-avg_cost_bound = 0.2
+avg_cost_bound = .28
 
 #bands = ['narrow_envelope_2.00_3.00', 'narrow_envelope_4.00_6.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
 bands = ["narrow_envelope_2.00_3.00",]

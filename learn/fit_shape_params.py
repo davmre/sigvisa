@@ -686,7 +686,6 @@ def main():
             for (band_idx, band) in enumerate(bands):
                 short_band = short_bands[band_idx]
                 pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-
                 for chan in chans:
 
                     if options.plot:
