@@ -6,19 +6,20 @@ from sigvisa import Sigvisa
 import obspy.signal.filter
 from obspy.core.trace import Trace
 
+from database.dataset import *
+
 class Waveform(object):
     """
     A single waveform trace. Contains methods for generating filtered versions of itself.
     """
 
-    def __init__(self, data, srate = None, stime=None, sta = None, segment_stats = None, my_stats = None, **my_stats_entries):
+    def __init__(self, data, srate = None, stime=None, sta = None, evid=None, segment_stats = None, my_stats = None, **my_stats_entries):
         if isinstance(data, ma.MaskedArray):
             self.data = data
         else:
             a = np.asarray(data)
             m = ma.masked_array(a)
             self.data = m
-
 
         # stats that can be shared with other waveforms in a segment
         if segment_stats is not None:
@@ -110,12 +111,16 @@ class Waveform(object):
             return self.my_stats[key]
 
         # if we don't have arrivals for this waveform, look them up and cache them
+        elif key == "event_arrivals":
+            event_arrivals = read_event_detections(cursor=Sigvisa().cursor, evid=self['evid'], stations = [self['sta'],], evtype="leb")
+            self.segment_stats['event_arrivals'] = event_arrivals
+            return event_arrivals
         elif key == "arrivals": # default to LEB arrivals
-            arrivals = read_arrivals(sta=self['sta'], stime=self['stime'], etime=self['etime'], evtype="leb")
+            arrivals = read_station_detections(cursor=Sigvisa().cursor, sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="leb_arrival")
             self.segment_stats['arrivals'] = arrivals
             return arrivals
         elif key == "arrivals_idcx":
-            arrivals = read_arrivals(sta=self['sta'], stime=self['stime'], etime=self['etime'], evtype="idcx")
+            arrivals = read_station_detections(cursor=Sigvisa().cursor, sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="idcx_arrival")
             self.segment_stats['arrivals_idcx'] = arrivals
             return arrivals
         else:
@@ -135,7 +140,9 @@ class Waveform(object):
         fstats["filter_str"] += ";" + desc
 
         f = None
-        if name == "env":
+        if name == "center":
+            f = lambda x : x - np.mean(x)
+        elif name == "env":
             f = lambda x: obspy.signal.filter.envelope(x)
         elif name == "smooth":
             if len(pieces) > 1:
@@ -158,7 +165,7 @@ class Waveform(object):
         s = "wave pts %d @ %d Hz. " % (self['npts'], self['srate'])
 
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s += "time: %s. sta: %s, chan %s. " % (timestr, self['sta'], self['chan'])
+        s += "time: %s (%.1f). sta: %s, chan %s. " % (timestr, self['stime'], self['sta'], self['chan'])
         s += ', '.join(['%s: %s' % (k, self.my_stats[k]) for k in sorted(self.my_stats.keys()) if k != 'chan'])
         return s
 
@@ -166,7 +173,7 @@ class Segment(object):
 
     STANDARD_STATS = ["srate", "sta", "stime", "etime", "npts"]
 
-    filter_order = ['freq', 'env', 'smooth']
+    filter_order = ['center', 'freq', 'env', 'smooth']
 
     def __init__(self, waveforms = []):
         self.__chans = dict()
@@ -196,6 +203,9 @@ class Segment(object):
             for stat in Segment.STANDARD_STATS:
                 if wf[stat] != self[stat]:
                     raise Exception("waveform conflicts with segment stat %s (%s vs %s)" % (stat, wf[stat], self[stat]))
+
+            # maintain invariant: all waveforms in a segment share the same segment stats object
+            wf.segment_stats = self.stats
 
         # add the waveform to the segment!
         self.__chans[wf["chan"]] = wf
@@ -234,6 +244,9 @@ class Segment(object):
                 old_segment[chan][band] = filtered[chan].as_obspy_trace()
         return old_segment
 
+    def get_chans(self):
+        return self.__chans.keys()
+
     def __getitem__(self, key):
         if key in self.__chans:
             return self.__chans[key].filter(self.filter_str)
@@ -245,11 +258,11 @@ class Segment(object):
             raise KeyError("segment didn't recognized key %s" % key)
 
     def __str__(self):
-        s = "wave pts %d @ %d Hz. " % (self['npts'], self['srate'])
+        s = "%d pts @ %d Hz (%.1fs). " % (self['npts'], self['srate'], self['npts'] / self['srate'])
 
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s += "time: %s. sta: %s, chans: %s. " % (timestr, self['sta'], ','.join(sorted(self.__chans.keys())))
-        s += 'filter: %s' % self.filter_str
+        s += "start: %s (%.1f). sta: %s, chans: %s. " % (timestr, self['stime'], self['sta'], ','.join(sorted(self.__chans.keys())))
+        s += "filter: '%s'" % self.filter_str
         return s
 
 

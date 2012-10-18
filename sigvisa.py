@@ -15,7 +15,10 @@ class Sigvisa(object):
     # method (defined below) returns a list of all channel names
     # equivalent to a particular channel.
     canonical_channel_name = {"BHZ": "BHZ", "BHN": "BHN", "BHE": "BHE", "BH1": "BHE", "BH2":"BHN"}
+
+    # defined only for canonical channels
     __equivalent_channels = {"BHZ" : ["BHZ"], "BHE": ["BHE", "BH1"], "BHN": ["BHN", "BH2"]}
+
 
     # singleton pattern -- only initialize once
     _instance = None
@@ -46,14 +49,14 @@ class Sigvisa(object):
 
 
         self.bands = ("freq_2.0_3.0",)
-        self.chans = ('BHZ',)
+        self.chans = ('BHZ', 'BHN', 'BHE')
         self.phases = ('P', 'Pn', 'Pg', 'S', 'Sn', 'Lg')
 
         self.P_phases = ('P', 'Pn')
         self.S_phases = ('S', 'Sn', 'Lg')
 
 
-
+        self.events = dict()
 
 
     def phasenames(self, phase_id_minus1_list):

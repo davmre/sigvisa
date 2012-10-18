@@ -29,8 +29,12 @@ class MissingWaveform(Exception):
 def load_event_station(cursor, evid, sta, evtype="leb"):
   arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
   arrival_times = arrivals[:, DET_TIME_COL]
+  print arrival_times
+  print np.min(arrival_times) - 10
+  print np.max(arrival_times) + 200
   seg = load_segments(cursor, (sta,), np.min(arrival_times)-10, np.max(arrival_times)+200)[0]
-  seg.stats['arrivals'] = arrivals
+  seg.stats['evid'] = evid
+  seg.stats['event_arrivals'] = arrivals
 
   return seg
 
@@ -78,10 +82,10 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
     for (chanidx, chan) in enumerate(chans):
         try:
           wave = fetch_waveform(sta, chan, start_time, end_time)
-          print trace
+          print wave
           print " ... successfully loaded."
-        except (MissingWaveform, IOError):
-          print " ... not found, skipping."
+        except (MissingWaveform, IOError) as e:
+          print " ... not found, skipping. (%s)" % e
           continue
         waves.append(wave)
 
@@ -117,7 +121,8 @@ def fetch_waveform(station, chan, stime, etime):
 
   while True:
 
-    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), stime, stime)
+    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), etime, stime)
+    print sql
 
     cursor.execute(sql)
     waveform_values = cursor.fetchone()
@@ -165,6 +170,10 @@ def fetch_waveform(station, chan, stime, etime):
     t_end = t_start + len(wave)
     global_data[t_start:t_end] = wave
 
+
+    print "loaded data from %d to %d (%.1f to %.1f)" % (t_start, t_end, t_start/samprate, t_end/samprate)
+
+
     # do we have all the data that we need
     if desired_samples <= available_samples:
       break
@@ -177,7 +186,7 @@ def fetch_waveform(station, chan, stime, etime):
 
   masked_data = ma.masked_invalid(global_data)
 
-  return Waveform(data=np.array(masked_data), sta=station, stime=stime, srate=samprate, chan=chan)
+  return Waveform(data=np.array(masked_data), sta=station, stime=global_stime, srate=samprate, chan=chan)
 
   #return samprate, np.array(data)
 

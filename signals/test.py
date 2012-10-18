@@ -8,6 +8,12 @@ from sigvisa import Sigvisa
 from signals.common import Waveform, Segment
 from signals.io import load_event_station
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+import plotting.plot
+
 
 class TestWaveform(unittest.TestCase):
 
@@ -122,13 +128,27 @@ class TestSegments(unittest.TestCase):
 
 class TestIO(unittest.TestCase):
 
-    def test_load_event_station(self):
+    def test_load_plot(self):
+        self.seg = load_event_station(Sigvisa().cursor, evid=5301405, sta="URZ")
 
-        seg = load_event_station(Sigvisa().cursor, evid=5301405, sta="URZ")
-        print seg
+        self.assertEqual(self.seg['sta'], "URZ")
 
-        assertEqual(seg['sta'], "URZ")
+        bhn = self.seg['BHN']
+        bhz = self.seg['BHZ']
 
+        self.assertIs(bhz['event_arrivals'], bhn['event_arrivals'])
+        self.assertIs(bhz['arrivals'], bhn['arrivals'])
+
+        plotting.plot.plot_segment(self.seg)
+        plt.savefig("URZ_5301405")
+
+        s = self.seg.with_filter('center;env')
+        plotting.plot.plot_segment(s)
+        plt.savefig("URZ_5301405_env")
+
+        s = s.with_filter('freq_2.0_3.0')
+        plotting.plot.plot_segment(s)
+        plt.savefig("URZ_5301405_env_2_3")
 
 
 if __name__ == '__main__':

@@ -162,15 +162,6 @@ class Heatmap(object):
         draw_density(self.bmap, self.lon_arr, self.lat_arr, self.fvals,
                      levels = levels, colorbar=colorbar)
 
-
-    def lonlatstr(self, lon, lat):
-        lon = (lon + 180) % 360 - 180
-
-        lonstr = "%.2f W" % -lon if lon < 0 else "%.2f E" % lon
-        latstr = "%.2f S" % -lat if lat < 0 else "%.2f N" % lat
-
-        return lonstr + " " + latstr
-
     def normalize_lonlat(self, lon, lat):
         """
         Return the given location represented within the coordinate
