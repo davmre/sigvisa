@@ -22,6 +22,10 @@ def plot_det_times(wave, axes=None, logscale=False):
     arrivals = wave['event_arrivals']
   except:
     arrivals = wave['arrivals']
+
+  if arrivals.shape[0] == 0:
+    return
+
   all_det_times = arrivals[:, DET_TIME_COL]
   all_det_labels = [Sigvisa().phasenames[arrivals[i, DET_PHASE_COL]] for i in range(arrivals.shape[0])]
 
@@ -60,7 +64,6 @@ def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False)
   gs = gridspec.GridSpec(n*3+1, 1)
   gs.update(left=0.1, right=0.95, hspace=1)
   for chidx, chan in enumerate(sorted(chans)):
-    print "plotting", chan, chidx, chans
     if chidx == 0:
       axes = plt.subplot(gs[chidx*3:chidx*3+3, 0])
     else:
@@ -89,7 +92,7 @@ def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False)
     e = Event(evid)
     descr = descr + "\n\n" + "Event: " + str(e)
   except KeyError as e:
-    print e
+    pass
   axes.text(0.5, 0, descr, fontsize=10, color="black", horizontalalignment='center', verticalalignment='center')
 
 #  fig.canvas.mpl_connect('draw_event', on_draw)
