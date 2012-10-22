@@ -150,7 +150,7 @@ class Waveform(object):
             if len(pieces) > 1:
                 window_len = int(pieces[1])
             else:
-                window_len = 11
+                window_len = 401
 
             f = lambda x: smooth(x, window_len)
         elif name == "freq":
@@ -270,7 +270,7 @@ class Segment(object):
         return s
 
 
-def smooth(x,window_len=11,window='hanning'):
+def smooth(x,window_len=121,window='hanning'):
     """smooth the data using a window with requested size.
 
     This method is based on the convolution of a scaled window with the signal.
@@ -315,15 +315,16 @@ def smooth(x,window_len=11,window='hanning'):
         raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
 
 
-    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
+#    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
     #print(len(s))
+
     if window == 'flat': #moving average
         w=np.ones(window_len,'d')
     else:
         w=eval('np.'+window+'(window_len)')
 
-    y=np.convolve(w/w.sum(),s,mode='valid')
-    return y
+    y=np.convolve(w/w.sum(),x.data,mode='same')
+    return ma.masked_array(y, x.mask)
 
 
 def bandpass_missing(masked_array, low, high, srate):

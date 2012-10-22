@@ -26,7 +26,10 @@ class MissingWaveform(Exception):
   pass
 
 
-def load_event_station(cursor, evid, sta, evtype="leb"):
+def load_event_station(evid, sta, evtype="leb", cursor=None):
+  if cursor is None:
+    cursor = Sigvisa().cursor
+
   arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
   arrival_times = arrivals[:, DET_TIME_COL]
   seg = load_segments(cursor, (sta,), np.min(arrival_times)-10, np.max(arrival_times)+200)[0]

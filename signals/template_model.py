@@ -1,20 +1,22 @@
-
+import numpy as np
+import sys, os
+from sigvisa import *
 
 class TemplateModel(object):
     """
     Abstract class defining a signal template model.
-    
+
     A phase template is defined by some number of parameters
     (e.g. onset period, height, and decay rate for a
     paired-exponential template). A signal consists of a number of
-    phase arrivals. 
+    phase arrivals.
 
     The methods in the class deal with matrices, each row of which
     gives the parameters for a specific phase arrival. That is, we
     allow modeling the joint distribution of template parameters over
     multiple phases, though it's also possible for a particular
     implementation to treat them independently.
-    
+
     Currently we assume that each channel and frequency band are
     independent. This should probably change.
 
@@ -37,7 +39,7 @@ class TemplateModel(object):
         phaseid = self.sigvisa.phaseids[phase]
         meantt = self.sigvisa.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, phaseid-1)
         return meantt
-        
+
     def sample_travel_time(self, event, sta, phase):
         meantt = self.mean_travel_time(event, sta, phase)
 
@@ -52,7 +54,7 @@ class TemplateModel(object):
         U = np.random.random() - .5
         tt = meantt - ttscale * np.sign(U) * np.log(1 - 2*np.abs(U))
         return tt
-        
+
     def travel_time_log_likelihood(self, tt, event, sta, phase):
         meantt = self.mean_travel_time(event, sta, phase)
         siteid = sigvisa.siteids[sta]
@@ -73,22 +75,26 @@ class ExponentialTemplateModel(TemplateModel):
         self.sigvisa = Sigvisa()
 
         # load gp models
-        if model_type[0:3] = "gp_":
+        if model_type[0:3] == "gp_":
             self.models = NestedDict()
 
             for param in self.params():
+                if param == "arrival_time":
+                    continue
+
                 basedir = os.path.join("parameters", model_type, param)
+                print basedir
                 for sta in os.listdir(basedir):
                     sta_dir = os.path.join(basedir, sta)
-                    if not os.isdir(sta_dir):
+                    if not os.path.isdir(sta_dir):
                         continue
                     for phase in os.listdir(sta_dir):
                         phase_dir = os.path.join(sta_dir, phase)
-                        if not os.isdir(phase_dir):
+                        if not os.path.isdir(phase_dir):
                             continue
                         for chan in os.listdir(phase_dir):
                             chan_dir = os.path.join(phase_dir, chan)
-                            if not os.isdir(chan_dir):
+                            if not os.path.isdir(chan_dir):
                                 continue
                             for band_model in os.listdir(chan_dir):
                                 band_file = os.path.join(chan_dir, band_model)
@@ -104,8 +110,10 @@ class ExponentialTemplateModel(TemplateModel):
     def predictTemplate(self, event, sta, chan, band, phases=None):
         if phases is None:
             phases = Sigvisa().phases
-        
-        predictions = np.zeros((len(phases),  len(__params)))
+
+        params = self.params()
+
+        predictions = np.zeros((len(phases),  len(params)))
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(params):
                 model = self.models[param][sta][phase][chan][band]
@@ -119,13 +127,15 @@ class ExponentialTemplateModel(TemplateModel):
                     predictions[i,j] = event.time + self.travel_time(event, sta)
                 else:
                     predictions[i,j] = model.predict(event)
-        return predictions
+        return (phases, predictions)
 
     def sample(self, event, sta, chan, band, phases=None):
         if phases is None:
             phases = Sigvisa().phases
-        
-        samples = np.zeros((len(phases),  len(__params)))
+
+        params = self.params()
+
+        samples = np.zeros((len(phases),  len(params)))
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(params):
                 model = self.models[param][sta][phase][chan][band]
@@ -135,35 +145,33 @@ class ExponentialTemplateModel(TemplateModel):
                 if param == "amp_transfer":
                     source_logamp = event.source_logamp(band)
                     samples[i,j] =  source_logamp + model.predict(event)
-                elif param = "arrival_time":
+                elif param == "arrival_time":
                     samples = event.time + self.sample_travel_time(event, sta)
                 else:
                     samples[i,j] = model.sample(event)
-        return predictions
+        return (phases, predictions)
 
-    def log_likelihood(self, template_params, event, sta, chan, band, phases=None):
+    def log_likelihood(self, template_params, event, sta, chan, band):
 
-        if phases is None:
-            phases = Sigvisa().phases
-        
+        phases = template_params[0]
+        param_vals = template_params[1]
+
         log_likelihood = 0
         for (i, phase) in enumerate(phases):
-            for (j, param) in enumerate(params):
+            for (j, param) in enumerate(self.params()):
                 model = self.models[param][sta][phase][chan][band]
                 if isinstance(model, NestedDict):
                     raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
                 if param == "amp_transfer":
                     source_logamp = event.source_logamp(band)
-                    log_likelihood += model.log_likelihood(event, template_params[i,j] - source_logamp)
+                    log_likelihood += model.log_likelihood(event, param_vals[i,j] - source_logamp)
                 elif param == "arrival_time":
-                    log_likelihood = self.travel_time_log_likelihood(event, sta, template_params[i,j])
+                    log_likelihood = self.travel_time_log_likelihood(event, sta, param_vals[i,j])
                 else:
-                    log_likelihood += model.log_likelihood(event, template_params[i,j])
+                    log_likelihood += model.log_likelihood(event, param_vals[i,j])
 
         return log_likelihood
-
-
 
 
 def train_param_models(siteids, runids, evid):

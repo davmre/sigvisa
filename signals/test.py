@@ -5,9 +5,12 @@ import numpy.ma as ma
 
 from sigvisa import Sigvisa
 
+from source.event import Event
+
 from signals.common import Waveform, Segment
 from signals.mask_util import *
 from signals.io import load_event_station
+from signals.template_model import ExponentialTemplateModel
 
 import matplotlib
 matplotlib.use("Agg")
@@ -212,7 +215,7 @@ class TestSegments(unittest.TestCase):
 class TestIO(unittest.TestCase):
 
     def test_load_plot(self):
-        self.seg = load_event_station(Sigvisa().cursor, evid=5301405, sta="URZ")
+        self.seg = load_event_station(evid=5301405, sta="URZ")
 
         self.assertEqual(self.seg['sta'], "URZ")
 
@@ -233,6 +236,27 @@ class TestIO(unittest.TestCase):
         plotting.plot.plot_segment(s)
         plt.savefig("URZ_5301405_env_2_3")
 
+        s = s.with_filter('smooth')
+        plotting.plot.plot_segment(s)
+        plt.savefig("URZ_5301405_env_2_3_smooth")
+
+
+class TestCost(unittest.TestCase):
+
+    def setUp(self):
+        self.seg = load_event_station(evid=5301405, sta="URZ")
+        self.event = Event(evid=5301405)
+        self.tm = ExponentialTemplateModel(run_name = "signal_unittest")
+
+    def test_iid_cost(self):
+
+        smoothed = self.seg.with_filter("freq_2.0_3.0;env;smooth")
+        bhz = smoothed['BHZ']
+        bhz_23_template = self.tm.predictTemplate(event = self.event, sta="URZ", chan="BHZ", band="freq_2.0_3.0")
+
+        c = c_cost(wave=bhz, params = bhz_23_template, iid=True)
+
+        print c
 
 if __name__ == '__main__':
     unittest.main()

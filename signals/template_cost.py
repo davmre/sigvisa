@@ -1,6 +1,6 @@
 """
 
-Code for computing the cost/likelihood of an envelope template with respect to a waveform. 
+Code for computing the cost/likelihood of an envelope template with respect to a waveform.
 
 """
 
@@ -24,9 +24,6 @@ import utils.geog
 import obspy.signal.util
 
 from signals.coda_decay_common import *
-
-
-
 
 def print_params(params):
     n = params.shape[0]
@@ -88,35 +85,37 @@ def logenv_ar_cost(true_env, logenv):
     return ll
 
 
-def c_cost(sigmodel, smoothed, phaseids, params, iid=False):
+def c_cost(wave, params, iid=False, sigmodel=None):
+
+    if sigmodel is None:
+        sigmodel = Sigvisa().sigmodel
 
 #    noise_floor = params[-1]
 #    params = np.reshape(params[:-1], (len(phaseids), -1))
 
-    params = np.reshape(params, (len(phaseids), -1))
+    phases = params[0]
+    vals = params[1]
 
-    for i, pid in enumerate(phaseids):
-        if np.isnan(params[i, PEAK_HEIGHT_PARAM]) or np.isnan(params[i, CODA_HEIGHT_PARAM]):
+    for i, pid in enumerate(phases):
+        if np.isnan(vals[i, PEAK_HEIGHT_PARAM]) or np.isnan(vals[i, CODA_HEIGHT_PARAM]):
             return np.float('inf')
-        if params[i, CODA_HEIGHT_PARAM] > params[i, PEAK_HEIGHT_PARAM] + 1:
+        if vals[i, CODA_HEIGHT_PARAM] > vals[i, PEAK_HEIGHT_PARAM] + 1:
             return np.float('inf')
-        if params[i, CODA_DECAY_PARAM] >= 0:
+        if vals[i, CODA_DECAY_PARAM] >= 0:
             return np.float('inf')
-        if params[i, PEAK_DECAY_PARAM] < 0:
+        if vals[i, PEAK_DECAY_PARAM] < 0:
             return np.float('inf')
 
 #    print "trying heights ppeak %f pcoda %f speak %f scoda %f" % (params[0, PEAK_HEIGHT_PARAM], params[0, CODA_HEIGHT_PARAM], params[1, PEAK_HEIGHT_PARAM], params[1, CODA_HEIGHT_PARAM] )
 
     # we assume the noise params are already set...
 
-    print "params"
-    print_params(params)
 
     if iid:
-        env = get_template(sigmodel, smoothed, phaseids, params, logscale=True)
-        c = logenv_l1_cost(np.log(smoothed.data), env.data)
+        env = get_template(sigmodel, wave, params, logscale=True)
+        c = logenv_l1_cost(np.log(wave.data), env.data)
     else:
-        c = -1 *sigmodel.trace_likelihood(smoothed, phaseids, params);
+        c = -1 *sigmodel.trace_likelihood(wave, params);
 
     print "cost", c
 
@@ -139,7 +138,7 @@ def load_template_params(cursor, evid, chan, band, runid, siteid):
         return None, None, None
     return fit_params, phaseids, fit_cost
 
-def get_template(sigmodel, trace, phaseids, params, logscale=False, sample=False):
+def get_template(sigmodel, trace, params, logscale=False, sample=False):
     srate = trace.stats['sampling_rate']
     st = trace.stats.starttime_unix
     et = st + trace.stats.npts/srate
@@ -147,9 +146,9 @@ def get_template(sigmodel, trace, phaseids, params, logscale=False, sample=False
     c = sigvisa.canonical_channel_num(trace.stats.channel)
     b = sigvisa.canonical_band_num(trace.stats.band)
     if not sample:
-        env = sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, params)
+        env = sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, params)
     else:
-        env = sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, params)
+        env = sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, params)
     env.data = np.log(env.data) if logscale else env.data
     env.stats.noise_floor = trace.stats.noise_floor
     return env

@@ -55,9 +55,7 @@ class Sigvisa(object):
         self.P_phases = ('P', 'Pn')
         self.S_phases = ('S', 'Sn', 'Lg')
 
-
         self.events = dict()
-
 
     def phasenames(self, phase_id_minus1_list):
         return [self.phasenames[id] for id in phase_id_minus1_list]
