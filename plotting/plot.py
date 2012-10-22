@@ -80,7 +80,7 @@ def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False)
     descr = descr + "\n\n" + "Event: " + str(e)
   except KeyError as e:
     pass
-  axes.text(0.5, 0, descr, fontsize=10, color="black", horizontalalignment='center', verticalalignment='center')
+  axes.text(0.5, 0, descr, fontsize=8, color="black", horizontalalignment='center', verticalalignment='center')
 
   return fig
 

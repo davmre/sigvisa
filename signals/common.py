@@ -17,8 +17,7 @@ class Waveform(object):
 
     def __init__(self, data, srate = None, stime=None, sta = None, evid=None, segment_stats = None, my_stats = None, **my_stats_entries):
         if isinstance(data, ma.MaskedArray):
-            self.data = mirror_missing(data)
-
+            self.data = data
         else:
             a = np.asarray(data)
             m = ma.masked_array(a)
@@ -53,8 +52,6 @@ class Waveform(object):
     def as_obspy_trace(self):
         allstats = dict(self.segment_stats.items() + self.my_stats.items())
         return Trace(header=allstats, data=self.data)
-
-
 
     def filter(self, filter_str, preserve_intermediate=False):
         """
@@ -146,9 +143,9 @@ class Waveform(object):
 
         f = None
         if name == "center":
-            f = lambda x : x - np.mean(x)
+            f = lambda x : ma.masked_array(data = x.data - np.mean(x), mask = x.mask)
         elif name == "env":
-            f = lambda x: obspy.signal.filter.envelope(x)
+            f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
         elif name == "smooth":
             if len(pieces) > 1:
                 window_len = int(pieces[1])
@@ -331,7 +328,8 @@ def smooth(x,window_len=11,window='hanning'):
 
 def bandpass_missing(masked_array, low, high, srate):
     mask = masked_array.mask
-    m = obspy.signal.filter.bandpass(masked_array, low, high, srate, corners = 4, zerophase=True)
+
+    m = obspy.signal.filter.bandpass(masked_array.data, low, high, srate, corners = 4, zerophase=True)
 
     return ma.masked_array(data=m, mask=mask)
 

@@ -225,13 +225,13 @@ class TestIO(unittest.TestCase):
         plotting.plot.plot_segment(self.seg)
         plt.savefig("URZ_5301405")
 
-#        s = self.seg.with_filter('center;env')
-#        plotting.plot.plot_segment(s)
-#        plt.savefig("URZ_5301405_env")
+        s = self.seg.with_filter('center;env')
+        plotting.plot.plot_segment(s)
+        plt.savefig("URZ_5301405_env")
 
-#        s = s.with_filter('freq_2.0_3.0')
-#        plotting.plot.plot_segment(s)
-#        plt.savefig("URZ_5301405_env_2_3")
+        s = s.with_filter('freq_2.0_3.0')
+        plotting.plot.plot_segment(s)
+        plt.savefig("URZ_5301405_env_2_3")
 
 
 if __name__ == '__main__':

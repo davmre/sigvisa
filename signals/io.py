@@ -95,7 +95,7 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
 
 
 
-def fetch_waveform(station, chan, stime, etime, pad_seconds=5):
+def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   """
   Returns a single Waveform for the given channel at the station in
   the given interval. If there are periods for which data are not
@@ -189,9 +189,11 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=5):
     etime = stime + (desired_samples - available_samples) / float(samprate)
 
   masked_data = mirror_missing(ma.masked_invalid(global_data))
-  pad_samples = pad_seconds * samprate
-  masked_data[0:pad_samples] = ma.masked
-  masked_data[-pad_samples:] = ma.masked
+
+  if pad_seconds > 0:
+    pad_samples = pad_seconds * samprate
+    masked_data[0:pad_samples] = ma.masked
+    masked_data[-pad_samples:] = ma.masked
 
   return Waveform(data=masked_data, sta=station, stime=global_stime, srate=samprate, chan=chan)
 
