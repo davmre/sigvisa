@@ -30,7 +30,9 @@ def plot_det_times(wave, axes=None, logscale=False):
   all_det_labels = [Sigvisa().phasenames[arrivals[i, DET_PHASE_COL]] for i in range(arrivals.shape[0])]
 
   if all_det_times is not None:
-    maxwave, minwave = float(max(wave.data)), float(min(wave.data))
+
+    maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
+
     if logscale:
       (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
     axes.bar(left=all_det_times, height=[maxwave-minwave for _ in all_det_times],
@@ -38,8 +40,6 @@ def plot_det_times(wave, axes=None, logscale=False):
     if all_det_labels is not None:
       for (t, lbl) in zip(all_det_times, all_det_labels):
         axes.text(t+3, maxwave - (maxwave-minwave)*0.1, lbl, color="red", fontsize=10)
-
-
 
 # does not save for you - you need to call savefig() yourself!
 def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False):
@@ -63,24 +63,11 @@ def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False)
   n = len(chans)
   gs = gridspec.GridSpec(n*3+1, 1)
   gs.update(left=0.1, right=0.95, hspace=1)
+  axes = None
   for chidx, chan in enumerate(sorted(chans)):
-    if chidx == 0:
-      axes = plt.subplot(gs[chidx*3:chidx*3+3, 0])
-    else:
       axes = plt.subplot(gs[chidx*3:chidx*3+3, 0], sharex=axes)
-
-    plt.ylabel(chan)
-
-    wave = segment[chan]
-    srate = wave['srate']
-    npts = wave['npts']
-    stime = wave['stime']
-    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-
-    wave_data = np.log(wave.data) if logscale else wave.data
-
-    plt.plot(timevals, wave_data, format)
-    plot_det_times(wave, axes=axes, logscale=logscale)
+      wave = segment[chan]
+      subplot_waveform(wave, format=format, logscale=logscale, axes=axes)
 
   axes = plt.subplot(gs[n*3, 0])
   axes.axis('off')
@@ -95,66 +82,31 @@ def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False)
     pass
   axes.text(0.5, 0, descr, fontsize=10, color="black", horizontalalignment='center', verticalalignment='center')
 
-#  fig.canvas.mpl_connect('draw_event', on_draw)
+  return fig
 
 
-
-def plot_waveform(wave, title=None,  format="k-"):
+def plot_waveform(wave, title=None,  format="k-", logscale=False):
   fig = plt.figure()
   plt.xlabel("Time (s)")
 
   if title is not None:
-    plt.title(title)
+    plt.suptitle(title)
 
-  chan_name = waves["chan"]
-
-  plt.ylabel(chan_name)
-
-  srate = wave['srate']
-  npts = wave['npts']
-  stime = wave['stime']
-  timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-
-  plt.plot(timevals, wave.data, format)
-  plot_det_times(wave)
+  axes = plt.subplot(1,1,1)
+  subplot_waveform(wave, axes, format=format, logscale=logscale)
   return fig
 
-def plot_waveforms(waves, title=None, formats=None, linewidths=None):
-  plt.figure()
-  if title is not None:
-    plt.title(title, fontsize=12)
-
-  plot_waves_subplot(plt.subplot(1,1,1), waves, formats, linewidths)
-
-def plot_waves_subplot(axes, waves, formats=None, linewidths=None, logscale=False):
-
-  if formats is None:
-    if len(traces) == 1:
-      formats = ["k-",]
-    elif len(traces) == 2:
-      formats = ["k-", "r-"]
-    else:
-      formats = ["k-" for t in traces]
-
-  if linewidths is None:
-      linewidths = [1 for t in traces]
-
-  axes.set_xlabel("Time (s)")
-
-  chan_name = traces[0].stats["channel"]
-
-  axes.set_ylabel(chan_name)
-
-  for (i,wave) in enumerate(waves):
+def subplot_waveform(wave, axes, format=None, logscale=False):
     srate = wave['srate']
     npts = wave['npts']
     stime = wave['stime']
     timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
-    tdata = np.log(wave.data) if logscale else wave.data
 
-    axes.plot(timevals, tdata, formats[i], linewidth = linewidths[i])
+    wave_data = np.log(wave.data) if logscale else wave.data
 
-  plot_det_times(waves[0], axes)
+    plt.ylabel(wave['chan'])
+    axes.plot(timevals, wave_data, format)
+    plot_det_times(wave, axes=axes, logscale=logscale)
 
 
 # does not save for you - you need to call savefig() yourself!
@@ -212,6 +164,11 @@ def plot_bands(wave, bands=None, title=None):
 """
 matplotlib text wrapping code from
 http://stackoverflow.com/questions/4018860/text-box-in-matplotlib
+
+to use: insert the line
+fig.canvas.mpl_connect('draw_event', on_draw)
+at the very end of constructing the figure
+
 """
 
 def on_draw(event):

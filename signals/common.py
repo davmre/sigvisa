@@ -6,6 +6,8 @@ from sigvisa import Sigvisa
 import obspy.signal.filter
 from obspy.core.trace import Trace
 
+from signals.mask_util import *
+
 from database.dataset import *
 
 class Waveform(object):
@@ -15,7 +17,8 @@ class Waveform(object):
 
     def __init__(self, data, srate = None, stime=None, sta = None, evid=None, segment_stats = None, my_stats = None, **my_stats_entries):
         if isinstance(data, ma.MaskedArray):
-            self.data = data
+            self.data = mirror_missing(data)
+
         else:
             a = np.asarray(data)
             m = ma.masked_array(a)
@@ -36,7 +39,7 @@ class Waveform(object):
             self.my_stats = my_stats_entries
 
             try:
-                fraction_valid = np.sum([int(v) for v in self.data.mask])/float(len(self.data))
+                fraction_valid = 1 - np.sum([int(v) for v in self.data.mask])/float(len(self.data))
             except TypeError:
                 fraction_valid = 1
 
@@ -50,6 +53,8 @@ class Waveform(object):
     def as_obspy_trace(self):
         allstats = dict(self.segment_stats.items() + self.my_stats.items())
         return Trace(header=allstats, data=self.data)
+
+
 
     def filter(self, filter_str, preserve_intermediate=False):
         """
@@ -154,7 +159,9 @@ class Waveform(object):
         elif name == "freq":
             low = float(pieces[1])
             high = float(pieces[2])
-            f = lambda x : obspy.signal.filter.bandpass(x, low, high, self.segment_stats['srate'], corners = 4, zerophase=True)
+
+            f = lambda x : bandpass_missing(x, low, high, self.segment_stats['srate'])
+
             fstats["freq_low"] = low
             fstats["freq_high"] = high
         else:
@@ -321,6 +328,12 @@ def smooth(x,window_len=11,window='hanning'):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y
 
+
+def bandpass_missing(masked_array, low, high, srate):
+    mask = masked_array.mask
+    m = obspy.signal.filter.bandpass(masked_array, low, high, srate, corners = 4, zerophase=True)
+
+    return ma.masked_array(data=m, mask=mask)
 
 def main():
     data1 = np.random.randn(1000)
