@@ -10,7 +10,7 @@ from utils.geog import lonlatstr
 class Event(object):
 
 
-    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'evid', 'natural_source']
+    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source']
 
 
     def __new__(cls, *args, **kwargs):
@@ -32,7 +32,7 @@ class Event(object):
 
         if evid is not None and evtype is not None:
 
-            self.lon, self.lat, self.depth, self.time, self.mb, _, self.evid = \
+            self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid = \
                 read_event(Sigvisa().cursor, evid, evtype)
 
             self.natural_source = True
@@ -43,8 +43,12 @@ class Event(object):
             self.depth=depth
             self.time=time
             self.mb=mb
+            self.orid=None
             self.evid=evid
             self.natural_source=natural_source
+
+    def as_tuple(self):
+        return (self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid)
 
     def source_logamp(self, band, phase):
         if natural_source:

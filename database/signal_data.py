@@ -10,12 +10,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
-import sigvisa
-import learn, sigvisa_util
-import signals.SignalPrior
+import sigvisa_c
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel, ErrorModel
-from utils.waveform import *
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
 import obspy.signal.util
@@ -59,7 +56,7 @@ def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=N
             if row[FIT_CHAN] != chan:
                 continue
         if short_band is not None:
-            b  = sigvisa.canonical_band_num(short_band)
+            b  = sigvisa_c.canonical_band_num(short_band)
             if int(row[FIT_BANDID]) != b:
                 continue
         if siteid is not None:
@@ -91,8 +88,8 @@ def load_wiggle_models(cursor, sigmodel, filename):
         entries = line.split()
         siteid = sta_to_siteid(entries[0], cursor)
         phaseid = phasename_to_id(entries[1])
-        c = sigvisa.canonical_channel_num(entries[2])
-        b = sigvisa.canonical_band_num(entries[3])
+        c = sigvisa_c.canonical_channel_num(entries[2])
+        b = sigvisa_c.canonical_band_num(entries[3])
         mean = float(entries[4])
         std = float(entries[5])
         order = int(entries[6])
@@ -111,7 +108,7 @@ def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runids=None
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi, fit.band from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and lebo.mb between %f and %f and fit.dist between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, acost_threshold, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi, fit.band from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_c_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and lebo.mb between %f and %f and fit.dist between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, acost_threshold, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
 
     fname = "db_cache/%s.txt" % str(hashlib.md5(sql_query).hexdigest())
     try:
@@ -121,7 +118,7 @@ def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runids=None
         cursor.execute(sql_query)
         shape_data = np.array(cursor.fetchall(), dtype=object)
         print shape_data.size
-        shape_data[:, FIT_BANDID] = np.asarray([sigvisa.canonical_band_num(band) for band in shape_data[:, FIT_BANDID]])
+        shape_data[:, FIT_BANDID] = np.asarray([sigvisa_c.canonical_band_num(band) for band in shape_data[:, FIT_BANDID]])
         shape_data = np.array(shape_data, dtype=float)
         np.savetxt(fname, shape_data)
 

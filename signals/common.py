@@ -29,7 +29,7 @@ class Waveform(object):
         else:
             npts = len(data)
             etime = stime + npts/float(srate)
-            self.segment_stats = {"srate" : float(srate), "stime" : stime, "sta": sta, "npts": npts, "etime": etime}
+            self.segment_stats = {"srate" : float(srate), "stime" : stime, "sta": sta, "npts": npts, "etime": etime, "len": npts/float(srate)}
 
         # attributes specific to this waveform, e.g. channel or freq band
         if my_stats is not None:
@@ -42,7 +42,7 @@ class Waveform(object):
             except TypeError:
                 fraction_valid = 1
 
-            my_stats_entries.update({"filter_str" : "",
+            self.my_stats.update({"filter_str" : "",
                                      "freq_low": 0.0,
                                      "freq_high": self.segment_stats["srate"]/2.0,
                                      "fraction_valid": fraction_valid })
@@ -51,6 +51,20 @@ class Waveform(object):
 
     def as_obspy_trace(self):
         allstats = dict(self.segment_stats.items() + self.my_stats.items())
+        allstats['starttime_unix'] = allstats['stime']
+        allstats['sampling_rate'] = allstats['srate']
+
+        band = "broadband"
+        for f in self.my_stats['filter_str'].split(';'):
+            if f == "env":
+                band = "broadband_envelope"
+            if f.startswith('freq'):
+                band = f
+                break
+        allstats['band'] = band
+
+        allstats['siteid'] = Sigvisa().name_to_siteid_minus1[allstats['sta']]+1
+
         return Trace(header=allstats, data=self.data)
 
     def filter(self, filter_str, preserve_intermediate=False):
@@ -258,6 +272,8 @@ class Segment(object):
             return self.filter_str
         elif key in self.stats:
             return self.stats[key]
+        elif key in ('arrivals', 'arrivals_idcx', 'event_arrivals'):
+            return self.__chans.values()[0][key]
         else:
             raise KeyError("segment didn't recognized key %s" % key)
 

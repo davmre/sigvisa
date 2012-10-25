@@ -16,14 +16,12 @@ matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-import plot
-import learn, sigvisa_util
-import signals.SignalPrior
-from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
 from signals.coda_decay_common import *
+
+import sigvisa_c
 
 def print_params(params):
     n = params.shape[0]
@@ -31,22 +29,22 @@ def print_params(params):
         print "%d: st: %.1f pdelay: %.1f pheight: %.2f pdecay: %.4f cheight: %.2f cdecay: %.4f" % (i, params[i, 0], params[i, 1], params[i, 2], params[i, 3], params[i, 4], params[i, 5])
 
 def set_dummy_wiggles(sigmodel, tr, phaseids):
-    c = sigvisa.canonical_channel_num(tr.stats.channel)
-    b = sigvisa.canonical_band_num(tr.stats.band)
+    c = sigvisa_c.canonical_channel_num(tr.stats.channel)
+    b = sigvisa_c.canonical_band_num(tr.stats.band)
     for pid in phaseids:
         sigmodel.set_wiggle_process(tr.stats.siteid, b, c, pid, 1, 0.05, np.array([.8,-.2]))
 
 def set_noise_process(sigmodel, tr):
-    c = sigvisa.canonical_channel_num(tr.stats.channel)
-    b = sigvisa.canonical_band_num(tr.stats.band)
+    c = sigvisa_c.canonical_channel_num(tr.stats.channel)
+    b = sigvisa_c.canonical_band_num(tr.stats.band)
     arm = tr.stats.noise_model
     sigmodel.set_noise_process(tr.stats.siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
 
 def set_noise_processes(sigmodel, seg):
     for chan in seg.keys():
-        c = sigvisa.canonical_channel_num(chan)
+        c = sigvisa_c.canonical_channel_num(chan)
         for band in seg[chan].keys():
-            b = sigvisa.canonical_band_num(band)
+            b = sigvisa_c.canonical_band_num(band)
             siteid = seg[chan][band].stats.siteid
             try:
                 arm = seg[chan][band].stats.noise_model
@@ -143,8 +141,8 @@ def get_template(sigmodel, trace, params, logscale=False, sample=False):
     st = trace.stats.starttime_unix
     et = st + trace.stats.npts/srate
     siteid = trace.stats.siteid
-    c = sigvisa.canonical_channel_num(trace.stats.channel)
-    b = sigvisa.canonical_band_num(trace.stats.band)
+    c = sigvisa_c.canonical_channel_num(trace.stats.channel)
+    b = sigvisa_c.canonical_band_num(trace.stats.band)
     if not sample:
         env = sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, params)
     else:

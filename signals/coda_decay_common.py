@@ -12,10 +12,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 import plot
 import sigvisa
 import learn
-import signals.SignalPrior
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel, ErrorModel
-from utils.waveform import *
 from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
 import obspy.signal.util

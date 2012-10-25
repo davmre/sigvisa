@@ -12,17 +12,12 @@ from matplotlib.backends.backend_pdf import PdfPages
 from optparse import OptionParser
 
 import plot
-import learn, sigvisa_util
-import signals.SignalPrior
-from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
 
 import utils.nonparametric_regression as nr
 from signals.coda_decay_common import *
-from signals.templates import *
-from signals.train_coda_models import CodaModel
 
 
 def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):

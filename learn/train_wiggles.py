@@ -14,9 +14,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from optparse import OptionParser
 
 import plot
-import learn, sigvisa_util
 import sigvisa
-from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 import itertools

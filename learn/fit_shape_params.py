@@ -2,6 +2,7 @@ import os, errno, sys, time, traceback
 import numpy as np, scipy
 
 from database.dataset import *
+from database.signal_data import *
 from database import db
 
 import matplotlib
@@ -10,19 +11,36 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
-import learn, sigvisa_util
-import signals.SignalPrior
-from utils.waveform import *
 import utils.geog
 import obspy.signal.util
 
 from optparse import OptionParser
 
-import utils.nonparametric_regression as nr
+from sigvisa import *
 from signals.coda_decay_common import *
-from signals.plot_coda_decays import *
-from signals.train_wiggles import *
-from signals.templates import *
+from signals.io import *
+from plotting.plot_coda_decays import *
+from learn.train_wiggles import *
+from signals.noise_model import *
+from signals.template_cost import *
+
+# params with peak but without arrtime
+def remove_peak(pp):
+    newp = np.zeros((pp.shape[0], NUM_PARAMS-3))
+    newp[:, 0] = pp[:, PEAK_OFFSET_PARAM-1]
+    newp[:, 1] = pp[:, CODA_HEIGHT_PARAM-1]
+    newp[:, 2] = pp[:, CODA_DECAY_PARAM-1]
+    return newp
+
+def restore_peak(peakless_params):
+    p = peakless_params
+    newp = np.zeros((p.shape[0], NUM_PARAMS-1))
+    newp[:, 0] = p[:, 0]
+    newp[:, 1] = p[:, 1]
+    newp[:, 2] = 1
+    newp[:, 3] = p[:, 1]
+    newp[:, 4] = p[:, 2]
+    return newp
 
 def arrival_peak_offset(trace, window_start_offset, window_end_offset = None):
     srate = trace.stats.sampling_rate
@@ -161,7 +179,6 @@ def extract_wiggles(tr, tmpl, arrs, threshold=2.5, length=None):
 
 def learn_wiggle_params(sigmodel, env, smoothed, phaseids, params):
 
-
     tmpl = get_template(sigmodel, env, phaseids, params)
     diff = subtract_traces(env, tmpl)
 
@@ -288,7 +305,10 @@ def fit_template(sigmodel, pp, arrs, env, smoothed, fix_peak = True, evid=None, 
     #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
 
     set_noise_process(sigmodel, env)
-    load_wiggle_models(cursor, sigmodel, wiggles)
+    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
+
+    if wiggles is not None:
+        load_wiggle_models(cursor, sigmodel, wiggles)
     best_params = None
 
     # initialize the search using the outcome of a previous run
@@ -465,33 +485,38 @@ def get_first_p_s_arrivals(cursor, evid, siteid):
     phases= [phaseid_to_name(x) for x in phaseids if x is not None]
     return first_p_arrival, first_s_arrival, arrivals, phases
 
-def load_segments(cursor, evid, sta, ar_noise=True, chans=None, bands=None):
+def load_segments(cursor, evid, siteid, ar_noise=True, chans=None, bands=None):
 
-    seg = load_event_station(cursor, evid, sta).filter("env")
-    if seg['real_len'] < MIN_SEGMENT_LENGTH
-        raise Exception("minimum segment length %.2fs, skipping segment withlength %.2f" % (MIN_SEGMENT_LENGTH,  npts/srate))    
+    sta = Sigvisa().siteid_minus1_to_name[siteid-1]
+    print sta
+    seg = load_event_station(evid, sta, cursor=cursor).with_filter("env")
+
+
 
     arrival_segment = seg.as_old_style_segment(bands)
 
 
     for chan in arrival_segment.keys():
+        if seg['len']*seg[chan]['fraction_valid'] < MIN_SEGMENT_LENGTH:
+            raise Exception("minimum segment length %.2fs, skipping channel with length %.2f" % (MIN_SEGMENT_LENGTH,  seg['len']*seg[chan]['fraction_valid']))
+
         for band in arrival_segment[chan].keys():
             a = arrival_segment[chan][band]
-            armodel = Sigvisa().get_noise_model(sta=sta, chan=chan, filter_str= (band + ";env"), time=seg['stime'])
+            armodel = get_noise_model(sta=sta, chan=chan, filter_str= (band + ";env"), time=seg['stime'])
             a.stats.noise_floor = armodel.c
             a.stats.noise_model = armodel
 
-    smoothed_segment = seg.filter("smooth").as_old_style_segment(bands)
+    smoothed_segment = seg.with_filter("smooth").as_old_style_segment(bands)
     for chan in arrival_segment.keys():
         for band in arrival_segment[chan].keys():
-            a = arrival_segment[chan][band]
-            armodel = Sigvisa().get_noise_model(sta=sta, chan=chan, filter_str= (band + ";env;smooth"), time=seg['stime'])
+            a = smoothed_segment[chan][band]
+            armodel = get_noise_model(sta=sta, chan=chan, filter_str= (band + ";env;smooth"), time=seg['stime'])
             a.stats.noise_floor = armodel.c
             a.stats.noise_model = armodel
 
     arrivals = seg['arrivals']
     all_arrivals = arrivals[:, DET_TIME_COL]
-    all_arrival_phases = Sigvisa().phasenames(arrivals[:, DET_PHASE_COL])
+    all_arrival_phases = Sigvisa().phasenames[[int(x) for x in arrivals[:, DET_PHASE_COL]]]
     all_arrival_arids = arrivals[:, DET_ARID_COL]
 
     # package together information about arriving phases into a single
@@ -591,6 +616,116 @@ def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_envelop
 
     return tr, smoothed, tmpl, arrs["arrival_phases"], wiggles, wiggles_smooth
 
+
+def fit_event_segment(event, siteid, runid, init_runid=None, plot=False, wiggles=None, method="simplex", by_phase=False):
+
+    try:
+        pp = None
+
+        evid = int(event[EV_EVID_COL])
+
+        s = Sigvisa()
+        bands = s.bands
+        chans = s.chans
+        cursor = s.cursor
+
+        base_coda_dir = get_base_dir(siteid, runid)
+
+
+        distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (s.sites[siteid-1][0], s.sites[siteid-1][1]))
+        azimuth = utils.geog.azimuth((s.sites[siteid-1][0], s.sites[siteid-1][1]), (event[EV_LON_COL], event[EV_LAT_COL]))
+
+        arrival_segment, smoothed_segment, arrs = load_segments(s.cursor, evid, siteid, bands=bands, chans=chans)
+
+
+
+        for (band_idx, band) in enumerate(bands):
+            pdf_dir = get_dir(os.path.join(base_coda_dir, band))
+
+            for chan in chans:
+
+                if plot:
+                    fname = os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
+                    print "writing to %s..." % (fname,)
+                    pp = PdfPages(fname)
+                else:
+                    pp = None
+
+                tr = arrival_segment[chan][band]
+                smoothed = smoothed_segment[chan][band]
+
+                st = tr.stats.starttime_unix
+                srate = tr.stats.sampling_rate
+                time_len = len(tr.data)/srate
+                et = st + time_len
+
+                # DO THE FITTING
+                if method == "load":
+                    fit_params, phaseids, fit_cost = load_template_params(s.cursor, evid, chan, band, init_runid, siteid)
+                    if fit_params is None:
+                        print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, runid, chan, band)
+                        continue
+                    set_noise_process(s.sigmodel, tr)
+                    fit_cost = fit_cost * time_len
+                else:
+                    fit_params, phaseids, fit_cost = fit_template(s.sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, wiggles=wiggles, by_phase=by_phase, cursor=cursor, init_runid=init_runid)
+                    if pp is not None:
+                        print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
+
+                tmpl = get_template(s.sigmodel, tr, phaseids, fit_params)
+                wiggles, l = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
+                print "got nwiggle length l", l
+                wiggles2, l2 = extract_wiggles(arrival_segment[chan]['broadband'], None, arrs, threshold=snr_threshold, length=l)
+
+                for (pidx, phaseid) in enumerate(phaseids):
+                    if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
+                        continue
+                    else:
+                        print "saving wiggles for phaseid", phaseid
+                        dirname = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)), band)
+                        dirname2 = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)))
+                        fname = os.path.join(dirname, "%d_%s.dat" % (evid, chan))
+                        fname2 = os.path.join(dirname2, "%d_%s_raw.dat" % (evid, chan))
+                        get_dir(dirname)
+                        get_dir(dirname2)
+                        print "saving phase %d len %d" % (phaseid, len(wiggles[pidx]))
+                        np.savetxt(fname, np.array(wiggles[pidx]))
+                        np.savetxt(fname2, np.array(wiggles2[pidx]))
+                        try:
+                            sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, band, chan, evid, fname, snr_threshold)
+                            cursor.execute(sql_query)
+
+
+                            sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, "broadband", chan, evid, fname, snr_threshold)
+                            cursor.execute(sql_query)
+                        except:
+                            print "DB error inserting fits (probably duplicate key), continuing..."
+                            pass
+
+                s = [method,]
+                if by_phase:
+                    s.append('byphase')
+                method_str = '_'.join(s)
+                if method != "load":
+                    for (i, arid) in enumerate(arrs["all_arrival_arids"]):
+                        sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+                        print sql_query
+                        try:
+                            cursor.execute(sql_query)
+                        except:
+                            print "DB error inserting fits (probably duplicate key), continuing..."
+                            pass
+                dbconn.commit()
+                if pp is not None:
+                    pp.close()
+
+
+    except:
+        if pp is not None:
+            pp.close()
+        raise
+
+
 def main():
 # boilerplate initialization of various things
 
@@ -612,10 +747,10 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
+    s = Sigvisa()
+    cursor = s.cursor
 
     siteid = options.siteid
-    method = options.method
     runid = options.runid
 
     if options.orid is not None:
@@ -655,9 +790,6 @@ def main():
     cursor.execute(sql_query)
     events = np.array(cursor.fetchall())
 
-#    bands = ['narrow_envelope_4.00_6.00', 'narrow_envelope_2.00_3.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
-    short_bands = [b[16:] for b in bands]
-
     if runid is None:
         cursor.execute("select max(runid) from sigvisa_coda_fits")
         runid, = cursor.fetchone()
@@ -665,8 +797,6 @@ def main():
             runid=0
         else:
             runid = int(runid)+1
-
-    base_coda_dir = get_base_dir(siteid, runid)
 
     for event in events:
         evid = int(event[EV_EVID_COL])
@@ -677,96 +807,10 @@ def main():
             os.system(cmd_str)
             continue
 
-        distance = utils.geog.dist_km((event[EV_LON_COL], event[EV_LAT_COL]), (sites[siteid-1][0], sites[siteid-1][1]))
-        azimuth = utils.geog.azimuth((sites[siteid-1][0], sites[siteid-1][1]), (event[EV_LON_COL], event[EV_LAT_COL]))
-
         try:
-            arrival_segment, smoothed_segment, arrs = load_segments(cursor, event[EV_EVID_COL], siteid, bands=bands, chans=chans)
-
-            for (band_idx, band) in enumerate(bands):
-                short_band = short_bands[band_idx]
-                pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
-
-                for chan in chans:
-
-                    if options.plot:
-                        fname = os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
-                        print "writing to %s..." % (fname,)
-                        pp = PdfPages(fname)
-                    else:
-                        pp = None
-                    tr = arrival_segment[chan][band]
-                    smoothed = smoothed_segment[chan][band]
-
-                    st = tr.stats.starttime_unix
-                    srate = tr.stats.sampling_rate
-                    time_len = len(tr.data)/srate
-                    et = st + time_len
-
-                    # DO THE FITTING
-                    if method == "load":
-                        fit_params, phaseids, fit_cost = load_template_params(cursor, evid, chan, short_band, options.init_runid, siteid)
-                        if fit_params is None:
-                            print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, runid, chan, short_band)
-                            continue
-                        set_noise_process(sigmodel, tr)
-                        fit_cost = fit_cost * time_len
-                    else:
-                        fit_params, phaseids, fit_cost = fit_template(sigmodel, pp, arrs, tr, smoothed, evid = str(evid), method=method, wiggles=options.wiggles, by_phase=by_phase, cursor=cursor, init_runid=options.init_runid)
-                        if pp is not None:
-                            print "wrote plot", os.path.join(pdf_dir, "%d_%s.pdf" % (evid, chan))
-
-                    tmpl = get_template(sigmodel, tr, phaseids, fit_params)
-                    wiggles, l = extract_wiggles(tr, tmpl, arrs, threshold=snr_threshold)
-                    print "got nwiggle length l", l
-                    wiggles2, l2 = extract_wiggles(arrival_segment[chan]['broadband'], None, arrs, threshold=snr_threshold, length=l)
-
-                    for (pidx, phaseid) in enumerate(phaseids):
-                        if wiggles[pidx] is None or len(wiggles[pidx]) == 0:
-                            continue
-                        else:
-                            print "saving wiggles for phaseid", phaseid
-                            dirname = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)), short_band)
-                            dirname2 = os.path.join("wiggles", str(int(runid)), str(int(siteid)), str(int(phaseid)))
-                            fname = os.path.join(dirname, "%d_%s.dat" % (evid, chan))
-                            fname2 = os.path.join(dirname2, "%d_%s_raw.dat" % (evid, chan))
-                            get_dir(dirname)
-                            get_dir(dirname2)
-                            print "saving phase %d len %d" % (phaseid, len(wiggles[pidx]))
-                            np.savetxt(fname, np.array(wiggles[pidx]))
-                            np.savetxt(fname2, np.array(wiggles2[pidx]))
-                            try:
-                                sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, short_band, chan, evid, fname, snr_threshold)
-                                cursor.execute(sql_query)
-
-
-                                sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrs["all_arrival_arids"][pidx], siteid, phaseid, "broadband", chan, evid, fname, snr_threshold)
-                                cursor.execute(sql_query)
-                            except:
-                                print "DB error inserting fits (probably duplicate key), continuing..."
-                                pass
-
-                    s = [method,]
-                    if by_phase:
-                        s.append('byphase')
-                    method_str = '_'.join(s)
-                    if method != "load":
-                        for (i, arid) in enumerate(arrs["all_arrival_arids"]):
-                            sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, short_band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
-                            print sql_query
-                            try:
-                                cursor.execute(sql_query)
-                            except:
-                                print "DB error inserting fits (probably duplicate key), continuing..."
-                                pass
-                    dbconn.commit()
-                    if pp is not None:
-                        pp.close()
-
+            fit_event_segment(event, siteid, runid, options.init_runid, options.plot, options.wiggles, options.method, by_phase=by_phase)
         except KeyboardInterrupt:
             dbconn.commit()
-            if pp is not None:
-                pp.close()
             raise
         except:
             dbconn.commit()
