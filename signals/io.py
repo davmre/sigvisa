@@ -17,7 +17,7 @@ from database.dataset import *
 import plot
 
 from signals.common import *
-
+from signals.mask_util import *
 # from signals.coda_decay_common import *
 
 from sigvisa import Sigvisa
@@ -26,11 +26,15 @@ class MissingWaveform(Exception):
   pass
 
 
-def load_event_station(cursor, evid, sta, evtype="leb"):
+def load_event_station(evid, sta, evtype="leb", cursor=None):
+  if cursor is None:
+    cursor = Sigvisa().cursor
+
   arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
   arrival_times = arrivals[:, DET_TIME_COL]
   seg = load_segments(cursor, (sta,), np.min(arrival_times)-10, np.max(arrival_times)+200)[0]
-  seg.stats['arrivals'] = arrivals
+  seg.stats['evid'] = evid
+  seg.stats['event_arrivals'] = arrivals
 
   return seg
 
@@ -76,14 +80,15 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
     waves = []
 
     for (chanidx, chan) in enumerate(chans):
-        try:
-          wave = fetch_waveform(sta, chan, start_time, end_time)
-          print trace
-          print " ... successfully loaded."
-        except (MissingWaveform, IOError):
-          print " ... not found, skipping."
-          continue
-        waves.append(wave)
+      print "loading sta %s chan %s time [%.1f, %.1f]" % (sta, chan, start_time, end_time),
+      sys.stdout.flush()
+      try:
+        wave = fetch_waveform(sta, chan, start_time, end_time)
+        print " ... successfully loaded."
+      except (MissingWaveform, IOError) as e:
+        print " ... not found, skipping. (%s)" % e
+        continue
+      waves.append(wave)
 
     if len(waves) > 0:
       segment = Segment(waves)
@@ -93,11 +98,15 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
 
 
 
-def fetch_waveform(station, chan, stime, etime):
+def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   """
   Returns a single Waveform for the given channel at the station in
   the given interval. If there are periods for which data are not
   available, they are marked as missing data.
+
+  Loads data for pad_seconds before and after the true start time, and
+  masks the additional data. This is used to absorb filtering
+  artifacts.
   """
   s = Sigvisa()
   cursor = s.cursor
@@ -105,19 +114,23 @@ def fetch_waveform(station, chan, stime, etime):
   # scan the waveforms for the given interval
   samprate = None
 
+  orig_stime = stime
+  orig_etime = etime
+  stime = stime-pad_seconds
+  etime = etime+pad_seconds
+
   # the global_data array is initialized below once we know the
   # samprate.za
   global_data = None
   global_stime = stime
   global_etime = etime
 
-
   chan = s.canonical_channel_name[chan]
   chan_list = s.equivalent_channels(chan)
 
   while True:
 
-    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), stime, stime)
+    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), etime, stime)
 
     cursor.execute(sql)
     waveform_values = cursor.fetchone()
@@ -165,6 +178,9 @@ def fetch_waveform(station, chan, stime, etime):
     t_end = t_start + len(wave)
     global_data[t_start:t_end] = wave
 
+#    print "   loaded data from %d to %d (%.1f to %.1f)" % (t_start, t_end, t_start/samprate, t_end/samprate)
+
+
     # do we have all the data that we need
     if desired_samples <= available_samples:
       break
@@ -175,9 +191,14 @@ def fetch_waveform(station, chan, stime, etime):
     # will be selected in the next file
     etime = stime + (desired_samples - available_samples) / float(samprate)
 
-  masked_data = ma.masked_invalid(global_data)
+  masked_data = mirror_missing(ma.masked_invalid(global_data))
 
-  return Waveform(data=np.array(masked_data), sta=station, stime=stime, srate=samprate, chan=chan)
+  if pad_seconds > 0:
+    pad_samples = pad_seconds * samprate
+    masked_data[0:pad_samples] = ma.masked
+    masked_data[-pad_samples:] = ma.masked
+
+  return Waveform(data=masked_data, sta=station, stime=global_stime, srate=samprate, chan=chan)
 
   #return samprate, np.array(data)
 

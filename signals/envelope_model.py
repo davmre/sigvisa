@@ -35,11 +35,10 @@ class EnvelopeModel:
 Compute the probability of a set of segments (signal envelopes), given a set of events. This is doen by either maximizing or integrating the probability over the template parameters describing the signals.
 """
 
-
-
     def __init__(self, template_model, bands=None, chans=None, phases=None):
-        
+
         self.sigvisa = Sigvisa()
+        self.sigmodel = self.sigvisa.sigmodel
         self.template_model = template_model
 
         if bands is None:
@@ -63,12 +62,12 @@ Compute the probability of a set of segments (signal envelopes), given a set of 
         total_ll = 0
         set_noise_processes(self.sigmodel, segment)
         all_params = NestedDict()
-        
+
         for chan in self.chans:
             for band in self.bands:
                 wave = segment.filter(band)[chan]
 
-                f = lambda params: -1 * c_cost(wave, self.phases, params, iid=iid) + self.template_model.log_likelihood(params, event, sta, chan, band, self.phases)
+                f = lambda params: -1 * c_cost(wave, self.phases, params, iid=iid, sigmodel=self.sigmodel) + self.template_model.log_likelihood(params, event, sta, chan, band, self.phases)
 
                 #just use the mean parameters
                 params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
@@ -83,12 +82,12 @@ Compute the probability of a set of segments (signal envelopes), given a set of 
         total_ll = 0
         set_noise_processes(self.sigmodel, segment)
         all_params = NestedDict()
-        
+
         for chan in self.chans:
             for band in self.bands:
                 wave = segment.filter(band)[chan]
 
-                f = lambda params: -1 * c_cost(wave, self.phases, params, iid=iid) + self.template_model.log_likelihood(params, event, sta, chan, band, self.phases)
+                f = lambda params: -1 * c_cost(wave, self.phases, params, iid=iid, sigmodel=self.sigmodel) + self.template_model.log_likelihood(params, event, sta, chan, band, self.phases)
 
                 #optimize over parameters
                 params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
@@ -108,12 +107,12 @@ Compute the probability of a set of segments (signal envelopes), given a set of 
         total_ll = 0
         set_noise_processes(self.sigmodel, segment)
         all_params = NestedDict()
-        
+
         for chan in self.chans:
             for band in self.bands:
                 wave = segment.filter(band)[chan]
 
-                f = lambda params: -1 * c_cost(wave, self.phases, params, iid=iid) + self.template_model.log_likelihood(params, event, sta, chan, band, self.phases)
+                f = lambda params: -1 * c_cost(wave, self.phases, params, iid=iid, sigmodel=self.sigmodel) + self.template_model.log_likelihood(params, event, sta, chan, band, self.phases)
 
                 sum_ll = np.float("-inf")
 
@@ -147,7 +146,7 @@ Compute the probability of a set of segments (signal envelopes), given a set of 
 
         tr = s[chan][band]
         siteid = tr.stats.siteid
-        
+
         ll, pdict  = self.log_likelihood(s, event, pp=pp, marginalize_method="mode", iid=iid)
         params = pdict[chan][band]
         if params is not None and not isinstance(params, NestedDict):

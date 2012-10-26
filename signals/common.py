@@ -6,12 +6,16 @@ from sigvisa import Sigvisa
 import obspy.signal.filter
 from obspy.core.trace import Trace
 
+from signals.mask_util import *
+
+from database.dataset import *
+
 class Waveform(object):
     """
     A single waveform trace. Contains methods for generating filtered versions of itself.
     """
 
-    def __init__(self, data, srate = None, stime=None, sta = None, segment_stats = None, my_stats = None, **my_stats_entries):
+    def __init__(self, data, srate = None, stime=None, sta = None, evid=None, segment_stats = None, my_stats = None, **my_stats_entries):
         if isinstance(data, ma.MaskedArray):
             self.data = data
         else:
@@ -19,14 +23,13 @@ class Waveform(object):
             m = ma.masked_array(a)
             self.data = m
 
-
         # stats that can be shared with other waveforms in a segment
         if segment_stats is not None:
             self.segment_stats = segment_stats
         else:
             npts = len(data)
             etime = stime + npts/float(srate)
-            self.segment_stats = {"srate" : float(srate), "stime" : stime, "sta": sta, "npts": npts, "etime": etime}
+            self.segment_stats = {"srate" : float(srate), "stime" : stime, "sta": sta, "npts": npts, "etime": etime, "len": npts/float(srate), "siteid": Sigvisa().name_to_siteid_minus1[sta]+1}
 
         # attributes specific to this waveform, e.g. channel or freq band
         if my_stats is not None:
@@ -35,19 +38,45 @@ class Waveform(object):
             self.my_stats = my_stats_entries
 
             try:
-                fraction_valid = np.sum([int(v) for v in self.data.mask])/float(len(self.data))
+                fraction_valid = 1 - np.sum([int(v) for v in self.data.mask])/float(len(self.data))
             except TypeError:
                 fraction_valid = 1
 
-            my_stats_entries.update({"filter_str" : "",
+            self.my_stats.update({"filter_str" : "",
                                      "freq_low": 0.0,
                                      "freq_high": self.segment_stats["srate"]/2.0,
                                      "fraction_valid": fraction_valid })
 
         self.filtered = dict()
 
+
+    # cost functions for comparing to other waves
+    def l1_cost(self, other_wave):
+        if self['filter_str'] != other['filter_str'] or self['stime'] != other_wave['stime'] or self['srate'] != other_wave['srate'] or self['npts'] != other_wave['npts']:
+            print "error computing distance between:"
+            print self
+            print other_wave
+            raise Exception("waveforms do not align, can't compute L1 distance!")
+
+        return np.sum(np.abs(self.data - other_wave.data))
+
+    def __get_band(self):
+        band = "broadband"
+        for f in self.my_stats['filter_str'].split(';'):
+            if f == "env":
+                band = "broadband_envelope"
+            if f.startswith('freq'):
+                band = f
+                break
+        return band
+
     def as_obspy_trace(self):
         allstats = dict(self.segment_stats.items() + self.my_stats.items())
+        allstats['starttime_unix'] = allstats['stime']
+        allstats['sampling_rate'] = allstats['srate']
+
+        allstats['band'] = self['band']
+
         return Trace(header=allstats, data=self.data)
 
     def filter(self, filter_str, preserve_intermediate=False):
@@ -110,14 +139,20 @@ class Waveform(object):
             return self.my_stats[key]
 
         # if we don't have arrivals for this waveform, look them up and cache them
+        elif key == "event_arrivals":
+            event_arrivals = read_event_detections(cursor=Sigvisa().cursor, evid=self['evid'], stations = [self['sta'],], evtype="leb")
+            self.segment_stats['event_arrivals'] = event_arrivals
+            return event_arrivals
         elif key == "arrivals": # default to LEB arrivals
-            arrivals = read_arrivals(sta=self['sta'], stime=self['stime'], etime=self['etime'], evtype="leb")
+            arrivals = read_station_detections(cursor=Sigvisa().cursor, sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="leb_arrival")
             self.segment_stats['arrivals'] = arrivals
             return arrivals
         elif key == "arrivals_idcx":
-            arrivals = read_arrivals(sta=self['sta'], stime=self['stime'], etime=self['etime'], evtype="idcx")
+            arrivals = read_station_detections(cursor=Sigvisa().cursor, sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="idcx_arrival")
             self.segment_stats['arrivals_idcx'] = arrivals
             return arrivals
+        elif key == "band":
+            return self.__get_band()
         else:
             raise KeyError("waveform didn't recognized key %s" % key)
 
@@ -135,19 +170,25 @@ class Waveform(object):
         fstats["filter_str"] += ";" + desc
 
         f = None
-        if name == "env":
-            f = lambda x: obspy.signal.filter.envelope(x)
+        if name == "center":
+            f = lambda x : ma.masked_array(data = x.data - np.mean(x), mask = x.mask)
+        if name == "log":
+            f = lambda x : np.log(x)
+        elif name == "env":
+            f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
         elif name == "smooth":
             if len(pieces) > 1:
                 window_len = int(pieces[1])
             else:
-                window_len = 11
+                window_len = 401
 
             f = lambda x: smooth(x, window_len)
         elif name == "freq":
             low = float(pieces[1])
             high = float(pieces[2])
-            f = lambda x : obspy.signal.filter.bandpass(x, low, high, self.segment_stats['srate'], corners = 4, zerophase=True)
+
+            f = lambda x : bandpass_missing(x, low, high, self.segment_stats['srate'])
+
             fstats["freq_low"] = low
             fstats["freq_high"] = high
         else:
@@ -158,7 +199,7 @@ class Waveform(object):
         s = "wave pts %d @ %d Hz. " % (self['npts'], self['srate'])
 
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s += "time: %s. sta: %s, chan %s. " % (timestr, self['sta'], self['chan'])
+        s += "time: %s (%.1f). sta: %s, chan %s. " % (timestr, self['stime'], self['sta'], self['chan'])
         s += ', '.join(['%s: %s' % (k, self.my_stats[k]) for k in sorted(self.my_stats.keys()) if k != 'chan'])
         return s
 
@@ -166,7 +207,7 @@ class Segment(object):
 
     STANDARD_STATS = ["srate", "sta", "stime", "etime", "npts"]
 
-    filter_order = ['freq', 'env', 'smooth']
+    filter_order = ['center', 'freq', 'env', 'log', 'smooth']
 
     def __init__(self, waveforms = []):
         self.__chans = dict()
@@ -196,6 +237,9 @@ class Segment(object):
             for stat in Segment.STANDARD_STATS:
                 if wf[stat] != self[stat]:
                     raise Exception("waveform conflicts with segment stat %s (%s vs %s)" % (stat, wf[stat], self[stat]))
+
+            # maintain invariant: all waveforms in a segment share the same segment stats object
+            wf.segment_stats = self.stats
 
         # add the waveform to the segment!
         self.__chans[wf["chan"]] = wf
@@ -234,6 +278,9 @@ class Segment(object):
                 old_segment[chan][band] = filtered[chan].as_obspy_trace()
         return old_segment
 
+    def get_chans(self):
+        return self.__chans.keys()
+
     def __getitem__(self, key):
         if key in self.__chans:
             return self.__chans[key].filter(self.filter_str)
@@ -241,19 +288,21 @@ class Segment(object):
             return self.filter_str
         elif key in self.stats:
             return self.stats[key]
+        elif key in ('arrivals', 'arrivals_idcx', 'event_arrivals'):
+            return self.__chans.values()[0][key]
         else:
             raise KeyError("segment didn't recognized key %s" % key)
 
     def __str__(self):
-        s = "wave pts %d @ %d Hz. " % (self['npts'], self['srate'])
+        s = "%d pts @ %d Hz (%.1fs). " % (self['npts'], self['srate'], self['npts'] / self['srate'])
 
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s += "time: %s. sta: %s, chans: %s. " % (timestr, self['sta'], ','.join(sorted(self.__chans.keys())))
-        s += 'filter: %s' % self.filter_str
+        s += "start: %s (%.1f). sta: %s, chans: %s. " % (timestr, self['stime'], self['sta'], ','.join(sorted(self.__chans.keys())))
+        s += "filter: '%s'" % self.filter_str
         return s
 
 
-def smooth(x,window_len=11,window='hanning'):
+def smooth(x,window_len=121,window='hanning'):
     """smooth the data using a window with requested size.
 
     This method is based on the convolution of a scaled window with the signal.
@@ -298,16 +347,24 @@ def smooth(x,window_len=11,window='hanning'):
         raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
 
 
-    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
+#    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
     #print(len(s))
+
     if window == 'flat': #moving average
         w=np.ones(window_len,'d')
     else:
         w=eval('np.'+window+'(window_len)')
 
-    y=np.convolve(w/w.sum(),s,mode='valid')
-    return y
+    y=np.convolve(w/w.sum(),x.data,mode='same')
+    return ma.masked_array(y, x.mask)
 
+
+def bandpass_missing(masked_array, low, high, srate):
+    mask = masked_array.mask
+
+    m = obspy.signal.filter.bandpass(masked_array.data, low, high, srate, corners = 4, zerophase=True)
+
+    return ma.masked_array(data=m, mask=mask)
 
 def main():
     data1 = np.random.randn(1000)

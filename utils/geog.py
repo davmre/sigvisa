@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,13 +24,22 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 import numpy as np
 
 from database.dataset import *
 import database.db
 
 AVG_EARTH_RADIUS_KM = 6371.0
+
+def lonlatstr(lon, lat):
+    lon = (lon + 180) % 360 - 180
+
+    lonstr = "%.2f W" % -lon if lon < 0 else "%.2f E" % lon
+    latstr = "%.2f S" % -lat if lat < 0 else "%.2f N" % lat
+
+    return lonstr + " " + latstr
+
 
 # strip away any trailing errors which can cause arccos to return nan
 # if mat is -1.0000000000000002 for example
@@ -69,7 +78,7 @@ def dist_km(loc1, loc2):
   """
   lon1, lat1 = loc1
   lon2, lat2 = loc2
-  
+
   return np.radians(dist_deg(loc1, loc2)) * AVG_EARTH_RADIUS_KM
 
 def degdiff(angle1, angle2):
@@ -77,7 +86,7 @@ def degdiff(angle1, angle2):
   The difference of two angles given in degrees. The answer is an angle from
   -180 to 180. Positive angles imply angle2 is clockwise from angle1 and -ve
   angles imply counter-clockwise.
-  
+
   >>> int(degdiff(40, 30))
   -10
   >>> int(degdiff(30, 40))
@@ -119,7 +128,7 @@ def azimuth(loc1, loc2):
   356
   """
   sin_delta = np.sin(np.radians(dist_deg(loc1, loc2)))
-  
+
   # convert to degrees and the latitude to colatitude
   phi1, theta1 = np.radians(loc1[0]), np.radians(90.0 - loc1[1])
   phi2, theta2 = np.radians(loc2[0]), np.radians(90.0 - loc2[1])
@@ -131,7 +140,7 @@ def azimuth(loc1, loc2):
   half_zeta = np.degrees(safe_acos(cos_zeta))
 
   east = np.sin(phi2 - phi1) >= 0
-  
+
   zeta = half_zeta * east + (360 - half_zeta) * (~east)
 
   return zeta
