@@ -18,8 +18,6 @@ import utils.geog
 import obspy.signal.util
 
 
-
-
 def get_dir(dname):
 
     try:
@@ -30,23 +28,53 @@ def get_dir(dname):
         else: raise
     return dname
 
-
-def get_base_dir(siteid, runid, label=None):
+def get_base_dir(sta, runid, label=None):
     if label is not None:
-        return get_dir(os.path.join("logs", "codas_%d_%s_%s" % (siteid, label, runid)))
+        return get_dir(os.path.join("logs", "codas_%s_%s_%s" % (sta, label, runid)))
     else:
-        return get_dir(os.path.join("logs", "codas_%d_%s" % (siteid, runid)))
+        return get_dir(os.path.join("logs", "codas_%s_%s" % (sta, runid)))
 
-def load_event(cursor, evid):
-    sql_query = "SELECT lon, lat, depth, time, mb, orid, evid from leb_origin where evid=%d" % (evid)
-    cursor.execute(sql_query)
-    return np.array(cursor.fetchone())
 
-def load_event_arrivals(cursor, evid, siteid):
-    sql_query = "select l.time from leb_arrival l, leb_origin lebo, leb_assoc leba, static_siteid sid where l.arid=leba.arid and leba.orid=lebo.orid and lebo.evid=%d and l.sta=sid.sta and sid.id=%d" % (evid, siteid)
-    cursor.execute(sql_query)
-    return np.array(cursor.fetchall())[:,0]
+def load_template_params(evid, chan, band, runid, sta):
+    s = Sigvisa()
 
+    sql_query = "select l.time, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.acost, pid.id from sigvisa_coda_fits fit, leb_assoc leba, leb_origin lebo, static_phaseid pid, leb_arrival l where lebo.orid=leba.orid and leba.arid=fit.arid and leba.phase=pid.phase and l.arid=leba.arid and l.sta=%s and lebo.evid=%d and fit.chan='%s' and fit.band='%s' and fit.runid=%d " % (evid, chan, band, runid, sta)
+    s.cursor.execute(sql_query)
+    rows = np.array(s.cursor.fetchall())
+    for (i, row) in enumerate(rows):
+        if row[2] is None:
+            row[2] = row[4]
+            row[3] = 1
+
+    try:
+        fit_params = np.asfarray(rows[:, 0:4])
+        phases = [s.phasenames[pid-1] for pid in rows[:, 5]]
+        fit_cost = rows[0,4]
+    except IndexError:
+        return None, None, None
+    return (phases, fit_params), fit_cost
+
+def store_template_params(wave, event, template_params, runid, method_str):
+    siteid = wave['siteid']
+    chan = wave['chan']
+    band = wave['band']
+    st = wave['stime']
+    et = wave['etime']
+    time_len = wave['len']
+
+    distance = utils.geog.dist_km((event.lon, event.lat), (s.sites[siteid-1][0], s.sites[siteid-1][1]))
+    azimuth = utils.geog.azimuth((s.sites[siteid-1][0], s.sites[siteid-1][1]), (event.lon, event.lat))
+
+    (phases, fit_params) = template_params
+
+    for (i, arid) in enumerate(event['event_arrivals'][:, AR_ARID_COL]):
+        sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+        print sql_query
+        try:
+            cursor.execute(sql_query)
+        except:
+            print "DB error inserting fits (probably duplicate key), continuing..."
+            pass
 
 def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 

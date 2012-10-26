@@ -29,7 +29,7 @@ class Waveform(object):
         else:
             npts = len(data)
             etime = stime + npts/float(srate)
-            self.segment_stats = {"srate" : float(srate), "stime" : stime, "sta": sta, "npts": npts, "etime": etime, "len": npts/float(srate)}
+            self.segment_stats = {"srate" : float(srate), "stime" : stime, "sta": sta, "npts": npts, "etime": etime, "len": npts/float(srate), "siteid": Sigvisa().name_to_siteid_minus1[sta]+1}
 
         # attributes specific to this waveform, e.g. channel or freq band
         if my_stats is not None:
@@ -49,11 +49,18 @@ class Waveform(object):
 
         self.filtered = dict()
 
-    def as_obspy_trace(self):
-        allstats = dict(self.segment_stats.items() + self.my_stats.items())
-        allstats['starttime_unix'] = allstats['stime']
-        allstats['sampling_rate'] = allstats['srate']
 
+    # cost functions for comparing to other waves
+    def l1_cost(self, other_wave):
+        if self['filter_str'] != other['filter_str'] or self['stime'] != other_wave['stime'] or self['srate'] != other_wave['srate'] or self['npts'] != other_wave['npts']:
+            print "error computing distance between:"
+            print self
+            print other_wave
+            raise Exception("waveforms do not align, can't compute L1 distance!")
+
+        return np.sum(np.abs(self.data - other_wave.data))
+
+    def __get_band(self):
         band = "broadband"
         for f in self.my_stats['filter_str'].split(';'):
             if f == "env":
@@ -61,9 +68,14 @@ class Waveform(object):
             if f.startswith('freq'):
                 band = f
                 break
-        allstats['band'] = band
+        return band
 
-        allstats['siteid'] = Sigvisa().name_to_siteid_minus1[allstats['sta']]+1
+    def as_obspy_trace(self):
+        allstats = dict(self.segment_stats.items() + self.my_stats.items())
+        allstats['starttime_unix'] = allstats['stime']
+        allstats['sampling_rate'] = allstats['srate']
+
+        allstats['band'] = self['band']
 
         return Trace(header=allstats, data=self.data)
 
@@ -139,6 +151,8 @@ class Waveform(object):
             arrivals = read_station_detections(cursor=Sigvisa().cursor, sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="idcx_arrival")
             self.segment_stats['arrivals_idcx'] = arrivals
             return arrivals
+        elif key == "band":
+            return self.__get_band()
         else:
             raise KeyError("waveform didn't recognized key %s" % key)
 
@@ -158,6 +172,8 @@ class Waveform(object):
         f = None
         if name == "center":
             f = lambda x : ma.masked_array(data = x.data - np.mean(x), mask = x.mask)
+        if name == "log":
+            f = lambda x : np.log(x)
         elif name == "env":
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
         elif name == "smooth":
@@ -191,7 +207,7 @@ class Segment(object):
 
     STANDARD_STATS = ["srate", "sta", "stime", "etime", "npts"]
 
-    filter_order = ['center', 'freq', 'env', 'smooth']
+    filter_order = ['center', 'freq', 'env', 'log', 'smooth']
 
     def __init__(self, waveforms = []):
         self.__chans = dict()

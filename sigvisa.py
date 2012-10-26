@@ -35,20 +35,18 @@ class Sigvisa(object):
 
         st = 1237680000
         et = st + 24 * 3600
-        dbconn = db.connect()
+        self.dbconn = db.connect()
         self.cursor = dbconn.cursor()
         self.sites = dataset.read_sites(self.cursor)
         self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(self.cursor)
         self.site_up = dataset.read_uptime(self.cursor, st, et)
         self.phasenames, self.phasetimedef = dataset.read_phases(self.cursor)
-        self.phaseids = dict(zip(self.phasenames, range(len(self.phasenames))))
+        self.phaseids = dict(zip(self.phasenames, range(1, len(self.phasenames)+1)))
         self.earthmodel = learn.do_training.load_earth("parameters", self.sites, self.phasenames, self.phasetimedef)
         self.sigmodel = learn.do_training.load_sigvisa("parameters", st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
 
 
-
         self.noise_models = NestedDict()
-
 
         self.bands = ("freq_2.0_3.0",)
         self.chans = ('BHZ', 'BHN', 'BHE')
@@ -59,13 +57,11 @@ class Sigvisa(object):
 
         self.events = dict()
 
+    def __del__():
+        self.dbconn.close()
+
     def phasenames(self, phase_id_minus1_list):
         return [self.phasenames[id] for id in phase_id_minus1_list]
-
-
-
-
-
 
     def arriving_phases(self, event, sta):
         siteid = self.name_to_siteid_minus1[sta] + 1

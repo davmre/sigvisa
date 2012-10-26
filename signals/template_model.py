@@ -22,17 +22,148 @@ class TemplateModel(object):
 
     """
 
+    # return the name of the template model as a string
+    def model_name(self)
+        raise Exception("abstract class: method not implemented")
+
+    # return a tuple of strings representing parameter names
     def params(self):
-        raise Exception("method not implemented")
+        raise Exception("abstract class: method not implemented")
+
+    def print_params(self, template_params):
+        phases, vals= template_params
+        pstr = ""
+        for (i, phase) in enumerate(phases):
+            pstr += "%s: " % phase
+            for (j, param) in enumerate(self.params()):
+                pstr += "%s: %.2f" % (param, vals[i,j])
+            pstr += "\n"
+        print pstr,
+
+    # check whether a given set of parameters is valid
+    def valid_params(self, params)
+        raise Exception("abstract class: method not implemented")
+
+    def generate_template_waveform(self, template_params, model_waveform=None, logscale=False, sample=False):
+        raise Exception("abstract class: method not implemented")
+
+    def waveform_cost(self, wave, template_params)
+        raise Exception("abstract class: method not implemented")
+
+    def waveform_cost_iid(self, wave, template_params):
+        if not self.valid_params(template_params):
+            return float("inf")
+        env = self.generate_template_waveform(template_params, model_waveform=wave, logscale=True)
+        return wave.l1_cost(env)
+
+    def __init__(self, run_name, model_type = "gp_dad"):
+        self.sigvisa = Sigvisa()
+
+        # load models
+        self.models = NestedDict()
+
+        if model_type == "dummy":
+            self.dummy=True
+            return
+        else:
+            self.dummy=False
+
+        for param in self.params():
+            if param == "arrival_time":
+                continue
+
+            basedir = os.path.join("parameters", self.model_name(), model_type, param)
+            print basedir
+            for sta in os.listdir(basedir):
+                sta_dir = os.path.join(basedir, sta)
+                if not os.path.isdir(sta_dir):
+                    continue
+                for phase in os.listdir(sta_dir):
+                    phase_dir = os.path.join(sta_dir, phase)
+                    if not os.path.isdir(phase_dir):
+                        continue
+                    for chan in os.listdir(phase_dir):
+                        chan_dir = os.path.join(phase_dir, chan)
+                        if not os.path.isdir(chan_dir):
+                            continue
+                        for band_model in os.listdir(chan_dir):
+                            band_file = os.path.join(chan_dir, band_model)
+                            band_run, ext = os.path.splitext(band_model)
+                            band, run = os.path.splitext(band_run)
+
+                            if run == run_name:
+                                self.models[param][sta][phase][chan][band] = SpatialModel(fname=band_file)
+
 
     def predictTemplate(self, event, sta, chan, band, phases=None):
-        raise Exception("method not implemented")
+        if phases is None:
+            phases = Sigvisa().phases
 
-    def likelihood(template, event, sta, chan, band, phases=None):
-        raise Exception("method not implemented")
+        params = self.params()
 
-    def sample(template, event, sta, chan, band, phases=None):
-        raise Exception("method not implemented")
+        predictions = np.zeros((len(phases),  len(params)))
+        for (i, phase) in enumerate(phases):
+            for (j, param) in enumerate(params):
+                model = self.models[param][sta][phase][chan][band]
+                if isinstance(model, NestedDict):
+                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+
+                if param == "amp_transfer":
+                    source_logamp = event.source_logamp(band)
+                    predictions[i,j] = source_logamp + model.predict(event)
+                elif param == "arrival_time":
+                    predictions[i,j] = event.time + self.travel_time(event, sta)
+                else:
+                    predictions[i,j] = model.predict(event)
+        return (phases, predictions)
+
+
+    def sample(self, event, sta, chan, band, phases=None):
+        if phases is None:
+            phases = Sigvisa().phases
+
+        params = self.params()
+
+        samples = np.zeros((len(phases),  len(params)))
+        for (i, phase) in enumerate(phases):
+            for (j, param) in enumerate(params):
+                model = self.models[param][sta][phase][chan][band]
+                if isinstance(model, NestedDict):
+                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+
+                if param == "amp_transfer":
+                    source_logamp = event.source_logamp(band)
+                    samples[i,j] =  source_logamp + model.predict(event)
+                elif param == "arrival_time":
+                    samples = event.time + self.sample_travel_time(event, sta)
+                else:
+                    samples[i,j] = model.sample(event)
+        return (phases, predictions)
+
+    def log_likelihood(self, template_params, event, sta, chan, band):
+
+        if self.dummy:
+            return 1.0
+
+        phases = template_params[0]
+        param_vals = template_params[1]
+
+        log_likelihood = 0
+        for (i, phase) in enumerate(phases):
+            for (j, param) in enumerate(self.params()):
+                model = self.models[param][sta][phase][chan][band]
+                if isinstance(model, NestedDict):
+                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+
+                if param == "amp_transfer":
+                    source_logamp = event.source_logamp(band)
+                    log_likelihood += model.log_likelihood(event, param_vals[i,j] - source_logamp)
+                elif param == "arrival_time":
+                    log_likelihood = self.travel_time_log_likelihood(event, sta, param_vals[i,j])
+                else:
+                    log_likelihood += model.log_likelihood(event, param_vals[i,j])
+
+        return log_likelihood
 
     def travel_time(self, event, sta, phase):
         siteid = self.sigvisa.siteids[sta]
@@ -64,157 +195,3 @@ class TemplateModel(object):
 
 
 
-class ExponentialTemplateModel(TemplateModel):
-
-#    target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB], "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] - SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]), bandid=int(r[FIT_BANDID]))}
-
-    __params =  ("arrival_time", "onset_period", "amp_transfer", "decay")
-
-    def __init__(self, run_name, model_type = "gp_dad"):
-
-        self.sigvisa = Sigvisa()
-
-        # load gp models
-        if model_type[0:3] == "gp_":
-            self.models = NestedDict()
-
-            for param in self.params():
-                if param == "arrival_time":
-                    continue
-
-                basedir = os.path.join("parameters", model_type, param)
-                print basedir
-                for sta in os.listdir(basedir):
-                    sta_dir = os.path.join(basedir, sta)
-                    if not os.path.isdir(sta_dir):
-                        continue
-                    for phase in os.listdir(sta_dir):
-                        phase_dir = os.path.join(sta_dir, phase)
-                        if not os.path.isdir(phase_dir):
-                            continue
-                        for chan in os.listdir(phase_dir):
-                            chan_dir = os.path.join(phase_dir, chan)
-                            if not os.path.isdir(chan_dir):
-                                continue
-                            for band_model in os.listdir(chan_dir):
-                                band_file = os.path.join(chan_dir, band_model)
-                                band_run, ext = os.path.splitext(band_model)
-                                band, run = os.path.splitext(band_run)
-
-                                if run == run_name:
-                                    self.models[param][sta][phase][chan][band] = SpatialGP(fname=band_file)
-
-    def params(self):
-        return self.__params
-
-    def predictTemplate(self, event, sta, chan, band, phases=None):
-        if phases is None:
-            phases = Sigvisa().phases
-
-        params = self.params()
-
-        predictions = np.zeros((len(phases),  len(params)))
-        for (i, phase) in enumerate(phases):
-            for (j, param) in enumerate(params):
-                model = self.models[param][sta][phase][chan][band]
-                if isinstance(model, NestedDict):
-                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
-
-                if param == "amp_transfer":
-                    source_logamp = event.source_logamp(band)
-                    predictions[i,j] = source_logamp + model.predict(event)
-                elif param == "arrival_time":
-                    predictions[i,j] = event.time + self.travel_time(event, sta)
-                else:
-                    predictions[i,j] = model.predict(event)
-        return (phases, predictions)
-
-    def sample(self, event, sta, chan, band, phases=None):
-        if phases is None:
-            phases = Sigvisa().phases
-
-        params = self.params()
-
-        samples = np.zeros((len(phases),  len(params)))
-        for (i, phase) in enumerate(phases):
-            for (j, param) in enumerate(params):
-                model = self.models[param][sta][phase][chan][band]
-                if isinstance(model, NestedDict):
-                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
-
-                if param == "amp_transfer":
-                    source_logamp = event.source_logamp(band)
-                    samples[i,j] =  source_logamp + model.predict(event)
-                elif param == "arrival_time":
-                    samples = event.time + self.sample_travel_time(event, sta)
-                else:
-                    samples[i,j] = model.sample(event)
-        return (phases, predictions)
-
-    def log_likelihood(self, template_params, event, sta, chan, band):
-
-        phases = template_params[0]
-        param_vals = template_params[1]
-
-        log_likelihood = 0
-        for (i, phase) in enumerate(phases):
-            for (j, param) in enumerate(self.params()):
-                model = self.models[param][sta][phase][chan][band]
-                if isinstance(model, NestedDict):
-                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
-
-                if param == "amp_transfer":
-                    source_logamp = event.source_logamp(band)
-                    log_likelihood += model.log_likelihood(event, param_vals[i,j] - source_logamp)
-                elif param == "arrival_time":
-                    log_likelihood = self.travel_time_log_likelihood(event, sta, param_vals[i,j])
-                else:
-                    log_likelihood += model.log_likelihood(event, param_vals[i,j])
-
-        return log_likelihood
-
-
-def train_param_models(siteids, runids, evid):
-
-    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
-
-    dad_params = {"decay": [.0235, .0158, 4.677, 0.005546, 0.00072], "onset": [1.87, 4.92, 2.233, 0., 0.0001], "amp_transfer": [1.1019, 3.017, 9.18, 0.00002589, 0.403]}
-
-
-    lldda_sum_params = {"decay": [.01, .05, 1, 0.00001, 20, 0.000001, 1, .05, 300], "onset": [2, 5, 1, 0.00001, 20, 0.000001, 1, 5, 300], "amp": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] , "amp_transfer": [.4, 0.00001, 1, 0.00001, 20, 0.00001, 1, .4, 800] }
-
-    gp_params = load_gp_params("parameters/gp_hyperparams.txt", "dad")
-
-    model_dict = NestedDict()
-
-    for siteid in siteids:
-        for band in bands:
-            for chan in chans:
-                print "loading/training siteid %d band %s chan %s" % (siteid, band, chan)
-                for (is_s, PSids) in enumerate((P_PHASEIDS, S_PHASEIDS)):
-
-                    short_band = band[16:]
-                    fit_data = load_shape_data(cursor, chan=chan, short_band=short_band, siteid=siteid, runids=runids, phaseids=PSids, exclude_evids = [evid,])
-
-                    loaded_dad_params = gp_params[siteid]["S" if is_s else "P"][chan][short_band]
-                    if len(loaded_dad_params.keys()) == 3:
-                        my_dad_params = loaded_dad_params
-                    else:
-                        my_dad_params = dad_params
-
-                    try:
-                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="decay", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=my_dad_params["decay"], debug=False)
-                        model_dict[siteid][band][chan][is_s]["decay"] = cm
-
-                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="onset", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=my_dad_params["onset"], debug=False)
-                        model_dict[siteid][band][chan][is_s]["onset"] = cm
-
-                        cm = CodaModel(fit_data=fit_data, band_dir = None, phaseids=PSids, chan=chan, target_str="amp_transfer", earthmodel=earthmodel, sigmodel = sigmodel, sites=sites, dad_params=my_dad_params["amp_transfer"], debug=False)
-                        model_dict[siteid][band][chan][is_s]["amp_transfer"] = cm
-
-                    except:
-                        import traceback, pdb
-                        traceback.print_exc()
-                        raise
-
-    return model_dict, cursor, sigmodel, earthmodel, sites

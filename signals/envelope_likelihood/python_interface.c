@@ -226,12 +226,25 @@ PyObject * py_gen_trace(SigModel_t * self, PyObject * args, int sample) {
 
   Spectral_Envelope_Model_Sample_Trace(self, p_trace, n, (const Arrival_t **)pp_arrs, sample, sample);
 
-  PyObject * py_trace = build_trace(p_trace);
+
+  /* build numpy array object to return */
+   npy_intp dims[1];
+   dims[0] = p_trace->len;
+
+   PyObject * py_data;
+   if (p_trace->py_array == NULL) {
+     py_data = (PyObject *)PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, p_trace->p_data);
+     p_trace->py_array = py_data;
+   } else {
+     py_data = (PyObject *)p_trace->py_array;
+   }
+
+
   free(p_arrs);
   free(pp_arrs);
   free_trace(p_trace);
 
-  return py_trace;
+  return py_data;
 }
 
 PyObject * py_gen_logenvelope_trace(SigModel_t * self, PyObject * args) {

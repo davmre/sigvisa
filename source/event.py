@@ -28,12 +28,12 @@ class Event(object):
             e = super(Event, cls).__new__(cls, *args, **kwargs)
         return e
 
-    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True):
+    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None):
 
-        if evid is not None and evtype is not None:
+        if (evid is not None or orid is not None) and evtype is not None:
 
             self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid = \
-                read_event(Sigvisa().cursor, evid, evtype)
+                read_event(Sigvisa().cursor, evid=evid, evtype, orid=orid)
 
             self.natural_source = True
 

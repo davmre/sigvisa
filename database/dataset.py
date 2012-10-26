@@ -101,13 +101,21 @@ def read_timerange(cursor, label, hours, skip):
 
   return stime, etime
 
-def read_event(cursor, evid, evtype="leb", runid=None):
+def read_event(cursor, evid=None, evtype="leb", runid=None, orid=None):
+    if evid is None:
+        if orid is None:
+            raise Exception("must specify event using either evid or orid")
+        else:
+            ev_condition = "where orid=%d" % orid
+    else:
+        ev_condition = "where evid=%d" % evid
+
   if runid is None:
     cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
-                   "where evid=%d" % (evtype, int(evid)))
+                   "%s" % (evtype, ev_condition))
   else:
     cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
-                   "where evid=%d" % (evtype, int(evid)))
+                   "%s" % (evtype, ev_condition))
   event = np.array(cursor.fetchone())
   return event
 

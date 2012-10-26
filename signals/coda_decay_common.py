@@ -26,10 +26,8 @@ S_PHASEIDS = [4, 5]
 
 MIN_SEGMENT_LENGTH = 40
 
-min_p_coda_length = 30
-min_s_coda_length = 45
 
-avg_cost_bound = 0.2
+
 
 #bands = ['narrow_envelope_2.00_3.00', 'narrow_envelope_4.00_6.00', 'narrow_envelope_1.00_1.50', 'narrow_envelope_0.70_1.00']
 bands = ["narrow_envelope_2.00_3.00",]
@@ -39,14 +37,6 @@ chans = ["BHZ",]
 (FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_BANDID, FIT_NUM_COLS) = range(13+1)
 
 (AR_TIME_COL, AR_AZI_COL, AR_SNR_COL, AR_PHASEID_COL, AR_SITEID_COL, AR_NUM_COLS) = range(5+1)
-
-(HEURISTIC_FIT_B, HEURISTIC_FIT_HEIGHT, HEURISTIC_FIT_PHASE_START_TIME, HEURISTIC_FIT_PHASE_LENGTH, HEURISTIC_FIT_PEAK_OFFSET, HEURISTIC_FIT_PEAK_HEIGHT, HEURISTIC_FIT_CODA_START_OFFSET, HEURISTIC_FIT_CODA_LENGTH, HEURISTIC_FIT_MAX_CODA_LENGTH, HEURISTIC_FIT_AVG_COST, HEURISTIC_FIT_NUM_COLS) = range(10+1)
-
-# params for the envelope model
-ARR_TIME_PARAM, PEAK_OFFSET_PARAM, PEAK_HEIGHT_PARAM, PEAK_DECAY_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(6+1)
-
-
-
 
 
 
@@ -81,22 +71,6 @@ def phaseid_to_name(phaseid):
 def almost_equal(f1, f2, eps = 0.00001):
     return np.abs(f1-f2) < eps
 
-def get_dir(dname):
-
-    try:
-        os.makedirs(dname)
-    except OSError as exc:
-        if exc.errno == errno.EEXIST:
-            pass
-        else: raise
-    return dname
-
-
-def get_base_dir(siteid, runid, label=None):
-    if label is not None:
-        return get_dir(os.path.join("logs", "codas_%d_%s_%s" % (siteid, label, runid)))
-    else:
-        return get_dir(os.path.join("logs", "codas_%d_%s" % (siteid, runid)))
 
 def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
 # print fit[HEURISTIC_FIT_B], fit[HEURISTIC_FIT_CODA_LENGTH], fit[HEURISTIC_FIT_AVG_COST]
