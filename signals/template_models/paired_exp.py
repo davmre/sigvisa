@@ -68,7 +68,7 @@ class PairedExpTemplateModel(TemplateModel):
         smoothed = wave.filter('smooth').as_obspy_trace()
         noise_model = get_noise_model(wave)
         smoothed.stats.noise_floor = noise_model.c
-        vals = find_starting_params(smoothed)
-        return (arrs['phase_arrivals'], vals)
+        template_params = find_starting_params(smoothed)
+        return template_params
 
 

@@ -97,7 +97,7 @@ class TemplateModel(object):
 
     def predictTemplate(self, event, sta, chan, band, phases=None):
         if phases is None:
-            phases = Sigvisa().phases
+            phases = Sigvisa().arriving_phases(event, sta)
 
         params = self.params()
 
@@ -120,7 +120,7 @@ class TemplateModel(object):
 
     def sample(self, event, sta, chan, band, phases=None):
         if phases is None:
-            phases = Sigvisa().phases
+            phases = Sigvisa().arriving_phases(event, sta)
 
         params = self.params()
 

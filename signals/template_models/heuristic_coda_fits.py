@@ -28,9 +28,14 @@ def find_starting_params(smoothed):
 
     avg_cost_bound = 0.2
 
+    noise_floor = smoothed.stats.noise_floor
     nf = lambda t : noise_floor
     accept_p = False
     accept_s = False
+
+    ev = Event(evid=smoothed['evid'])
+    sta = smoothed['sta']
+    siteid - smoothed['siteid']
 
     heuristic_fits = []
 
@@ -49,20 +54,24 @@ def find_starting_params(smoothed):
         accepted_previous_fit = accept_fit(fit, min_coda_length=min_coda_length, max_avg_cost = avg_cost_bound)
         heuristic_fits.append(fit)
 
-    start_params = np.zeros((len(arrivals), NUM_PARAMS))
-    for i, arr in enumerate(arrivals):
-        time = arr[DET_TIME_COL]
+    # initialize default params for all arriving phases (including those not actually detected)
+    all_phases = arriving_phases(self, event, sta)
+    start_params = np.zeros((len(all_phases), NUM_PARAMS))
+    for (i, phase) in enumerate(all_phases):
+        start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(ev.lon, ev.lat, ev.depth, siteid-1, s.phaseids[phase]-1)
+        start_params[i, PEAK_OFFSET_PARAM] = 3
+        start_params[i, CODA_DECAY_PARAM] = -0.03
 
-        a = heuristic_fits[i]
-        noise_floor = smoothed.stats.noise_floor
-
+    # copy over heuristic code fits for detected phases
+    for (time, phase, fit) in zip(arrival_times, arrival_phases, heuristic_fits):
+        i = all_phases.index(phase)
         start_params[i, ARR_TIME_PARAM] = time
+        fit_peak_height = logsub_noise(fit[HEURISTIC_FIT_PEAK_HEIGHT], noise_floor)
+        fit_coda_height = logsub_noise(fit[HEURISTIC_FIT_HEIGHT] - fit[HEURISTIC_FIT_B] *(fit[HEURISTIC_FIT_CODA_START_OFFSET] - fit[HEURISTIC_FIT_PEAK_OFFSET]), noise_floor)
 
-        fit_peak_height = logsub_noise(a[HEURISTIC_FIT_PEAK_HEIGHT], noise_floor)
-        fit_coda_height = logsub_noise(a[HEURISTIC_FIT_HEIGHT] - a[HEURISTIC_FIT_B] *(a[HEURISTIC_FIT_CODA_START_OFFSET] - a[HEURISTIC_FIT_PEAK_OFFSET]), noise_floor)
-
+        start_params[i, PEAK_OFFSET_PARAM] = fit[HEURISTIC_FIT_PEAK_OFFSET]
         start_params[i, CODA_HEIGHT_PARAM] = fit_coda_height if fit_coda_height > 0 else 1
-        start_params[i, CODA_DECAY_PARAM] = a[HEURISTIC_FIT_B] if a[HEURISTIC_FIT_B] < 0 else -0.03
+        start_params[i, CODA_DECAY_PARAM] = fit[HEURISTIC_FIT_B] if fit[HEURISTIC_FIT_B] < 0 else -0.03
 
     return start_params
 
