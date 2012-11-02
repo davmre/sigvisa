@@ -19,6 +19,8 @@ def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
 # print fit[HEURISTIC_FIT_B], fit[HEURISTIC_FIT_CODA_LENGTH], fit[HEURISTIC_FIT_AVG_COST]
     return fit[HEURISTIC_FIT_B] > -0.15 and fit[HEURISTIC_FIT_B] <= 0 and fit[HEURISTIC_FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[HEURISTIC_FIT_AVG_COST] <= max_avg_cost
 
+
+
 def find_starting_params(smoothed):
     """ Uses various heuristics to come up with a good initialization
     for the fitting process. Also constructs a list of bounds
@@ -191,6 +193,21 @@ def find_coda_max_length(trace, peak_offset_time, phase_end_time, noise_floor):
 
 
     return phase_end_time - peak_offset_time
+
+def arrival_peak_offset(trace, window_start_offset, window_end_offset = None):
+    srate = trace.stats.sampling_rate
+
+    if window_end_offset is None:
+        window_end_offset = window_start_offset + 15
+
+    i = np.floor(window_start_offset*srate)
+    j = np.floor(window_end_offset*srate)
+
+    print window_start_offset, window_end_offset, i, j, srate, trace.data.shape
+
+    pt = np.argmax(trace.data[i:j]) / srate
+    return (pt +window_start_offset, trace.data[(pt+window_start_offset) * srate ])
+
 
 # end old model region
 ####################################################
