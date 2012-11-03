@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.ma as ma
-import time, copy
+import time, copy, cPickle
 from sigvisa import Sigvisa
 
 import obspy.signal.filter
@@ -9,6 +9,22 @@ from obspy.core.trace import Trace
 from signals.mask_util import *
 
 from database.dataset import *
+
+def load_waveform_from_file(fname):
+    wave = cPickle.load(open(fname, 'rb'))
+    wave.filtered = dict()
+    return wave
+
+def filter_str_extract_band(filter_str):
+    band = "broadband"
+    for f in filter_str.split(';'):
+        if f == "env":
+            band = "broadband_envelope"
+        if f.startswith('freq'):
+            band = f
+            break
+    return band
+
 
 class Waveform(object):
     """
@@ -61,20 +77,12 @@ class Waveform(object):
         return np.sum(np.abs(self.data - other_wave.data))
 
     def __get_band(self):
-        band = "broadband"
-        for f in self.my_stats['filter_str'].split(';'):
-            if f == "env":
-                band = "broadband_envelope"
-            if f.startswith('freq'):
-                band = f
-                break
-        return band
+        return filter_str_extract_band(self.my_stats['filter_str'])
 
     def as_obspy_trace(self):
         allstats = dict(self.segment_stats.items() + self.my_stats.items())
         allstats['starttime_unix'] = allstats['stime']
         allstats['sampling_rate'] = allstats['srate']
-
         allstats['band'] = self['band']
 
         return Trace(header=allstats, data=self.data)
@@ -102,13 +110,19 @@ class Waveform(object):
             return self
 
         # return result from cache if we have it
-        if filter_str in self.filtered:
-            return self.filtered[filter_str]
+        try:
+            if filter_str in self.filtered:
+                return self.filtered[filter_str]
+        except:
+            import pdb
+            pdb.set_trace()
 
         # pick out the first filter to apply
-        filters = filter_str.split(';')
-        first_filter = filters[0]
-        other_filters = ';'.join(filters[1:])
+        first_filter = ""
+        while first_filter == "":
+            filters = filter_str.split(';')
+            first_filter = filters[0]
+            other_filters = ';'.join(filters[1:])
 
         # apply the first filter
         if first_filter in self.filtered:
@@ -194,6 +208,12 @@ class Waveform(object):
         else:
             raise Exception("unrecognized filter description %s" % desc)
         return f, fstats
+
+    def dump_to_file(self, fname):
+        filtered = self.filtered
+        self.filtered=None
+        cPickle.dump(self, open(fname, 'wb'), protocol=2)
+        self.filtered = filtered
 
     def __str__(self):
         s = "wave pts %d @ %d Hz. " % (self['npts'], self['srate'])
@@ -370,11 +390,6 @@ def main():
     data1 = np.random.randn(1000)
     data2 = np.random.randn(1000)
     data3 = data1 + data2
-
-
-
-
-
     print s1
 
 if __name__ == "__main__":

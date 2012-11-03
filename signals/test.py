@@ -1,18 +1,20 @@
 import unittest
 
+import shutil, os
+
 import numpy as np
 import numpy.ma as ma
 
 from sigvisa import Sigvisa
 
 from source.event import Event
-
-from signals.common import Waveform, Segment
+from signals.common import Waveform, Segment, load_waveform_from_file
 from signals.mask_util import *
 from signals.io import load_event_station
-from signals.template_model import ExponentialTemplateModel
-
-
+from signals.template_models.paired_exp import PairedExpTemplateModel
+from signals.armodel.model import ARModel, ErrorModel, load_armodel_from_file
+from signals.armodel.learner import ARLearner
+from signals.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
 
 import matplotlib
 matplotlib.use("Agg")
@@ -117,6 +119,13 @@ class TestWaveform(unittest.TestCase):
 
     def test_obspy_trace(self):
         tr = self.bhz.as_obspy_trace()
+
+    def test_pickle(self):
+        self.bhz.dump_to_file("test_bhz.wave")
+        loaded = load_waveform_from_file("test_bhz.wave")
+        self.assertEqual(self.bhz.segment_stats, loaded.segment_stats)
+        self.assertEqual(self.bhz.my_stats, loaded.my_stats)
+        self.assertAlmostEqual(np.sum(self.bhz.data - loaded.data), 0)
 
 class TestSegments(unittest.TestCase):
 
@@ -242,13 +251,78 @@ class TestIO(unittest.TestCase):
         plotting.plot.plot_segment(s)
         plt.savefig("URZ_5301405_env_2_3_smooth")
 
+class TestAutoregressiveModels(unittest.TestCase):
+
+    def setUp(self):
+        np.random.seed(0)
+
+    def test_AR_learning(self):
+        true_params = np.array([.8, .1])
+        true_std = .11
+        errormodel = ErrorModel(mean=0, std=true_std)
+        true_model = ARModel(true_params, errormodel)
+        sampled_data = true_model.sample(1000)
+
+        learner = ARLearner(sampled_data)
+        learned_params, learned_std = learner.yulewalker(2)
+
+        self.assertAlmostEqual(np.sum(true_params - learned_params), 0, places=1)
+        self.assertAlmostEqual(true_std, learned_std, places=1)
+
+    def test_pickle(self):
+        true_params = np.array([.8, .1])
+        true_std = .11
+        errormodel = ErrorModel(mean=0, std=true_std)
+        true_model = ARModel(true_params, errormodel)
+        true_model.dump_to_file("test.armodel")
+
+        loaded_model = load_armodel_from_file("test.armodel")
+        self.assertAlmostEqual(np.sum(true_model.params - loaded_model.params), 0)
+        self.assertAlmostEqual(true_model.em.std, loaded_model.em.std)
+
+class TestNoiseModels(unittest.TestCase):
+
+    def test_train_noise_model(self):
+        ev = Event(evid=5301405)
+
+        sta='URZ'
+        chan='BHZ'
+        filter_str='freq_2.0_3.0;env'
+
+        # delete existing saved noise models
+        hour = (int(ev.time/3600)-1)
+        hour_dir, model_fname = model_path(sta, chan, filter_str, srate=40, order=17, hour_time=hour*3600)
+        try:
+            shutil.rmtree(os.path.realpath(hour_dir))
+        except OSError as e:
+            pass
+        try:
+            os.remove(hour_dir)
+        except OSError as e:
+            pass
+
+        # the first model we request should actually build models for all frequency bands
+        s = Sigvisa()
+        for freq in s.bands:
+            # test that we can load models, and are not reconstructing them differently each time
+            model1 = get_noise_model(sta=sta, chan=chan, filter_str=freq+';env', time=ev.time, srate=40, order=17)
+            model2 = get_noise_model(sta=sta, chan=chan, filter_str=freq+';env', time=ev.time, srate=40, order=17)
+            self.assertAlmostEqual(np.sum(np.asarray(model1.params) - np.asarray(model2.params)), 0)
+
+        weird_band = 'freq_12_14'
+        old_bands = s.bands
+        s.bands = old_bands + (weird_band,)
+        model1 = get_noise_model(sta=sta, chan=chan, filter_str=weird_band+';env', time=ev.time, srate=40, order=17)
+        model2 = get_noise_model(sta=sta, chan=chan, filter_str=weird_band+';env', time=ev.time, srate=40, order=17)
+        self.assertAlmostEqual(np.sum(np.asarray(model1.params) - np.asarray(model2.params)), 0)
+        s.bands = old_bands
 
 class TestCost(unittest.TestCase):
 
     def setUp(self):
         self.seg = load_event_station(evid=5301405, sta="URZ")
         self.event = Event(evid=5301405)
-        self.tm = ExponentialTemplateModel(run_name = "signal_unittest")
+        self.tm = PairedExpTemplateModel(run_name = "signal_unittest")
 
     def test_iid_cost(self):
 

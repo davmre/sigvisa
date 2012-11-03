@@ -1,4 +1,8 @@
 import numpy as np
+import cPickle
+
+def load_armodel_from_file(fname):
+    return cPickle.load(open(fname, 'rb'))
 
 class ARModel:
     #params: array of parameters
@@ -89,6 +93,9 @@ class ARModel:
         for i in range(int(float(n)*0.8)):
             rss += np.square(psd[i] - S[i])
         return rss
+
+    def dump_to_file(self, fname):
+        cPickle.dump(self, open(fname, 'wb'), protocol=2)
 
 
 # error model obeys normal distribution
