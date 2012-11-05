@@ -33,7 +33,7 @@ class Event(object):
         if (evid is not None or orid is not None) and evtype is not None:
 
             self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid = \
-                read_event(Sigvisa().cursor, evid=evid, evtype, orid=orid)
+                read_event(Sigvisa().cursor, evid=evid, evtype=evtype, orid=orid)
 
             self.natural_source = True
 

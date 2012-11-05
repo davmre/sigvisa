@@ -2,7 +2,7 @@ import numpy as np
 import time, os
 
 from sigvisa import Sigvisa
-
+import sigvisa_c
 from database import dataset
 from database.signal_data import ensure_dir_exists
 
@@ -171,3 +171,10 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
         armodel = load_armodel_from_file(os.path.join(model_dir, model_fname))
 
     return armodel
+
+def set_noise_process(wave):
+    s = Sigvisa()
+    arm = get_noise_model(waveform=wave)
+    c = sigvisa_c.canonical_channel_num(wave['chan'])
+    b = sigvisa_c.canonical_band_num(wave['band'])
+    s.sigmodel.set_noise_process(wave['siteid'], b, c, arm.c, arm.em.std**2, np.array(arm.params))

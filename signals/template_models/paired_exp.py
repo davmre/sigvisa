@@ -1,10 +1,25 @@
 import numpy as np
 import sys, os
 from sigvisa import *
+import sigvisa_c
 
+import signals.noise_model as noise_model
+from signals.common import *
 from signals.template_model import TemplateModel
-
 from signals.template_models.heuristic_coda_fits import *
+
+
+def set_dummy_wiggles(sta):
+    s = Sigvisa()
+    siteid = s.name_to_siteid_minus1[sta]+1
+    for chan in s.chans:
+        c = sigvisa_c.canonical_channel_num(chan)
+        for band in s.bands:
+            b = sigvisa_c.canonical_band_num(band)
+            for p in s.phases:
+                pid = s.phaseids[p]
+                sigmodel.set_wiggle_process(siteid, b, c, pid, 1, 0.05, np.array([.8,-.2]))
+
 
 class PairedExpTemplateModel(TemplateModel):
 
@@ -16,53 +31,60 @@ class PairedExpTemplateModel(TemplateModel):
     def model_name(self):
         return "paired_exp"
 
-    def valid_params(self, params):
-        phases, vals = params
-
-        for i, phase in enumerate(phases):
-            if np.isnan(vals[i, PEAK_HEIGHT_PARAM]) or np.isnan(vals[i, CODA_HEIGHT_PARAM]):
-                return False
-            if vals[i, CODA_HEIGHT_PARAM] > vals[i, PEAK_HEIGHT_PARAM] + 1:
-                return False
-            if vals[i, CODA_DECAY_PARAM] >= 0:
-                return False
-            if vals[i, PEAK_DECAY_PARAM] < 0:
-                return False
-        return True
-
     def generate_template_waveform(self, template_params, model_waveform, logscale=False, sample=False):
         s = self.sigvisa
 
-        srate = trace['srate']
-        st = trace['stime']
-        et = trace['etime']
-        siteid = trace['siteid']
-        c = sigvisa_c.canonical_channel_num(trace['chan'])
-        b = sigvisa_c.canonical_band_num(trace['band'])
+        srate = model_waveform['srate']
+        st = model_waveform['stime']
+        et = model_waveform['etime']
+        siteid = model_waveform['siteid']
+        c = sigvisa_c.canonical_channel_num(model_waveform['chan'])
+        b = sigvisa_c.canonical_band_num(model_waveform['band'])
+
+        noise_model.set_noise_process(model_waveform)
 
         phases, vals = template_params
+
         phaseids = [s.phaseids[phase] for phase in phases]
 
         if not sample:
-            env = s.sigmodel.generate_wave(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
+            env = s.sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
         else:
-            env = s.sigmodel.sample_wave(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
+            env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
         data = np.log(env) if logscale else env
         wave = Waveform(data = data, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
 
+        try:
+            del wave.segment_stats['evid']
+            del wave.segment_stats['event_arrivals']
+        except KeyError:
+            pass
+
         return wave
 
-    def waveform_cost(self, wave, template_params):
-        if not self.valid_params(template_params):
-            return float('inf')
-
+    def waveform_log_likelihood(self, wave, template_params):
         s = self.sigvisa
         phases, vals = template_params
         phaseids = [s.phaseids[phase] for phase in phases]
 
-        c = -1 *s.sigmodel.trace_likelihood(wave.as_obspy_trace(), vals);
-        return c
+        noise_model.set_noise_process(model_waveform)
+
+        ll = s.sigmodel.trace_log_likelihood(wave.as_obspy_trace(), vals);
+        return ll
+
+    def low_bounds(self, phases):
+        bounds = np.ones((len(phases), len(self.params()))) * -np.inf
+        bounds[:, PEAK_OFFSET_PARAM] = 0
+        bounds[:, CODA_HEIGHT_PARAM] = 0
+        bounds[:, CODA_DECAY_PARAM] = -.2
+        return bounds
+
+    def high_bounds(self, phases):
+        bounds = np.ones((len(phases), len(self.params()))) * np.inf
+        bounds[:, PEAK_OFFSET_PARAM] = 15
+        bounds[:, CODA_DECAY_PARAM] = 0
+        return bounds
 
     def heuristic_starting_params(self, wave):
         smoothed = wave.filter('smooth').as_obspy_trace()

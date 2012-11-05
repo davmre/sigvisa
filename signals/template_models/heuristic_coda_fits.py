@@ -4,13 +4,22 @@
 #######################################
 
 import numpy as np
-import sys, os
+import scipy
+import sys, os, traceback
 from sigvisa import *
+from database.dataset import *
+from signals.noise_model import *
+
+from source.event import Event
 
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4+1)
 
 (HEURISTIC_FIT_B, HEURISTIC_FIT_HEIGHT, HEURISTIC_FIT_PHASE_START_TIME, HEURISTIC_FIT_PHASE_LENGTH, HEURISTIC_FIT_PEAK_OFFSET, HEURISTIC_FIT_PEAK_HEIGHT, HEURISTIC_FIT_CODA_START_OFFSET, HEURISTIC_FIT_CODA_LENGTH, HEURISTIC_FIT_MAX_CODA_LENGTH, HEURISTIC_FIT_AVG_COST, HEURISTIC_FIT_NUM_COLS) = range(10+1)
 
+
+avg_cost_bound = .28
+min_p_coda_length = 30
+min_s_coda_length = 45
 
 def logsub_noise(log_height, log_noise):
     return np.log ( np.exp(log_height) - np.exp(log_noise) )
@@ -35,13 +44,13 @@ def find_starting_params(smoothed):
     accept_p = False
     accept_s = False
 
-    ev = Event(evid=smoothed['evid'])
-    sta = smoothed['sta']
-    siteid - smoothed['siteid']
+    ev = Event(evid=smoothed.stats['evid'])
+    sta = smoothed.stats['sta']
+    siteid = smoothed.stats['siteid']
 
     heuristic_fits = []
 
-    arrivals = smoothed['event_arrivals']
+    arrivals = smoothed.stats['event_arrivals']
     arrival_times = arrivals[:, DET_TIME_COL]
     arrival_phases = [s.phasenames[pid_m1] for pid_m1 in arrivals[:, DET_PHASE_COL]]
 
@@ -57,14 +66,14 @@ def find_starting_params(smoothed):
         heuristic_fits.append(fit)
 
     # initialize default params for all arriving phases (including those not actually detected)
-    all_phases = arriving_phases(self, event, sta)
+    all_phases = s.arriving_phases(ev, sta)
     start_params = np.zeros((len(all_phases), NUM_PARAMS))
     for (i, phase) in enumerate(all_phases):
         start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(ev.lon, ev.lat, ev.depth, siteid-1, s.phaseids[phase]-1)
         start_params[i, PEAK_OFFSET_PARAM] = 3
         start_params[i, CODA_DECAY_PARAM] = -0.03
 
-    # copy over heuristic code fits for detected phases
+    # copy over heuristic coda fits for detected phases
     for (time, phase, fit) in zip(arrival_times, arrival_phases, heuristic_fits):
         i = all_phases.index(phase)
         start_params[i, ARR_TIME_PARAM] = time
@@ -75,7 +84,7 @@ def find_starting_params(smoothed):
         start_params[i, CODA_HEIGHT_PARAM] = fit_coda_height if fit_coda_height > 0 else 1
         start_params[i, CODA_DECAY_PARAM] = fit[HEURISTIC_FIT_B] if fit[HEURISTIC_FIT_B] < 0 else -0.03
 
-    return start_params
+    return (all_phases, start_params)
 
 def fit_phase_coda(phase_arrival, smoothed, arrivals, arrival_phases, noise_floor):
     """
@@ -90,11 +99,13 @@ def fit_phase_coda(phase_arrival, smoothed, arrivals, arrival_phases, noise_floo
     srate = smoothed.stats.sampling_rate
     stime = smoothed.stats.starttime_unix
 
-    P = True if int(phase_arrival[DET_PHASE_COL]) in P_PHASEIDS else False
+    s = Sigvisa()
+    phase = s.phasenames[phase_arrival[DET_PHASE_COL]]
+    P = True if phase in s.P_phases else False
 
     phase_length = 200
     if len(arrivals) > 0:
-        for (a, pa) in zip(arrivals, arrival_phases):
+        for (a, pa) in zip(arrivals[:, DET_TIME_COL], arrival_phases):
             if a > phase_arrival[DET_TIME_COL] and pa != "LR":
                 phase_length = np.min([a - phase_arrival[DET_TIME_COL], phase_length])
 
@@ -115,7 +126,7 @@ def fit_phase_coda(phase_arrival, smoothed, arrivals, arrival_phases, noise_floo
     try:
         max_coda_length = find_coda_max_length(smoothed, peak_offset_time, peak_offset_time - (peak_offset_time - phase_start_time)  + phase_length, noise_floor)
         max_coda_length = np.min([max_coda_length, phase_length - (peak_offset_time - phase_start_time)])
-    except:
+    except IndexError:
         print "error finding coda length"
         print traceback.format_exc()
         print phase_length, peak_offset_time, phase_start_time
@@ -134,6 +145,16 @@ def logenv_l1_cost(true_env, logenv):
         n = np.min([n, n2])
     c = np.sum (np.abs(true_env[:n] - logenv[:n]))
     return c
+
+def gen_logenvelope(length, sampling_rate, peak_height, gamma, b):
+# print length, sampling_rate, peak_height, gamma, b
+    t = np.linspace(1/sampling_rate, length, length*sampling_rate)
+    f = (gamma*-1)*np.log(t) + (b * t)
+
+    offset = peak_height - f[0]
+    f = f + offset
+
+    return f
 
 def fit_specific(trace, coda_start_time, coda_len):
     srate = trace.stats['sampling_rate']
@@ -203,7 +224,7 @@ def arrival_peak_offset(trace, window_start_offset, window_end_offset = None):
     i = np.floor(window_start_offset*srate)
     j = np.floor(window_end_offset*srate)
 
-    print window_start_offset, window_end_offset, i, j, srate, trace.data.shape
+#    print window_start_offset, window_end_offset, i, j, srate, trace.data.shape
 
     pt = np.argmax(trace.data[i:j]) / srate
     return (pt +window_start_offset, trace.data[(pt+window_start_offset) * srate ])

@@ -7,11 +7,11 @@
 
 typedef void(*SMSetParams_f)(void * pv_params, int station, PyObject * py_dict);
 
-typedef int(*SMHasModel_f)(void * p_sigmodel, int siteid, int chan);
+typedef int(*SMHasModel_f)(void * p_sigmodel, int siteid, int chan, int band);
 
 typedef double(*SMLikelihood_f)(void * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals);
 
-typedef void(*SMSample_f)(void * p_sigmodel, EarthModel_t * p_earth, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int samplePerturb, int sampleNoise);
+typedef void(*SMSample_f)(void * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int * bands_to_sample, int samplePerturb, int sampleNoise);
 
 typedef void(*SMUnInit_f)(void * pv_params);
 

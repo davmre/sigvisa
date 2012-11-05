@@ -26,7 +26,6 @@
 
 #define NUM_BANDS   10
 
-#define DEFAULT_BAND NARROW_20_30
 
 #define BROADBAND       0
 #define BB_ENVELOPE     1
@@ -39,14 +38,13 @@
 #define NARROW_40_60    8
 #define NARROW_60_80    9
 
-
 /* parameters for specifying a signal envelope */
 #define ARR_TIME_PARAM 0
 #define PEAK_OFFSET_PARAM 1
-#define PEAK_HEIGHT_PARAM 2
-#define PEAK_DECAY_PARAM 3
-#define CODA_HEIGHT_PARAM 4
-#define CODA_DECAY_PARAM 5
+// #define PEAK_HEIGHT_PARAM 2
+// #define PEAK_DECAY_PARAM 3
+#define CODA_HEIGHT_PARAM 2
+#define CODA_DECAY_PARAM 3
 
 #define MIN_LOGENV_CUTOFF -3
 #define EXP_MIN_LOGENV_CUTOFF 0.0497870684
@@ -131,6 +129,8 @@ int canonical_channel_num(char* chan_str);
 int canonical_band_num(char* band_str);
 PyObject * canonical_band_name(int num);
 PyObject* canonical_channel_name(int num);
+
+int segment_contains_band(Segment_t * p_segment, int band);
 
 PyObject * channel_bundle_to_trace_bundle(Segment_t * p_segment);
 int signal_to_trace(Channel_t * p_signal, PyObject ** pp_trace);

@@ -17,70 +17,59 @@ import obspy.signal.util
 from optparse import OptionParser
 
 from sigvisa import *
-from signals.coda_decay_common import *
 from signals.io import *
 from plotting.plot_coda_decays import *
 from learn.train_wiggles import *
+from learn.optimize import minimize_matrix
 from signals.noise_model import *
-from signals.template_cost import *
 
 
-
-def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_runid=None):
+def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, optimize_arrival_times=False, iid=False):
     """
     Return the template parameters which best fit the given waveform.
     """
 
-    # if 
-    (phases, start_param_vals) = tm.heuristic_starting_params(wave)
+    s = tm.sigvisa
+    sta = wave['sta']
+    chan = wave['chan']
+    band = wave['band']
 
-
-
-    narrs = len(arrs["arrivals"])
-    try:
-        arr_times = np.reshape(np.array(arrs["arrivals"]), (narrs, -1))
-    except:
-        import pdb, traceback
-        traceback.print_exc()
-        pdb.set_trace()
-
-    if fix_peak:
-        start_params = remove_peak(start_params)
-        bounds = bounds_fp
-    else:
-        assem_params = lambda params: np.hstack([arr_times, np.reshape(params, (narrs, -1))])
-
-    start_params = start_params.flatten()
-
-    print "start params", start_params
-
-    #gen_title = lambda event, fit: "%s evid %d siteid %d mb %f \n dist %f azi %f \n p: %s \n s: %s " % (band, event[EV_EVID_COL], siteid, event[EV_MB_COL], distance, azimuth, fit[0,:],fit[1,:] if fit.shape[0] > 1 else "")
-
-    set_noise_process(sigmodel, env)
-    f = lambda params : c_cost(sigmodel, smoothed, phaseids, assem_params(params), iid=True)
+    print "fitting template for", sta, chan, band
 
     if wiggles is not None:
-        load_wiggle_models(cursor, sigmodel, wiggles)
+        load_wiggle_models(s.cursor, s.sigmodel, wiggles)
     best_params = None
 
     # initialize the search using the outcome of a previous run
-    if init_runid is not None:
-        best_params, phaseids_loaded, fit_cost = load_template_params(cursor, int(evid), env.stats.channel, env.stats.short_band, init_runid, env.stats.siteid)
-        best_params = best_params[:, 1:]
-        if fix_peak:
-            best_params = remove_peak(best_params)
-        best_params = best_params.flatten()
-        print "loaded"
-        print_params(assem_params(best_params))
+    if init_run_name is not None:
+        start_param_vals, phaseids_loaded, fit_cost = load_template_params(s.cursor, ev.evid, chan, band, init_run_name, wave['siteid'])
+        phases = [s.phasenames[phaseid-1] for phaseid in phaseids_loaded]
 
-        if phaseids_loaded != phaseids:
-            best_params = None
-        elif pp is not None:
-            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "loaded smoothed iid (cost %f, evid %s)" % (start_cost, evid))
+        arriving_phases = s.arriving_phases(ev, wave['sta'])
+        assert(phases == arriving_phases)
 
+    # or if this is the first run, initialize heuristically
+    else:
+        (phases, start_param_vals) = tm.heuristic_starting_params(wave)
+
+
+    if iid:
+        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(wave, (phases, vals))
+    else:
+        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood(wave, (phases, vals))
+
+    low_bounds = None
+    high_bounds = None
+    if method == "bfgs" or method == "tnc":
+        low_bounds = tm.low_bounds()
+        high_bounds = tm.high_bounds()
+
+    best_param_vals, best_cost = minimize_matrix(f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, method=method, fix_first_col=(not optimize_arrival_times))
+
+    """
     if wiggles is None or best_params is None:
         # learn from smoothed data w/ iid noise
-        best_params, best_cost = optimize(f, start_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
+
         if pp is not None:
             plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
             plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "")
@@ -97,11 +86,11 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_runid=None)
 
             plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid), logscale=False)
             plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid), logscale=False)
+            """
 
+    return (phases, best_param_vals), best_cost
 
-    return assem_params(best_params), phaseids, best_cost
-
-def fit_event_segment(event, sta, tm, runid, init_runid=None, plot=False, wiggles=None, method="simplex"):
+def fit_event_segment(event, sta, tm, output_run_name, init_run_name=None, plot=False, wiggles=None, method="simplex", iid=False):
     """
     Find the best-fitting template parameters for each band/channel of
     a particular event at a particular station. Store the template
@@ -116,10 +105,10 @@ def fit_event_segment(event, sta, tm, runid, init_runid=None, plot=False, wiggle
         chans = s.chans
         cursor = s.cursor
 
-        base_coda_dir = get_base_dir(sta, runid)
-        seg = load_event_station(evid, sta, cursor=cursor).with_filter("env")
+        base_coda_dir = get_base_dir(sta, output_run_name)
+        seg = load_event_station(event.evid, sta, cursor=cursor).with_filter("env")
         for (band_idx, band) in enumerate(bands):
-            pdf_dir = get_dir(os.path.join(base_coda_dir, band))
+            pdf_dir = ensure_dir_exists(os.path.join(base_coda_dir, band))
             band_seg = seg.with_filter(band)
             for chan in chans:
                 if plot:
@@ -133,20 +122,20 @@ def fit_event_segment(event, sta, tm, runid, init_runid=None, plot=False, wiggle
 
                 # DO THE FITTING
                 if method == "load":
-                    fit_params, fit_cost = load_template_params(event.evid, chan, band, init_runid, siteid)
+                    fit_params, fit_cost = load_template_params(event.evid, chan, band, init_run_name, siteid)
                     if fit_params is None:
-                        print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, init_runid, chan, band)
+                        print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, init_run_name, chan, band)
                         continue
                     set_noise_process(s.sigmodel, tr)
                     fit_cost = fit_cost * time_len
                 else:
-                    fit_params, fit_cost = fit_template(wave, pp=pp, ev=event, tm=tm, method=method, wiggles=wiggles, init_runid=init_runid)
+                    fit_params, fit_cost = fit_template(wave, pp=pp, ev=event, tm=tm, method=method, wiggles=wiggles, iid=iid, init_run_name=init_run_name)
                     if pp is not None:
                         print "wrote plot"
 
-                save_wiggles(wave, runid=runid, template_params=fit_params)
+                save_wiggles(wave, run_name=output_run_name, template_params=fit_params)
                 if method != "load":
-                    store_template_params(wave, event, fit_params, runid, method)
+                    store_template_params(wave, event, fit_params, output_run_name, method)
                 dbconn.commit()
                 if pp is not None:
                     pp.close()
@@ -165,7 +154,7 @@ def main():
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
     parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load (default is to ignore wiggle model and do iid fits)")
-    parser.add_option("--init_runid", dest="init_runid", default=None, type="int", help="initialize template fitting with results from this runid")
+    parser.add_option("--init_run_name", dest="init_run_name", default=None, type="int", help="initialize template fitting with results from this runid")
     parser.add_option("-p", "--plot", dest="plot", default=False, action="store_true", help="save plots")
     parser.add_option("--template_shape", dest = "template_shape", default="paired_exp", type="str", help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_run_name", dest = "template_run_name", default=None, type="str", help="name of previously trained template model to load (None)")
@@ -186,7 +175,7 @@ def main():
 
     if options.start_time is None:
         cursor.execute("select start_time, end_time from dataset where label='training'")
-        (st, et) read_timerange(cursor, "training", hours=None, skip=0):
+        (st, et) = read_timerange(cursor, "training", hours=None, skip=0)
     else:
         st = options.start_time
         et = options.end_time
@@ -197,14 +186,13 @@ def main():
         raise Exception("Must specify event id (evid) or origin id (orid) to fit.")
 
     try:
-        fit_event_segment(event=ev, sta=options.sta, tm = tm, runid=options.runid, init_runid=options.init_runid, plot=options.plot, method=options.method, wiggles=options.wiggles)
+        fit_event_segment(event=ev, sta=options.sta, tm = tm, runid=options.runid, init_run_name=options.init_run_name, plot=options.plot, method=options.method, wiggles=options.wiggles)
     except KeyboardInterrupt:
         s.dbconn.commit()
         raise
     except:
         s.dbconn.commit()
         print traceback.format_exc()
-        continue
 
 if __name__ == "__main__":
     main()

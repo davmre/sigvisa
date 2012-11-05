@@ -110,14 +110,14 @@ def read_event(cursor, evid=None, evtype="leb", runid=None, orid=None):
     else:
         ev_condition = "where evid=%d" % evid
 
-  if runid is None:
-    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
-                   "%s" % (evtype, ev_condition))
-  else:
-    cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
-                   "%s" % (evtype, ev_condition))
-  event = np.array(cursor.fetchone())
-  return event
+    if runid is None:
+        cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
+                       "%s" % (evtype, ev_condition))
+    else:
+        cursor.execute("select lon, lat, depth, time, mb, orid, evid from %s_origin "
+                       "%s" % (evtype, ev_condition))
+    event = np.array(cursor.fetchone())
+    return event
 
 def read_events(cursor, start_time, end_time, evtype, runid=None):
   if runid is None:
@@ -193,11 +193,6 @@ def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", n
 
   return detections, arid2num
 
-
-def read_event(cursor, evid, evtype="leb"):
-    sql_query = "SELECT lon, lat, depth, time, mb, orid, evid from %s_origin where evid=%d" % (evtype, evid)
-    cursor.execute(sql_query)
-    return np.array(cursor.fetchone())
 
 def read_event_detections(cursor, evid, stations=None, evtype="leb"):
 

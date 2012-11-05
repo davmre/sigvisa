@@ -57,37 +57,37 @@ void Spectral_Envelope_Model_Set_Params(Spectral_Envelope_Model_t * p_params, in
   }
 }
 
-int Spectral_Envelope_Model_Has_Model(SigModel_t * p_sigmodel, int siteid, int chan) {
+int Spectral_Envelope_Model_Has_Model(SigModel_t * p_sigmodel, int siteid, int chan, int band) {
   SignalModel_t * p_model = &p_sigmodel->signal_model;
   Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t *)p_model->pv_params;
 
-  /* chan < 0 means return true if we have a model for any channel at
-     this station */
-  if (chan < 0) {
+  /* chan < 0 means return true if we have a model for *any* channel
+     at this station. similarly band < 0 means return true if we have
+     any band models at this station. */
 
-    for (int i=0; i < NUM_CHANS; ++i) {
+  int chan_model = FALSE;
+  int wiggle_model = FALSE;
 
-      int chan_model = FALSE;
-      int wiggle_model = FALSE;
+  for (int i=0; i < NUM_CHANS; ++i) {
+    for (int j=0; j < NUM_BANDS; ++j) {
 
-      if (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].channel_noise_models[i].coeffs != NULL) {
+      if (chan >= 0 && chan != i) continue;
+      if (band >= 0 && chan != j) continue;
+
+      if (p_params->p_stations[siteid-1].bands[j].channel_noise_models[i].coeffs != NULL) {
 	chan_model = TRUE;
       }
 
       for(int p=0; p < NUM_TD_PHASES; ++p) {
-	if (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].wiggle_model[i][p].coeffs != NULL) {
+	if (p_params->p_stations[siteid-1].bands[j].wiggle_model[i][p].coeffs != NULL) {
 	  wiggle_model = TRUE;
 	}
       }
 
       if (chan_model && wiggle_model) return TRUE;
     }
-    return FALSE;
   }
-
-  else {
-    return (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].wiggle_model[chan][0].coeffs != NULL) && (p_params->p_stations[siteid-1].bands[DEFAULT_BAND].channel_noise_models[chan].coeffs != NULL);
-  }
+  return FALSE;
 
 }
 
@@ -118,32 +118,17 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
   long peak_idx = (p_arrival->peak_time - p_arrival->time) * p_trace->hz;
   double onset_slope;
   if (peak_idx != 0) {
-    onset_slope = (p_arrival->peak_amp - MIN_LOGENV_CUTOFF) / peak_idx;
+    onset_slope = (p_arrival->amp - MIN_LOGENV_CUTOFF) / peak_idx;
   }
   for (long t=0; t < peak_idx && t < p_trace->len; ++t) {
     d[t] = MIN_LOGENV_CUTOFF + t * onset_slope;
   }
 
-  // generate decay
-  /*  double alpha = (exp(p_arrival->peak_amp) - exp(p_arrival->amp)) / exp(p_arrival->amp);
-  double gamma = ( log(alpha) - log(0.1)) / log(p_arrival->peak_decay);
-  gamma = (gamma > 0) ? gamma : 0;
-  for (long t=peak_idx; t < p_trace->len; ++t) {
-    double t_off = (t - peak_idx)/p_trace->hz;
-    d[t] = p_arrival->amp + log(1+ alpha/(pow(1 + t_off, gamma))) + p_arrival->coda_decay*t_off;
-    if (t - peak_idx < 5) {
-      printf("peak d[%ld] = %f, prev d[%ld] = %f, alpha = %f, gamma = %f\n", t, d[t], t-1, d[t-1], alpha, gamma);
-    }
-    }*/
-
-
-  double A = exp(p_arrival->amp);
-  double P = exp(p_arrival->peak_amp);
-  double F = p_arrival->peak_decay;
   double b = p_arrival->coda_decay;
   for (long t=MAX(peak_idx, 0); t < p_trace->len; ++t) {
     double t_off = (t - peak_idx)/p_trace->hz;
-    d[t] = log( (P-A) * exp( -1 * (t_off * t_off) / (F * F)) + A * exp( b * t_off));
+    d[t] = p_arrival->amp + b * t_off;
+    //    printf("trace %ld = %f * exp(%lf * %lf) = %lf\n", t, A, b, t_off, d[t]);
   }
 
   p_trace->start_time = p_arrival->time;
@@ -362,19 +347,12 @@ void init_ArrivalWaveforms(BandModel_t * p_band, double hz, int num_arrivals, co
 }
 
 
-/*
-  Return the likelihood of the given signal segment (three channels at
-  some station over some time period), under the envelope + AR(n)
-  wiggles + Gaussian iid noise signal model.
- */
-double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
-
+double Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int band) {
   SignalModel_t * p_model = &p_sigmodel->signal_model;
   int siteid = p_segment->siteid;
-  int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
   Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t * )p_model->pv_params;
   Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
-  int band = DEFAULT_BAND;
+
   BandModel_t * p_band = p_sta->bands + band;
   double ll = 0;
 
@@ -433,12 +411,42 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
   return ll;
 }
 
+/*
+  Return the likelihood of the given signal segment (three channels at
+  some station over some time period), under the envelope + AR(n)
+  wiggles + Gaussian iid noise signal model.
+ */
+double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals) {
+
+  SignalModel_t * p_model = &p_sigmodel->signal_model;
+  int siteid = p_segment->siteid;
+  Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t * )p_model->pv_params;
+  Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
+
+  double ll = 0;
+  for(int band=0; band < NUM_BANDS; ++band) {
+
+    if (!segment_contains_band(p_segment, band)) {
+      continue;
+    }
+
+    BandModel_t * p_band = p_sta->bands + band;
+    if (p_band == NULL) {
+      LogError("segment contains data for band '%s', but no model is loaded (siteid %d)!", canonical_band_name(band), siteid);
+      exit(1);
+    }
+
+    ll += Envelope_Model_Likelihood(p_sigmodel, p_segment, num_arrivals, pp_arrivals, band);
+  }
+  return ll;
+}
+
 
 void Spectral_Envelope_Model_Sample_Trace(SigModel_t * p_sigmodel, Trace_t * p_trace, int num_arrivals, const Arrival_t ** pp_arrivals, int sample_noise, int sample_wiggles) {
 
   SignalModel_t * p_model = &p_sigmodel->signal_model;
   int siteid = p_trace->siteid;
-  int numtimedefphases = EarthModel_NumTimeDefPhases(p_sigmodel->p_earth);
+
   Spectral_Envelope_Model_t * p_params = (Spectral_Envelope_Model_t * )p_model->pv_params;
   Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
   int band = p_trace->band;
@@ -513,21 +521,26 @@ void Spectral_Envelope_Model_Sample_Trace(SigModel_t * p_sigmodel, Trace_t * p_t
 
 }
 
-void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int sample_noise, int sample_wiggles) {
+void Spectral_Envelope_Model_Sample(SigModel_t * p_sigmodel, Segment_t * p_segment, int num_arrivals, const Arrival_t ** pp_arrivals, int * bands_to_sample, int sample_noise, int sample_wiggles) {
 
-  // TODO: specify which (if any) bands to sample
+  /*
+    bands_to_sample is a boolean array of length NUM_BANDS.
+   */
+
   for(int chan=0; chan < NUM_CHANS; ++chan) {
-    int band = DEFAULT_BAND;
     Channel_t * p_chan = p_segment->p_channels[chan];
-    Trace_t * p_trace;
     if (p_chan != NULL) {
-      p_trace = p_chan->p_bands[band];
-      assert(p_trace != NULL);
+      for (int band=0; band < NUM_BANDS; ++band) {
+	if (bands_to_sample[band]) {
+	  Trace_t * p_trace;
+	  p_trace = p_chan->p_bands[band];
+	  assert(p_trace != NULL);
+	  Spectral_Envelope_Model_Sample_Trace(p_sigmodel, p_trace, num_arrivals, pp_arrivals, sample_noise, sample_wiggles);
+	}
+      }
     }
-    Spectral_Envelope_Model_Sample_Trace(p_sigmodel, p_trace, num_arrivals, pp_arrivals, sample_noise, sample_wiggles);
   }
 }
-
 
 void Spectral_Envelope_Model_UnInit(Spectral_Envelope_Model_t * p_params) {
 

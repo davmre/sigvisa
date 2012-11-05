@@ -23,7 +23,7 @@ class TemplateModel(object):
     """
 
     # return the name of the template model as a string
-    def model_name(self)
+    def model_name(self):
         raise Exception("abstract class: method not implemented")
 
     # return a tuple of strings representing parameter names
@@ -40,21 +40,27 @@ class TemplateModel(object):
             pstr += "\n"
         print pstr,
 
-    # check whether a given set of parameters is valid
-    def valid_params(self, params)
-        raise Exception("abstract class: method not implemented")
-
     def generate_template_waveform(self, template_params, model_waveform=None, logscale=False, sample=False):
         raise Exception("abstract class: method not implemented")
 
-    def waveform_cost(self, wave, template_params)
+
+    # p(waveform | params)
+    def waveform_log_likelihood(self, wave, template_params):
         raise Exception("abstract class: method not implemented")
 
-    def waveform_cost_iid(self, wave, template_params):
-        if not self.valid_params(template_params):
-            return float("inf")
+    # this is intended as a simple default option that gives decent,
+    # fast fits.  since we don't actually learn the variance of the L1
+    # noise, the interpretation as a "likelihood" is basically
+    # meaningless.
+    def waveform_log_likelihood_iid(self, wave, template_params):
         env = self.generate_template_waveform(template_params, model_waveform=wave, logscale=True)
-        return wave.l1_cost(env)
+        return -wave.l1_cost(env)
+
+    def low_bounds(self, phases):
+        raise Exception("abstract class: method not implemented")
+
+    def high_bounds(self, phases):
+        raise Exception("abstract class: method not implemented")
 
     def __init__(self, run_name, model_type = "gp_dad"):
         self.sigvisa = Sigvisa()
@@ -119,6 +125,7 @@ class TemplateModel(object):
 
 
     def sample(self, event, sta, chan, band, phases=None):
+
         if phases is None:
             phases = Sigvisa().arriving_phases(event, sta)
 

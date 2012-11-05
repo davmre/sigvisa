@@ -19,13 +19,10 @@ static PyMethodDef SigModel_methods[] = {
   {"synthesize_signals", (PyCFunction)py_synthesize_signals, METH_VARARGS,
    "synthesize_signals(evlist, stalist, start_time, end_time, hz, samplePerturb, sampleNoise) "
    "-> success\n"},
-  {"synthesize_signals_det", (PyCFunction)py_synthesize_signals_det, METH_VARARGS,
-   "synthesize_signals(stalist, start_time, end_time, hz, samplePerturb, sampleNoise) "
-   "-> success\n"},
-  {"trace_likelihood", (PyCFunction) py_trace_likelihood, METH_VARARGS,
-   "trace_likelihood(trace, phaseids, params) -> ll\n" },
-  {"segment_likelihood", (PyCFunction) py_segment_likelihood, METH_VARARGS,
-   "segment_likelihood(segment, phaseids, params) -> ll\n" },
+  {"trace_log_likelihood", (PyCFunction) py_trace_log_likelihood, METH_VARARGS,
+   "trace_log_likelihood(trace, phaseids, params) -> ll\n" },
+  {"segment_log_likelihood", (PyCFunction) py_segment_log_likelihood, METH_VARARGS,
+   "segment_log_likelihood(segment, phaseids, params) -> ll\n" },
   {"generate_segment", (PyCFunction) py_gen_logenvelope_segment, METH_VARARGS,
    "generate_segment(start_time, end_time, siteid, srate, phaseids, params) -> segment\n" },
   {"sample_segment", (PyCFunction) py_sample_segment, METH_VARARGS,
@@ -60,9 +57,6 @@ static PyMethodDef SigModel_methods[] = {
    "-> success\n"},
   {"event_likelihood", (PyCFunction)py_event_likelihood, METH_VARARGS,
    "event_likelihood(time, lon, lat, depth, mb)"
-   "-> log likelihood\n"},
-  {"detection_likelihood", (PyCFunction)py_det_likelihood, METH_VARARGS,
-   "detection_likelihood(write_log)"
    "-> log likelihood\n"},
   {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
    "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"

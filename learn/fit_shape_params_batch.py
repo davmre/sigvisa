@@ -14,6 +14,11 @@ from optparse import OptionParser
 from sigvisa import *
 
 
+def fit_schedule(round):
+    # first round: iid fits, fixed arrival times
+    # second round: ar fits, fixed arrival times
+    # third and thereafter: AR fits, flexible arrival times?
+
 def main():
 # boilerplate initialization of various things
     parser = OptionParser()

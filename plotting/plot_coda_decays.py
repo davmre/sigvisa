@@ -16,9 +16,6 @@ import utils.geog
 import obspy.signal.util
 
 
-import utils.nonparametric_regression as nr
-from signals.coda_decay_common import *
-
 
 def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):
     fig = plt.figure(figsize = (8, 8))
@@ -218,7 +215,7 @@ def plot_geog(band_data, pp, azistr):
     site_lonlat = sites[siteid-1, 0:2]
 
     print band_data.shape
-    
+
     ev_lonlat = band_data[:, (LON_COL, LAT_COL)]
     allll = np.vstack([ev_lonlat, site_lonlat])
     (max_lon, max_lat) = np.max(allll, axis=0)
@@ -227,7 +224,7 @@ def plot_geog(band_data, pp, azistr):
     min_lon=-180
     max_lat=90
     min_lat=-90
-    
+
     from utils.draw_earth import draw_earth, draw_events
     bmap = draw_earth("",
                   projection="cyl",
@@ -273,7 +270,7 @@ def generate_scatter_plots(cursor, runid, siteid, min_azi, max_azi, acost_thresh
             lp = np.array(lp)
             ls = np.array(ls)
 
-            pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
+            pdf_dir = ensure_dir_exists(os.path.join(base_coda_dir, short_band))
             fname = os.path.join(pdf_dir, "plots_%s_%s_%.0f_%.0f.pdf" % (chan, target_str, min_azi, max_azi))
             pp = PdfPages(fname)
             print "opening pp in ", fname
@@ -291,7 +288,7 @@ def merge_plots(base_coda_dir, bands, all_data, min_azi, max_azi):
             except:
                 pass
 
-            
+
             band_data = extract_band(all_data, band_idx)
             evlist = os.path.join(pdf_dir, "plots_%d_%d.pdf" % (min_azi, max_azi)) + " " + os.path.join(pdf_dir, "geog_%d_%d.pdf" % (min_azi, max_azi))
             for row in band_data:
@@ -361,7 +358,7 @@ def main():
     parser.add_option("--events", dest="events", default=False, action="store_true", help="(re)creates individual event coda plots (False)")
     parser.add_option("--pred_events", dest="pred_events", default=False, action="store_true", help="predicts individual event coda plots (False)")
     parser.add_option("--merge", dest="merge", default=False, action="store_true", help="merge all available plots for each band (False)")
-    
+
     parser.add_option("--min_azi", dest="min_azi", default=0, type="int", help="exclude all events with azimuth less than this value (0)")
     parser.add_option("--max_azi", dest="max_azi", default=360, type="int", help="exclude all events with azimuth greater than this value (360)")
 
@@ -406,7 +403,7 @@ def main():
             accept_s_horiz = accept_fit(fit_s_horiz, min_coda_length=min_s_coda_length, max_avg_cost = avg_cost_bound)
 
 
-            pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
+            pdf_dir = ensure_dir_exists(os.path.join(base_coda_dir, short_band))
             pp = PdfPages(os.path.join(pdf_dir, str(int(row[EVID_COL])) + "_log.pdf"))
 
             title = "%s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_len %f \n s_b %f s_acost %f s_len %f " % (short_band, row[EVID_COL], row[SITEID_COL], row[MB_COL], row[DISTANCE_COL], row[AZI_COL], row[VERT_P_FIT_B], row[VERT_P_FIT_AVG_COST], row[VERT_P_FIT_CODA_LENGTH], row[HORIZ_S_FIT_B], row[HORIZ_S_FIT_AVG_COST], row[HORIZ_S_FIT_CODA_LENGTH])
@@ -479,7 +476,7 @@ def main():
             except ValueError:
                 continue
 
-            pdf_dir = get_dir(os.path.join(base_coda_dir, short_band))
+            pdf_dir = ensure_dir_exists(os.path.join(base_coda_dir, short_band))
             pp = PdfPages(os.path.join(pdf_dir, str(int(row[EVID_COL])) + "_pred.pdf"))
             title = "PREDICTED %s evid %d siteid %d mb %f \n dist %f azi %f \n p_b %f p_acost %f p_len %f \n s_b %f s_acost %f s_len %f " % (short_band, row[EVID_COL], row[SITEID_COL], row[MB_COL], row[DISTANCE_COL], row[AZI_COL], row[VERT_P_FIT_B], row[VERT_P_FIT_AVG_COST], row[VERT_P_FIT_CODA_LENGTH], row[HORIZ_S_FIT_B], row[HORIZ_S_FIT_AVG_COST], row[HORIZ_S_FIT_CODA_LENGTH])
 

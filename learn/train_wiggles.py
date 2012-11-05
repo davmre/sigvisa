@@ -19,11 +19,10 @@ import utils.geog
 import obspy.signal.util
 import itertools
 
-from signals.coda_decay_common import *
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel
 
-def save_wiggles(wave, tm, runid, template_params=None, snr_threshold=1, length=0):
+def save_wiggles(wave, tm, run_name, template_params=None, snr_threshold=1, length=0):
     """
     Extract wiggles from a wave (under a given set of template
     params), and save to a file. Also save a record of the extracted
@@ -55,14 +54,14 @@ def save_wiggles(wave, tm, runid, template_params=None, snr_threshold=1, length=
             continue
         else:
             print "saving wiggles for phase", phase
-            dirname = os.path.join("wiggles", str(int(runid)), sta, phase, )
+            dirname = os.path.join("wiggles", run_name, sta, phase, )
             fname = os.path.join(dirname, "%d_%s%s.dat" % (evid, chan, tag))
-            get_dir(dirname)
+            ensure_dir_exists(dirname)
             print "saving phase %s len %d" % (phase, len(wiggles[pidx]))
             np.savetxt(fname, np.array(wiggles[pidx]))
 
             try:
-                sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (runid, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (runid, arrivals[pidx, AR_ARID_COL], siteid, phaseid, band, chan, evid, fname, snr_threshold)
+                sql_query = "INSERT INTO sigvisa_wiggle_wfdisc (run_name, arid, siteid, phaseid, band, chan, evid, fname, snr) VALUES (%d, %d, %d, %d, '%s', '%s', %d, '%s', %f)" % (run_name, arrivals[pidx, AR_ARID_COL], siteid, phaseid, band, chan, evid, fname, snr_threshold)
                 cursor.execute(sql_query)
             except:
                 print "DB error inserting wiggle description (probably duplicate key), continuing..."
@@ -220,18 +219,18 @@ def main():
 
     parser = OptionParser()
     parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str", help="siteid of station for which to learn wiggle model (default: all)")
-    parser.add_option("-r", "--runids", dest="runids", default=None, type="str", help="runid of the extracted wiggles to use")
+    parser.add_option("-r", "--run_names", dest="run_names", default=None, type="str", help="run_name of the extracted wiggles to use")
     parser.add_option("-p", "--phaseids", dest="phaseids", default=None, type="str", help="phaseids (P_PHASES)")
     parser.add_option("-c", "--channels", dest="channels", default=None, type="str", help="channels (all)")
     parser.add_option("-o", "--outfile", dest="outfile", default="parameters/signal_wiggles.txt", type="str", help="filename to save output (parameters/signal_wiggles.txt)")
     (options, args) = parser.parse_args()
 
-    runids = [int(r) for r in options.runids.split(',')]
+    run_names = options.run_names.split(',')
     phaseids = P_PHASEIDS if options.phaseids is None else [int(r) for r in options.phaseids.split(',')]
     channels = chans if options.channels is None else [s for s in options.channels.split(',')]
     siteids = None if options.siteids is None else [int(s) for s in options.siteids.split(',')]
-    runid_cond = "(" + " or ".join(["runid=%d" % r for r in runids])  + ")"
-    print runid_cond
+    run_name_cond = "(" + " or ".join(["run_name='%s'" % r for r in run_names])  + ")"
+    print run_name_cond
 
     f = open(options.outfile, 'w')
 
@@ -243,7 +242,7 @@ def main():
 
         print sta, phase, channel, short_band
 
-        sql_query = "select fname from sigvisa_wiggle_wfdisc where %s and siteid=%d and phaseid=%d and band='%s' and chan='%s'" % (runid_cond, siteid, phaseid, short_band, channel)
+        sql_query = "select fname from sigvisa_wiggle_wfdisc where %s and siteid=%d and phaseid=%d and band='%s' and chan='%s'" % (run_name_cond, siteid, phaseid, short_band, channel)
         print sql_query
         cursor.execute(sql_query)
         rows = cursor.fetchall()

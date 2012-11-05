@@ -46,21 +46,21 @@ PyObject * canonical_band_name(int num) {
 
   switch(num) {
   case NARROW_05_07:
-    return PyString_FromString("narrow_envelope_0.50_0.70");
+    return PyString_FromString("freq_0.50_0.70");
  case NARROW_07_10:
-    return PyString_FromString("narrow_envelope_0.70_1.00");
+    return PyString_FromString("freq_0.70_1.00");
   case NARROW_10_15:
-    return PyString_FromString("narrow_envelope_1.00_1.50");
+    return PyString_FromString("freq_1.00_1.50");
   case NARROW_15_20:
-    return PyString_FromString("narrow_envelope_1.50_2.00");
+    return PyString_FromString("freq_1.50_2.00");
   case NARROW_20_30:
-    return PyString_FromString("narrow_envelope_2.00_3.00");
+    return PyString_FromString("freq_2.00_3.00");
   case NARROW_30_40:
-    return PyString_FromString("narrow_envelope_3.00_4.0");
+    return PyString_FromString("freq_3.00_4.0");
   case NARROW_40_60:
-    return PyString_FromString("narrow_envelope_4.00_6.00");
+    return PyString_FromString("freq_4.00_6.00");
   case NARROW_60_80:
-    return PyString_FromString("narrow_envelope_6.00_8.00");
+    return PyString_FromString("freq_6.00_8.00");
   case BROADBAND:
     return PyString_FromString("broadband");
   case BB_ENVELOPE:
@@ -226,6 +226,16 @@ void init_dummy_segment(Trace_t * p_trace, Segment_t * p_segment) {
 
 }
 
+int segment_contains_band(Segment_t * p_segment, int band) {
+  for (int c=0; c < NUM_CHANS; ++c) {
+    if (p_segment->p_channels[c] != NULL &&
+	p_segment->p_channels[c]->p_bands[band] != NULL) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 /*
 ****************************************************************
 py_set_signals and associated helper methods for converting Python
@@ -364,7 +374,7 @@ int py_segments_to_c_segments(SigModel_t * p_sigmodel, PyObject * py_segments, S
     int skip = 0;
     for(int chan=0; chan < NUM_CHANS; ++chan) {
       if (new_segment->p_channels[chan] != NULL) {
-	if (!(*p_sigmodel->signal_model.has_model)(p_sigmodel, new_segment->siteid , chan)) {
+	if (!(*p_sigmodel->signal_model.has_model)(p_sigmodel, new_segment->siteid , chan, -1)) {
 	  LogInfo("no signal model available for siteid %d chan %d, skipping segment...", new_segment->siteid, chan);
 	  skip = 1;
 	  break;
@@ -530,43 +540,6 @@ PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args) {
    ****************************************************************
 */
 
-void synthesize_signals_dets(SigModel_t *p_sigmodel, int numsiteids, int * p_siteids, double start_time, double end_time, double hz, int samplePerturb, int sampleNoise) {
-
-  EarthModel_t * p_earth = p_sigmodel->p_earth;
-
-
-  p_sigmodel->numsegments = numsiteids;
-  p_sigmodel->p_segments = calloc(numsiteids, sizeof(Segment_t));
-
-  for (int i=0; i < numsiteids; ++i) {
-    int siteid = p_siteids[i];
-
-    Segment_t * p_segment = p_sigmodel->p_segments + i;
-
-    p_segment->start_time = start_time;
-    p_segment->hz = hz;
-    p_segment->siteid = siteid;
-    p_segment->len = (int) (end_time - start_time) * hz;
-
-    int num_arrivals;
-    Arrival_t ** pp_arrivals;
-
-    det_arrivals((void *)p_sigmodel, p_segment, &num_arrivals, &pp_arrivals);
-    (*p_sigmodel->signal_model.sample)(p_sigmodel->signal_model.pv_params,
-				       p_sigmodel->p_earth,
-				       p_segment,
-				       num_arrivals, (const Arrival_t **)pp_arrivals,
-				       samplePerturb, sampleNoise);
-    for (int i=0; i < num_arrivals; ++i) {
-      free(pp_arrivals[i]);
-    }
-    free(pp_arrivals);
-
-    LogTrace("generated segment at siteid %d w/ length %ld = (%lf - %lf) * %lf\n", siteid, p_segment->len, end_time, start_time, hz);
-
-  }
-}
-
 void synthesize_signals(SigModel_t *p_sigmodel, int numevents, Event_t ** pp_events, int numsiteids, int * p_siteids, double start_time, double end_time, double hz, int samplePerturb, int sampleNoise) {
 
   EarthModel_t * p_earth = p_sigmodel->p_earth;
@@ -650,26 +623,4 @@ PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args) {
   return Py_BuildValue("n", 0);
 }
 
-
-PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args) {
-  PyArrayObject * p_evlist_obj;
-  PyObject * p_stalist_obj;
-  double stime, etime, hz;
-  int samplePerturb, sampleNoise;
-
-  if (!PyArg_ParseTuple(args, "O!dddii", &PyTuple_Type, &p_stalist_obj, &stime, &etime, &hz,&samplePerturb, &sampleNoise))
-    return NULL;
-
-  int numsiteids;
-  int * p_siteids;
-
-  convert_tuple_int(p_stalist_obj, &numsiteids, &p_siteids);
-
-  synthesize_signals_dets(p_sigmodel, numsiteids, p_siteids, stime, etime, hz, samplePerturb, sampleNoise);
-
-  free(p_siteids);
-
-
-  return Py_BuildValue("n", 0);
-}
 

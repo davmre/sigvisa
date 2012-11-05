@@ -6,7 +6,6 @@ import numpy as np
 import numpy.ma as ma
 
 from sigvisa import Sigvisa
-
 from source.event import Event
 from signals.common import Waveform, Segment, load_waveform_from_file
 from signals.mask_util import *
@@ -21,8 +20,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import plotting.plot
-
-
 
 
 class TestMasks(unittest.TestCase):
@@ -317,14 +314,22 @@ class TestNoiseModels(unittest.TestCase):
         self.assertAlmostEqual(np.sum(np.asarray(model1.params) - np.asarray(model2.params)), 0)
         s.bands = old_bands
 
-class TestCost(unittest.TestCase):
+class TestSignalLikelihood(unittest.TestCase):
 
     def setUp(self):
-        self.seg = load_event_station(evid=5301405, sta="URZ")
+        self.seg = load_event_station(evid=5301405, sta="URZ").with_filter('freq_2.0_3.0;env')
         self.event = Event(evid=5301405)
-        self.tm = PairedExpTemplateModel(run_name = "signal_unittest")
+        self.tm =  PairedExpTemplateModel(run_name = "", model_type="dummy")
 
-    def test_iid_cost(self):
+    def test_generate(self):
+        st = self.seg['stime']
+        param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
+        bhz_23_template =(('P', 'S'), param_vals)
+        bhz_23_wave = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'])
+        plotting.plot.plot_waveform(bhz_23_wave, logscale=True)
+        plt.savefig('synthesized.png')
+
+"""    def test_iid_cost(self):
 
         smoothed = self.seg.with_filter("freq_2.0_3.0;env;smooth")
         bhz = smoothed['BHZ']
@@ -333,6 +338,7 @@ class TestCost(unittest.TestCase):
         c = c_cost(wave=bhz, params = bhz_23_template, iid=True)
 
         print c
+"""
 
 if __name__ == '__main__':
     unittest.main()

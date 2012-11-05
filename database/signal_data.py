@@ -18,8 +18,7 @@ import utils.geog
 import obspy.signal.util
 
 
-def get_dir(dname):
-
+def ensure_dir_exists(dname):
     try:
         os.makedirs(dname)
     except OSError as exc:
@@ -28,17 +27,17 @@ def get_dir(dname):
         else: raise
     return dname
 
-def get_base_dir(sta, runid, label=None):
+def get_base_dir(sta, run_name, label=None):
     if label is not None:
-        return get_dir(os.path.join("logs", "codas_%s_%s_%s" % (sta, label, runid)))
+        return ensure_dir_exists(os.path.join("logs", "codas_%s_%s_%s" % (sta, label, run_name)))
     else:
-        return get_dir(os.path.join("logs", "codas_%s_%s" % (sta, runid)))
+        return ensure_dir_exists(os.path.join("logs", "codas_%s_%s" % (sta, run_name)))
 
 
-def load_template_params(evid, chan, band, runid, sta):
+def load_template_params(evid, chan, band, run_name, sta):
     s = Sigvisa()
 
-    sql_query = "select l.time, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.acost, pid.id from sigvisa_coda_fits fit, leb_assoc leba, leb_origin lebo, static_phaseid pid, leb_arrival l where lebo.orid=leba.orid and leba.arid=fit.arid and leba.phase=pid.phase and l.arid=leba.arid and l.sta=%s and lebo.evid=%d and fit.chan='%s' and fit.band='%s' and fit.runid=%d " % (evid, chan, band, runid, sta)
+    sql_query = "select l.time, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.acost, pid.id from sigvisa_coda_fits fit, leb_assoc leba, leb_origin lebo, static_phaseid pid, leb_arrival l where lebo.orid=leba.orid and leba.arid=fit.arid and leba.phase=pid.phase and l.arid=leba.arid and l.sta=%s and lebo.evid=%d and fit.chan='%s' and fit.band='%s' and fit.run_name='%s'" % (sta, evid, chan, band, run_name)
     s.cursor.execute(sql_query)
     rows = np.array(s.cursor.fetchall())
     for (i, row) in enumerate(rows):
@@ -54,7 +53,7 @@ def load_template_params(evid, chan, band, runid, sta):
         return None, None, None
     return (phases, fit_params), fit_cost
 
-def store_template_params(wave, event, template_params, runid, method_str):
+def store_template_params(wave, event, template_params, run_name, method_str):
     siteid = wave['siteid']
     chan = wave['chan']
     band = wave['band']
@@ -68,7 +67,7 @@ def store_template_params(wave, event, template_params, runid, method_str):
     (phases, fit_params) = template_params
 
     for (i, arid) in enumerate(event['event_arrivals'][:, AR_ARID_COL]):
-        sql_query = "INSERT INTO sigvisa_coda_fits (runid, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, arid, chan, band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+        sql_query = "INSERT INTO sigvisa_coda_fits (run_name, arid, chan, band, peak_delay, peak_height, peak_decay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) VALUES (%d, %d, '%s', '%s', %f, NULL, NULL, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (run_name, arid, chan, band, fit_params[i, PEAK_OFFSET_PARAM], fit_params[i, CODA_HEIGHT_PARAM], fit_params[i, CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
         print sql_query
         try:
             cursor.execute(sql_query)
@@ -76,7 +75,7 @@ def store_template_params(wave, event, template_params, runid, method_str):
             print "DB error inserting fits (probably duplicate key), continuing..."
             pass
 
-def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
+def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, run_name=None, phaseids=None, evids=None, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 
     new_data = []
     for row in fit_data:
@@ -90,8 +89,8 @@ def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=N
         if siteid is not None:
             if int(row[FIT_SITEID]) != siteid:
                 continue
-        if runid is not None:
-            if int(row[FIT_RUNID]) != runid:
+        if run_name is not None:
+            if row[FIT_RUN_NAME] != run_name:
                 continue
         if phaseids is not None:
             if int(row[FIT_PHASEID]) not in phaseids:
@@ -126,12 +125,12 @@ def load_wiggle_models(cursor, sigmodel, filename):
 
 
 
-def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runids=None, phaseids=None, evids=None, exclude_evids=None, acost_threshold=20, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
+def load_shape_data(cursor, chan=None, short_band=None, siteid=None, run_names=None, phaseids=None, evids=None, exclude_evids=None, acost_threshold=20, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 
     chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
     band_cond = "and fit.band='%s'" % (short_band) if short_band is not None else ""
     site_cond = "and sid.id=%d" % (siteid) if siteid is not None else ""
-    run_cond = "and (" + " or ".join(["fit.runid = %d" % runid for runid in runids]) + ")" if runids is not None else ""
+    run_cond = "and (" + " or ".join(["fit.run_name = '%s'" % run_name for run_name in run_names]) + ")" if run_names is not None else ""
     phase_cond = "and (" + " or ".join(["pid.id = %d" % phaseid for phaseid in phaseids]) + ")" if phaseids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
