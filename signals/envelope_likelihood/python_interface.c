@@ -230,6 +230,13 @@ PyObject * py_gen_trace(SigModel_t * p_sigmodel, PyObject * args, int sample) {
 
   Spectral_Envelope_Model_Sample_Trace(p_sigmodel, p_trace, n, (const Arrival_t **)pp_arrs, sample, sample);
 
+  if (sample) {
+    for(int i=0; i < p_trace->len; ++i) {
+      p_trace->p_data[i] = MAX(p_trace->p_data[i], EXP_MIN_LOGENV_CUTOFF);
+    }
+  }
+
+
   /* build numpy array object to return */
    npy_intp dims[1];
    dims[0] = p_trace->len;

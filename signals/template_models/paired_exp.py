@@ -53,6 +53,7 @@ class PairedExpTemplateModel(TemplateModel):
             env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
         data = np.log(env) if logscale else env
+
         wave = Waveform(data = data, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
 
         try:
@@ -68,9 +69,9 @@ class PairedExpTemplateModel(TemplateModel):
         phases, vals = template_params
         phaseids = [s.phaseids[phase] for phase in phases]
 
-        noise_model.set_noise_process(model_waveform)
+        noise_model.set_noise_process(wave)
 
-        ll = s.sigmodel.trace_log_likelihood(wave.as_obspy_trace(), vals);
+        ll = s.sigmodel.trace_log_likelihood(wave.as_obspy_trace(), phaseids, vals);
         return ll
 
     def low_bounds(self, phases):

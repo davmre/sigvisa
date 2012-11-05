@@ -424,6 +424,7 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
   Spectral_StationModel_t * p_sta = p_params->p_stations + siteid - 1;
 
   double ll = 0;
+  int bands_considered = 0;
   for(int band=0; band < NUM_BANDS; ++band) {
 
     if (!segment_contains_band(p_segment, band)) {
@@ -436,8 +437,15 @@ double Spectral_Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p
       exit(1);
     }
 
+    bands_considered++;
     ll += Envelope_Model_Likelihood(p_sigmodel, p_segment, num_arrivals, pp_arrivals, band);
   }
+
+  if (bands_considered==0) {
+    LogError("No valid bands found in segment, can't compute likelihood!");
+    return NAN;
+  }
+
   return ll;
 }
 

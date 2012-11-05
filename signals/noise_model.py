@@ -106,7 +106,14 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
 
     for band in s.bands:
         tmp_filter_str = filter_str.replace(old_band, band)
+
+        print "filtering for band", tmp_filter_str
+        print filter_str
+        print old_band
+        print band
         filtered_wave = model_wave.filter(tmp_filter_str)
+
+
 
         # train AR noise model
         ar_learner = ARLearner(filtered_wave.data, filtered_wave['srate'])

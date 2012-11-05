@@ -325,20 +325,30 @@ class TestSignalLikelihood(unittest.TestCase):
         st = self.seg['stime']
         param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
         bhz_23_template =(('P', 'S'), param_vals)
-        bhz_23_wave = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'])
-        plotting.plot.plot_waveform(bhz_23_wave, logscale=True)
-        plt.savefig('synthesized.png')
+        template = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'])
 
-"""    def test_iid_cost(self):
+        sampled = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'], sample=True)
 
-        smoothed = self.seg.with_filter("freq_2.0_3.0;env;smooth")
-        bhz = smoothed['BHZ']
-        bhz_23_template = self.tm.predictTemplate(event = self.event, sta="URZ", chan="BHZ", band="freq_2.0_3.0")
+        plotting.plot.plot_waveform(template, logscale=True)
+        plt.savefig('template.png')
 
-        c = c_cost(wave=bhz, params = bhz_23_template, iid=True)
+        plotting.plot.plot_waveform(sampled, logscale=True)
+        plt.savefig('sampled.png')
 
-        print c
-"""
+    def test_iid_cost(self):
+        smoothed = self.seg.with_filter("smooth")
+        st = self.seg['stime']
+        param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
+        ll = self.tm.waveform_log_likelihood_iid(smoothed['BHZ'], (('P', 'S'), param_vals))
+        print ll
+
+    def test_likelihood(self):
+        smoothed = self.seg.with_filter("smooth")
+        st = self.seg['stime']
+        param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
+        ll = self.tm.waveform_log_likelihood(smoothed['BHZ'], (('P', 'S'), param_vals))
+        print ll
+
 
 if __name__ == '__main__':
     unittest.main()

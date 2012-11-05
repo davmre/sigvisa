@@ -68,7 +68,7 @@ class Waveform(object):
 
     # cost functions for comparing to other waves
     def l1_cost(self, other_wave):
-        if self['filter_str'] != other['filter_str'] or self['stime'] != other_wave['stime'] or self['srate'] != other_wave['srate'] or self['npts'] != other_wave['npts']:
+        if self['filter_str'] != other_wave['filter_str'] or self['stime'] != other_wave['stime'] or self['srate'] != other_wave['srate'] or self['npts'] != other_wave['npts']:
             print "error computing distance between:"
             print self
             print other_wave
@@ -83,7 +83,9 @@ class Waveform(object):
         allstats = dict(self.segment_stats.items() + self.my_stats.items())
         allstats['starttime_unix'] = allstats['stime']
         allstats['sampling_rate'] = allstats['srate']
+        allstats['channel'] = allstats['chan']
         allstats['band'] = self['band']
+
 
         return Trace(header=allstats, data=self.data)
 
@@ -264,8 +266,17 @@ class Segment(object):
         # add the waveform to the segment!
         self.__chans[wf["chan"]] = wf
 
-    def with_filter(self, filter_str):
+    def with_filter(self, filter_str, force_duplicate=False):
         new_filters = filter_str.split(';')
+
+        # sanity check to avoid creating weird filter strings
+        if not force_duplicate:
+            s1 = set(new_filters)
+            s2 = set(self.filter_str.split(';'))
+            duplicates = s1.intersection(s2)
+            if len(duplicates) > 0:
+                raise Exception("filter str '%s' duplicates a filter already in use (currently '%s')! Use force_duplicate to override this error." % (filter_str, self.filter_str))
+
         filters = [x for x in (self.filter_str.split(';') + new_filters) if len(x) > 0]
         sorted_filters = []
         for filter_pattern in self.filter_order:
