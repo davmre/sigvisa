@@ -56,6 +56,7 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
 
   // now resize all the temp matrices
   int L = k->np;
+  realloc_matrix(&k->p_linear_obs, k->obs_n, L);
   realloc_matrix(&k->P, L, L);
   realloc_matrix(&k->p_sigma_points, L, 2*L+1);
   realloc_matrix(&k->p_obs_points, k->obs_n, 2*L+1);
@@ -67,6 +68,7 @@ int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p) {
   realloc_vector(&k->p_collapsed_mean_update, L);
   realloc_vector(&k->p_mean_update, (k->n));
   realloc_matrix(&k->p_covars_tmp, (k->n), (k->n));
+  realloc_matrix(&k->p_collapsed_covars_tmp, (k->np), (k->np));
 
   if (k->debug_processes_fp != NULL) {
     fprintf(k->debug_processes_fp, "add process id %d order %d mean %f std %f\n", k->np-1, p->order, p->mean, sqrt(p->sigma2));
@@ -105,6 +107,7 @@ void kalman_remove_AR_process(KalmanState_t * k, int m, int perm_idx) {
   k->np--;
   // now resize all the temp matrices
   int L = k->np;
+  realloc_matrix(&k->p_linear_obs, k->obs_n, L);
   realloc_matrix(&k->P, L, L);
   realloc_matrix(&k->p_sigma_points, L, 2*L+1);
   realloc_matrix(&k->p_obs_points, k->obs_n, 2*L+1);
@@ -116,50 +119,8 @@ void kalman_remove_AR_process(KalmanState_t * k, int m, int perm_idx) {
   realloc_vector(&k->p_collapsed_mean_update, L);
   realloc_vector(&k->p_mean_update, (k->n));
   realloc_matrix(&k->p_covars_tmp, (k->n), (k->n));
+  realloc_matrix(&k->p_collapsed_covars_tmp, (k->np), (k->np));
 }
-
-/* constructs the observation matrix for the current set of AR processes */
-/* void AR_observation(int n, int k,
-		    int n_arrs, ArrivalWaveform_t * active_arrivals,
-		    Segment_t * p_segment,
-		    gsl_matrix ** pp_obs) {
-  if (*pp_obs != NULL) {
-    gsl_matrix_free(*pp_obs);
-  }
-
-  if (n_arrs == 0) {
-    *pp_obs = NULL;
-    return;
-  }
-
-  *pp_obs = gsl_matrix_alloc(k, n*n_arrs);
-  gsl_matrix_set_zero(*pp_obs);
-
-  for (int arr=0; arr < n_arrs; ++arr) {
-    ArrivalWaveform_t * p_a = active_arrivals;
-   int curr_chan=0;
-    for (int i=0; i < NUM_CHANS; ++i) {
-      if (p_segment->p_channels[i] != NULL) {
-	switch (i) {
-	case CHAN_BHZ:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]);
-	  break;
-	case CHAN_BHN:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]);
-	  break;
-	case CHAN_BHE:
-	  gsl_matrix_set(*pp_obs, curr_chan, arr*n+n-1, p_a->bhz_coeff * p_a->p_envelope[p_a->idx]);
-	  break;
-	}
-	curr_chan++;
-      }
-    }
-
-    active_arrivals=active_arrivals->next_active;
-  }
-
-
-} */
 
 /* predict the distribution at the next timestep */
 void kalman_predict(KalmanState_t * k) {
@@ -215,6 +176,128 @@ for(int i=0; i < k->np; ++i) {
     }
   }
 }
+
+/*
+  each row of the observation matrix gives the coefficients for one channel of the output.
+ */
+
+void kalman_observation_matrix(KalmanState_t *k, int* noise_indices, ArrivalWaveform_t * active_arrivals) {
+
+  int obs_i = 0;
+  for (int c=0; c < NUM_CHANS; ++c) {
+
+    // an index of -1 corresponds to a channel that is not being output, so we skip it
+    if (noise_indices[c] == -1 ) continue;
+
+    gsl_vector_view obs_channel = gsl_matrix_row(k->p_linear_obs, obs_i);
+    gsl_vector_set_zero(&obs_channel.vector);
+
+    if (noise_indices[c] == -2 ) {
+      LogError("WHYWHYWHYWHYWHYWHYWHY");
+      exit(1);
+    }
+
+    // the output of each channel starts with the noise process
+    int id = gsl_vector_get(k->p_permanent_indices, noise_indices[c]);
+
+    gsl_vector_set(&obs_channel.vector, id, 1);
+
+    // then, we add in the signal from each active arrival
+    for(ArrivalWaveform_t * aa = active_arrivals;
+	aa != NULL;
+	aa = aa->next_active) {
+      // the coefficient for each arrival is the template height
+      double coeff = exp(aa->p_abstract_trace->p_data[aa->idx]);
+      // projected onto the current channel
+      coeff *= aa->projection_coeffs[c];
+      id = gsl_vector_get(k->p_permanent_indices, aa->wiggle_ids[c]);
+      gsl_vector_set(&obs_channel.vector, id, coeff);
+    }
+    obs_i++;
+  }
+}
+
+/*
+  Do a linear Kalman observation update. Notation follows
+  http://en.wikipedia.org/wiki/Kalman_filter#Update.
+ */
+double kalman_linear_update(KalmanState_t *k,  gsl_vector * p_true_obs, int* noise_indices, ArrivalWaveform_t * active_arrivals) {
+
+  // generate observation matrix
+  kalman_observation_matrix(k, noise_indices, active_arrivals);
+
+  /* for the update, we work only with the current-time components of the state, and we add in the process mean */
+  collapse_state(k);
+  gsl_vector_add(k->p_collapsed_means, k->p_const);
+  gsl_matrix_memcpy(k->P, k->p_collapsed_covars);
+
+  // calculate the predicted observations:
+  // H_t is the observation matrix (p_linear_obs).
+  // x_t is the current state estimate mean (p_collapsed_means).
+  // Here we compute H_t * x_t and store the result (temporarily) in k->y.
+  gsl_blas_dgemv (CblasNoTrans, 1, k->p_linear_obs, k->p_collapsed_means, 0, k->y);
+
+  /* Now we find the observation residual (difference between
+     predicted obs and the actual observation z_t), and store this into
+     k->y. The result is y = z - Hx.
+  */
+  gsl_vector_sub(k->y, p_true_obs);
+  gsl_vector_scale(k->y, -1);
+
+  // calculate the predicted observation covariance:
+  // P_t is the current state covariance estimate (p_collapsed_covars).
+  // H_t is the observation matrix.
+  // R_t is covariance of the observation noise (assumed diagonal).
+  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->p_collapsed_covars, k->p_linear_obs, 0, k->Ktmp); // Ktmp = PH^T
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->p_linear_obs, k->Ktmp, 0, k->S); // S = HPH^T
+  matrix_add_to_diagonal(k->S, k->p_obs_noise); // S = HPH^T + R
+
+  // and the Kalman gain K = PH^T*S^-1
+  double log_det_S = psdmatrix_inv_logdet(k->S, k->Sinv);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->Ktmp, k->Sinv, 0, k->K);
+
+  /* zero out the columns of the Kalman gain which correspond to
+     unobserved channels (indicated by NaN). */
+    for (int c=0; c < k->obs_n; ++c) {
+      if (isnan(gsl_vector_get(k->y, c))) {
+	gsl_vector_view gain_col = gsl_matrix_column(k->K, c);
+	gsl_vector_set_zero(&gain_col.vector);
+	gsl_vector_set(k->y, c, 0);
+      }
+    }
+
+  // update the mean vector by x <- x + Ky
+  gsl_blas_dgemv(CblasNoTrans, 1, k->K, k->y, 0, k->p_collapsed_mean_update);
+  gsl_vector_add(k->p_collapsed_means, k->p_collapsed_mean_update);
+
+  // use k->P as a tmp matrix for computing the updated covariances
+  gsl_matrix_set_identity (k->P);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, k->K, k->p_linear_obs, 1, k->P);
+  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->P, k->p_collapsed_covars, 0, k->p_collapsed_covars_tmp);
+  gsl_matrix_memcpy(k->p_collapsed_covars, k->p_collapsed_covars_tmp);
+
+  // propagate our changes back into the full (uncollapsed) state
+  gsl_vector_sub(k->p_collapsed_means, k->p_const);
+  uncollapse_state(k);
+
+  // compute the likelihood
+  gsl_blas_dgemv(CblasNoTrans, 1, k->Sinv, k->y, 0, k->ytmp);
+  double ex;
+  gsl_blas_ddot(k->y, k->ytmp, &ex);
+  double thisll = -0.5 * k->obs_n*log(2*PI) - 0.5 * log_det_S - 0.5 * ex;
+
+  if (k->debug_res_fp != NULL) {
+    fprint_vector(k->debug_res_fp, k->y, "%f ");
+    fprint_vector(k->debug_obs_fp, p_true_obs, "%f ");
+    fprint_matrix(k->debug_var_fp, k->S, "%f ", FALSE);
+    fprint_matrix(k->debug_gain_fp, k->K, "%f ", FALSE);
+    fprint_vector(k->debug_state_fp, k->p_collapsed_means, "%f ");
+    fprint_matrix(k->debug_state_covar_fp, k->p_collapsed_covars, "%f ", FALSE);
+  }
+  return thisll;
+
+}
+
 
 /* Uses the unscented transform to compute the measurement mean and covariance; then uses these to update the Kalman filtering distribution. */
 double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...) {
@@ -354,60 +437,11 @@ void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...) {
 }
 
 
+void kalman_state_init(KalmanState_t *k, int obs_n, kalman_obs_fn p_obs_fn, double obs_noise, char *debug_dir) {
 
-
-/*
-  This function should work, but is untested and unproven since we're
-  currently using a nonlinear observation model.
-
-  (and should be updated not to alloc its own memory; use temp variables in KalmanState)
- */
-/*
-void kalman_update_linear(KalmanState *k,  gsl_vector * p_true_obs, gsl_vector ** y, gsl_matrix ** S) {
-
-  int obs_n = k->p_obs->size1;
-  int state_n = k->p_means->size;
-
-  // calculate the predicted observations
-  *y = gsl_vector_alloc(obs_n);
-  gsl_blas_dgemv (CblasNoTrans, 1, k->p_obs, k->p_means, 0, *y);
-
-  // calculate the predicted observation covariance
-  gsl_matrix * PHt = gsl_matrix_alloc(state_n, obs_n);
-  gsl_matrix * S = gsl_matrix_alloc(obs_n, obs_n);
-  gsl_blas_dgemm (CblasNoTrans, CblasTrans, 1, k->p_covars, k->p_obs, 0, PHt);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, k->p_obs, PHt, 0, *S);
-  matrix_add_to_diagonal(*S, k->p_obs_noise);
-
-  // and the Kalman gain
-
-  gsl_blas_dtrsm (CblasRight, CblasLower, CblasNoTrans, CblasNonUnit, 1, *S, *PHt);
-  gsl_matrix * K = PHt;
-
-  // find the observation residual
-  gsl_vector_sub(*y, p_true_obs);
-  gsl_vector_scale(*y, -1);
-
-  gsl_vector *mean_update = gsl_vector_alloc(state_n);
-  gsl_blas_dgemv(CblasNoTrans, 1, K, *y, 0, mean_update);
-  gsl_vector_add(k->p_means, mean_update);
-
-  gsl_matrix * I = gsl_matrix_alloc(state_n,state_n);
-  gsl_matrix_set_identity (I);
-
-  gsl_matrix * new_covar = gsl_matrix_alloc(state_n,state_n);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, -1, K, k->p_obs, 1, I);
-  gsl_blas_dgemm (CblasNoTrans, CblasNoTrans, 1, I, k->p_covars, 0, new_covar);
-  gsl_matrix_memcpy(p_covars, new_covar);
-
-  gsl_vector_free(mean_update);
-  gsl_matrix_free(I);
-  gsl_matrix_free(K);
-  gsl_matrix_free(new_covar);
-
-  }*/
-
-void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise, char *debug_dir) {
+  /*
+    obs_fn is used only with a nonlinear observation model. (for an unscented kalman transform).
+  */
 
   k->verbose = 0;
 
@@ -422,8 +456,7 @@ void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix *
   k->np = 0;
   k->obs_n = obs_n;
 
-  k->linear_obs = linear_obs;
-  k->p_linear_obs = p_linear_obs;
+
   k->p_obs_fn = p_obs_fn;
 
   // allocate the temp matrices that have a known size
@@ -505,6 +538,7 @@ void kalman_state_free(KalmanState_t * k) {
   if (k->p_mean_update != NULL) gsl_vector_free(k->p_mean_update);
   if (k->p_collapsed_mean_update != NULL) gsl_vector_free(k->p_collapsed_mean_update);
   if (k->p_covars_tmp != NULL) gsl_matrix_free(k->p_covars_tmp);
+  if (k->p_collapsed_covars_tmp != NULL) gsl_matrix_free(k->p_collapsed_covars_tmp);
 
   if (k->p_collapsed_means != NULL) gsl_vector_free(k->p_collapsed_means);
   if (k->p_collapsed_covars != NULL) gsl_matrix_free(k->p_collapsed_covars);

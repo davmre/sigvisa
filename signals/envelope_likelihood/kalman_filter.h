@@ -38,12 +38,6 @@ typedef struct KalmanState {
   gsl_vector * p_permanent_indices; /* map permanent indices to process indices (?? -> np) */
 
 
-  int linear_obs; /* determines whether observations are a linear
-		     transformation, given by the matrix p_linear_obs,
-		     or a nonlinear transformation given by
-		     p_obs_fn. The nonlinear case is handled through
-		     an unscented Kalman filter. */
-  gsl_matrix * p_linear_obs;
   kalman_obs_fn p_obs_fn;
   gsl_vector * p_obs_noise;
 
@@ -51,21 +45,27 @@ typedef struct KalmanState {
 
   /* begin temp variables: these are not really part of the state, but are used repeatedly (mostly when updating) and so we keep them around to avoid allocating/deallocating */
 
+  gsl_matrix * p_linear_obs;
+
   gsl_vector * y; // the predicted observation (or obs residual) (obs_n)
   gsl_vector * ytmp; // temp vector (obs_n)
   gsl_matrix * S; // predicted observation covariance (obs_n * obs_n)
   gsl_matrix * Sinv; // inverse of S (obs_n * obs_n)
 
+
   gsl_matrix * P; // unscented transform tmp matrix (np x np)
   gsl_matrix * p_sigma_points; // original sigma points (np x 2np+1)
   gsl_matrix * p_obs_points; // sigma point observations (obs_n x 2np+1)
   gsl_vector * p_weights; // weights for unscented transform (2np+1)
+
   gsl_vector * p_mean_update; // tmp vector for mean update (n)
   gsl_vector * p_collapsed_mean_update; // tmp vector for mean update (np)
   gsl_matrix * p_covars_tmp; //tmp vector for covar update (n x n)
+  gsl_matrix * p_collapsed_covars_tmp; // tmp for new collapsed covariance matrix (np x np)
 
   gsl_vector * p_collapsed_means; // collapsed mean vector (np)
   gsl_matrix * p_collapsed_covars; // collapsed covariance matrix (np x np)
+
 
   gsl_matrix * K; // optimal Kalman gain matrix (np x obs_n)
   gsl_matrix * Ktmp; // temp matrix, (np x obs_n)
@@ -82,13 +82,15 @@ typedef struct KalmanState {
   FILE * debug_processes_fp;
 } KalmanState_t ;
 
-void kalman_state_init(KalmanState_t *k, int obs_n, int linear_obs, gsl_matrix * p_linear_obs, kalman_obs_fn p_obs_fn, double obs_noise, char * debug_dir);
+void kalman_state_init(KalmanState_t *k, int obs_n, kalman_obs_fn p_obs_fn, double obs_noise, char * debug_dir);
 void kalman_state_free(KalmanState_t * k);
 
 int kalman_add_AR_process(KalmanState_t * k, ARProcess_t * p);
 void kalman_remove_AR_process(KalmanState_t * k, int m, int arridx);
 void kalman_predict(KalmanState_t * k);
+
 double kalman_nonlinear_update(KalmanState_t *k,  gsl_vector * p_true_obs, ...);
+double kalman_linear_update(KalmanState_t *k,  gsl_vector * p_true_obs, int* noise_indices, ArrivalWaveform_t * active_arrivals);
 
 void kalman_sample_forward(KalmanState_t *k, gsl_vector * p_output, ...);
 

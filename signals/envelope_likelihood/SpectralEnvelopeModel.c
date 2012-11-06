@@ -148,8 +148,6 @@ void sum_envelope_obsfn(const gsl_vector *state, gsl_vector *obs, void *void_k, 
   BandModel_t * p_band = va_arg(*args, BandModel_t *);
   ArrivalWaveform_t * active_arrivals = va_arg(*args, ArrivalWaveform_t *);
 
-
-
   int obs_i = 0;
   for(int c=0; c < NUM_CHANS; c++) {
 
@@ -370,7 +368,7 @@ double Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p_segment,
 
   // initialize the Kalman filter with AR noise processes for each channel
   KalmanState_t * k = calloc(1, sizeof(KalmanState_t));
-  kalman_state_init(k, obs_n, FALSE, NULL, sum_envelope_obsfn, (obs_n == 1) ? 0 : 0.0001, NULL);
+  kalman_state_init(k, obs_n, sum_envelope_obsfn, (obs_n == 1) ? 0 : 0.0001, NULL);
   int noise_indices[NUM_CHANS];
   setup_noise_processes(p_band, p_segment, k, noise_indices);
 
@@ -398,7 +396,8 @@ double Envelope_Model_Likelihood(SigModel_t * p_sigmodel, Segment_t * p_segment,
        log-likelihood of the observation */
     kalman_predict(k);
 
-    ll += kalman_nonlinear_update(k, p_true_obs, noise_indices, p_band, arw.active_arrivals);
+    // ll += kalman_nonlinear_update(k, p_true_obs, noise_indices, p_band, arw.active_arrivals);
+    ll += kalman_linear_update(k, p_true_obs, noise_indices, arw.active_arrivals);
   }
 
   /* Free memory before returning */
@@ -473,7 +472,7 @@ void Spectral_Envelope_Model_Sample_Trace(SigModel_t * p_sigmodel, Trace_t * p_t
 
   // initialize the Kalman filter with AR noise processes for each channel
   KalmanState_t * k = calloc(1, sizeof(KalmanState_t));
-  kalman_state_init(k, obs_n, FALSE, NULL, sum_envelope_obsfn, 0, NULL);
+  kalman_state_init(k, obs_n, sum_envelope_obsfn, 0, NULL);
   int noise_indices[NUM_CHANS];
   setup_noise_process(p_band, p_trace->chan, k, noise_indices);
 

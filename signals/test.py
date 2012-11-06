@@ -342,13 +342,25 @@ class TestSignalLikelihood(unittest.TestCase):
         ll = self.tm.waveform_log_likelihood_iid(smoothed['BHZ'], (('P', 'S'), param_vals))
         print ll
 
+        missing_bhz = self.seg.with_filter("smooth")['BHZ']
+        missing_bhz.data[50:5000] = ma.masked
+        ll_missing = self.tm.waveform_log_likelihood_iid(missing_bhz, (('P', 'S'), param_vals))
+        print "missing iid ll", ll_missing
+
+        self.assertGreater(ll_missing, ll)
+
     def test_likelihood(self):
-        smoothed = self.seg.with_filter("smooth")
         st = self.seg['stime']
         param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
-        ll = self.tm.waveform_log_likelihood(smoothed['BHZ'], (('P', 'S'), param_vals))
+        ll = self.tm.waveform_log_likelihood(self.seg['BHZ'], (('P', 'S'), param_vals))
         print ll
 
+        missing_bhz = self.seg['BHZ']
+        missing_bhz.data[50:5000] = ma.masked
+        ll_missing = self.tm.waveform_log_likelihood(missing_bhz, (('P', 'S'), param_vals))
+        print "missing ll", ll_missing
+
+        self.assertGreater(ll_missing, ll)
 
 if __name__ == '__main__':
     unittest.main()
