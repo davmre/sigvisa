@@ -24,7 +24,7 @@ from learn.optimize import minimize_matrix
 from signals.noise_model import *
 
 
-def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, optimize_arrival_times=False, iid=False):
+def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, init_iteration=init_iteration, optimize_arrival_times=False, iid=False):
     """
     Return the template parameters which best fit the given waveform.
     """
@@ -42,7 +42,7 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
 
     # initialize the search using the outcome of a previous run
     if init_run_name is not None:
-        start_param_vals, phaseids_loaded, fit_cost = load_template_params(s.cursor, ev.evid, chan, band, init_run_name, wave['siteid'])
+        start_param_vals, phaseids_loaded, fit_cost = load_template_params(ev.evid, sta, chan, band, run_name=init_run_name, iteration=init_iteration)
         phases = [s.phasenames[phaseid-1] for phaseid in phaseids_loaded]
 
         arriving_phases = s.arriving_phases(ev, wave['sta'])
@@ -50,8 +50,9 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
 
     # or if this is the first run, initialize heuristically
     else:
+        print "getting heuristic start params..."
         (phases, start_param_vals) = tm.heuristic_starting_params(wave)
-
+        print "done"
 
     if iid:
         f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(wave, (phases, vals))
@@ -64,7 +65,9 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
         low_bounds = tm.low_bounds()
         high_bounds = tm.high_bounds()
 
+    print "minimizing matrix", start_param_vals
     best_param_vals, best_cost = minimize_matrix(f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, method=method, fix_first_col=(not optimize_arrival_times))
+    print "done", best_param_vals, best_cost
 
     """
     if wiggles is None or best_params is None:
@@ -90,7 +93,7 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
 
     return (phases, best_param_vals), best_cost
 
-def fit_event_segment(event, sta, tm, output_run_name, init_run_name=None, plot=False, wiggles=None, method="simplex", iid=False):
+def fit_event_segment(event, sta, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, plot=False, wiggles=None, method="simplex", iid=False, extract_wiggles=True):
     """
     Find the best-fitting template parameters for each band/channel of
     a particular event at a particular station. Store the template
@@ -129,14 +132,15 @@ def fit_event_segment(event, sta, tm, output_run_name, init_run_name=None, plot=
                     set_noise_process(s.sigmodel, tr)
                     fit_cost = fit_cost * time_len
                 else:
-                    fit_params, fit_cost = fit_template(wave, pp=pp, ev=event, tm=tm, method=method, wiggles=wiggles, iid=iid, init_run_name=init_run_name)
+                    fit_params, fit_cost = fit_template(wave, pp=pp, ev=event, tm=tm, method=method, wiggles=wiggles, iid=iid, init_run_name=init_run_name, init_iteration=init_iteration)
                     if pp is not None:
                         print "wrote plot"
 
-                save_wiggles(wave, run_name=output_run_name, template_params=fit_params)
+                if extract_wiggles:
+                    save_wiggles(wave=wave, tm=tm, run_name=output_run_name, template_params=fit_params)
                 if method != "load":
-                    store_template_params(wave, event, fit_params, output_run_name, method)
-                dbconn.commit()
+                    store_template_params(wave, fit_params, method_str=method, iid=iid, fit_cost=fit_cost, run_name=output_run_name, iteration=output_iteration)
+                s.dbconn.commit()
                 if pp is not None:
                     pp.close()
 

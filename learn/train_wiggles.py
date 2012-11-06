@@ -14,11 +14,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 from optparse import OptionParser
 
 import plot
-import sigvisa
+from sigvisa import Sigvisa
 import utils.geog
 import obspy.signal.util
 import itertools
-
+from source.event import Event
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel
 
@@ -142,17 +142,6 @@ def learn_wiggle_params(sigmodel, env, smoothed, phaseids, params):
 
 
 
-
-def demo_get_wiggles():
-
-    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
-    tr, smoothed, tmpl, phases, wiggles, wiggles_smooth = get_wiggles(cursor, sigmodel, 5301405, 2)
-    print tr
-    print smoothed
-    print tmpl
-    print phases
-    print wiggles
-    print wiggles_smooth
 
 def get_wiggles(cursor, sigmodel, evid, siteid, chan='BHZ', band='narrow_envelope_2.00_3.00', wiggle_threshold=2):
     """

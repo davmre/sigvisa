@@ -112,7 +112,7 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
         print old_band
         print band
         filtered_wave = model_wave.filter(tmp_filter_str)
-
+        print "done filtering"
 
 
         # train AR noise model

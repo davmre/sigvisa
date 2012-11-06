@@ -23,11 +23,14 @@ import plotting.plot
 
 class TestFit(unittest.TestCase):
 
+    def setUp(self):
+        np.random.seed(0)
+
     def test_fit_template_iid(self):
         s = Sigvisa()
         event = Event(evid=5301405)
         tm = PairedExpTemplateModel(run_name="", model_type="dummy")
-        fit_event_segment(event=event, sta='URZ', tm=tm, output_run_name="unittest", plot=False, wiggles=None, iid=True)
+        fit_event_segment(event=event, sta='URZ', tm=tm, output_run_name="unittest", plot=False, wiggles=None, iid=True, extract_wiggles=False)
 
 
 class TestOptimize(unittest.TestCase):

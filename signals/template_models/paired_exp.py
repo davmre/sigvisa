@@ -8,7 +8,6 @@ from signals.common import *
 from signals.template_model import TemplateModel
 from signals.template_models.heuristic_coda_fits import *
 
-
 def set_dummy_wiggles(sta):
     s = Sigvisa()
     siteid = s.name_to_siteid_minus1[sta]+1
@@ -42,9 +41,7 @@ class PairedExpTemplateModel(TemplateModel):
         b = sigvisa_c.canonical_band_num(model_waveform['band'])
 
         noise_model.set_noise_process(model_waveform)
-
         phases, vals = template_params
-
         phaseids = [s.phaseids[phase] for phase in phases]
 
         if not sample:
@@ -53,7 +50,6 @@ class PairedExpTemplateModel(TemplateModel):
             env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
         data = np.log(env) if logscale else env
-
         wave = Waveform(data = data, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
 
         try:
@@ -61,30 +57,29 @@ class PairedExpTemplateModel(TemplateModel):
             del wave.segment_stats['event_arrivals']
         except KeyError:
             pass
-
         return wave
 
     def waveform_log_likelihood(self, wave, template_params):
         s = self.sigvisa
         phases, vals = template_params
         phaseids = [s.phaseids[phase] for phase in phases]
-
         noise_model.set_noise_process(wave)
-
-        ll = s.sigmodel.trace_log_likelihood(wave.as_obspy_trace(), phaseids, vals);
+        tr = wave.as_obspy_trace()
+        tr.data = tr.data.filled(np.float('nan'))
+        ll = s.sigmodel.trace_log_likelihood(tr, phaseids, vals);
         return ll
 
     def low_bounds(self, phases):
         bounds = np.ones((len(phases), len(self.params()))) * -np.inf
-        bounds[:, PEAK_OFFSET_PARAM] = 0
-        bounds[:, CODA_HEIGHT_PARAM] = 0
-        bounds[:, CODA_DECAY_PARAM] = -.2
+        bounds[:, PE_PEAK_OFFSET_PARAM] = 0
+        bounds[:, PE_CODA_HEIGHT_PARAM] = 0
+        bounds[:, PE_CODA_DECAY_PARAM] = -.2
         return bounds
 
     def high_bounds(self, phases):
         bounds = np.ones((len(phases), len(self.params()))) * np.inf
-        bounds[:, PEAK_OFFSET_PARAM] = 15
-        bounds[:, CODA_DECAY_PARAM] = 0
+        bounds[:, PE_PEAK_OFFSET_PARAM] = 15
+        bounds[:, PE_CODA_DECAY_PARAM] = 0
         return bounds
 
     def heuristic_starting_params(self, wave):

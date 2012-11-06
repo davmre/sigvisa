@@ -151,15 +151,23 @@ create table visa_assoc (
  primary key(runid, orid, arid)
 );
 
+create table sigvisa_coda_fitting_runs (
+ runid 	     int,
+ run_name 	varchar(255),
+ iter 		int,
+ primary key(runid)
+);
 
 create table sigvisa_coda_fits (
  runid    int,
- arid     int,
+ evid	  int,
+ sta	  varchar(10),
  chan	  varchar(10),
- band	  varchar(10),
+ lowband  float(24),
+ highband  float(24),
+ phase	  varchar(20),
+ atime	  float(24),
  peak_delay float(24),
- peak_height float(24),
- peak_decay float(24),
  coda_height float(24),
  coda_decay  float(24),
  optim_method  varchar(15),
@@ -169,7 +177,7 @@ create table sigvisa_coda_fits (
  acost	    float,
  dist	    float,
  azi	    float,
- primary key(runid, arid, chan, band)
+ primary key(runid, evid, sta, chan, lowband, highband, phase)
 );
 
 create table sigvisa_wiggle_wfdisc (

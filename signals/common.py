@@ -121,8 +121,9 @@ class Waveform(object):
 
         # pick out the first filter to apply
         first_filter = ""
+        other_filters = filter_str
         while first_filter == "":
-            filters = filter_str.split(';')
+            filters = other_filters.split(';')
             first_filter = filters[0]
             other_filters = ';'.join(filters[1:])
 

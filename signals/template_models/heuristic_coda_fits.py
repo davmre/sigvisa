@@ -71,6 +71,7 @@ def find_starting_params(smoothed):
     for (i, phase) in enumerate(all_phases):
         start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(ev.lon, ev.lat, ev.depth, siteid-1, s.phaseids[phase]-1)
         start_params[i, PEAK_OFFSET_PARAM] = 3
+        start_params[i, CODA_HEIGHT_PARAM] = 1e-10
         start_params[i, CODA_DECAY_PARAM] = -0.03
 
     # copy over heuristic coda fits for detected phases
