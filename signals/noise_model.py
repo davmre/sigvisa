@@ -10,7 +10,9 @@ from signals.armodel.model import ARModel, ErrorModel, load_armodel_from_file
 from signals.armodel.learner import ARLearner
 
 from signals.io import fetch_waveform
-from signals.common import load_waveform_from_file, filter_str_extract_band
+from signals.common import filter_str_extract_band
+
+NOISE_PAD_SECONDS = 20
 
 def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=None):
 
@@ -58,7 +60,7 @@ def get_median_noise_wave(sta, chan, hour_start, hour_end):
             if t > minute and t < minute+60:
                 continue
         try:
-            wave = fetch_waveform(sta, chan, minute, minute+60)
+            wave = fetch_waveform(sta, chan, minute, minute+60, pad_seconds=NOISE_PAD_SECONDS)
         except Exception as e:
             failures.append(minute)
             print "failed loading signal (%s, %s, %d, %d)." % (sta, chan, minute, minute+60)
@@ -89,31 +91,25 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
     hour_end = (hour+1)*3600
 
     s = Sigvisa()
-    wave_fname = "%s.%s.%.0f.wave" % (sta, chan, srate)
+    # wave_fname = "%s.%s.%.0f.wave" % (sta, chan, srate)
 
-    # if we've built a noise model here before, for a different filter band, reload the same training segment
+    # if we've built a noise model here before, for a different channel or filter band, reload the same training segment
     hour_dir, model_fname = model_path(sta, chan, filter_str, srate, order, hour_time=hour_start)
-    try:
-        model_wave = load_waveform_from_file(os.path.join(hour_dir, wave_fname))
+    if os.path.exists(hour_dir):
         minute_dir = os.path.realpath(hour_dir)
         minute = int(os.path.split(minute_dir)[-1])
+        model_wave = fetch_waveform(sta, chan, minute, minute+60, pad_seconds=NOISE_PAD_SECONDS)
 
     # otherwise, load a training segment from scratch
-    except:
+    else:
+        print "hour dir", hour_dir, "doesn't exist, computing new median minute"
         model_wave, minute = get_median_noise_wave(sta, chan, hour_start, hour_end)
 
     old_band = filter_str_extract_band(filter_str)
 
     for band in s.bands:
         tmp_filter_str = filter_str.replace(old_band, band)
-
-        print "filtering for band", tmp_filter_str
-        print filter_str
-        print old_band
-        print band
         filtered_wave = model_wave.filter(tmp_filter_str)
-        print "done filtering"
-
 
         # train AR noise model
         ar_learner = ARLearner(filtered_wave.data, filtered_wave['srate'])
@@ -121,15 +117,13 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
         em = ErrorModel(0, std)
         armodel = ARModel(params, em, c = ar_learner.c)
 
-        minute_dir, model_fname = model_path(sta, chan, tmp_filter_str, srate, order, minute_time=model_wave['stime'])
+        minute_dir, model_fname = model_path(sta, chan, tmp_filter_str, srate, order, minute_time=minute)
         ensure_dir_exists(minute_dir)
         print "saved model", model_fname
         armodel.dump_to_file(os.path.join(minute_dir, model_fname))
 
-    model_wave.dump_to_file(os.path.join(minute_dir, wave_fname))
-
-
-    hour_dir, model_fname = model_path(sta, chan, filter_str, srate, order, hour_time=hour_start)
+        wave_fname = model_fname.replace("armodel", "wave")
+        np.savetxt(os.path.join(minute_dir, wave_fname), filtered_wave.data.filled(np.float('nan')))
 
     try:
         minute_dir_path = os.path.realpath(minute_dir)

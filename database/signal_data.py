@@ -46,13 +46,21 @@ def get_next_runid(cursor):
         runid = r+1
     return runid
 
-def get_fitting_runid(cursor, run_name, iteration):
+def get_fitting_runid(cursor, run_name, iteration, create_if_new=True):
     sql_query = "select runid from sigvisa_coda_fitting_runs where run_name='%s' and iter=%d" % (run_name, iteration)
     cursor.execute(sql_query)
-    runid = cursor.fetchone()[0]
+    result = cursor.fetchone()
+    if result is None:
+        if not create_if_new:
+            raise Exception("no existing runid for iteration %d of run %s!")
+        runid = get_next_runid(cursor)
+        sql_query = "insert into sigvisa_coda_fitting_runs (runid, run_name, iter) values (%d, '%s', %d)" % (runid, run_name, iteration)
+        cursor.execute(sql_query)
+    else:
+        runid = result[0]
     return runid
 
-def get_fitting_run_info(cursor, runid):
+def read_fitting_run(cursor, runid):
     sql_query = "select run_name, iter from sigvisa_coda_fitting_runs where runid=%d" % runid
     cursor.execute(sql_query)
     info = cursor.fetchone()
@@ -62,28 +70,21 @@ def get_fitting_run_info(cursor, runid):
         (run_name, iteration) = info
     return (run_name, iteration)
 
-def get_latest_fitting_iteration(cursor, run_name):
+def get_last_iteration(cursor, run_name):
+    iters = read_fitting_run_iterations(cursor, run_name)
+    last_iter = iters[-1][0] if len(iters) > 0 else 0
+    return last_iter
+
+def read_fitting_run_iterations(cursor, run_name):
     sql_query = "select iter, runid from sigvisa_coda_fitting_runs where run_name='%s'" % run_name
     cursor.execute(sql_query)
     r = cursor.fetchall()
-    if len(r) == 0:
-        return (0, None)
-    else:
-        (fit_iter, runid) = sorted(r)[-1]
-        return (fit_iter, runid)
-
-def insert_new_fitting_iteration(cursor, run_name):
-    runid = get_next_runid(cursor)
-    last_iter, _ = get_latest_fitting_iteration(cursor, run_name)
-    sql_query = "insert into sigvisa_coda_fitting_runs (runid, run_name, iter) values (%d, '%s', %d)" % (runid, run_name, last_iter + 1)
-    cursor.execute(sql_query)
-    return (last_iter+1, runid)
-
+    return sorted(r)
 
 def load_template_params(evid, sta, chan, band, run_name, iteration):
     s = Sigvisa()
 
-    runid = get_fitting_runid(s.cursor, run_name, iteration)
+    runid = get_fitting_runid(s.cursor, run_name, iteration, create_if_new=False)
 
     pieces = band.split('_')
     lowband = float(pieces[1])

@@ -11,12 +11,13 @@ from signals.common import Waveform, Segment
 from signals.io import load_event_station
 from signals.template_models.paired_exp import PairedExpTemplateModel
 
-from learn.fit_shape_params import fit_event_segment
+from learn.fit_shape_params import fit_event_segment, fit_template
 import learn.optimize as optimize
 
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use('PDF')
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 import plotting.plot
 
@@ -25,12 +26,18 @@ class TestFit(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
+        self.event = Event(evid=5301405)
+        self.s = Sigvisa()
+        self.seg = load_event_station(self.event.evid, "URZ", cursor=self.s.cursor).with_filter("freq_2.0_3.0;env")
 
     def test_fit_template_iid(self):
-        s = Sigvisa()
-        event = Event(evid=5301405)
         tm = PairedExpTemplateModel(run_name="", model_type="dummy")
-        fit_event_segment(event=event, sta='URZ', tm=tm, output_run_name="unittest", plot=False, wiggles=None, iid=True, extract_wiggles=False)
+        wave = self.seg['BHZ']
+        pp = PdfPages("test_fit.pdf")
+        fit_params, fit_cost = fit_template(wave, pp=pp, ev=self.event, tm=tm, method="simplex", wiggles=None, iid=True)
+        pp.close()
+#        fit_event_segment(event=event, sta='URZ', tm=tm, output_run_name="unittest", output_iteration=1, plot=False, wiggles=None, iid=True, extract_wiggles=False)
+
 
 
 class TestOptimize(unittest.TestCase):

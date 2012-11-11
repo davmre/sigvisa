@@ -96,7 +96,7 @@ def plot_waveform(wave, title=None,  format="k-", logscale=False):
   subplot_waveform(wave, axes, format=format, logscale=logscale)
   return fig
 
-def subplot_waveform(wave, axes, format=None, logscale=False):
+def subplot_waveform(wave, axes, logscale=False, plot_dets=True, **kwargs):
     srate = wave['srate']
     npts = wave['npts']
     stime = wave['stime']
@@ -105,8 +105,9 @@ def subplot_waveform(wave, axes, format=None, logscale=False):
     wave_data = np.log(wave.data) if logscale else wave.data
 
     plt.ylabel(wave['chan'])
-    axes.plot(timevals, wave_data, format)
-    plot_det_times(wave, axes=axes, logscale=logscale)
+    axes.plot(timevals, wave_data, **kwargs)
+    if plot_dets:
+      plot_det_times(wave, axes=axes, logscale=logscale)
 
 
 # does not save for you - you need to call savefig() yourself!

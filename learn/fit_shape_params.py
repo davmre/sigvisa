@@ -24,7 +24,7 @@ from learn.optimize import minimize_matrix
 from signals.noise_model import *
 
 
-def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, init_iteration=init_iteration, optimize_arrival_times=False, iid=False):
+def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, init_iteration=None, optimize_arrival_times=False, iid=False):
     """
     Return the template parameters which best fit the given waveform.
     """
@@ -55,7 +55,9 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
         print "done"
 
     if iid:
-        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(wave, (phases, vals))
+        smooth_wave = wave.filter("smooth")
+        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(smooth_wave, (phases, vals))
+
     else:
         f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood(wave, (phases, vals))
 
@@ -65,31 +67,16 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
         low_bounds = tm.low_bounds()
         high_bounds = tm.high_bounds()
 
+    if pp is not None:
+        plot_waveform_with_pred(pp, wave, tm, (phases, start_param_vals), title = "start (cost %f, evid %s)" % (f(start_param_vals), ev.evid), logscale=True)
+
     print "minimizing matrix", start_param_vals
     best_param_vals, best_cost = minimize_matrix(f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, method=method, fix_first_col=(not optimize_arrival_times))
     print "done", best_param_vals, best_cost
 
-    """
-    if wiggles is None or best_params is None:
-        # learn from smoothed data w/ iid noise
+    if pp is not None:
+        plot_waveform_with_pred(pp, wave, tm, (phases, best_param_vals), title = "best (cost %f, evid %s)" % (f(best_param_vals), ev.evid), logscale=True)
 
-        if pp is not None:
-            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
-            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "")
-            load_wiggle_models(cursor, sigmodel, wiggles)
-            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best iid (cost %f, evid %s)" % (best_cost, evid))
-
-    if wiggles is not None:
-        f = lambda params : c_cost(sigmodel, env, phaseids, assem_params(params))
-        print "loaded cost is", f(best_params)
-#        best_params, best_cost = optimize(f, best_params, bounds, method=method, phaseids= (phaseids if by_phase else None))
-        if pp is not None:
-            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid))
-            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid))
-
-            plot_channels_with_pred(sigmodel, pp, env, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid), logscale=False)
-            plot_channels_with_pred(sigmodel, pp, smoothed, assem_params(best_params), phaseids, None, None, title = "best (cost %f, evid %s)" % (best_cost, evid), logscale=False)
-            """
 
     return (phases, best_param_vals), best_cost
 
@@ -154,14 +141,15 @@ def main():
 
     parser.add_option("-s", "--sta", dest="sta", default=None, type="str", help="name of station for which to fit templates")
     parser.add_option("-m", "--method", dest="method", default="simplex", type="str", help="fitting method (simplex)")
-    parser.add_option("-r", "--runid", dest="runid", default=None, type="int", help="runid")
+    parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run name")
+    parser.add_option("-i", "--run_iteration", dest="run_iteration", default=None, type="int", help="run iteration (default is to use the next iteration)")
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
-    parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load (default is to ignore wiggle model and do iid fits)")
-    parser.add_option("--init_run_name", dest="init_run_name", default=None, type="int", help="initialize template fitting with results from this runid")
+    parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load")
+    parser.add_option("--init_run_name", dest="init_run_name", default=None, type="str", help="initialize template fitting with results from this run name")
+    parser.add_option("--init_run_iteration", dest="init_run_iteration", default=None, type="int", help="initialize template fitting with results from this run iteration (default: most recent)")
     parser.add_option("-p", "--plot", dest="plot", default=False, action="store_true", help="save plots")
     parser.add_option("--template_shape", dest = "template_shape", default="paired_exp", type="str", help="template model type to fit parameters under (paired_exp)")
-    parser.add_option("--template_run_name", dest = "template_run_name", default=None, type="str", help="name of previously trained template model to load (None)")
     parser.add_option("--template_model", dest = "template_model", default="gp_dad", type="str", help="")
 
     (options, args) = parser.parse_args()
@@ -169,13 +157,26 @@ def main():
     s = Sigvisa()
     cursor = s.cursor
 
-    iid=True
 
+    if options.run_name is None or options.run_iteration is None:
+        raise Exception("must specify run name and iteration!")
 
-    if options.template_run_name is None:
+    if options.run_iteration == 1:
+        iid=True
+        optimize_arrival_times=False
+    elif options.run_iteration == 2:
+        iid=False
+        optimize_arrival_times=False
+    else:
+        iid=False
+        optimize_arrival_times=True
+    if options.wiggles is None and not iid:
+        raise Exception("need to specify wiggle model for non-iid fits!")
+
+    if options.init_run_name is None:
         tm = load_template_model(template_shape = options.template_shape, run_name=None, model_type="dummy")
     else:
-        tm = load_template_model(template_shape = options.template_shape, run_name=options.template_run_name, model_type=options.template_model)
+        tm = load_template_model(template_shape = options.template_shape, run_name=options.init_run_name, model_type=options.template_model)
 
     if options.start_time is None:
         cursor.execute("select start_time, end_time from dataset where label='training'")
@@ -190,7 +191,7 @@ def main():
         raise Exception("Must specify event id (evid) or origin id (orid) to fit.")
 
     try:
-        fit_event_segment(event=ev, sta=options.sta, tm = tm, runid=options.runid, init_run_name=options.init_run_name, plot=options.plot, method=options.method, wiggles=options.wiggles)
+        fit_event_segment(event=ev, sta=options.sta, tm = tm, run_name=options.run_name, iteration=options.run_iteration, init_run_name=options.init_run_name, init_run_iteration=options.init_run_iteration, plot=options.plot, method=options.method, wiggles=options.wiggles)
     except KeyboardInterrupt:
         s.dbconn.commit()
         raise

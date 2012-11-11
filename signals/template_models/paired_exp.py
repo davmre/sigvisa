@@ -25,7 +25,7 @@ class PairedExpTemplateModel(TemplateModel):
 #    target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB], "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] - SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]), bandid=int(r[FIT_BANDID]))}
 
     def params(self):
-        return ("arrival_time", "onset_period", "amp_transfer", "decay")
+        return ("arrival_time", "onset_period", "amplitude", "decay")
 
     def model_name(self):
         return "paired_exp"
@@ -71,22 +71,22 @@ class PairedExpTemplateModel(TemplateModel):
 
     def low_bounds(self, phases):
         bounds = np.ones((len(phases), len(self.params()))) * -np.inf
-        bounds[:, PE_PEAK_OFFSET_PARAM] = 0
-        bounds[:, PE_CODA_HEIGHT_PARAM] = 0
-        bounds[:, PE_CODA_DECAY_PARAM] = -.2
+        bounds[:, PEAK_OFFSET_PARAM] = 0
+        bounds[:, CODA_HEIGHT_PARAM] = 0
+        bounds[:, CODA_DECAY_PARAM] = -.2
         return bounds
 
     def high_bounds(self, phases):
         bounds = np.ones((len(phases), len(self.params()))) * np.inf
-        bounds[:, PE_PEAK_OFFSET_PARAM] = 15
-        bounds[:, PE_CODA_DECAY_PARAM] = 0
+        bounds[:, PEAK_OFFSET_PARAM] = 15
+        bounds[:, CODA_DECAY_PARAM] = 0
         return bounds
 
-    def heuristic_starting_params(self, wave):
-        smoothed = wave.filter('smooth').as_obspy_trace()
+    def heuristic_starting_params(self, wave, detected_phases_only=True):
+        smoothed = wave.filter('smooth;log').as_obspy_trace()
         noise_model = get_noise_model(wave)
         smoothed.stats.noise_floor = noise_model.c
-        template_params = find_starting_params(smoothed)
+        template_params = find_starting_params(smoothed, detected_phases_only)
         return template_params
 
 

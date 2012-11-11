@@ -189,7 +189,7 @@ class Waveform(object):
         f = None
         if name == "center":
             f = lambda x : ma.masked_array(data = x.data - np.mean(x), mask = x.mask)
-        if name == "log":
+        elif name == "log":
             f = lambda x : np.log(x)
         elif name == "env":
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
@@ -222,7 +222,7 @@ class Waveform(object):
         s = "wave pts %d @ %d Hz. " % (self['npts'], self['srate'])
 
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s += "time: %s (%.1f). sta: %s, chan %s. " % (timestr, self['stime'], self['sta'], self['chan'])
+        s += "time: %s (%.1f). \nsta: %s, chan %s. " % (timestr, self['stime'], self['sta'], self['chan'])
         s += ', '.join(['%s: %s' % (k, self.my_stats[k]) for k in sorted(self.my_stats.keys()) if k != 'chan'])
         return s
 

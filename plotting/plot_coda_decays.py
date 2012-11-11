@@ -7,14 +7,15 @@ from database import db
 import matplotlib
 matplotlib.use('PDF')
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
 
 from optparse import OptionParser
 
+from source.event import Event
 import plot
 import utils.geog
 import obspy.signal.util
-
 
 
 def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):
@@ -26,9 +27,9 @@ def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, hor
     if title is not None:
         plt.title(title, fontsize=12)
 
-    plot_envelopes_with_pred(sigmodel, bhz_axes, vert_trace, phaseids, vert_params, logscale=logscale)
+    plot_envelopes_with_pred(bhz_axes, vert_trace, phaseids, vert_params, logscale=logscale)
     horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
-    plot_envelopes_with_pred(sigmodel, horiz_axes, vert_trace, phaseids, vert_params, sample=True, logscale=logscale)
+    plot_envelopes_with_pred(horiz_axes, vert_trace, phaseids, vert_params, sample=True, logscale=logscale)
 #    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)
 
 
@@ -38,16 +39,39 @@ def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, hor
     pp.savefig()
     plt.close(fig)
 
-def plot_envelopes_with_pred(sigmodel, axes, trace, phaseids, params, sample=False, logscale=True):
-    srate = trace.stats['sampling_rate']
+def plot_waveform_with_pred(pp, wave, tm, template_params, title=None, sample=False, logscale=True):
+    fig = plt.figure(figsize=(10,8), dpi=250)
+    plt.xlabel("Time (s)")
+    if title is not None:
+        plt.suptitle(title, fontsize=20)
 
-    synth_trace = get_template(sigmodel, trace, phaseids, params, sample=sample)
-    traces = [trace, synth_trace]
+
+    synth_wave = tm.generate_template_waveform(template_params, wave, sample=sample)
 
     formats = ["w-","k-"]
     linewidths = [1,1]
 
-    plot.plot_traces_subplot(axes, traces, formats = formats, linewidths = linewidths, logscale=logscale)
+    gs = gridspec.GridSpec(4, 1)
+    gs.update(left=0.1, right=0.95, hspace=1)
+
+    axes = plt.subplot(gs[0:3, 0])
+    plot.subplot_waveform(wave.filter("smooth"), axes, color='black', linewidth=1, logscale=logscale)
+    plot.subplot_waveform(synth_wave, axes, color="green", linewidth=1, logscale=logscale, plot_dets=False)
+
+    axes = plt.subplot(gs[3, 0])
+    axes.axis('off')
+    descr = tm.param_str(template_params) + "\n\n"
+    descr += "Waveform: " + str(wave)
+    try:
+        evid = wave['evid']
+        e = Event(evid)
+        descr = descr + "\n\n" + "Event: " + str(e)
+    except KeyError as e:
+        pass
+    axes.text(0.5, 0, descr, fontsize=8, color="black", horizontalalignment='center', verticalalignment='center')
+
+    pp.savefig()
+    plt.close(fig)
 
 def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, all_det_times = None, all_det_labels = None, title = None):
     fig = plt.figure(figsize = (8, 8))

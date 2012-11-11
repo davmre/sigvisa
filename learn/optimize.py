@@ -121,3 +121,4 @@ def minimize_matrix(f, start, method, fix_first_col=False, low_bounds=None, high
 
     result_vector, cost = minimize(f_to_minimize, start.flatten(), method=method, disp=False, **other_args)
     return restore_matrix_form(result_vector), cost
+

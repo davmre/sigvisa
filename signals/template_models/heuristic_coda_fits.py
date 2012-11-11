@@ -29,8 +29,7 @@ def accept_fit(fit, min_coda_length=40, max_avg_cost=avg_cost_bound):
     return fit[HEURISTIC_FIT_B] > -0.15 and fit[HEURISTIC_FIT_B] <= 0 and fit[HEURISTIC_FIT_CODA_LENGTH] >= (min_coda_length-0.1) and fit[HEURISTIC_FIT_AVG_COST] <= max_avg_cost
 
 
-
-def find_starting_params(smoothed):
+def find_starting_params(smoothed, detected_phases_only=True):
     """ Uses various heuristics to come up with a good initialization
     for the fitting process. Also constructs a list of bounds
     appropriate for passing to a scipy optimization function."""
@@ -66,7 +65,12 @@ def find_starting_params(smoothed):
         heuristic_fits.append(fit)
 
     # initialize default params for all arriving phases (including those not actually detected)
-    all_phases = s.arriving_phases(ev, sta)
+
+    if detected_phases_only:
+        all_phases = arrival_phases
+    else:
+        all_phases = s.arriving_phases(ev, sta)
+
     start_params = np.zeros((len(all_phases), NUM_PARAMS))
     for (i, phase) in enumerate(all_phases):
         start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(ev.lon, ev.lat, ev.depth, siteid-1, s.phaseids[phase]-1)
@@ -81,7 +85,7 @@ def find_starting_params(smoothed):
         fit_peak_height = logsub_noise(fit[HEURISTIC_FIT_PEAK_HEIGHT], noise_floor)
         fit_coda_height = logsub_noise(fit[HEURISTIC_FIT_HEIGHT] - fit[HEURISTIC_FIT_B] *(fit[HEURISTIC_FIT_CODA_START_OFFSET] - fit[HEURISTIC_FIT_PEAK_OFFSET]), noise_floor)
 
-        start_params[i, PEAK_OFFSET_PARAM] = fit[HEURISTIC_FIT_PEAK_OFFSET]
+        start_params[i, PEAK_OFFSET_PARAM] = fit[HEURISTIC_FIT_PEAK_OFFSET] - fit[HEURISTIC_FIT_PHASE_START_TIME]
         start_params[i, CODA_HEIGHT_PARAM] = fit_coda_height if fit_coda_height > 0 else 1
         start_params[i, CODA_DECAY_PARAM] = fit[HEURISTIC_FIT_B] if fit[HEURISTIC_FIT_B] < 0 else -0.03
 

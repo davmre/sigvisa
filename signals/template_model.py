@@ -30,15 +30,15 @@ class TemplateModel(object):
     def params(self):
         raise Exception("abstract class: method not implemented")
 
-    def print_params(self, template_params):
+    def param_str(self, template_params):
         phases, vals= template_params
         pstr = ""
         for (i, phase) in enumerate(phases):
             pstr += "%s: " % phase
             for (j, param) in enumerate(self.params()):
-                pstr += "%s: %.2f" % (param, vals[i,j])
+                pstr += "%s: %.3f " % (param, vals[i,j])
             pstr += "\n"
-        print pstr,
+        return pstr
 
     def generate_template_waveform(self, template_params, model_waveform=None, logscale=False, sample=False):
         raise Exception("abstract class: method not implemented")
@@ -53,6 +53,10 @@ class TemplateModel(object):
     # noise, the interpretation as a "likelihood" is basically
     # meaningless.
     def waveform_log_likelihood_iid(self, wave, template_params):
+        (phases, vals) = template_params
+        if (vals < self.low_bounds(phases)).any() or (vals > self.high_bounds(phases)).any():
+            return -np.inf
+
         env = self.generate_template_waveform(template_params, model_waveform=wave, logscale=True)
         return -wave.l1_cost(env)
 
@@ -100,7 +104,6 @@ class TemplateModel(object):
                             if run == run_name:
                                 self.models[param][sta][phase][chan][band] = SpatialModel(fname=band_file)
 
-
     def predictTemplate(self, event, sta, chan, band, phases=None):
         if phases is None:
             phases = Sigvisa().arriving_phases(event, sta)
@@ -114,7 +117,7 @@ class TemplateModel(object):
                 if isinstance(model, NestedDict):
                     raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
-                if param == "amp_transfer":
+                if param == "amplitude":
                     source_logamp = event.source_logamp(band)
                     predictions[i,j] = source_logamp + model.predict(event)
                 elif param == "arrival_time":
@@ -138,7 +141,7 @@ class TemplateModel(object):
                 if isinstance(model, NestedDict):
                     raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
-                if param == "amp_transfer":
+                if param == "amplitude":
                     source_logamp = event.source_logamp(band)
                     samples[i,j] =  source_logamp + model.predict(event)
                 elif param == "arrival_time":
@@ -162,7 +165,7 @@ class TemplateModel(object):
                 if isinstance(model, NestedDict):
                     raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
-                if param == "amp_transfer":
+                if param == "amplitude":
                     source_logamp = event.source_logamp(band)
                     log_likelihood += model.log_likelihood(event, param_vals[i,j] - source_logamp)
                 elif param == "arrival_time":

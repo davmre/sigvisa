@@ -24,31 +24,26 @@ class TestRuns(unittest.TestCase):
         s = self.s
         run_name = self.run_name
 
-        iteration, runid = get_latest_fitting_iteration(s.cursor, run_name)
-        self.assertIsNone(runid)
+        iters = read_fitting_run_iterations(s.cursor, run_name)
+        self.assertTrue(len(iters)==0)
 
         # create a new run (starting at iteration 1)
-        iteration, runid = insert_new_fitting_iteration(s.cursor, run_name)
-        self.assertEqual(iteration, 1)
-        self.assertIsNotNone(iteration, runid)
-
-        # retrieve info on the run and check that it's correct
-        (run_name2, iteration2) = get_fitting_run_info(s.cursor, runid)
-        self.assertEqual(run_name, run_name2)
-        self.assertEqual(iteration, iteration2)
-
-        runid2 = get_fitting_runid(s.cursor, run_name, iteration)
+        runid = get_fitting_runid(s.cursor, run_name, 1)
+        self.assertEqual(1, get_last_iteration(s.cursor, run_name))
+        # check that the second call returns the same thing (doesn't create a second run)
+        runid2 = get_fitting_runid(s.cursor, run_name, 1)
         self.assertEqual(runid, runid2)
 
-        # create a new iteration for the same run, should be the 2nd iteration
-        iteration3, runid3 = insert_new_fitting_iteration(s.cursor, run_name)
-        self.assertEqual(iteration3, 2)
+        # retrieve info on the run and check that it's correct
+        (run_name2, iteration2) = read_fitting_run(s.cursor, runid)
+        self.assertEqual(run_name, run_name2)
+        self.assertEqual(1, iteration2)
+
+        runid3 = get_fitting_runid(s.cursor, run_name, 2)
         self.assertNotEqual(runid3, runid2)
 
-        iteration4, runid4 = get_latest_fitting_iteration(s.cursor, run_name)
-        self.assertEqual(runid3, runid4)
-        self.assertEqual(iteration3, iteration4)
-
+        iters2 = read_fitting_run_iterations(s.cursor, run_name)
+        self.assertEqual(len(iters2), 2)
 
     def tearDown(self):
         # erase our tracks
@@ -74,7 +69,9 @@ class TestTemplateParams(unittest.TestCase):
          [  1.23891813e+09,   1.13087039e+02,   3.36043492e+00,  -8.51671938e-02], \
          [  1.23891826e+09,   9.79702075e+00,  -2.85349225e-12,  -8.43354825e-02]])
 
-        (i, runid) = insert_new_fitting_iteration(s.cursor, "unit_test_fake"):
+        run_name = "unit_test_fake"
+        i = get_last_iteration(s.cursor, run_name) + 1
+        runid = get_fitting_runid(s.cursor, run_name, i)
 
         wave = self.seg['BHZ']
         store_template_params(wave, (phases, param_vals), method_str='unit_test_fake', iid=True, fit_cost=0, run_name="unit_test_fake", iteration=i)
