@@ -1,5 +1,4 @@
 import numpy as np
-import numpy.ma as ma
 import time, os
 
 from sigvisa import Sigvisa
@@ -32,12 +31,9 @@ def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=
 
     return os.path.join(base_dir, model_dir), model_fname
 
+def get_median_noise_wave(sta, chan, hour_start, hour_end):
 
-def get_masked_hour_wave(sta, chan, hour_start, hour_end):
     s = Sigvisa()
-
-    MASK_SECONDS_BEFORE_ARRIVAL = 10
-    MASK_SECONDS_AFTER_ARRIVAL = 400
 
     arrivals = dataset.read_station_detections(s.cursor, sta, hour_start, hour_end)
     if arrivals.shape[0] != 0:
@@ -45,16 +41,53 @@ def get_masked_hour_wave(sta, chan, hour_start, hour_end):
     else:
         arrival_times = np.array(())
 
-    wave = fetch_waveform(sta, chan, hour_start, hour_end)
 
-    for arrival_time in arrival_times:
-        srate = wave['srate']
-        stime = wave['stime']
-        mask_start_idx = max(0, int((arrival_time - MASK_SECONDS_BEFORE_ARRIVAL -stime)*srate))
-        mask_end_idx = min(wave['npts'], int((arrival_time + MASK_SECONDS_AFTER_ARRIVAL  -stime)*srate))
-        wave.data[mask_start_idx:mask_end_idx] = ma.masked
+    # load waveforms for five minutes within the hour
+    waves = []
+    blocks = []
+    failures = []
+    num_blocks = 4
+    block_len = 5
+    max_failures=60/block_len - num_blocks + 1
 
-    return wave
+    while len(waves) < num_blocks and len(failures) < max_failures:
+
+        while True:
+            block_start = np.random.randint(60/block_len)*block_len*60+hour_start
+            if block_start not in blocks and block_start not in failures:
+                break
+
+        block_end = block_start + 60*block_len
+
+        # skip any block that includes a detected arrival
+        for t in arrival_times:
+            if t > block_start and t < block_end:
+                continue
+        try:
+            wave = fetch_waveform(sta, chan, block_start, block_end, pad_seconds=NOISE_PAD_SECONDS)
+        except Exception as e:
+            failures.append(block_start)
+#            print "failed loading signal (%s, %s, %d, %d)." % (sta, chan, block_start, block_end)
+            continue
+
+        # also skip any minute for which we don't have much data
+        if wave['fraction_valid'] < 0.5:
+            failures.append(block_start)
+            print "not enough datapoints for signal (%s, %s, %d, %d) (%.1f\% valid)." % (sta, chan, block_start, block_end, wave['fraction_valid'])
+            continue
+
+        waves.append(wave)
+        blocks.append(block_start)
+
+    if len(blocks) < num_blocks:
+        raise Exception("failed to load noise model for (%s, %s, %d), waves len %d" % (sta, chan, hour_start, len(waves)))
+
+    # choose the smallest block as our model
+    waves.sort(key=lambda w : np.dot(w.data, w.data))
+    model_wave = waves[0]
+    block_start = blocks[0]
+
+    return model_wave, block_start
 
 def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, order):
 
@@ -66,9 +99,15 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
 
     # if we've built a noise model here before, for a different channel or filter band, reload the same training segment
     hour_dir, model_fname = model_path(sta, chan, filter_str, srate, order, hour_time=hour_start)
-    ensure_dir_exists(hour_dir)
+    if os.path.exists(hour_dir):
+        minute_dir = os.path.realpath(hour_dir)
+        minute = int(os.path.split(minute_dir)[-1])
+        model_wave = fetch_waveform(sta, chan, minute, minute+60, pad_seconds=NOISE_PAD_SECONDS)
 
-    model_wave = get_masked_hour_wave(sta, chan, hour_start, hour_end)
+    # otherwise, load a training segment from scratch
+    else:
+        print "hour dir", hour_dir, "doesn't exist, computing new median minute"
+        model_wave, minute = get_median_noise_wave(sta, chan, hour_start, hour_end)
 
     old_band = filter_str_extract_band(filter_str)
 
@@ -82,14 +121,24 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
         em = ErrorModel(0, std)
         armodel = ARModel(params, em, c = ar_learner.c)
 
-        hour_dir, model_fname = model_path(sta, chan, tmp_filter_str, srate, order, hour_time=hour_start)
-
+        minute_dir, model_fname = model_path(sta, chan, tmp_filter_str, srate, order, minute_time=minute)
+        ensure_dir_exists(minute_dir)
         print "saved model", model_fname
-        armodel.dump_to_file(os.path.join(hour_dir, model_fname))
+        armodel.dump_to_file(os.path.join(minute_dir, model_fname))
 
         wave_fname = model_fname.replace("armodel", "wave")
-        np.savetxt(os.path.join(hour_dir, wave_fname), filtered_wave.data.filled(np.float('nan')))
+        np.savetxt(os.path.join(minute_dir, wave_fname), filtered_wave.data.filled(np.float('nan')))
 
+    try:
+        minute_dir_path = os.path.realpath(minute_dir)
+        os.symlink(minute_dir_path, hour_dir)
+        print "successfully created symlink"
+    except OSError:
+        # if symlink already exists, check to make sure it's the right thing
+        current_link_target = os.path.realpath(hour_dir)
+
+        if not current_link_target == minute_dir_path:
+            raise Exception("tried to symlink %s to %s, but symlink already exists and points to %s!" % (hour_dir, minute_dir_path, current_link_target))
 
 def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17):
     """
