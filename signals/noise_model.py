@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.ma as ma
 import time, os
 
 from sigvisa import Sigvisa
@@ -32,9 +33,11 @@ def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=
     return os.path.join(base_dir, model_dir), model_fname
 
 
-def get_median_noise_wave(sta, chan, hour_start, hour_end):
-
+def get_masked_hour_wave(sta, chan, hour_start, hour_end):
     s = Sigvisa()
+
+    MASK_SECONDS_BEFORE_ARRIVAL = 10
+    MASK_SECONDS_AFTER_ARRIVAL = 400
 
     arrivals = dataset.read_station_detections(s.cursor, sta, hour_start, hour_end)
     if arrivals.shape[0] != 0:
@@ -42,48 +45,16 @@ def get_median_noise_wave(sta, chan, hour_start, hour_end):
     else:
         arrival_times = np.array(())
 
+    wave = fetch_waveform(sta, chan, hour_start, hour_end)
 
-    # load waveforms for five minutes within the hour
-    waves = []
-    minutes = []
-    failures = []
-    max_failures=30
-    while len(waves) < 5 and len(failures) < max_failures:
+    for arrival_time in arrival_times:
+        srate = wave['srate']
+        stime = wave['stime']
+        mask_start_idx = max(0, int((arrival_time - MASK_SECONDS_BEFORE_ARRIVAL -stime)*srate))
+        mask_end_idx = min(wave['npts'], int((arrival_time + MASK_SECONDS_AFTER_ARRIVAL  -stime)*srate))
+        wave.data[mask_start_idx:mask_end_idx] = ma.masked
 
-        while True:
-            minute = np.random.randint(60)*60+hour_start
-            if minute not in minutes and minute not in failures:
-                break
-
-        # skip any minute that includes a detected arrival
-        for t in arrival_times:
-            if t > minute and t < minute+60:
-                continue
-        try:
-            wave = fetch_waveform(sta, chan, minute, minute+60, pad_seconds=NOISE_PAD_SECONDS)
-        except Exception as e:
-            failures.append(minute)
-            print "failed loading signal (%s, %s, %d, %d)." % (sta, chan, minute, minute+60)
-            continue
-
-        # also skip any minute for which we don't have much data
-        if wave['fraction_valid'] < 0.5:
-            failures.append(minute)
-            print "not enough datapoints for signal (%s, %s, %d, %d) (%.1f\% valid)." % (sta, chan, minute, minute+60, wave['fraction_valid'])
-            continue
-
-        waves.append(wave)
-        minutes.append(minute)
-
-    if failures == max_failures:
-        raise Exception("failed to load noise model for (%s, %s, %d)" % (sta, chan, hour_start))
-
-    # choose the median minute (index 2 of 0,1,2,3,4) as our model
-    waves.sort(key=lambda w : np.dot(w.data, w.data))
-    model_wave = waves[2]
-    minute = minutes[2]
-
-    return model_wave, minute
+    return wave
 
 def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, order):
 
@@ -95,15 +66,9 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
 
     # if we've built a noise model here before, for a different channel or filter band, reload the same training segment
     hour_dir, model_fname = model_path(sta, chan, filter_str, srate, order, hour_time=hour_start)
-    if os.path.exists(hour_dir):
-        minute_dir = os.path.realpath(hour_dir)
-        minute = int(os.path.split(minute_dir)[-1])
-        model_wave = fetch_waveform(sta, chan, minute, minute+60, pad_seconds=NOISE_PAD_SECONDS)
+    ensure_dir_exists(hour_dir)
 
-    # otherwise, load a training segment from scratch
-    else:
-        print "hour dir", hour_dir, "doesn't exist, computing new median minute"
-        model_wave, minute = get_median_noise_wave(sta, chan, hour_start, hour_end)
+    model_wave = get_masked_hour_wave(sta, chan, hour_start, hour_end)
 
     old_band = filter_str_extract_band(filter_str)
 
@@ -117,24 +82,14 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
         em = ErrorModel(0, std)
         armodel = ARModel(params, em, c = ar_learner.c)
 
-        minute_dir, model_fname = model_path(sta, chan, tmp_filter_str, srate, order, minute_time=minute)
-        ensure_dir_exists(minute_dir)
+        hour_dir, model_fname = model_path(sta, chan, tmp_filter_str, srate, order, hour_time=hour_start)
+
         print "saved model", model_fname
-        armodel.dump_to_file(os.path.join(minute_dir, model_fname))
+        armodel.dump_to_file(os.path.join(hour_dir, model_fname))
 
         wave_fname = model_fname.replace("armodel", "wave")
-        np.savetxt(os.path.join(minute_dir, wave_fname), filtered_wave.data.filled(np.float('nan')))
+        np.savetxt(os.path.join(hour_dir, wave_fname), filtered_wave.data.filled(np.float('nan')))
 
-    try:
-        minute_dir_path = os.path.realpath(minute_dir)
-        os.symlink(minute_dir_path, hour_dir)
-        print "successfully created symlink"
-    except OSError:
-        # if symlink already exists, check to make sure it's the right thing
-        current_link_target = os.path.realpath(hour_dir)
-
-        if not current_link_target == minute_dir_path:
-            raise Exception("tried to symlink %s to %s, but symlink already exists and points to %s!" % (hour_dir, minute_dir_path, current_link_target))
 
 def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17):
     """
@@ -179,3 +134,35 @@ def set_noise_process(wave):
     c = sigvisa_c.canonical_channel_num(wave['chan'])
     b = sigvisa_c.canonical_band_num(wave['band'])
     s.sigmodel.set_noise_process(wave['siteid'], b, c, arm.c, arm.em.std**2, np.array(arm.params))
+
+def main():
+
+    t_start = 1238917955 - 6*3600
+    t_max = t_start + 14*24*3600
+
+    t=t_start
+    f = open('means.txt', 'w')
+    fs = open('stds.txt', 'w')
+    for d in range(14):
+        for h in range(24):
+            t = t_start + d*24*3600 + h*3600
+            try:
+                nm = get_noise_model(sta="URZ", chan="BHZ", time=t, filter_str="freq_2.0_3.0;env")
+                print "nm for time", t," has mean", nm.c
+                f.write("%f, " % nm.c)
+                fs.write("%f, " % nm.em.std)
+            except Exception as e:
+                print e
+                f.write(", ")
+                fs.write(", ")
+                continue
+
+        f.write("\n")
+        fs.write("\n")
+    f.close()
+    fs.close()
+
+
+
+if __name__ == "__main__":
+    main()
