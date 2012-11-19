@@ -8,6 +8,10 @@ class NestedDict(dict):
         if key in self: return self.get(key)
         return self.setdefault(key, NestedDict())
 
+class BadParamTreeException(Exception):
+    pass
+
+
 class Sigvisa(object):
 
     # some channels are referred to by multiple names, i.e. the

@@ -20,18 +20,30 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 import plotting.plot
+from plotting.plot_coda_decays import *
+
 
 
 class TestFit(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
-        self.event = Event(evid=5301405)
+        self.event = Event(evid=5429382)
         self.s = Sigvisa()
         self.seg = load_event_station(self.event.evid, "URZ", cursor=self.s.cursor).with_filter("freq_2.0_3.0;env")
+        self.tm = PairedExpTemplateModel(run_name="", model_type="dummy")
+
+    def test_plot(self):
+        pvals = np.array([[1238917955.54000, 4.10006, 1.35953, -0.04931], \
+                          [1238918128.71000, 10.70001, .9597, -0.03423]])
+        params = (('P', 'S'), pvals)
+
+        pp = PdfPages("testplot.pdf")
+        plot_waveform_with_pred(pp, self.seg['BHZ'], self.tm, params, logscale=True)
+        pp.close()
 
     def test_fit_template_iid(self):
-        tm = PairedExpTemplateModel(run_name="", model_type="dummy")
+        tm = self.tm
         wave = self.seg['BHZ']
         pp = PdfPages("test_fit.pdf")
         fit_params, fit_cost = fit_template(wave, pp=pp, ev=self.event, tm=tm, method="simplex", wiggles=None, iid=True)

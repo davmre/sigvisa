@@ -2,6 +2,8 @@ import numpy as np
 import time, os
 
 from sigvisa import Sigvisa
+
+
 import sigvisa_c
 from database import dataset
 from database.signal_data import ensure_dir_exists
@@ -12,7 +14,12 @@ from signals.armodel.learner import ARLearner
 from signals.io import fetch_waveform
 from signals.common import filter_str_extract_band
 
+
 NOISE_PAD_SECONDS = 20
+
+class NoNoiseException(Exception):
+    pass
+
 
 def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=None):
 
@@ -32,6 +39,8 @@ def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=
     return os.path.join(base_dir, model_dir), model_fname
 
 def get_median_noise_wave(sta, chan, hour_start, hour_end):
+
+    ARRIVAL_BUFFER = 400
 
     s = Sigvisa()
 
@@ -59,9 +68,12 @@ def get_median_noise_wave(sta, chan, hour_start, hour_end):
 
         block_end = block_start + 60*block_len
 
-        # skip any block that includes a detected arrival
+        # skip any block that includes a detected arrival, or is within ARRIVAL_BUFFER seconds after one
         for t in arrival_times:
             if t > block_start and t < block_end:
+                continue
+            buffer = block_start - t
+            if buffer > 0 and buffer < ARRIVAL_BUFFER:
                 continue
         try:
             wave = fetch_waveform(sta, chan, block_start, block_end, pad_seconds=NOISE_PAD_SECONDS)
@@ -73,20 +85,22 @@ def get_median_noise_wave(sta, chan, hour_start, hour_end):
         # also skip any minute for which we don't have much data
         if wave['fraction_valid'] < 0.5:
             failures.append(block_start)
-            print "not enough datapoints for signal (%s, %s, %d, %d) (%.1f\% valid)." % (sta, chan, block_start, block_end, wave['fraction_valid'])
+#            print (sta, chan, block_start, block_end, wave['fraction_valid'])
+#            print "not enough datapoints for signal (%s, %s, %d, %d) (%.1f%% valid)." % (sta, chan, block_start, block_end, 100*wave['fraction_valid'])
             continue
 
         waves.append(wave)
         blocks.append(block_start)
 
     if len(blocks) < num_blocks:
-        raise Exception("failed to load noise model for (%s, %s, %d), waves len %d" % (sta, chan, hour_start, len(waves)))
+        raise NoNoiseException("failed to load noise model for (%s, %s, %d), waves len %d" % (sta, chan, hour_start, len(waves)))
 
     # choose the smallest block as our model
     waves.sort(key=lambda w : np.dot(w.data, w.data))
     model_wave = waves[0]
     block_start = blocks[0]
 
+    print block_start - hour_start
     return model_wave, block_start
 
 def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, order):
@@ -138,7 +152,7 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
         current_link_target = os.path.realpath(hour_dir)
 
         if not current_link_target == minute_dir_path:
-            raise Exception("tried to symlink %s to %s, but symlink already exists and points to %s!" % (hour_dir, minute_dir_path, current_link_target))
+            raise BadParamTreeException("tried to symlink %s to %s, but symlink already exists and points to %s!" % (hour_dir, minute_dir_path, current_link_target))
 
 def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17):
     """
@@ -196,11 +210,11 @@ def main():
         for h in range(24):
             t = t_start + d*24*3600 + h*3600
             try:
-                nm = get_noise_model(sta="URZ", chan="BHZ", time=t, filter_str="freq_2.0_3.0;env")
+                nm = get_noise_model(sta="CTA", chan="BHZ", time=t, filter_str="freq_2.0_3.0;env")
                 print "nm for time", t," has mean", nm.c
                 f.write("%f, " % nm.c)
                 fs.write("%f, " % nm.em.std)
-            except Exception as e:
+            except NoNoiseException as e:
                 print e
                 f.write(", ")
                 fs.write(", ")

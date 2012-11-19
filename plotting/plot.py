@@ -42,7 +42,7 @@ def plot_det_times(wave, axes=None, logscale=False):
         axes.text(t+3, maxwave - (maxwave-minwave)*0.1, lbl, color="red", fontsize=10)
 
 # does not save for you - you need to call savefig() yourself!
-def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False):
+def plot_segment(segment, title=None, chans=None, logscale=False):
   fig = plt.figure(figsize=(10,8), dpi=250)
   plt.xlabel("Time (s)")
 
@@ -67,7 +67,7 @@ def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False)
   for chidx, chan in enumerate(sorted(chans)):
       axes = plt.subplot(gs[chidx*3:chidx*3+3, 0], sharex=axes)
       wave = segment[chan]
-      subplot_waveform(wave, format=format, logscale=logscale, axes=axes)
+      subplot_waveform(wave, logscale=logscale, axes=axes)
 
   axes = plt.subplot(gs[n*3, 0])
   axes.axis('off')
@@ -85,7 +85,7 @@ def plot_segment(segment, title=None, format = "k-", chans=None, logscale=False)
   return fig
 
 
-def plot_waveform(wave, title=None,  format="k-", logscale=False):
+def plot_waveform(wave, title=None, logscale=False):
   fig = plt.figure()
   plt.xlabel("Time (s)")
 
@@ -93,7 +93,7 @@ def plot_waveform(wave, title=None,  format="k-", logscale=False):
     plt.suptitle(title)
 
   axes = plt.subplot(1,1,1)
-  subplot_waveform(wave, axes, format=format, logscale=logscale)
+  subplot_waveform(wave, axes, logscale=logscale)
   return fig
 
 def subplot_waveform(wave, axes, logscale=False, plot_dets=True, **kwargs):

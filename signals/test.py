@@ -79,17 +79,14 @@ class TestWaveform(unittest.TestCase):
         mask[100:200] = np.ones((100,))
 
         self.data1 = ma.masked_array(np.random.randn(1000), mask)
-        self.bhz = Waveform(data = self.data1, srate = 10, stime=103, sta="CTA", chan="BHZ")
-
-    def test_retrieve_data(self):
-        self.assertTrue( (self.bhz[0:2] == self.data1[0:2] ).all())
+        self.bhz = Waveform(data = self.data1, srate = 10, stime=11111103, sta="CTA", chan="BHZ")
 
     def test_segment_stats(self):
         self.assertEqual( self.bhz['sta'], "CTA")
         self.assertEqual( self.bhz['srate'], 10)
         self.assertEqual( self.bhz['npts'], 1000)
-        self.assertEqual( self.bhz['stime'], 103)
-        self.assertEqual( self.bhz['etime'], 203)
+        self.assertEqual( self.bhz['stime'], 11111103)
+        self.assertEqual( self.bhz['etime'], 11111203)
 
     def test_local_stats(self):
         self.assertEqual( self.bhz['chan'], "BHZ")
@@ -104,6 +101,10 @@ class TestWaveform(unittest.TestCase):
 
         bhz_alt = self.bhz.filter("freq_2.0_3.0;env;smooth")
         self.assertIs(bhz_23_env_smooth, bhz_alt)
+
+    def test_timeslice(self):
+        a = self.bhz[0:100]
+
 
     def test_mirror_missing(self):
 

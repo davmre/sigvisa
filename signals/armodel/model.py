@@ -2,7 +2,26 @@ import numpy as np
 import cPickle
 
 def load_armodel_from_file(fname):
-    return cPickle.load(open(fname, 'rb'))
+    f = open(fname, 'r')
+    try:
+        srate = int(f.readline().split(" ")[1])
+        c = float(f.readline().split(" ")[1])
+        _ = f.readline()
+        mean = float(f.readline().split(" ")[1])
+        std = float(f.readline().split(" ")[1])
+        _ = f.readline()
+        _ = f.readline()
+        params = []
+        for line in f:
+            params.append(float(line))
+        em = ErrorModel(mean, std)
+        arm = ARModel(params, em, c=c, sf=0)
+    except Exception as e:
+        raise Exception("error reading AR model from file %s: %s" % (fname, str(e)))
+    finally:
+        f.close()
+    return arm
+#    return cPickle.load(open(fname, 'rb'))
 
 class ARModel:
     #params: array of parameters
@@ -95,7 +114,19 @@ class ARModel:
         return rss
 
     def dump_to_file(self, fname):
-        cPickle.dump(self, open(fname, 'wb'), protocol=2)
+        f = open(fname, 'w')
+        f.write("srate %d\n" % self.sf)
+        f.write("c %.9f\n" % self.c)
+        f.write("\n")
+        f.write("mean %.9f\n" % self.em.mean)
+        f.write("std %.9f\n" % self.em.std)
+        f.write("\n")
+        f.write("params\n")
+        for p in self.params:
+            f.write("%.8f\n" % p)
+        f.close()
+
+        #cPickle.dump(self, open(fname, 'wb'), protocol=0)
 
 
 # error model obeys normal distribution

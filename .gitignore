@@ -50,3 +50,4 @@ database/*.csv
 /test_orids
 /gen_templates.sh
 /test_orids3
+/parameters/

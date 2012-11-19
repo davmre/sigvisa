@@ -176,7 +176,7 @@ class TemplateModel(object):
         return log_likelihood
 
     def travel_time(self, event, sta, phase):
-        siteid = self.sigvisa.siteids[sta]
+        siteid = self.sigvisa.name_to_siteid_minus1[sta] + 1
         phaseid = self.sigvisa.phaseids[phase]
         meantt = self.sigvisa.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, phaseid-1)
         return meantt

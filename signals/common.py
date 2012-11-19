@@ -148,7 +148,10 @@ class Waveform(object):
 
         # numeric indices return raw waveform data
         if isinstance(key, slice):
-            return self.data[key]
+            srate = self['srate']
+            stime = self['stime']
+            newslice = slice(int((key.start - stime)*srate), int((key.stop - stime)*srate), 1)
+            return self.data[newslice]
         # otherwise, we pull from the stats
         elif key in self.segment_stats:
             return self.segment_stats[key]

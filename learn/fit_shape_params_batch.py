@@ -81,12 +81,7 @@ def main():
 
     for sta in options.stations.split(','):
         # want to select all events, with certain properties, which have a P or S phase detected at this station
-        phase_condition = "(" + " or ".join(["leba.phase='%s'" % (pn) for pn in S_PHASES + P_PHASES]) + ")"
-        ev_condition = "and l.time between %f and %f and lebo.mb between %f and %f and l.snr > 5" % (st, et, options.min_mb, options.max_mb)
-        sql_query="SELECT distinct lebo.evid FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid and %s and l.dta=%s %s" % (phase_condition, sta, ev_condition)
-        cursor.execute(sql_query)
-        evids = cursor.fetchall()
-
+        evids = read_evids_detected_at_station(cursor, sta, st, et, P_PHASES+ S_PHASES, min_mb = options.min_mb, max_mb = options.max_mb)
         for evid in evids:
             cmd_str = "python2.6 -m signals.fit_shape_params -e %d -m %s -s %s -w %s --template_shape=%s --template_model=%s --run_name=%s --run_iteration=%d %s" % (evid, method, sta, options.wiggles, options.template_shape, options.template_model, run_name, iteration, init_str)
             print "running", cmd_str

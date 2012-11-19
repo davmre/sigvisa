@@ -128,18 +128,17 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   chan = s.canonical_channel_name[chan]
   chan_list = s.equivalent_channels(chan)
 
-  while True:
+  sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), etime, stime)
+  cursor.execute(sql)
+  waveforms = cursor.fetchall()
+  if not waveforms:
+    raise MissingWaveform("Can't find data for sta %s chan %s time %d"
+                          % (station, chan, stime))
+  table_description = cursor.description
 
-    sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), etime, stime)
+  for waveform_values in waveforms:
 
-    cursor.execute(sql)
-    waveform_values = cursor.fetchone()
-
-    if waveform_values is None:
-      raise MissingWaveform("Can't find data for sta %s chan %s time %d"
-                            % (station, chan, stime))
-
-    waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
+    waveform = dict(zip([x[0].lower() for x in table_description], waveform_values))
     cursor.execute("select id from static_siteid where sta = '%s'" % (station))
     try:
       if station=="MK31":
@@ -160,14 +159,14 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
       global_data.fill(np.nan)
 
     # at which offset should we start collecting samples
-    first_off = int((stime-waveform['time'])*samprate)
+    first_offset = max(int(np.floor((stime-waveform['time'])*samprate)), 0)
     # how many samples are needed remaining
-    desired_samples = int(round((etime - stime) * samprate))
+    desired_samples = int(np.floor((global_etime - stime) * samprate))
     # how many samples are actually available
-    available_samples = waveform['nsamp'] - first_off
+    available_samples = waveform['nsamp'] - first_offset
     # grab the available and needed samples
     try:
-      wave = _read_waveform_from_file(waveform, first_off,
+      wave = _read_waveform_from_file(waveform, first_offset,
                                        min(desired_samples, available_samples))
     except IOError:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
@@ -180,7 +179,6 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
 
 #    print "   loaded data from %d to %d (%.1f to %.1f)" % (t_start, t_end, t_start/samprate, t_end/samprate)
 
-
     # do we have all the data that we need
     if desired_samples <= available_samples:
       break
@@ -189,8 +187,8 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
     stime = waveform['endtime']
     # and adust the end time to ensure that the correct number of samples
     # will be selected in the next file
-    etime = stime + (desired_samples - available_samples) / float(samprate)
 
+  print global_data
   masked_data = mirror_missing(ma.masked_invalid(global_data))
 
   if pad_seconds > 0:
