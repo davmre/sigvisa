@@ -110,7 +110,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   """
   s = Sigvisa()
   cursor = s.cursor
-
+  
   # scan the waveforms for the given interval
   samprate = None
 
@@ -128,7 +128,13 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   chan = s.canonical_channel_name[chan]
   chan_list = s.equivalent_channels(chan)
 
-  sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (station, sql_multi_str("chan", chan_list), etime, stime)
+  if station=="MKAR":
+    selection="MK31"
+    print "forcing mk31"
+  else:
+    selection=station
+  
+  sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (selection, sql_multi_str("chan", chan_list), etime, stime)
   cursor.execute(sql)
   waveforms = cursor.fetchall()
   if not waveforms:
@@ -188,7 +194,6 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
     # and adust the end time to ensure that the correct number of samples
     # will be selected in the next file
 
-  print global_data
   masked_data = mirror_missing(ma.masked_invalid(global_data))
 
   if pad_seconds > 0:
