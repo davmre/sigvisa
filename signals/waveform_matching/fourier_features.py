@@ -16,50 +16,97 @@ class FourierFeatures(object):
         s = np.zeros((len_seconds*self.srate,))
 
         for (i, row) in enumerate(features):
-            print row
             (amp, phase) = row
-            freq = self.fundamental*i 
             
+
+#            (c1, c2) = row
+
+            freq = self.fundamental*i 
+#            basis1  =  np.sin(x*2*np.pi*freq)
+#            basis2  =  np.cos(x*2*np.pi*freq)
+            
+#            s += c1 * basis1
+#            s += c2 * basis2
+
             s += amp * np.sin(x*2*np.pi*freq + phase)
             
-        return s
-            
-    def features_from_signal(self, signal):
 
-        # initialize features from an fft
-        fft = np.fft.rfft(signal)
-        len_seconds = len(signal)/self.srate
-        fft_fundamental = 2.0/len_seconds
-        fund_ratio = self.fundamental / fft_fundamental
+        s = s/np.std(s) - np.mean(s)
+        return s
+
+    def basis_decomposition(self, signal):
         n_features = int(self.max_freq/self.fundamental)
+        len_seconds = len(signal)/self.srate
+
+        x = np.linspace(0, len_seconds, len_seconds*self.srate)
+
         features = np.zeros((n_features, 2))
         for i in np.arange(n_features):
-            c = fft[int((i+1)*fund_ratio) -1]
-            a = np.array((np.abs(c), np.angle(c)))
-            features[i, :] = a
+            freq = self.fundamental*i
 
-        print features
-        s = self.signal_from_features(features, len_seconds = len_seconds)
-        plt.plot(s)
-        plt.show()
+            periods = freq*len_seconds
 
-        fit_cost = lambda features : np.linalg.norm(signal - self.signal_from_features(features, len_seconds = len_seconds), 1)
-        
-        optim_features = learn.optimize.minimize_matrix(fit_cost, features, "bfgs")
-                 
-        s2 = self.signal_from_features(optim_features, len_seconds = len_seconds)
-        print optim_features
-        plt.plot(s2)
-        plt.show()
+            basis1  =  np.sin(x*2*np.pi*freq)
+            basis2  =  np.cos(x*2*np.pi*freq)
 
 
+            b1d = np.dot(basis1, basis1)
+            b2d = np.dot(basis2, basis2)
+
+            c1 = np.dot(signal, basis1) / len(signal)
+            c2 = np.dot(signal, basis2) / len(signal)
+
+            if np.isnan(c1):
+                c1 = 0
+            if np.isnan(c2):
+                c2 = 0
+
+#            features[i, :] = [c1, c2]
+
+            c = complex(c1, c2)
+
+            (amp, phase) = (np.abs(c), np.angle(c))
+            features[i, :] = (amp, phase)
+
+
+        return features         
+
+    def cost(self, signal, features):
+        return np.linalg.norm(signal - self.signal_from_features(features, len_seconds = len(signal) / self.srate), 1)
 
 def main():
-    ff = FourierFeatures()
+    ff = FourierFeatures(fundamental=1/20.0)
     wave = np.loadtxt("test.wave")
+    wave = wave/np.std(wave) - np.mean(wave)
+    plt.plot(wave)
+    plt.show()
+    
+#    features = np.zeros((35, 2))
+#    features[5,:] = [1, 1]
+#    wave = ff.signal_from_features(features, len_seconds = 30)
+#    plt.figure()
 #    plt.plot(wave)
-#    plt.show()
-    f = ff.features_from_signal(wave)
+
+    f = ff.basis_decomposition(wave)
+    plt.figure()
+    plt.plot(f[:, 0])
+#    plt.plot(features[:, 0])
+
+    print f
+#    print features
+
+    plt.figure()
+    s = ff.signal_from_features(f, len_seconds = len(wave) / 40)
+    plt.plot(s)
+    
+    plt.figure()
+    plt.plot(s)
+    plt.plot(wave)
+
+    offby = s/wave
+    print "off by", np.mean(offby), np.median(offby)
+
+    plt.show()
 
 if __name__ == "__main__":
     main()

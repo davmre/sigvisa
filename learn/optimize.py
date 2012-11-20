@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+import scipy.optimize
 
 def coord_descent(f, x0, converge=0.1, steps=None, maxiters=500):
     """
