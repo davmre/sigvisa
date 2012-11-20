@@ -22,7 +22,7 @@ class FourierFeatures(object):
 
 #            (c1, c2) = row
 
-            freq = self.fundamental*i 
+            freq = self.min_freq + self.fundamental*i 
 #            basis1  =  np.sin(x*2*np.pi*freq)
 #            basis2  =  np.cos(x*2*np.pi*freq)
             
@@ -36,14 +36,14 @@ class FourierFeatures(object):
         return s
 
     def basis_decomposition(self, signal):
-        n_features = int(self.max_freq/self.fundamental)
+        n_features = int((self.max_freq - self.min_freq)/self.fundamental)
         len_seconds = len(signal)/self.srate
 
         x = np.linspace(0, len_seconds, len_seconds*self.srate)
 
         features = np.zeros((n_features, 2))
         for i in np.arange(n_features):
-            freq = self.fundamental*i
+            freq = self.fundamental*i + self.min_freq
 
             periods = freq*len_seconds
 
@@ -72,21 +72,26 @@ class FourierFeatures(object):
 
         return features         
 
+    def project_down(self, signal):
+        features = self.basis_decomposition(signal)
+        return self.signal_from_features(features, len_seconds=len(signal)/self.srate)
+
     def cost(self, signal, features):
         return np.linalg.norm(signal - self.signal_from_features(features, len_seconds = len(signal) / self.srate), 1)
 
 def main():
-    ff = FourierFeatures(fundamental=1/20.0)
-    wave = np.loadtxt("test.wave")
-    wave = wave/np.std(wave) - np.mean(wave)
-    plt.plot(wave)
-    plt.show()
+    ff = FourierFeatures(fundamental=1/20.0, min_freq=0.8, max_freq=3.5)
+
+
+#    wave = np.loadtxt("test.wave")
     
-#    features = np.zeros((35, 2))
-#    features[5,:] = [1, 1]
-#    wave = ff.signal_from_features(features, len_seconds = 30)
-#    plt.figure()
-#    plt.plot(wave)
+    features = np.zeros((35, 2))
+    features[5,:] = [1, 1]
+    wave = ff.signal_from_features(features, len_seconds = 30)
+
+    wave = wave/np.std(wave) - np.mean(wave)
+    plt.figure()
+    plt.plot(wave)
 
     f = ff.basis_decomposition(wave)
     plt.figure()

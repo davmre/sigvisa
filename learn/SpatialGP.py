@@ -1,6 +1,8 @@
 import os
 import numpy as np
 
+import utils.geog
+
 from gpr import munge, kernels, evaluate, learn, distributions, plot
 from gpr.gp import GaussianProcess
 
@@ -113,17 +115,22 @@ def lon_lat_depth_distfn(lld1, lld2, params=None):
 
 
 distfns = {
-"dad_cuberoot": [dist_azi_depth_distfn_cuberoot, dist_azi_depth_distfn_deriv_cuberoot]
-"dad_linear": [dist_azi_depth_distfn_linear, dist_azi_depth_distfn_deriv_linear]
-"dad_log": [dist_azi_depth_distfn_log, dist_azi_depth_distfn_deriv_log]
-"lld": lon_lat_depth_distfn,
+"dad_cuberoot": [dist_azi_depth_distfn_cuberoot, dist_azi_depth_distfn_deriv_cuberoot],
+"dad_linear": [dist_azi_depth_distfn_linear, dist_azi_depth_distfn_deriv_linear],
+"dad_log": [dist_azi_depth_distfn_log, dist_azi_depth_distfn_deriv_log],
+"lld": lon_lat_depth_distfn
 }
 
 class SpatialGP(GaussianProcess):
 
-    def __init__(self, *args, distfn_str="dad_log", **kwargs):
-        self.distfn_str = distfn_str
-        kwargs['kernel_extra'] = distfns[distfn_str]
+    def __init__(self, *args, **kwargs):
+        try:
+            self.distfn_str = kwargs.pop("distfn_str")
+        except KeyError:
+            self.distfn_str = "dad_log"
+        kwargs['kernel_extra'] = distfns[self.distfn_str]
+        kwargs['kernel']  = "distfn"
+
         GaussianProcess.__init__(self, *args, **kwargs)
         
         
@@ -138,8 +145,8 @@ class SpatialGP(GaussianProcess):
 
     def load_trained_model(self, filename):
         npzfile = np.load(filename)
-        self.__unpack_npz(npzfile)
-        self.distfn_str = npzfile['distfn_str']
-        self.kernel_extra = distfns[distfn_str]
+        self.unpack_npz(npzfile)
+        self.distfn_str = str(npzfile['distfn_str'])
+        self.kernel_extra = distfns[self.distfn_str]
         self.kernel = kernels.setup_kernel(self.kernel_name, self.kernel_params, extra=self.kernel_extra)
         

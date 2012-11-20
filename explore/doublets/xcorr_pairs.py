@@ -20,20 +20,25 @@ def extract_phase_window(sta, chan, phase, atime, window_len, filter_str, evid):
     PAD = 10
 
     ev = Event(int(evid))
-    wave = fetch_waveform(sta, chan, atime - 5, atime + window_len, pad_seconds = PAD)
 
-    pad_samples = wave['srate']*PAD
-    filtered = wave.filter(filter_str)
-    
-    d = filtered.data.filled(float('nan'))[pad_samples:-pad_samples]
-    
     fdir, fname = extracted_wave_fname(sta, chan, phase, window_len, filter_str, evid)
     fullpath = os.path.join(fdir, fname)
+    try:
+        d = np.loadtxt(fullpath)
+    except Exception as e:
+        print e
 
-    if not os.path.exists(fullpath):
-        ensure_dir_exists(fdir)
-        print "saved to", fullpath
-        np.savetxt(fullpath, d)
+        wave = fetch_waveform(sta, chan, atime - 1, atime + window_len, pad_seconds = PAD)
+
+        pad_samples = wave['srate']*PAD
+        filtered = wave.filter(filter_str)
+
+        d = filtered.data.filled(float('nan'))[pad_samples:-pad_samples]
+
+        if not os.path.exists(fullpath):
+            ensure_dir_exists(fdir)
+            print "saved to", fullpath
+            np.savetxt(fullpath, d)
 
     return d
 
@@ -95,8 +100,11 @@ def xcorr(a, b):
     unbiased = np.array([float(N)/(N- np.abs(N-i)) for i in range(1, 2*N)])
     xc *= unbiased
 
-    xcmax = np.max(xc[N - 300 : N+300])
-    return xcmax
+    shifted = xc[N - 200 : N+200]
+    xcmax = np.max(shifted)
+    offset = np.argmax(shifted) - 200
+
+    return xcmax, offset
 
 #    np.savetxt("xc.txt", xc)
 
