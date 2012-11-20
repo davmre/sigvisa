@@ -38,14 +38,13 @@ def predict_signal_at_point(pt, models, ff, n):
     freqs = sorted(models.keys())
 
     features = np.zeros((len(freqs), 2))
-    print "predicting for point", pt
     for (i, freq) in enumerate(freqs):
         for (j, component) in enumerate(["amp", "phase"]):
             features[i][j] = models[freq][component].predict(pt)
-    print "got features", features
+#    print "got features", features
 
     signal = ff.signal_from_features(features, len_seconds = n / ff.srate)
-    return signal
+    return signal, features
 
 def load_models_from_dir(model_folder):
     models = NestedDict()
@@ -53,7 +52,7 @@ def load_models_from_dir(model_folder):
     for m in os.listdir(model_folder):
         model = SpatialGP(fname=os.path.join(model_folder, m))
         hz, f = m[:-12].split('_')
-        print "loaded", hz, f
+#        print "loaded", hz, f
         models[hz][f] = model
     return models
 
@@ -99,7 +98,7 @@ def main():
     true_center_wave = normalize(extract_phase_window(sta, chan, phase, atime, window_len, filter_str, center.evid))
 
     prediction_points = []
-    for i in np.linspace(-.5, .5, 11):
+    for i in np.linspace(-.3, .3, 11):
         pt = (center.lon + i, center.lat + i, center.depth)
         prediction_points.append(pt)
 
@@ -108,18 +107,19 @@ def main():
     models = load_models_from_dir(model_folder)
     x = np.linspace(-1, window_len, len(true_center_wave))
     for pt in prediction_points:
-        predicted_center_wave = predict_signal_at_point(pt, models, ff, len(true_center_wave))
+        predicted_wave, predicted_features = predict_signal_at_point(pt, models, ff, len(true_center_wave))
 
         fig = plt.figure()
         gs = gridspec.GridSpec(2,1)
         gs.update(left=0.1, right=0.95, hspace=1)
 
         axes = None
-        axes = plt.subplot(gs[0,0], sharey=axes)
-        axes.plot(x, predicted_center_wave, color="red")
+        axes = plt.subplot(gs[0:2,0], sharey=axes)
+        axes.plot(x, predicted_wave, color="red")
+        axes.plot(x, true_center_wave, color="blue")
+        
+#        axes = plt.subplot(gs[1,0], sharey=axes)
 
-        axes = plt.subplot(gs[1,0], sharey=axes)
-        axes.plot(x, true_center_wave, color="red")
 
         plt.suptitle(str(pt))
 

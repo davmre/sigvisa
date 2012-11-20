@@ -33,6 +33,66 @@ from gpr.gp import GaussianProcess
 from learn.SpatialGP import SpatialGP
 
 
+def train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder, amp_params = [.01, .4, 5], phase_params = [.1, .4, 5]):
+    # now load signals for each and compute features
+    arriving_events, arrival_dict  = get_first_arrivals(training_events, sta)
+
+    signals = []
+    features = []
+    loaded_events = []
+    for ev in arriving_events:
+        (atime, phase) = arrival_dict[ev.evid]
+
+        try:
+            wave = extract_phase_window(sta, chan, phase, atime, window_len, filter_str, ev.evid)
+            feature = ff.basis_decomposition(wave)
+            signals.append(wave)
+            features.append(feature)
+            loaded_events.append(ev)
+        except Exception as e:
+            print e
+            continue
+
+#    print "saving models to", model_folder
+
+    # for each feature, train a GP model on all events
+    ensure_dir_exists(model_folder)
+
+    feature_shape = features[0].shape
+    n_features = feature_shape[0]*feature_shape[1]
+    X = np.array([(ev.lon, ev.lat, ev.depth) for ev in loaded_events])
+    for i in range(feature_shape[0]):
+        for j in range(feature_shape[1]):
+            feature_name = str(i*ff.fundamental + ff.min_freq)
+            feature_name += "_amp" if j==0 else "_phase"
+
+            y = [f[i][j] for f in features]
+            gp = SpatialGP(X, y, distfn_str="lld", kernel_params = amp_params if j==0 else phase_params)
+
+            fname = os.path.join(model_folder, feature_name + ".gpmodel")
+            gp.save_trained_model(fname)
+#            print "saved model", fname, "trained on", len(y), "events", "mean", gp.mu
+
+
+def read_training_events(sta, st, et, min_mb, max_mb, center, width):
+    s = Sigvisa()
+
+    evids = read_evids_detected_at_station(s.cursor, sta, st, et, min_mb = min_mb, max_mb = max_mb)
+    events = [Event(evid) for evid in evids]
+
+
+    def ev_distkm(ev1, ev2):
+        return utils.geog.dist_km((ev1.lon, ev1.lat), (ev2.lon, ev2.lat))
+       
+    training_events = []
+    for event in events:
+        if event.evid != center.evid and ev_distkm(center, event) < width:
+#        if ev_distkm(center, event) < width:
+            training_events.append(event)
+
+    return training_events
+
+        
 def main():
     parser = OptionParser()
 
@@ -69,19 +129,8 @@ def main():
 
 
     # first find the events we'll train with: everything near the center, but *not* the center itself
-    evids = read_evids_detected_at_station(s.cursor, sta, st, et, min_mb = options.min_mb, max_mb = options.max_mb)
-    events = [Event(evid) for evid in evids]
-
-
-    def ev_distkm(ev1, ev2):
-        return utils.geog.dist_km((ev1.lon, ev1.lat), (ev2.lon, ev2.lat))
-       
-    training_events = []
-    for event in events:
-   #     if event.evid != center.evid and ev_distkm(center, event) < width:
-        if ev_distkm(center, event) < width:
-            training_events.append(event)
-
+    training_events = read_training_events(sta, st, et, options.min_mb, options.max_mb, center, width)
+    
     # plot the training events
     pp = PdfPages("train_set.pdf")
     hm = EventHeatmap(f=lambda x,y: 0, center = (center.lon, center.lat), width = width/70.0)
@@ -92,48 +141,14 @@ def main():
     pp.savefig()
     pp.close()
 
-    # now load signals for each and compute features
-    arriving_events, arrival_dict  = get_first_arrivals(training_events, sta)
+
 
     fundamental = 0.1
     min_freq=0.8
     max_freq=3.5
     ff = FourierFeatures(fundamental=fundamental, min_freq=min_freq, max_freq=max_freq)
-    signals = []
-    features = []
-    loaded_events = []
-    for ev in arriving_events:
-        (atime, phase) = arrival_dict[ev.evid]
 
-        try:
-            wave = extract_phase_window(sta, chan, phase, atime, window_len, filter_str, ev.evid)
-            feature = ff.basis_decomposition(wave)
-            signals.append(wave)
-            features.append(feature)
-            loaded_events.append(ev)
-        except Exception as e:
-            print e
-            continue
-
-    print "saving models to", model_folder
-
-    # for each feature, train a GP model on all events
-    ensure_dir_exists(model_folder)
-
-    feature_shape = features[0].shape
-    n_features = feature_shape[0]*feature_shape[1]
-    X = np.array([(ev.lon, ev.lat, ev.depth) for ev in loaded_events])
-    for i in range(feature_shape[0]):
-        for j in range(feature_shape[1]):
-            feature_name = str(i*fundamental + min_freq)
-            feature_name += "_amp" if j==0 else "_phase"
-
-            y = [f[i][j] for f in features]
-            gp = SpatialGP(X, y, distfn_str="lld", kernel_params = [.001, 5, 1])
-
-            fname = os.path.join(model_folder, feature_name + ".gpmodel")
-            gp.save_trained_model(fname)
-            print "saved model", fname, "trained on", len(y), "events", "mean", gp.mu
+    train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder)
 
 if __name__ == "__main__":
     main()
