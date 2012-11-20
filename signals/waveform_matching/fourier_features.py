@@ -5,9 +5,10 @@ import learn.optimize
 
 class FourierFeatures(object):
 
-    def __init__(self, fundamental=.1, max_freq=3.5, srate = 40):
+    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, srate = 40):
         self.fundamental = fundamental
         self.max_freq = max_freq
+        self.min_freq = min_freq
         self.srate = 40
 
     def signal_from_features(self, features, len_seconds = 30):
