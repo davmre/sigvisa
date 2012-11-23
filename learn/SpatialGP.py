@@ -149,4 +149,5 @@ class SpatialGP(GaussianProcess):
         self.distfn_str = str(npzfile['distfn_str'])
         self.kernel_extra = distfns[self.distfn_str]
         self.kernel = kernels.setup_kernel(self.kernel_name, self.kernel_params, extra=self.kernel_extra)
-        
+        del npzfile.f
+        npzfile.close()

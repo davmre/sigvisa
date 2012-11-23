@@ -21,24 +21,24 @@ def extract_phase_window(sta, chan, phase, atime, window_len, filter_str, evid):
 
     ev = Event(int(evid))
 
-    fdir, fname = extracted_wave_fname(sta, chan, phase, window_len, filter_str, evid)
-    fullpath = os.path.join(fdir, fname)
-    try:
-        d = np.loadtxt(fullpath)
-    except Exception as e:
-        print e
+#    fdir, fname = extracted_wave_fname(sta, chan, phase, window_len, filter_str, evid)
+#    fullpath = os.path.join(fdir, fname)
+#    try:
+#        d = np.loadtxt(fullpath)
+#    except Exception as e:
+#        print e
 
-        wave = fetch_waveform(sta, chan, atime - 1, atime + window_len, pad_seconds = PAD)
+    wave = fetch_waveform(sta, chan, atime - 1, atime + window_len, pad_seconds = PAD)
 
-        pad_samples = wave['srate']*PAD
-        filtered = wave.filter(filter_str)
+    pad_samples = wave['srate']*PAD
+    filtered = wave.filter(filter_str)
 
-        d = filtered.data.filled(float('nan'))[pad_samples:-pad_samples]
+    d = filtered.data.filled(float('nan'))[pad_samples:-pad_samples]
 
-        if not os.path.exists(fullpath):
-            ensure_dir_exists(fdir)
-            print "saved to", fullpath
-            np.savetxt(fullpath, d)
+#        if not os.path.exists(fullpath):
+#            ensure_dir_exists(fdir)
+#            print "saved to", fullpath
+#            np.savetxt(fullpath, d)
 
     return d
 

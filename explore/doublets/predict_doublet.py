@@ -10,7 +10,7 @@ import time, calendar
 
 
 import matplotlib
-matplotlib.use('PDF')
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.gridspec as gridspec
@@ -26,6 +26,7 @@ from plotting.event_heatmap import EventHeatmap
 from signals.waveform_matching.fourier_features import FourierFeatures
 from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
 from explore.doublets.xcorr_pairs import extract_phase_window
+from train_model import train_and_save_models, read_training_events
 
 from gpr.gp import GaussianProcess
 from learn.SpatialGP import SpatialGP
@@ -33,6 +34,21 @@ from learn.SpatialGP import SpatialGP
 
 def normalize(x):
     return x/np.std(x) - np.mean(x)
+
+
+def plot_events(sta, center, training_events, pred_points, highlighted, width=1):
+        # plot the training events
+    hm = EventHeatmap(f=lambda x,y: 0, center = (center.lon, center.lat), width = width)
+
+    hm.plot_earth()
+    hm.plot_locations([(ev.lon, ev.lat) for ev in training_events], marker="x", ms=12, mfc="none", mec="red", mew=2, alpha=.6)
+
+    hm.plot_locations([pp[:2] for pp in pred_points], marker=".", ms=12, mfc="none", mec="white", mew=2, alpha=0.5)
+    hm.plot_locations([highlighted[0:2],], marker=".", ms=15, mfc="none", mec="white", mew=2, alpha=1)
+
+    hm.plot_locations(((center.lon, center.lat),), labels=None,
+                        marker="*", ms=12, mfc="none", mec="#44FF44", mew=2, alpha=1)
+
 
 def predict_signal_at_point(pt, models, ff, n):
     freqs = sorted(models.keys())
@@ -80,7 +96,7 @@ def main():
     model_folder = os.path.realpath(options.model_folder)
 
 
-    pp = PdfPages(options.outfile)
+
 
     s = Sigvisa()
 
@@ -91,22 +107,41 @@ def main():
     max_freq=3.5
     ff = FourierFeatures(fundamental=fundamental, min_freq=min_freq, max_freq=max_freq)
 
+
+
     # load true waveform for the query point
     center = Event(center_evid)
     arriving_events, arrival_dict  = get_first_arrivals([center,], sta)
     (atime, phase) = arrival_dict[center.evid]
     true_center_wave = normalize(extract_phase_window(sta, chan, phase, atime, window_len, filter_str, center.evid))
 
+
+    training_events = read_training_events(sta, center.time-7*24*3600, center.time+7*24*3600, 3.5, 10, center, 100)
+    
     prediction_points = []
-    for i in np.linspace(-.3, .3, 11):
-        pt = (center.lon + i, center.lat + i, center.depth)
+    for i in np.linspace(-.2, .2, 41):
+        pt = (center.lon+i, center.lat, center.depth)
         prediction_points.append(pt)
+
+
+    for event in training_events:
+        print event
+    print "center:", center
+
+
+
+#    pp = PdfPages(options.outfile + "map.pdf")
+    for (i, pt) in enumerate( prediction_points):
+        plot_events(sta, center, training_events, prediction_points, pt)
+        plt.savefig("%02d_map.png" % (i))
 
     print "all points", prediction_points
 
+    return
+
     models = load_models_from_dir(model_folder)
     x = np.linspace(-1, window_len, len(true_center_wave))
-    for pt in prediction_points:
+    for (i, pt) in enumerate(prediction_points):
         predicted_wave, predicted_features = predict_signal_at_point(pt, models, ff, len(true_center_wave))
 
         fig = plt.figure()
@@ -117,15 +152,18 @@ def main():
         axes = plt.subplot(gs[0:2,0], sharey=axes)
         axes.plot(x, predicted_wave, color="red")
         axes.plot(x, true_center_wave, color="blue")
+
+        plt.ylim([-5,5])
         
 #        axes = plt.subplot(gs[1,0], sharey=axes)
 
 
-        plt.suptitle(str(pt))
+#        plt.suptitle(str(pt))
 
-        pp.savefig()
+        plt.savefig("%02d_signal.png" % (i))
 
-    pp.close()
+
+#    pp.close()
 
 if __name__ == "__main__":
     main()

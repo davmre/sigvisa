@@ -33,7 +33,7 @@ from gpr.gp import GaussianProcess
 from learn.SpatialGP import SpatialGP
 
 
-def train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder, amp_params = [.01, .4, 5], phase_params = [.1, .4, 5]):
+def train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder, amp_params = [.05, .05, 1.5], phase_params = [.05, .05, 4]):
     # now load signals for each and compute features
     arriving_events, arrival_dict  = get_first_arrivals(training_events, sta)
 
@@ -141,14 +141,14 @@ def main():
     pp.savefig()
     pp.close()
 
-
-
     fundamental = 0.1
     min_freq=0.8
     max_freq=3.5
     ff = FourierFeatures(fundamental=fundamental, min_freq=min_freq, max_freq=max_freq)
 
+    print "ts"
     train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder)
-
+    print "done"
+    
 if __name__ == "__main__":
     main()

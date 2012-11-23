@@ -113,8 +113,8 @@ def main():
 
             predicted_center_wave, predicted_features = predict_signal_at_point((center.lon, center.lat, center.depth), models, ff, len(true_center_wave))
 
-            feature_error = np.linalg.norm((predicted_features - true_center_features).flatten())
-            signal_error = np.linalg.norm((predicted_center_wave - true_center_wave).flatten())
+            feature_error = np.linalg.norm((predicted_features - true_center_features).flatten(), 1)
+            signal_error = np.linalg.norm((predicted_center_wave - true_center_wave).flatten(), 1)
 
             print "evid", center.evid, "params", ap, phase_p, "feature error", feature_error, "signal error", signal_error
 
