@@ -64,7 +64,7 @@ def train_cv_models(cv_dir, model_type):
         trainy = y[train]
         trainevids = evids[train]
 
-        evidhash = hashlib.sha1(trainevids).hexdigest()[0:8]
+        evidhash = hashlib.sha1(repr(trainevids)).hexdigest()[0:8]
         fname = ".".join(["fold_%02d" % i, evidhash, model_type])
         fullpath = os.path.join(cv_dir, fname)
         if os.path.exists(fullpath):
@@ -72,7 +72,7 @@ def train_cv_models(cv_dir, model_type):
             i += 1
             continue
 
-        logfile_name = os.path.join(cv_dir, "fold_%02d_train.log" % i)
+        logfile_name = os.path.join(cv_dir, "fold_%02d_train.%s.log" % (i, model_type))
         logfile = open(logfile_name, 'w')
         print "training model, writing log to", logfile_name
         with RedirectStdStreams(stdout=logfile, stderr=logfile):
@@ -99,7 +99,7 @@ def cv_eval_models(cv_dir, model_type):
         testy = y[test]
         trainevids = evids[train]
         testevids = evids[test]
-        evidhash = hashlib.sha1(trainevids).hexdigest()[0:8]
+        evidhash = hashlib.sha1(repr(trainevids)).hexdigest()[0:8]
 
         fname = ".".join(["fold_%02d" % i, evidhash, model_type])
         model = load_model(os.path.join(cv_dir, fname), model_type)
@@ -154,8 +154,8 @@ def main():
 
     cv_dir = os.path.dirname(model_fname)
 
-#    print "generating cross-validation folds in dir", cv_dir
-#    save_cv_folds(X,y,evids, cv_dir)
+    print "generating cross-validation folds in dir", cv_dir
+    save_cv_folds(X,y,evids, cv_dir)
 
     for model_type in model_types:
         print "training cross-validation models for", model_type

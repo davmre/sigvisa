@@ -91,7 +91,7 @@ def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_ty
 
     ensure_dir_exists(path)
 
-    evidhash = hashlib.sha1(evids).hexdigest()[0:8]
+    evidhash = hashlib.sha1(repr(evids)).hexdigest()[0:8]
     fname = ".".join([evidhash, model_type])
     return os.path.join(path, fname)
 

@@ -12,33 +12,38 @@ from database.signal_data import ensure_dir_exists
 def extracted_wave_fname(sta, chan, phase, window_len, filter_str, evid):
 
     fdir = os.path.join("waves", sta, chan, filter_str.replace(';', '_'))
-    fname = str(evid).strip() +  "%s_%d" % (phase, window_len) + ".dat"
+    fname = str(int(evid)).strip() +  "_%s_%ds" % (phase, window_len) + ".dat"
 
     return fdir, fname
 
-def extract_phase_window(sta, chan, phase, atime, window_len, filter_str, evid):
+def extract_phase_window(sta, chan, phase, atime, window_len, filter_str, evid, cache=False):
     PAD = 10
 
     ev = Event(int(evid))
+    load_from_db = not cache
 
-#    fdir, fname = extracted_wave_fname(sta, chan, phase, window_len, filter_str, evid)
-#    fullpath = os.path.join(fdir, fname)
-#    try:
-#        d = np.loadtxt(fullpath)
-#    except Exception as e:
-#        print e
+    if cache:
+        fdir, fname = extracted_wave_fname(sta, chan, phase, window_len, filter_str, evid)
+        fullpath = os.path.join(fdir, fname)
+        try:
+            d = np.loadtxt(fullpath)
+        except Exception as e:
+#            print e
+            load_from_db = True
 
-    wave = fetch_waveform(sta, chan, atime - 1, atime + window_len, pad_seconds = PAD)
+    if load_from_db:
+        wave = fetch_waveform(sta, chan, atime - 1, atime + window_len, pad_seconds = PAD)
 
-    pad_samples = wave['srate']*PAD
-    filtered = wave.filter(filter_str)
+        pad_samples = wave['srate']*PAD
+        filtered = wave.filter(filter_str)
 
-    d = filtered.data.filled(float('nan'))[pad_samples:-pad_samples]
+        d = filtered.data.filled(float('nan'))[pad_samples:-pad_samples]
 
-#        if not os.path.exists(fullpath):
-#            ensure_dir_exists(fdir)
-#            print "saved to", fullpath
-#            np.savetxt(fullpath, d)
+        if cache:
+            if not os.path.exists(fullpath):
+                ensure_dir_exists(fdir)
+                print "saved to", fullpath
+                np.savetxt(fullpath, d)
 
     return d
 
