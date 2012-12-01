@@ -1,0 +1,1 @@
+cat MKAR_doublets.txt | parallel -j 2 --tempdir=logs/parallel/ --output-as-files /vdec/software/site/usr/bin/python2.6 explore/doublets/model_select.py --center={} --width=100 -s MKAR -o aftershocks_10s --window_len=10 --min_mb=3.5

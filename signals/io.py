@@ -130,7 +130,6 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
 
   if station=="MKAR":
     selection="MK31"
-    print "forcing mk31"
   else:
     selection=station
   

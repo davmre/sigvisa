@@ -12,8 +12,10 @@ class EventHeatmap(Heatmap):
 
         if sitenames is None:
             cursor = db.connect().cursor()
-            sitenames = read_sites_by_name(cursor)
-        self.sitenames = sitenames
+            stations, name_to_siteid_minus1, siteid_minus1_to_name = read_sites_by_name(cursor)
+            self.sitenames = stations
+        else:
+            self.sitenames = self.sitenames
 
         self.event_locations = []
         self.event_labels = []

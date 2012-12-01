@@ -12,7 +12,35 @@ except:
     
 from optparse import OptionParser
 
+from source.event import Event
 from sigvisa import *
+
+def get_first_arrivals(events, sta):
+    s = Sigvisa()
+    arriving_events = []
+    evids = []
+    first_arriving_times = []
+    first_arriving_phases = []
+    for event in events:
+        dets = read_event_detections(s.cursor, event.evid, stations=[sta])
+        phase = ""
+        i=0
+        for det in dets:
+            phaseid_minus_1 = det[DET_PHASE_COL]
+            phase = s.phasenames[phaseid_minus_1]
+            if phase in s.P_phases:
+                break
+        if phase not in s.P_phases:
+            continue
+
+        arriving_events.append(event)
+        evids.append(event.evid)
+        first_arriving_phases.append(phase)
+        first_arriving_times.append(det[DET_TIME_COL])
+    arrival_dict = dict(zip(evids, zip(first_arriving_times, first_arriving_phases)))
+    
+    return arriving_events, arrival_dict
+
 
 def main():
     parser = OptionParser()
@@ -42,6 +70,7 @@ def main():
         try:
             st = float(options.start_time)
             et = float(options.end_time)
+
         except:
 
             st = p.parse(options.start_time)[0]
@@ -60,35 +89,13 @@ def main():
         f.close()
 
     print "loading", len(evids), "events..."
-    events = [read_event(s.cursor, evid=evid) for evid in evids]
+    events = [Event(evid) for evid in evids]
     print "---------------------------------------------------------"
 
-    arriving_events = []
-    evids = []
-    first_arriving_times = []
-    first_arriving_phases = []
-    for event in events:
-        print event
-        
-        dets = read_event_detections(s.cursor, event[EV_EVID_COL], stations=[sta])
-        phase = ""
-        i=0
-        for det in dets:
-            phaseid_minus_1 = det[DET_PHASE_COL]
-            phase = s.phasenames[phaseid_minus_1]
-            if phase in s.P_phases:
-                break
-        if phase not in s.P_phases:
-            continue
-
-        arriving_events.append(event)
-        evids.append(event[EV_EVID_COL])
-        first_arriving_phases.append(phase)
-        first_arriving_times.append(det[DET_TIME_COL])
-    arrival_dict = dict(zip(evids, zip(first_arriving_times, first_arriving_phases)))
+    arriving_events, arrival_dict = get_first_arrivals(events, sta)
 
     evpairs = itertools.combinations(arriving_events, 2)
-    p = [(utils.geog.dist_km((e1[EV_LON_COL], e1[EV_LAT_COL]), (e2[EV_LON_COL], e2[EV_LAT_COL])), e1[EV_DEPTH_COL], e2[EV_DEPTH_COL], e1[EV_EVID_COL], e2[EV_EVID_COL], e1[EV_ORID_COL], e2[EV_ORID_COL]) for (e1, e2) in evpairs if e1[3]!=e2[3]]
+    p = [(utils.geog.dist_km((e1.lon, e1.lat), (e2.lon, e2.lat)), e1.depth, e2.depth, e1.evid, e2.evid, e1.orid, e2.orid) for (e1, e2) in evpairs if e1[3]!=e2[3]]
 
     # filter for pairs with short distances and similar depths
     p = [pair for pair in p if pair[0] < 15 and abs(pair[2]-pair[1]) <= 40]

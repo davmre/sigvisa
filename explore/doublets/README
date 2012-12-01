@@ -1,0 +1,23 @@
+Tools to:
+
+- Find potential doublets (nearby events):
+	python2.6 explore/closest_event_pairs_at_sta.py -s MKAR --start_time=1210464000 --end_time=1211155200 --min_mb=3.5 -o doublets_mkar
+
+- Verify doublets (look for waveforms with high cross-correlation):
+	python explore/xcorr_pairs.py -s MKAR  -i doublets_mkar -o doublet_xcorrs --window_len=10
+
+- Plot overlapping waveforms from the doublets:
+	python explore/doublets/visualize_best_correlations.py -s MKAR -i doublet_xcorrs -o out.pdf --window_len=10
+
+- Train a GP model with Fourier features, centered around a particular event (i.e., train on all events within "width" k of that event, but not the event itself). GP params are currently hardcoded, should fix this.
+	python explore/doublets/train_model.py --center=4654458 --width=100 -s MKAR -o aftershocks_10s --window_len=10
+
+- Predict using a GP model trained with the previous command. Currently this loops over a (horizontal or vertical, depending on where a particular "+i" goes in the loop that generates prediction_points) line of locations including the center point, and outputs a 41-frame animation as png images showing how the signal changes. Should probably do something less hacky.
+	python explore/doublets/predict_doublet.py --center=4654458 -s MKAR -m aftershocks_10s --window_len=10 -o doublet_pred_4654458.pdf
+- to turn this into a GIF animation, use the commands in magic_script 
+
+mogrify -crop 400x800+300+100 +repage *_map.png
+for i in {0..40}; do convert `printf "%02d" ${i}`_map.png `printf "%02d" ${i}`_signal.png +append 4650360_vertical_`printf "%02d" ${i}`_total.png; done
+
+- Model selection: (grid) search for the best hyperparams, and outputs a PDF plotting doublet predictions for this event under lots of possible hyperparams.
+python2.6 explore/doublets/model_select.py --center=4656019 --width=100 -s MKAR -o aftershocks_10s --window_len=10 --min_mb=3.5
