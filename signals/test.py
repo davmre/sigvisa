@@ -13,7 +13,7 @@ from signals.io import load_event_station
 from signals.template_models.paired_exp import PairedExpTemplateModel
 from signals.armodel.model import ARModel, ErrorModel, load_armodel_from_file
 from signals.armodel.learner import ARLearner
-from signals.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
+from noise.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
 
 import matplotlib
 matplotlib.use("Agg")
@@ -278,42 +278,6 @@ class TestAutoregressiveModels(unittest.TestCase):
         self.assertAlmostEqual(np.sum(true_model.params - loaded_model.params), 0)
         self.assertAlmostEqual(true_model.em.std, loaded_model.em.std)
 
-class TestNoiseModels(unittest.TestCase):
-
-    def test_train_noise_model(self):
-        ev = Event(evid=5301405)
-
-        sta='URZ'
-        chan='BHZ'
-        filter_str='freq_2.0_3.0;env'
-
-        # delete existing saved noise models
-        hour = (int(ev.time/3600)-1)
-        hour_dir, model_fname = model_path(sta, chan, filter_str, srate=40, order=17, hour_time=hour*3600)
-        try:
-            shutil.rmtree(os.path.realpath(hour_dir))
-        except OSError as e:
-            pass
-        try:
-            os.remove(hour_dir)
-        except OSError as e:
-            pass
-
-        # the first model we request should actually build models for all frequency bands
-        s = Sigvisa()
-        for freq in s.bands:
-            # test that we can load models, and are not reconstructing them differently each time
-            model1 = get_noise_model(sta=sta, chan=chan, filter_str=freq+';env', time=ev.time, srate=40, order=17)
-            model2 = get_noise_model(sta=sta, chan=chan, filter_str=freq+';env', time=ev.time, srate=40, order=17)
-            self.assertAlmostEqual(np.sum(np.asarray(model1.params) - np.asarray(model2.params)), 0)
-
-        weird_band = 'freq_12_14'
-        old_bands = s.bands
-        s.bands = old_bands + (weird_band,)
-        model1 = get_noise_model(sta=sta, chan=chan, filter_str=weird_band+';env', time=ev.time, srate=40, order=17)
-        model2 = get_noise_model(sta=sta, chan=chan, filter_str=weird_band+';env', time=ev.time, srate=40, order=17)
-        self.assertAlmostEqual(np.sum(np.asarray(model1.params) - np.asarray(model2.params)), 0)
-        s.bands = old_bands
 
 class TestSignalLikelihood(unittest.TestCase):
 
