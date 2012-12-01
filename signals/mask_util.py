@@ -65,7 +65,7 @@ def mirror_missing(m):
 
         max_copy = max(forward_copy, backward_copy)
         if forward_copy >= n/2 :
-            if backward_copy >= n/2:
+            if backward_copy >= n/2.0:
                 forward_copy = int(np.floor(n/2.0))
                 backward_copy = int(np.ceil(n/2.0))
                 max_copy=backward_copy

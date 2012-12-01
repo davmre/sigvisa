@@ -21,7 +21,7 @@ from signals.io import *
 from plotting.plot_coda_decays import *
 from learn.train_wiggles import *
 from learn.optimize import minimize_matrix
-from signals.noise_model import *
+from noise.noise_model import *
 
 
 def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, init_iteration=None, optimize_arrival_times=False, iid=False):

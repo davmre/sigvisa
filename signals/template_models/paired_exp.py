@@ -3,7 +3,7 @@ import sys, os
 from sigvisa import *
 import sigvisa_c
 
-import signals.noise_model as noise_model
+import noise.noise_model as noise_model
 from signals.common import *
 from signals.template_model import TemplateModel
 from signals.template_models.heuristic_coda_fits import *
@@ -30,7 +30,7 @@ class PairedExpTemplateModel(TemplateModel):
     def model_name(self):
         return "paired_exp"
 
-    def generate_template_waveform(self, template_params, model_waveform, logscale=False, sample=False):
+    def generate_template_waveform(self, template_params, model_waveform, sample=False):
         s = self.sigvisa
 
         srate = model_waveform['srate']
@@ -49,8 +49,7 @@ class PairedExpTemplateModel(TemplateModel):
         else:
             env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
-        data = np.log(env) if logscale else env
-        wave = Waveform(data = data, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
+        wave = Waveform(data = env, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
 
         try:
             del wave.segment_stats['evid']
@@ -72,21 +71,21 @@ class PairedExpTemplateModel(TemplateModel):
     def low_bounds(self, phases):
         bounds = np.ones((len(phases), len(self.params()))) * -np.inf
         bounds[:, PEAK_OFFSET_PARAM] = 0
-        bounds[:, CODA_HEIGHT_PARAM] = 0
         bounds[:, CODA_DECAY_PARAM] = -.2
         return bounds
 
     def high_bounds(self, phases):
         bounds = np.ones((len(phases), len(self.params()))) * np.inf
-        bounds[:, PEAK_OFFSET_PARAM] = 15
+        bounds[:, PEAK_OFFSET_PARAM] = 25
         bounds[:, CODA_DECAY_PARAM] = 0
         return bounds
 
     def heuristic_starting_params(self, wave, detected_phases_only=True):
-        smoothed = wave.filter('smooth;log').as_obspy_trace()
-        noise_model = get_noise_model(wave)
-        smoothed.stats.noise_floor = noise_model.c
-        template_params = find_starting_params(smoothed, detected_phases_only)
+        smoothed = wave.filter('smooth')
+        noise_model = get_noise_model(smoothed)
+        logsmoothed = smoothed.filter("log").as_obspy_trace()
+        logsmoothed.stats.noise_floor = np.log(noise_model.c)
+        template_params = find_starting_params(logsmoothed, detected_phases_only)
         return template_params
 
 

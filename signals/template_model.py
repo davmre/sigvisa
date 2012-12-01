@@ -40,7 +40,7 @@ class TemplateModel(object):
             pstr += "\n"
         return pstr
 
-    def generate_template_waveform(self, template_params, model_waveform=None, logscale=False, sample=False):
+    def generate_template_waveform(self, template_params, model_waveform=None, sample=False):
         raise Exception("abstract class: method not implemented")
 
 
@@ -54,11 +54,22 @@ class TemplateModel(object):
     # meaningless.
     def waveform_log_likelihood_iid(self, wave, template_params):
         (phases, vals) = template_params
-        if (vals < self.low_bounds(phases)).any() or (vals > self.high_bounds(phases)).any():
-            return -np.inf
+        lb = np.nan_to_num(self.low_bounds(phases))
+        hb = np.nan_to_num(self.high_bounds(phases))
+        bounds_violations = np.abs((lb-vals) * (vals < lb)) + np.abs((vals-hb) * (vals > hb))
+        bound_penalty = 1000*np.exp(np.sum(bounds_violations)) - 1000
 
-        env = self.generate_template_waveform(template_params, model_waveform=wave, logscale=True)
-        return -wave.l1_cost(env)
+        # assume the provided wave is in original (linear) scale, but we do the comparison in logscale
+        env = self.generate_template_waveform(template_params, model_waveform=wave)
+        logwave =  wave.filter("log")
+        logenv = env.filter("log")
+        cost = logwave.l1_cost(logenv)
+
+#        env = self.generate_template_waveform(template_params, model_waveform=wave, logscale=False)
+#        cost = wave.l1_cost(env)
+
+
+        return -cost - bound_penalty
 
     def low_bounds(self, phases):
         raise Exception("abstract class: method not implemented")

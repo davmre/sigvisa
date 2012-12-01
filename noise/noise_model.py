@@ -112,11 +112,14 @@ def get_sta_lta_picks(wave):
         return False
 
 
-def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=None):
+def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=None, anchor_time=None):
 
     if hour_time is not None:
         t = time.gmtime(hour_time)
         model_dir = "hour_%02d" % t.tm_hour
+    elif anchor_time is not None:
+        t = time.gmtime(anchor_time)
+        model_dir = "preceding_%d" % int(anchor_time)
     elif minute_time is not None:
         t = time.gmtime(minute_time)
         model_dir = "%d" % int(minute_time)
@@ -232,6 +235,21 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
         if not current_link_target == minute_dir_path:
             raise BadParamTreeException("tried to symlink %s to %s, but symlink already exists and points to %s!" % (hour_dir, minute_dir_path, current_link_target))
 
+def construct_and_save_immediate_noise_models(time, sta, chan, filter_str, srate, order):
+    block_start, block_end = get_recent_safe_block(time, sta)
+    minute_dir = construct_and_save_noise_models(block_start, block_end-block_start, sta, chan, filter_str, srate, order)
+
+    immediate_dir, model_fname = model_path(sta, chan, filter_str, srate, order, anchor_time=time)
+    try:
+        minute_dir_path = os.path.realpath(minute_dir)
+        os.symlink(minute_dir_path, immediate_dir)
+        print "successfully created symlink"
+    except OSError:
+        # if symlink already exists, check to make sure it's the right thing
+        current_link_target = os.path.realpath(immediate_dir)
+        if not current_link_target == minute_dir_path:
+            raise BadParamTreeException("tried to symlink %s to %s, but symlink already exists and points to %s!" % (immediate_dir, minute_dir_path, current_link_target))
+
 
 def construct_and_save_noise_models(minute, block_len_seconds, sta, chan, filter_str, srate, order, model_wave = None):
 
@@ -289,8 +307,7 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
         noise_hour = signal_hour - 1
         model_dir, model_fname = model_path(sta, chan, filter_str, srate, order, hour_time=noise_hour*3600)
     elif noise_mode == NOISE_MODE_IMMEDIATE:
-        block_start, block_end = get_recent_safe_block(time, sta)
-        model_dir, model_fname = model_path(sta, chan, filter_str, srate, order, minute_time=block_start)
+        model_dir, model_fname = model_path(sta, chan, filter_str, srate, order, anchor_time=time)
     else:
         raise Exception("unknown noise_mode (neither HOURLY nor IMMEDIATE)")
 
@@ -304,11 +321,10 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
             construct_and_save_hourly_noise_models(noise_hour, sta, chan, filter_str, srate, order)
         elif noise_mode == NOISE_MODE_IMMEDIATE:
             # block_start and block_end are computed above
-            construct_and_save_noise_models(block_start, block_end-block_start, sta, chan, filter_str, srate, order)
+            construct_and_save_immediate_noise_models(time, sta, chan, filter_str, srate, order)
 
     armodel = load_armodel_from_file(os.path.join(model_dir, model_fname))
     return armodel
-
 
 def get_recent_safe_block(time, sta, margin_seconds = 10, preferred_len_seconds = 120, min_len_seconds = 60, arrival_window_seconds=1200):
     """ Get a block of time preceding the specified time, and ending at least margin_seconds before that time, during which there are no recorded arrivals at the station."""

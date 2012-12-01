@@ -8,7 +8,7 @@ import scipy
 import sys, os, traceback
 from sigvisa import *
 from database.dataset import *
-from signals.noise_model import *
+from noise.noise_model import *
 
 from source.event import Event
 

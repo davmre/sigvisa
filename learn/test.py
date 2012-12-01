@@ -28,7 +28,7 @@ class TestFit(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
-        self.event = Event(evid=5429382)
+        self.event = Event(evid=5301405)
         self.s = Sigvisa()
         self.seg = load_event_station(self.event.evid, "URZ", cursor=self.s.cursor).with_filter("freq_2.0_3.0;env")
         self.tm = PairedExpTemplateModel(run_name="", model_type="dummy")
