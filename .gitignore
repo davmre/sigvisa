@@ -3,6 +3,7 @@
 *.pyc
 *.so
 parameters/*.txt
+eval/*
 bgjob*
 utils/bgjob
 build

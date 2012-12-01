@@ -52,18 +52,6 @@ def plot_residuals(pp, quantity, phaseids, chan, residuals, labels):
         plt.title('%s %s Residual Distribution (phaseids=%s, chan=%s)' % (quantity, labels[i], phaseids, chan))
         pp.savefig()
 
-def cv_generator(n, k=5):
-    data = np.random.permutation(n)
-    fold_size = n/k
-    folds = [data[i*fold_size:(i+1)*fold_size] for i in range(k)]
-    folds[k-1] = data[(k-1)*fold_size:]
-    for i in range(k):
-        train = np.array(())
-        for j in range(k):
-            if j != i:
-                train = np.concatenate([train, folds[j]])
-        test = folds[i]
-        yield (train, test)
 
 def cv_external(cursor, fit_data, band_dir, phaseids, chan, target_str, pp = None, lld_params=None, dad_params=None, lldda_sum_params=None, lldda_prod_params=None):
 
@@ -130,8 +118,6 @@ def plot_linear(pp, data, b_col, title=""):
     plt.plot(X, y, 'ro')
     pp.savefig()
 
-
-
 def plot_event_location_heat(pp, val, cm, X, sll, model_type, title):
 
     # plot the conditional likelihood of event locations given the event parameters
@@ -148,11 +134,11 @@ def plot_event_location_heat(pp, val, cm, X, sll, model_type, title):
     hm.plot_locations((sll,),  marker="x", ms=7, mfc="none", mec="white", mew=2)
     hm.plot_locations(X, marker="o", ms=5, mfc="none", mec="red", mew=2)
 
-    
+
     maxlon, maxlat, maxval = hm.max()
     hm.plot_locations(((maxlon, maxlat),), marker="*", ms=5, mfc="none", mec="green", mew=2)
     dist = utils.geog.dist_km((maxlon, maxlat), X[0])
-    
+
     plt.title(title + "\n distance: %.2f km" % dist)
     pp.savefig()
 
@@ -287,7 +273,7 @@ def main():
                     # if no specific event specified, train a model
                     # for each station based on all events from that
                     # station and evaluate/plot its predictions
-                    
+
                     fname = os.path.join(band_dir, "%s_predictions_%s.pdf" % (phase_label, options.chan))
                     pp = PdfPages(fname)
                     print "saving heat map(s) to", fname
@@ -295,11 +281,11 @@ def main():
                     pp.close()
                 else:
                     for evid in evids:
-                        
+
                         # if a specific event is specified, train a
                         # model for each station based on all other
                         # events, then try to plot the event location
-                        
+
                         fname = os.path.join(band_dir, "%s_%s_location_%s_%d.pdf" % (phase_label, target_str, options.chan, evid))
                         pp = PdfPages(fname)
                         print "saving heat map(s) to", fname
@@ -343,7 +329,7 @@ def main():
             title = "%d prior: dist %.2f km" % (evid, dist)
             print title
             plt.title(title)
-           
+
             pp.savefig()
             plt.clf()
 
@@ -386,7 +372,6 @@ if __name__ == "__main__":
         type, value, tb = sys.exc_info()
         traceback.print_exc()
         pdb.post_mortem(tb)
-
 
 
 def gridsearch_dad(cursor, fit_data, band_dir, phaseids, chan, target_str, pp):

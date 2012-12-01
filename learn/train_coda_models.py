@@ -1,419 +1,171 @@
 
 from database.dataset import *
+from database.signal_data import *
 from database import db
 
 import matplotlib
 matplotlib.use('PDF')
 import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
 from matplotlib.backends.backend_pdf import PdfPages
 
 import sys, os, pickle
 
 import utils.geog
 import obspy.signal.util
-import learn, sigvisa_util, sigvisa
-
+from sigvisa import *
 import numpy as np
 import scipy.linalg
 import hashlib
 
-from signals.coda_decay_common import *
-from signals.source_spectrum import *
+from learn.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
+import learn.baseline_models as baseline_models
+import gpr.learn
+from gpr.distributions import InvGamma, LogNormal
 
-from utils.gp_regression import GaussianProcess, optimize_hyperparams
-from utils.kernels import InvGamma, LogNormal
 
-def learn_models(fit_data, earthmodel, target_fn, lld_params, dad_params, lldda_sum_params, lldda_prod_params, optimize, pp, label):
+X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
 
-    fit_data = np.reshape(fit_data, (-1, FIT_NUM_COLS))
-    n = fit_data.shape[0]
+def learn_model(X, y, model_type, target=None):
+    if model_type.startswith("gp"):
+        distfn = model_type[3:]
+        params = start_params[distfn][target]
+        model = learn_gp(X, y, distfn=distfn, params=params)
+    elif model_type == "constant":
+        model = learn_constant(X, y)
+    elif model_type == "linear_distance":
+        model = learn_linear(X, y)
+    else:
+        raise Exception("invalid model type %s" % (model_type))
+    return model
 
-    X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
-    Xll = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
-    Xad = fit_data[:, [FIT_DISTANCE, FIT_AZIMUTH, FIT_DEPTH]]
+def learn_gp(X, y, distfn, params, optimize=True):
 
-    y = np.zeros((n,))
-    for i in range(n):
-        try:
-            y[i] = target_fn(fit_data[i, :])
-        except:
-            import pdb, traceback
-            traceback.print_exc()
-            pdb.set_trace()
-
-    gpd = None
-    gpt = None
-
-#    lld_priors = [InvGamma(.2, .5), InvGamma(.2, .5), LogNormal(5.0, 3.0)]
-    lld_priors = [None, None, None]
-#    dad_priors = [InvGamma(.2, .5), InvGamma(.2, .5), LogNormal(1.0, 3.0), LogNormal(-3.0, 5.0), LogNormal(0.0, 5.0)]
-    dad_priors = [None, None, None, None, None]
-
-    lldda_sum_priors = [None, None, None, None, None, None, None, None, None]
-    lldda_prod_priors = [None, None, None, None, None, None]
+    X = gp_extract_features(X, distfn)
 
     if optimize:
-#        print "optimizing prod-composite GP..."
-#        lldda_prod_params,v = optimize_hyperparams(X, y, kernel="distfns_prod", start_kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors)
- #       print "got params", lldda_prod_params , "giving ll", v
+        priors = [None for p in params]
+        params, ll = gpr.learn.learn_hyperparams(X, y, kernel= "distfn", start_kernel_params = params, kernel_priors=priors, kernel_extra=distfns[distfn])
+        print "got params", params , "giving ll", ll
 
-        if lld_params is not None:
-            print "optimizing location-based GP..."
-            lld_params,v = optimize_hyperparams(Xll, y, kernel="distfn", start_kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn, kernel_priors = lld_priors)
-            print "got params", lld_params, "giving ll", v
+    gp = SpatialGP(X, y, distfn_str=distfn, kernel_params=params)
+    return gp
 
-        if dad_params is not None:
-            print "optimizing distance/azimuth-based GP..."
-            dad_params,v = optimize_hyperparams(Xad, y, kernel="distfn", start_kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], kernel_priors = dad_priors)
-            print "got params", dad_params , "giving ll", v
+def learn_linear(X, y):
+    return baseline_models.LinearModel(X,y)
 
-        if lldda_sum_params is not None:
-            print "optimizing sum-composite GP..."
-            lldda_sum_params,v = optimize_hyperparams(X, y, kernel="distfns_sum", start_kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_sum_priors)
-            print "got params", lldda_sum_params , "giving ll", v
-
-    gp_lld = None
-    if lld_params is not None:
-        gp_lld = GaussianProcess(Xll, y, kernel="distfn", kernel_params=lld_params, kernel_extra=lon_lat_depth_distfn)
-
-    gp_dad = None
-    if dad_params is not None:
-        gp_dad = GaussianProcess(Xad, y, kernel="distfn", kernel_params=dad_params, kernel_extra=[dist_azi_depth_distfn, dist_azi_depth_distfn_deriv], ignore_pos_def_errors=False)
-
-    gp_lldda_sum = None
-    if lldda_sum_params is not None:
-        gp_lldda_sum = GaussianProcess(X, y, kernel="distfns_sum", kernel_params=lldda_sum_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], ignore_pos_def_errors=False)
-
-#    gp_lldda_prod = GaussianProcess(X, y, kernel="distfns_prod", kernel_params=lldda_prod_params, kernel_extra=[(dist_distfn, None), (azi_distfn, None), (depth_distfn, None), (ll_distfn, None)], kernel_priors = lldda_prod_priors, ignore_pos_def_errors=False)
-
-    regional_dist = []
-    regional_y = []
-    tele_dist = []
-    tele_y = []
-
-    azi1 = []
-    azi1_y = []
-    azi2 = []
-    azi2_y = []
-    
-    for i in range(n):
-        d = fit_data[i, FIT_DISTANCE]
-        a = fit_data[i, FIT_AZIMUTH]
-        dy = target_fn(fit_data[i, :])
-        if d > 2000:
-            tele_dist.append(d)
-            tele_y.append(dy)
-        else:
-            regional_dist.append(d)
-            regional_y.append(dy)
-
-        azi1.append(a)
-
-        azi2.append(d)
-        azi2_y.append(dy)
-
-    regional_dist = np.array(regional_dist)
-    tele_dist = np.array(tele_dist)
+def learn_constant(X,y):
+    return baseline_models.ConstantModel(X,y)
 
 
-    if pp is not None:
-        plt.figure()
-#        plt.title(label + " GP_DAD + \n%s" % dad_params)
-        plt.xlabel("distance (km)")
-        plt.ylabel("coda decay (b)")
-        ds = np.linspace(0, 10000, 150)
-        try:
+def load_model(fname, model_type):
+    if model_type.startswith("gp"):
+        model = SpatialGP(fname=fname)
+    elif model_type == "constant":
+        model = baseline_models.ConstantModel(fname=fname)
+    elif model_type == "linear_distance":
+        model = baseline_models.LinearModel(fname=fname)
+    else:
+        raise Exception("invalid model type %s" % (model_type))
+    return model
 
-            plt.ylim([-0.06, 0])
-            plt.xlim([0, 10000])
-            pred = np.array([ gp_dad.predict(np.array((d, 0, 0))) for d in ds]).flatten()
-            plt.plot(ds, pred, "k-")
+def analyze_model_fname(fname):
+    d = dict()
 
-            std = np.sqrt(np.array([ gp_dad.variance(np.array((d, 0, 0)))[0][0] for d in ds]))
+    fname, d['filename'] = os.path.split(fname)
+    d['evidhash'], d['model_type'] = d['filename'].split('.')
+    fname, d['band'] = os.path.split(fname)
+    fname, d['chan'] = os.path.split(fname)
+    fname, d['phase'] = os.path.split(fname)
+    fname, d['sta'] = os.path.split(fname)
+    fname, d['target'] = os.path.split(fname)
+    fname, d['model_name'] = os.path.split(fname)
+    fname, d['run_iter'] = os.path.split(fname)
+    fname, d['run_name'] = os.path.split(fname)
+    fname, d['prefix'] = os.path.split(fname)
 
-            var_x = np.concatenate((ds, ds[::-1]))
-            var_y = np.concatenate((pred + std, (pred - std)[::-1]))
-            p = plt.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3')
+    return d
 
+def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, model_name="paired_exp", prefix="parameters"):
+    path_components = [prefix, run_name, "iter_%02d" % run_iter, "paired_exp", target, sta, phase, chan,band]
+    path = os.path.join(*path_components)
 
-            plt.plot(azi2, azi2_y, 'ro')
-            pp.savefig()
-        except:
-            import pdb, traceback
-            traceback.print_exc()
-            pdb.set_trace()
+    ensure_dir_exists(path)
 
-    if pp is not None:
-        plt.figure()
-#        plt.title(label + " GP_DAD + \n%s" % dad_params)
-        plt.xlabel("azimuth(deg)")
-        plt.ylabel("coda decay (b)")
-        das = np.linspace(0, 360, 360)
-        try:
+    evidhash = hashlib.sha1(evids).hexdigest()[0:8]
+    fname = ".".join([evidhash, model_type])
+    return os.path.join(path, fname)
 
-            plt.ylim([-0.06, 0])
-            plt.xlim([0, 360])
-            pred = np.array([ gp_dad.predict(np.array((2700, a, 0))) for a in das]).flatten()
-            plt.plot(das, pred, "k-")
+def get_training_data(run_name, run_iter, sta, chan, band, phases, target):
+    s = Sigvisa()
 
-            std = np.sqrt(np.array([ gp_dad.variance(np.array((2700, a, 0)))[0][0] for a in das]))
+    runid = get_fitting_runid(s.cursor, run_name, run_iter, create_if_new=False)
 
-            var_x = np.concatenate((das, das[::-1]))
-            var_y = np.concatenate((pred + std, (pred - std)[::-1]))
-            p = plt.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3')
+    print "loading %s fit data... " % (phases),
+    fit_data = load_shape_data(s.cursor, chan=chan, band=band, sta=sta, runids=[runid,], phases=phases)
+    print str(fit_data.shape[0]) + " entries loaded"
 
+    if target=="decay":
+        y = fit_data[:, FIT_CODA_DECAY]
+    elif target=="amp_transfer":
+        phase = s.phasenames(int(fit_data[FIT_PHASEID])-1)
+        band = sigvisa_c.canonical_band_name(int(fit_data[FIT_BANDID]))
+        ev = Event(evid=int(fit_data[FIT_EVID]))
+        y = fit_data[:, FIT_CODA_HEIGHT] - ev.source_logamp(phase, band)
+    elif target=="onset":
+        y = fit_data[:, FIT_PEAK_DELAY]
+    else:
+        raise KeyError("invalid target param %s" % (target))
 
-            plt.plot(azi1, azi2_y, 'ro')
-            pp.savefig()
-        except:
-            import pdb, traceback
-            traceback.print_exc()
-            pdb.set_trace()
+    X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
 
+    evids = fit_data[:, FIT_EVID]
 
-
-    try:
-        regional_model = utils.LinearModel.LinearModel("regional", ["distance", "const"],
-                                                       [regional_dist,np.ones((len(regional_dist),))],
-                                                       regional_y)
-    except ValueError:
-        print "regional model failed", regional_dist, regional_y
-        regional_model=None
-    try:
-        tele_model = utils.LinearModel.LinearModel("tele", ["distance", "const"],
-                                                   [tele_dist,np.ones((len(tele_dist),))],
-                                                   tele_y)
-    except ValueError:
-        print "tele model failed", tele_dist, tele_y
-        tele_model=None
-
-
-    if pp is not None:
-        plt.figure()
-        plt.title(label + " linear")
-        plt.xlabel("distance (km)")
-        plt.ylabel("")
-        plt.ylim([-0.06, 0])
-        plt.xlim([0, 10000])
-        try:
-            t = np.linspace(0, 2000, 50)
-            pred = [ regional_model[(tv,1)] for tv in t ]
-            plt.plot(t, pred, "k-")
-        except:
-            pass
-        try:
-
-            t = np.linspace(2000, np.max(tele_dist), 50)
-            pred = [ tele_model[(tv, 1)] for tv in t ]
-            plt.plot(t, pred, "k-")
-        except:
-            pass
-        plt.plot(np.concatenate([regional_dist, tele_dist]), np.concatenate([regional_y, tele_y]), 'ro')
-        pp.savefig()
-
-    regional_mean = np.mean(regional_y)
-    regional_var = np.var(regional_y)
-    tele_mean = np.mean(tele_y)
-    tele_var = np.var(tele_y)
-
-    if pp is not None:
-        try:
-            plt.figure()
-            plt.title(label + " regional gaussian mean %f sigma")
-            n, bins, patches = plt.hist(regional_y, normed=1)
-            bincenters = 0.5*(bins[1:]+bins[:-1])
-            y = mlab.normpdf( bincenters, regional_mean, np.sqrt(regional_var))
-            plt.plot(bincenters, y, 'r--', linewidth=1)
-            pp.savefig()
-        except:
-            pass
-        try:
-            plt.figure()
-            plt.title(label + " tele gaussian")
-            n, bins, patches = plt.hist(tele_y, normed=1)
-            bincenters = 0.5*(bins[1:]+bins[:-1])
-            y = mlab.normpdf( bincenters, tele_mean, np.sqrt(tele_var))
-            plt.plot(bincenters, y, 'r--', linewidth=1)
-            pp.savefig()
-        except:
-            pass
-
-
-#    print "outputs", y
-#    print "learned means ", (regional_mean, regional_var), (tele_mean, tele_var)
-
-    m = dict()
-    m["gp_lld"] = gp_lld
-    m["gp_dad"] = gp_dad
-    m["gp_lldda_sum"] = gp_lldda_sum
-    m["gp_lldda_prod"] = gp_lldda_sum
-    m["regional_linear"] = regional_model
-    m["tele_linear"] = tele_model
-    m["regional_gaussian"] = (regional_mean, regional_var)
-    m["tele_gaussian"] = (tele_mean, tele_var)
-    return m, lld_params, dad_params, lldda_sum_params, lldda_prod_params
-
-class CodaModel:
-
-    MODEL_TYPE_GP_LLD, MODEL_TYPE_GP_DAD, MODEL_TYPE_GP_LLDDA_SUM, MODEL_TYPE_GP_LLDDA_PROD, MODEL_TYPE_LINEAR, MODEL_TYPE_GAUSSIAN, MODEL_TYPE_GP_DAD_VAR = range(7)
-
-
-    target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB], "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] - SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]), bandid=int(r[FIT_BANDID]))}
-
-
-    def __init__(self, fit_data, band_dir, phaseids, chan, target_str="decay", ignore_evids = None, earthmodel = None, sigmodel=None, sites=None, lld_params=None, dad_params=None, lldda_sum_params = None, lldda_prod_params = None, optimize=False, debug=True):
-
-        if target_str not in self.target_fns.keys():
-            raise Exception("invalid target str %s" % target_str)
-        else:
-             self.target_fn = self.target_fns[target_str]
-
-        # assume that either earthmodel and sigmodel are both given, or neither given
-        if sigmodel is None:
-            cursor, self.sigmodel, self.earthmodel, self.sites, dbconn = sigvisa_util.init_sigmodel()
-        else:
-            self.earthmodel = earthmodel
-            self.sigmodel = sigmodel
-            self.sites=sites
-
-        # used for cross-validation
-        if ignore_evids is not None:
-            good_rows = np.array([int(fit_data[i, FIT_EVID]) not in ignore_evids for i in range(fit_data.shape[0])])
-            fit_data_n = fit_data[good_rows, :]
-            fit_data = fit_data_n
-
-        self.siteid = int(fit_data[0, FIT_SITEID])
-        self.slon = self.sites[self.siteid-1, 0]
-        self.slat = self.sites[self.siteid-1, 1]
-
-
-        pp = None
-        if debug:
-            outfile = os.path.join(band_dir, "model_%s_fits_%s_%s.pdf" % (target_str, ":".join([str(p) for p in phaseids]), chan))
-            pp = PdfPages(outfile)
-            print "saving plots to", outfile
-
-        # learn decay rate models
-        self.models, self.lld_params, self.dad_params, self.lldda_sum_params, self.lldda_prod_params = learn_models(fit_data, self.earthmodel, target_fn=self.target_fn, lld_params=lld_params, dad_params=dad_params, lldda_sum_params = lldda_sum_params, lldda_prod_params = lldda_prod_params, pp=pp, label="%s phaseids=%s chan=%s" % (target_str, phaseids, chan), optimize=optimize)
-        if pp is not None:
-            pp.close()
-
-    def predict(self, ev, model_type, distance = None, azimuth=None):
-
-        if distance is None:
-            distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
-        if model_type == self.MODEL_TYPE_GP_LLD:
-            return float(self.models['gp_lld'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL])))
-        elif model_type == self.MODEL_TYPE_GP_DAD:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return float(self.models['gp_dad'].predict((distance, azimuth, ev[EV_DEPTH_COL])))
-        elif model_type == self.MODEL_TYPE_GP_DAD_VAR:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return float(self.models['gp_dad'].variance((distance, azimuth, ev[EV_DEPTH_COL])))
-        elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return float(self.models['gp_lldda_sum'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
-        elif model_type == self.MODEL_TYPE_GP_LLDDA_PROD:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return float(self.models['gp_lldda_prod'].predict((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
-        elif model_type == self.MODEL_TYPE_LINEAR:
-            if distance < 2000:
-                model = self.models['regional_linear']
-            else:
-                model = self.models['tele_linear']
-            try:
-                return float(model[(distance, 1)])
-            except:
-                return self.predict(ev, self.MODEL_TYPE_GAUSSIAN, distance=distance, azimuth=azimuth)
-        elif model_type == self.MODEL_TYPE_GAUSSIAN:
-            if distance < 2000:
-                (mean, var) = self.models['regional_gaussian']
-            else:
-                (mean, var) = self.models['tele_gaussian']
-            return float(mean)
-
-    def sample(self, ev, model_type, distance = None, azimuth=None):
-
-        if distance is None:
-            distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
-
-        if model_type == self.MODEL_TYPE_GP_LLD:
-            return self.models['gp_lld'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]))
-        elif model_type == self.MODEL_TYPE_GP_DAD:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return self.models['gp_dad'].sample((distance, azimuth, ev[EV_DEPTH_COL]))
-        elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return float(self.models['gp_lldda_sum'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
-        elif model_type == self.MODEL_TYPE_GP_LLDDA_PROD:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            return float(self.models['gp_lldda_prod'].sample((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth)))
-        elif model_type == self.MODEL_TYPE_LINEAR:
-            raise RuntimeError("sampling not yet implemented for linear models")
-            if distance < 2000:
-                model = self.models['regional_linear']
-            else:
-                model = self.models['tele_linear']
-
-        elif model_type == self.MODEL_TYPE_GAUSSIAN:
-            if distance < 2000:
-                (mean, var) = self.models['regional_gaussian']
-            else:
-                (mean, var) = self.models['tele_gaussian']
-            return mean + np.random.randn() * np.sqrt(var)
-
-    def log_likelihood(self, val, ev, model_type, distance = None, azimuth = None):
-
-        ll = None
-
-        if distance is None:
-            distance = utils.geog.dist_km((ev[EV_LON_COL], ev[EV_LAT_COL]), (self.slon, self.slat))
-
-        if model_type == self.MODEL_TYPE_GP_LLD:
-            ll = self.models['gp_lld'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL]), val)
-        elif model_type == self.MODEL_TYPE_GP_DAD:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            ll = self.models['gp_dad'].posterior_log_likelihood((distance, azimuth, ev[EV_DEPTH_COL]), val)
-        elif model_type == self.MODEL_TYPE_GP_LLDDA_SUM:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            ll = self.models['gp_lldda_sum'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth), val)
-        elif model_type == self.MODEL_TYPE_GP_LLDDA_PROD:
-            if azimuth is None:
-                azimuth = utils.geog.azimuth((self.slon, self.slat), (ev[EV_LON_COL], ev[EV_LAT_COL]))
-            ll = self.models['gp_lldda_prod'].posterior_log_likelihood((ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], distance, azimuth), val)
-        elif model_type == self.MODEL_TYPE_LINEAR:
-            raise RuntimeError("log likelihood not yet implemented for linear models")
-            if distance < 2000:
-                model = self.models['regional_linear']
-            else:
-                model = self.models['tele_linear']
-        elif model_type == self.MODEL_TYPE_GAUSSIAN:
-            if distance < 2000:
-                (mean, var) = self.models['regional_gaussian']
-            else:
-                (mean, var) = self.models['tele_gaussian']
-            ll -.5 *np.log(2*np.pi*var) - .5 *(val-mean)**2 / var
-
-        if ll is None or np.isnan(ll):
-            print "error: invalid ll", ll
-            import pdb
-            pdb.set_trace()
-
-        return ll
-
+    return X, y, evids
 
 def main():
-    cm = CodaModel(sys.argv[1], ignore_evids = (5330781,))
+    parser = OptionParser()
+
+    s = Sigvisa()
+
+    parser.add_option("-s", "--sites", dest="sites", default=None, type="str", help="comma-separated list of sites for which to train models")
+    parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
+    parser.add_option("--run_iter", dest="run_iter", default="latest", type="str", help="run iteration (latest)")
+    parser.add_option("-c", "--channel", dest="chan", default="BHZ", type="str", help="name of channel to examine (BHZ)")
+    parser.add_option("-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
+    parser.add_option("-p", "--phases", dest="phases", default=",".join(s.phases), type="str", help="comma-separated list of phases for which to train models)")
+    parser.add_option("-t", "--targets", dest="targets", default="decay,amp_transfer,onset", type="str", help="comma-separated list of target parameter names (decay,amp_transfer,onset)")
+    parser.add_option("-m", "--model_type", dest="model_type", default="gp_dad_log", type="str", help="type of model to train (gp_dad_log)")
+
+    (options, args) = parser.parse_args()
+
+    sites = options.sites.split(',')
+    chan = options.chan
+    phases = options.phases.split(',')
+    targets = options.targets.split(',')
+    model_type = options.model_type
+    band = options.band
+
+    run_name = options.run_name
+    if options.run_iter == "latest":
+        iters = read_fitting_run_iterations(s.cursor, run_name)
+        run_iter = np.max(iters)
+    else:
+        run_iter = int(options.run_iter)
+
+
+
+    for site in sites:
+        for target in targets:
+            for phase in phases:
+
+                X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target)
+
+                model_fname = get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, model_name="paired_exp")
+
+                distfn = model_type[3:]
+                model = learn_model(X, y, model_type, start_params = start_params[distfn][target])
+
+                model.save_trained_model(model_fname)
 
 if __name__ == "__main__":
     main()

@@ -2,6 +2,8 @@ import numpy as np
 import sys, os
 from sigvisa import *
 
+from learn.train_coda_models import load_model
+
 class TemplateModel(object):
     """
     Abstract class defining a signal template model.
@@ -77,7 +79,7 @@ class TemplateModel(object):
     def high_bounds(self, phases):
         raise Exception("abstract class: method not implemented")
 
-    def __init__(self, run_name, model_type = "gp_dad"):
+    def __init__(self, run_name, run_iter, model_type = "gp_dad"):
         self.sigvisa = Sigvisa()
 
         # load models
@@ -93,7 +95,7 @@ class TemplateModel(object):
             if param == "arrival_time":
                 continue
 
-            basedir = os.path.join("parameters", self.model_name(), model_type, param)
+            basedir = os.path.join("parameters", run_name, "iter_%02d" % run_iter, self.model_name(), param)
             print basedir
             for sta in os.listdir(basedir):
                 sta_dir = os.path.join(basedir, sta)
@@ -107,13 +109,18 @@ class TemplateModel(object):
                         chan_dir = os.path.join(phase_dir, chan)
                         if not os.path.isdir(chan_dir):
                             continue
-                        for band_model in os.listdir(chan_dir):
-                            band_file = os.path.join(chan_dir, band_model)
-                            band_run, ext = os.path.splitext(band_model)
-                            band, run = os.path.splitext(band_run)
+                        for band in os.listdir(chan_dir):
+                            band_dir = os.path.join(chan_dir, band)
+                            for fname in os.listdir(band_dir):
 
-                            if run == run_name:
-                                self.models[param][sta][phase][chan][band] = SpatialModel(fname=band_file)
+                                fullname = os.path.join(band_dir, fname)
+                                evidhash, ext = os.path.splitext(fname)
+
+                                if ext != model_type:
+                                    continue
+
+                                self.models[param][sta][phase][chan][band] = load_model(fullname)
+
 
     def predictTemplate(self, event, sta, chan, band, phases=None):
         if phases is None:

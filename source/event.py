@@ -7,6 +7,9 @@ from sigvisa import Sigvisa
 
 from utils.geog import lonlatstr
 
+
+KNOWN_EXPLOSIONS = (5393637)  # 2009 DPRK event
+
 class Event(object):
 
 
@@ -35,7 +38,7 @@ class Event(object):
             self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid = \
                 read_event(Sigvisa().cursor, evid=evid, evtype=evtype, orid=orid)
 
-            self.natural_source = True
+            self.natural_source = False if evid in KNOWN_EXPLOSIONS else True
 
         else:
             self.lon=lon

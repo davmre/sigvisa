@@ -21,6 +21,8 @@ import obspy.signal.util
 
 # from signals.template_models.paired_exp import *
 
+(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(13+1)
+
 def ensure_dir_exists(dname):
     try:
         os.makedirs(dname)
@@ -52,7 +54,7 @@ def get_fitting_runid(cursor, run_name, iteration, create_if_new=True):
     result = cursor.fetchone()
     if result is None:
         if not create_if_new:
-            raise Exception("no existing runid for iteration %d of run %s!")
+            raise Exception("no existing runid for iteration %d of run %s!" % (iteration, run_name))
         runid = get_next_runid(cursor)
         sql_query = "insert into sigvisa_coda_fitting_runs (runid, run_name, iter) values (%d, '%s', %d)" % (runid, run_name, iteration)
         cursor.execute(sql_query)
@@ -78,8 +80,8 @@ def get_last_iteration(cursor, run_name):
 def read_fitting_run_iterations(cursor, run_name):
     sql_query = "select iter, runid from sigvisa_coda_fitting_runs where run_name='%s'" % run_name
     cursor.execute(sql_query)
-    r = cursor.fetchall()
-    return sorted(r)
+    r = np.reshape(np.array(cursor.fetchall()), (-1, 2))
+    return np.array(sorted(r))
 
 def load_template_params(evid, sta, chan, band, run_name, iteration):
     s = Sigvisa()
@@ -190,30 +192,34 @@ def load_wiggle_models(cursor, sigmodel, filename):
         sigmodel.set_wiggle_process(siteid, b, c, phaseid, mean, std, np.asfarray(params))
 
 
-def load_shape_data(cursor, chan=None, short_band=None, siteid=None, runids=None, phaseids=None, evids=None, exclude_evids=None, acost_threshold=20, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
+def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=None, evids=None, exclude_evids=None, acost_threshold=20, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 
     chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
-    band_cond = "and fit.band='%s'" % (short_band) if short_band is not None else ""
-    site_cond = "and sid.id=%d" % (siteid) if siteid is not None else ""
+    band_cond = "and fit.lowband=%.3f and fit.highband=%.3f" % tuple(float(b) for b in band.split('_')[1:]) if band is not None else ""
+    site_cond = "and fit.sta='%s'" % (sta) if sta is not None else ""
     run_cond = "and (" + " or ".join(["fit.runid = %d" % int(runid) for runid in runids]) + ")" if runids is not None else ""
-    phase_cond = "and (" + " or ".join(["pid.id = %d" % phaseid for phaseid in phaseids]) + ")" if phaseids is not None else ""
+    phase_cond = "and (" + " or ".join(["fit.phase = '%s'" % phase for phase in phases]) + ")" if phases is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, pid.id, fit.peak_delay, fit.coda_height, fit.coda_decay, sid.id, fit.dist, fit.azi, fit.band from leb_origin lebo, leb_assoc leba, leb_arrival l, sigvisa_c_coda_fits fit, static_siteid sid, static_phaseid pid where fit.arid=l.arid and l.arid=leba.arid and leba.orid=lebo.orid and leba.phase=pid.phase and sid.sta=l.sta %s %s %s %s %s %s and fit.acost<%f and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and lebo.mb between %f and %f and fit.dist between %f and %f" % (chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, acost_threshold, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fit.phase, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.sta, fit.dist, fit.azi, fit.lowband from leb_origin lebo, sigvisa_coda_fits fit where fit.acost<%f %s %s %s %s %s %s and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f" % (acost_threshold, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
 
     fname = "db_cache/%s.txt" % str(hashlib.md5(sql_query).hexdigest())
     try:
-
         shape_data = np.loadtxt(fname, dtype=float)
     except:
         cursor.execute(sql_query)
         shape_data = np.array(cursor.fetchall(), dtype=object)
         print shape_data.size
-        shape_data[:, FIT_BANDID] = np.asarray([sigvisa_c.canonical_band_num(band) for band in shape_data[:, FIT_BANDID]])
-        shape_data = np.array(shape_data, dtype=float)
-        np.savetxt(fname, shape_data)
 
+        if shape_data.shape[0] > 0:
+            s = Sigvisa()
+            shape_data[:, FIT_SITEID] = np.asarray([s.name_to_siteid_minus1[sta]+1 for sta in shape_data[:, FIT_SITEID]])
+            shape_data[:, FIT_PHASEID] = np.asarray([s.phaseids[phase] for phase in shape_data[:, FIT_PHASEID]])
+            shape_data = np.array(shape_data, dtype=float)
+            np.savetxt(fname, shape_data)
+        else:
+            raise Exception("found no shape data matching query %s" % sql_query)
     return shape_data
 
 

@@ -7,6 +7,37 @@ from gpr import munge, kernels, evaluate, learn, distributions, plot
 from gpr.gp import GaussianProcess
 
 
+start_params_dad_log = {"decay": [.022, .0187, 1.00, .14, .1], \
+                            "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31], \
+                            "onset": [2.7, 3.4, 2, .7, 0.1] \
+                            }
+start_params_dad_cuberoot = {"decay": [.022, .0187, 1.00, .14, .1], \
+                            "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31], \
+                            "onset": [2.7, 3.4, 2, .7, 0.1] \
+                            }
+start_params_dad_linear = {"decay": [.022, .0187, 500.00, .14, .1], \
+                            "amp_transfer": [1.1, 3.4, 1000.00, 0.1, .31], \
+                            "onset": [2.7, 3.4, 500.00, .7, 0.1] \
+                            }
+start_params_lld = {"decay": [.022, .0187, 50.00], \
+                            "amp_transfer": [1.1, 3.4, 100.00], \
+                            "onset": [2.7, 3.4, 50.00] \
+                            }
+start_params = {"dad_log": start_params_dad_log, \
+                    "dad_cuberoot": start_params_dad_cuberoot, \
+                    "dad_linear": start_params_dad_linear, \
+                    "lld": start_params_lld\
+                    }
+
+
+X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
+def gp_extract_features(X, distfn):
+    if distfn == "lld":
+        X = X[:, [X_LON, X_LAT, X_DEPTH]]
+    elif distfn.startswith("dad"):
+        X = X[:, [X_DIST, X_AZI, X_DEPTH]]
+    return X
+
 def dist_azi_depth_distfn_log(dad1, dad2, params):
     azi_scale = params[0]
     depth_scale = params[1]
@@ -63,9 +94,9 @@ def dist_azi_depth_distfn_deriv_cuberoot(i, dad1, dad2, params):
     depth = dad1[2]**(1.0/3)- dad2[2]**(1.0/3)
     r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
 
-    if i==0: # deriv wrt azi_scale                                                                                                                                                                  
+    if i==0: # deriv wrt azi_scale
         deriv = azi_scale * azi**2 / r if r != 0 else 0
-    elif i==1: # deriv wrt depth_scale                                                                                                                                                              
+    elif i==1: # deriv wrt depth_scale
         deriv = depth_scale * depth**2 / r if r != 0 else 0
     else:
         raise Exception("unknown parameter number %d" % i)
@@ -81,9 +112,9 @@ def dist_azi_depth_distfn_deriv_linear(i, dad1, dad2, params):
     depth = dad1[2]- dad2[2]
     r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
 
-    if i==0: # deriv wrt azi_scale                                                                                                                                                                  
+    if i==0: # deriv wrt azi_scale
         deriv = azi_scale * azi**2 / r if r != 0 else 0
-    elif i==1: # deriv wrt depth_scale                                                                                                                                                              
+    elif i==1: # deriv wrt depth_scale
         deriv = depth_scale * depth**2 / r if r != 0 else 0
     else:
         raise Exception("unknown parameter number %d" % i)
@@ -99,12 +130,14 @@ def dist_azi_depth_distfn_deriv_log(i, dad1, dad2, params):
     depth = np.log(dad1[2]+1)- np.log(dad2[2]+1)
     r = np.sqrt(dist**2 + (azi_scale*azi)**2 + (depth_scale*depth)**2)
 
-    if i==0: # deriv wrt azi_scale                                                                                                                                                                  
+    if i==0: # deriv wrt azi_scale
         deriv = azi_scale * azi**2 / r if r != 0 else 0
-    elif i==1: # deriv wrt depth_scale                                                                                                                                                              
+    elif i==1: # deriv wrt depth_scale
         deriv = depth_scale * depth**2 / r if r != 0 else 0
     else:
         raise Exception("unknown parameter number %d" % i)
+
+    return deriv
 
 
 def lon_lat_depth_distfn(lld1, lld2, params=None):
@@ -132,15 +165,28 @@ class SpatialGP(GaussianProcess):
         kwargs['kernel']  = "distfn"
 
         GaussianProcess.__init__(self, *args, **kwargs)
-        
-        
+
+    def predict(self, X1):
+        # X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
+
+        if len(X1.shape) == 1:
+            X1 = np.reshape(X1, (1, -1))
+        if X1.shape[1] == 5:
+            X1 = gp_extract_features(X1, self.distfn_str)
+
+        result = GaussianProcess.predict(self, X1)
+        if len(result) == 1:
+            result = result[0]
+        return result
+
     def save_trained_model(self, filename):
         """
         Serialize the model to a file.
         """
         kname = np.array((self.kernel_name,))
         mname = np.array((self.mean,))
-        np.savez(filename, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, K=self.K, L=self.L, distfn_str = self.distfn_str)
+        with open(filename, 'w') as f:
+            np.savez(f, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, K=self.K, L=self.L, distfn_str = self.distfn_str)
 
 
     def load_trained_model(self, filename):
