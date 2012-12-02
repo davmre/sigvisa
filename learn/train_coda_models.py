@@ -44,7 +44,20 @@ def learn_gp(X, y, distfn, params, optimize=True):
 
     if optimize:
         priors = [None for p in params]
-        params, ll = gpr.learn.learn_hyperparams(X, y, kernel= "distfn", start_kernel_params = params, kernel_priors=priors, kernel_extra=distfns[distfn])
+
+        # subsample for efficient hyperparam learning
+        n = len(y)
+        if n > 250:
+            np.random.seed(0)
+            perm = np.random.permutation(n)[0:250]
+            sX = X[perm, :]
+            sy = y[perm, :]
+        else:
+            sX = X
+            sy = y
+        print "learning hyperparams on", len(sy), "examples"
+        params, ll = gpr.learn.learn_hyperparams(sX, sy, kernel= "distfn", start_kernel_params = params, kernel_priors=priors, kernel_extra=distfns[distfn])
+        
         print "got params", params , "giving ll", ll
 
     gp = SpatialGP(X, y, distfn_str=distfn, kernel_params=params)

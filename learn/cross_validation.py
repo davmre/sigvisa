@@ -38,6 +38,10 @@ def cv_generator(n, k=3):
         yield ([int (t) for t in train], [int(t) for t in test])
 
 def save_cv_folds(X, y, evids, cv_dir, folds=3):
+    if os.path.exists(os.path.join(cv_dir, "fold_%02d_test.txt" % (folds-1))):
+        print "folds already exist, not regenerating."
+        return
+
     np.savetxt(os.path.join(cv_dir, "X.txt"), X)
     np.savetxt(os.path.join(cv_dir, "y.txt"), y)
     np.savetxt(os.path.join(cv_dir, "evids.txt"), evids)
@@ -65,6 +69,7 @@ def train_cv_models(cv_dir, model_type):
         trainevids = evids[train]
 
         evidhash = hashlib.sha1(repr(trainevids)).hexdigest()[0:8]
+
         fname = ".".join(["fold_%02d" % i, evidhash, model_type])
         fullpath = os.path.join(cv_dir, fname)
         if os.path.exists(fullpath):
@@ -76,7 +81,11 @@ def train_cv_models(cv_dir, model_type):
         logfile = open(logfile_name, 'w')
         print "training model, writing log to", logfile_name
         with RedirectStdStreams(stdout=logfile, stderr=logfile):
-            model = learn_model(trainX, trainy, model_type, target=d['target'])
+            try:
+                model = learn_model(trainX, trainy, model_type, target=d['target'])
+            except Exception as e:
+                print e
+                continue
         logfile.close()
         model.save_trained_model(fullpath)
 
