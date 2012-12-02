@@ -86,7 +86,7 @@ def analyze_model_fname(fname):
     d = dict()
 
     fname, d['filename'] = os.path.split(fname)
-    d['evidhash'], d['model_type'] = d['filename'].split('.')
+    d['evidhash'], d['model_type'] = d['filename'].split('.')[-2:]
     fname, d['band'] = os.path.split(fname)
     fname, d['chan'] = os.path.split(fname)
     fname, d['phase'] = os.path.split(fname)

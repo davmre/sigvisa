@@ -4,7 +4,7 @@ import scipy.stats
 import matplotlib.pyplot as plt
 
 from utils.draw_earth import draw_events, draw_earth, draw_density
-
+import utils.geog
 
 import multiprocessing
 
@@ -15,7 +15,7 @@ def multi_f(f_args):
 
 class Heatmap(object):
 
-    def __init__(self, f, n=20, center=None, width=None, lonbounds=None, latbounds=None, fname=None, calc=True):
+    def __init__(self, f, n=20, center=None, width=None, lonbounds=None, latbounds=None, autobounds=None, fname=None, calc=True):
         """ Arguments:
 
         fn: the function to plot, with signature f(lon, lat)
@@ -39,6 +39,8 @@ class Heatmap(object):
         try:
             self.__load(fname)
         except:
+            if autobounds is not None:
+                lonbounds, latbounds, _ = self.event_bounds(autobounds)
             if lonbounds is not None and latbounds is not None:
                 self.min_lon = lonbounds[0]
                 self.max_lon = lonbounds[1]
@@ -180,6 +182,38 @@ class Heatmap(object):
             lat -= 180
 
         return (lon, lat)
+
+    def event_bounds(self, X, quantile=0.9):
+
+        X = X[:, 0:2]
+
+        def find_center(X):
+
+            rX = np.radians(X) + np.array((0, np.pi/2.0))
+
+            pts_cartesian = [(np.sin(lat)*np.cos(lon), np.sin(lat)*np.sin(lon), np.cos(lat)) for (lon, lat) in rX]
+            center_cartesian = np.mean(pts_cartesian, axis=0)
+            (x,y,z) = center_cartesian
+            lat_center = np.degrees(np.arccos(z) - np.pi/2.0)
+            lon_center = np.degrees(np.arctan2(y,x))
+
+            return (lon_center, lat_center)
+
+
+        center = find_center(X)
+        lon_distances = sorted(np.abs([utils.geog.degdiff(pt[0], center[0]) for pt in X]))
+        lat_distances = sorted(np.abs([utils.geog.degdiff(pt[1], center[1]) for pt in X]))
+        lon_width = lon_distances[int(np.ceil(len(lon_distances) * float(quantile)))]
+        lat_width = lat_distances[int(np.ceil(len(lat_distances) * float(quantile)))]
+
+
+        min_lon = center[0]-lon_width
+        max_lon = center[0]+lon_width
+        min_lat = center[1]-lat_width
+        max_lat = center[1]+lat_width
+
+        return [min_lon, max_lon], [min_lat, max_lat], center
+
 
     def max(self):
         maxlon = 0
