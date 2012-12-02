@@ -56,8 +56,9 @@ def learn_gp(X, y, distfn, params, optimize=True):
             sX = X
             sy = y
         print "learning hyperparams on", len(sy), "examples"
+
         params, ll = gpr.learn.learn_hyperparams(sX, sy, kernel= "distfn", start_kernel_params = params, kernel_priors=priors, kernel_extra=distfns[distfn])
-        
+            
         print "got params", params , "giving ll", ll
 
     gp = SpatialGP(X, y, distfn_str=distfn, kernel_params=params)
@@ -120,10 +121,13 @@ def get_training_data(run_name, run_iter, sta, chan, band, phases, target):
     if target=="decay":
         y = fit_data[:, FIT_CODA_DECAY]
     elif target=="amp_transfer":
-        phase = s.phasenames(int(fit_data[FIT_PHASEID])-1)
-        band = sigvisa_c.canonical_band_name(int(fit_data[FIT_BANDID]))
-        ev = Event(evid=int(fit_data[FIT_EVID]))
-        y = fit_data[:, FIT_CODA_HEIGHT] - ev.source_logamp(phase, band)
+        y = np.zeros((fit_data.shape[0],))
+        for (i, fit) in enumerate(fit_data):
+            phase = s.phasenames[int(fit[FIT_PHASEID])-1]
+#            band = sigvisa_c.canonical_band_name(int(fit[FIT_BANDID]))
+            ev = Event(evid=int(fit[FIT_EVID]))
+            y[i] = fit[FIT_CODA_HEIGHT] - ev.source_logamp(band, phase)
+        print y
     elif target=="onset":
         y = fit_data[:, FIT_PEAK_DELAY]
     else:

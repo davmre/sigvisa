@@ -21,7 +21,7 @@ import obspy.signal.util
 
 # from signals.template_models.paired_exp import *
 
-(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(13+1)
+(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(14+1)
 
 def ensure_dir_exists(dname):
     try:
@@ -202,7 +202,7 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fit.phase, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.sta, fit.dist, fit.azi, fit.lowband from leb_origin lebo, sigvisa_coda_fits fit where fit.acost<%f %s %s %s %s %s %s and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f" % (acost_threshold, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fit.phase, fit.atime, fit.peak_delay, fit.coda_height, fit.coda_decay, fit.sta, fit.dist, fit.azi, fit.lowband from leb_origin lebo, sigvisa_coda_fits fit where fit.acost<%f %s %s %s %s %s %s and fit.peak_delay between -10 and 20 and fit.coda_decay>-0.2 and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f" % (acost_threshold, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
 
     fname = "db_cache/%s.txt" % str(hashlib.md5(sql_query).hexdigest())
     try:

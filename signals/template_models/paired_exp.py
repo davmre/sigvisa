@@ -49,6 +49,15 @@ class PairedExpTemplateModel(TemplateModel):
         else:
             env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
+
+        if len(env) == len(model_waveform.data)-1:
+            le = len(env)
+            new_env = np.ones(le+1)
+            new_env[0:le] = env
+            new_env[le] = env[-1]
+            env = new_env
+        assert len(env) == len(model_waveform.data)
+
         wave = Waveform(data = env, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
 
         try:
