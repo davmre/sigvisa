@@ -1,0 +1,1 @@
+cat dprk_stations | parallel -j 4 --tempdir=logs/parallel/ --output-as-files /vdec/software/site/usr/bin/python2.6 -m learn.cross_validation -s {} -r run8 -p P -t amp_transfer -m constant,linear_distance,gp_dad_log,gp_dad_cuberoot
