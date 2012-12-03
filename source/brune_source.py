@@ -60,7 +60,8 @@ def source_freq_logamp(event, f, phase):
         sq = 103111374869011.25
         K = 0.33
         cp = 0.49
-        
+    else:
+        raise Exception("don't know how to compute source amplitude for phase %s" % (phase))
     # Fisk version of corner frequency calculation:
 #    c = 0.41 if phase in P_phases else 0.49
 #    sigma = 10 # assume stress drop of 10 bars
@@ -85,7 +86,7 @@ def source_freq_logamp(event, f, phase):
 
 def source_logamp(event, band, phase):
     f = band_to_hz(band)
-    amp, corner = source_freq_logamp(event, f, phase)
+    amp, corner, M0 = source_freq_logamp(event, f, phase)
     return amp
 
 def main():

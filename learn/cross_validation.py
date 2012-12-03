@@ -58,8 +58,9 @@ def train_cv_models(cv_dir, model_type):
 
     d = analyze_model_fname(os.path.join(cv_dir, "abcdefg.model"))
 
-    i = 0
-    while os.path.exists(os.path.join(cv_dir, "fold_%02d_train.txt" % i)):
+    i = -1
+    while os.path.exists(os.path.join(cv_dir, "fold_%02d_train.txt" % (i+1))):
+        i+= 1
 
         train = [int(x) for x in np.loadtxt(os.path.join(cv_dir, "fold_%02d_train.txt" % i))]
         test = [int(x) for x in np.loadtxt(os.path.join(cv_dir, "fold_%02d_test.txt" % i))]
@@ -74,22 +75,26 @@ def train_cv_models(cv_dir, model_type):
         fullpath = os.path.join(cv_dir, fname)
         if os.path.exists(fullpath):
             print "model %s already exists, skipping..." % fullpath
-            i += 1
             continue
 
         logfile_name = os.path.join(cv_dir, "fold_%02d_train.%s.log" % (i, model_type))
         logfile = open(logfile_name, 'w')
-        print "training model, writing log to", logfile_name
+        print "training model", evidhash, ", writing log to", logfile_name
         with RedirectStdStreams(stdout=logfile, stderr=logfile):
             try:
+                print "learning model"
                 model = learn_model(trainX, trainy, model_type, target=d['target'])
+                print "learned"
+            except KeyboardInterrupt:
+                logfile.close()
+                raise
             except Exception as e:
-                print e
+                print "Error training model:", str(e)
                 continue
+            model.save_trained_model(fullpath)
         logfile.close()
-        model.save_trained_model(fullpath)
 
-        i += 1
+
 
 def cv_eval_models(cv_dir, model_type):
     X = np.loadtxt(os.path.join(cv_dir, "X.txt"))

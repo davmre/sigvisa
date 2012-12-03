@@ -8,7 +8,7 @@ from sigvisa import Sigvisa
 from utils.geog import lonlatstr
 
 
-KNOWN_EXPLOSIONS = (5393637)  # 2009 DPRK event
+KNOWN_EXPLOSIONS = (5393637,)  # 2009 DPRK event
 
 class Event(object):
 
@@ -54,8 +54,8 @@ class Event(object):
         return (self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid)
 
     def source_logamp(self, band, phase):
-        if natural_source:
-            return brune.source_logamp(mb=self.mb, band=band, phase=phase)
+        if self.natural_source:
+            return brune.source_logamp(event=self, band=band, phase=phase)
         else:
             return mm.source_logamp(event=self, band=band, phase=phase)
 
