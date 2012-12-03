@@ -120,7 +120,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   etime = etime+pad_seconds
 
   # the global_data array is initialized below once we know the
-  # samprate.za
+  # samprate
   global_data = None
   global_stime = stime
   global_etime = etime
@@ -163,10 +163,12 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
       global_data = np.empty((int((global_etime-global_stime)*samprate),))
       global_data.fill(np.nan)
 
-    # at which offset should we start collecting samples
-    first_offset = max(int(np.floor((stime-waveform['time'])*samprate)), 0)
+    # at which offset into this waveform should we start collecting samples
+    first_offset_time = max(stime-waveform['time'], 0)
+    first_offset = int(np.floor(first_offset_time*samprate))
     # how many samples are needed remaining
-    desired_samples = int(np.floor((global_etime - stime) * samprate))
+    load_start_time = waveform['time'] + first_offset_time
+    desired_samples = int(np.floor((global_etime - load_start_time) * samprate))
     # how many samples are actually available
     available_samples = waveform['nsamp'] - first_offset
     # grab the available and needed samples
