@@ -46,21 +46,21 @@ PyObject * canonical_band_name(int num) {
 
   switch(num) {
   case NARROW_05_07:
-    return PyString_FromString("freq_0.50_0.70");
+    return PyString_FromString("freq_0.5_0.7");
  case NARROW_07_10:
-    return PyString_FromString("freq_0.70_1.00");
+    return PyString_FromString("freq_0.7_1.0");
   case NARROW_10_15:
-    return PyString_FromString("freq_1.00_1.50");
+    return PyString_FromString("freq_1.0_1.5");
   case NARROW_15_20:
-    return PyString_FromString("freq_1.50_2.00");
+    return PyString_FromString("freq_1.5_2.0");
   case NARROW_20_30:
-    return PyString_FromString("freq_2.00_3.00");
+    return PyString_FromString("freq_2.0_3.0");
   case NARROW_30_40:
-    return PyString_FromString("freq_3.00_4.0");
+    return PyString_FromString("freq_3.0_4.0");
   case NARROW_40_60:
-    return PyString_FromString("freq_4.00_6.00");
+    return PyString_FromString("freq_4.0_6.0");
   case NARROW_60_80:
-    return PyString_FromString("freq_6.00_8.00");
+    return PyString_FromString("freq_6.0_8.0");
   case BROADBAND:
     return PyString_FromString("broadband");
   case BB_ENVELOPE:
