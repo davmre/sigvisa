@@ -99,10 +99,11 @@ def load_template_params(evid, sta, chan, band, run_name, iteration):
         all_phases = s.phases
         fit_params =np.asfarray([row[0:4] for row in rows])
         phases = tuple([r[5] for r in rows])
-        tmp = sorted(zip(phases, range(len(phases))), key = lambda z : all_phases.index(z[0]))
+        phase_indices = zip(phases, range(len(phases)))
+        phase_indices = [(p, i) for (p,i) in phase_indices if p in all_phases]
+        tmp = sorted(phase_indices, key = lambda z : all_phases.index(z[0]))
         (phases, permutation) = zip(*tmp)
         fit_params = fit_params[permutation, :]
-
         fit_cost = rows[0][4]
     except IndexError as e:
         print e

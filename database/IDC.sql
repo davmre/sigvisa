@@ -166,7 +166,7 @@ create table sigvisa_coda_fits (
  lowband  float(24),
  highband  float(24),
  phase	  varchar(20),
- atime	  float(24),
+ atime	  float,
  peak_delay float(24),
  coda_height float(24),
  coda_decay  float(24),

@@ -4,6 +4,8 @@ import numpy as np, scipy
 from database.dataset import *
 from database import db
 
+from sigvisa import Sigvisa
+
 import matplotlib
 matplotlib.use('PDF')
 import matplotlib.pyplot as plt
@@ -39,7 +41,7 @@ def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, hor
     pp.savefig()
     plt.close(fig)
 
-def plot_waveform_with_pred(pp, wave, tm, template_params, title=None, sample=False, logscale=True):
+def plot_waveform_with_pred(pp, wave, tm, template_params, title=None, sample=False, logscale=True, smooth=True):
     fig = plt.figure(figsize=(10,8), dpi=250)
     plt.xlabel("Time (s)")
     if title is not None:
@@ -48,15 +50,13 @@ def plot_waveform_with_pred(pp, wave, tm, template_params, title=None, sample=Fa
 
     synth_wave = tm.generate_template_waveform(template_params, wave, sample=sample)
 
-    formats = ["w-","k-"]
-    linewidths = [1,1]
 
     gs = gridspec.GridSpec(4, 1)
     gs.update(left=0.1, right=0.95, hspace=1)
 
     axes = plt.subplot(gs[0:3, 0])
-    plot.subplot_waveform(wave.filter("smooth"), axes, color='black', linewidth=1, logscale=logscale)
-    plot.subplot_waveform(synth_wave, axes, color="green", linewidth=1, logscale=logscale, plot_dets=False)
+    plot.subplot_waveform(wave.filter("smooth") if smooth else wave, axes, color='black', linewidth=1.5, logscale=logscale)
+    plot.subplot_waveform(synth_wave, axes, color="green", linewidth=3, logscale=logscale, plot_dets=False)
 
     axes = plt.subplot(gs[3, 0])
     axes.axis('off')
@@ -66,6 +66,12 @@ def plot_waveform_with_pred(pp, wave, tm, template_params, title=None, sample=Fa
         evid = wave['evid']
         e = Event(evid)
         descr = descr + "\n\n" + "Event: " + str(e)
+
+        s  =Sigvisa()
+        station_location = s.stations[wave['sta']][0:2]
+        dist = utils.geog.dist_km((e.lon, e.lat), station_location)
+        azi = utils.geog.azimuth(station_location, (e.lon, e.lat))
+        descr = descr + "\n" + "event-station distance: %.1fkm, azimuth %.1f deg" % (dist, azi)
     except KeyError as e:
         pass
     axes.text(0.5, 0, descr, fontsize=8, color="black", horizontalalignment='center', verticalalignment='center')

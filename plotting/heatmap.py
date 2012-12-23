@@ -147,6 +147,12 @@ class Heatmap(object):
         self.bmap.drawmeridians(meridians,labels=[True,False,False,True])
 
     def plot_locations(self, locations, labels=None, **plotargs):
+        try:
+            bmap = self.bmap
+        except:
+            self.plot_earth()
+
+
         normed_locations = [self.normalize_lonlat(*location) for location in locations]
         draw_events(self.bmap, normed_locations, labels=labels, **plotargs)
 

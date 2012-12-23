@@ -33,7 +33,7 @@ s.cursor.execute(new)
 s.dbconn.commit()
 
 get_fit = "select runid, arid, chan, band, peak_delay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi from sigvisa_coda_fits"
-getmisc = "select l.sta, leba.phase, l.time, lebo.evid from leb_arrival l, leb_assoc leba, leb_origin lebo where l.arid=%d and leba.arid=l.arid and leba.orid=lebo.orid"
+getmisc = "select l.sta, leba.phase, round(l.time,4), lebo.evid from leb_arrival l, leb_assoc leba, leb_origin lebo where l.arid=%d and leba.arid=l.arid and leba.orid=lebo.orid"
 s.cursor.execute(get_fit)
 
 cursor2 = s.dbconn.cursor()
