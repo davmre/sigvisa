@@ -94,6 +94,9 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
       segment = Segment(waves)
       segments.append(segment)
 
+  if len(segments) == 0:
+    raise MissingWaveform("couldn't load any waveforms for this segment; check that the data files are in the correct location.")
+
   return segments
 
 
@@ -110,7 +113,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   """
   s = Sigvisa()
   cursor = s.cursor
-  
+
   # scan the waveforms for the given interval
   samprate = None
 
@@ -132,7 +135,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
     selection="MK31"
   else:
     selection=station
-  
+
   sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (selection, sql_multi_str("chan", chan_list), etime, stime)
   cursor.execute(sql)
   waveforms = cursor.fetchall()
