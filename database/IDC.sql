@@ -159,13 +159,14 @@ create table sigvisa_coda_fitting_runs (
 );
 
 create table sigvisa_coda_fits (
- runid    int,
- evid	  int,
- sta	  varchar(10),
- chan	  varchar(10),
- lowband  float(24),
- highband  float(24),
- phase	  varchar(20),
+ fitid    int not null auto increment,
+ runid    int not null,
+ evid	  int not null,
+ sta	  varchar(10) not null,
+ chan	  varchar(10) not null,
+ lowband  float(24) not null,
+ highband  float(24) not null,
+ phase	  varchar(20) not null,
  atime	  float,
  peak_delay float(24),
  coda_height float(24),
@@ -177,10 +178,12 @@ create table sigvisa_coda_fits (
  acost	    float,
  dist	    float,
  azi	    float,
- primary key(runid, evid, sta, chan, lowband, highband, phase)
+ primary key(fitid),
+ foreign key (runid) REFERENCES sigvisa_coda_fitting_runs(runid)
 );
 
 create table sigvisa_wiggle_wfdisc (
+ wiggleid not null auto increment,
  runid 	  int,
  arid     int,
  siteid    int,
@@ -190,7 +193,8 @@ create table sigvisa_wiggle_wfdisc (
  evid 	  int,
  fname	  varchar(255),
  snr	  float,
- primary key(runid, arid, band, chan)
+ primary key(wiggleid),
+ foreign key (runid) references sigvisa_coda_fitting_runs(runid)
 );
 
 

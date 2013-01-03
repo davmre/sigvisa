@@ -95,7 +95,11 @@ class Sigvisa(object):
                         pid = s.phaseids[p]
                         s.sigmodel.set_wiggle_process(siteid, b, c, pid, 1, 0.05, np.array([.8,-.2]))
 
-
+    def band_name(self, low_band=None, high_band=None):
+        low_match = [band for band in self.bands if np.abs(float(band.split('_')[1])-low_band) < 0.01] if low_band is not None else self.bands
+        high_match = [band for band in low_match if np.abs(float(band.split('_')[2])-high_band) < 0.01] if high_band is not None else low_match
+        return high_match
+                        
 def set_noise_processes(sigmodel, seg):
     for chan in seg.keys():
         c = sigvisa_c.canonical_channel_num(chan)

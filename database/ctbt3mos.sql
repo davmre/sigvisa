@@ -45,8 +45,8 @@ create table jap_hdf (
  igreg       int
 ) engine = myisam;
 
-load data local infile 'jap2.5.hdf.csv' into table jap_hdf 
-fields terminated by ',';
+/* load data local infile 'jap2.5.hdf.csv' into table jap_hdf 
+fields terminated by ','; */
 
 /* add a UTC timestamp to the table */
 alter table jap_hdf add column (time double);
@@ -79,8 +79,8 @@ create table hon_hdf (
  igreg       int
 ) engine = myisam;
 
-load data local infile 'hon2.5.hdf.csv' into table hon_hdf 
-fields terminated by ',';
+/* load data local infile 'hon2.5.hdf.csv' into table hon_hdf 
+fields terminated by ','; */
 
 /* add a UTC timestamp to the table */
 alter table hon_hdf add column (time double);
@@ -110,7 +110,7 @@ create table isc_events (
  index (author, time)
 ) engine = myisam;
 
-load data local infile '200903.csv' into table isc_events fields 
+/*load data local infile '200903.csv' into table isc_events fields 
 terminated by ',' optionally enclosed by '"' ignore 1 lines;
 
 load data local infile '200904.csv' into table isc_events fields 
@@ -120,7 +120,7 @@ load data local infile '200905.csv' into table isc_events fields
 terminated by ',' optionally enclosed by '"' ignore 1 lines;
 
 load data local infile '200906.csv' into table isc_events fields 
-terminated by ',' optionally enclosed by '"' ignore 1 lines;
+terminated by ',' optionally enclosed by '"' ignore 1 lines; */
 
 /* leb_arrival */
 
@@ -230,8 +230,8 @@ create table idcx_arrival (
  index (arid)
 ) engine = myisam;
 
-load data local infile 'idcx_arrival.csv' into table idcx_arrival fields
-terminated by ', ' optionally enclosed by '"' ignore 1 lines;
+/* load data local infile 'idcx_arrival.csv' into table idcx_arrival fields
+terminated by ', ' optionally enclosed by '"' ignore 1 lines; */
 
 create table idcx_amplitude (
  ampid       int not null,
@@ -256,8 +256,8 @@ create table idcx_amplitude (
  index (arid)
 ) engine = myisam;
 
-load data local infile 'idcx_amplitude.csv' into table idcx_amplitude fields
-terminated by ', ' optionally enclosed by '"' ignore 1 lines;
+/* load data local infile 'idcx_amplitude.csv' into table idcx_amplitude fields
+terminated by ', ' optionally enclosed by '"' ignore 1 lines; */
 
 /* idcx_tohoku
  * 9.0 Earthquake off the coast of Japan, March 11 & March 12 2011
@@ -575,8 +575,8 @@ create table idcx_wfdisc (
 
 ) engine = myisam;
 
-load data local infile 'idcx_wfdisc.csv' into table idcx_wfdisc 
-fields terminated by ', ' optionally enclosed by '"' ignore 1 lines;
+/* load data local infile 'idcx_wfdisc.csv' into table idcx_wfdisc 
+fields terminated by ', ' optionally enclosed by '"' ignore 1 lines; */
                                     
 /* change the location of the data from /archive/ops/ to /var/ctbt_data/ */
 update idcx_wfdisc set dir = concat('/var/ctbt_data/', substr(dir,14));

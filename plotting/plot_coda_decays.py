@@ -20,7 +20,7 @@ import utils.geog
 import obspy.signal.util
 
 
-def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):
+def plot_channels_with_pred(sigmodel, vert_trace, vert_params, phaseids, horiz_trace, horiz_params, title = None, logscale=True):
     fig = plt.figure(figsize = (8, 8))
 
     bhz_axes = plt.subplot(2, 1, 1)
@@ -38,15 +38,13 @@ def plot_channels_with_pred(sigmodel, pp, vert_trace, vert_params, phaseids, hor
 #    horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)
 #    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)
 
-    pp.savefig()
-    plt.close(fig)
+    return fig
 
-def plot_waveform_with_pred(pp, wave, tm, template_params, title=None, sample=False, logscale=True, smooth=True):
+def plot_waveform_with_pred(wave, tm, template_params, title=None, sample=False, logscale=True, smooth=True):
     fig = plt.figure(figsize=(10,8), dpi=250)
     plt.xlabel("Time (s)")
     if title is not None:
         plt.suptitle(title, fontsize=20)
-
 
     synth_wave = tm.generate_template_waveform(template_params, wave, sample=sample)
 
@@ -76,8 +74,7 @@ def plot_waveform_with_pred(pp, wave, tm, template_params, title=None, sample=Fa
         pass
     axes.text(0.5, 0, descr, fontsize=8, color="black", horizontalalignment='center', verticalalignment='center')
 
-    pp.savefig()
-    plt.close(fig)
+    return fig
 
 def plot_channels(pp, vert_trace, vert_noise_floor, vert_fits, vert_formats, horiz_trace, horiz_noise_floor, horiz_fits, horiz_formats, all_det_times = None, all_det_labels = None, title = None):
     fig = plt.figure(figsize = (8, 8))

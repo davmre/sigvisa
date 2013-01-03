@@ -68,14 +68,18 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
         high_bounds = tm.high_bounds()
 
     if pp is not None:
-        plot_waveform_with_pred(pp, wave, tm, (phases, start_param_vals), title = "start (cost %f, evid %s)" % (f(start_param_vals), ev.evid), logscale=True)
+        fig = plot_waveform_with_pred(wave, tm, (phases, start_param_vals), title = "start (cost %f, evid %s)" % (f(start_param_vals), ev.evid), logscale=True)
+        pp.savefig()
+        plt.close(fig)
 
     print "minimizing matrix", start_param_vals
     best_param_vals, best_cost = minimize_matrix(f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, method=method, fix_first_col=(not optimize_arrival_times))
     print "done", best_param_vals, best_cost
 
     if pp is not None:
-        plot_waveform_with_pred(pp, wave, tm, (phases, best_param_vals), title = "best (cost %f, evid %s)" % (f(best_param_vals), ev.evid), logscale=True)
+        fig = plot_waveform_with_pred(wave, tm, (phases, best_param_vals), title = "best (cost %f, evid %s)" % (f(best_param_vals), ev.evid), logscale=True)
+        pp.savefig()
+        plt.close(fig)
 
 
     return (phases, best_param_vals), best_cost

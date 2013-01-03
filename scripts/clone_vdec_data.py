@@ -1,4 +1,3 @@
-import sigvisa_util
 from database import db
 import numpy as np
 import utils.geog
@@ -66,9 +65,14 @@ def main():
             tname = os.path.split(a)[-1]
 
             if not options.preserve:
-                clear_table(cursor, tname)
-            load_table(cursor, tname, fname)
-
+                try:
+                    clear_table(cursor, tname)
+                except Exception as e:
+                    print "could not clear table %s: exception" % tname, e
+            try:
+                load_table(cursor, tname, fname)
+            except Exception as e:
+                print "could not load into table %s: exception" % tname, e
 
 if __name__ == "__main__":
     main()
