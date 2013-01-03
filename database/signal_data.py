@@ -83,16 +83,18 @@ def read_fitting_run_iterations(cursor, run_name):
     r = np.reshape(np.array(cursor.fetchall()), (-1, 2))
     return np.array(sorted(r))
 
-def load_template_params(evid, sta, chan, band, run_name, iteration):
+def load_template_params(evid, sta, chan, band, run_name=None, iteration=None, runid=None):
     s = Sigvisa()
 
-    runid = get_fitting_runid(s.cursor, run_name, iteration, create_if_new=False)
+    if runid is None:
+        runid = get_fitting_runid(s.cursor, run_name, iteration, create_if_new=False)
 
     pieces = band.split('_')
     lowband = float(pieces[1])
     highband = float(pieces[2])
 
-    sql_query = "select round(atime,4), peak_delay, coda_height, coda_decay, acost, phase from sigvisa_coda_fits where sta='%s' and evid=%d and chan='%s' and lowband=%f and highband=%f and runid=%d" % (sta, evid, chan, lowband, highband, runid)
+    sql_query = "select round(atime,4), peak_delay, coda_height, coda_decay, acost, phase from sigvisa_coda_fits where sta='%s' and evid=%d and chan='%s' and lowband=%.1f and runid=%d" % (sta, evid, chan, lowband, runid)
+    print sql_query
     s.cursor.execute(sql_query)
     rows = s.cursor.fetchall()
     try:

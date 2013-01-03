@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import learn.do_training
 from database import db, dataset
 import sigvisa_c
@@ -52,8 +53,8 @@ class Sigvisa(object):
         self.site_up = dataset.read_uptime(self.cursor, st, et)
         self.phasenames, self.phasetimedef = dataset.read_phases(self.cursor)
         self.phaseids = dict(zip(self.phasenames, range(1, len(self.phasenames)+1)))
-        self.earthmodel = learn.do_training.load_earth("parameters", self.sites, self.phasenames, self.phasetimedef)
-        self.sigmodel = learn.do_training.load_sigvisa("parameters", st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
+        self.earthmodel = learn.do_training.load_earth(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), self.sites, self.phasenames, self.phasetimedef)
+        self.sigmodel = learn.do_training.load_sigvisa(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
 
         self.bands = ("freq_2.0_3.0",'freq_0.5_0.7')
         self.chans = ('BHZ', 'BHN', 'BHE')
@@ -98,8 +99,8 @@ class Sigvisa(object):
     def band_name(self, low_band=None, high_band=None):
         low_match = [band for band in self.bands if np.abs(float(band.split('_')[1])-low_band) < 0.01] if low_band is not None else self.bands
         high_match = [band for band in low_match if np.abs(float(band.split('_')[2])-high_band) < 0.01] if high_band is not None else low_match
-        return high_match
-                        
+        return high_match[0]
+
 def set_noise_processes(sigmodel, seg):
     for chan in seg.keys():
         c = sigvisa_c.canonical_channel_num(chan)
