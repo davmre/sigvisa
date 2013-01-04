@@ -1,7 +1,9 @@
 import django
 import django.views.generic
+from django.views.decorators.cache import cache_page
 
 import numpy as np
+import sys
 from database.dataset import *
 from database.signal_data import *
 from signals.io import *
@@ -27,6 +29,7 @@ class FitDetailView(django.views.generic.DetailView):
     template_name = 'coda_fits/detail.html'
     context_object_name = 'fit'
 
+@cache_page(60*60*24*365)
 def FitImageView(request, fitid):
 
     logscale = request.GET.get("logscale", "False").lower().startswith('t')
