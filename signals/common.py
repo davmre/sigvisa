@@ -198,7 +198,7 @@ class Waveform(object):
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
         elif name == "smooth":
             if len(pieces) > 1:
-                window_len = int(pieces[1])
+                window_len = int(float(pieces[1]) * self['srate'])
             else:
                 window_len = 401
 

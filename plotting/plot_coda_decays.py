@@ -15,7 +15,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from optparse import OptionParser
 
 from source.event import Event
-import plot
+import plotting.plot as plot
 import utils.geog
 import obspy.signal.util
 

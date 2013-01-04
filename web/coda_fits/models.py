@@ -8,6 +8,8 @@
 # into your database.
 
 from django.db import models
+from coda_fits.fields import UnixTimestampField
+
 
 class Dataset(models.Model):
     label = models.CharField(max_length=60)
@@ -46,35 +48,6 @@ class IdcxArrival(models.Model):
     class Meta:
         db_table = u'idcx_arrival'
 
-class IdcxArrivalNet(models.Model):
-    sta = models.CharField(max_length=18)
-    time = models.FloatField()
-    arid = models.IntegerField()
-    jdate = models.IntegerField(null=True, blank=True)
-    stassid = models.IntegerField(null=True, blank=True)
-    chanid = models.IntegerField(null=True, blank=True)
-    chan = models.CharField(max_length=24, blank=True)
-    iphase = models.CharField(max_length=24, blank=True)
-    stype = models.CharField(max_length=3, blank=True)
-    deltim = models.FloatField(null=True, blank=True)
-    azimuth = models.FloatField(null=True, blank=True)
-    delaz = models.FloatField(null=True, blank=True)
-    slow = models.FloatField(null=True, blank=True)
-    delslo = models.FloatField(null=True, blank=True)
-    ema = models.FloatField(null=True, blank=True)
-    rect = models.FloatField(null=True, blank=True)
-    amp = models.FloatField(null=True, blank=True)
-    per = models.FloatField(null=True, blank=True)
-    logat = models.FloatField(null=True, blank=True)
-    clip = models.CharField(max_length=3, blank=True)
-    fm = models.CharField(max_length=6, blank=True)
-    snr = models.FloatField(null=True, blank=True)
-    qual = models.CharField(max_length=3, blank=True)
-    auth = models.CharField(max_length=45, blank=True)
-    commid = models.IntegerField(null=True, blank=True)
-    lddate = models.DateTimeField(null=True, blank=True)
-    class Meta:
-        db_table = u'idcx_arrival_net'
 
 class IdcxWfdisc(models.Model):
     sta = models.CharField(max_length=18)
@@ -183,16 +156,15 @@ class LebOrigin(models.Model):
     class Meta:
         db_table = u'leb_origin'
 
-
 class SigvisaCodaFittingRun(models.Model):
     runid = models.IntegerField(primary_key=True)
     run_name = models.CharField(max_length=765, blank=True)
     iter = models.IntegerField(null=True, blank=True)
     class Meta:
-        db_table = u'sigvisa_coda_fitting_runs'
+        db_table = u'sigvisa_coda_fitting_run'
 
     def __unicode__(self):
-        return "%s_%d" % (self.run_name, self.iter)
+        return "%s_iter%04d" % (self.run_name, self.runid)
 
 class SigvisaCodaFit(models.Model):
     fitid = models.IntegerField(primary_key=True)
@@ -200,37 +172,31 @@ class SigvisaCodaFit(models.Model):
     evid = models.IntegerField()
     sta = models.CharField(max_length=30)
     chan = models.CharField(max_length=30)
-    lowband = models.FloatField()
-    highband = models.FloatField()
-    phase = models.CharField(max_length=60)
-    atime = models.FloatField(null=True, blank=True)
-    peak_delay = models.FloatField(null=True, blank=True)
-    coda_height = models.FloatField(null=True, blank=True)
-    coda_decay = models.FloatField(null=True, blank=True)
+    band = models.CharField(max_length=45)
     optim_method = models.CharField(max_length=45, blank=True)
     iid = models.IntegerField(null=True, blank=True)
-    stime = models.FloatField(null=True, blank=True)
-    etime = models.FloatField(null=True, blank=True)
+    stime = UnixTimestampField(null=True, blank=True)
+    etime = UnixTimestampField(null=True, blank=True)
     acost = models.FloatField(null=True, blank=True)
     dist = models.FloatField(null=True, blank=True)
     azi = models.FloatField(null=True, blank=True)
+    human_approved = models.IntegerField(null=True, blank=True)
     class Meta:
-        db_table = u'sigvisa_coda_fits'
+        db_table = u'sigvisa_coda_fit'
+
+class SigvisaCodaFitPhase(models.Model):
+    fpid = models.IntegerField(primary_key=True)
+    fitid = models.ForeignKey(SigvisaCodaFit, db_column='fitid')
+    phase = models.CharField(max_length=60)
+    template_model = models.CharField(max_length=60, blank=True)
+    param1 = models.FloatField(null=True, blank=True)
+    param2 = models.FloatField(null=True, blank=True)
+    param3 = models.FloatField(null=True, blank=True)
+    param4 = models.FloatField(null=True, blank=True)
+    class Meta:
+        db_table = u'sigvisa_coda_fit_phase'
 
 
-class SigvisaWiggleWfdisc(models.Model):
-    wiggleid = models.IntegerField(primary_key=True)
-    runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='runid')
-    arid = models.IntegerField()
-    siteid = models.IntegerField(null=True, blank=True)
-    phaseid = models.IntegerField(null=True, blank=True)
-    band = models.CharField(max_length=30)
-    chan = models.CharField(max_length=30)
-    evid = models.IntegerField(null=True, blank=True)
-    fname = models.CharField(max_length=765, blank=True)
-    snr = models.FloatField(null=True, blank=True)
-    class Meta:
-        db_table = u'sigvisa_wiggle_wfdisc'
 
 class StaticPhaseid(models.Model):
     id = models.IntegerField(primary_key=True)
@@ -238,37 +204,6 @@ class StaticPhaseid(models.Model):
     timedef = models.CharField(max_length=3, blank=True)
     class Meta:
         db_table = u'static_phaseid'
-
-class StaticSite(models.Model):
-    sta = models.CharField(max_length=18, primary_key=True)
-    ondate = models.IntegerField(primary_key=True)
-    offdate = models.IntegerField(null=True, blank=True)
-    lat = models.FloatField(null=True, blank=True)
-    lon = models.FloatField(null=True, blank=True)
-    elev = models.FloatField(null=True, blank=True)
-    staname = models.CharField(max_length=150, blank=True)
-    statype = models.CharField(max_length=12, blank=True)
-    refsta = models.CharField(max_length=18, blank=True)
-    dnorth = models.FloatField(null=True, blank=True)
-    deast = models.FloatField(null=True, blank=True)
-    lddate = models.DateTimeField(null=True, blank=True)
-    class Meta:
-        db_table = u'static_site'
-
-class StaticSitechan(models.Model):
-    sta = models.CharField(max_length=18, primary_key=True)
-    chan = models.CharField(max_length=24, primary_key=True)
-    ondate = models.IntegerField(primary_key=True)
-    chanid = models.IntegerField(null=True, blank=True)
-    offdate = models.IntegerField(null=True, blank=True)
-    ctype = models.CharField(max_length=12, blank=True)
-    edepth = models.FloatField(null=True, blank=True)
-    hang = models.FloatField(null=True, blank=True)
-    vang = models.FloatField(null=True, blank=True)
-    descrip = models.CharField(max_length=150, blank=True)
-    lddate = models.DateTimeField(null=True, blank=True)
-    class Meta:
-        db_table = u'static_sitechan'
 
 class StaticSiteid(models.Model):
     id = models.IntegerField(primary_key=True)

@@ -83,34 +83,50 @@ def read_fitting_run_iterations(cursor, run_name):
     r = np.reshape(np.array(cursor.fetchall()), (-1, 2))
     return np.array(sorted(r))
 
-def load_template_params(evid, sta, chan, band, run_name=None, iteration=None, runid=None):
+
+def get_fitid(evid, sta, chan, band, run_name=None, iteration=None, runid=None):
     s = Sigvisa()
 
     if runid is None:
         runid = get_fitting_runid(s.cursor, run_name, iteration, create_if_new=False)
 
-    pieces = band.split('_')
-    lowband = float(pieces[1])
-    highband = float(pieces[2])
+    sql_query = "select fitid from sigvisa_coda_fit where sta='%s' and evid=%d and chan='%s' and band='%s' and runid=%d" % (sta, evid, chan, band, runid)
+    s.cursor.execute(sql_query)
+    fitid = s.cursor.fetchone()[0]
+    return fitid
 
-    sql_query = "select round(atime,4), peak_delay, coda_height, coda_decay, acost, phase from sigvisa_coda_fits where sta='%s' and evid=%d and chan='%s' and lowband=%.1f and runid=%d" % (sta, evid, chan, lowband, runid)
-    print sql_query
+def filter_and_sort_template_params(unsorted_phases, unsorted_params, filter_list):
+    phase_indices = zip(unsorted_phases, range(len(unsorted_phases)))
+    phase_indices = [(p, i) for (p,i) in phase_indices if p in filter_list]
+    tmp = sorted(phase_indices, key = lambda z : filter_list.index(z[0]))
+    (phases, permutation) = zip(*tmp)
+    fit_params = unsorted_params[permutation, :]
+    return (phases, fit_params)
+
+
+def load_template_params_by_fitid(fitid):
+    s = Sigvisa()
+
+    sql_query = "select phase, round(param1,8), round(param2, 8), round(param3, 8), round(param4, 8) from sigvisa_coda_fit_phase where fitid=%d" % (fitid)
     s.cursor.execute(sql_query)
     rows = s.cursor.fetchall()
     try:
-        all_phases = s.phases
-        fit_params =np.asfarray([row[0:4] for row in rows])
-        phases = tuple([r[5] for r in rows])
-        phase_indices = zip(phases, range(len(phases)))
-        phase_indices = [(p, i) for (p,i) in phase_indices if p in all_phases]
-        tmp = sorted(phase_indices, key = lambda z : all_phases.index(z[0]))
-        (phases, permutation) = zip(*tmp)
-        fit_params = fit_params[permutation, :]
-        fit_cost = rows[0][4]
+        fit_params =np.asfarray([row[1:5] for row in rows])
+        phases = tuple([r[0] for r in rows])
+        (phases, fit_params) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
     except IndexError as e:
         print e
         return (None, None), None
+
+    sql_query = "select acost from sigvisa_coda_fit where fitid=%d"
+    cursor.execute()
+    fit_cost = cursor.fetchone()[0]
     return (phases, fit_params), fit_cost
+
+
+def load_template_params(evid, sta, chan, band, run_name=None, iteration=None, runid=None):
+    fitid = get_fitid(evid, sta, chan, band, run_name=None, iteration=None, runid=None)
+    return load_template_params_by_fitid(fitid)
 
 def store_template_params(wave, template_params, method_str, iid, fit_cost, run_name, iteration):
     s  = Sigvisa()
