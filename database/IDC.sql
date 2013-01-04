@@ -151,50 +151,75 @@ create table visa_assoc (
  primary key(runid, orid, arid)
 );
 
-create table sigvisa_coda_fitting_runs (
+create table sigvisa_coda_fitting_run (
  runid 	     int,
  run_name 	varchar(255),
  iter 		int,
  primary key(runid)
 );
 
-create table sigvisa_coda_fits (
- fitid    int not null auto increment,
+create table sigvisa_coda_fit (
+ /* fitid    int not null auto_increment, */ /* MYSQL version */
+ fitid	  int not null, /* Oracle version */
  runid    int not null,
- evid	  int not null,
- sta	  varchar(10) not null,
- chan	  varchar(10) not null,
- band	  varchar(15) not null,
- phase	  varchar(20) not null,
- atime	  float,
- peak_delay float(24),
- coda_height float(24),
- coda_decay  float(24),
+ evid     int not null,
+ sta      varchar(10) not null,
+ chan     varchar(10) not null,
+ band     varchar(15) not null,
  optim_method  varchar(15),
- iid	    int,
- stime	    float,
- etime	    float,
- acost	    float,
- dist	    float,
- azi	    float,
+ iid        int,
+ stime      double,
+ etime      double,
+ acost      float(24),
+ dist       float(24),
+ azi        float(24),
+ human_approved varchar(1),
  primary key(fitid),
- foreign key (runid) REFERENCES sigvisa_coda_fitting_runs(runid)
+ foreign key(runid) REFERENCES sigvisa_coda_fitting_run(runid)
 );
 
-create table sigvisa_wiggle_wfdisc (
- wiggleid not null auto increment,
- runid 	  int,
- arid     int,
- siteid    int,
- phaseid   int,
- band	  varchar(10),
- chan	  varchar(10),
- evid 	  int,
- fname	  varchar(255),
- snr	  float,
- primary key(wiggleid),
- foreign key (runid) references sigvisa_coda_fitting_runs(runid)
+/* hack to implement auto_increment in Oracle */
+create sequence fitid_seq start with 1 increment by 1 nomaxvalue;
+create or replace trigger fitid_trigger
+before insert on sigvisa_coda_fit
+for each row
+begin
+select fitid_seq.nextval into :new.fitid from dual;
+end;
+/
+
+create table sigvisa_coda_fit_phase (
+/* fpid  int not null auto_increment, */ /* MYSQL version */
+ fpid  int not null, /* Oracle version */
+ fitid int not null,
+ phase	  varchar(20) not null,
+ template_model   varchar(20) default 'paired_exp',
+ param1	  double,
+ param2 double,
+ param3 double,
+ param4  double,
+ primary key(fpid),
+ foreign key (fitid) REFERENCES sigvisa_coda_fit(fitid)
 );
+
+/* hack to implement auto_increment in Oracle */
+create sequence fpid_seq start with 1 increment by 1 nomaxvalue;
+create or replace trigger fpid_trigger
+before insert on sigvisa_coda_fit_phase
+for each row
+begin
+select fpid_seq.nextval into :new.fpid from dual;
+end;
+/
+
+/*create table sigvisa_wiggle_wfdisc (
+ wiggleid not null auto increment,
+ fitid	  int,
+
+ fname	  varchar(255),
+ primary key(wiggleid),
+ foreign key (fitid) references sigvisa_coda_fit(fitid)
+);*/
 
 
 
