@@ -33,7 +33,7 @@ import time
 
 from database.dataset import *
 from utils.geog import dist_deg
-from utils.draw_earth import draw_events, draw_earth, draw_density
+
 
 # we will use these many events to compute the optimal bandwidth
 SAMPLE_EVENTS = 1000
@@ -147,6 +147,7 @@ def learn(param_fname, options, leb_events):
     else:
       title = "Event Location Log Density (b=%.2f)" % best_bandw
     
+    from utils.draw_earth import draw_events, draw_earth, draw_density
     bmap = draw_earth(title)
     draw_density(bmap, lon_arr, lat_arr, log(density),
                  colorbar_orientation="horizontal", colorbar_shrink=0.75)
