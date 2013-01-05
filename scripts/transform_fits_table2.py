@@ -32,7 +32,7 @@ s = Sigvisa()
 #s.cursor.execute(new)
 #s.dbconn.commit()
 
-get_fit = "select runid, evid, sta, chan, lowband, highband, phase, round(atime,4), peak_delay, coda_height, coda_decay, optim_method, iid, round(stime,4), round(etime,4), acost, dist, azi from sigvisa_coda_fits_old"
+get_fit = "select runid, evid, sta, chan, lowband, highband, phase, round(atime,4), peak_delay, coda_height, coda_decay, optim_method, iid, round(stime,4), round(etime,4), acost, dist, azi from sigvisa_coda_fits"
 s.cursor.execute(get_fit)
 print "executed"
 

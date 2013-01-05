@@ -18,9 +18,10 @@ class UnixTimestampField(models.DateTimeField):
     def to_python(self, value):
         if isinstance(value, unicode):
             a  = dateutil.parser.parse(value)
-        else:
+        elif isinstance(value, float):
             a = datetime.fromtimestamp(value)
-        print "given", value, "returning", a
+        else:
+            a = value
         return a
 
     def get_db_prep_value(self, value, connection, prepared=False):
@@ -29,5 +30,4 @@ class UnixTimestampField(models.DateTimeField):
         if value==None:
             return None
         b= time.mktime(value.timetuple())
-        print "prep given", value, "returning", b
         return b

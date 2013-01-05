@@ -1,6 +1,10 @@
 import django
 import django.views.generic
+from django.shortcuts import render_to_response, get_object_or_404
 from django.views.decorators.cache import cache_page
+from django.template import RequestContext
+from django.http import HttpResponse, HttpResponseRedirect
+from django.core.urlresolvers import reverse
 
 import numpy as np
 import sys
@@ -30,7 +34,7 @@ class FitDetailView(django.views.generic.DetailView):
     context_object_name = 'fit'
 
 @cache_page(60*60*24*365)
-def FitImageView(request, fitid):
+def FitImageView(request, runid, fitid):
 
     logscale = request.GET.get("logscale", "False").lower().startswith('t')
     smoothing = int(request.GET.get("smooth", "0"))
@@ -42,6 +46,8 @@ def FitImageView(request, fitid):
     tm = load_template_model("paired_exp", run_name=None, run_iter=0, model_type="dummy")
 
     fit = SigvisaCodaFit.objects.get(fitid=fitid)
+    # TODO: raise error if fit does not match runid
+
 
     fit_phases = fit.sigvisacodafitphase_set.all()
 
@@ -65,3 +71,18 @@ def FitImageView(request, fitid):
     canvas.print_png(response)
     plt.close(fig)
     return response
+
+def rate_fit(request, runid, fitid):
+    fit = get_object_or_404(SigvisaCodaFit, pk = pk)
+    try:
+        rating = int(request.POST['approval'])
+    except KeyError:
+        return render_to_response('coda_fits/detail.html', {
+                'fit': fit,
+                'error_message': "You didn't select a rating.",
+                }, context_instance=RequestContext(request))
+    else:
+        fit.human_approved = rating
+        fit.save()
+        return HttpResponseRedirect(reverse('detail', args=(fit.fitid,)))
+    return HttpResponse("Something went wrong.")

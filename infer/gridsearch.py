@@ -1,9 +1,11 @@
 import numpy as np
+import pdb
 from sigvisa import *
 from database.dataset import *
-from dataset.signal_data import *
+from database.signal_data import *
 from source.event import *
 
+from optparse import OptionParser
 
 
 
@@ -16,7 +18,7 @@ def event_at(ev, lon=None, lat=None, t=None):
 
 
 
-        f = lambda lon, lat: self.event_location_likelihood(event_at(base_event, lon=lon, lat=lat), segments, pp=pp, marginalize_method=marginalize_method, iid=iid)
+#        f = lambda lon, lat: self.event_location_likelihood(event_at(base_event, lon=lon, lat=lat), segments, pp=pp, marginalize_method=marginalize_method, iid=iid)
 
 # get the likelihood of an event location, if we don't know the event time.
 # "likelihood" is a function of a segment and an event object (e.g. envelope_model.log_likelihood_optimize wrapped in a lambda)
@@ -139,7 +141,8 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         raise
-    except:
+    except Exception as e:
+        print e
         type, value, tb = sys.exc_info()
         traceback.print_exc()
         pdb.post_mortem(tb)

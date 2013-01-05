@@ -1,2 +1,45 @@
-<h1>{{ fit.evid }}</h1>
-<img src="visual.png">
+<h1>{{ fit.sta }}: {{ fit.evid }} ({{ fit.chan }}, {{fit.band }})</h1>
+<table>
+<tr>
+  <td><img src="visual.png" width=500 height=300></td>
+  <td valign=top rowspan=2>Hello world</td>
+</tr>
+<tr>
+  <td> 
+    <form action="/sigvisa/fits/{{ fit.fitid }}/rate/" method="post">
+      {% csrf_token %}
+
+      Current: {{ fit.human_approved }}
+      <input type="radio" name="approval" id="unknown" value="0" />
+      <label for="unknown">Unknown</label> 
+      <input type="radio" name="approval" id="bad" value="1" />
+      <label for="bad">Bad fit</label> 
+      <input type="radio" name="approval" id="good" value="2" />
+      <label for="good">Good fit</label> 
+      <input type="submit" value="Submit" />
+    </form>
+
+  </td>
+<tr>
+  <td colspan=2>
+    <table border=1 width=100%>
+      <tr>
+	<td><strong>Phase</strong></td>
+	<td><strong>atime</strong></td>
+	<td><strong>onset_seconds</strong></td>
+	<td><strong>coda_height</strong></td>
+	<td><strong>decay_rate</strong></td>
+      </tr>
+      {% for phase in fit.sigvisacodafitphase_set.all %}
+      <tr>
+	<td>{{ phase.phase }}</td>
+	<td>{{ phase.param1 }}</td>
+	<td>{{ phase.param2 }}</td>
+	<td>{{ phase.param3 }}</td>
+	<td>{{ phase.param4 }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </td>
+</tr>
+</table>

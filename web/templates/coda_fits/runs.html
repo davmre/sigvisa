@@ -1,0 +1,9 @@
+{% if run_list %}
+    <ul>
+    {% for run in run_list %}
+        <li><a href="/sigvisa/fits/runs/{{ run.runid }}/">{{ run.run_name }} (iter {{ run.iter }})</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No runs are available.</p>
+{% endif %}

@@ -15,7 +15,6 @@ from source.event import Event
 import sigvisa_c
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel, ErrorModel
-from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
 import obspy.signal.util
 
