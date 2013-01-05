@@ -4,6 +4,8 @@
 #define SIGVISA_MAIN_MODULE
 #include "sigvisa.h"
 
+PyObject * traceClass_obj;
+
 static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 
