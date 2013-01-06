@@ -1,0 +1,7 @@
+numpy
+scipy
+matplotlib
+django
+MySQL-python
+python-dateutil
+functools32

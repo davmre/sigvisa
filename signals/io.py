@@ -100,7 +100,7 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
   return segments
 
 
-
+@functools32.lru_cache(maxsize=1024)
 def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   """
   Returns a single Waveform for the given channel at the station in
