@@ -1,11 +1,21 @@
 {# .... **Normal content list, maybe a table** .... #}
 {% if fit_list %}
-    <table id="fits">
+    <table id="fits" border=1 cellpadding=3>
+      <tr>
+	<td><strong>evid</strong></td>
+	<td><strong>sta</strong></td>
+	<td><strong>chan</strong></td>
+	<td><strong>band</strong></td>
+	<td><strong>start time</strong></td>
+      </tr>
         {% for fit in fit_list %}
             <tr>
                 <td>{{ fit.evid }}</td>
                 <td>{{ fit.sta }}</td>
-                <td><a href="fits/{{ fit.fitid }}/" class="see_detail">detail</a></td>
+                <td>{{ fit.chan }}</td>
+                <td>{{ fit.band }}</td>
+                <td>{{ fit.stime }}</td>
+                <td><a href="{% url fit_run_detail runid=fit.runid.runid pageid=forloop.counter|add:page_obj.start_index|add:-1  %}" class="see_detail">detail</a></td>
             </tr>
         {% endfor %}
     </table>

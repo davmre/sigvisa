@@ -1,20 +1,74 @@
+<script>
+document.onkeydown = KeyCheck;       
+
+function KeyCheck(e)
+{
+var KeyID = (window.event) ? event.keyCode : e.keyCode;
+
+var rbuttons = document.getElementsByName('approval');
+
+switch(KeyID)
+{
+
+{% if page_obj.has_previous %}
+case 37:
+window.location = "{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}";
+break;
+{% endif %}
+
+{% if page_obj.has_next %}
+case 39:
+window.location = "{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}";
+break;
+{% endif %}
+
+case 49:
+rbuttons[0].checked = true;
+document.forms["approval_form"].submit();
+break;
+case 50:
+rbuttons[1].checked = true;
+document.forms["approval_form"].submit();
+break;
+case 51:
+rbuttons[2].checked = true;
+document.forms["approval_form"].submit();
+break;
+
+
+default:
+break;
+
+}
+}
+</script>
+
 <h1>{{ fit.sta }}: {{ fit.evid }} ({{ fit.chan }}, {{fit.band }})</h1>
 <table>
 <tr>
-  <td><img src="visual.png" width=500 height=300></td>
-  <td valign=top rowspan=2>Hello world</td>
+  <td><img src="visual.png" width=500 height=300><br \>{{ wave_str }}</td>
+  <td valign=top rowspan=2>
+    <table>
+      <tr><td>evid</td><td>{{ ev.evid }}</td></tr>
+      <tr><td>orid</td><td>{{ ev.orid }}</td></tr>
+      <tr><td>loc</td><td>{{ loc_str }}</td></tr>
+      <tr><td>depth</td><td>{{ ev.depth|stringformat:'.1f' }}km</td></tr>
+      <tr><td>time</td><td>{{ ev.time }}</td></tr>
+      <tr><td>mb</td><td>{{ ev.mb }}</td></tr>
+      <tr><td>source</td><td>{% if ev.natural_source %}natural{% else %}nuclear{% endif %}</td></tr>
+    </table>
+  </td>
 </tr>
 <tr>
   <td> 
-    <form action="/sigvisa/fits/{{ fit.fitid }}/rate/" method="post">
+    <form action="{% url rate_fit runid=fit.runid.runid pageid=page_obj.number %}" method="post" id='approval_form'>
       {% csrf_token %}
 
-      Current: {{ fit.human_approved }}
-      <input type="radio" name="approval" id="unknown" value="0" />
+      <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == None %}checked{% endif %}/>
       <label for="unknown">Unknown</label> 
-      <input type="radio" name="approval" id="bad" value="1" />
+      <input type="radio" name="approval" id="bad" value="1" {% if fit.human_approved == '1' %}checked{% endif %}/>
       <label for="bad">Bad fit</label> 
-      <input type="radio" name="approval" id="good" value="2" />
+      <input type="radio" name="approval" id="good" value="2" {% if fit.human_approved == '2' %}checked{% endif %}/>
       <label for="good">Good fit</label> 
       <input type="submit" value="Submit" />
     </form>
@@ -43,3 +97,12 @@
   </td>
 </tr>
 </table>
+{% if page_obj.has_previous %}
+<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}">previous</a>
+{% endif %}
+<span class="page-current">
+  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+</span>
+{% if page_obj.has_next %}
+<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}">next</a>
+{% endif %}
