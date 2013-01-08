@@ -39,14 +39,14 @@ class FitListView(django.views.generic.ListView):
 
 def pageid_to_fit(runid, pageid):
     qset = SigvisaCodaFit.objects.filter(runid=runid)
-    p = Paginator(list(qset), 1) 
+    p = Paginator(list(qset), 1)
     current_fit_page = p.page(pageid)
     fit = current_fit_page[0]
     return fit
 
 def fit_detail(request, runid, pageid):
     qset = SigvisaCodaFit.objects.filter(runid=runid)
-    p = Paginator(list(qset), 1) 
+    p = Paginator(list(qset), 1)
     current_fit_page = p.page(pageid)
     fit = current_fit_page[0]
 
@@ -59,7 +59,7 @@ def fit_detail(request, runid, pageid):
     except Exception as e:
         wave_str = "wave not loaded (%s)" % str(e)
 
-    # preload waveform for the next fit so that it will be cached when we actually need it. 
+    # preload waveform for the next fit so that it will be cached when we actually need it.
     if current_fit_page.has_next():
         try:
             nextfit = p.page(current_fit_page.next_page_number())[0]
@@ -71,7 +71,7 @@ def fit_detail(request, runid, pageid):
     try:
         ev = Event(evid=fit.evid)
 
-        station_location = s.stations[wave['sta']][0:2]
+        station_location = s.stations[str(fit.sta)][0:2]
         dist = utils.geog.dist_km((ev.lon, ev.lat), station_location)
         azi = utils.geog.azimuth(station_location, (ev.lon, ev.lat))
 
@@ -83,11 +83,12 @@ def fit_detail(request, runid, pageid):
         azi = None
         loc_str = ""
 
+
     return render_to_response('coda_fits/detail.html', {
             'fit': fit,
             'page_obj': current_fit_page,
             'wave_str': wave_str,
-            'event': ev,
+            'ev': ev,
             'loc_str': loc_str,
             'dist': dist,
             'azi': azi,
@@ -95,7 +96,7 @@ def fit_detail(request, runid, pageid):
 
 
 
-    # 
+    #
     # SigvisaCodaFit.objects.filter(runid=self.run)
 
 
