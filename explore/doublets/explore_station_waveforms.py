@@ -9,7 +9,7 @@ try:
     import parsedatetime.parsedatetime as pdt
 except:
     import parsedatetime as pdt
-    
+
 from optparse import OptionParser
 
 from source.event import Event
@@ -19,12 +19,14 @@ from explore.doublets.xcorr_pairs import extract_phase_window
 
 def get_first_arrivals(events, sta):
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
     arriving_events = []
     evids = []
     first_arriving_times = []
     first_arriving_phases = []
     for event in events:
-        dets = read_event_detections(s.cursor, event.evid, stations=[sta])
+        dets = read_event_detections(cursor, event.evid, stations=[sta])
         phase = ""
         i=0
         for det in dets:
@@ -40,7 +42,7 @@ def get_first_arrivals(events, sta):
         first_arriving_phases.append(phase)
         first_arriving_times.append(det[DET_TIME_COL])
     arrival_dict = dict(zip(evids, zip(first_arriving_times, first_arriving_phases)))
-    
+
     return arriving_events, arrival_dict
 
 
@@ -60,6 +62,7 @@ def main():
     (options, args) = parser.parse_args()
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
     if options.sta is None:
         raise Exception("must specify a station name (use -s)!")
@@ -87,7 +90,7 @@ def main():
             et = calendar.timegm(et)
 
         phases = [ p for p in options.phases.split(',') if p != ""]
-        evids = read_evids_detected_at_station(s.cursor, sta, st, et, phases, min_mb = options.min_mb, max_mb = options.max_mb)
+        evids = read_evids_detected_at_station(cursor, sta, st, et, phases, min_mb = options.min_mb, max_mb = options.max_mb)
     else:
         f = open(options.evid_file, 'r')
         evids = [int(line) for line in f]
@@ -105,7 +108,7 @@ def main():
         d = extract_phase_window(sta, chan, phase, atime, window_len=10, filter_str="freq_0.8_3.5", evid=ev.evid, cache=True)
         print "extracted", ev
 
-        
+
 
 if __name__ == "__main__":
     main()

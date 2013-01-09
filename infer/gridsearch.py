@@ -25,7 +25,7 @@ def event_at(ev, lon=None, lat=None, t=None):
 def event_location_likelihood(ev, segments, pp, log_likelihood, template_model, iid=False):
 
     s = Sigvisa()
-    
+
     event_time_proposals = []
     for segment in segments:
         is_new = lambda l, x : (len(l) == 0 or np.min([np.abs(lx - x) for lx in l]) > 1.5)
@@ -75,6 +75,7 @@ def main():
     map_width = options.map_width
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
     # train / load coda models
     model_name = options.model
@@ -99,21 +100,21 @@ def main():
     statimes = [ev.time + tm.travel_time(ev_true, sta, phase) for (sta,phase) in itertools.product(sites,s.phases)]
     stime = np.min(statimes) - 60
     etime = np.max(statimes) + 240
-    segments = load_segments(s.cursor, sites, stime, etime)
-        
+    segments = load_segments(cursor, sites, stime, etime)
+
     """
     for sta in sites:
 
         plot_band = 'narrow_envelope_2.00_3.00'
         plot_chan = 'BHZ'
 
-        s = load_event_station(s.cursor, evid, sta)
+        s = load_event_station(cursor, evid, sta)
         signals.append(s)
 
         tr = s[0][plot_chan][plot_band]
         fig = plot.plot_trace(tr)
         em.plot_predicted_signal(s[0], ev, pp, iid=True, chan=plot_chan, band=plot_band)
-        
+
         pp.savefig()
         plt.close(fig)
      """

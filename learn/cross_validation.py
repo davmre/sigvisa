@@ -135,6 +135,7 @@ def main():
     parser = OptionParser()
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
     parser.add_option("-s", "--site", dest="site", default=None, type="str", help="site for which to train models")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
@@ -157,7 +158,7 @@ def main():
     run_name = options.run_name
 
     if options.run_iter == "latest":
-        iters = read_fitting_run_iterations(s.cursor, run_name)
+        iters = read_fitting_run_iterations(cursor, run_name)
         run_iter = np.max(iters[:, 0])
     else:
         run_iter = int(options.run_iter)

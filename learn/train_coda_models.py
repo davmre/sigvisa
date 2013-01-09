@@ -58,7 +58,7 @@ def learn_gp(X, y, distfn, params, optimize=True):
         print "learning hyperparams on", len(sy), "examples"
 
         params, ll = gpr.learn.learn_hyperparams(sX, sy, kernel= "distfn", start_kernel_params = params, kernel_priors=priors, kernel_extra=distfns[distfn])
-            
+
         print "got params", params , "giving ll", ll
 
     gp = SpatialGP(X, y, distfn_str=distfn, kernel_params=params)
@@ -111,11 +111,12 @@ def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_ty
 
 def get_training_data(run_name, run_iter, sta, chan, band, phases, target):
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
-    runid = get_fitting_runid(s.cursor, run_name, run_iter, create_if_new=False)
+    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
     print "loading %s fit data... " % (phases),
-    fit_data = load_shape_data(s.cursor, chan=chan, band=band, sta=sta, runids=[runid,], phases=phases)
+    fit_data = load_shape_data(cursor, chan=chan, band=band, sta=sta, runids=[runid,], phases=phases)
     print str(fit_data.shape[0]) + " entries loaded"
 
     if target=="decay":
@@ -143,6 +144,7 @@ def main():
     parser = OptionParser()
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
     parser.add_option("-s", "--sites", dest="sites", default=None, type="str", help="comma-separated list of sites for which to train models")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
@@ -164,7 +166,7 @@ def main():
 
     run_name = options.run_name
     if options.run_iter == "latest":
-        iters = read_fitting_run_iterations(s.cursor, run_name)
+        iters = read_fitting_run_iterations(cursor, run_name)
         run_iter = np.max(iters)
     else:
         run_iter = int(options.run_iter)

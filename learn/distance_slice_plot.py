@@ -53,7 +53,7 @@ def distance_slice_plot(X, y, model, plotfile, d, event_split=None):
         ylim = [-.04, 0]
 
     ylabel = "coda decay (b)" if d['target'] == "decay" else "transfer fn (log-amplitude)"
-    
+
     for azi in []:
             #    for azi in [0, 90, 180, 270]:
 
@@ -112,7 +112,7 @@ def distance_slice_plot(X, y, model, plotfile, d, event_split=None):
         plt.plot(X_special[:, X_AZI], y_special, 'go')
         plt.plot(X_all[:, X_AZI], y_all, 'ko', alpha=0.02)
 
-        
+
     pp.savefig()
 
 
@@ -126,8 +126,9 @@ def squid_plot(X,y,model, plotfile, d, event_split = None, all_idx=None):
     heatfile = os.path.join(os.path.dirname(plotfile), ".heat_" + hashlib.md5(plotfile).hexdigest()[0:6])
 
     s = Sigvisa()
-    s.cursor.execute("SELECT lon, lat from static_siteid where sta='%s'" % (d['sta']))
-    (slon, slat) = s.cursor.fetchone()
+    cursor = s.dbconn.cursor()
+    cursor.execute("SELECT lon, lat from static_siteid where sta='%s'" % (d['sta']))
+    (slon, slat) = cursor.fetchone()
 
     f = lambda lon, lat: model.predict(np.array([lon, lat, 0, \
                                             utils.geog.dist_km((lon, lat), (slon, slat)), \

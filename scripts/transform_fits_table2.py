@@ -28,12 +28,13 @@ create table sigvisa_coda_fits_shadow (
 """
 
 s = Sigvisa()
-#s.cursor.execute("drop table sigvisa_coda_fit_shadow")
-#s.cursor.execute(new)
+cursor = s.dbconn.cursor()
+#cursor.execute("drop table sigvisa_coda_fit_shadow")
+#cursor.execute(new)
 #s.dbconn.commit()
 
 get_fit = "select runid, evid, sta, chan, lowband, highband, phase, round(atime,4), peak_delay, coda_height, coda_decay, optim_method, iid, round(stime,4), round(etime,4), acost, dist, azi from sigvisa_coda_fits"
-s.cursor.execute(get_fit)
+cursor.execute(get_fit)
 print "executed"
 
 cursor2 = s.dbconn.cursor()
@@ -41,7 +42,7 @@ cursor2 = s.dbconn.cursor()
 fitids = dict()
 
 i=1
-for row in s.cursor:
+for row in cursor:
 
     if i % 100 == 0:
         print i

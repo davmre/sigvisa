@@ -14,7 +14,7 @@ import matplotlib.gridspec as gridspec
 from plotting.plot import subplot_waveform
 
 from database.signal_data import ensure_dir_exists
-    
+
 from optparse import OptionParser
 
 from sigvisa import *
@@ -76,14 +76,15 @@ def train_and_save_models(training_events, sta, chan, window_len, filter_str, ff
 
 def read_training_events(sta, st, et, min_mb, max_mb, center, width):
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
-    evids = read_evids_detected_at_station(s.cursor, sta, st, et, min_mb = min_mb, max_mb = max_mb)
+    evids = read_evids_detected_at_station(cursor, sta, st, et, min_mb = min_mb, max_mb = max_mb)
     events = [Event(evid) for evid in evids]
 
 
     def ev_distkm(ev1, ev2):
         return utils.geog.dist_km((ev1.lon, ev1.lat), (ev2.lon, ev2.lat))
-       
+
     training_events = []
     for event in events:
         if event.evid != center.evid and ev_distkm(center, event) < width:
@@ -92,14 +93,14 @@ def read_training_events(sta, st, et, min_mb, max_mb, center, width):
 
     return training_events
 
-        
+
 def main():
     parser = OptionParser()
 
     parser.add_option("-s", "--sta", dest="sta", default=None, type="str", help="name of station")
     parser.add_option("-c", "--chan", dest="chan", default="BHZ", type="str", help="channel to correlate")
     parser.add_option("--center", dest="center_evid", default=None, type="int", help="evid to center on")
-    
+
     parser.add_option("--days_before", dest="days_before", default=7, type="float", help="set time window reletive to center event")
     parser.add_option("--days_after", dest="days_after", default=7, type="float", help="set time window reletive to center event")
     parser.add_option("--width", dest="width", default=100, type="float", help="only load events within a distance of width km from the center event.")
@@ -112,7 +113,7 @@ def main():
     (options, args) = parser.parse_args()
 
     s = Sigvisa()
-        
+
     sta = options.sta
     chan = options.chan
     filter_str = options.filter_str
@@ -130,7 +131,7 @@ def main():
 
     # first find the events we'll train with: everything near the center, but *not* the center itself
     training_events = read_training_events(sta, st, et, options.min_mb, options.max_mb, center, width)
-    
+
     # plot the training events
     pp = PdfPages("train_set.pdf")
     hm = EventHeatmap(f=lambda x,y: 0, center = (center.lon, center.lat), width = width/70.0)
@@ -149,6 +150,6 @@ def main():
     print "ts"
     train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder)
     print "done"
-    
+
 if __name__ == "__main__":
     main()

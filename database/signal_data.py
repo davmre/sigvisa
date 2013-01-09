@@ -83,15 +83,14 @@ def read_fitting_run_iterations(cursor, run_name):
     return np.array(sorted(r))
 
 
-def get_fitid(evid, sta, chan, band, run_name=None, iteration=None, runid=None):
-    s = Sigvisa()
+def get_fitid(cursor, evid, sta, chan, band, run_name=None, iteration=None, runid=None):
 
     if runid is None:
-        runid = get_fitting_runid(s.cursor, run_name, iteration, create_if_new=False)
+        runid = get_fitting_runid(cursor, run_name, iteration, create_if_new=False)
 
     sql_query = "select fitid from sigvisa_coda_fit where sta='%s' and evid=%d and chan='%s' and band='%s' and runid=%d" % (sta, evid, chan, band, runid)
-    s.cursor.execute(sql_query)
-    fitid = s.cursor.fetchone()[0]
+    cursor.execute(sql_query)
+    fitid = cursor.fetchone()[0]
     return fitid
 
 def filter_and_sort_template_params(unsorted_phases, unsorted_params, filter_list):
@@ -103,12 +102,11 @@ def filter_and_sort_template_params(unsorted_phases, unsorted_params, filter_lis
     return (phases, fit_params)
 
 
-def load_template_params_by_fitid(fitid):
-    s = Sigvisa()
+def load_template_params_by_fitid(cursor, fitid):
 
     sql_query = "select phase, round(param1,8), round(param2, 8), round(param3, 8), round(param4, 8) from sigvisa_coda_fit_phase where fitid=%d" % (fitid)
-    s.cursor.execute(sql_query)
-    rows = s.cursor.fetchall()
+    cursor.execute(sql_query)
+    rows = cursor.fetchall()
     try:
         fit_params =np.asfarray([row[1:5] for row in rows])
         phases = tuple([r[0] for r in rows])
@@ -123,14 +121,15 @@ def load_template_params_by_fitid(fitid):
     return (phases, fit_params), fit_cost
 
 
-def load_template_params(evid, sta, chan, band, run_name=None, iteration=None, runid=None):
-    fitid = get_fitid(evid, sta, chan, band, run_name=None, iteration=None, runid=None)
-    return load_template_params_by_fitid(fitid)
+def load_template_params(cursor, evid, sta, chan, band, run_name=None, iteration=None, runid=None):
+    fitid = get_fitid(cursor, evid, sta, chan, band, run_name=None, iteration=None, runid=None)
+    return load_template_params_by_fitid(cursor, fitid)
 
 def store_template_params(wave, template_params, method_str, iid, fit_cost, run_name, iteration):
     s  = Sigvisa()
+    cursor = s.dbconn.cursor()
 
-    runid = get_fitting_runid(s.cursor, run_name, iteration)
+    runid = get_fitting_runid(cursor, run_name, iteration)
 
     sta = wave['sta']
     siteid = wave['siteid']
@@ -155,7 +154,7 @@ def store_template_params(wave, template_params, method_str, iid, fit_cost, run_
     for (i, phase) in enumerate(phases):
         sql_query = "INSERT INTO sigvisa_coda_fits (runid, evid, sta, chan, lowband, highband, phase, atime, peak_delay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) values (%d, %d, '%s', '%s', %f, %f, '%s', %f, %f, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, lowband, highband, phase, fit_params[i, PE_ARR_TIME_PARAM], fit_params[i, PE_PEAK_OFFSET_PARAM], fit_params[i, PE_CODA_HEIGHT_PARAM], fit_params[i, PE_CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
         try:
-            s.cursor.execute(sql_query)
+            cursor.execute(sql_query)
         except Exception as e:
             print e
             print "DB error inserting fits (probably duplicate key), continuing..."

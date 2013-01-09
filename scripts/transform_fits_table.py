@@ -28,17 +28,18 @@ create table sigvisa_coda_fits_shadow (
 """
 
 s = Sigvisa()
-s.cursor.execute("drop table sigvisa_coda_fits_shadow")
-s.cursor.execute(new)
+cursor = s.dbconn.cursor()
+cursor.execute("drop table sigvisa_coda_fits_shadow")
+cursor.execute(new)
 s.dbconn.commit()
 
 get_fit = "select runid, arid, chan, band, peak_delay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi from sigvisa_coda_fits"
 getmisc = "select l.sta, leba.phase, round(l.time,4), lebo.evid from leb_arrival l, leb_assoc leba, leb_origin lebo where l.arid=%d and leba.arid=l.arid and leba.orid=lebo.orid"
-s.cursor.execute(get_fit)
+cursor.execute(get_fit)
 
 cursor2 = s.dbconn.cursor()
 
-for row in s.cursor:
+for row in cursor:
     sql_query = getmisc % row[1]
 #    print sql_query
     cursor2.execute(sql_query)

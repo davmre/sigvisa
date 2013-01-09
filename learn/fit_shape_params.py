@@ -30,6 +30,7 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
     """
 
     s = tm.sigvisa
+    cursor = s.dbconn.cursor()
     sta = wave['sta']
     chan = wave['chan']
     band = wave['band']
@@ -37,12 +38,12 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
     print "fitting template for", sta, chan, band
 
     if wiggles is not None:
-        load_wiggle_models(s.cursor, s.sigmodel, wiggles)
+        load_wiggle_models(cursor, s.sigmodel, wiggles)
     best_params = None
 
     # initialize the search using the outcome of a previous run
     if init_run_name is not None:
-        start_param_vals, phaseids_loaded, fit_cost = load_template_params(ev.evid, sta, chan, band, run_name=init_run_name, iteration=init_iteration)
+        start_param_vals, phaseids_loaded, fit_cost = load_template_params(cursor, ev.evid, sta, chan, band, run_name=init_run_name, iteration=init_iteration)
         phases = [s.phasenames[phaseid-1] for phaseid in phaseids_loaded]
 
         arriving_phases = s.arriving_phases(ev, wave['sta'])
@@ -97,7 +98,7 @@ def fit_event_segment(event, sta, tm, output_run_name, output_iteration, init_ru
         s = Sigvisa()
         bands = s.bands
         chans = s.chans
-        cursor = s.cursor
+        cursor = s.dbconn.cursor()
 
         base_coda_dir = get_base_dir(sta, output_run_name)
         seg = load_event_station(event.evid, sta, cursor=cursor).with_filter("env")
@@ -116,7 +117,7 @@ def fit_event_segment(event, sta, tm, output_run_name, output_iteration, init_ru
 
                 # DO THE FITTING
                 if method == "load":
-                    fit_params, fit_cost = load_template_params(event.evid, chan, band, init_run_name, siteid)
+                    fit_params, fit_cost = load_template_params(cursor, event.evid, chan, band, init_run_name, siteid)
                     if fit_params is None:
                         print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, init_run_name, chan, band)
                         continue
@@ -159,7 +160,7 @@ def main():
     (options, args) = parser.parse_args()
 
     s = Sigvisa()
-    cursor = s.cursor
+    cursor = s.dbconn.cursor()
 
 
     if options.run_name is None or options.run_iteration is None:

@@ -9,7 +9,7 @@ try:
     import parsedatetime.parsedatetime as pdt
 except:
     import parsedatetime as pdt
-    
+
 from optparse import OptionParser
 
 from source.event import Event
@@ -17,12 +17,13 @@ from sigvisa import *
 
 def get_first_arrivals(events, sta):
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
     arriving_events = []
     evids = []
     first_arriving_times = []
     first_arriving_phases = []
     for event in events:
-        dets = read_event_detections(s.cursor, event.evid, stations=[sta])
+        dets = read_event_detections(cursor, event.evid, stations=[sta])
         phase = ""
         i=0
         for det in dets:
@@ -38,7 +39,7 @@ def get_first_arrivals(events, sta):
         first_arriving_phases.append(phase)
         first_arriving_times.append(det[DET_TIME_COL])
     arrival_dict = dict(zip(evids, zip(first_arriving_times, first_arriving_phases)))
-    
+
     return arriving_events, arrival_dict
 
 
@@ -57,6 +58,7 @@ def main():
     (options, args) = parser.parse_args()
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
     if options.sta is None:
         raise Exception("must specify a station name (use -s)!")
@@ -82,7 +84,7 @@ def main():
             et = calendar.timegm(et)
 
         phases = [ p for p in options.phases.split(',') if p != ""]
-        evids = read_evids_detected_at_station(s.cursor, sta, st, et, phases, min_mb = options.min_mb, max_mb = options.max_mb)
+        evids = read_evids_detected_at_station(cursor, sta, st, et, phases, min_mb = options.min_mb, max_mb = options.max_mb)
     else:
         f = open(options.evid_file, 'r')
         evids = [int(line) for line in f]
@@ -104,7 +106,7 @@ def main():
     for pair in p:
         (atime1, phase1) = arrival_dict[pair[3]]
         (atime2, phase2) = arrival_dict[pair[4]]
-        
+
         print "evids %d, %d are at distance %.3fkm and have depths (%.3fkm, %.3fkm) (orid %d %d)" % (pair[3], pair[4], pair[0], pair[1], pair[2], pair[5], pair[6])
 
     if options.outfile:
