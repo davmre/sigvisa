@@ -31,7 +31,7 @@ class Waveform(object):
     A single waveform trace. Contains methods for generating filtered versions of itself.
     """
 
-    def __init__(self, data, srate = None, stime=None, sta = None, evid=None, segment_stats = None, my_stats = None, **my_stats_entries):
+    def __init__(self, data=[], srate = 40, stime=0, sta = "AAK", evid=None, segment_stats = None, my_stats = None, **my_stats_entries):
         if isinstance(data, ma.MaskedArray):
             self.data = data
         else:

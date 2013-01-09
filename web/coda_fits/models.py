@@ -10,6 +10,11 @@
 from django.db import models
 from coda_fits.fields import UnixTimestampField
 
+class view_options(models.Model):
+    id = models.IntegerField(primary_key=True)
+    smoothing = models.IntegerField()
+    logscale = models.BooleanField()
+    sample = models.BooleanField()
 
 class Dataset(models.Model):
     label = models.CharField(max_length=60)

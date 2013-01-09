@@ -1,5 +1,122 @@
 <script>
+function hideLoading() {
+document.getElementById('loading').style.visibility = 'hidden';
+}
+</script>
+<h1>{{ fit.sta }}: {{ fit.evid }} ({{ fit.chan }}, {{fit.band }})</h1>
+<table>
+<tr>
+  <td><img id="fit" src="" width=500 height=300 onload="hideLoading()"><br \>
+  </td>
+  <td valign=top rowspan=1>
+    <b>Event</b>
+    <table>
+      <tr><td>evid</td><td>{{ ev.evid|stringformat:'d' }}</td></tr>
+      <tr><td>orid</td><td>{{ ev.orid|stringformat:'d' }}</td></tr>
+      <tr><td>loc</td><td>{{ loc_str }}</td></tr>
+      <tr><td>depth</td><td>{{ ev.depth|stringformat:'.1f' }}km</td></tr>
+      <tr><td>time</td><td>{{ ev_time_str }}</td></tr>
+      <tr><td>unix time</td><td>{{ ev.time }}</td></tr>
+      <tr><td>mb</td><td>{{ ev.mb|stringformat:'.2f' }}</td></tr>
+      <tr><td>source</td><td>{% if ev.natural_source %}natural{% else %}nuclear{% endif %}</td></tr>
+    </table>
+  </td>
+  <td valign=top rowspan=1>
+    <b>Waveform</b>
+    <table>
+      <tr><td>sta</td><td>{{ wave.sta }}</td></tr>
+      <tr><td>npts</td><td>{{ wave.npts }}</td></tr>
+      <tr><td>srate</td><td>{{ wave.srate }}Hz</td></tr>
+      <tr><td>len</td><td>{{ wave.len }}s</td></tr>
+      <tr><td>filter_str</td><td>{{ wave.filter_str }}</td></tr>
+      <tr><td>fraction_valid</td><td>{{ wave.fraction_valid|stringformat:'.3f' }}</td></tr>
+      <tr><td>start time</td><td>{{ wave_time_str }}</td></tr>
+      <tr><td>unix stime</td><td>{{ wave.stime|stringformat:'.1f' }}</td></tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <td valign='top'>
+    <center>
+      <table>
+	<tr>
+	  <td valign='top'><center>
+	      <span id="slider">0
+		<input id="slide" type="range" min="0" max="20" step="1" value="{{ fit_view_options.smoothing }}"
+		       onchange="updateSliderDisplay()" onMouseUp="updateFitImage()" />
+		20</span><br/>
+	      smoothing: <span id="chosen"></div>
+	    </center>
+	  </td>
+	  <td valign='top'>
+	    <input id="fitlog" type="checkbox" onchange="updateFitImage()" {% if fit_view_options.logscale %}checked{% endif %}>
+	    <label for="fitlog">logscale</label>
+	  </td>
+	  <td valign='top'>
+	    <input id="fitsample" type="checkbox" onchange="updateFitImage()" {% if fit_view_options.sample %}checked{% endif %}>
+	    <label for="fitsample">sample</label>
+	  </td>
+	  <td valign='top'>
+	    <div id="loading" style="color: red">loading...</div>
+	  </td>
+        </tr>
+      </table>
+    </center>
+  </td>
+  <td colspan=2 valign='top'>
+    <form action="{% url rate_fit runid=fit.runid.runid pageid=page_obj.number %}" method="post" id='approval_form'>
+      {% csrf_token %}
+
+      <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
+      <label for="unknown">Unknown</label>
+      <input type="radio" name="approval" id="bad" value="1" {% if fit.human_approved == '1' or fit.human_approved == 1 %}checked{% endif %}/>
+      <label for="bad">Bad fit</label>
+      <input type="radio" name="approval" id="good" value="2" {% if fit.human_approved == '2' or fit.human_approved = 2%}checked{% endif %}/>
+      <label for="good">Good fit</label>
+      <input type="submit" value="Submit" />
+    </form>
+  </td>
+</tr>
+<tr>
+  <td colspan=3>
+    <table border=1 width=100%>
+      <tr>
+	<td><strong>Phase</strong></td>
+	<td><strong>atime</strong></td>
+	<td><strong>onset_seconds</strong></td>
+	<td><strong>coda_height</strong></td>
+	<td><strong>decay_rate</strong></td>
+      </tr>
+      {% for phase in fit.sigvisacodafitphase_set.all %}
+      <tr>
+	<td>{{ phase.phase }}</td>
+	<td>{{ phase.param1 }}</td>
+	<td>{{ phase.param2 }}</td>
+	<td>{{ phase.param3 }}</td>
+	<td>{{ phase.param4 }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </td>
+</tr>
+</table>
+<br/>
+<center>
+{% if page_obj.has_previous %}
+<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}">previous</a>
+{% endif %}
+<span class="page-current">
+  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+</span>
+{% if page_obj.has_next %}
+<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}">next</a>
+{% endif %}
+</center>
+<img id="nextfit" src="" style="display: none">
+
+<script>
 document.onkeydown = KeyCheck;
+window.onload = updateSlider()
 
 function KeyCheck(e)
 {
@@ -38,83 +155,58 @@ break;
 
 default:
 break;
+}
+}
+
+
+function updateSliderDisplay() {
+
+var slide = document.getElementById("slide");
+slideAmount = slide.value;
+
+var display = document.getElementById("chosen");
+display.innerHTML=slide.value;
 
 }
+
+function preloadNextFit() {
+var slide = document.getElementById("slide");
+slideAmount = slide.value;
+
+fitlog = document.getElementById("fitlog").checked;
+fitsample = document.getElementById("fitsample").checked;
+
+var nextfit = document.getElementById("nextfit");
+nextfit.src = "{% url visual runid=fit.runid.runid pageid=page_obj.next_page_number %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";sample=" + fitsample + ";saveprefs=true";
+
+}
+
+
+function updateFitImage() {
+var slide = document.getElementById("slide");
+slideAmount = slide.value;
+
+fitlog = document.getElementById("fitlog").checked;
+fitsample = document.getElementById("fitsample").checked;
+
+var fit_img = document.getElementById("fit");
+new_src = "{% url visual runid=fit.runid.runid pageid=page_obj.number %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";sample=" + fitsample + ";saveprefs=true";
+
+// only show the loading message if the image has actually changed
+if ('/' + fit_img.src.split("/").slice(3).join("/") != new_src) {
+showLoading();
+}
+fit_img.src = new_src
+
+}
+
+function updateSlider() {
+updateSliderDisplay();
+updateFitImage();
+preloadNextFit();
+}
+
+function showLoading() {
+document.getElementById('loading').style.visibility = 'visible';
 }
 </script>
-
-<h1>{{ fit.sta }}: {{ fit.evid }} ({{ fit.chan }}, {{fit.band }})</h1>
-<table>
-<tr>
-  <td><img src="{% url visual runid=fit.runid.runid pageid=page_obj.number %}" width=500 height=300><br \>{{ wave_str }}</td>
-  <td valign=top rowspan=2>
-    <table>
-      <tr><td>evid</td><td>{{ ev.evid|stringformat:'d' }}</td></tr>
-      <tr><td>orid</td><td>{{ ev.orid|stringformat:'d' }}</td></tr>
-      <tr><td>loc</td><td>{{ loc_str }}</td></tr>
-      <tr><td>depth</td><td>{{ ev.depth|stringformat:'.1f' }}km</td></tr>
-      <tr><td>time</td><td>{{ ev.time }}</td></tr>
-      <tr><td>mb</td><td>{{ ev.mb|stringformat:'.2f' }}</td></tr>
-      <tr><td>source</td><td>{% if ev.natural_source %}natural{% else %}nuclear{% endif %}</td></tr>
-    </table>
-  </td>
-  <td valign=top rowspan=2>
-    <table>
-      <tr><td>evid</td><td>{{ ev.evid|stringformat:'d' }}</td></tr>
-      <tr><td>orid</td><td>{{ ev.orid|stringformat:'d' }}</td></tr>
-      <tr><td>loc</td><td>{{ loc_str }}</td></tr>
-      <tr><td>depth</td><td>{{ ev.depth|stringformat:'.1f' }}km</td></tr>
-      <tr><td>time</td><td>{{ ev.time }}</td></tr>
-      <tr><td>mb</td><td>{{ ev.mb|stringformat:'.2f' }}</td></tr>
-      <tr><td>source</td><td>{% if ev.natural_source %}natural{% else %}nuclear{% endif %}</td></tr>
-    </table>
-  </td>
-
-</tr>
-<tr>
-  <td>
-    <form action="{% url rate_fit runid=fit.runid.runid pageid=page_obj.number %}" method="post" id='approval_form'>
-      {% csrf_token %}
-
-      <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
-      <label for="unknown">Unknown</label>
-      <input type="radio" name="approval" id="bad" value="1" {% if fit.human_approved == '1' or fit.human_approved == 1 %}checked{% endif %}/>
-      <label for="bad">Bad fit</label>
-      <input type="radio" name="approval" id="good" value="2" {% if fit.human_approved == '2' or fit.human_approved = 2%}checked{% endif %}/>
-      <label for="good">Good fit</label>
-      <input type="submit" value="Submit" />
-    </form>
-
-  </td>
-<tr>
-  <td colspan=3>
-    <table border=1 width=100%>
-      <tr>
-	<td><strong>Phase</strong></td>
-	<td><strong>atime</strong></td>
-	<td><strong>onset_seconds</strong></td>
-	<td><strong>coda_height</strong></td>
-	<td><strong>decay_rate</strong></td>
-      </tr>
-      {% for phase in fit.sigvisacodafitphase_set.all %}
-      <tr>
-	<td>{{ phase.phase }}</td>
-	<td>{{ phase.param1 }}</td>
-	<td>{{ phase.param2 }}</td>
-	<td>{{ phase.param3 }}</td>
-	<td>{{ phase.param4 }}</td>
-      </tr>
-      {% endfor %}
-    </table>
-  </td>
-</tr>
-</table>
-{% if page_obj.has_previous %}
-<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}">previous</a>
-{% endif %}
-<span class="page-current">
-  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
-</span>
-{% if page_obj.has_next %}
-<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}">next</a>
-{% endif %}

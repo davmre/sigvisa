@@ -126,7 +126,7 @@ def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=
     else:
         raise Exception("noise model path must specify either an hour or a specific minute")
 
-    base_dir = os.path.join("parameters/noise_models/", sta, str(t.tm_year), str(t.tm_mon), str(t.tm_mday))
+    base_dir = os.path.join(os.getenv('SIGVISA_HOME'), "parameters", "noise_models", sta, str(t.tm_year), str(t.tm_mon), str(t.tm_mday))
     sanitized_filter_str = '_'.join([s for s in filter_str.split(';') if s != ""])
     model_fname = '.'.join([chan, sanitized_filter_str, "%.0f" % (srate) + "hz", str(order), 'armodel'])
 
