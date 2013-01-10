@@ -112,7 +112,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   artifacts.
   """
   s = Sigvisa()
-  cursor = s.cursor
+  cursor = s.dbconn.cursor()
 
   # scan the waveforms for the given interval
   samprate = None

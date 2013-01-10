@@ -136,7 +136,8 @@ def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=
 # load times of all arrivals at a station within a given period
 def load_arrival_times(sta, stime, etime):
     s = Sigvisa()
-    arrivals = dataset.read_station_detections(s.cursor, sta, stime, etime)
+    cursor = s.dbconn.cursor()
+    arrivals = dataset.read_station_detections(cursor, sta, stime, etime)
     if arrivals.shape[0] != 0:
         arrival_times = arrivals[:, dataset.DET_TIME_COL]
     else:

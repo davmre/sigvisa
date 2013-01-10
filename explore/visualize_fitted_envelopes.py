@@ -20,12 +20,13 @@ from sigvisa import *
 
 
 
-    
+
 
 def main():
     parser = OptionParser()
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
     parser.add_option("-s", "--site", dest="site", default=None, type="str", help="site for which to train models")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
@@ -46,11 +47,11 @@ def main():
     run_name = options.run_name
 
     if options.run_iter == "latest":
-        iters = read_fitting_run_iterations(s.cursor, run_name)
+        iters = read_fitting_run_iterations(cursor, run_name)
         run_iter = np.max(iters[:, 0])
     else:
         run_iter = int(options.run_iter)
-    runid = get_fitting_runid(s.cursor, run_name, run_iter, create_if_new=False)
+    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
 
     pieces = band.split('_')
@@ -59,8 +60,8 @@ def main():
         lowband = float(pieces[1])
         highband = float(pieces[2])
         sql_query = "select distinct evid from sigvisa_coda_fits where runid=%d and sta='%s' and chan='%s' and lowband=%f and highband=%f and acost < %f" % (runid, sta, chan, lowband, highband, acost_threshold)
-        s.cursor.execute(sql_query)
-        evids = s.cursor.fetchall()
+        cursor.execute(sql_query)
+        evids = cursor.fetchall()
     else:
         evids = [ [options.evid,], ]
 
@@ -81,7 +82,7 @@ def main():
                 continue
 
 
-            (phases, vals), cost = load_template_params(evid, sta, chan, band, run_name, run_iter)
+            (phases, vals), cost = load_template_params(cursor, evid, sta, chan, band, run_name, run_iter)
 
             if options.require_p_s:
                 P_arrivals = [phase for phase in phases if phase in s.P_phases]
@@ -104,7 +105,7 @@ def main():
             print "writing ev %d to %s" % (evid, fname)
 
 
-            seg = load_event_station(evid, sta, cursor=s.cursor).with_filter("env;"+band)
+            seg = load_event_station(evid, sta, cursor=cursor).with_filter("env;"+band)
             wave = seg[chan]
             plt.clf()
             plot_waveform_with_pred(pp, wave, tm, (phases, vals), logscale=True, title="log scale")

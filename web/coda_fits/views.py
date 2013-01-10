@@ -67,10 +67,13 @@ def fit_detail(request, runid, pageid):
         fit_view_options.sample = False
         fit_view_options.save()
 
+
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
     # load the waveform so that we can display data about it
     try:
-        s = Sigvisa()
-        seg = load_event_station(fit.evid, str(fit.sta), cursor=s.cursor).with_filter("env;"+str(fit.band))
+        seg = load_event_station(fit.evid, str(fit.sta), cursor=cursor).with_filter("env;"+str(fit.band))
         wave = seg[fit.chan]
 
         wave_time_str = str(datetime.fromtimestamp(wave['stime']))
@@ -132,6 +135,7 @@ def FitImageView(request, runid, pageid):
 
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
     tm = load_template_model("paired_exp", run_name=None, run_iter=0, model_type="dummy")
 
     fit_phases = fit.sigvisacodafitphase_set.all()
@@ -142,7 +146,7 @@ def FitImageView(request, runid, pageid):
         (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
 
 
-        seg = load_event_station(fit.evid, str(fit.sta), cursor=s.cursor).with_filter("env;"+str(fit.band))
+        seg = load_event_station(fit.evid, str(fit.sta), cursor=cursor).with_filter("env;"+str(fit.band))
         wave = seg[fit.chan]
 
         fig = plt.figure(figsize=(5,3), dpi=144)

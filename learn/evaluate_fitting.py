@@ -31,6 +31,7 @@ def main():
     arrivals = arrival_select.arrivals_from_options(options)
 
     s = Sigvisa()
+    cursor = s.dbconn.cursor()
     bands = ['freq_2.0_3.0',]
     chans = ['BHZ',]
 
@@ -45,7 +46,7 @@ def main():
     times = []
     for (sta, evid) in arrivals:
         event = Event(evid)
-        seg = load_event_station(event.evid, sta, cursor=s.cursor).with_filter("env")
+        seg = load_event_station(event.evid, sta, cursor=cursor).with_filter("env")
         for band in bands:
             band_seg = seg.with_filter(band)
             for chan in chans:

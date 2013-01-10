@@ -35,7 +35,7 @@ def main():
     (options, args) = parser.parse_args()
 
     s = Sigvisa()
-    cursor = s.cursor
+    cursor = s.dbconn.cursor()
 
     iid=True
     by_phase=False
@@ -44,7 +44,7 @@ def main():
     if options.run_name is None:
         raise Exception("must specify a run name!")
     run_name = options.run_name
-    iters = read_fitting_run_iterations(s.cursor, run_name)
+    iters = read_fitting_run_iterations(cursor, run_name)
     print "Current iterations for run %s: %s" % (run_name, zip(*iters)[0])
     if len(iters) == 0:
         if not query_yes_no("Create a new run and do a first iteration of fits with heuristic initialization?"):
