@@ -39,7 +39,7 @@ class Event(object):
         if (evid is not None or orid is not None) and evtype is not None:
 
             try:
-                ev = read_event(Sigvisa().cursor, evid=evid, evtype=evtype, orid=orid)
+                ev = read_event(Sigvisa().dbconn.cursor(), evid=evid, evtype=evtype, orid=orid)
                 self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid = ev
             except TypeError as e:
                 raise EventNotFound("couldn't load evid %d" % evid)

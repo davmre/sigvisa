@@ -28,7 +28,7 @@ class MissingWaveform(Exception):
 
 def load_event_station(evid, sta, evtype="leb", cursor=None):
   if cursor is None:
-    cursor = Sigvisa().cursor
+    cursor = Sigvisa().dbconn.cursor()
 
   arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
   arrival_times = arrivals[:, DET_TIME_COL]
