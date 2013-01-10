@@ -145,8 +145,7 @@ INSTALLED_APPS = (
     'coda_fits',
     # Uncomment the next line to enable the admin:
     'django.contrib.admin',
-    # Uncomment the next line to enable admin documentation:
-    # 'django.contrib.admindocs',
+    'django_extensions',
 )
 
 CACHES = {
