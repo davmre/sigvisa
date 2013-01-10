@@ -73,8 +73,7 @@ def fit_detail(request, runid, pageid):
 
     # load the waveform so that we can display data about it
     try:
-        seg = load_event_station(fit.evid, str(fit.sta), cursor=cursor).with_filter("env;"+str(fit.band))
-        wave = seg[fit.chan]
+        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band)+";env")
 
         wave_time_str = str(datetime.fromtimestamp(wave['stime']))
     except Exception as e:
@@ -144,8 +143,7 @@ def FitImageView(request, runid, pageid):
         (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
 
 
-        seg = load_event_station(fit.evid, str(fit.sta), cursor=cursor).with_filter("env;"+str(fit.band))
-        wave = seg[fit.chan]
+        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
 
         fig = plt.figure(figsize=(5,3), dpi=144)
         fig.patch.set_facecolor('white')

@@ -1,6 +1,19 @@
 
 <html>
 <head>
+
+{% if page_obj.has_next %}
+<link rel='prev'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}" />
+{% endif %}
+{% if page_obj.has_next %}
+<link rel='next'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}" />
+<link rel='prerender'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}" />
+<link rel='prefetch'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}" />
+<link rel='prerender'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number|add:1 %}" />
+<link rel='prerender'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number|add:2 %}" />
+{% endif %}
+
+
 <script>
 function hideLoading() {
 document.getElementById('loading').style.visibility = 'hidden';

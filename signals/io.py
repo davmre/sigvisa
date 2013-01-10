@@ -25,10 +25,23 @@ from sigvisa import Sigvisa
 class MissingWaveform(Exception):
   pass
 
+def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None):
+  if cursor is None:
+    cursor = Sigvisa().dbconn.cursor()
+
+  arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
+  arrival_times = arrivals[:, DET_TIME_COL]
+
+  wave = fetch_waveform(sta, chan, np.min(arrival_times)-10, np.max(arrival_times)+200)
+  wave.segment_stats['evid'] = evid
+  wave.segment_stats['event_arrivals'] = arrivals
+
+  return wave
+
 
 def load_event_station(evid, sta, evtype="leb", cursor=None):
   if cursor is None:
-    cursor = Sigvisa().cursor
+    cursor = Sigvisa().dbconn.cursor()
 
   arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
   arrival_times = arrivals[:, DET_TIME_COL]
@@ -136,7 +149,9 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
   else:
     selection=station
 
-  sql = "select * from idcx_wfdisc where sta = '%s' and %s and time <= %f and %f < endtime" % (selection, sql_multi_str("chan", chan_list), etime, stime)
+  # explicitly do BETWEEN queries (with generous bounds) rather than just checking time < etime and endtime > stime, because the latter creates a monstrous slow database join
+  MAX_SIGNAL_LEN=3600*8
+  sql = "select * from idcx_wfdisc where sta = '%s' and %s and time between %f and %f and endtime between %f and %f" % (selection, sql_multi_str("chan", chan_list), stime-MAX_SIGNAL_LEN, etime, stime, etime+MAX_SIGNAL_LEN)
   cursor.execute(sql)
   waveforms = cursor.fetchall()
   if not waveforms:
