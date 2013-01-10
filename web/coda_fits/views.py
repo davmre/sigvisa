@@ -37,7 +37,8 @@ class FitListView(django.views.generic.ListView):
     def get_queryset(self):
         a = self.args
         self.run = get_object_or_404(SigvisaCodaFittingRun, pk=self.kwargs['pk'])
-        return SigvisaCodaFit.objects.filter(runid=self.run)
+        qset = SigvisaCodaFit.objects.filter(runid=self.run)
+        return qset
 
 def pageid_to_fit(runid, pageid):
     qset = SigvisaCodaFit.objects.filter(runid=runid)

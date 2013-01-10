@@ -4,7 +4,6 @@ from django.views.generic import DetailView, ListView
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFittingRun
 
 urlpatterns = patterns('',
-    url(r'^fits$', FitListView.as_view(), name='fits'),
     url(r'^fits/runs/$',   ListView.as_view(queryset=SigvisaCodaFittingRun.objects.order_by('run_name'),
                                            context_object_name='run_list',
                                            template_name='coda_fits/runs.html')),
