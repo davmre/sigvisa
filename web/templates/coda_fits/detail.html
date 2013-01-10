@@ -1,8 +1,15 @@
+
+<html>
+<head>
 <script>
 function hideLoading() {
 document.getElementById('loading').style.visibility = 'hidden';
 }
 </script>
+<title>{{ fit.evid }} at {{ fit.sta }} -- sigvisa fit</title>
+</head>
+<body>
+
 <h1>{{ fit.sta }}: {{ fit.evid }} ({{ fit.chan }}, {{fit.band }})</h1>
 <table>
 <tr>
@@ -114,6 +121,8 @@ document.getElementById('loading').style.visibility = 'hidden';
 </center>
 <img id="nextfit" src="" style="display: none">
 
+
+
 <script>
 document.onkeydown = KeyCheck;
 window.onload = updateSlider()
@@ -210,3 +219,5 @@ function showLoading() {
 document.getElementById('loading').style.visibility = 'visible';
 }
 </script>
+</body>
+</html>

@@ -28,9 +28,9 @@ vdec_db = {
     }
 
 
-try:
-    os.getenv('VISA_ORA_USER')
-except:
+
+a =  os.getenv('VISA_ORA_USER')
+if a is None:
     default_db = patmos_db
 else:
     default_db = vdec_db
@@ -112,9 +112,11 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+   'debug_toolbar.middleware.DebugToolbarMiddleware',
     # Uncomment the next line for simple clickjacking protection:
     # 'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
+
 
 ROOT_URLCONF = 'sigvisa_web.urls'
 
@@ -146,7 +148,10 @@ INSTALLED_APPS = (
     # Uncomment the next line to enable the admin:
     'django.contrib.admin',
     'django_extensions',
+    'debug_toolbar',
 )
+
+INTERNAL_IPS = ('127.0.0.1', '75.38.192.148')
 
 CACHES = {
     'default': {

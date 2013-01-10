@@ -42,7 +42,7 @@ class FitListView(django.views.generic.ListView):
 
 def pageid_to_fit(runid, pageid):
     qset = SigvisaCodaFit.objects.filter(runid=runid)
-    p = Paginator(list(qset), 1)
+    p = Paginator(qset, 1)
     current_fit_page = p.page(pageid)
     fit = current_fit_page[0]
     return fit
@@ -52,7 +52,7 @@ def fit_detail(request, runid, pageid):
 
     # get the fit corresponding to the given pageid for this run
     qset = SigvisaCodaFit.objects.filter(runid=runid)
-    p = Paginator(list(qset), 1)
+    p = Paginator(qset, 1)
     current_fit_page = p.page(pageid)
     fit = current_fit_page[0]
 
@@ -130,8 +130,6 @@ def FitImageView(request, runid, pageid):
         fit_view_options.smoothing = smoothing
         fit_view_options.logscale = logscale
         fit_view_options.save()
-
-
 
 
     s = Sigvisa()
