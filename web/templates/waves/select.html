@@ -1,0 +1,74 @@
+<html>
+<head>
+<script>
+function hideLoading() {
+document.getElementById('loading').style.visibility = 'hidden';
+}
+</script>
+
+<style type="text/css">
+.wavediv {
+   position: relative;
+   width: 100%; /* for IE 6 */
+}
+
+#loading {
+   position: absolute;
+   top: 200px;
+   left: 0px;
+   color: red;
+   width: 100%;
+   visibility: hidden;
+}
+</style>
+
+<title>sigvisa waveform viewer</title>
+
+</head>
+<body>
+
+<center>
+  <div id="wavediv">
+    <img id="wave" src="" width=800 height=500 onload="hideLoading()" border=1>
+    <h1 id="loading">Loading...</h1>
+  </div>
+  <br/>
+  <input type="textbox" id="txt_sta" value=""  size="4"/>
+  <input type="textbox" id="txt_chan" value="BHZ"  size="3" />
+  <input type="textbox" id="stime" value="0" size="15"/>
+  <input type="textbox" id="etime" value="0" size="15"/>
+  <input type="textbox" id="filter_str" value="freq_2.0_3.0;env;smooth_8"  size="30"/>
+  <input id="logscale" type="checkbox" />
+  <label for="fitlog">logscale</label>
+  <input type="button" value="update" onclick="updateWaveImage()" />
+</center>
+
+
+<script>
+
+
+function updateWaveImage() {
+var sta = document.getElementById("txt_sta").value;
+var chan = document.getElementById("txt_chan").value;
+var stime = document.getElementById("stime").value;
+var etime = document.getElementById("etime").value;
+var filter_str = document.getElementById("filter_str").value;
+
+logscale = document.getElementById("logscale").checked;
+
+var wave_img = document.getElementById("wave");
+new_src = "wave.png?sta=" + sta + ";chan=" + chan + ";stime=" + stime + ";etime=" + etime + ";filter_str=" + escape(filter_str) + ";logscale=" + logscale
+
+// only show the loading message if the image has actually changed
+if ('/' + wave_img.src.split("/").slice(3).join("/") != new_src) {
+showLoading();
+}
+wave_img.src = new_src
+}
+
+function showLoading() {
+document.getElementById('loading').style.visibility = 'visible';
+}
+</script>
+</body>
+</html>
