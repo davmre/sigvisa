@@ -145,6 +145,7 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'coda_fits',
+    'waves',
     # Uncomment the next line to enable the admin:
     'django.contrib.admin',
     'django_extensions',

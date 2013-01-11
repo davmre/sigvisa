@@ -10,7 +10,8 @@ urlpatterns = patterns('',
     # url(r'^sigvisa/', include('sigvisa.foo.urls')),
 
                        url(r'^sigvisa/', include('coda_fits.urls')),
-                       
+                       url(r'^sigvisa/', include('waves.urls')),
+
 
     # Uncomment the admin/doc line below to enable admin documentation:
     url(r'^admin/doc/', include('django.contrib.admindocs.urls')),
