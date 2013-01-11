@@ -56,7 +56,7 @@ class Sigvisa(object):
         self.earthmodel = learn.do_training.load_earth(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), self.sites, self.phasenames, self.phasetimedef)
         self.sigmodel = learn.do_training.load_sigvisa(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
 
-        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7')
+        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
         self.chans = ('BHZ', 'BHN', 'BHE')
         self.phases = ('P', 'Pn', 'Pg', 'S', 'Sn', 'Lg')
 

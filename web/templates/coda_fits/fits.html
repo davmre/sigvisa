@@ -15,7 +15,7 @@
                 <td>{{ fit.chan }}</td>
                 <td>{{ fit.band }}</td>
                 <td>{{ fit.stime }}</td>
-                <td><a href="{% url fit_run_detail runid=fit.runid.runid pageid=forloop.counter|add:page_obj.start_index|add:-1  %}" class="see_detail">detail</a></td>
+                <td><a href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=forloop.counter|add:page_obj.start_index|add:-1  %}" class="see_detail">detail</a></td>
             </tr>
         {% endfor %}
     </table>

@@ -1,16 +1,16 @@
-
+{% load math_filters %}
 <html>
 <head>
 
 {% if page_obj.has_next %}
-<link rel='prev'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}" />
+<link rel='prev'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.previous_page_number %}" />
 {% endif %}
 {% if page_obj.has_next %}
-<link rel='next'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}" />
-<link rel='prerender'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}" />
-<link rel='prefetch'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}" />
-<link rel='prerender'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number|add:1 %}" />
-<link rel='prerender'  href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number|add:2 %}" />
+<link rel='next'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}" />
+<link rel='prerender'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}" />
+<link rel='prefetch'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}" />
+<link rel='prerender'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number|add:1 %}" />
+<link rel='prerender'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number|add:2 %}" />
 {% endif %}
 
 
@@ -39,6 +39,8 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr><td>unix time</td><td>{{ ev.time }}</td></tr>
       <tr><td>mb</td><td>{{ ev.mb|stringformat:'.2f' }}</td></tr>
       <tr><td>source</td><td>{% if ev.natural_source %}natural{% else %}nuclear{% endif %}</td></tr>
+      <tr><td>dist</td><td>{{ fit.dist }}km</td></tr>
+      <tr><td>azi</td><td>{{ fit.azi }}</td></tr>
     </table>
   </td>
   <td valign=top rowspan=1>
@@ -50,8 +52,29 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr><td>len</td><td>{{ wave.len }}s</td></tr>
       <tr><td>filter_str</td><td>{{ wave.filter_str }}</td></tr>
       <tr><td>fraction_valid</td><td>{{ wave.fraction_valid|stringformat:'.3f' }}</td></tr>
-      <tr><td>start time</td><td>{{ wave_time_str }}</td></tr>
+      <tr><td>start time</td><td>{{ wave_stime_str }}</td></tr>
+      <tr><td>end time</td><td>{{ wave_etime_str }}</td></tr>
       <tr><td>unix stime</td><td>{{ wave.stime|stringformat:'.1f' }}</td></tr>
+      <tr><td>unix etime</td><td>{{ wave.etime|stringformat:'.1f' }}</td></tr>
+
+    </table>
+  </td>
+  <td valign=top rowspan=1>
+    <b>Fit</b>
+    <table>
+      <tr><td>optim_method</td><td>{{ fit.optim_method }}</td></tr>
+      <tr><td>iid</td><td>{{ fit.iid }}</td></tr>
+      <tr><td>acost</td><td>{{ fit.acost }}</td></tr>
+    </table><br/>
+    <b>Noise</b>
+    <table>
+      <tr><td>mean</td><td>{{noise_model.c }}</td></tr>
+      <tr><td>log(mean)</td><td>{{noise_model.c|log }}</td></tr>
+      <tr><td>std</td><td>{{noise_model.em.std }}</td></tr>
+      <tr><td>order</td><td>{{noise_model.p }}</td></tr>
+      {% for coeff in noise_model.params|slice:":3" %}
+      <tr><td>coeff {{ forloop.counter }}</td><td>{{ coeff }}</td></tr>
+      {% endfor %}
     </table>
   </td>
 </tr>
@@ -83,22 +106,7 @@ document.getElementById('loading').style.visibility = 'hidden';
       </table>
     </center>
   </td>
-  <td colspan=2 valign='top'>
-    <form action="{% url rate_fit runid=fit.runid.runid pageid=page_obj.number %}" method="post" id='approval_form'>
-      {% csrf_token %}
-
-      <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
-      <label for="unknown">Unknown</label>
-      <input type="radio" name="approval" id="bad" value="1" {% if fit.human_approved == '1' or fit.human_approved == 1 %}checked{% endif %}/>
-      <label for="bad">Bad fit</label>
-      <input type="radio" name="approval" id="good" value="2" {% if fit.human_approved == '2' or fit.human_approved = 2%}checked{% endif %}/>
-      <label for="good">Good fit</label>
-      <input type="submit" value="Submit" />
-    </form>
-  </td>
-</tr>
-<tr>
-  <td colspan=3>
+  <td colspan=3 rowspan=2 valign='top'>
     <table border=1 width=100%>
       <tr>
 	<td><strong>Phase</strong></td>
@@ -119,17 +127,33 @@ document.getElementById('loading').style.visibility = 'hidden';
     </table>
   </td>
 </tr>
+<tr>
+  <td colspan=1 align="center">
+    <form action="{% url rate_fit runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.number %}" method="post" id='approval_form'>
+      {% csrf_token %}
+
+      <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
+      <label for="unknown">Unknown</label>
+      <input type="radio" name="approval" id="bad" value="1" {% if fit.human_approved == '1' or fit.human_approved == 1 %}checked{% endif %}/>
+      <label for="bad">Bad fit</label>
+      <input type="radio" name="approval" id="good" value="2" {% if fit.human_approved == '2' or fit.human_approved = 2%}checked{% endif %}/>
+      <label for="good">Good fit</label>
+      <input type="submit" value="Submit" />
+    </form>
+
+  </td>
+</tr>
 </table>
 <br/>
 <center>
 {% if page_obj.has_previous %}
-<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}">previous</a>
+<a href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.previous_page_number %}">previous</a>
 {% endif %}
 <span class="page-current">
   Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
 </span>
 {% if page_obj.has_next %}
-<a href="{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}">next</a>
+<a href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}">next</a>
 {% endif %}
 </center>
 <img id="nextfit" src="" style="display: none">
@@ -151,13 +175,13 @@ switch(KeyID)
 
 {% if page_obj.has_previous %}
 case 37:
-window.location = "{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.previous_page_number %}";
+window.location = "{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.previous_page_number %}";
 break;
 {% endif %}
 
 {% if page_obj.has_next %}
 case 39:
-window.location = "{% url fit_run_detail runid=fit.runid.runid pageid=page_obj.next_page_number %}";
+window.location = "{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}";
 break;
 {% endif %}
 
@@ -191,19 +215,6 @@ display.innerHTML=slide.value;
 
 }
 
-function preloadNextFit() {
-var slide = document.getElementById("slide");
-slideAmount = slide.value;
-
-fitlog = document.getElementById("fitlog").checked;
-fitsample = document.getElementById("fitsample").checked;
-
-var nextfit = document.getElementById("nextfit");
-nextfit.src = "{% url visual runid=fit.runid.runid pageid=page_obj.next_page_number %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";sample=" + fitsample + ";saveprefs=true";
-
-}
-
-
 function updateFitImage() {
 var slide = document.getElementById("slide");
 slideAmount = slide.value;
@@ -212,7 +223,7 @@ fitlog = document.getElementById("fitlog").checked;
 fitsample = document.getElementById("fitsample").checked;
 
 var fit_img = document.getElementById("fit");
-new_src = "{% url visual runid=fit.runid.runid pageid=page_obj.number %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";sample=" + fitsample + ";saveprefs=true";
+new_src = "{% url visual fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";sample=" + fitsample + ";saveprefs=true";
 
 // only show the loading message if the image has actually changed
 if ('/' + fit_img.src.split("/").slice(3).join("/") != new_src) {

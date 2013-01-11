@@ -13,8 +13,10 @@ from database.dataset import *
 from database.signal_data import *
 from signals.io import *
 from sigvisa import *
+from noise.noise_model import get_noise_model
 from signals.template_models.load_by_name import load_template_model
 from source.event import Event, EventNotFound
+from signals.armodel.model import ARModel, ErrorModel
 import utils.geog
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -27,31 +29,41 @@ import textwrap
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
 
 
+def get_fit_queryset(runid="all", sta="all", chan="all", band="all", fit_quality="all"):
+    a = dict()
+    if runid != "all":
+        a['runid'] = runid
+    if sta != "all":
+        a['sta'] = sta
+    if chan != "all":
+        a['chan'] = chan
+    if band != "all":
+        a['band'] = band
+    if fit_quality != "all":
+        a['human_approved'] = fit_quality
+
+    qset = SigvisaCodaFit.objects.filter(**a)
+    return qset
 
 class FitListView(django.views.generic.ListView):
-    model = SigvisaCodaFit      # shorthand for setting queryset = models.Car.objects.all()
-    template_name = 'coda_fits/fits.html'  # optional (the default is app_name/modelNameInLowerCase_list.html; which will look into your templates folder for that path and file)
-    context_object_name = "fit_list"    #default is object_list as well as model's_verbose_name_list and/or model's_verbose_name_plural_list, if defined in the model's inner Meta class
-    paginate_by = 50  #and that's it !!
+    template_name = 'coda_fits/fits.html' 
+    context_object_name = "fit_list"  
+    paginate_by = 20  #and that's it !!
 
     def get_queryset(self):
-        a = self.args
-        self.run = get_object_or_404(SigvisaCodaFittingRun, pk=self.kwargs['pk'])
-        qset = SigvisaCodaFit.objects.filter(runid=self.run)
-        return qset
+        return get_fit_queryset(**(self.kwargs))
 
-def pageid_to_fit(runid, pageid):
-    qset = SigvisaCodaFit.objects.filter(runid=runid)
-    p = Paginator(qset, 1)
-    current_fit_page = p.page(pageid)
-    fit = current_fit_page[0]
-    return fit
+    def get_context_data(self, **kwargs):
+        context = super(FitListView, self).get_context_data(**kwargs)
+        context['filter_args'] = self.kwargs
+        return context
 
 # detail view for a particular fit
-def fit_detail(request, runid, pageid):
+def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
 
     # get the fit corresponding to the given pageid for this run
-    qset = SigvisaCodaFit.objects.filter(runid=runid)
+    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
+    qset = get_fit_queryset(**filter_args)
     p = Paginator(qset, 1)
     current_fit_page = p.page(pageid)
     fit = current_fit_page[0]
@@ -75,10 +87,14 @@ def fit_detail(request, runid, pageid):
     try:
         wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band)+";env")
 
-        wave_time_str = str(datetime.fromtimestamp(wave['stime']))
+        wave_stime_str = str(datetime.fromtimestamp(wave['stime']))
+        wave_etime_str = str(datetime.fromtimestamp(wave['etime']))
+        nm = get_noise_model(waveform=wave)
+        
     except Exception as e:
         wave = Waveform()
         wave_time_str = str(e)
+        nm = ARModel([], ErrorModel(0, 1), c=0)
 
     # load the event so that we can display data about it
     try:
@@ -102,12 +118,15 @@ def fit_detail(request, runid, pageid):
             'fit_view_options': fit_view_options,
             'page_obj': current_fit_page,
             'wave': wave,
-            'wave_time_str': wave_time_str,
+            'wave_stime_str': wave_stime_str,
+            'wave_etime_str': wave_etime_str,
             'ev': ev,
             'ev_time_str': ev_time_str,
             'loc_str': loc_str,
             'dist': dist,
             'azi': azi,
+            'filter_args': filter_args,
+            'noise_model': nm,
             }, context_instance=RequestContext(request))
 
     #
@@ -115,9 +134,9 @@ def fit_detail(request, runid, pageid):
 
 
 @cache_page(60*60*24*365)
-def FitImageView(request, runid, pageid):
+def FitImageView(request, fitid):
 
-    fit = pageid_to_fit(runid, pageid)
+    fit = get_object_or_404(SigvisaCodaFit, pk=fitid)
 
     logscale = request.GET.get("logscale", "False").lower().startswith('t')
     smoothing = int(request.GET.get("smooth", "0"))
@@ -169,17 +188,21 @@ def FitImageView(request, runid, pageid):
     plt.close(fig)
     return response
 
-def rate_fit(request, runid, pageid):
-    fit = pageid_to_fit(runid, pageid)
+def rate_fit(request, runid, sta, chan, band, fit_quality, pageid):
+    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
+    qset = get_fit_queryset(**filter_args)
+    p = Paginator(qset, 1)
+    current_fit_page = p.page(pageid)
+    fit = current_fit_page[0]
+
     try:
         rating = int(request.POST['approval'])
     except KeyError:
-        return render_to_response('coda_fits/detail.html', {
-                'fit': fit,
-                'error_message': "You didn't select a rating.",
-                }, context_instance=RequestContext(request))
+        return HttpResponse("You didn't select a rating.")
     else:
         fit.human_approved = rating
         fit.save()
-        return HttpResponseRedirect(reverse('fit_run_detail', args=(runid, unicode(int(pageid)+1),)))
+        return HttpResponseRedirect(reverse('fit_run_detail', kwargs=filter_args,))
     return HttpResponse("Something went wrong.")
+
+

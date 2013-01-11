@@ -33,7 +33,7 @@ def WaveImageView(request):
     stime = float(request.GET.get("stime", ""))
     etime = float(request.GET.get("etime", ""))
     logscale = request.GET.get("logscale", "false").lower().startswith('t')
-    filter_str = quote_name(request.GET.get("filter_str", ""))[1:-1]
+    filter_str = quote_name(request.GET.get("filter_str", ""))[1:-1].lower()
 
     print sta
 
@@ -43,7 +43,7 @@ def WaveImageView(request):
     try:
         wave = fetch_waveform(sta, chan, stime, etime)
 
-        fig = plt.figure(figsize=(8,6), dpi=144)
+        fig = plt.figure(figsize=(8,5), dpi=144)
         fig.patch.set_facecolor('white')
         plt.xlabel("Time (s)")
         axes = plt.gca()
