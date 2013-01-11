@@ -22,6 +22,7 @@ import utils.geog
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from datetime import datetime
+from pytz import timezone
 
 import plotting.plot as plot
 import textwrap
@@ -87,8 +88,8 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
     try:
         wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band)+";env")
 
-        wave_stime_str = str(datetime.fromtimestamp(wave['stime']))
-        wave_etime_str = str(datetime.fromtimestamp(wave['etime']))
+        wave_stime_str = str(datetime.fromtimestamp(wave['stime'], timezone('UTC')))
+        wave_etime_str = str(datetime.fromtimestamp(wave['etime'], timezone('UTC')))
         nm = get_noise_model(waveform=wave)
         
     except Exception as e:
@@ -104,7 +105,7 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
         dist = utils.geog.dist_km((ev.lon, ev.lat), station_location)
         azi = utils.geog.azimuth(station_location, (ev.lon, ev.lat))
 
-        ev_time_str = str(datetime.fromtimestamp(ev.time))
+        ev_time_str = str(datetime.fromtimestamp(ev.time, timezone('UTC')))
         loc_str = utils.geog.lonlatstr(ev.lon, ev.lat)
     except EventNotFound as e:
         ev = Event()
@@ -202,7 +203,8 @@ def rate_fit(request, runid, sta, chan, band, fit_quality, pageid):
     else:
         fit.human_approved = rating
         fit.save()
-        return HttpResponseRedirect(reverse('fit_run_detail', kwargs=filter_args,))
+        filter_args['pageid']=int(pageid)+1
+        return HttpResponseRedirect(reverse('fit_run_detail', kwargs=filter_args))
     return HttpResponse("Something went wrong.")
 
 

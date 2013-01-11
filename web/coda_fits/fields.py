@@ -1,5 +1,6 @@
 from django.db import models
 from datetime import datetime
+from pytz import timezone
 import time
 import dateutil.parser
 
@@ -19,7 +20,7 @@ class UnixTimestampField(models.DateTimeField):
         if isinstance(value, unicode):
             a  = dateutil.parser.parse(value)
         elif isinstance(value, float):
-            a = datetime.fromtimestamp(value)
+            a = datetime.fromtimestamp(value, timezone('UTC'))
         else:
             a = value
         return a

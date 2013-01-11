@@ -266,7 +266,7 @@ def construct_and_save_noise_models(minute, block_len_seconds, sta, chan, filter
         filtered_wave = model_wave.filter(tmp_filter_str)
 
         # train AR noise model
-        ar_learner = ARLearner(filtered_wave.data, filtered_wave['srate'])
+        ar_learner = ARLearner(filtered_wave.data.compressed(), filtered_wave['srate'])
         params, std = ar_learner.yulewalker(order)
         em = ErrorModel(0, std)
         armodel = ARModel(params, em, c = ar_learner.c)

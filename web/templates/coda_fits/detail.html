@@ -35,12 +35,12 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr><td>orid</td><td>{{ ev.orid|stringformat:'d' }}</td></tr>
       <tr><td>loc</td><td>{{ loc_str }}</td></tr>
       <tr><td>depth</td><td>{{ ev.depth|stringformat:'.1f' }}km</td></tr>
-      <tr><td>time</td><td>{{ ev_time_str }}</td></tr>
-      <tr><td>unix time</td><td>{{ ev.time }}</td></tr>
       <tr><td>mb</td><td>{{ ev.mb|stringformat:'.2f' }}</td></tr>
       <tr><td>source</td><td>{% if ev.natural_source %}natural{% else %}nuclear{% endif %}</td></tr>
       <tr><td>dist</td><td>{{ fit.dist }}km</td></tr>
       <tr><td>azi</td><td>{{ fit.azi }}</td></tr>
+      <tr><td>time</td><td>{{ ev_time_str }}</td></tr>
+      <tr><td>unix time</td><td>{{ ev.time }}</td></tr>
     </table>
   </td>
   <td valign=top rowspan=1>
@@ -56,12 +56,12 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr><td>end time</td><td>{{ wave_etime_str }}</td></tr>
       <tr><td>unix stime</td><td>{{ wave.stime|stringformat:'.1f' }}</td></tr>
       <tr><td>unix etime</td><td>{{ wave.etime|stringformat:'.1f' }}</td></tr>
-
     </table>
   </td>
   <td valign=top rowspan=1>
     <b>Fit</b>
     <table>
+      <tr><td>fitid</td><td>{{ fit.fitid }}</td></tr>
       <tr><td>optim_method</td><td>{{ fit.optim_method }}</td></tr>
       <tr><td>iid</td><td>{{ fit.iid }}</td></tr>
       <tr><td>acost</td><td>{{ fit.acost }}</td></tr>
@@ -72,7 +72,7 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr><td>log(mean)</td><td>{{noise_model.c|log }}</td></tr>
       <tr><td>std</td><td>{{noise_model.em.std }}</td></tr>
       <tr><td>order</td><td>{{noise_model.p }}</td></tr>
-      {% for coeff in noise_model.params|slice:":3" %}
+      {% for coeff in noise_model.params|slice:":2" %}
       <tr><td>coeff {{ forloop.counter }}</td><td>{{ coeff }}</td></tr>
       {% endfor %}
     </table>
