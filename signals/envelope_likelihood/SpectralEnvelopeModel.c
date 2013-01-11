@@ -99,11 +99,13 @@ int Spectral_Envelope_Model_Has_Model(SigModel_t * p_sigmodel, int siteid, int c
 void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace) {
 
   // calculate length of envelope to generate
-  p_trace->len = (long)((MIN_LOGENV_CUTOFF- p_arrival->amp) / p_arrival->coda_decay * p_trace->hz);
+  p_trace->len = (long)( (  (p_arrival->peak_time - p_arrival->time) + 
+			    (MIN_LOGENV_CUTOFF- p_arrival->amp) / p_arrival->coda_decay 
+			  ) * p_trace->hz);
 
-  if (p_trace->len > 800*(p_trace->hz) || p_trace->len < 0) {
+  if (p_trace->len > 1200*(p_trace->hz) || p_trace->len < 0) {
     LogTrace("WARNING: truncating arrival length from %d to %d, (length based on amp %f, coda_decay %f, hz %f)", p_trace->len, (int) ((500)*(p_trace->hz)), p_arrival->amp, p_arrival->coda_decay, (p_trace->hz));
-    p_trace->len = 500*p_trace->hz;
+    p_trace->len = 1200*p_trace->hz;
   }
 
   // allocate memory
@@ -116,12 +118,13 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
 
   // generate onset
   long peak_idx = (p_arrival->peak_time - p_arrival->time) * p_trace->hz;
+  double initial_height = p_arrival->amp - 9;
   double onset_slope;
   if (peak_idx != 0) {
-    onset_slope = (p_arrival->amp - MIN_LOGENV_CUTOFF) / peak_idx;
+    onset_slope = (p_arrival->amp - initial_height) / peak_idx;
   }
   for (long t=0; t < peak_idx && t < p_trace->len; ++t) {
-    d[t] = MIN_LOGENV_CUTOFF + t * onset_slope;
+    d[t] = initial_height + t * onset_slope;
   }
 
   double b = p_arrival->coda_decay;
