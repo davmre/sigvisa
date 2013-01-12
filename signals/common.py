@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.ma as ma
+import scipy.signal
 import time, copy, cPickle
 from sigvisa import Sigvisa
 
@@ -45,13 +46,14 @@ class Waveform(object):
         else:
             npts = len(data)
             etime = stime + npts/float(srate)
-            self.segment_stats = {"srate" : float(srate), "stime" : stime, "sta": sta, "npts": npts, "etime": etime, "len": npts/float(srate), "siteid": Sigvisa().name_to_siteid_minus1[sta]+1}
+            self.segment_stats = {"stime" : stime, "sta": sta, "etime": etime, "len": npts/float(srate), "siteid": Sigvisa().name_to_siteid_minus1[sta]+1}
 
         # attributes specific to this waveform, e.g. channel or freq band
         if my_stats is not None:
             self.my_stats = my_stats
         else:
-            self.my_stats = my_stats_entries
+            self.my_stats = {"srate" : float(srate), "npts": npts}
+            self.my_stats.update(my_stats_entries)
 
             try:
                 fraction_valid = 1 - np.sum([int(v) for v in self.data.mask])/float(len(self.data))
@@ -60,7 +62,7 @@ class Waveform(object):
 
             self.my_stats.update({"filter_str" : "",
                                      "freq_low": 0.0,
-                                     "freq_high": self.segment_stats["srate"]/2.0,
+                                     "freq_high": self.my_stats["srate"]/2.0,
                                      "fraction_valid": fraction_valid })
 
         self.filtered = dict()
@@ -194,6 +196,15 @@ class Waveform(object):
             f = lambda x : ma.masked_array(data = x.data - np.mean(x), mask = x.mask)
         elif name == "log":
             f = lambda x : np.log(x)
+        elif name == "hz":
+            new_srate = float(pieces[1])
+            ratio = self['srate']/new_srate
+            rounded_ratio = int(np.round(ratio))
+            if np.abs(ratio - rounded_ratio) > 0.00000001:
+                raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
+            f= lambda x : scipy.signal.decimate(x, rounded_ratio)
+            fstats['srate'] = new_srate
+            fstats['npts'] = int(fstats['npts']/rounded_ratio)
         elif name == "env":
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
         elif name == "smooth":
@@ -207,7 +218,7 @@ class Waveform(object):
             low = float(pieces[1])
             high = float(pieces[2])
 
-            f = lambda x : bandpass_missing(x, low, high, self.segment_stats['srate'])
+            f = lambda x : bandpass_missing(x, low, high, self.my_stats['srate'])
 
             fstats["freq_low"] = low
             fstats["freq_high"] = high
@@ -231,7 +242,7 @@ class Waveform(object):
 
 class Segment(object):
 
-    STANDARD_STATS = ["srate", "sta", "stime", "etime", "npts"]
+    STANDARD_STATS = ["sta", "stime", "etime"]
 
     filter_order = ['center', 'freq', 'env', 'log', 'smooth']
 
@@ -329,10 +340,8 @@ class Segment(object):
             raise KeyError("segment didn't recognized key %s" % key)
 
     def __str__(self):
-        s = "%d pts @ %d Hz (%.1fs). " % (self['npts'], self['srate'], self['npts'] / self['srate'])
-
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s += "start: %s (%.1f). sta: %s, chans: %s. " % (timestr, self['stime'], self['sta'], ','.join(sorted(self.__chans.keys())))
+        s = "start: %s (%.1f). sta: %s, chans: %s. " % (timestr, self['stime'], self['sta'], ','.join(sorted(self.__chans.keys())))
         s += "filter: '%s'" % self.filter_str
         return s
 
