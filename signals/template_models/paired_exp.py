@@ -58,7 +58,7 @@ class PairedExpTemplateModel(TemplateModel):
             try:
                 intro_len = min(len(d), peak_idx)
                 if intro_len > 0 and onset_slope > 0:
-                    d[0:peak_idx] = np.log(np.arange(intro_len) * onset_slope) 
+                    d[0:peak_idx] = np.log(np.arange(intro_len) * onset_slope + np.exp(min_logenv)) 
                 d[peak_idx:] = np.arange(len(d)-peak_idx)/srate * coda_decay + coda_height
             except Exception as e:
                 print e
