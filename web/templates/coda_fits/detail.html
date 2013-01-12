@@ -62,21 +62,26 @@ document.getElementById('loading').style.visibility = 'hidden';
     <b>Fit</b>
     <table>
       <tr><td>fitid</td><td>{{ fit.fitid }}</td></tr>
+      <tr><td>time</td><td>{{ fit_time_str }}</td></tr>
+      <tr><td>elapsed</td><td>{{ fit.elapsed }}s</td></tr>
       <tr><td>optim_method</td><td>{{ fit.optim_method }}</td></tr>
       <tr><td>iid</td><td>{{ fit.iid }}</td></tr>
+      <tr><td>sampling</td><td>{{ fit.hz }}hz</td></tr>
       <tr><td>acost</td><td>{{ fit.acost }}</td></tr>
     </table><br/>
+  </td>
+  <td valign=top rowspan=1>
     <b>Noise</b>
     <table>
       <tr><td>mean</td><td>{{noise_model.c }}</td></tr>
       <tr><td>log(mean)</td><td>{{noise_model.c|log }}</td></tr>
       <tr><td>std</td><td>{{noise_model.em.std }}</td></tr>
       <tr><td>order</td><td>{{noise_model.p }}</td></tr>
-      {% for coeff in noise_model.params|slice:":2" %}
+      {% for coeff in noise_model.params|slice:":5" %}
       <tr><td>coeff {{ forloop.counter }}</td><td>{{ coeff }}</td></tr>
       {% endfor %}
     </table>
-  </td>
+    </td>
 </tr>
 <tr>
   <td valign='top'>
@@ -106,7 +111,7 @@ document.getElementById('loading').style.visibility = 'hidden';
       </table>
     </center>
   </td>
-  <td colspan=3 rowspan=2 valign='top'>
+  <td colspan=4 rowspan=2 valign='top'>
     <table border=1 width=100%>
       <tr>
 	<td><strong>Phase</strong></td>

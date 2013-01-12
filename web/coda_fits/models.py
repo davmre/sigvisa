@@ -178,6 +178,7 @@ class SigvisaCodaFit(models.Model):
     sta = models.CharField(max_length=30)
     chan = models.CharField(max_length=30)
     band = models.CharField(max_length=45)
+    hz = models.FloatField(null=True, blank=True)
     optim_method = models.CharField(max_length=45, blank=True)
     iid = models.IntegerField(null=True, blank=True)
     stime = UnixTimestampField(null=True, blank=True)
@@ -185,7 +186,9 @@ class SigvisaCodaFit(models.Model):
     acost = models.FloatField(null=True, blank=True)
     dist = models.FloatField(null=True, blank=True)
     azi = models.FloatField(null=True, blank=True)
-    human_approved = models.IntegerField(null=True, blank=True)
+    timestamp = UnixTimestampField(null=True, blank=True)
+    elapsed = models.FloatField(null=True, blank=True)
+    human_approved = models.IntegerField(default=0)
     class Meta:
         db_table = u'sigvisa_coda_fit'
 

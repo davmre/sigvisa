@@ -69,6 +69,10 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
     current_fit_page = p.page(pageid)
     fit = current_fit_page[0]
 
+    time_format = "%b %d %Y, %H:%M:%S"
+
+    fit_time_str = fit.timestamp.strftime(time_format)
+
     # get the current display options; initialize to defaults if there are none
     try:
         fit_view_options = view_options.objects.get(id=1)
@@ -88,13 +92,14 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
     try:
         wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band)+";env")
 
-        wave_stime_str = str(datetime.fromtimestamp(wave['stime'], timezone('UTC')))
-        wave_etime_str = str(datetime.fromtimestamp(wave['etime'], timezone('UTC')))
+        wave_stime_str = datetime.fromtimestamp(wave['stime'], timezone('UTC')).strftime(time_format)
+        wave_etime_str = datetime.fromtimestamp(wave['etime'], timezone('UTC')).strftime(time_format)
         nm = get_noise_model(waveform=wave)
         
     except Exception as e:
         wave = Waveform()
-        wave_time_str = str(e)
+        wave_stime_str = str(e)
+        wave_etime_str = str(e)
         nm = ARModel([], ErrorModel(0, 1), c=0)
 
     # load the event so that we can display data about it
@@ -105,7 +110,7 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
         dist = utils.geog.dist_km((ev.lon, ev.lat), station_location)
         azi = utils.geog.azimuth(station_location, (ev.lon, ev.lat))
 
-        ev_time_str = str(datetime.fromtimestamp(ev.time, timezone('UTC')))
+        ev_time_str = datetime.fromtimestamp(ev.time, timezone('UTC')).strftime(time_format)
         loc_str = utils.geog.lonlatstr(ev.lon, ev.lat)
     except EventNotFound as e:
         ev = Event()
@@ -116,6 +121,7 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
 
     return render_to_response('coda_fits/detail.html', {
             'fit': fit,
+            'fit_time_str': fit_time_str,
             'fit_view_options': fit_view_options,
             'page_obj': current_fit_page,
             'wave': wave,

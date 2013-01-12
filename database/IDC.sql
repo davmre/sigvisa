@@ -166,6 +166,7 @@ create table sigvisa_coda_fit (
  sta      varchar(10) not null,
  chan     varchar(10) not null,
  band     varchar(15) not null,
+ hz	  float(24),
  optim_method  varchar(15),
  iid        int,
  stime      double,
@@ -173,7 +174,9 @@ create table sigvisa_coda_fit (
  acost      float(24),
  dist       float(24),
  azi        float(24),
- human_approved varchar(1),
+ timestamp float(24),
+ elapsed   float(24),
+ human_approved varchar(1) default 0,
  primary key(fitid),
  foreign key(runid) REFERENCES sigvisa_coda_fitting_run(runid)
 );

@@ -69,7 +69,7 @@ def main():
 
     if options.start_time is None:
         cursor.execute("select start_time, end_time from dataset where label='training'")
-        (st, et) read_timerange(cursor, "training", hours=None, skip=0):
+        (st, et) = read_timerange(cursor, "training", hours=None, skip=0)
     else:
         st = options.start_time
         et = options.end_time

@@ -24,7 +24,7 @@ from learn.optimize import minimize_matrix
 from noise.noise_model import *
 
 
-def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, init_iteration=None, optimize_arrival_times=False, iid=False):
+def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=None, init_iteration=None, optimize_arrival_times=False, iid=False, hz=None):
     """
     Return the template parameters which best fit the given waveform.
     """
@@ -55,12 +55,17 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
         (phases, start_param_vals) = tm.heuristic_starting_params(wave)
         print "done"
 
-    if iid:
-        smooth_wave = wave.filter("smooth;hz_5")
-        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(smooth_wave, (phases, vals))
-
+    if hz is not None:
+        wave_to_fit = wave.filter("hz_%.1f" % hz)
     else:
-        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood(wave, (phases, vals))
+        wave_to_fit = wave
+
+
+    if iid:
+        wave_to_fit = wave_to_fit.filter("smooth")
+        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(wave_to_fit, (phases, vals))
+    else:
+        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood(wave_to_fit, (phases, vals))
 
     low_bounds = None
     high_bounds = None
@@ -83,9 +88,13 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
         plt.close(fig)
 
 
-    return (phases, best_param_vals), best_cost
+    nm = get_noise_model(wave_to_fit)
+    acost = best_cost / (nm.em.std * wave_to_fit['npts'])
 
-def fit_event_segment(event, sta, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, plot=False, wiggles=None, method="simplex", iid=False, extract_wiggles=True):
+
+    return (phases, best_param_vals), acost
+
+def fit_event_segment(event, sta, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, plot=False, wiggles=None, method="simplex", iid=False, extract_wiggles=True, fit_hz=5):
     """
     Find the best-fitting template parameters for each band/channel of
     a particular event at a particular station. Store the template
@@ -121,17 +130,19 @@ def fit_event_segment(event, sta, tm, output_run_name, output_iteration, init_ru
                     if fit_params is None:
                         print "no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, init_run_name, chan, band)
                         continue
-                    set_noise_process(s.sigmodel, tr)
-                    fit_cost = fit_cost * time_len
+                    set_noise_process(s.sigmodel, wave)
                 else:
-                    fit_params, fit_cost = fit_template(wave, pp=pp, ev=event, tm=tm, method=method, wiggles=wiggles, iid=iid, init_run_name=init_run_name, init_iteration=init_iteration)
+                    st = time.time()
+                    fit_params, acost = fit_template(wave, pp=pp, ev=event, tm=tm, method=method, wiggles=wiggles, iid=iid, init_run_name=init_run_name, init_iteration=init_iteration, hz=fit_hz)
+                    et = time.time()
                     if pp is not None:
                         print "wrote plot"
 
                 if extract_wiggles:
                     save_wiggles(wave=wave, tm=tm, run_name=output_run_name, template_params=fit_params)
                 if method != "load":
-                    store_template_params(wave, fit_params, method_str=method, iid=iid, fit_cost=fit_cost, run_name=output_run_name, iteration=output_iteration)
+
+                    store_template_params(wave, fit_params, method_str=method, iid=iid, acost=acost, run_name=output_run_name, iteration=output_iteration, elapsed=et-st, hz=fit_hz)
                 s.dbconn.commit()
                 if pp is not None:
                     pp.close()

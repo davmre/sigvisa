@@ -1,4 +1,4 @@
-import os, errno, sys, time, traceback, hashlib
+import os, errno, sys, time, traceback, hashlib, time
 import numpy as np, scipy, scipy.stats
 
 from database.dataset import *
@@ -125,7 +125,7 @@ def load_template_params(cursor, evid, sta, chan, band, run_name=None, iteration
     fitid = get_fitid(cursor, evid, sta, chan, band, run_name=None, iteration=None, runid=None)
     return load_template_params_by_fitid(cursor, fitid)
 
-def store_template_params(wave, template_params, method_str, iid, fit_cost, run_name, iteration):
+def store_template_params(wave, template_params, method_str, iid, hz, acost, run_name, iteration, elapsed):
     s  = Sigvisa()
     cursor = s.dbconn.cursor()
 
@@ -137,14 +137,15 @@ def store_template_params(wave, template_params, method_str, iid, fit_cost, run_
     band = wave['band']
     st = wave['stime']
     et = wave['etime']
-    time_len = wave['len']
     event = Event(evid=wave['evid'])
 
 
     distance = utils.geog.dist_km((event.lon, event.lat), (s.sites[siteid-1][0], s.sites[siteid-1][1]))
     azimuth = utils.geog.azimuth((s.sites[siteid-1][0], s.sites[siteid-1][1]), (event.lon, event.lat))
 
-    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, acost, dist, azi) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, band,  method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+    
+
+    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, band,  method_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed)
 
     if "cx_Oracle" in str(type(s.dbconn)):
         import cx_Oracle
