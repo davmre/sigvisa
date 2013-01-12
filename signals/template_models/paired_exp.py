@@ -30,13 +30,63 @@ class PairedExpTemplateModel(TemplateModel):
     def model_name(self):
         return "paired_exp"
 
-    def generate_template_waveform(self, template_params, model_waveform, sample=False):
-        s = self.sigvisa
+    def generate_trace_python(self, model_waveform, template_params):
+        nm = noise_model.get_noise_model(model_waveform)
 
         srate = model_waveform['srate']
         st = model_waveform['stime']
         et = model_waveform['etime']
+        npts = model_waveform['npts']
+        
+        data = np.ones((npts,)) * nm.c
+        phases, vals = template_params
+
+        def abstract_logenv_raw(vals, min_logenv = -7):
+            arr_time, peak_offset, coda_height, coda_decay = vals
+            if coda_decay > -0.001:
+                l =1200*srate
+            else:
+                l = int(max(0, min(1200, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+            d = np.empty((l,))
+
+            peak_idx = max(0, int(peak_offset*srate))
+            if peak_idx != 0:
+                onset_slope = np.exp(coda_height) / float(peak_idx)
+            else:
+                onset_slope = 0
+
+            try:
+                intro_len = min(len(d), peak_idx)
+                if intro_len > 0 and onset_slope > 0:
+                    d[0:peak_idx] = np.log(np.arange(intro_len) * onset_slope) 
+                d[peak_idx:] = np.arange(len(d)-peak_idx)/srate * coda_decay + coda_height
+            except Exception as e:
+                print e
+                import pdb; pdb.set_trace()
+            return d
+
+        for (i, phase) in enumerate(phases):
+            v = vals[i,:]
+            arr_time, peak_offset, coda_height, coda_decay = v
+            phase_env = abstract_logenv_raw(v)
+            start_idx = int((arr_time - st) * srate)
+            end_idx = start_idx + len(phase_env)
+
+            try:
+                overshoot = max(0, end_idx - len(data))
+                data[start_idx:end_idx-overshoot] += np.exp(phase_env[:len(phase_env)-overshoot])
+            except Exception as e:
+                print e
+                import pdb; pdb.set_trace()
+        return data
+
+    def generate_template_waveform(self, template_params, model_waveform, sample=False):
+        s = self.sigvisa
+
         siteid = model_waveform['siteid']
+        srate = model_waveform['srate']
+        st = model_waveform['stime']
+        et = model_waveform['etime']
         c = sigvisa_c.canonical_channel_num(model_waveform['chan'])
         b = sigvisa_c.canonical_band_num(model_waveform['band'])
 
@@ -45,7 +95,7 @@ class PairedExpTemplateModel(TemplateModel):
         phaseids = [s.phaseids[phase] for phase in phases]
 
         if not sample:
-            env = s.sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
+            env = self.generate_trace_python(model_waveform, template_params) #env = s.sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
         else:
             env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
@@ -90,6 +140,26 @@ class PairedExpTemplateModel(TemplateModel):
         return bounds
 
     def heuristic_starting_params(self, wave, detected_phases_only=True):
+        s = Sigvisa()
+
+        ev = Event(wave['evid'])
+        if detected_phases_only:
+            arrivals = wave['event_arrivals']
+            arrival_phases = [s.phasenames[pid_m1] for pid_m1 in arrivals[:, DET_PHASE_COL]]
+            all_phases = arrival_phases
+        else:
+            all_phases = s.arriving_phases(ev, wave['sta'])
+
+        start_params = np.zeros((len(all_phases), 4))
+        for (i, phase) in enumerate(all_phases):
+            start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(ev.lon, ev.lat, ev.depth, wave['siteid']-1, s.phaseids[phase]-1)
+            start_params[i, PEAK_OFFSET_PARAM] = 1
+            start_params[i, CODA_HEIGHT_PARAM] = np.max(np.log(wave.data))+.5
+            start_params[i, CODA_DECAY_PARAM] = -0.001
+        return (all_phases, start_params)
+
+
+    def heuristic_starting_params_mega(self, wave, detected_phases_only=True):
         smoothed = wave.filter('smooth')
         noise_model = get_noise_model(smoothed)
         logsmoothed = smoothed.filter("log").as_obspy_trace()
