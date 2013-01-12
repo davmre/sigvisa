@@ -202,7 +202,7 @@ class Waveform(object):
             rounded_ratio = int(np.round(ratio))
             if np.abs(ratio - rounded_ratio) > 0.00000001:
                 raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
-            f= lambda x : scipy.signal.decimate(x, rounded_ratio)
+            f= lambda x : ma.masked_array(data=scipy.signal.decimate(x, rounded_ratio), mask = x.mask[::rounded_ratio])
             fstats['srate'] = new_srate
             fstats['npts'] = int(fstats['npts']/rounded_ratio)
         elif name == "env":
