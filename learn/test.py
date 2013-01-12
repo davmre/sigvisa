@@ -30,11 +30,12 @@ class TestFit(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
-        self.event = Event(evid=5301405)
+        self.event = Event(evid=2781427) # Event(evid=5301405)
+        self.sta = "FITZ"
         self.s = Sigvisa()
-        cursor = s.dbconn.cursor()
-        self.seg = load_event_station(self.event.evid, "URZ", cursor=cursor).with_filter("freq_2.0_3.0;env")
-        self.tm = PairedExpTemplateModel(run_name="", model_type="dummy")
+        cursor = self.s.dbconn.cursor()
+        self.seg = load_event_station(self.event.evid, self.sta, cursor=cursor).with_filter("freq_2.0_3.0;env")
+        self.tm = PairedExpTemplateModel(run_name="", run_iter=0, model_type="dummy")
 
     def test_plot(self):
         pvals = np.array([[1238917955.54000, 4.10006, 1.35953, -0.04931], \
@@ -49,9 +50,11 @@ class TestFit(unittest.TestCase):
         tm = self.tm
         wave = self.seg['BHZ']
         pp = PdfPages("test_fit.pdf")
+        t = time.time()
         fit_params, fit_cost = fit_template(wave, pp=pp, ev=self.event, tm=tm, method="simplex", wiggles=None, iid=True)
+        print "fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
+        print "got params", fit_params
         pp.close()
-#        fit_event_segment(event=event, sta='URZ', tm=tm, output_run_name="unittest", output_iteration=1, plot=False, wiggles=None, iid=True, extract_wiggles=False)
 
 
 

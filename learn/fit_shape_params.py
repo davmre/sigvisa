@@ -56,7 +56,7 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
         print "done"
 
     if iid:
-        smooth_wave = wave.filter("smooth")
+        smooth_wave = wave.filter("smooth;hz_5")
         f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(smooth_wave, (phases, vals))
 
     else:
@@ -65,8 +65,8 @@ def fit_template(wave, ev, tm, pp, method="bfgs", wiggles=None, init_run_name=No
     low_bounds = None
     high_bounds = None
     if method == "bfgs" or method == "tnc":
-        low_bounds = tm.low_bounds()
-        high_bounds = tm.high_bounds()
+        low_bounds = tm.low_bounds(phases)
+        high_bounds = tm.high_bounds(phases)
 
     if pp is not None:
         fig = plot_waveform_with_pred(wave, tm, (phases, start_param_vals), title = "start (cost %f, evid %s)" % (f(start_param_vals), ev.evid), logscale=True)

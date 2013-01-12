@@ -118,13 +118,12 @@ void abstract_spectral_logenv_raw(const Arrival_t * p_arrival, Trace_t * p_trace
 
   // generate onset
   long peak_idx = (p_arrival->peak_time - p_arrival->time) * p_trace->hz;
-  double initial_height = p_arrival->amp - 9;
   double onset_slope;
   if (peak_idx != 0) {
-    onset_slope = (p_arrival->amp - initial_height) / peak_idx;
+    onset_slope = exp(p_arrival->amp)  / peak_idx;
   }
   for (long t=0; t < peak_idx && t < p_trace->len; ++t) {
-    d[t] = initial_height + t * onset_slope;
+    d[t] = log(t * onset_slope);
   }
 
   double b = p_arrival->coda_decay;

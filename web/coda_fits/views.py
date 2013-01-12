@@ -43,7 +43,7 @@ def get_fit_queryset(runid="all", sta="all", chan="all", band="all", fit_quality
     if fit_quality != "all":
         a['human_approved'] = fit_quality
 
-    qset = SigvisaCodaFit.objects.filter(**a)
+    qset = SigvisaCodaFit.objects.filter(**a).order_by('fitid')
     return qset
 
 class FitListView(django.views.generic.ListView):
@@ -208,3 +208,18 @@ def rate_fit(request, runid, sta, chan, band, fit_quality, pageid):
     return HttpResponse("Something went wrong.")
 
 
+def delete_fit(request, fitid):
+    try:
+        fit = SigvisaCodaFit.objects.get(fitid=int(fitid))
+        fit.delete()
+        return HttpResponse("Fit %d deleted. <a href=\"javascript:history.go(-1)\">Go back</a>." % int(fitid))
+    except Exception as e:
+        return HttpResponse("Error deleting fit %d: %s" % (int(fitid), str(e)))
+
+def delete_run(request, runid):
+    try:
+        run = SigvisaCodaFittingRun.objects.get(runid=int(runid))
+        run.delete()
+        return HttpResponse("Run %d deleted. <a href=\"javascript:history.go(-1)\">Go back</a>." % int(runid))
+    except Exception as e:
+        return HttpResponse("Error deleting run %d: %s" % (int(runid), str(e)))

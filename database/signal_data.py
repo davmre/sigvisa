@@ -38,7 +38,7 @@ def get_base_dir(sta, run_name, label=None):
         return ensure_dir_exists(os.path.join("logs", "codas_%s_%s" % (sta, run_name)))
 
 def get_next_runid(cursor):
-    sql_query = "select max(runid) from sigvisa_coda_fitting_runs"
+    sql_query = "select max(runid) from sigvisa_coda_fitting_run"
     cursor.execute(sql_query)
     r = cursor.fetchone()[0]
     if r is None:
@@ -48,21 +48,21 @@ def get_next_runid(cursor):
     return runid
 
 def get_fitting_runid(cursor, run_name, iteration, create_if_new=True):
-    sql_query = "select runid from sigvisa_coda_fitting_runs where run_name='%s' and iter=%d" % (run_name, iteration)
+    sql_query = "select runid from sigvisa_coda_fitting_run where run_name='%s' and iter=%d" % (run_name, iteration)
     cursor.execute(sql_query)
     result = cursor.fetchone()
     if result is None:
         if not create_if_new:
             raise Exception("no existing runid for iteration %d of run %s!" % (iteration, run_name))
         runid = get_next_runid(cursor)
-        sql_query = "insert into sigvisa_coda_fitting_runs (runid, run_name, iter) values (%d, '%s', %d)" % (runid, run_name, iteration)
+        sql_query = "insert into sigvisa_coda_fitting_run (runid, run_name, iter) values (%d, '%s', %d)" % (runid, run_name, iteration)
         cursor.execute(sql_query)
     else:
         runid = result[0]
     return runid
 
 def read_fitting_run(cursor, runid):
-    sql_query = "select run_name, iter from sigvisa_coda_fitting_runs where runid=%d" % runid
+    sql_query = "select run_name, iter from sigvisa_coda_fitting_run where runid=%d" % runid
     cursor.execute(sql_query)
     info = cursor.fetchone()
     if info is None:
@@ -77,7 +77,7 @@ def get_last_iteration(cursor, run_name):
     return last_iter
 
 def read_fitting_run_iterations(cursor, run_name):
-    sql_query = "select iter, runid from sigvisa_coda_fitting_runs where run_name='%s'" % run_name
+    sql_query = "select iter, runid from sigvisa_coda_fitting_run where run_name='%s'" % run_name
     cursor.execute(sql_query)
     r = np.reshape(np.array(cursor.fetchall()), (-1, 2))
     return np.array(sorted(r))
@@ -140,25 +140,28 @@ def store_template_params(wave, template_params, method_str, iid, fit_cost, run_
     time_len = wave['len']
     event = Event(evid=wave['evid'])
 
-    pieces = band.split('_')
-    lowband = float(pieces[1])
-    highband = float(pieces[2])
 
     distance = utils.geog.dist_km((event.lon, event.lat), (s.sites[siteid-1][0], s.sites[siteid-1][1]))
     azimuth = utils.geog.azimuth((s.sites[siteid-1][0], s.sites[siteid-1][1]), (event.lon, event.lat))
 
+    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, acost, dist, azi) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, band,  method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
+
+    if "cx_Oracle" in str(type(s.dbconn)):
+        import cx_Oracle
+        myseq=cursor.var(cx_Oracle.NUMBER)
+        cursor.prepare(sql_query +  "returning fitid into :x")
+        cursor.execute(None, x=myseq)
+        fitid = int(myseq.getvalue())
+    elif "MySQLdb" in str(type(s.dbconn)):
+        cursor.execute(sql_query)
+        fitid = cursor.lastrowid
+
+
     (phases, fit_params) = template_params
 
-    PE_ARR_TIME_PARAM, PE_PEAK_OFFSET_PARAM, PE_CODA_HEIGHT_PARAM, PE_CODA_DECAY_PARAM, PE_NUM_PARAMS = range(4+1)
-
     for (i, phase) in enumerate(phases):
-        sql_query = "INSERT INTO sigvisa_coda_fits (runid, evid, sta, chan, lowband, highband, phase, atime, peak_delay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) values (%d, %d, '%s', '%s', %f, %f, '%s', %f, %f, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, lowband, highband, phase, fit_params[i, PE_ARR_TIME_PARAM], fit_params[i, PE_PEAK_OFFSET_PARAM], fit_params[i, PE_CODA_HEIGHT_PARAM], fit_params[i, PE_CODA_DECAY_PARAM], method_str, 1 if iid else 0, st, et, fit_cost/time_len, distance, azimuth)
-        try:
-            cursor.execute(sql_query)
-        except Exception as e:
-            print e
-            print "DB error inserting fits (probably duplicate key), continuing..."
-            pass
+        phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4) values (%d, '%s', 'paired_exp', %f, %f, %f, %f)" % (fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3])
+        cursor.execute(phase_insert_query)
 
 def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 

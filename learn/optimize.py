@@ -78,9 +78,9 @@ def optimize(f, start_params, bounds, method, phaseids=None, maxfun=None):
 
 def minimize(f, x0, method="bfgs", steps=None, **bounds_and_maxfun):
     if method=="bfgs":
-        x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, x0, approx_grad=1, factr=1e7, **bounds_and_maxfun)
+        x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f, x0, approx_grad=1, factr=1e10, **bounds_and_maxfun)
     elif method=="tnc":
-        x1, nfeval, rc = scipy.optimize.fmin_tnc(f, x0, approx_grad=1, ftol=0.01, **bounds_and_maxfun)
+        x1, nfeval, rc = scipy.optimize.fmin_tnc(f, x0, approx_grad=1, ftol=0.1, **bounds_and_maxfun)
         x1 = np.array(x1)
     elif method=="simplex":
         x1 = scipy.optimize.fmin(f, x0, xtol=0.01, ftol=0.01, **bounds_and_maxfun)
@@ -92,6 +92,8 @@ def minimize(f, x0, method="bfgs", steps=None, **bounds_and_maxfun):
         x1, best_cost = scipy.optimize.anneal(f, x0, maxeval=maxeval)
     elif method=="coord":
         x1 = coord_descent(f, x0, steps=steps)
+    elif method=="none":
+        x1 = x0
     else:
         raise Exception("unknown optimization method %s" % (method))
     return x1, f(x1)

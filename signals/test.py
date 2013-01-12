@@ -83,12 +83,12 @@ class TestWaveform(unittest.TestCase):
 
     def test_segment_stats(self):
         self.assertEqual( self.bhz['sta'], "CTA")
-        self.assertEqual( self.bhz['srate'], 10)
-        self.assertEqual( self.bhz['npts'], 1000)
         self.assertEqual( self.bhz['stime'], 11111103)
         self.assertEqual( self.bhz['etime'], 11111203)
 
     def test_local_stats(self):
+        self.assertEqual( self.bhz['srate'], 10)
+        self.assertEqual( self.bhz['npts'], 1000)
         self.assertEqual( self.bhz['chan'], "BHZ")
         self.assertEqual( self.bhz['filter_str'], "")
         self.assertEqual( self.bhz['freq_low'], 0.0)
@@ -101,6 +101,11 @@ class TestWaveform(unittest.TestCase):
 
         bhz_alt = self.bhz.filter("freq_2.0_3.0;env;smooth")
         self.assertIs(bhz_23_env_smooth, bhz_alt)
+
+        bhz_decimated = self.bhz.filter("freq_2.0_3.0;env;smooth;hz_5")
+        self.assertEqual(bhz_decimated['srate'], 5)
+        self.assertEqual(bhz_decimated['npts'], 500)
+
 
     def test_timeslice(self):
         a = self.bhz[0:100]

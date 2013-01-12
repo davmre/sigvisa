@@ -1,9 +1,23 @@
+<html>
+<script>
+
+function confirm_delete(runid, url) {
+if (confirm("Are you sure you want to delete all fits in run " + runid + "?")) { 
+window.location = url;
+}
+}
+</script>
+
+<body>
+
 {% if run_list %}
     <ul>
     {% for run in run_list %}
-        <li><a href="{% url fit_list runid=run.runid sta='all' chan='all' band='all' fit_quality='all' %}">{{ run.run_name }} (iter {{ run.iter }})</a></li>
+        <li><a href="{% url fit_list runid=run.runid sta='all' chan='all' band='all' fit_quality='all' %}">{{ run.run_name }} (iter {{ run.iter }})</a> <input type="button" onclick="confirm_delete({{ run.runid }}, '{% url delete_run runid=run.runid %}')" value="delete run"/></li>
     {% endfor %}
     </ul>
 {% else %}
     <p>No runs are available.</p>
 {% endif %}
+</body>
+</html>

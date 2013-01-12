@@ -129,9 +129,10 @@ document.getElementById('loading').style.visibility = 'hidden';
 </tr>
 <tr>
   <td colspan=1 align="center">
+  
+
     <form action="{% url rate_fit runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.number %}" method="post" id='approval_form'>
       {% csrf_token %}
-
       <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
       <label for="unknown">Unknown</label>
       <input type="radio" name="approval" id="bad" value="1" {% if fit.human_approved == '1' or fit.human_approved == 1 %}checked{% endif %}/>
@@ -140,7 +141,7 @@ document.getElementById('loading').style.visibility = 'hidden';
       <label for="good">Good fit</label>
       <input type="submit" value="Submit" />
     </form>
-
+<p><a href="{% url delete_fit fitid=fit.fitid %}">delete fit</a></p>
   </td>
 </tr>
 </table>
