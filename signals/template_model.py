@@ -2,8 +2,11 @@ import numpy as np
 import sys, os
 from sigvisa import *
 
+import noise.noise_model as noise_model
 from learn.optimize import BoundsViolation
 from learn.train_coda_models import load_model
+from signals.common import *
+
 
 class TemplateModel(object):
     """
@@ -226,4 +229,70 @@ class TemplateModel(object):
         return ll
 
 
+    def generate_trace_python(self, model_waveform, template_params):
+        nm = noise_model.get_noise_model(model_waveform)
 
+        srate = model_waveform['srate']
+        st = model_waveform['stime']
+        et = model_waveform['etime']
+        npts = model_waveform['npts']
+        
+        data = np.ones((npts,)) * nm.c
+        phases, vals = template_params
+
+
+        for (i, phase) in enumerate(phases):
+            v = vals[i,:]
+            arr_time = v[0]
+            start = (arr_time - st) * srate
+            start_idx = int(start)
+            offset = start - start_idx
+            phase_env = self.abstract_logenv_raw(v, idx_offset = 0, srate=srate)
+            end_idx = start_idx + len(phase_env)
+
+            try:
+                overshoot = max(0, end_idx - len(data))
+                data[start_idx:end_idx-overshoot] += np.exp(phase_env[:len(phase_env)-overshoot])
+            except Exception as e:
+                print e
+                raise
+        return data
+
+    def generate_template_waveform(self, template_params, model_waveform, sample=False):
+        s = self.sigvisa
+
+        siteid = model_waveform['siteid']
+        srate = model_waveform['srate']
+        st = model_waveform['stime']
+        et = model_waveform['etime']
+        c = sigvisa_c.canonical_channel_num(model_waveform['chan'])
+        b = sigvisa_c.canonical_band_num(model_waveform['band'])
+
+        noise_model.set_noise_process(model_waveform)
+        phases, vals = template_params
+        phaseids = [s.phaseids[phase] for phase in phases]
+
+
+
+        if not sample:
+            env = self.generate_trace_python(model_waveform, template_params) #env = s.sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
+        else:
+            env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
+
+
+        if len(env) == len(model_waveform.data)-1:
+            le = len(env)
+            new_env = np.ones(le+1)
+            new_env[0:le] = env
+            new_env[le] = env[-1]
+            env = new_env
+        assert len(env) == len(model_waveform.data)
+
+        wave = Waveform(data = env, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
+
+        try:
+            del wave.segment_stats['evid']
+            del wave.segment_stats['event_arrivals']
+        except KeyError:
+            pass
+        return wave

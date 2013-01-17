@@ -34,6 +34,7 @@ def run_fit_and_rename_output(args):
     tmp_output_dir = os.path.join(base_output, "temp")
     tmp_output_file = os.path.join(tmp_output_dir, "run%d_%s.log" % (runid, paramhash))
     ensure_dir_exists(tmp_output_dir)
+    print "running fit, tmp output to %s" % tmp_output_file
 
     result = work(cmd, tmp_output_file)
 
@@ -61,6 +62,7 @@ def work(cmd, output_file_str):
     on_posix = 'posix' in sys.builtin_module_names
     with open(output_file_str, 'w') as output_file:
         output_file.write(cmd + "\n\n")
+        output_file.flush()
         result = subprocess.call(shlex.split(cmd),
                                  shell=False,
                                  close_fds=on_posix,
