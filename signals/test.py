@@ -6,7 +6,7 @@ import numpy as np
 import numpy.ma as ma
 
 from sigvisa import Sigvisa
-from source.event import Event
+from source.event import get_event
 from signals.common import Waveform, Segment, load_waveform_from_file
 from signals.mask_util import *
 from signals.io import load_event_station
@@ -288,7 +288,7 @@ class TestSignalLikelihood(unittest.TestCase):
 
     def setUp(self):
         self.seg = load_event_station(evid=5301405, sta="URZ").with_filter('freq_2.0_3.0;env')
-        self.event = Event(evid=5301405)
+        self.event = get_event(evid=5301405)
         self.tm =  PairedExpTemplateModel(run_name = "", model_type="dummy")
 
     def test_generate(self):

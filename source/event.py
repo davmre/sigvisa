@@ -6,33 +6,21 @@ from database.dataset import *
 from sigvisa import Sigvisa
 
 from utils.geog import lonlatstr
-
+import functools32
 
 KNOWN_EXPLOSIONS = (5393637,)  # 2009 DPRK event
 
 class EventNotFound(Exception):
     pass
 
+@functools32.lru_cache(1024)
+def get_event(*args, **kwargs):
+    return Event(*args, **kwargs)
+
 class Event(object):
 
 
     __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source']
-
-
-    def __new__(cls, *args, **kwargs):
-
-        e = None
-        if "evid" in kwargs and "evtype" in kwargs:
-            evid = kwargs["evid"]
-            evtype = kwargs["evtype"]
-            try:
-                e = Sigvisa().events[(evid,evtype)]
-            except KeyError:
-                e = super(Event, cls).__new__(cls, *args, **kwargs)
-                Sigvisa().events[(evid,evtype)] = e
-        if e is None:
-            e = super(Event, cls).__new__(cls, *args, **kwargs)
-        return e
 
     def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None):
 

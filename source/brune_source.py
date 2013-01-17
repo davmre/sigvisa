@@ -6,10 +6,6 @@
 
 import numpy as np
 
-import matplotlib
-matplotlib.use('PDF')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 
 from source.common import *
 # from sigvisa import Sigvisa

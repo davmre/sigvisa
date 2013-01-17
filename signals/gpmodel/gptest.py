@@ -10,7 +10,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import database.db
 from database.dataset import *
 import utils.geog
-from plotting.event_heatmap import EventHeatmap
+from plotting.event_heatmap import get_eventHeatmap
 import sys
 import matplotlib.mlab as mlab
 import wave
@@ -419,9 +419,9 @@ def test16():
     evid1 = 4686108
     evid2 = 4689462
     evid3 = 4650871
-    e1 = Event(evid1)
-    e2 = Event(evid2)
-    e3 = Event(evid3)
+    e1 = get_event(evid1)
+    e2 = get_event(evid2)
+    e3 = get_event(evid3)
     print e1.dist(e3)
     def filter(x):
         cA1, cD1 = pywt.dwt(x,'db1') #cA1 0-10 Hz
@@ -469,9 +469,9 @@ def test15():
     list = closest2(evid=evid1)
     evid3 = list[-3][1]
     evid3 = 4657242
-    e1 = Event(evid1)
-    e2 = Event(evid2)
-    e3 = Event(evid3)
+    e1 = get_event(evid1)
+    e2 = get_event(evid2)
+    e3 = get_event(evid3)
     y1 = np.fft.rfft(e1.x)
     y2 = np.fft.rfft(e2.x)
     y3 = np.fft.rfft(e3.x)
@@ -518,9 +518,9 @@ def test14():
     list = closest2(evid=evid1)
     evid3 = list[-4][1]
 #    evid3 = 4657242
-    e1 = Event(evid1)
-    e2 = Event(evid2)
-    e3 = Event(evid3)
+    e1 = get_event(evid1)
+    e2 = get_event(evid2)
+    e3 = get_event(evid3)
 
     plt.plot(e3.x)
 
@@ -556,8 +556,8 @@ def test12():
 
 def createpdf(evid1, evid2, N=8):
 
-    e1 = Event(evid1)
-    e2 = Event(evid2)
+    e1 = get_event(evid1)
+    e2 = get_event(evid2)
     name = 'outputs/%f_%d-%d.pdf' %(e1.dist(e2), evid1, evid2)
     print "creating %s..." %name
     pdf = PdfPages(name)
@@ -623,9 +623,9 @@ def test10():
     evid1 = 4686108
     evid2 = 4689462
     evid3 = 4650871
-    e1 = Event(evid1)
-    e2 = Event(evid2)
-    e3 = Event(evid3)
+    e1 = get_event(evid1)
+    e2 = get_event(evid2)
+    e3 = get_event(evid3)
     x1 = e1.data-np.mean(e1.data)
     x2 = e2.data-np.mean(e2.data)
     x3 = e3.data-np.mean(e3.data)
@@ -665,7 +665,7 @@ def test9():
         param,std = l.yulewalker(p)
         for ind in range(p):
             outputs_t[ind][i] = param[ind]
-    e = Event(evid, phase=None)
+    e = get_event(evid, phase=None)
     input = [e.lat, e.lon]
     l = lnr.ARLearner(e.data)
     param, std = l.yulewalker(5)
@@ -712,7 +712,7 @@ def test8():
         param,std = l.yulewalker(5)
         outputs[i] = param[k]
 
-    e = Event(evid, phase=None)
+    e = get_event(evid, phase=None)
     input = [e.lat, e.lon]
     l = lnr.ARLearner(e.data)
     param, std = l.yulewalker(5)
@@ -758,7 +758,7 @@ def test7():
 def test6():
     evids = validevids("GNI")
     for evid in evids:
-        e = Event(evid)
+        e = get_event(evid)
         plt.plot(e.data)
         plt.show()
 
@@ -767,7 +767,7 @@ def test5():
     print len(evids)
     for evid in evids:
         try:
-            e = Event(evid)
+            e = get_event(evid)
             plt.plot(e.lat, e.lon, "o")
         except:
             pass

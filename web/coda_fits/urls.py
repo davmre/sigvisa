@@ -8,7 +8,7 @@ from coda_fits.models import SigvisaCodaFit, SigvisaCodaFittingRun
 urlpatterns = patterns('',
     url(r'^fits/runs/$',   ListView.as_view(queryset=SigvisaCodaFittingRun.objects.order_by('run_name'),
                                            context_object_name='run_list',
-                                           template_name='coda_fits/runs.html')),
+                                           template_name='coda_fits/runs.html'), name="all_runs"),
     url(r'^fits/runs/(?P<runid>\d+)/$',
         lambda request, runid: HttpResponseRedirect(reverse('fit_list', args=(runid, "all", "all", "all", "all",))),
         name='fit_list_redirect'),

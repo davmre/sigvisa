@@ -12,7 +12,7 @@ except:
 
 from optparse import OptionParser
 
-from source.event import Event
+from source.event import get_event
 from sigvisa import *
 
 def get_first_arrivals(events, sta):
@@ -91,7 +91,7 @@ def main():
         f.close()
 
     print "loading", len(evids), "events..."
-    events = [Event(evid) for evid in evids]
+    events = [get_event(evid) for evid in evids]
     print "---------------------------------------------------------"
 
     arriving_events, arrival_dict = get_first_arrivals(events, sta)

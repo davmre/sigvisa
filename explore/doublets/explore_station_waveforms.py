@@ -12,7 +12,7 @@ except:
 
 from optparse import OptionParser
 
-from source.event import Event
+from source.event import get_event
 from sigvisa import *
 
 from explore.doublets.xcorr_pairs import extract_phase_window
@@ -97,7 +97,7 @@ def main():
         f.close()
 
     print "loading", len(evids), "events..."
-    events = [Event(evid) for evid in evids]
+    events = [get_event(evid) for evid in evids]
     print "---------------------------------------------------------"
 
 

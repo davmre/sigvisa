@@ -6,19 +6,14 @@ from scipy import stats
 from database.dataset import *
 from database import db
 
-import matplotlib
-matplotlib.use('PDF')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 
 from optparse import OptionParser
 
-import plot
 from sigvisa import Sigvisa
 import utils.geog
 import obspy.signal.util
 import itertools
-from source.event import Event
+from source.event import get_event
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel
 

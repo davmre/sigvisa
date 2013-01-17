@@ -25,33 +25,8 @@ import sigvisa_c, sigvisa
 
 def log_trace(trc, filename, format):
 
-  real_fn = 'logs/%s.pdf' % (filename)
-
-#  while (os.path.exists(real_fn)):
-#    real_fn = real_fn + "_"
-
-  print "logging to file", real_fn
-
-  pp = PdfPages(real_fn)
-
-  siteid = trc.stats["siteid"]
-  start_time = trc.stats["starttime_unix"]
-  if trc.stats["window_size"] is not None:
-    srate = 1/ ( trc.stats.window_size * (1- trc.stats.overlap) )
-    npts = trc.stats.npts_processed
-  else:
-    srate = trc.stats.sampling_rate
-    npts = trc.stats.npts
-  end_time = start_time + npts/srate
-
-  text = "%s: siteid %d" % (filename, siteid)
-  print text
-  utils.waveform.plot_trace(trc, title = text, format=format)
-  pp.savefig()
-  pp.close()
-
+  print "WARNING: ignoring log_trace from c code"
   return True
-
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
   model = sigvisa_c.EarthModel(sites, phasenames, phasetimedef,
@@ -148,9 +123,6 @@ def main(param_dirname):
   parser.add_option("-w", "--writefig", dest="writefig",
                     default=None, help = "Directory to save figures (None)",
                     metavar="DIR")
-  parser.add_option("-p", "--pdf", dest="pdf",
-                    default=None, help = "pdf file to save figures (None)",
-                    metavar="FILE")
   parser.add_option("-d", "--datadir", dest="datadir",
                     default=None, help = "Directory to save data (None)",
                     metavar="DIR")
@@ -173,8 +145,6 @@ def main(param_dirname):
   if options.type1:
     plt.rcParams['text.usetex'] = True
 
-  if options.pdf:
-    options.pdf = PdfPages(options.pdf)
 
   if options.gui:
     options.plt = plt
@@ -182,7 +152,7 @@ def main(param_dirname):
   # if the user has not request a GUI but he does want the pictures then we
   # will set the gui flag for the subcomponents, however, we won't display
   # the generated images
-  elif options.pdf or options.writefig:
+  elif  options.writefig:
     options.plt = plt
     options.gui = True
     showgui = False
@@ -309,8 +279,6 @@ def main(param_dirname):
     learn_phase(os.path.join(param_dirname, "PhasePrior.txt"), phasenames,
                 phasetimedef)
 
-  if options.pdf:
-    options.pdf.close()
 
   if showgui:
     plt.show()

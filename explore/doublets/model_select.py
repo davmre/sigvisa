@@ -18,8 +18,8 @@ from optparse import OptionParser
 from sigvisa import *
 from signals.io import fetch_waveform
 from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
-from source.event import Event
-from plotting.event_heatmap import EventHeatmap
+from source.event import get_event
+from plotting.event_heatmap import get_eventHeatmap
 from signals.waveform_matching.fourier_features import FourierFeatures
 from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
 from explore.doublets.xcorr_pairs import extract_phase_window

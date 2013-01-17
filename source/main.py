@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 from source import brune_source, mm_source
-from source.event import Event
+from source.event import get_event
 
 def plot_source_spectra():
 

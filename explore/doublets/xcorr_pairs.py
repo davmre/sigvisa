@@ -4,7 +4,7 @@ import sys, os, itertools
 from optparse import OptionParser
 
 from signals.template_models.paired_exp import PairedExpTemplateModel
-from source.event import Event
+from source.event import get_event
 from sigvisa import *
 from signals.io import fetch_waveform
 from database.signal_data import ensure_dir_exists

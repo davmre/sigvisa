@@ -5,7 +5,7 @@ import numpy.ma as ma
 
 from sigvisa import Sigvisa
 
-from source.event import Event
+from source.event import get_event
 from signals.io import load_event_station
 from signals.template_models.paired_exp import PairedExpTemplateModel
 
@@ -57,7 +57,7 @@ class TestTemplateParams(unittest.TestCase):
 
     def setUp(self):
         self.seg = load_event_station(evid=5301405, sta="URZ").with_filter('freq_2.0_3.0;env')
-        self.event = Event(evid=5301405)
+        self.event = get_event(evid=5301405)
         self.tm =  PairedExpTemplateModel(run_name = "", model_type="dummy")
 
     def test_template_params(self):
@@ -79,7 +79,7 @@ class TestTemplateParams(unittest.TestCase):
         wave = self.seg['BHZ']
         store_template_params(wave, (phases, param_vals), method_str='unit_test_fake', iid=True, fit_cost=0, run_name="unit_test_fake", iteration=i)
 
-        (phases2, fit_params2), fit_cost = load_template_params(cursor, self.event.evid, 'URZ', 'BHZ', 'freq_2.0_3.0', run_name = 'unit_test_fake', iteration=i)
+        (phases2, fit_params2), fit_cost, fitid = load_template_params(cursor, self.event.evid, 'URZ', 'BHZ', 'freq_2.0_3.0', run_name = 'unit_test_fake', iteration=i)
         self.assertEqual(tuple(phases), tuple(phases2))
         self.assertAlmostEqual(np.sum((param_vals-fit_params2).flatten()), 0, places=3)
         self.assertAlmostEqual(fit_cost, 0)

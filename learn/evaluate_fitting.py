@@ -45,7 +45,7 @@ def main():
     costs = []
     times = []
     for (sta, evid) in arrivals:
-        event = Event(evid)
+        event = get_event(evid)
         seg = load_event_station(event.evid, sta, cursor=cursor).with_filter("env")
         for band in bands:
             band_seg = seg.with_filter(band)

@@ -21,8 +21,8 @@ from optparse import OptionParser
 from sigvisa import *
 from signals.io import fetch_waveform
 from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
-from source.event import Event
-from plotting.event_heatmap import EventHeatmap
+from source.event import get_event
+from plotting.event_heatmap import get_eventHeatmap
 from signals.waveform_matching.fourier_features import FourierFeatures
 
 
@@ -109,8 +109,8 @@ def main():
         xc, offset = xcorr(p1, p2)
         offset = offset / filtered1['srate']
 
-        ev1 = Event(evid1)
-        ev2 = Event(evid2)
+        ev1 = get_event(evid1)
+        ev2 = get_event(evid2)
         plt.suptitle("evids %d, %d: xc %.3f offset %.3f\n(%.2f, %.2f) vs (%.2f, %.2f): %.2fkm" % (evid1, evid2, xc, offset, ev1.lon, ev1.lat, ev2.lon, ev2.lat, dist))
 
         x = np.linspace(-1, window_len, len(p1))

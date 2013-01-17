@@ -9,7 +9,7 @@ import learn
 from sigvisa import Sigvisa
 from utils.geog import dist_deg, azimuth
 
-from source.event import Event
+from source.event import get_event
 
 def plot_det_times(wave, axes=None, logscale=False):
   if wave is None:
@@ -76,7 +76,7 @@ def plot_segment(segment, title=None, chans=None, logscale=False):
   descr = "Segment: " + str(segment)
   try:
     evid = segment['evid']
-    e = Event(evid)
+    e = get_event(evid)
     descr = descr + "\n\n" + "Event: " + str(e)
   except KeyError as e:
     pass

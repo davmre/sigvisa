@@ -27,10 +27,8 @@
 #
 
 import matplotlib
-matplotlib.use("PDF")
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 
 import os
 from optparse import OptionParser
@@ -237,6 +235,8 @@ def main():
     parser.add_option("-o", "--outfile", dest="outfile", default="geog.pdf", type="str", help="name of output file (geog.pdf)")
 
     (options, args) = parser.parse_args()
+
+    from matplotlib.backends.backend_pdf import PdfPages
 
 #    pp = PdfPages(os.path.join(pdf_dir, "geog.pdf"))
     pp = PdfPages(options.outfile)

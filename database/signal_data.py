@@ -4,14 +4,9 @@ import numpy as np, scipy, scipy.stats
 from database.dataset import *
 from database import db
 
-import matplotlib
-matplotlib.use('PDF')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 
-import plot
 from sigvisa import Sigvisa
-from source.event import Event
+from source.event import get_event
 import sigvisa_c
 from signals.armodel.learner import ARLearner
 from signals.armodel.model import ARModel, ErrorModel
@@ -101,6 +96,17 @@ def filter_and_sort_template_params(unsorted_phases, unsorted_params, filter_lis
     fit_params = unsorted_params[permutation, :]
     return (phases, fit_params)
 
+def benchmark_fitting_run(cursor, runid, return_raw_data=False):
+    sql_query = "select acost, elapsed from sigvisa_coda_fit where runid=%d" % runid
+    cursor.execute(sql_query)
+    results = np.array(cursor.fetchall())
+    acosts = results[:, 0]
+    times = results[:, 1]
+    if return_raw_data:
+        return acosts, times
+    else:
+        return np.mean(acosts), np.mean(times)
+    
 
 def load_template_params_by_fitid(cursor, fitid):
 
@@ -123,9 +129,10 @@ def load_template_params_by_fitid(cursor, fitid):
 
 def load_template_params(cursor, evid, sta, chan, band, run_name=None, iteration=None, runid=None):
     fitid = get_fitid(cursor, evid, sta, chan, band, run_name=None, iteration=None, runid=None)
-    return load_template_params_by_fitid(cursor, fitid)
+    p, c = load_template_params_by_fitid(cursor, fitid)
+    return p, c, fitid
 
-def store_template_params(wave, template_params, method_str, iid, hz, acost, run_name, iteration, elapsed):
+def store_template_params(wave, template_params, optim_param_str, iid, hz, acost, run_name, iteration, elapsed):
     s  = Sigvisa()
     cursor = s.dbconn.cursor()
 
@@ -137,15 +144,16 @@ def store_template_params(wave, template_params, method_str, iid, hz, acost, run
     band = wave['band']
     st = wave['stime']
     et = wave['etime']
-    event = Event(evid=wave['evid'])
+    event = get_event(evid=wave['evid'])
 
 
     distance = utils.geog.dist_km((event.lon, event.lat), (s.sites[siteid-1][0], s.sites[siteid-1][1]))
     azimuth = utils.geog.azimuth((s.sites[siteid-1][0], s.sites[siteid-1][1]), (event.lon, event.lat))
 
+    optim_param_str = optim_param_str.replace("'", "''")
     
 
-    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, band,  method_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed)
+    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, band,  optim_param_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed)
 
     if "cx_Oracle" in str(type(s.dbconn)):
         import cx_Oracle
@@ -163,6 +171,7 @@ def store_template_params(wave, template_params, method_str, iid, hz, acost, run
     for (i, phase) in enumerate(phases):
         phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4) values (%d, '%s', 'paired_exp', %f, %f, %f, %f)" % (fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3])
         cursor.execute(phase_insert_query)
+    return fitid
 
 def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
 

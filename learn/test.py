@@ -5,13 +5,13 @@ import numpy.ma as ma
 
 from sigvisa import Sigvisa
 
-from source.event import Event
+from source.event import get_event
 
 from signals.common import Waveform, Segment
 from signals.io import load_event_station
 from signals.template_models.paired_exp import PairedExpTemplateModel
 
-from learn.fit_shape_params import fit_event_segment, fit_template
+from learn.fit_shape_params import fit_template
 from learn.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
 
 import learn.optimize as optimize
@@ -30,7 +30,7 @@ class TestFit(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
-        self.event = Event(evid=2781427) # Event(evid=5301405)
+        self.event = get_event(evid=2781427) # Event(evid=5301405)
         self.sta = "FITZ"
         self.s = Sigvisa()
         cursor = self.s.dbconn.cursor()

@@ -117,7 +117,7 @@ def validevents(sta):
     evids = validevids(sta)
     events = []
     for evid in evids:
-        e = Event(evid)
+        e = get_event(evid)
         if e.data != None:
             events.append(e)
     return events
@@ -136,7 +136,7 @@ def validevents2(ex=None,feature=None):
     evids = validevids2()
     events = []
     for evid in evids:
-        e = Event(evid, feature=feature, phase=None)
+        e = get_event(evid, feature=feature, phase=None)
         if e.data != None:
             if ex != evid:
                 events.append(e)
@@ -165,7 +165,7 @@ def closest2(evid=None):
                 ej = events[j]
                 list.append((ei.dist(ej),ei.evid, ej.evid))
     else:
-        e = Event(evid)
+        e = get_event(evid)
         for ei in events:
             list.append((e.dist(ei),ei.evid))
 

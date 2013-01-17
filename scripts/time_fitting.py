@@ -6,14 +6,14 @@ import numpy.ma as ma
 
 from sigvisa import Sigvisa
 from signals.template_models.paired_exp import PairedExpTemplateModel
-from source.event import Event
+from source.event import get_event
 
 
 from learn.fit_shape_params import fit_event_segment, fit_template
 
 
 def main():
-    event = Event(evid=2781427) # Event(evid=5301405)
+    event = get_event(evid=2781427) # Event(evid=5301405)
     tm = PairedExpTemplateModel(run_name="", run_iter=0, model_type="dummy")
 
     for optim_method in ('bfgs',):

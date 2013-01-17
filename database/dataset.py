@@ -28,7 +28,7 @@
 import numpy as np
 from time import strftime, gmtime
 from math import ceil
-import os
+import os, sys
 
 # local imports
 import db
@@ -172,12 +172,21 @@ def read_evids_detected_at_station(cursor, sta, start_time, end_time, phases = [
         phase_condition = "and (" + " or ".join(["leba.phase='%s'" % (pn) for pn in phases]) + ")"
     else:
         phase_condition = ""
-    ev_condition = "and l.time between %f and %f and lebo.mb between %f and %f and l.snr > 5" % (start_time, end_time, min_mb, max_mb)
+#    ev_condition = "and l.time between %f and %f and lebo.mb between %f and %f and l.snr > 5" % (start_time, end_time, min_mb, max_mb)
+    ev_condition = "and lebo.mb between %f and %f and l.snr > 5" % (min_mb, max_mb)
 
-    sql_query="SELECT distinct lebo.evid FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s" % (phase_condition, sta, ev_condition)
-    print sql_query
+    sql_query="SELECT lebo.evid, l.time FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s" % (phase_condition, sta, ev_condition)
+    print sql_query, "ADDITIONALLY FILTERING FOR l.time between %f and %f" % (start_time, end_time)
     cursor.execute(sql_query)
-    evids = cursor.fetchall()
+    evids = set()
+    for (i, row) in enumerate(cursor):
+        t = row[1]
+        if t > start_time and t < end_time:
+            evids.add(row[0])
+        if i % 1000 == 0:
+            print ".",
+            sys.stdout.flush()
+    print 
     return evids
 
 def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", noarrays=False):

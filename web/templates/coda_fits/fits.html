@@ -1,5 +1,14 @@
-{# .... **Normal content list, maybe a table** .... #}
+<html>
+<head>
+<title>{{ run.run_name }} - fits - sigvisa</title>
+</head>
+<body>
+<h1>{{ run.run_name }}: iter {{ run.iter }}</h1>
+<p><a href="{% url all_runs %}">back to run list</a></p>
+<p>{{ run.sigvisacodafit_set.count }} fits, average cost {{ avg_acost }}, average time {{ avg_time }}.<p>
 {% if fit_list %}
+
+
     <table id="fits" border=1 cellpadding=3>
       <tr>
 	<td><strong>evid</strong></td>
@@ -7,6 +16,9 @@
 	<td><strong>chan</strong></td>
 	<td><strong>band</strong></td>
 	<td><strong>start time</strong></td>
+	<td><strong>fit timestamp</strong></td>
+	<td><strong>running time</strong></td>
+	<td><strong>acost</strong></td>
       </tr>
         {% for fit in fit_list %}
             <tr>
@@ -15,6 +27,9 @@
                 <td>{{ fit.chan }}</td>
                 <td>{{ fit.band }}</td>
                 <td>{{ fit.stime }}</td>
+                <td>{{ fit.timestamp }}</td>
+                <td>{{ fit.elapsed }}</td>
+                <td>{{ fit.acost }}</td>
                 <td><a href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=forloop.counter|add:page_obj.start_index|add:-1  %}" class="see_detail">detail</a></td>
             </tr>
         {% endfor %}
@@ -39,4 +54,5 @@
     <h3>My Fits</h3>
     <p>No fits found!!! :(</p>
 {% endif %}
-{# .... **More content, footer, etc.** .... #}
+</body>
+</html>

@@ -2,6 +2,7 @@ import numpy as np
 import sys, os
 from sigvisa import *
 
+from learn.optimize import BoundsViolation
 from learn.train_coda_models import load_model
 
 class TemplateModel(object):
@@ -56,10 +57,13 @@ class TemplateModel(object):
     # meaningless.
     def waveform_log_likelihood_iid(self, wave, template_params):
         (phases, vals) = template_params
+
         lb = np.nan_to_num(self.low_bounds(phases))
         hb = np.nan_to_num(self.high_bounds(phases))
-        bounds_violations = np.abs((lb-vals) * (vals < lb)) + np.abs((vals-hb) * (vals > hb))
-        bound_penalty = 1000*np.exp(np.sum(bounds_violations)) - 1000
+        bounds_violations = np.abs((lb-vals) * (vals < lb)) + np.abs((vals-hb) * (vals > hb))       
+        bound_penalty = 1000*np.exp(min(700,np.sum(bounds_violations))) - 1000
+#        if (vals < lb).any() or (vals > hb).any():
+#            raise BoundsViolation("params: %s\n\n low bounds: %s\n\n high bounds: %s" % (str(vals), str(lb), str(hb)))
 
         # assume the provided wave is in original (linear) scale, but we do the comparison in logscale
         env = self.generate_template_waveform(template_params, model_waveform=wave)
@@ -70,8 +74,8 @@ class TemplateModel(object):
 #        env = self.generate_template_waveform(template_params, model_waveform=wave, logscale=False)
 #        cost = wave.l1_cost(env)
 
-
-        return -cost - bound_penalty
+        a = -cost - bound_penalty
+        return a
 
     def low_bounds(self, phases):
         raise Exception("abstract class: method not implemented")

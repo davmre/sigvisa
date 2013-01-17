@@ -6,15 +6,13 @@ from database import db
 
 from sigvisa import Sigvisa
 
-import matplotlib
-matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
 
 from optparse import OptionParser
 
-from source.event import Event
+from source.event import get_event
 import plotting.plot as plot
 import utils.geog
 import obspy.signal.util
@@ -62,7 +60,7 @@ def plot_waveform_with_pred(wave, tm, template_params, title=None, sample=False,
     descr += "Waveform: " + str(wave)
     try:
         evid = wave['evid']
-        e = Event(evid)
+        e = get_event(evid)
         descr = descr + "\n\n" + "Event: " + str(e)
 
         s  =Sigvisa()

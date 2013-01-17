@@ -21,11 +21,11 @@ from sigvisa import *
 from signals.io import fetch_waveform
 from signals.waveform_matching.fourier_features import FourierFeatures
 
-from source.event import Event
+from source.event import get_event
 from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
 from explore.doublets.xcorr_pairs import extract_phase_window
 
-from plotting.event_heatmap import EventHeatmap
+from plotting.event_heatmap import get_eventHeatmap
 
 
 #from gpr import munge, kernels, evaluate, learn, distributions, plot
@@ -79,7 +79,7 @@ def read_training_events(sta, st, et, min_mb, max_mb, center, width):
     cursor = s.dbconn.cursor()
 
     evids = read_evids_detected_at_station(cursor, sta, st, et, min_mb = min_mb, max_mb = max_mb)
-    events = [Event(evid) for evid in evids]
+    events = [get_event(evid) for evid in evids]
 
 
     def ev_distkm(ev1, ev2):

@@ -91,7 +91,7 @@ def main():
     load_wiggle_models(cursor, sigmodel, "parameters/signal_wiggles.txt")
     em = EnvelopeModel(template_model)
 
-    ev_true = Event(evid=evid)
+    ev_true = get_event(evid=evid)
 
     # inference is based on segments from all specified stations,
     # starting at the min predicted arrival time (for the true event)

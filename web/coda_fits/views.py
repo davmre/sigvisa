@@ -15,10 +15,11 @@ from signals.io import *
 from sigvisa import *
 from noise.noise_model import get_noise_model
 from signals.template_models.load_by_name import load_template_model
-from source.event import Event, EventNotFound
+from source.event import get_event, EventNotFound
 from signals.armodel.model import ARModel, ErrorModel
 import utils.geog
 
+import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -57,6 +58,10 @@ class FitListView(django.views.generic.ListView):
     def get_context_data(self, **kwargs):
         context = super(FitListView, self).get_context_data(**kwargs)
         context['filter_args'] = self.kwargs
+        run = SigvisaCodaFittingRun.objects.get(pk=self.kwargs['runid'])
+        context['run'] = run
+        s = Sigvisa()
+        context['avg_acost'], context['avg_time'] = benchmark_fitting_run(s.dbconn.cursor(), run.runid)
         return context
 
 # detail view for a particular fit
@@ -104,7 +109,7 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
 
     # load the event so that we can display data about it
     try:
-        ev = Event(evid=fit.evid)
+        ev = get_event(evid=fit.evid)
 
         station_location = s.stations[str(fit.sta)][0:2]
         dist = utils.geog.dist_km((ev.lon, ev.lat), station_location)

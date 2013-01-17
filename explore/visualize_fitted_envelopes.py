@@ -82,7 +82,7 @@ def main():
                 continue
 
 
-            (phases, vals), cost = load_template_params(cursor, evid, sta, chan, band, run_name, run_iter)
+            (phases, vals), cost, fitid = load_template_params(cursor, evid, sta, chan, band, run_name, run_iter)
 
             if options.require_p_s:
                 P_arrivals = [phase for phase in phases if phase in s.P_phases]

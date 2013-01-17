@@ -167,7 +167,7 @@ create table sigvisa_coda_fit (
  chan     varchar(10) not null,
  band     varchar(15) not null,
  hz	  float(24),
- optim_method  varchar(15),
+ optim_method  varchar(1024),
  iid        int,
  stime      double,
  etime      double,

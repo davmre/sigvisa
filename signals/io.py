@@ -1,9 +1,5 @@
 import time
 import sys, struct, sys, os, gzip, functools32
-import matplotlib
-matplotlib.use('PDF')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import numpy.ma as ma
 import scipy.optimize

@@ -3,10 +3,8 @@ from database.dataset import *
 from database.signal_data import *
 from database import db
 
-import matplotlib
-matplotlib.use('PDF')
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
+
 
 import sys, os, pickle
 
@@ -126,7 +124,7 @@ def get_training_data(run_name, run_iter, sta, chan, band, phases, target):
         for (i, fit) in enumerate(fit_data):
             phase = s.phasenames[int(fit[FIT_PHASEID])-1]
 #            band = sigvisa_c.canonical_band_name(int(fit[FIT_BANDID]))
-            ev = Event(evid=int(fit[FIT_EVID]))
+            ev = get_event(evid=int(fit[FIT_EVID]))
             y[i] = fit[FIT_CODA_HEIGHT] - ev.source_logamp(band, phase)
         print y
     elif target=="onset":

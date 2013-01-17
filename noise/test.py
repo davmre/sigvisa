@@ -6,7 +6,7 @@ import numpy as np
 import numpy.ma as ma
 
 from sigvisa import Sigvisa
-from source.event import Event
+from source.event import get_event
 from signals.common import Waveform, Segment, load_waveform_from_file
 from noise.noise_model import *
 
@@ -22,7 +22,7 @@ class TestNoiseModels(unittest.TestCase):
     def setUp(self):
         self.s = Sigvisa()
 
-        self.ev = Event(evid=5301405)
+        self.ev = get_event(evid=5301405)
 
         self.sta='URZ'
         self.chan='BHZ'
