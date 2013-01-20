@@ -125,6 +125,11 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td>{{ phase.param2 }}</td>
 	<td>{{ phase.param3 }}</td>
 	<td>{{ phase.param4 }}</td>
+	<td>
+	  {% for wiggle in phase.sigvisacodafitphasewiggle_set.all %}
+	  <a href="{% url wiggle_detail_view wiggleid=wiggle.wiggleid %}">{{ wiggle.type }} wiggle</a> 
+	  {% endfor %}
+	</td>
       </tr>
       {% endfor %}
     </table>

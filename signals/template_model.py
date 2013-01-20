@@ -102,7 +102,7 @@ class TemplateModel(object):
             if param == "arrival_time":
                 continue
 
-            basedir = os.path.join("parameters", run_name, "iter_%02d" % run_iter, self.model_name(), param)
+            basedir = os.path.join("parameters", "runs", run_name, "iter_%02d" % run_iter, self.model_name(), param)
             print basedir
             for sta in os.listdir(basedir):
                 sta_dir = os.path.join(basedir, sta)
@@ -247,7 +247,7 @@ class TemplateModel(object):
             start = (arr_time - st) * srate
             start_idx = int(start)
             offset = start - start_idx
-            phase_env = self.abstract_logenv_raw(v, idx_offset = 0, srate=srate)
+            phase_env = self.abstract_logenv_raw(v, idx_offset = offset, srate=srate)
             end_idx = start_idx + len(phase_env)
 
             try:
@@ -268,7 +268,6 @@ class TemplateModel(object):
         c = sigvisa_c.canonical_channel_num(model_waveform['chan'])
         b = sigvisa_c.canonical_band_num(model_waveform['band'])
 
-        noise_model.set_noise_process(model_waveform)
         phases, vals = template_params
         phaseids = [s.phaseids[phase] for phase in phases]
 

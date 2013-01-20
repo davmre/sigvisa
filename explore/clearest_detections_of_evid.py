@@ -2,13 +2,12 @@ import database.db
 from database.dataset import *
 import utils.geog
 import sys
-import sigvisa_util
 from optparse import OptionParser
 
 
 parser = OptionParser()
 parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
-parser.add_option("--ss_only", dest="ss_only", default=False, type="int", help="list only three-component stations, no arrays")
+parser.add_option("--ss_only", dest="ss_only", default=False, action="store_true", help="list only three-component stations, no arrays")
 (options, args) = parser.parse_args()
 
 cursor = db.connect().cursor()

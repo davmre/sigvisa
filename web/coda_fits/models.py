@@ -204,6 +204,22 @@ class SigvisaCodaFitPhase(models.Model):
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'
 
+class SigvisaCodaFitPhaseWiggle(models.Model):
+    wiggleid = models.BigIntegerField(primary_key=True)
+    fpid = models.ForeignKey(SigvisaCodaFitPhase, db_column='fpid')
+    stime = models.FloatField()
+    etime = models.FloatField()
+    filename = models.CharField(max_length=255)
+    timestamp = models.FloatField()
+    type = models.CharField(max_length=31)
+    nparams = models.BigIntegerField()
+    srate = models.FloatField()
+    fundamental = models.FloatField()
+    meta1 = models.FloatField()
+    meta2 = models.FloatField()
+    params = models.TextField()
+    class Meta:
+        db_table = u'sigvisa_coda_fit_phase_wiggle'
 
 
 class StaticPhaseid(models.Model):

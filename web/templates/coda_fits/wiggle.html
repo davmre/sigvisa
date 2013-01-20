@@ -1,0 +1,23 @@
+<html>
+<head>
+<title>wiggle {{ wiggle.wiggleid }} -- sigvisa</title>
+</head>
+<body>
+<h1>Wiggle id {{ wiggle.wiggleid }}</h1>
+
+<table>
+<tr>
+<td colspan=2><img src="{% url visual fitid=fit.fitid  %}" width=500 height=300></td>
+</tr>
+<tr>
+<td><img src="{% url raw_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
+<td><img src="{% url reconstructed_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
+</tr>
+<tr>
+<td><img src="{% url template_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
+<td><img src="{% url reconstructed_template_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
+</tr>
+</table>
+
+</body>
+</html>

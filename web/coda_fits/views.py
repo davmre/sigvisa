@@ -31,6 +31,17 @@ import textwrap
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
 
 
+def process_plot_args(request):
+    xmin = request.GET.get("xmin", "auto")
+    xmax = request.GET.get("xmax", "auto")
+    ymin = request.GET.get("ymin", "auto")
+    ymax = request.GET.get("ymax", "auto")
+
+    if xmin != "auto" and xmax != "auto":
+        plt.xlim([float(xmin), float(xmax)])
+    if ymin != "auto" and ymax != "auto":
+        plt.ylim([float(ymin), float(ymax)])
+
 def get_fit_queryset(runid="all", sta="all", chan="all", band="all", fit_quality="all"):
     a = dict()
     if runid != "all":
@@ -234,3 +245,97 @@ def delete_run(request, runid):
         return HttpResponse("Run %d deleted. <a href=\"javascript:history.go(-1)\">Go back</a>." % int(runid))
     except Exception as e:
         return HttpResponse("Error deleting run %d: %s" % (int(runid), str(e)))
+
+def fit_cost_quality(request, runid):
+    run = SigvisaCodaFittingRun.objects.get(runid=int(runid))
+
+    fig = plt.figure(figsize=(5,3), dpi=144)
+    fig.patch.set_facecolor('white')
+
+    plt.title("%s iter %d fit quality" % (run.run_name, run.iter))
+    
+    plt.xlabel("Acost")
+    plt.ylabel("mb")
+
+    unknown = request.GET.get("unknown", "True").lower().startswith('t')
+    good = request.GET.get("good", "True").lower().startswith('t')
+    bad = request.GET.get("bad", "True").lower().startswith('t')
+
+    if good:
+        good_fits = run.sigvisacodafit_set.filter(human_approved=2)
+        g = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in good_fits])
+        if good_fits.count() > 0:
+            plt.scatter(g[:,0], g[:, 1], c='g', alpha=0.5)
+
+    if bad:
+        bad_fits = run.sigvisacodafit_set.filter(human_approved=1)
+        b = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in bad_fits])
+        if bad_fits.count() > 0:
+            plt.scatter(b[:,0], b[:, 1], c='r', alpha=0.5)
+
+    if unknown:
+        unknown_fits = run.sigvisacodafit_set.filter(human_approved=0)    
+        u = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in unknown_fits])
+        if unknown_fits.count() > 0:
+            plt.scatter(u[:,0], u[:, 1], c='b', alpha=0.5)
+    
+    matplotlib.rcParams.update({'font.size': 8})    
+    process_plot_args(request)
+
+
+    canvas=FigureCanvas(fig)
+    response=django.http.HttpResponse(content_type='image/png')
+    plt.tight_layout()
+    canvas.print_png(response)
+    plt.close(fig)
+    return response
+
+
+def distance_decay(request, runid, sta, chan, band, fit_quality):
+
+    # get the fit corresponding to the given pageid for this run
+    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
+    qset = get_fit_queryset(**filter_args)
+
+    phases = request.GET.get("phases", "P").split(',')
+    max_acost = float(request.GET.get("max_acost", "inf"))
+    min_amp = float(request.GET.get("min_amp", "-inf"))
+    param_idx = int(request.GET.get("plot_param", "4"))
+    pstr = "p[0].param%d" % param_idx
+
+    x = {}
+    for phase in phases:
+        x[phase] = []
+        
+    for fit in qset:
+        for phase in phases:
+            p = fit.sigvisacodafitphase_set.filter(phase=phase)
+            if len(p) == 1 and p[0].param3 > min_amp:
+                x[phase].append((fit.dist,  eval(pstr)))
+
+    for phase in phases:
+        x[phase] = np.array(x[phase])
+
+
+    fig = plt.figure(figsize=(5,3), dpi=144)
+    fig.patch.set_facecolor('white')    
+    plt.xlabel("distance")
+    param_names = ["arr_time", "peak_offset", "coda_height", "coda_decay"]
+    plt.ylabel(param_names[param_idx-1])
+
+    colors = ['b', 'r', 'g', 'y']
+
+    for (i, phase) in enumerate(phases):
+        plt.scatter(x[phase][:, 0], x[phase][:, 1], alpha=0.5, c=colors[i])
+    
+    matplotlib.rcParams.update({'font.size': 8})    
+    process_plot_args(request)
+
+    canvas=FigureCanvas(fig)
+    response=django.http.HttpResponse(content_type='image/png')
+    plt.tight_layout()
+    canvas.print_png(response)
+    plt.close(fig)
+    return response
+
+

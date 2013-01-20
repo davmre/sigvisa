@@ -5,7 +5,6 @@ from database.dataset import *
 from database.signal_data import *
 from database import db
 
-import plot
 import utils.geog
 import obspy.signal.util
 
@@ -29,6 +28,8 @@ def run_fit_and_rename_output(args):
     cmd, runid = args
 
     paramhash = hashlib.sha1(str(cmd)).hexdigest()[:8]
+
+    print "about to run", cmd
     
     base_output = os.path.join(os.getenv("SIGVISA_HOME"), "logs", "fitting")
     tmp_output_dir = os.path.join(base_output, "temp")
@@ -77,6 +78,7 @@ def main():
 
     parser.add_option("-e", "--evidfile", dest="evidfile", default=None, type="str", help="file of 'evid, sta' pairs to fit")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
+    parser.add_option("-i", "--run_iter", dest="run_iter", default=None, type="int", help="run_iter")
     parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load (default is to ignore wiggle model and do iid fits)")
     parser.add_option("--init_runid", dest="init_runid", default=None, type="int", help="initialize template fitting with results from this runid")
     parser.add_option("--template_shape", dest = "template_shape", default="paired_exp", type="str", help="template model type to fit parameters under (paired_exp)")
@@ -99,23 +101,30 @@ def main():
         init_str = ""
     else:
         run_name = options.run_name
-    
-        iters = read_fitting_run_iterations(cursor, run_name)
-        if len(iters) == 0:
-            iteration = 1
-            init_iteration = None
-            init_run_name = None
-            init_str = ""
+
+        iteration = options.run_iter
+        """        if iteration is None:
+            iters = read_fitting_run_iterations(cursor, run_name)
+            if len(iters) == 0:
+                iteration = 1
+            else:
+                last_iteration = iters[-1][0]
+                iteration = last_iteration+1
+                init_iteration = None
+                init_run_name = None
+                init_str = ""
         else:
             last_iteration = iters[-1][0]
             init_run_name = run_name
             iteration = last_iteration+1
             init_iteration = last_iteration
             init_str = "--init_run_name=%s --init_run_iteration=%d" % (init_run_name, init_run_iteration)
-
+            """
+        init_str = ""
+        
     runid = get_fitting_runid(cursor, run_name, iteration)
 
-
+    print "hello", runid
     cmds = []
 
     with open(options.evidfile, 'r') as f:
@@ -127,14 +136,15 @@ def main():
 #            run_fit_and_rename_output((cmd_str, runid))
 #            sys.exit(1)
             cmds.append((cmd_str, runid))
-            print cmd_str
+#            print cmd_str
 
     
     count = multiprocessing.cpu_count()
     print "starting thread pool with %d concurrent processes..." % count
     pool = multiprocessing.Pool(processes=count)
-    pool.map(run_fit_and_rename_output, cmds)
-
+    r = pool.map_async(run_fit_and_rename_output, cmds)
+    r.wait()
+    
 if __name__ == "__main__":
     main()
 

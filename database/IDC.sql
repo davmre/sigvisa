@@ -215,6 +215,36 @@ select fpid_seq.nextval into :new.fpid from dual;
 end;
 /
 
+create table sigvisa_coda_fit_phase_wiggle (
+/* wiggleid  int not null auto_increment, */ /* MYSQL version */
+ wiggleid  int not null, /* Oracle version */
+ fpid int not null,
+ stime float(24) not null,
+ etime float(24) not null,
+ srate float(24) not null,
+ filename varchar(255) not null,
+ timestamp float(24) not null,
+ type varchar(31) not null,
+ nparams int not null,
+ meta1 float(24) not null,
+ meta2 float(24) not null,
+ fundamental float(24) not null,
+ params clob not null,
+ primary key(wiggleid),
+ foreign key (fpid) REFERENCES sigvisa_coda_fit_phase(fpid)
+);
+
+/* hack to implement auto_increment in Oracle */
+create sequence wiggleid_seq start with 1 increment by 1 nomaxvalue;
+create or replace trigger wiggleid_trigger
+before insert on sigvisa_coda_fit_phase_wiggle
+for each row
+begin
+select wiggleid_seq.nextval into :new.wiggleid from dual;
+end;
+/
+
+
 /*create table sigvisa_wiggle_wfdisc (
  wiggleid not null auto increment,
  fitid	  int,

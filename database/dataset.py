@@ -166,14 +166,14 @@ def read_isc_events(cursor, start_time, end_time, author):
   return events
 
 
-def read_evids_detected_at_station(cursor, sta, start_time, end_time, phases = [], min_mb = 0, max_mb = 99999):
+def read_evids_detected_at_station(cursor, sta, start_time, end_time, phases = [], min_mb = 0, max_mb = 99999, min_snr = 0, max_snr=99999):
 
     if phases:
         phase_condition = "and (" + " or ".join(["leba.phase='%s'" % (pn) for pn in phases]) + ")"
     else:
         phase_condition = ""
 #    ev_condition = "and l.time between %f and %f and lebo.mb between %f and %f and l.snr > 5" % (start_time, end_time, min_mb, max_mb)
-    ev_condition = "and lebo.mb between %f and %f and l.snr > 5" % (min_mb, max_mb)
+    ev_condition = "and lebo.mb between %f and %f and l.snr between %f and %f" % (min_mb, max_mb, min_snr, max_snr)
 
     sql_query="SELECT lebo.evid, l.time FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s" % (phase_condition, sta, ev_condition)
     print sql_query, "ADDITIONALLY FILTERING FOR l.time between %f and %f" % (start_time, end_time)

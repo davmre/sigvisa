@@ -12,6 +12,7 @@ from signals.io import *
 from sigvisa import *
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import matplotlib
 import matplotlib.pyplot as plt
 from datetime import datetime
 import django.db

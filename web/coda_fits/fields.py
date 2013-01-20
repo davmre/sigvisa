@@ -1,7 +1,7 @@
 from django.db import models
 from datetime import datetime
 from pytz import timezone
-import time
+import time, calendar
 import dateutil.parser
 
 class UnixTimestampField(models.DateTimeField):
@@ -30,5 +30,5 @@ class UnixTimestampField(models.DateTimeField):
             value = self.get_prep_value(value)
         if value==None:
             return None
-        b= time.mktime(value.timetuple())
+        b= calendar.timegm(value.timetuple())
         return b

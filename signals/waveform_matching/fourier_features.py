@@ -5,11 +5,11 @@ import learn.optimize
 
 class FourierFeatures(object):
 
-    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, srate = 40):
+    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, srate = 40.0):
         self.fundamental = fundamental
         self.max_freq = max_freq
         self.min_freq = min_freq
-        self.srate = 40
+        self.srate = 40.0
 
     def signal_from_features(self, features, len_seconds = 30):
         x = np.linspace(0, len_seconds, len_seconds*self.srate)
@@ -37,7 +37,7 @@ class FourierFeatures(object):
 
     def basis_decomposition(self, signal):
         n_features = int((self.max_freq - self.min_freq)/self.fundamental)
-        len_seconds = len(signal)/self.srate
+        len_seconds = len(signal)/float(self.srate)
 
         x = np.linspace(0, len_seconds, len_seconds*self.srate)
 
@@ -78,6 +78,7 @@ class FourierFeatures(object):
 
     def cost(self, signal, features):
         return np.linalg.norm(signal - self.signal_from_features(features, len_seconds = len(signal) / self.srate), 1)
+        
 
 def main():
     ff = FourierFeatures(fundamental=1/20.0, min_freq=0.8, max_freq=3.5)

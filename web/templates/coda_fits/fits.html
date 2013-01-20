@@ -5,8 +5,9 @@
 <body>
 <h1>{{ run.run_name }}: iter {{ run.iter }}</h1>
 <p><a href="{% url all_runs %}">back to run list</a></p>
-<p>{{ run.sigvisacodafit_set.count }} fits, average cost {{ avg_acost }}, average time {{ avg_time }}.<p>
+<p>{{ run.sigvisacodafit_set.count }} fits, average cost {{ avg_acost }}, average time {{ avg_time }}.     <a href="{% url distance_decay runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=4;ymin=-0.05;ymax=0;phases=P">Plot distance vs. coda decay</a><p>
 {% if fit_list %}
+
 
 
     <table id="fits" border=1 cellpadding=3>

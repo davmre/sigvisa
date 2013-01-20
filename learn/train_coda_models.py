@@ -19,7 +19,7 @@ from learn.SpatialGP import distfns, SpatialGP, start_params, gp_extract_feature
 import learn.baseline_models as baseline_models
 import gpr.learn
 from gpr.distributions import InvGamma, LogNormal
-
+from optparse import OptionParser
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
 
@@ -97,7 +97,7 @@ def analyze_model_fname(fname):
 
     return d
 
-def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, model_name="paired_exp", prefix="parameters"):
+def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, model_name="paired_exp", prefix=os.path.join("parameters", "runs"):
     path_components = [prefix, run_name, "iter_%02d" % run_iter, "paired_exp", target, sta, phase, chan,band]
     path = os.path.join(*path_components)
 
@@ -165,7 +165,7 @@ def main():
     run_name = options.run_name
     if options.run_iter == "latest":
         iters = read_fitting_run_iterations(cursor, run_name)
-        run_iter = np.max(iters)
+        run_iter = np.max(iters[:, 0])
     else:
         run_iter = int(options.run_iter)
 
@@ -177,10 +177,10 @@ def main():
 
                 X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target)
 
-                model_fname = get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, model_name="paired_exp")
+                model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name="paired_exp")
 
                 distfn = model_type[3:]
-                model = learn_model(X, y, model_type, start_params = start_params[distfn][target])
+                model = learn_model(X, y, model_type, target=target)
 
                 model.save_trained_model(model_fname)
 

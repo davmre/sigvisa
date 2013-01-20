@@ -18,6 +18,8 @@ def main():
     parser.add_option("-o", dest="output", default=None, type="str", help="write fitting commands to a file (e.g. for later execution using GNU parallel) rather than executing them directly")
     parser.add_option("--min_mb", dest="min_mb", default=5, type="float", help="exclude all events with mb less than this value (0)")
     parser.add_option("--max_mb", dest="max_mb", default=10, type="float", help="exclude all events with mb greater than this value (10)")
+    parser.add_option("--min_snr", dest="min_snr", default=5, type="float", help="exclude all events with snr less than this value (0)")
+    parser.add_option("--max_snr", dest="max_snr", default=float(inf), type="float", help="exclude all events with snr greater than this value (10)")
     parser.add_option("--start_time", dest="start_time", default=None, type="float", help="exclude all events with time less than this value (0)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float", help="exclude all events with time greater than this value (1237680000)")
 
@@ -27,12 +29,12 @@ def main():
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
-    if options.start_time is None:
+    if options.start_time is None or options.end_time is None:
         cursor.execute("select start_time, end_time from dataset where label='training'")
         (st, et) = read_timerange(cursor, "training", hours=None, skip=0)
-    else:
-        st = options.start_time
-        et = options.end_time
+
+    st = options.start_time if options.start_time is not None else st
+    et = options.end_time if options.end_time is not None else et
 
     if options.output is None:
         raise Exception("must specify an output file")
@@ -41,7 +43,7 @@ def main():
     with open(options.output, 'w') as f:
         for sta in options.stations.split(','):
             # want to select all events, with certain properties, which have a P or S phase detected at this station
-            evids = read_evids_detected_at_station(cursor, sta, st, et, s.P_phases+ s.S_phases, min_mb = options.min_mb, max_mb = options.max_mb)
+            evids = read_evids_detected_at_station(cursor, sta, st, et, s.P_phases+ s.S_phases, min_mb = options.min_mb, max_mb = options.max_mb, min_snr = options.min_snr, max_snr = options.max_snr)
             for evid in evids:
                 f.write('%s %d\n'% (sta, evid))
 

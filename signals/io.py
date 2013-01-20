@@ -10,7 +10,6 @@ import obspy.signal.filter
 from obspy.signal.trigger import triggerOnset
 
 from database.dataset import *
-import plot
 
 from signals.common import *
 from signals.mask_util import *
