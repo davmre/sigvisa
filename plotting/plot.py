@@ -104,7 +104,7 @@ def subplot_waveform(wave, axes, logscale=False, plot_dets=True, **kwargs):
 
     wave_data = np.log(wave.data) if logscale else wave.data
 
-    plt.ylabel(wave['chan'])
+    axes.set_ylabel(wave['chan'])
     axes.plot(timevals, wave_data, **kwargs)
     if plot_dets:
       plot_det_times(wave, axes=axes, logscale=logscale)

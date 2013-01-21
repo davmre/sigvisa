@@ -19,9 +19,8 @@ from source.event import get_event, EventNotFound
 from signals.armodel.model import ARModel, ErrorModel
 import utils.geog
 
-import matplotlib
+from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-import matplotlib.pyplot as plt
 from datetime import datetime
 from pytz import timezone
 
@@ -31,16 +30,31 @@ import textwrap
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
 
 
-def process_plot_args(request):
+def process_plot_args(request, axes):
     xmin = request.GET.get("xmin", "auto")
     xmax = request.GET.get("xmax", "auto")
     ymin = request.GET.get("ymin", "auto")
     ymax = request.GET.get("ymax", "auto")
 
     if xmin != "auto" and xmax != "auto":
-        plt.xlim([float(xmin), float(xmax)])
+        axes.set_xlim(float(xmin), float(xmax))
     if ymin != "auto" and ymax != "auto":
-        plt.ylim([float(ymin), float(ymax)])
+        axes.set_ylim(float(ymin), float(ymax))
+
+
+def error_wave(exception):
+    error_text = 'Error plotting waveform: \"%s\"' % str(exception)
+    fig = Figure(figsize=(5,3), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    axes.set_xlabel("Time (s)", fontsize=8)
+    axes.text(.5, .5, "\n".join(textwrap.wrap(error_text, 60)), horizontalalignment='center', verticalalignment='center', transform = axes.transAxes, fontsize=8)
+    canvas=FigureCanvas(fig)
+    response=django.http.HttpResponse(content_type='image/png')
+    fig.tight_layout()
+    canvas.print_png(response)
+    return response
+
 
 def get_fit_queryset(runid="all", sta="all", chan="all", band="all", fit_quality="all"):
     a = dict()
@@ -187,28 +201,21 @@ def FitImageView(request, fitid):
 
         wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
 
-        fig = plt.figure(figsize=(5,3), dpi=144)
+        fig = Figure(figsize=(5,3), dpi=144)
         fig.patch.set_facecolor('white')
-        plt.xlabel("Time (s)")
+        axes = fig.add_subplot(111)
+        axes.set_xlabel("Time (s)", fontsize=8)
         synth_wave = tm.generate_template_waveform((phases, vals), wave, sample=sample)
-        axes = plt.gca()
         plot.subplot_waveform(wave.filter("smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
         plot.subplot_waveform(synth_wave, axes, color="green", linewidth=3, logscale=logscale, plot_dets=False)
-        matplotlib.rcParams.update({'font.size': 8})
 
     except Exception as e:
-        error_text = 'Error plotting waveform: \"%s\"' % str(e)
-        fig = plt.figure(figsize=(5,3), dpi=144)
-        fig.patch.set_facecolor('white')
-        axes = plt.gca()
-        plt.text(.5, .5, "\n".join(textwrap.wrap(error_text, 60)), horizontalalignment='center', verticalalignment='center', transform = axes.transAxes)
-        matplotlib.rcParams.update({'font.size': 8})
-
+        return error_wave(e)
+    
     canvas=FigureCanvas(fig)
     response=django.http.HttpResponse(content_type='image/png')
-    plt.tight_layout()
+    fig.tight_layout()
     canvas.print_png(response)
-    plt.close(fig)
     return response
 
 def rate_fit(request, runid, sta, chan, band, fit_quality, pageid):
@@ -249,13 +256,13 @@ def delete_run(request, runid):
 def fit_cost_quality(request, runid):
     run = SigvisaCodaFittingRun.objects.get(runid=int(runid))
 
-    fig = plt.figure(figsize=(5,3), dpi=144)
+    fig = Figure(figsize=(5,3), dpi=144)
     fig.patch.set_facecolor('white')
-
-    plt.title("%s iter %d fit quality" % (run.run_name, run.iter))
+    axes = fig.add_subplot(111)
+    fig.suptitle("%s iter %d fit quality" % (run.run_name, run.iter))
     
-    plt.xlabel("Acost")
-    plt.ylabel("mb")
+    axes.set_xlabel("Acost")
+    axes.set_ylabel("mb")
 
     unknown = request.GET.get("unknown", "True").lower().startswith('t')
     good = request.GET.get("good", "True").lower().startswith('t')
@@ -265,29 +272,27 @@ def fit_cost_quality(request, runid):
         good_fits = run.sigvisacodafit_set.filter(human_approved=2)
         g = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in good_fits])
         if good_fits.count() > 0:
-            plt.scatter(g[:,0], g[:, 1], c='g', alpha=0.5)
+            axes.scatter(g[:,0], g[:, 1], c='g', alpha=0.5)
 
     if bad:
         bad_fits = run.sigvisacodafit_set.filter(human_approved=1)
         b = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in bad_fits])
         if bad_fits.count() > 0:
-            plt.scatter(b[:,0], b[:, 1], c='r', alpha=0.5)
+            axes.scatter(b[:,0], b[:, 1], c='r', alpha=0.5)
 
     if unknown:
         unknown_fits = run.sigvisacodafit_set.filter(human_approved=0)    
         u = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in unknown_fits])
         if unknown_fits.count() > 0:
-            plt.scatter(u[:,0], u[:, 1], c='b', alpha=0.5)
+            axes.scatter(u[:,0], u[:, 1], c='b', alpha=0.5)
     
-    matplotlib.rcParams.update({'font.size': 8})    
-    process_plot_args(request)
+    process_plot_args(request, axes)
 
 
     canvas=FigureCanvas(fig)
     response=django.http.HttpResponse(content_type='image/png')
-    plt.tight_layout()
+    fig.tight_layout()
     canvas.print_png(response)
-    plt.close(fig)
     return response
 
 
@@ -317,25 +322,24 @@ def distance_decay(request, runid, sta, chan, band, fit_quality):
         x[phase] = np.array(x[phase])
 
 
-    fig = plt.figure(figsize=(5,3), dpi=144)
-    fig.patch.set_facecolor('white')    
-    plt.xlabel("distance")
+    fig = Figure(figsize=(5,3), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    axes.set_xlabel("distance", fontsize=8)
     param_names = ["arr_time", "peak_offset", "coda_height", "coda_decay"]
-    plt.ylabel(param_names[param_idx-1])
+    axes.set_ylabel(param_names[param_idx-1], fontsize=8)
 
     colors = ['b', 'r', 'g', 'y']
 
     for (i, phase) in enumerate(phases):
-        plt.scatter(x[phase][:, 0], x[phase][:, 1], alpha=0.5, c=colors[i])
+        axes.scatter(x[phase][:, 0], x[phase][:, 1], alpha=0.5, c=colors[i])
     
-    matplotlib.rcParams.update({'font.size': 8})    
-    process_plot_args(request)
+    process_plot_args(request, axes)
 
     canvas=FigureCanvas(fig)
     response=django.http.HttpResponse(content_type='image/png')
-    plt.tight_layout()
+    fig.tight_layout()
     canvas.print_png(response)
-    plt.close(fig)
     return response
 
 

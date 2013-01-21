@@ -97,7 +97,7 @@ def analyze_model_fname(fname):
 
     return d
 
-def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, model_name="paired_exp", prefix=os.path.join("parameters", "runs"):
+def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, model_name="paired_exp", prefix=os.path.join("parameters", "runs")):
     path_components = [prefix, run_name, "iter_%02d" % run_iter, "paired_exp", target, sta, phase, chan,band]
     path = os.path.join(*path_components)
 

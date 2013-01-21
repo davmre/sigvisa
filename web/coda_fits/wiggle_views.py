@@ -19,9 +19,8 @@ from learn.train_wiggles import create_wiggled_phase
 from signals.waveform_matching.fourier_features import FourierFeatures
 from signals.common import Waveform
 
-import matplotlib
+from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-import matplotlib.pyplot as plt
 import calendar
 from pytz import timezone
 
@@ -29,7 +28,7 @@ import plotting.plot as plot
 import textwrap
 
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaCodaFitPhaseWiggle
-from coda_fits.views import process_plot_args
+from coda_fits.views import process_plot_args, error_wave
 
 
 # detail view for a particular fit
@@ -54,36 +53,21 @@ def wiggle_detail_view(request, wiggleid):
 
 def view_wave(request, wave, **kwargs):
     #    try:
-    fig = plt.figure(figsize=(5,3), dpi=144)
+    fig = Figure(figsize=(5,3), dpi=144)
     fig.patch.set_facecolor('white')
-    plt.xlabel("Time (s)")
-    axes = plt.gca()
+    axes = fig.add_subplot(111)
+    axes.set_xlabel("Time (s)", fontsize=8)
     plot.subplot_waveform(wave, axes, **kwargs)
-    matplotlib.rcParams.update({'font.size': 8})
+    #matplotlib.rcParams.update({'font.size': 8})
     canvas=FigureCanvas(fig)
     response=django.http.HttpResponse(content_type='image/png')
-    plt.tight_layout()
+    fig.tight_layout()
     canvas.print_png(response)
-    plt.close(fig)
     return response
 #    except Exception as e:
 #        return error_wave(e)
     
-def error_wave(exception):
-    error_text = 'Error plotting waveform: \"%s\"' % str(exception)
-    fig = plt.figure(figsize=(5,3), dpi=144)
-    fig.patch.set_facecolor('white')
-    axes = plt.gca()
-    plt.text(.5, .5, "\n".join(textwrap.wrap(error_text, 60)), horizontalalignment='center', verticalalignment='center', transform = axes.transAxes)
-    matplotlib.rcParams.update({'font.size': 8})
-
-    canvas=FigureCanvas(fig)
-    response=django.http.HttpResponse(content_type='image/png')
-    plt.tight_layout()
-    canvas.print_png(response)
-    plt.close(fig)
-    return response
-    
+   
 
 def raw_wiggle_view(request, wiggleid):
 
