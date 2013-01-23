@@ -186,7 +186,7 @@ class SpatialGP(GaussianProcess):
         kname = np.array((self.kernel_name,))
         mname = np.array((self.mean,))
         with open(filename, 'w') as f:
-            np.savez(f, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, K=self.K, L=self.L, distfn_str = self.distfn_str)
+            np.savez(f, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, L=self.L, distfn_str = self.distfn_str)
 
 
     def load_trained_model(self, filename):
