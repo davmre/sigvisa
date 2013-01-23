@@ -15,7 +15,7 @@ from database.signal_data import *
 from sigvisa import *
 
 from signals.template_models.load_by_name import load_template_model
-from learn.train_wiggles import create_wiggled_phase
+from learn.extract_wiggles import create_wiggled_phase
 from signals.waveform_matching.fourier_features import FourierFeatures
 from signals.common import Waveform
 
@@ -27,25 +27,25 @@ from pytz import timezone
 import plotting.plot as plot
 import textwrap
 
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaCodaFitPhaseWiggle
+from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle
 from coda_fits.views import process_plot_args, error_wave
-
+from signals.common import load_waveform_from_file
 
 # detail view for a particular fit
-def wiggle_detail_view(request, wiggleid):
+def wiggle_detail_view(request, fpid):
 
     # get the fit corresponding to the given pageid for this run
 
 
     s = Sigvisa()
 
-    wiggle = get_object_or_404(SigvisaCodaFitPhaseWiggle, pk=wiggleid)
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
+#    wiggle = get_object_or_404(SigvisaWiggle, pk=wiggleid)
+    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
     run = get_object_or_404(SigvisaCodaFittingRun, pk=fit.runid.runid)
 
     return render_to_response('coda_fits/wiggle.html', {
-        'wiggle': wiggle,
+#        'wiggle': wiggle,
         'phase': phase,
         'fit': fit,
         'run': run,
@@ -69,10 +69,9 @@ def view_wave(request, wave, **kwargs):
     
    
 
-def raw_wiggle_view(request, wiggleid):
+def raw_wiggle_view(request, fpid):
 
-    wiggle = get_object_or_404(SigvisaCodaFitPhaseWiggle, pk=wiggleid)
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
+    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
 
     s = Sigvisa()
@@ -83,17 +82,15 @@ def raw_wiggle_view(request, wiggleid):
     wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
 
     #    try:
-    raw_wiggle = np.loadtxt(os.path.join(wiggle_dir, wiggle.filename))
-    wiggle_wave = Waveform(data=raw_wiggle, srate=wiggle.srate, stime=wiggle.stime, sta=str(fit.sta), evid=fit.evid, filter_str="wiggle", chan=str(fit.chan))
-    return view_wave(request, wiggle_wave, color='black', linewidth=1.5, logscale=False)
+    wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
+    return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)
 #    except Exception as e:
 #        return error_wave(e)
 
 
-def template_wiggle_view(request, wiggleid):
+def template_wiggle_view(request, fpid):
 
-    wiggle = get_object_or_404(SigvisaCodaFitPhaseWiggle, pk=wiggleid)
-    phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
+    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
 
     s = Sigvisa()
@@ -103,7 +100,8 @@ def template_wiggle_view(request, wiggleid):
     wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
 
     #try:
-    raw_wiggle = np.loadtxt(os.path.join(wiggle_dir, wiggle.filename))
+
+    wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
 
     fit_phases = fit.sigvisacodafitphase_set.all()
     fit_params =np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
@@ -112,9 +110,8 @@ def template_wiggle_view(request, wiggleid):
 
     st = calendar.timegm(fit.stime.timetuple())
     et = calendar.timegm(fit.etime.timetuple())
-    wiggled_phase_data = create_wiggled_phase((phases, vals), tm, phase.phase, raw_wiggle, st, npts=((et-st) * wiggle.srate), srate = wiggle.srate, chan=str(fit.chan), sta=str(fit.sta))
-    wiggle_wave = Waveform(data=wiggled_phase_data, srate=wiggle.srate, stime=st, sta=str(fit.sta), evid=fit.evid, filter_str="wiggle", chan=str(fit.chan))
-    return view_wave(request, wiggle_wave, color='black', linewidth=1.5, logscale=False)
+    wave = create_wiggled_phase((phases, vals), tm, phase.phase, wave.data, st, npts=((et-st) * wave['srate']), srate = wave['srate'], chan=str(fit.chan), sta=str(fit.sta))
+    return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)
     #except Exception as e:
     #    return error_wave(e)
 
@@ -123,20 +120,22 @@ def reconstruct_wiggle_data(wiggle):
     if wiggle.type == "fourier":
         min_freq = wiggle.meta1
         max_freq = wiggle.meta2
-        fundamental = wiggle.fundamental
+        fundamental = wiggle.meta0
         srate = wiggle.srate
-        params = np.array(eval(wiggle.params))
 
         f = FourierFeatures(fundamental=fundamental, min_freq=min_freq, max_freq=max_freq, srate=srate)
-        reconstructed_wiggle = f.signal_from_features(params, len_seconds=wiggle.etime-wiggle.stime)
+        reconstructed_wiggle = f.signal_from_encoded_params(wiggle.params, srate=wiggle.srate, len_seconds=wiggle.etime-wiggle.stime)
     else:
         raise Exception("unrecognized wiggle type %s" % wiggle.type)
+    if wiggle.log == '1':
+        reconstructed_wiggle = np.exp(reconstructed_wiggle)
+
     return reconstructed_wiggle
 
 
 def reconstructed_wiggle_view(request, wiggleid):
 
-    wiggle = get_object_or_404(SigvisaCodaFitPhaseWiggle, pk=wiggleid)
+    wiggle = get_object_or_404(SigvisaWiggle, pk=wiggleid)
     phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
 
@@ -152,7 +151,7 @@ def reconstructed_wiggle_view(request, wiggleid):
 
 def reconstructed_template_wiggle_view(request, wiggleid):
 
-    wiggle = get_object_or_404(SigvisaCodaFitPhaseWiggle, pk=wiggleid)
+    wiggle = get_object_or_404(SigvisaWiggle, pk=wiggleid)
     phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
 
@@ -161,19 +160,17 @@ def reconstructed_template_wiggle_view(request, wiggleid):
 
     s = Sigvisa()
 
-    try:
-        reconstructed_wiggle = reconstruct_wiggle_data(wiggle)
+    #try:
+    reconstructed_wiggle_data = reconstruct_wiggle_data(wiggle)
 
-        fit_phases = fit.sigvisacodafitphase_set.all()
-        fit_params =np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
-        phases = tuple([str(p.phase) for p in fit_phases])
-        (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
+    fit_phases = fit.sigvisacodafitphase_set.all()
+    fit_params =np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
+    phases = tuple([str(p.phase) for p in fit_phases])
+    (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
 
-        st = calendar.timegm(fit.stime.timetuple())
-        et = calendar.timegm(fit.etime.timetuple())
-        wiggled_phase_data = create_wiggled_phase((phases, vals), tm, phase.phase, reconstructed_wiggle, st, npts=((et-st) * wiggle.srate), srate = wiggle.srate, chan=str(fit.chan), sta=str(fit.sta))
-
-        wiggle_wave = Waveform(data=wiggled_phase_data, srate=wiggle.srate, stime=st, sta=str(fit.sta), evid=fit.evid, filter_str="wiggle", chan=str(fit.chan))
-        return view_wave(request, wiggle_wave, color='black', linewidth=1.5, logscale=False)
-    except Exception as e:
-        return error_wave(e)
+    st = calendar.timegm(fit.stime.timetuple())
+    et = calendar.timegm(fit.etime.timetuple())
+    wave = create_wiggled_phase((phases, vals), tm, phase.phase, reconstructed_wiggle_data, st, npts=((et-st) * wiggle.srate), srate = wiggle.srate, chan=str(fit.chan), sta=str(fit.sta))
+    return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)
+#    except Exception as e:
+#        return error_wave(e)

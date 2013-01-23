@@ -259,3 +259,29 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
     return shape_data
 
 
+def insert_wiggle(dbconn, p):
+    cursor = dbconn.cursor()
+    sql_query = "insert into sigvisa_wiggle (fpid, stime, etime, srate, timestamp, type, log, meta0, meta1, meta2, params) values (:fpid, :stime, :etime, :srate, :timestamp, :type, :log, :meta0, :meta1, :meta2, :params)"
+
+    if "cx_Oracle" in str(type(dbconn)):
+        import cx_Oracle
+        binary_var = cursor.var(cx_Oracle.BLOB)
+        binary_var.setvalue(0, p['params'])
+        p['params'] = binary_var
+        wiggleid=cursor.var(cx_Oracle.NUMBER)
+        sql_query += " returning wiggleid into :x"
+        p['x'] = wiggleid
+        cursor.setinputsizes(params = cx_Oracle.BLOB)
+        cursor.execute(sql_query, p)
+        wiggleid = int(wiggleid.getvalue())
+
+
+    elif "MySQLdb" in str(type(dbconn)):
+        raise Exception("blob insertion for mysql not yet implemented")
+    
+    return wiggleid
+
+def read_wiggle(cursor, wiggleid):
+    sql_query = "select * from sigvisa_wiggle where wiggleid=%d" % (wiggleid)
+    cursor.execute(sql_query)
+    return cursor.fetchone()

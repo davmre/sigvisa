@@ -1,22 +1,32 @@
 <html>
 <head>
-<title>wiggle {{ wiggle.wiggleid }} -- sigvisa</title>
+<title>phase {{ phase.fpid }} wiggles -- sigvisa</title>
 </head>
 <body>
-<h1>Wiggle id {{ wiggle.wiggleid }}</h1>
-
+<h1></h1>
+TODO for this page:
+<ul>
+<li>table headings</li>
+<li>show metadata for each wiggle model</li>
+<li>standardize x- and y-axes between plots</li>
+<li>standardize wiggle length: if we trained on only 10s worth of wiggle, then we should show 10s everywhere (or show the whole thing everywhere)</li>
+</ul>
+</ul>
 <table>
 <tr>
 <td colspan=2><img src="{% url visual fitid=fit.fitid  %}" width=500 height=300></td>
 </tr>
 <tr>
-<td><img src="{% url raw_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
-<td><img src="{% url reconstructed_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
+<td><img src="{% url raw_wiggle fpid=phase.fpid  %}" width=500 height=300></td>
+<td><img src="{% url template_wiggle fpid=phase.fpid  %}" width=500 height=300></td>
 </tr>
+
+{% for wiggle in phase.sigvisawiggle_set.all %}
 <tr>
-<td><img src="{% url template_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
+<td><img src="{% url reconstructed_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
 <td><img src="{% url reconstructed_template_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
 </tr>
+{% endfor %}
 </table>
 
 </body>

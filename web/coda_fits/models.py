@@ -8,7 +8,7 @@
 # into your database.
 
 from django.db import models
-from coda_fits.fields import UnixTimestampField
+from coda_fits.fields import UnixTimestampField, BlobField
 
 class view_options(models.Model):
     id = models.IntegerField(primary_key=True)
@@ -201,25 +201,28 @@ class SigvisaCodaFitPhase(models.Model):
     param2 = models.FloatField(null=True, blank=True)
     param3 = models.FloatField(null=True, blank=True)
     param4 = models.FloatField(null=True, blank=True)
+    wiggle_fname = models.CharField(max_length=255, blank=True)
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'
 
-class SigvisaCodaFitPhaseWiggle(models.Model):
+
+class SigvisaWiggle(models.Model):
     wiggleid = models.BigIntegerField(primary_key=True)
     fpid = models.ForeignKey(SigvisaCodaFitPhase, db_column='fpid')
     stime = models.FloatField()
     etime = models.FloatField()
-    filename = models.CharField(max_length=255)
+    srate = models.FloatField()
     timestamp = models.FloatField()
     type = models.CharField(max_length=31)
-    nparams = models.BigIntegerField()
-    srate = models.FloatField()
-    fundamental = models.FloatField()
-    meta1 = models.FloatField()
-    meta2 = models.FloatField()
-    params = models.TextField()
+    log = models.IntegerField()
+    meta0 = models.FloatField(null=True, blank=True)
+    meta1 = models.FloatField(null=True, blank=True)
+    meta2 = models.FloatField(null=True, blank=True)
+    meta3 = models.FloatField(null=True, blank=True)
+    meta_str = models.CharField(max_length=255, blank=True)
+    params = BlobField() # This field type is a guess.
     class Meta:
-        db_table = u'sigvisa_coda_fit_phase_wiggle'
+        db_table = u'sigvisa_wiggle'
 
 
 class StaticPhaseid(models.Model):

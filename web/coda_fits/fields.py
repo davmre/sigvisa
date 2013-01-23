@@ -32,3 +32,8 @@ class UnixTimestampField(models.DateTimeField):
             return None
         b= calendar.timegm(value.timetuple())
         return b
+
+class BlobField(models.Field):
+    description = "Blob"
+    def db_type(self, connection):
+        return 'blob'

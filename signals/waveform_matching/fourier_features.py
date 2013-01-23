@@ -2,19 +2,24 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import learn.optimize
+import scipy.io
+import cStringIO
+from signals.waveform_matching.featurizer import Featurizer
 
-class FourierFeatures(object):
+class FourierFeatures(Featurizer):
 
-    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, srate = 40.0):
+    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, srate = None):
         self.fundamental = fundamental
         self.max_freq = max_freq
         self.min_freq = min_freq
-        self.srate = 40.0
+        self.srate = srate
 
-    def signal_from_features(self, features, len_seconds = 30):
-        x = np.linspace(0, len_seconds, len_seconds*self.srate)
+    def signal_from_features(self, features, srate=None, len_seconds = 30):
+        srate = srate if srate is not None else self.srate
+        
+        x = np.linspace(0, len_seconds, len_seconds*srate)
 
-        s = np.zeros((len_seconds*self.srate,))
+        s = np.zeros((len_seconds*srate,))
 
         for (i, row) in enumerate(features):
             (amp, phase) = row
@@ -35,11 +40,14 @@ class FourierFeatures(object):
         s = s/np.std(s) - np.mean(s)
         return s
 
-    def basis_decomposition(self, signal):
-        n_features = int((self.max_freq - self.min_freq)/self.fundamental)
-        len_seconds = len(signal)/float(self.srate)
 
-        x = np.linspace(0, len_seconds, len_seconds*self.srate)
+    def basis_decomposition(self, signal, srate=None):
+        srate = srate if srate is not None else self.srate
+        
+        n_features = int((self.max_freq - self.min_freq)/self.fundamental)
+        len_seconds = len(signal)/float(srate)
+
+        x = np.linspace(0, len_seconds, len_seconds*srate)
 
         features = np.zeros((n_features, 2))
         for i in np.arange(n_features):
@@ -72,13 +80,6 @@ class FourierFeatures(object):
 
         return features         
 
-    def project_down(self, signal):
-        features = self.basis_decomposition(signal)
-        return self.signal_from_features(features, len_seconds=len(signal)/self.srate)
-
-    def cost(self, signal, features):
-        return np.linalg.norm(signal - self.signal_from_features(features, len_seconds = len(signal) / self.srate), 1)
-        
 
 def main():
     ff = FourierFeatures(fundamental=1/20.0, min_freq=0.8, max_freq=3.5)
