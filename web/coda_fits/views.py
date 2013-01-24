@@ -2,6 +2,7 @@ import django
 import django.views.generic
 from django.shortcuts import render_to_response, get_object_or_404
 from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 from django.template import RequestContext
 from django.http import HttpResponse, HttpResponseRedirect
 from django.core.urlresolvers import reverse
@@ -23,8 +24,10 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from datetime import datetime
 from pytz import timezone
+import hashlib
 
 import plotting.plot as plot
+import plotting.histogram as histogram
 import textwrap
 
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
@@ -86,7 +89,9 @@ class FitListView(django.views.generic.ListView):
         run = SigvisaCodaFittingRun.objects.get(pk=self.kwargs['runid'])
         context['run'] = run
         s = Sigvisa()
-        context['avg_acost'], context['avg_time'] = benchmark_fitting_run(s.dbconn.cursor(), run.runid)
+        context['queryset'] = self.get_queryset()
+        context['mean_acost'] = np.mean([fit.acost for fit in context['queryset']])
+        context['mean_time'] = np.mean([fit.elapsed for fit in context['queryset']])
         return context
 
 # detail view for a particular fit
@@ -296,6 +301,24 @@ def fit_cost_quality(request, runid):
     return response
 
 
+def get_all_params(fit_qset, phase, template_shape):
+
+    cachekey = hashlib.sha1(str(fit_qset.count) + str(fit_qset.query) + str(phase) + str(template_shape)).hexdigest()
+    print cachekey
+    x = cache.get(cachekey)
+    if x is None:    
+        x = []
+        for fit in fit_qset:
+            p = fit.sigvisacodafitphase_set.filter(phase=phase, template_model=template_shape)
+            if len(p) != 1: continue
+            else: p = p[0]
+            x.append((p.param1, p.param2, p.param3, p.param4, fit.dist, fit.azi, fit.acost))
+        x = np.array(x)
+
+        cache.set(cachekey, x, 60*60*24*365)
+        
+    return x
+
 def distance_decay(request, runid, sta, chan, band, fit_quality):
 
     # get the fit corresponding to the given pageid for this run
@@ -306,22 +329,16 @@ def distance_decay(request, runid, sta, chan, band, fit_quality):
     max_acost = float(request.GET.get("max_acost", "inf"))
     min_amp = float(request.GET.get("min_amp", "-inf"))
     param_idx = int(request.GET.get("plot_param", "4"))
+    template_shape = request.GET.get("shape", "paired_exp")
+    min_azi = float(request.GET.get("min_azi", "0"))
+    max_azi = float(request.GET.get("max_azi", "360"))
     pstr = "p[0].param%d" % param_idx
 
     x = {}
+    # for each phase, get all (distance, param) pairs
     for phase in phases:
-        x[phase] = []
+        x[phase] = np.array([(z[4], z[param_idx-1]) for z in get_all_params(qset, phase, template_shape=template_shape) if z[2] > min_amp and z[6] < max_acost and z[5] > min_azi and z[5] < max_azi])
         
-    for fit in qset:
-        for phase in phases:
-            p = fit.sigvisacodafitphase_set.filter(phase=phase)
-            if len(p) == 1 and p[0].param3 > min_amp:
-                x[phase].append((fit.dist,  eval(pstr)))
-
-    for phase in phases:
-        x[phase] = np.array(x[phase])
-
-
     fig = Figure(figsize=(5,3), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
@@ -332,7 +349,7 @@ def distance_decay(request, runid, sta, chan, band, fit_quality):
     colors = ['b', 'r', 'g', 'y']
 
     for (i, phase) in enumerate(phases):
-        axes.scatter(x[phase][:, 0], x[phase][:, 1], alpha=0.5, c=colors[i])
+        axes.scatter(x[phase][:, 0], x[phase][:, 1], alpha=1 / np.log(x[phase].shape[0]), c=colors[i], s=10, marker='.', edgecolors="none")
     
     process_plot_args(request, axes)
 
@@ -342,4 +359,42 @@ def distance_decay(request, runid, sta, chan, band, fit_quality):
     canvas.print_png(response)
     return response
 
+def param_histogram(request, runid, sta, chan, band, fit_quality):
 
+    # get the fit corresponding to the given pageid for this run
+    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
+    qset = get_fit_queryset(**filter_args)
+
+    phases = request.GET.get("phases", "P").split(',')
+    max_acost = float(request.GET.get("max_acost", "inf"))
+    min_amp = float(request.GET.get("min_amp", "-inf"))
+    param_idx = int(request.GET.get("plot_param", "4"))
+    template_shape = request.GET.get("shape", "paired_exp")
+    min_azi = float(request.GET.get("min_azi", "0"))
+    max_azi = float(request.GET.get("max_azi", "360"))
+
+    pstr = "p[0].param%d" % param_idx
+
+    x = {}
+    for phase in phases:
+        x[phase] = [z[param_idx-1] for z in get_all_params(qset, phase, template_shape=template_shape) if z[2] > min_amp and z[6] < max_acost  and z[5] > min_azi and z[5] < max_azi]
+        print "got", len(x[phase]), "params"
+
+    fig = Figure(figsize=(5,3), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    param_names = ["arr_time", "peak_offset", "coda_height", "coda_decay"]
+    axes.set_xlabel(param_names[param_idx-1], fontsize=8)
+
+    colors = ['b', 'r', 'g', 'y']
+
+    for (i, phase) in enumerate(phases):
+        histogram.plot_histogram(x[phase], axes=axes)
+    
+    process_plot_args(request, axes)
+
+    canvas=FigureCanvas(fig)
+    response=django.http.HttpResponse(content_type='image/png')
+    fig.tight_layout()
+    canvas.print_png(response)
+    return response

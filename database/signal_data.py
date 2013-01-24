@@ -137,6 +137,24 @@ def load_template_params(cursor, evid, sta, chan, band, run_name=None, iteration
     p, c = load_template_params_by_fitid(cursor, fitid)
     return p, c, fitid
 
+
+def execute_and_return_id(dbconn, query, idname, **kwargs):
+    cursor = dbconn.cursor()
+    if "cx_Oracle" in str(type(dbconn)):
+        import cx_Oracle
+        myseq=cursor.var(cx_Oracle.NUMBER)
+        query +=  " returning %s into :rbfhaj" % (idname,)
+        cursor.execute(query, rbfhaj=myseq,**kwargs)
+        lrid = int(myseq.getvalue())
+    elif "MySQLdb" in str(type(s.dbconn)):
+        cursor.execute(sql_query)
+        lrid = cursor.lastrowid
+
+    cursor.close()
+    dbconn.commit()
+    return lrid
+
+
 def store_template_params(wave, template_params, optim_param_str, iid, hz, acost, run_name, iteration, elapsed):
     s  = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -160,16 +178,8 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
 
     sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, band,  optim_param_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed)
 
-    if "cx_Oracle" in str(type(s.dbconn)):
-        import cx_Oracle
-        myseq=cursor.var(cx_Oracle.NUMBER)
-        cursor.prepare(sql_query +  "returning fitid into :x")
-        cursor.execute(None, x=myseq)
-        fitid = int(myseq.getvalue())
-    elif "MySQLdb" in str(type(s.dbconn)):
-        cursor.execute(sql_query)
-        fitid = cursor.lastrowid
 
+    fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 
     (phases, fit_params) = template_params
 
@@ -285,3 +295,6 @@ def read_wiggle(cursor, wiggleid):
     sql_query = "select * from sigvisa_wiggle where wiggleid=%d" % (wiggleid)
     cursor.execute(sql_query)
     return cursor.fetchone()
+
+def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll):
+    return execute_and_return_id(dbconn, "insert into sigvisa_template_param_model (fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, timestamp) values (:fr,:ts,:param,:site,:chan,:band,:phase,:mt,:mf,:tf,:tll,:timestamp)", "modelid", fr=fitting_runid, ts=template_shape, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time())

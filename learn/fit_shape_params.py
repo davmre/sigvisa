@@ -13,7 +13,6 @@ from optparse import OptionParser
 
 from sigvisa import Sigvisa
 from signals.io import *
-from learn.train_wiggles import save_wiggles
 from learn.optimize import minimize_matrix
 
 def construct_optim_params(optim_param_str):
@@ -58,7 +57,7 @@ def construct_optim_params(optim_param_str):
     copy_dict_entries([], src=overrides, dest=optim_params)
     return optim_params
 
-def fit_template(wave, ev, tm, optim_params, wiggles=None, init_run_name=None, init_iteration=None, iid=False, hz=None):
+def fit_template(wave, ev, tm, optim_params, init_run_name=None, init_iteration=None, iid=False, hz=None):
     """
     Return the template parameters which best fit the given waveform.
     """
@@ -71,8 +70,6 @@ def fit_template(wave, ev, tm, optim_params, wiggles=None, init_run_name=None, i
 
     print "fitting template for", sta, chan, band
 
-    if wiggles is not None:
-        load_wiggle_models(cursor, s.sigmodel, wiggles)
     best_params = None
 
     # initialize the search using the outcome of a previous run
@@ -120,12 +117,11 @@ def fit_template(wave, ev, tm, optim_params, wiggles=None, init_run_name=None, i
 
     return (phases, best_param_vals), acost
 
-def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, plot=False, wiggles=None, optim_params=None, iid=False, fit_hz=5):
+def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, plot=False, optim_params=None, iid=False, fit_hz=5):
     """
     Find the best-fitting template parameters for each band/channel of
     a particular event at a particular station. Store the template
-    parameters in the database, and extract wiggles from the saved
-    parameters and save them to disk.
+    parameters in the database.
     """
 
     s = Sigvisa()
@@ -141,7 +137,7 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
             raise Exception("no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, init_run_name, chan, band))
     else:
         st = time.time()
-        fit_params, acost = fit_template(wave, ev=event, tm=tm, optim_params=optim_params, wiggles=wiggles, iid=iid, init_run_name=init_run_name, init_iteration=init_iteration, hz=fit_hz)
+        fit_params, acost = fit_template(wave, ev=event, tm=tm, optim_params=optim_params, iid=iid, init_run_name=init_run_name, init_iteration=init_iteration, hz=fit_hz)
         et = time.time()
         fitid = store_template_params(wave, fit_params, optim_param_str=repr(optim_params)[1:-1], iid=iid, acost=acost, run_name=output_run_name, iteration=output_iteration, elapsed=et-st, hz=fit_hz)
         s.dbconn.commit()
@@ -157,7 +153,6 @@ def main():
     parser.add_option("-i", "--run_iteration", dest="run_iteration", default=None, type="int", help="run iteration (default is to use the next iteration)")
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
-    parser.add_option("-w", "--wiggles", dest="wiggles", default=None, type="str", help="filename of wiggle-model params to load")
     parser.add_option("--init_run_name", dest="init_run_name", default=None, type="str", help="initialize template fitting with results from this run name")
     parser.add_option("--init_run_iteration", dest="init_run_iteration", default=None, type="int", help="initialize template fitting with results from this run iteration (default: most recent)")
     parser.add_option("-p", "--plot", dest="plot", default=False, action="store_true", help="save plots")
@@ -185,8 +180,9 @@ def main():
     else:
         iid=False
         fix_first_cols = 0
-    if options.wiggles is None and not iid:
-        raise Exception("need to specify wiggle model for non-iid fits!")
+    if not iid:
+        raise Exception("non-iid fits not currently implemented!")
+#        raise Exception("need to specify wiggle model for non-iid fits!")
 
     if options.init_run_name is None:
         tm = load_template_model(template_shape = options.template_shape, model_type="dummy")
@@ -200,7 +196,7 @@ def main():
         raise Exception("Must specify event id (evid) or origin id (orid) to fit.")
 
     try:
-        fitid = fit_event_wave(event=ev, sta=options.sta, band=options.band, chan=options.chan, tm = tm, output_run_name=options.run_name, output_iteration=options.run_iteration, init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, plot=options.plot, optim_params=construct_optim_params(options.optim_params), wiggles=options.wiggles, iid=iid)
+        fitid = fit_event_wave(event=ev, sta=options.sta, band=options.band, chan=options.chan, tm = tm, output_run_name=options.run_name, output_iteration=options.run_iteration, init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, plot=options.plot, optim_params=construct_optim_params(options.optim_params), iid=iid)
     except KeyboardInterrupt:
         s.dbconn.commit()
         raise

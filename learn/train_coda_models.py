@@ -28,8 +28,8 @@ def learn_model(X, y, model_type, target=None):
         distfn = model_type[3:]
         params = start_params[distfn][target]
         model = learn_gp(X, y, distfn=distfn, params=params)
-    elif model_type == "constant":
-        model = learn_constant(X, y)
+    elif model_type == "constant_gaussian":
+        model = learn_constant_gaussian(X, y)
     elif model_type == "linear_distance":
         model = learn_linear(X, y)
     else:
@@ -65,15 +65,15 @@ def learn_gp(X, y, distfn, params, optimize=True):
 def learn_linear(X, y):
     return baseline_models.LinearModel(X,y)
 
-def learn_constant(X,y):
-    return baseline_models.ConstantModel(X,y)
+def learn_constant_gaussian(X,y):
+    return baseline_models.ConstGaussianModel(X,y)
 
 
 def load_model(fname, model_type):
     if model_type.startswith("gp"):
         model = SpatialGP(fname=fname)
-    elif model_type == "constant":
-        model = baseline_models.ConstantModel(fname=fname)
+    elif model_type == "constant_gaussian":
+        model = baseline_models.ConstGaussianModel(fname=fname)
     elif model_type == "linear_distance":
         model = baseline_models.LinearModel(fname=fname)
     else:
@@ -126,7 +126,6 @@ def get_training_data(run_name, run_iter, sta, chan, band, phases, target):
 #            band = sigvisa_c.canonical_band_name(int(fit[FIT_BANDID]))
             ev = get_event(evid=int(fit[FIT_EVID]))
             y[i] = fit[FIT_CODA_HEIGHT] - ev.source_logamp(band, phase)
-        print y
     elif target=="onset":
         y = fit_data[:, FIT_PEAK_DELAY]
     else:
@@ -151,6 +150,7 @@ def main():
     parser.add_option("-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
     parser.add_option("-p", "--phases", dest="phases", default=",".join(s.phases), type="str", help="comma-separated list of phases for which to train models)")
     parser.add_option("-t", "--targets", dest="targets", default="decay,amp_transfer,onset", type="str", help="comma-separated list of target parameter names (decay,amp_transfer,onset)")
+    parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
     parser.add_option("-m", "--model_type", dest="model_type", default="gp_dad_log", type="str", help="type of model to train (gp_dad_log)")
 
     (options, args) = parser.parse_args()
@@ -169,6 +169,7 @@ def main():
     else:
         run_iter = int(options.run_iter)
 
+    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
 
     for site in sites:
@@ -177,12 +178,15 @@ def main():
 
                 X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target)
 
-                model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name="paired_exp")
+                model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape)
+                evid_fname = os.path.splitext(model_fname)[0] + '.evids'
+                np.savetxt(evid_fname, evids, fmt='%d')
 
                 distfn = model_type[3:]
                 model = learn_model(X, y, model_type, target=target)
-
                 model.save_trained_model(model_fname)
-
+                modelid = insert_model(s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll = model.log_likelihood())
+                print "inserted as", modelid
+                
 if __name__ == "__main__":
     main()

@@ -139,7 +139,7 @@ def main():
 
     parser.add_option("-s", "--site", dest="site", default=None, type="str", help="site for which to train models")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
-    parser.add_option("--run_iter", dest="run_iter", default="latest", type="str", help="run iteration (latest)")
+    parser.add_option("-i", "--run_iter", dest="run_iter", default="latest", type="str", help="run iteration (latest)")
     parser.add_option("-c", "--channel", dest="chan", default="BHZ", type="str", help="name of channel to examine (BHZ)")
     parser.add_option("-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
     parser.add_option("-p", "--phase", dest="phase", default=",".join(s.phases), type="str", help="phase for which to train models)")

@@ -247,14 +247,72 @@ end;
 /
 
 
-/*create table sigvisa_wiggle_wfdisc (
- wiggleid not null auto increment,
- fitid	  int,
+create table sigvisa_template_param_model (
+ modelid int not null, /* Oracle version */
+ fitting_runid int not null,
+ template_shape varchar(15) not null,
+ param varchar(15) not null, 
+ site varchar(10) not null,
+ chan varchar(10) not null,
+ band varchar(15) not null,
+ phase varchar(10) not null,
+ model_type varchar(15) not null,
+ model_fname varchar(255) not null,
+ training_set_fname varchar(255) not null,
+ training_ll double precision not null,
+ timestamp double precision not null,
+ primary key (modelid),
+ foreign key (fitting_runid) REFERENCES sigvisa_coda_fitting_run(runid)
+);
 
- fname	  varchar(255),
- primary key(wiggleid),
- foreign key (fitid) references sigvisa_coda_fit(fitid)
-);*/
+/* hack to implement auto_increment in Oracle */
+create sequence modelid_seq start with 1 increment by 1 nomaxvalue;
+create or replace trigger modelid_trigger
+before insert on sigvisa_template_param_model
+for each row
+begin
+select modelid_seq.nextval into :new.modelid from dual;
+end;
+/
+
+create table sigvisa_gridsearch_run (
+/* gsid  int not null auto_increment, */ /* MYSQL version */
+ gsid  int not null, /* Oracle version */
+ evid int not null,
+ timestamp double precision not null,
+ elapsed double precision not null,
+ lon_nw float(24) not null,
+ lat_nw float(24) not null,
+ lon_se float(24) not null,
+ lat_se float(24) not null,
+ pts_per_side int not null,
+ likelihood_method varchar(63) not null,
+ heatmap_fname varchar(255) not null,
+ primary key (gsid)
+);
+
+create table sigvisa_gsrun_stations (
+ gsid int not null,
+ siteid int not null,
+ foreign key (gsid) REFERENCES sigvisa_gridsearch_run(gsid)
+);
+
+create table sigvisa_gsrun_models (
+ gsid int not null,
+ modelid int not null,
+ foreign key (gsid) REFERENCES sigvisa_gridsearch_run(gsid),
+ foreign key (modelid) REFERENCES sigvisa_template_param_model(modelid)
+);
+
+/* hack to implement auto_increment in Oracle */
+create sequence gsid_seq start with 1 increment by 1 nomaxvalue;
+create or replace trigger gsid_trigger
+before insert on sigvisa_gridsearch_run
+for each row
+begin
+select gsid_seq.nextval into :new.gsid from dual;
+end;
+/
 
 
 
