@@ -166,6 +166,27 @@ class SpatialGP(GaussianProcess):
 
         GaussianProcess.__init__(self, *args, **kwargs)
 
+    def sample(self, X1):
+        if len(X1.shape) == 1:
+            X1 = np.reshape(X1, (1, -1))
+        if X1.shape[1] == 5:
+            X1 = gp_extract_features(X1, self.distfn_str)
+
+        result = GaussianProcess.sample(self, X1)
+        if len(result) == 1:
+            result = result[0]
+        return result
+
+    def posterior_log_likelihood(self, X1, y):
+
+        if len(X1.shape) == 1:
+            X1 = np.reshape(X1, (1, -1))
+        if X1.shape[1] == 5:
+            X1 = gp_extract_features(X1, self.distfn_str)
+
+        result = GaussianProcess.posterior_log_likelihood(self, X1, y)
+        return result
+
     def predict(self, X1):
         # X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
 
@@ -186,7 +207,7 @@ class SpatialGP(GaussianProcess):
         kname = np.array((self.kernel_name,))
         mname = np.array((self.mean,))
         with open(filename, 'w') as f:
-            np.savez(f, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, L=self.L, distfn_str = self.distfn_str)
+            np.savez(f, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, L=self.L, distfn_str = self.distfn_str, ll=self.ll)
 
 
     def load_trained_model(self, filename):
