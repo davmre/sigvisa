@@ -23,6 +23,9 @@ database/*.csv
 *.out
 *.heatmap
 *.DS_Store
+/*evids
+/eval*
+/wiggles*
 /TAGS
 /earthmodel.c
 /logs/codas_2_1338747082/all_data
