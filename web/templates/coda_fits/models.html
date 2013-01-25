@@ -1,0 +1,74 @@
+{% load pagination_tags %}
+{% autopaginate model_list 20 %}
+
+<html>
+<head>
+<title>models - sigvisa</title>
+</head>
+<body>
+<h1>models</h1>
+
+        
+{{ model_filter }}<br>
+
+{% if model_list %}
+
+    <table id="models" border=1 cellpadding=3>
+      <tr>
+	<td><strong>modelid</strong></td> 
+        <td><strong>timestamp</strong></td>
+	<td><strong>run</strong></td>
+	<td><strong>shape</strong></td>
+	<td><strong>param</strong></td>
+	<td><strong>site</strong></td>
+	<td><strong>chan</strong></td>
+	<td><strong>band</strong></td>
+	<td><strong>phase</strong></td>
+	<td><strong>max acost</strong></td>
+	<td><strong>min amp</strong></td>
+	<td><strong>human-approved fits?</strong></td>
+	<td><strong>model type</strong></td>
+	<td><strong>trainset</strong></td>
+	<td><strong>n_events</strong></td>
+	<td><strong>ll</strong></td>
+	<td><strong>visualizations</strong></td>
+      </tr>
+        {% for model in model_list %}
+            <tr>
+                <td>{{ model.modelid }}</td>
+		<td>{{ model.timestamp }}</td>
+                <td><a href="{% url fit_list runid=model.fitting_runid.runid chan=model.chan sta=model.site band=model.band fit_quality='all' %}">{{ model.fitting_runid.run_name }} iter {{ model.fitting_runid.iter }}</a></td>
+                <td>{{ model.template_shape }}</td>
+                <td>{{ model.param }}</td>
+                <td>{{ model.site }}</td>
+                <td>{{ model.chan }}</td>
+                <td>{{ model.band }}</td>
+                <td>{{ model.phase }}</td>
+                <td>{{ model.max_acost }}</td>
+                <td>{{ model.min_amp }}</td>
+                <td>{{ model.require_human_approved }}</td>
+                <td>{{ model.model_type }}</td>
+                <td>{{ model.training_set_fname|slice:"-14:" }}</td>
+                <td>{{ model.n_evids }}</td>
+                <td>{{ model.training_ll }}</td>
+                <td>
+		{% if model.model_type|slice:":8" == "constant" %}
+		<a href="{% url model_density modelid=model.modelid %}">density</a>
+		{% endif %}
+		{% if model.model_type|slice:":6" = "linear" %}
+		<a href="{% url model_distance_plot modelid=model.modelid %}">distance plot</a>
+		{% endif %}
+		{% if model.model_type|slice:":2" == "gp" %}
+		<a href="{% url model_distance_plot modelid=model.modelid %}">distance plot</a>
+		<a href="{% url model_heatmap modelid=model.modelid %}">heatmap</a>
+		{% endif %}
+		</td>
+            </tr>
+        {% endfor %}
+    </table>
+{% paginate %}
+{% else %}
+    <p>No models found!!! :(</p>
+{% endif %}
+</body>
+</html>

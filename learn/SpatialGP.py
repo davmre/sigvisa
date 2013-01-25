@@ -7,21 +7,21 @@ from gpr import munge, kernels, evaluate, learn, distributions, plot
 from gpr.gp import GaussianProcess
 
 
-start_params_dad_log = {"decay": [.022, .0187, 1.00, .14, .1], \
+start_params_dad_log = {"coda_decay": [.022, .0187, 1.00, .14, .1], \
                             "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31], \
-                            "onset": [2.7, 3.4, 2, .7, 0.1] \
+                            "peak_offset": [2.7, 3.4, 2, .7, 0.1] \
                             }
-start_params_dad_cuberoot = {"decay": [.022, .0187, 1.00, .14, .1], \
+start_params_dad_cuberoot = {"coda_decay": [.022, .0187, 1.00, .14, .1], \
                             "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31], \
-                            "onset": [2.7, 3.4, 2, .7, 0.1] \
+                            "peak_offset": [2.7, 3.4, 2, .7, 0.1] \
                             }
-start_params_dad_linear = {"decay": [.022, .0187, 500.00, .14, .1], \
+start_params_dad_linear = {"coda_decay": [.022, .0187, 500.00, .14, .1], \
                             "amp_transfer": [1.1, 3.4, 1000.00, 0.1, .31], \
-                            "onset": [2.7, 3.4, 500.00, .7, 0.1] \
+                            "peak_offset": [2.7, 3.4, 500.00, .7, 0.1] \
                             }
-start_params_lld = {"decay": [.022, .0187, 50.00], \
+start_params_lld = {"coda_decay": [.022, .0187, 50.00], \
                             "amp_transfer": [1.1, 3.4, 100.00], \
-                            "onset": [2.7, 3.4, 50.00] \
+                            "peak_offset": [2.7, 3.4, 50.00] \
                             }
 start_params = {"dad_log": start_params_dad_log, \
                     "dad_cuberoot": start_params_dad_cuberoot, \
@@ -165,6 +165,17 @@ class SpatialGP(GaussianProcess):
         kwargs['kernel']  = "distfn"
 
         GaussianProcess.__init__(self, *args, **kwargs)
+
+    def variance(self, X1):
+        if len(X1.shape) == 1:
+            X1 = np.reshape(X1, (1, -1))
+        if X1.shape[1] == 5:
+            X1 = gp_extract_features(X1, self.distfn_str)
+
+        result = GaussianProcess.variance(self, X1)
+        if len(result) == 1:
+            result = result[0]
+        return result
 
     def sample(self, X1):
         if len(X1.shape) == 1:

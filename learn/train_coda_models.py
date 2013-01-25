@@ -107,26 +107,21 @@ def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_ty
     fname = ".".join([evidhash, model_type])
     return os.path.join(path, fname)
 
-def get_training_data(run_name, run_iter, sta, chan, band, phases, target):
+def get_training_data(run_name, run_iter, sta, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
     print "loading %s fit data... " % (phases),
-    fit_data = load_shape_data(cursor, chan=chan, band=band, sta=sta, runids=[runid,], phases=phases)
+    fit_data = load_shape_data(cursor, chan=chan, band=band, sta=sta, runids=[runid,], phases=phases, require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp)
     print str(fit_data.shape[0]) + " entries loaded"
 
-    if target=="decay":
+    if target=="coda_decay":
         y = fit_data[:, FIT_CODA_DECAY]
     elif target=="amp_transfer":
-        y = np.zeros((fit_data.shape[0],))
-        for (i, fit) in enumerate(fit_data):
-            phase = s.phasenames[int(fit[FIT_PHASEID])-1]
-#            band = sigvisa_c.canonical_band_name(int(fit[FIT_BANDID]))
-            ev = get_event(evid=int(fit[FIT_EVID]))
-            y[i] = fit[FIT_CODA_HEIGHT] - ev.source_logamp(band, phase)
-    elif target=="onset":
+        y = fit_data[:, FIT_AMP_TRANSFER]
+    elif target=="peak_offset":
         y = fit_data[:, FIT_PEAK_DELAY]
     else:
         raise KeyError("invalid target param %s" % (target))
@@ -149,9 +144,13 @@ def main():
     parser.add_option("-c", "--channel", dest="chan", default="BHZ", type="str", help="name of channel to examine (BHZ)")
     parser.add_option("-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
     parser.add_option("-p", "--phases", dest="phases", default=",".join(s.phases), type="str", help="comma-separated list of phases for which to train models)")
-    parser.add_option("-t", "--targets", dest="targets", default="decay,amp_transfer,onset", type="str", help="comma-separated list of target parameter names (decay,amp_transfer,onset)")
+    parser.add_option("-t", "--targets", dest="targets", default="coda_decay,amp_transfer,peak_offset", type="str", help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
     parser.add_option("-m", "--model_type", dest="model_type", default="gp_dad_log", type="str", help="type of model to train (gp_dad_log)")
+    parser.add_option("--require_human_approved", dest="require_human_approved", default=False, action="store_true", help="only train on human-approved good fits")
+    parser.add_option("--max_acost", dest="max_acost", default=200, type=float, help="maximum fitting cost of fits in training set (200)")
+    parser.add_option("--min_amp", dest="min_amp", default=1, type=float, help="only consider fits above the given amplitude (does not apply to amp_transfer fits)")
+    parser.add_option("--min_amp_for_at", dest="min_amp_for_at", default=-5, type=float, help="only consider fits above the given amplitude (for amp_transfer fits)")
 
     (options, args) = parser.parse_args()
 
@@ -174,9 +173,17 @@ def main():
 
     for site in sites:
         for target in targets:
+
+            if target == "amp_transfer":
+                min_amp = options.min_amp_for_at
+            else:
+                min_amp = options.min_amp
+            
             for phase in phases:
 
-                X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target)
+                X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp)
+
+
 
                 model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape)
                 evid_fname = os.path.splitext(model_fname)[0] + '.evids'
@@ -184,9 +191,10 @@ def main():
 
                 distfn = model_type[3:]
                 model = learn_model(X, y, model_type, target=target)
+
                 model.save_trained_model(model_fname)
-                modelid = insert_model(s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll = model.log_likelihood())
-                print "inserted as", modelid
+                modelid = insert_model(s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll = model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp)
+                print "inserted as", modelid, "ll", model.log_likelihood()
                 
 if __name__ == "__main__":
     main()

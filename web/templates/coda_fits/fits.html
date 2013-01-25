@@ -14,28 +14,28 @@
   </td>
   <td><b>onset_seconds</b></td>
   <td>
-   <a href="{% url param_histogram runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=2;phases=P">histogram</a>
+   <a href="{% url param_histogram runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=peak_offset;phases=P">histogram</a>
   </td>
   <td>
-   <a href="{% url distance_decay runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=2;ymin=-5;ymax=30;phases=P">distance plot</a>
+   <a href="{% url distance_decay runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=peak_offset;ymin=-5;ymax=30;phases=P">distance plot</a>
   </td>
  </tr> 
  <tr>
   <td><b>coda_height</b></td>
   <td>
-   <a href="{% url param_histogram runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=3;phases=P">histogram</a>
+   <a href="{% url param_histogram runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=coda_height;phases=P">histogram</a>
   </td>
   <td>
-   <a href="{% url distance_decay runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=3;ymin=-7;ymax=10;phases=P">distance plot</a>
+   <a href="{% url distance_decay runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=coda_height;ymin=-7;ymax=10;phases=P">distance plot</a>
   </td>
  </tr> 
  <tr>
   <td><b>coda_decay</b></td>
   <td>
-   <a href="{% url param_histogram runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=4;phases=P">histogram</a>
+   <a href="{% url param_histogram runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=coda_decay;phases=P">histogram</a>
   </td>
   <td>
-   <a href="{% url distance_decay runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=4;ymin=-0.05;ymax=0;phases=P">distance plot</a>
+   <a href="{% url distance_decay runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality %}?plot_param=coda_decay;phases=P">distance plot</a>
   </td>
  </tr> 
 </table>

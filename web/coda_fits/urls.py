@@ -1,6 +1,7 @@
 from django.conf.urls import patterns, url
 from coda_fits.views import *
 from coda_fits.wiggle_views import *
+from coda_fits.model_views import *
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
@@ -18,8 +19,8 @@ urlpatterns = patterns('',
     url(r'^fits/runs/(?P<runid>\d+)/filter/(?P<sta>\w+)/(?P<chan>\w+)/(?P<band>[.\w]+)/(?P<fit_quality>\w+)/$',   FitListView.as_view(), name='fit_list'),
     url(r'^fits/runs/(?P<runid>\d+)/filter/(?P<sta>\w+)/(?P<chan>\w+)/(?P<band>[.\w]+)/(?P<fit_quality>\w+)/(?P<pageid>\d+)$',   fit_detail, name="fit_run_detail"),
     url(r'^fits/runs/(?P<runid>\d+)/filter/(?P<sta>\w+)/(?P<chan>\w+)/(?P<band>[.\w]+)/(?P<fit_quality>\w+)/(?P<pageid>\d+)/rate/$',  rate_fit, name="rate_fit"),
-    url(r'^fits/runs/(?P<runid>\d+)/filter/(?P<sta>\w+)/(?P<chan>\w+)/(?P<band>[.\w]+)/(?P<fit_quality>\w+)/distance_decay.png$', distance_decay, name="distance_decay"),
-    url(r'^fits/runs/(?P<runid>\d+)/filter/(?P<sta>\w+)/(?P<chan>\w+)/(?P<band>[.\w]+)/(?P<fit_quality>\w+)/histogram.png$', param_histogram, name="param_histogram"),
+    url(r'^fits/runs/(?P<runid>\d+)/filter/(?P<sta>\w+)/(?P<chan>\w+)/(?P<band>[.\w]+)/(?P<fit_quality>\w+)/distance_decay.png$', data_distance_plot, name="distance_decay"),
+    url(r'^fits/runs/(?P<runid>\d+)/filter/(?P<sta>\w+)/(?P<chan>\w+)/(?P<band>[.\w]+)/(?P<fit_quality>\w+)/histogram.png$', data_histogram_plot, name="param_histogram"),
     url(r'^fits/(?P<fitid>\d+)/delete$', delete_fit, name='delete_fit'),
 #    url(r'^fits/(?P<pk>\d+)/$',
 #        FitDetailView.as_view(),
@@ -30,4 +31,8 @@ urlpatterns = patterns('',
     url(r'^wiggles/(?P<wiggleid>\d+)/reconstructed_wiggle.png$', reconstructed_wiggle_view, name='reconstructed_wiggle'),
     url(r'^phases/(?P<fpid>\d+)/template_wiggle.png$', template_wiggle_view, name='template_wiggle'),
     url(r'^wiggles/(?P<wiggleid>\d+)/reconstructed_template_wiggle.png$', reconstructed_template_wiggle_view, name='reconstructed_template_wiggle'),
+    url(r'^models/$', model_list_view, name='model_list'),
+    url(r'^models/(?P<modelid>\d+)/density.png$', model_density, name='model_density'),
+    url(r'^models/(?P<modelid>\d+)/distance_plot.png$', model_distance_plot, name='model_distance_plot'),
+    url(r'^models/(?P<modelid>\d+)/heatmap.png$', model_heatmap, name='model_heatmap'),
 )

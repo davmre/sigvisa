@@ -117,6 +117,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td><strong>onset_seconds</strong></td>
 	<td><strong>coda_height</strong></td>
 	<td><strong>decay_rate</strong></td>
+	<td><strong>amp_transfer</strong></td>
 	<td><strong>trained wiggles</strong></td>
       </tr>
       {% for phase in fit.sigvisacodafitphase_set.all %}
@@ -126,9 +127,10 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td>{{ phase.param2 }}</td>
 	<td>{{ phase.param3 }}</td>
 	<td>{{ phase.param4 }}</td>
+	<td>{{ phase.amp_transfer }}</td>
 	<td>
 	{% if phase.wiggle_fname and phase.wiggle_fname != 'NONE' %}
-	<a href="{% url fit_phase_wiggles fpid=phase.fpid%}">{{ phase.sigvisawiggle_set.count }} wiggle{{ phase.sigvisawiggle_set.count|pluralize }}</a>
+	<a href="{% url fit_phase_wiggles fpid=phase.fpid%}">{{ phase.sigvisawiggle_set.count }} parameterization{{ phase.sigvisawiggle_set.count|pluralize }}</a>
 	  {% endif %} 
 	{% if phase.wiggle_fname == 'NONE' %}
 	could not extract wiggle.

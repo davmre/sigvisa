@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_histogram(data, axes=None, draw_stats=True):
+def plot_histogram(data, axes=None, draw_stats=True, **kwargs):
     data = sorted(data)
     n = len(data)
     mean = np.mean(data)
@@ -21,7 +21,7 @@ def plot_histogram(data, axes=None, draw_stats=True):
     # freedman / diaconis rule
     bin_size = 2 * iqr / float(n)**(1.0/3.0)
     n_bins = int(np.ceil((np.max(data)-np.min(data))/bin_size))
-    axes.hist(data, n_bins)
+    axes.hist(x=data, bins=n_bins, **kwargs)
 
     if draw_stats:
         htext = "mean: %.4f\nstd:  %.4f\n\nmin:  %.4f\n5%%:   %.4f\n25%%:  %.4f\n50%%:  %.4f\n75%%:  %.4f\n95%%:  %.4f\nmax:  %.4f" % (mean, std, np.min(data), p5, p25, median, p75, p95, np.max(data))

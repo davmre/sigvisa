@@ -201,18 +201,19 @@ class SigvisaCodaFitPhase(models.Model):
     param2 = models.FloatField(null=True, blank=True)
     param3 = models.FloatField(null=True, blank=True)
     param4 = models.FloatField(null=True, blank=True)
+    amp_transfer = models.FloatField(null=True, blank=True)
     wiggle_fname = models.CharField(max_length=255, blank=True)
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'
 
 
 class SigvisaWiggle(models.Model):
-    wiggleid = models.BigIntegerField(primary_key=True)
+    wiggleid = models.IntegerField(primary_key=True)
     fpid = models.ForeignKey(SigvisaCodaFitPhase, db_column='fpid')
     stime = models.FloatField()
     etime = models.FloatField()
     srate = models.FloatField()
-    timestamp = models.FloatField()
+    timestamp = UnixTimestampField()
     type = models.CharField(max_length=31)
     log = models.IntegerField()
     meta0 = models.FloatField(null=True, blank=True)
@@ -223,6 +224,55 @@ class SigvisaWiggle(models.Model):
     params = BlobField() # This field type is a guess.
     class Meta:
         db_table = u'sigvisa_wiggle'
+
+class SigvisaTemplateParamModel(models.Model):
+    modelid = models.IntegerField(primary_key=True)
+    fitting_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='fitting_runid')
+    template_shape = models.CharField(max_length=15)
+    param = models.CharField(max_length=15)
+    site = models.CharField(max_length=10)
+    chan = models.CharField(max_length=10)
+    band = models.CharField(max_length=15)
+    phase = models.CharField(max_length=10)
+    max_acost = models.FloatField()
+    min_amp = models.FloatField()
+    require_human_approved = models.CharField(max_length=1)
+    model_type = models.CharField(max_length=31)
+    model_fname = models.CharField(max_length=255)
+    training_set_fname = models.CharField(max_length=255)
+    n_evids = models.IntegerField()
+    training_ll = models.FloatField()
+    timestamp = UnixTimestampField()
+    class Meta:
+        db_table = u'sigvisa_template_param_model'
+
+class SigvisaGridsearchRun(models.Model):
+    gsid = models.IntegerField(primary_key=True)
+    evid = models.IntegerField()
+    timestamp = UnixTimestampField()
+    elapsed = models.FloatField()
+    lon_nw = models.FloatField()
+    lat_nw = models.FloatField()
+    lon_se = models.FloatField()
+    lat_se = models.FloatField()
+    pts_per_side = models.IntegerField()
+    likelihood_method = models.CharField(max_length=63)
+    heatmap_fname = models.CharField(max_length=255)
+    class Meta:
+        db_table = u'sigvisa_gridsearch_run'
+
+class SigvisaGsrunStations(models.Model):
+    gsid = models.ForeignKey(SigvisaGridsearchRun, db_column='gsid')
+    siteid = models.IntegerField()
+    class Meta:
+        db_table = u'sigvisa_gsrun_stations'
+
+class SigvisaGsrunModels(models.Model):
+    gsid = models.ForeignKey(SigvisaGridsearchRun, db_column='gsid')
+    modelid = models.ForeignKey(SigvisaTemplateParamModel, db_column='modelid')
+    class Meta:
+        db_table = u'sigvisa_gsrun_models'
+
 
 
 class StaticPhaseid(models.Model):

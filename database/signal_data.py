@@ -15,7 +15,7 @@ import obspy.signal.util
 
 # from signals.template_models.paired_exp import *
 
-(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(14+1)
+(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_AMP_TRANSFER, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(15+1)
 
 def ensure_dir_exists(dname):
     try:
@@ -183,8 +183,14 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
 
     (phases, fit_params) = template_params
 
+    ev = get_event(evid=evid)
+
+
     for (i, phase) in enumerate(phases):
-        phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4) values (%d, '%s', 'paired_exp', %f, %f, %f, %f)" % (fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3])
+
+        transfer = fit_params[i,2] - ev.source_logamp(band, phase)
+        
+        phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3], transfer)
         cursor.execute(phase_insert_query)
     return fitid
 
@@ -237,7 +243,7 @@ def load_wiggle_models(cursor, sigmodel, filename):
         sigmodel.set_wiggle_process(siteid, b, c, phaseid, mean, std, np.asfarray(params))
 
 
-def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=None, evids=None, exclude_evids=None, acost_threshold=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
+def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10):
 
     chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
     band_cond = "and fit.band='%s'" % (band)  if band is not None else ""
@@ -246,8 +252,9 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
     phase_cond = "and (" + " or ".join(["fp.phase = '%s'" % phase for phase in phases]) + ")" if phases is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
+    approval_cond = "and human_approved==2" if require_human_approved else ""
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fit.acost<%f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f" % (acost_threshold, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist)
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fit.acost<%f and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s" % (max_acost, min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond)
 
     fname = "db_cache/%s.txt" % str(hashlib.md5(sql_query).hexdigest())
     try:
@@ -296,5 +303,5 @@ def read_wiggle(cursor, wiggleid):
     cursor.execute(sql_query)
     return cursor.fetchone()
 
-def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll):
-    return execute_and_return_id(dbconn, "insert into sigvisa_template_param_model (fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, timestamp) values (:fr,:ts,:param,:site,:chan,:band,:phase,:mt,:mf,:tf,:tll,:timestamp)", "modelid", fr=fitting_runid, ts=template_shape, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time())
+def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp):
+    return execute_and_return_id(dbconn, "insert into sigvisa_template_param_model (fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp) values (:fr,:ts,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp)", "modelid", fr=fitting_runid, ts=template_shape, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost = max_acost, ne=n_evids, min_amp=min_amp)

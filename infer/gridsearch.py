@@ -6,7 +6,7 @@ from database.signal_data import *
 from source.event import *
 
 from optparse import OptionParser
-
+from signals.template_models.load_by_name import load_template_model
 
 
 def event_at(ev, lon=None, lat=None, t=None):
@@ -61,6 +61,8 @@ def main():
 
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
     parser.add_option("-s", "--sites", dest="sites", default=None, type="str", help="comma-separated list of stations with which to locate the event")
+    parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="name of training run specifying the set of models to use")
+    parser.add_option("--template_shape", dest = "template_shape", default="paired_exp", type="str", help="template model type (paired_exp)")
     parser.add_option("-m", "--model", dest="model", default=None, type="str", help="name of training run specifying the set of models to use")
     parser.add_option("-w", "--map_width", dest="map_width", default=2, type="float", help="width in degrees of the plotted heat map (2)")
     parser.add_option("--iid", dest="iid", default=False, action="store_true", help="use a uniform iid noise model (instead of AR)")
@@ -70,7 +72,6 @@ def main():
 
     evid = options.evid
     sites = options.sites.split(',')
-    runids = [int(s) for s in options.runids.split(',')]
 
     map_width = options.map_width
 
@@ -78,8 +79,11 @@ def main():
     cursor = s.dbconn.cursor()
 
     # train / load coda models
-    model_name = options.model
-    template_model = ExponentialTemplateModel(model_name)
+    run_name = options.run_name
+    iters = read_fitting_run_iterations(cursor, run_name)
+    run_iter = np.max(iters[:, 0])
+
+    template_model = load_template_model(template_shape = options.template_shape, model_type="gp_dad_log", run_name=run_name, run_iter=run_iter)
 
     sta_string = ":".join([siteid_to_sta(sid,cursor) for sid in siteids])
     run_label = "%d_%d_%s_%s_%s" % (evid, map_width, sta_string, options.method, "iid" if options.iid else "arwiggle")

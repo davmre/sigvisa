@@ -5,3 +5,5 @@ django
 MySQL-python
 python-dateutil
 functools32
+django-pagination
+django-easyfilters

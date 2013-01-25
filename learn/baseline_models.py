@@ -184,10 +184,13 @@ class LinearModel(ParamModel):
 
         return np.sum([self.ll_item(x1, y1) for (x1, y1) in zip(X1, y)])
 
+    def std(self, x):
+        std = self.tele_std if x[X_DIST] > self.tele_cutoff else self.regional_std
+        return std
+
     def sample_item(self, x):
         mean = self.predict_item(x)
-        std = self.tele_std if x[X_DIST] > self.tele_cutoff else self.regional_std
-        s = mean + scipy.stats.norm.rvs(scale=std)
+        s = mean + scipy.stats.norm.rvs(scale=self.std(x))
         return s
 
     def sample(self, X1):
