@@ -39,7 +39,7 @@ class Sigvisa(object):
 
         # enforcing the singleton pattern: don't init if it's already been done.
         try:
-            self.cursor
+            self.dbconn
             return
         except:
             pass
@@ -47,11 +47,11 @@ class Sigvisa(object):
         st = 1237680000
         et = st + 24 * 3600
         self.dbconn = db.connect()
-        self.cursor = self.dbconn.cursor()
-        self.sites = dataset.read_sites(self.cursor)
-        self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(self.cursor)
-        self.site_up = dataset.read_uptime(self.cursor, st, et)
-        self.phasenames, self.phasetimedef = dataset.read_phases(self.cursor)
+        cursor = self.dbconn.cursor()
+        self.sites = dataset.read_sites(cursor)
+        self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(cursor)
+        self.site_up = dataset.read_uptime(cursor, st, et)
+        self.phasenames, self.phasetimedef = dataset.read_phases(cursor)
         self.phaseids = dict(zip(self.phasenames, range(1, len(self.phasenames)+1)))
         self.earthmodel = learn.do_training.load_earth(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), self.sites, self.phasenames, self.phasetimedef)
         self.sigmodel = learn.do_training.load_sigvisa(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
