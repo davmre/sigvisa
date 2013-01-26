@@ -27,7 +27,7 @@ class PairedExpTemplateModel(TemplateModel):
 #    target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r : r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB], "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] - SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]), bandid=int(r[FIT_BANDID]))}
 
     def params(self):
-        return ("arrival_time", "onset_period", "amplitude", "decay")
+        return ("arrival_time", "peak_offset", "coda_height", "coda_decay")
 
     def model_name(self):
         return "paired_exp"

@@ -2,6 +2,7 @@ import numpy as np
 import sys, os
 from sigvisa import *
 
+from database.signal_data import get_fitting_runid
 import noise.noise_model as noise_model
 from learn.optimize import BoundsViolation
 from learn.train_coda_models import load_model
@@ -86,8 +87,9 @@ class TemplateModel(object):
     def high_bounds(self, phases):
         raise Exception("abstract class: method not implemented")
 
-    def __init__(self, run_name, run_iter, model_type = "gp_dad"):
+    def __init__(self, run_name, run_iter, model_type = "dummy"):
         self.sigvisa = Sigvisa()
+        cursor = self.sigvisa.dbconn.cursor()
 
         # load models
         self.models = NestedDict()
@@ -98,35 +100,15 @@ class TemplateModel(object):
         else:
             self.dummy=False
 
-        for param in self.params():
-            if param == "arrival_time":
-                continue
-
-            basedir = os.path.join("parameters", "runs", run_name, "iter_%02d" % run_iter, self.model_name(), param)
-            print basedir
-            for sta in os.listdir(basedir):
-                sta_dir = os.path.join(basedir, sta)
-                if not os.path.isdir(sta_dir):
-                    continue
-                for phase in os.listdir(sta_dir):
-                    phase_dir = os.path.join(sta_dir, phase)
-                    if not os.path.isdir(phase_dir):
-                        continue
-                    for chan in os.listdir(phase_dir):
-                        chan_dir = os.path.join(phase_dir, chan)
-                        if not os.path.isdir(chan_dir):
-                            continue
-                        for band in os.listdir(chan_dir):
-                            band_dir = os.path.join(chan_dir, band)
-                            for fname in os.listdir(band_dir):
-
-                                fullname = os.path.join(band_dir, fname)
-                                evidhash, ext = os.path.splitext(fname)
-
-                                if ext != model_type:
-                                    continue
-
-                                self.models[param][sta][phase][chan][band] = load_model(fullname)
+            basedir = os.getenv('SIGVISA_HOME')
+            runid = get_fitting_runid(cursor, run_name=run_name, iteration=run_iter, create_if_new=False)
+            sql_query = "select param, site, phase, chan, band, model_fname from sigvisa_template_param_model where model_type = '%s' and fitting_runid=%d" % (model_type, runid)
+            cursor.execute(sql_query)
+            
+            for (param, sta, phase, chan, band, fname) in cursor:
+                if param == "amp_transfer":
+                    param = "coda_height"
+                self.models[param][sta][phase][chan][band] = load_model(os.path.join(basedir, fname), model_type)
 
 
     def predictTemplate(self, event, sta, chan, band, phases=None):
@@ -142,7 +124,7 @@ class TemplateModel(object):
                 if isinstance(model, NestedDict):
                     raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
-                if param == "amplitude":
+                if param == "coda_height":
                     source_logamp = event.source_logamp(band)
                     predictions[i,j] = source_logamp + model.predict(event)
                 elif param == "arrival_time":
@@ -166,7 +148,7 @@ class TemplateModel(object):
                 if isinstance(model, NestedDict):
                     raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
-                if param == "amplitude":
+                if param == "coda_height":
                     source_logamp = event.source_logamp(band)
                     samples[i,j] =  source_logamp + model.predict(event)
                 elif param == "arrival_time":
@@ -190,7 +172,7 @@ class TemplateModel(object):
                 if isinstance(model, NestedDict):
                     raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
-                if param == "amplitude":
+                if param == "coda_height":
                     source_logamp = event.source_logamp(band)
                     log_likelihood += model.log_likelihood(event, param_vals[i,j] - source_logamp)
                 elif param == "arrival_time":
