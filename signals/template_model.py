@@ -2,6 +2,8 @@ import numpy as np
 import sys, os
 from sigvisa import *
 
+
+# from
 from database.signal_data import get_fitting_runid
 import noise.noise_model as noise_model
 from learn.optimize import BoundsViolation
@@ -64,7 +66,7 @@ class TemplateModel(object):
 
         lb = np.nan_to_num(self.low_bounds(phases))
         hb = np.nan_to_num(self.high_bounds(phases))
-        bounds_violations = np.abs((lb-vals) * (vals < lb)) + np.abs((vals-hb) * (vals > hb))       
+        bounds_violations = np.abs((lb-vals) * (vals < lb)) + np.abs((vals-hb) * (vals > hb))
         bound_penalty = 1000*np.exp(min(700,np.sum(bounds_violations))) - 1000
 #        if (vals < lb).any() or (vals > hb).any():
 #            raise BoundsViolation("params: %s\n\n low bounds: %s\n\n high bounds: %s" % (str(vals), str(lb), str(hb)))
@@ -87,12 +89,13 @@ class TemplateModel(object):
     def high_bounds(self, phases):
         raise Exception("abstract class: method not implemented")
 
-    def __init__(self, run_name, run_iter, model_type = "dummy"):
+    def __init__(self, run_name, run_iter, model_type = "dummy", verbose=True):
         self.sigvisa = Sigvisa()
         cursor = self.sigvisa.dbconn.cursor()
 
         # load models
         self.models = NestedDict()
+        self.modelids = []
 
         if model_type == "dummy":
             self.dummy=True
@@ -102,60 +105,68 @@ class TemplateModel(object):
 
             basedir = os.getenv('SIGVISA_HOME')
             runid = get_fitting_runid(cursor, run_name=run_name, iteration=run_iter, create_if_new=False)
-            sql_query = "select param, site, phase, chan, band, model_fname from sigvisa_template_param_model where model_type = '%s' and fitting_runid=%d" % (model_type, runid)
+
+            if isinstance(model_type, str):
+                model_type_cond = "model_type = '%s'" % model_type
+            elif isinstance(model_type, dict):
+                model_type_cond = "(" + " or ".join(["(model_type = '%s' and param = '%s')" % (v, k) for (k, v) in model_type.items()]) + ")"
+            else:
+                raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
+
+            sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where %s and fitting_runid=%d" % (model_type_cond, runid)
             cursor.execute(sql_query)
-            
-            for (param, sta, phase, chan, band, fname) in cursor:
+
+            for (param, sta, phase, chan, band, db_model_type, fname, modelid) in cursor:
                 if param == "amp_transfer":
                     param = "coda_height"
-                self.models[param][sta][phase][chan][band] = load_model(os.path.join(basedir, fname), model_type)
+                self.models[param][sta][phase][chan][band] = load_model(os.path.join(basedir, fname), db_model_type)
+                self.models[param][sta][phase][chan][band].modelid = modelid
+                if verbose:
+                    print "loaded model type '%s' for param %s at %s:%s:%s phase %s (modelid %d)" % ( db_model_type, param, sta, chan, band, phase, modelid)
 
-
-    def predictTemplate(self, event, sta, chan, band, phases=None):
-        if phases is None:
-            phases = Sigvisa().arriving_phases(event, sta)
+    def predictTemplate(self, event, sta, chan, band, phases):
 
         params = self.params()
 
         predictions = np.zeros((len(phases),  len(params)))
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(params):
-                model = self.models[param][sta][phase][chan][band]
-                if isinstance(model, NestedDict):
-                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
-
-                if param == "coda_height":
-                    source_logamp = event.source_logamp(band)
-                    predictions[i,j] = source_logamp + model.predict(event)
-                elif param == "arrival_time":
-                    predictions[i,j] = event.time + self.travel_time(event, sta)
+                if param == "arrival_time":
+                    predictions[i,j] = event.time + self.travel_time(event, sta, phase)
                 else:
-                    predictions[i,j] = model.predict(event)
-        return (phases, predictions)
+                    model = self.models[param][sta][phase][chan][band]
+                    if isinstance(model, NestedDict):
+                        raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+
+                    if param == "coda_height":
+                        source_logamp = event.source_logamp(band, phase)
+                        predictions[i,j] = source_logamp + model.predict(event)
+                    else:
+                        predictions[i,j] = model.predict(event)
+        return predictions
 
 
-    def sample(self, event, sta, chan, band, phases=None):
-
-        if phases is None:
-            phases = Sigvisa().arriving_phases(event, sta)
+    def sample(self, event, sta, chan, band, phases):
 
         params = self.params()
 
         samples = np.zeros((len(phases),  len(params)))
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(params):
-                model = self.models[param][sta][phase][chan][band]
-                if isinstance(model, NestedDict):
-                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
-                if param == "coda_height":
-                    source_logamp = event.source_logamp(band)
-                    samples[i,j] =  source_logamp + model.predict(event)
-                elif param == "arrival_time":
-                    samples = event.time + self.sample_travel_time(event, sta)
+                if param == "arrival_time":
+                    samples[i,j] = event.time + self.sample_travel_time(event, sta, phase)
                 else:
-                    samples[i,j] = model.sample(event)
-        return (phases, predictions)
+                    model = self.models[param][sta][phase][chan][band]
+                    if isinstance(model, NestedDict):
+                        raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+
+                    if param == "coda_height":
+                        source_logamp = event.source_logamp(band, phase)
+                        samples[i,j] =  source_logamp + model.predict(event)
+                    else:
+                        samples[i,j] = model.sample(event)
+        return samples
 
     def log_likelihood(self, template_params, event, sta, chan, band):
 
@@ -168,17 +179,18 @@ class TemplateModel(object):
         log_likelihood = 0
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(self.params()):
-                model = self.models[param][sta][phase][chan][band]
-                if isinstance(model, NestedDict):
-                    raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
-
-                if param == "coda_height":
-                    source_logamp = event.source_logamp(band)
-                    log_likelihood += model.log_likelihood(event, param_vals[i,j] - source_logamp)
-                elif param == "arrival_time":
-                    log_likelihood = self.travel_time_log_likelihood(event, sta, param_vals[i,j])
+                if param == "arrival_time":
+                    log_likelihood = self.travel_time_log_likelihood(tt=param_vals[i,j]-event.time, event=event, sta=sta, phase=phase)
                 else:
-                    log_likelihood += model.log_likelihood(event, param_vals[i,j])
+                    model = self.models[param][sta][phase][chan][band]
+                    if isinstance(model, NestedDict):
+                        raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+
+                    if param == "coda_height":
+                        source_logamp = event.source_logamp(band, phase)
+                        log_likelihood += model.posterior_log_likelihood(event, param_vals[i,j] - source_logamp)
+                    else:
+                        log_likelihood += model.posterior_log_likelihood(event, param_vals[i,j])
 
         return log_likelihood
 
@@ -189,13 +201,13 @@ class TemplateModel(object):
         return meantt
 
     def sample_travel_time(self, event, sta, phase):
-        meantt = self.mean_travel_time(event, sta, phase)
+        meantt = self.travel_time(event, sta, phase)
 
         # peak of a laplace distribution is 1/2b, where b is the
         # scale param, so (HACK ALERT) we can recover b by
         # evaluating the density at the peak
-        siteid = sigvisa.siteids[sta]
-        phaseid = sigvisa.phaseids[phase]
+        siteid = self.sigvisa.name_to_siteid_minus1[sta] + 1
+        phaseid = self.sigvisa.phaseids[phase]
         ttscale = 2.0 / np.exp(self.sigvisa.sigmodel.arrtime_logprob(0, 0, 0, siteid-1, phaseid-1))
 
         # sample from a Laplace distribution:
@@ -204,10 +216,11 @@ class TemplateModel(object):
         return tt
 
     def travel_time_log_likelihood(self, tt, event, sta, phase):
-        meantt = self.mean_travel_time(event, sta, phase)
-        siteid = sigvisa.siteids[sta]
-        phaseid = sigvisa.phaseids[phase]
-        ll = self.sigvisa.arrtime_logprob(tt, meantt, 0, siteid-1, phaseid-1)
+        meantt = self.travel_time(event, sta, phase)
+        siteid = self.sigvisa.name_to_siteid_minus1[sta] + 1
+        phaseid = self.sigvisa.phaseids[phase]
+
+        ll = self.sigvisa.sigmodel.arrtime_logprob(tt, meantt, 0, siteid-1, phaseid-1)
         return ll
 
 
@@ -218,7 +231,7 @@ class TemplateModel(object):
         st = model_waveform['stime']
         et = model_waveform['etime']
         npts = model_waveform['npts']
-        
+
         data = np.ones((npts,)) * nm.c
         phases, vals = template_params
 
@@ -227,14 +240,18 @@ class TemplateModel(object):
             v = vals[i,:]
             arr_time = v[0]
             start = (arr_time - st) * srate
-            start_idx = int(start)
+            start_idx = int(np.floor(start))
+            if start_idx > npts:
+                continue
+
             offset = start - start_idx
             phase_env = self.abstract_logenv_raw(v, idx_offset = offset, srate=srate)
             end_idx = start_idx + len(phase_env)
 
             try:
+                early = max(0, -start_idx)
                 overshoot = max(0, end_idx - len(data))
-                data[start_idx:end_idx-overshoot] += np.exp(phase_env[:len(phase_env)-overshoot])
+                data[start_idx+early:end_idx-overshoot] += np.exp(phase_env[early:len(phase_env)-overshoot])
             except Exception as e:
                 print e
                 raise

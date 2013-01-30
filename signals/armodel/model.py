@@ -55,18 +55,23 @@ class ARModel:
         return data
 
     # likelihood in log scale
-    def lklhood(self, data):
+    def lklhood(self, data, zero_mean=False):
         if not isinstance(data, (list, tuple)):
             data = [data,]
+
+        if zero_mean:
+            c = 0
+        else:
+            mean = self.c
 
         prob = 0
         for d in data:
             d_prob = 0
             for t in range(len(d)):
-                expected = self.c
+                expected = c
                 for i in range(self.p):
                     if t > i:
-                        expected += self.params[i] * (d[t-i-1] - self.c)
+                        expected += self.params[i] * (d[t-i-1] - c)
                 actual = d[t]
                 error = actual - expected
                 d_prob += self.em.lklhood(error)

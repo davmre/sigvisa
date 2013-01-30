@@ -3,9 +3,12 @@ import numpy as np
 
 import utils.geog
 
+
 from gpr import munge, kernels, evaluate, learn, distributions, plot
 from gpr.gp import GaussianProcess
 
+from learn.baseline_models import ParamModel
+from source.event import Event
 
 start_params_dad_log = {"coda_decay": [.022, .0187, 1.00, .14, .1], \
                             "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31], \
@@ -154,19 +157,26 @@ distfns = {
 "lld": lon_lat_depth_distfn
 }
 
-class SpatialGP(GaussianProcess):
+class SpatialGP(GaussianProcess, ParamModel):
 
     def __init__(self, *args, **kwargs):
         try:
             self.distfn_str = kwargs.pop("distfn_str")
         except KeyError:
             self.distfn_str = "dad_log"
+
+        try:
+            ParamModel.__init__(self, sta=kwargs.pop("sta"))
+        except KeyError:
+            pass
+
         kwargs['kernel_extra'] = distfns[self.distfn_str]
         kwargs['kernel']  = "distfn"
 
         GaussianProcess.__init__(self, *args, **kwargs)
 
     def variance(self, X1):
+        if isinstance(X1, Event): X1 = self.event_to_array(X1)
         if len(X1.shape) == 1:
             X1 = np.reshape(X1, (1, -1))
         if X1.shape[1] == 5:
@@ -178,6 +188,7 @@ class SpatialGP(GaussianProcess):
         return result
 
     def sample(self, X1):
+        if isinstance(X1, Event): X1 = self.event_to_array(X1)
         if len(X1.shape) == 1:
             X1 = np.reshape(X1, (1, -1))
         if X1.shape[1] == 5:
@@ -190,6 +201,10 @@ class SpatialGP(GaussianProcess):
 
     def posterior_log_likelihood(self, X1, y):
 
+        if isinstance(X1, Event):
+            X1 = self.event_to_array(X1)
+            y = np.array((y,))
+
         if len(X1.shape) == 1:
             X1 = np.reshape(X1, (1, -1))
         if X1.shape[1] == 5:
@@ -200,7 +215,7 @@ class SpatialGP(GaussianProcess):
 
     def predict(self, X1):
         # X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
-
+        if isinstance(X1, Event): X1 = self.event_to_array(X1)
         if len(X1.shape) == 1:
             X1 = np.reshape(X1, (1, -1))
         if X1.shape[1] == 5:
@@ -218,8 +233,8 @@ class SpatialGP(GaussianProcess):
         kname = np.array((self.kernel_name,))
         mname = np.array((self.mean,))
         with open(filename, 'w') as f:
-            np.savez(f, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, L=self.L, distfn_str = self.distfn_str, ll=self.ll)
-
+            np.savez(f, X = self.X, y=self.y, mu = np.array((self.mu,)), kernel_name=kname, kernel_params=self.kernel_params, mname = mname, alpha=self.alpha, Kinv=self.Kinv, L=self.L, distfn_str = self.distfn_str, ll=self.ll, base_str=super(SpatialGP, self).__repr_base_params__())
+            
 
     def load_trained_model(self, filename):
         npzfile = np.load(filename)
@@ -227,5 +242,6 @@ class SpatialGP(GaussianProcess):
         self.distfn_str = str(npzfile['distfn_str'])
         self.kernel_extra = distfns[self.distfn_str]
         self.kernel = kernels.setup_kernel(self.kernel_name, self.kernel_params, extra=self.kernel_extra)
+        super(SpatialGP, self).__unrepr_base_params__(str(npzfile['base_str']))
         del npzfile.f
         npzfile.close()

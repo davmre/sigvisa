@@ -37,7 +37,7 @@ class Heatmap(object):
 
         self.fname = fname
         try:
-            self.__load(fname)
+            self.load()
         except:
             if autobounds is not None:
                 lonbounds, latbounds, _ = self.event_bounds(autobounds)
@@ -80,7 +80,8 @@ class Heatmap(object):
                     data_file.write('%d %d %f\n' % (loni, lati, v))
         data_file.close()
 
-    def __load(self):
+    def load(self):
+        fname = self.fname
         print "loading heat map values from %s" % fname
 
         data_file = open(fname, 'r')
@@ -124,16 +125,24 @@ class Heatmap(object):
 
                     if checkpoint is not None:
                         self.save(checkpoint)
+                    print "computed (%.2f, %.2f) = %.6f" % (lon, lat, self.fvals[loni, lati])
 
-
-    def plot_earth(self):
+    def init_bmap(self, axes=None):
         self.bmap = draw_earth("",
                                projection="cyl",
                                resolution="l",
                                llcrnrlon = self.min_lon, urcrnrlon = self.max_lon,
                                llcrnrlat = self.min_lat, urcrnrlat = self.max_lat,
                                nofillcontinents=True,
-                               figsize=(10,10))
+                               ax=axes,
+                           )
+
+
+    def plot_earth(self):
+        try:
+            bmap = self.bmap
+        except:
+            self.init_bmap()
 
         parallels = np.arange(int(self.min_lat)-1,int(self.max_lat+1))
         if len(parallels) > 10:
@@ -150,7 +159,7 @@ class Heatmap(object):
         try:
             bmap = self.bmap
         except:
-            self.plot_earth()
+            self.init_bmap()
 
 
         normed_locations = [self.normalize_lonlat(*location) for location in locations]
@@ -160,7 +169,7 @@ class Heatmap(object):
         try:
             bmap = self.bmap
         except:
-            self.plot_earth()
+            self.init_bmap()
 
         minlevel = scipy.stats.scoreatpercentile([v for v in self.fvals.flatten() if not np.isnan(v)], 20)
         levels = np.linspace(minlevel, np.max(self.fvals), 10)

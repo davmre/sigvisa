@@ -135,6 +135,7 @@ class Waveform(object):
         else:
             f, fstats = self.__filter_by_desc(first_filter)
             filtered_data = f(self.data)
+            fstats['npts'] = len(filtered_data)
             first_filtered = Waveform(filtered_data, segment_stats=self.segment_stats, my_stats=fstats)
 
         # then apply the others recursively
@@ -204,7 +205,6 @@ class Waveform(object):
                 raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
             f= lambda x : ma.masked_array(data=scipy.signal.decimate(x, rounded_ratio), mask = x.mask[::rounded_ratio])
             fstats['srate'] = new_srate
-            fstats['npts'] = int(fstats['npts']/rounded_ratio)
         elif name == "env":
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
         elif name == "smooth":
@@ -244,7 +244,7 @@ class Segment(object):
 
     STANDARD_STATS = ["sta", "stime", "etime"]
 
-    filter_order = ['center', 'freq', 'env', 'log', 'smooth']
+    filter_order = ['center', 'freq', 'env', 'log', 'smooth', 'hz']
 
     def __init__(self, waveforms = []):
         self.__chans = dict()

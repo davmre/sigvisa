@@ -23,20 +23,20 @@ from optparse import OptionParser
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
 
-def learn_model(X, y, model_type, target=None):
+def learn_model(X, y, model_type, sta, target=None):
     if model_type.startswith("gp"):
         distfn = model_type[3:]
         params = start_params[distfn][target]
-        model = learn_gp(X, y, distfn=distfn, params=params)
+        model = learn_gp(X=X, y=y, sta=sta, distfn=distfn, params=params)
     elif model_type == "constant_gaussian":
-        model = learn_constant_gaussian(X, y)
+        model = learn_constant_gaussian(sta=sta, X=X, y=y)
     elif model_type == "linear_distance":
-        model = learn_linear(X, y)
+        model = learn_linear(sta=sta, X=X, y=y)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
 
-def learn_gp(X, y, distfn, params, optimize=True):
+def learn_gp(sta, X, y, distfn, params, optimize=True):
 
     X = gp_extract_features(X, distfn)
 
@@ -59,14 +59,14 @@ def learn_gp(X, y, distfn, params, optimize=True):
 
         print "got params", params , "giving ll", ll
 
-    gp = SpatialGP(X, y, distfn_str=distfn, kernel_params=params)
+    gp = SpatialGP(X=X, y=y, sta=sta, distfn_str=distfn, kernel_params=params)
     return gp
 
-def learn_linear(X, y):
-    return baseline_models.LinearModel(X,y)
+def learn_linear(X, y, sta):
+    return baseline_models.LinearModel(X=X,y=y, sta=sta)
 
-def learn_constant_gaussian(X,y):
-    return baseline_models.ConstGaussianModel(X,y)
+def learn_constant_gaussian(X,y, sta):
+    return baseline_models.ConstGaussianModel(X=X,y=y,sta=sta)
 
 
 def load_model(fname, model_type):
@@ -190,7 +190,7 @@ def main():
                 np.savetxt(evid_fname, evids, fmt='%d')
 
                 distfn = model_type[3:]
-                model = learn_model(X, y, model_type, target=target)
+                model = learn_model(X, y, model_type, target=target, sta=site)
 
                 model.save_trained_model(model_fname)
                 modelid = insert_model(s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll = model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp)

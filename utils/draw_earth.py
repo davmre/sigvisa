@@ -28,7 +28,8 @@
 
 import matplotlib
 from mpl_toolkits.basemap import Basemap
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+import matplotlib.cm
 
 import os
 from optparse import OptionParser
@@ -71,8 +72,6 @@ def draw_earth(title, **args):
     args["lat_0"] = 0
     args["lon_0"] = 0
 
-  plt.figure(figsize=figsize)
-  plt.title(title)
   bmap = Basemap(**args)
   try:
     bmap.drawmapboundary(fill_color=(.7,.7,1,1))
@@ -86,8 +85,6 @@ def draw_earth(title, **args):
     bmap.drawcoastlines(zorder=10)
   except:
     bmap.drawcoastlines()
-
-  plt.subplots_adjust(left=0.02, right=0.98)
 
   if not nofillcontinents:
     # fill the continents with a greenish color
@@ -134,8 +131,9 @@ def draw_events(bmap, events, labels = None, **args):
     bmap.plot([x], [y], **args)
 
 
-    if labels is not None and labels[enum] is not None:
-      plt.annotate(
+    if labels is not None and labels[enum] is not None and 'ax' in args:
+      axes = args['ax']
+      axes.annotate(
         labels[enum][0],
         xy = (x, y),
         size=4,
@@ -162,7 +160,7 @@ def draw_vectors(bmap, vectors, scale, **args):
   for (lon1, lat1, lon2, lat2) in vectors:
     x1, y1 = bmap(lon1, lat1)
     x2, y2 = bmap(lon2, lat2)
-    plt.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
+    bmap.ax.arrow(x1, y1, scale * (x2-x1), scale * (y2-y1), **args)
 
 
 def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
@@ -176,15 +174,16 @@ def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
   x_arr = np.array(x).reshape(lon_arr.shape)
   y_arr = np.array(y).reshape(lat_arr.shape)
 
+  cm = matplotlib.cm.get_cmap('jet')
   cs1 = bmap.contour(x_arr, y_arr, vals, levels, linewidths=.5, colors="k",
                      zorder=6 - int(nolines))
-  cs2 = bmap.contourf(x_arr, y_arr, vals, levels, cmap=plt.cm.jet, zorder=5,
+  cs2 = bmap.contourf(x_arr, y_arr, vals, levels, cmap=cm, zorder=5,
                       extend="both",
                       norm=matplotlib.colors.BoundaryNorm(cs1.levels,
-                                                          plt.cm.jet.N))
+                                                          cm.N))
 
   if colorbar:
-    plt.colorbar(cs2, orientation=colorbar_orientation, drawedges=True,
+    bmap.ax.colorbar(cs2, orientation=colorbar_orientation, drawedges=True,
                  shrink = colorbar_shrink)
 
 def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
@@ -211,9 +210,6 @@ def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
 
   draw_events(bmap, sites, marker="^", ms=10, mfc="none", mec="green",
               mew=2, zorder=3)
-
-def show():
-  plt.show()
 
 
 def main():
@@ -297,7 +293,7 @@ def main():
         draw_events(bmap, ((ev[0], ev[1]),), marker=".", ms=1, mfc="none", alpha=0.4, mec="red", mew=1)
       draw_events(bmap, (site_lonlat,),  marker="x", ms=4, mfc="none", mec="purple", mew=2)
 
-      plt.title("siteid %d azi (%d, %d) dist (%d, %d)\n mb (%.2f, %.2f) depth (%d, %d)" % (siteid, options.min_azi, options.max_azi, options.min_dist, options.max_dist, options.min_mb, options.max_mb, options.min_depth, options.max_depth))
+      bmap.ax.suptitle("siteid %d azi (%d, %d) dist (%d, %d)\n mb (%.2f, %.2f) depth (%d, %d)" % (siteid, options.min_azi, options.max_azi, options.min_dist, options.max_dist, options.min_mb, options.max_mb, options.min_depth, options.max_depth))
 
     else:
       sql_query = "select sta from static_siteid"
@@ -305,7 +301,6 @@ def main():
       stas = cursor.fetchall()
 
       draw_events(bmap, sites[:, 0:2],  labels=stas, marker="x", ms=3, mfc="none", mec="purple", mew=1)
-
 
     pp.savefig()
     pp.close()

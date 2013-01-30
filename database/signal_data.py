@@ -106,7 +106,7 @@ def benchmark_fitting_run(cursor, runid, return_raw_data=False):
         return acosts, times
     else:
         return np.mean(acosts), np.mean(times)
-    
+
 
 def load_template_params_by_fitid(cursor, fitid, return_cost=True):
 
@@ -174,7 +174,7 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
     azimuth = utils.geog.azimuth((s.sites[siteid-1][0], s.sites[siteid-1][1]), (event.lon, event.lat))
 
     optim_param_str = optim_param_str.replace("'", "''")
-    
+
 
     sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f)" % (runid, event.evid, sta, chan, band,  optim_param_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed)
 
@@ -189,7 +189,7 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
     for (i, phase) in enumerate(phases):
 
         transfer = fit_params[i,2] - ev.source_logamp(band, phase)
-        
+
         phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3], transfer)
         cursor.execute(phase_insert_query)
     return fitid
@@ -295,7 +295,7 @@ def insert_wiggle(dbconn, p):
 
     elif "MySQLdb" in str(type(dbconn)):
         raise Exception("blob insertion for mysql not yet implemented")
-    
+
     return wiggleid
 
 def read_wiggle(cursor, wiggleid):
@@ -305,3 +305,19 @@ def read_wiggle(cursor, wiggleid):
 
 def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp):
     return execute_and_return_id(dbconn, "insert into sigvisa_template_param_model (fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp) values (:fr,:ts,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp)", "modelid", fr=fitting_runid, ts=template_shape, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost = max_acost, ne=n_evids, min_amp=min_amp)
+
+def save_gsrun_to_db(d, segments, em, tm):
+    s = Sigvisa()
+    sql_query = "insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, phases, wiggle_model_type, heatmap_fname) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :phases, :wiggle_model_type, :heatmap_fname)"
+    gsid = execute_and_return_id(s.dbconn, sql_query, "gsid", **d)
+
+    for seg in segments:
+        for chan in em.chans:
+            for band in em.bands:
+                gswid = execute_and_return_id(s.dbconn, "insert into sigvisa_gsrun_wave (gsid, sta, chan, band, stime, etime, hz) values (%d, '%s', '%s', '%s', %f, %f, %f)" % (gsid, seg['sta'], chan, band, seg['stime'], seg['etime'], seg[chan]['srate']), 'gswid')
+                for phase in em.phases:
+                    for param in tm.models.keys():
+                        modelid = tm.models[param][seg['sta']][phase][chan][band].modelid
+                        gsmid = execute_and_return_id(s.dbconn, "insert into sigvisa_gsrun_tmodel (gswid, modelid) values (%d, %d)" % (gswid, modelid), 'gsmid')
+
+    s.dbconn.commit()

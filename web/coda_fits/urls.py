@@ -2,6 +2,7 @@ from django.conf.urls import patterns, url
 from coda_fits.views import *
 from coda_fits.wiggle_views import *
 from coda_fits.model_views import *
+from coda_fits.gridsearch_views import *
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
@@ -35,4 +36,8 @@ urlpatterns = patterns('',
     url(r'^models/(?P<modelid>\d+)/density.png$', model_density, name='model_density'),
     url(r'^models/(?P<modelid>\d+)/distance_plot.png$', model_distance_plot, name='model_distance_plot'),
     url(r'^models/(?P<modelid>\d+)/heatmap.png$', model_heatmap, name='model_heatmap'),
+    url(r'^gridsearch/$', gridsearch_list_view, name='gridsearch_list'),
+    url(r'^gridsearch/(?P<gsid>\d+)/$', gridsearch_detail_view, name='gsrun_detail'),
+    url(r'^gridsearch/(?P<gsid>\d+)/heatmap.png$', gs_heatmap_view, name='gs_heatmap'),
+    url(r'^gridsearch/(?P<gsid>\d+)/delete$', delete_gsrun, name='gsrun_delete'),
 )

@@ -4,18 +4,14 @@ from plotting.heatmap import Heatmap
 from utils.geog import dist_km, lonlatstr
 from database.dataset import *
 from database import db
+from sigvisa import Sigvisa
 
 class EventHeatmap(Heatmap):
 
-    def __init__(self, f, sitenames=None, **args):
+    def __init__(self, f, **args):
         Heatmap.__init__(self, f=f, **args)
 
-        if sitenames is None:
-            cursor = db.connect().cursor()
-            stations, name_to_siteid_minus1, siteid_minus1_to_name = read_sites_by_name(cursor)
-            self.sitenames = stations
-        else:
-            self.sitenames = self.sitenames
+        self.sitenames = Sigvisa().stations
 
         self.event_locations = []
         self.event_labels = []
@@ -54,8 +50,9 @@ class EventHeatmap(Heatmap):
         self.save(fname + ".log")
 
 
-    def plot(self, colorbar=True, event_alpha=0.6):
+    def plot(self, colorbar=True, event_alpha=0.6, axes=None):
 
+        self.init_bmap(axes=axes)
         self.plot_earth()
         self.plot_density(colorbar=colorbar)
 

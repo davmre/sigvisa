@@ -60,7 +60,7 @@ class PairedExpTemplateModel(TemplateModel):
 
                 # avoid taking log(0)
                 intro_env[0] = 0.1
-                d[0:intro_len] = np.log(intro_env) 
+                d[0:intro_len] = np.log(intro_env)
 
                 # say peak_idx is 9.9 and idx_offset is 0.2, so we have intro_len=11
                 # then at t=1, we have onset[0.8]
@@ -128,7 +128,3 @@ class PairedExpTemplateModel(TemplateModel):
             start_params[i, CODA_HEIGHT_PARAM] = np.log(np.max(wave.data)) +.2 #np.log(np.max(wave.data[arrival_idx: arrival_idx + wave['srate']*5]))+.5
             start_params[i, CODA_DECAY_PARAM] = -0.001
         return (all_phases, start_params)
-
-
-
-

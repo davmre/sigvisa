@@ -113,7 +113,7 @@ class TestModels(unittest.TestCase):
 
 
     def test_constant(self):
-        model = learn_model(self.X, self.y, model_type="constant_gaussian")
+        model = learn_model(self.X, self.y, model_type="constant_gaussian", sta="AAK")
         pred1 = model.predict(self.testX1)
         pred2 = model.predict(self.testX2)
         self.assertAlmostEqual(pred1, np.mean(self.y))
@@ -133,7 +133,7 @@ class TestModels(unittest.TestCase):
 
 
     def test_linear_distance(self):
-        model = learn_model(self.X, self.y, model_type="linear_distance")
+        model = learn_model(self.X, self.y, model_type="linear_distance", sta="AAK")
         pred1 = model.predict(self.testX1)
         pred2 = model.predict(self.testX2)
         self.assertAlmostEqual(pred1, -0.01375)
@@ -152,7 +152,7 @@ class TestModels(unittest.TestCase):
         s = nmodel.sample(self.X)
         
     def test_GP(self):
-        model = learn_model(self.X, self.y, model_type="gp_dad_log", target="decay")
+        model = learn_model(self.X, self.y, model_type="gp_dad_log", target="coda_decay", sta='AAK')
         pred1 = model.predict(self.testX1)
         pred2 = model.predict(self.testX2)
 

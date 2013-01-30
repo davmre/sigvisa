@@ -247,12 +247,11 @@ select wiggleid_seq.nextval into :new.wiggleid from dual;
 end;
 /
 
-
 create table sigvisa_template_param_model (
  modelid int not null, /* Oracle version */
  fitting_runid int not null,
  template_shape varchar(15) not null,
- param varchar(15) not null, 
+ param varchar(15) not null,
  site varchar(10) not null,
  chan varchar(10) not null,
  band varchar(15) not null,
@@ -291,21 +290,32 @@ create table sigvisa_gridsearch_run (
  lon_se float(24) not null,
  lat_se float(24) not null,
  pts_per_side int not null,
+ phases varchar(127) not null,
  likelihood_method varchar(63) not null,
+ wiggle_model_type varchar(31) not null,
  heatmap_fname varchar(255) not null,
  primary key (gsid)
 );
 
-create table sigvisa_gsrun_stations (
+create table sigvisa_gsrun_wave (
+ gswid int not null, /* Oracle version */
  gsid int not null,
- siteid int not null,
+ sta varchar(10) not null,
+ chan varchar(10) not null,
+ band varchar(15) not null,
+ hz float(24) not null,
+ stime double precision not null,
+ etime double precision not null,
+ primary key (gswid),
  foreign key (gsid) REFERENCES sigvisa_gridsearch_run(gsid)
 );
 
-create table sigvisa_gsrun_models (
- gsid int not null,
+create table sigvisa_gsrun_tmodel (
+ gsmid int not null, /* Oracle version */
+ gswid int not null,
  modelid int not null,
- foreign key (gsid) REFERENCES sigvisa_gridsearch_run(gsid),
+ primary key (gsmid),
+ foreign key (gswid) REFERENCES sigvisa_gsrun_wave(gswid),
  foreign key (modelid) REFERENCES sigvisa_template_param_model(modelid)
 );
 
@@ -316,6 +326,26 @@ before insert on sigvisa_gridsearch_run
 for each row
 begin
 select gsid_seq.nextval into :new.gsid from dual;
+end;
+/
+
+/* hack to implement auto_increment in Oracle */
+create sequence gsw_id_seq start with 1 increment by 1 nomaxvalue;
+create or replace trigger gsw_id_trigger
+before insert on sigvisa_gsrun_wave
+for each row
+begin
+select gsw_id_seq.nextval into :new.gswid from dual;
+end;
+/
+
+/* hack to implement auto_increment in Oracle */
+create sequence gsm_id_seq start with 1 increment by 1 nomaxvalue;
+create or replace trigger gsm_id_trigger
+before insert on sigvisa_gsrun_tmodel
+for each row
+begin
+select gsm_id_seq.nextval into :new.gsmid from dual;
 end;
 /
 

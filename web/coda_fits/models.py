@@ -257,23 +257,30 @@ class SigvisaGridsearchRun(models.Model):
     lat_se = models.FloatField()
     pts_per_side = models.IntegerField()
     likelihood_method = models.CharField(max_length=63)
+    phases = models.CharField(max_length=127)
+    wiggle_model_type = models.CharField(max_length=31)
     heatmap_fname = models.CharField(max_length=255)
     class Meta:
         db_table = u'sigvisa_gridsearch_run'
 
-class SigvisaGsrunStations(models.Model):
+class SigvisaGsrunWave(models.Model):
+    gswid = models.IntegerField(primary_key=True)
     gsid = models.ForeignKey(SigvisaGridsearchRun, db_column='gsid')
-    siteid = models.IntegerField()
+    sta = models.CharField(max_length=10)
+    chan = models.CharField(max_length=10)
+    band = models.CharField(max_length=15)
+    stime = UnixTimestampField()
+    etime = UnixTimestampField()
+    hz = models.FloatField()
     class Meta:
-        db_table = u'sigvisa_gsrun_stations'
+        db_table = u'sigvisa_gsrun_wave'
 
-class SigvisaGsrunModels(models.Model):
-    gsid = models.ForeignKey(SigvisaGridsearchRun, db_column='gsid')
+class SigvisaGsrunTModel(models.Model):
+    gsmid = models.IntegerField(primary_key=True)
+    gswid = models.ForeignKey(SigvisaGsrunWave, db_column='gswid')
     modelid = models.ForeignKey(SigvisaTemplateParamModel, db_column='modelid')
     class Meta:
-        db_table = u'sigvisa_gsrun_models'
-
-
+        db_table = u'sigvisa_gsrun_tmodel'
 
 class StaticPhaseid(models.Model):
     id = models.IntegerField(primary_key=True)
@@ -292,4 +299,3 @@ class StaticSiteid(models.Model):
     statype = models.CharField(max_length=6, blank=True)
     class Meta:
         db_table = u'static_siteid'
-

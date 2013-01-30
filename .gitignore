@@ -25,7 +25,7 @@ database/*.csv
 *.DS_Store
 /*evids
 /eval*
-/wiggles*
+/wiggle_data*
 /TAGS
 /earthmodel.c
 /logs/codas_2_1338747082/all_data

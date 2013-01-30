@@ -13,7 +13,7 @@ from sigvisa import *
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from datetime import datetime
 import django.db
 
@@ -35,8 +35,8 @@ def WaveImageView(request):
     etime = float(request.GET.get("etime", ""))
     logscale = request.GET.get("logscale", "false").lower().startswith('t')
     filter_str = quote_name(request.GET.get("filter_str", ""))[1:-1].lower()
-
-    print sta
+    ratio = float(request.GET.get("ratio", "1.6"))
+    dpi = int(request.GET.get("dpi", "144"))
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -44,24 +44,21 @@ def WaveImageView(request):
     try:
         wave = fetch_waveform(sta, chan, stime, etime)
 
-        fig = plt.figure(figsize=(8,5), dpi=144)
+        fig = Figure(figsize=(5 * ratio,5), dpi=dpi)
         fig.patch.set_facecolor('white')
-        plt.xlabel("Time (s)")
-        axes = plt.gca()
+        axes = fig.add_subplot(111)
+        axes.set_xlabel("Time (s)", fontsize=8)
         plot.subplot_waveform(wave.filter(filter_str), axes, color='black', linewidth=1.5, logscale=logscale)
-        matplotlib.rcParams.update({'font.size': 8})
 
     except Exception as e:
         error_text = 'Error plotting waveform: \"%s\"' % str(e)
-        fig = plt.figure(figsize=(5,3), dpi=144)
+        fig = Figure(figsize=(5,3), dpi=144)
         fig.patch.set_facecolor('white')
-        axes = plt.gca()
-        plt.text(.5, .5, "\n".join(textwrap.wrap(error_text, 60)), horizontalalignment='center', verticalalignment='center', transform = axes.transAxes)
-        matplotlib.rcParams.update({'font.size': 8})
+        axes = fig.add_subplot(111)
+        axes.text(.5, .5, "\n".join(textwrap.wrap(error_text, 60)), horizontalalignment='center', verticalalignment='center', transform = axes.transAxes, fontsize=8)
 
     canvas=FigureCanvas(fig)
     response=django.http.HttpResponse(content_type='image/png')
-    plt.tight_layout()
+    fig.tight_layout()
     canvas.print_png(response)
-    plt.close(fig)
     return response
