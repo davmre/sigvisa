@@ -89,34 +89,44 @@ class TemplateModel(object):
     def high_bounds(self, phases):
         raise Exception("abstract class: method not implemented")
 
-    def __init__(self, run_name, run_iter, model_type = "dummy", verbose=True):
-        self.sigvisa = Sigvisa()
-        cursor = self.sigvisa.dbconn.cursor()
+    def __init__(self, run_name=None, run_iter=None, model_type = None, verbose=True, modelids=None):
+        s = Sigvisa()
+        cursor = s.dbconn.cursor()
 
         # load models
+
         self.models = NestedDict()
-        self.modelids = []
 
         if model_type == "dummy":
             self.dummy=True
             return
         else:
             self.dummy=False
-
             basedir = os.getenv('SIGVISA_HOME')
-            runid = get_fitting_runid(cursor, run_name=run_name, iteration=run_iter, create_if_new=False)
 
-            if isinstance(model_type, str):
-                model_type_cond = "model_type = '%s'" % model_type
-            elif isinstance(model_type, dict):
-                model_type_cond = "(" + " or ".join(["(model_type = '%s' and param = '%s')" % (v, k) for (k, v) in model_type.items()]) + ")"
+            if modelids is not None:
+                models = []
+                for modelid in modelids:
+                    sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where modelid=%d" % (modelid)
+                    cursor.execute(sql_query)
+                    models.append(cursor.fetchone())
+            elif run_name is not None and run_iter is not None and model_type is not None:
+                runid = get_fitting_runid(cursor, run_name=run_name, iteration=run_iter, create_if_new=False)
+
+                if isinstance(model_type, str):
+                    model_type_cond = "model_type = '%s'" % model_type
+                elif isinstance(model_type, dict):
+                    model_type_cond = "(" + " or ".join(["(model_type = '%s' and param = '%s')" % (v, k) for (k, v) in model_type.items()]) + ")"
+                else:
+                    raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
+
+                sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where %s and fitting_runid=%d" % (model_type_cond, runid)
+                cursor.execute(sql_query)
+                models = cursor.fetchall()
             else:
-                raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
+                raise Exception("you must specify either a fitting run or a list of template model ids!")
 
-            sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where %s and fitting_runid=%d" % (model_type_cond, runid)
-            cursor.execute(sql_query)
-
-            for (param, sta, phase, chan, band, db_model_type, fname, modelid) in cursor:
+            for (param, sta, phase, chan, band, db_model_type, fname, modelid) in models:
                 if param == "amp_transfer":
                     param = "coda_height"
                 self.models[param][sta][phase][chan][band] = load_model(os.path.join(basedir, fname), db_model_type)
@@ -127,7 +137,6 @@ class TemplateModel(object):
     def predictTemplate(self, event, sta, chan, band, phases):
 
         params = self.params()
-
         predictions = np.zeros((len(phases),  len(params)))
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(params):
@@ -195,20 +204,22 @@ class TemplateModel(object):
         return log_likelihood
 
     def travel_time(self, event, sta, phase):
-        siteid = self.sigvisa.name_to_siteid_minus1[sta] + 1
-        phaseid = self.sigvisa.phaseids[phase]
-        meantt = self.sigvisa.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, phaseid-1)
+        s = Sigvisa()
+        siteid = s.name_to_siteid_minus1[sta] + 1
+        phaseid = s.phaseids[phase]
+        meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, phaseid-1)
         return meantt
 
     def sample_travel_time(self, event, sta, phase):
+        s = Sigvisa()
         meantt = self.travel_time(event, sta, phase)
 
         # peak of a laplace distribution is 1/2b, where b is the
         # scale param, so (HACK ALERT) we can recover b by
         # evaluating the density at the peak
-        siteid = self.sigvisa.name_to_siteid_minus1[sta] + 1
-        phaseid = self.sigvisa.phaseids[phase]
-        ttscale = 2.0 / np.exp(self.sigvisa.sigmodel.arrtime_logprob(0, 0, 0, siteid-1, phaseid-1))
+        siteid = s.name_to_siteid_minus1[sta] + 1
+        phaseid = s.phaseids[phase]
+        ttscale = 2.0 / np.exp(s.sigmodel.arrtime_logprob(0, 0, 0, siteid-1, phaseid-1))
 
         # sample from a Laplace distribution:
         U = np.random.random() - .5
@@ -216,11 +227,13 @@ class TemplateModel(object):
         return tt
 
     def travel_time_log_likelihood(self, tt, event, sta, phase):
-        meantt = self.travel_time(event, sta, phase)
-        siteid = self.sigvisa.name_to_siteid_minus1[sta] + 1
-        phaseid = self.sigvisa.phaseids[phase]
+        s = Sigvisa()
 
-        ll = self.sigvisa.sigmodel.arrtime_logprob(tt, meantt, 0, siteid-1, phaseid-1)
+        meantt = self.travel_time(event, sta, phase)
+        siteid = s.name_to_siteid_minus1[sta] + 1
+        phaseid = s.phaseids[phase]
+
+        ll = s.sigmodel.arrtime_logprob(tt, meantt, 0, siteid-1, phaseid-1)
         return ll
 
 
@@ -258,7 +271,7 @@ class TemplateModel(object):
         return data
 
     def generate_template_waveform(self, template_params, model_waveform, sample=False):
-        s = self.sigvisa
+        s = Sigvisa()
 
         siteid = model_waveform['siteid']
         srate = model_waveform['srate']

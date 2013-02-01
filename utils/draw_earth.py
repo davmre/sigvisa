@@ -165,7 +165,7 @@ def draw_vectors(bmap, vectors, scale, **args):
 
 def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
                  nolines = False, colorbar_orientation="vertical",
-                 colorbar_shrink = 0.9):
+                 colorbar_shrink = 0.9, smooth=False):
   loni, lati = np.mgrid[0:len(lons), 0:len(lats)]
   lon_arr, lat_arr = lons[loni], lats[lati]
 
@@ -175,16 +175,28 @@ def draw_density(bmap, lons, lats, vals, levels=10, colorbar=True,
   y_arr = np.array(y).reshape(lat_arr.shape)
 
   cm = matplotlib.cm.get_cmap('jet')
-  cs1 = bmap.contour(x_arr, y_arr, vals, levels, linewidths=.5, colors="k",
+
+  if not smooth:
+    cs1 = bmap.contour(x_arr, y_arr, vals, levels, linewidths=.5, colors="k",
                      zorder=6 - int(nolines))
-  cs2 = bmap.contourf(x_arr, y_arr, vals, levels, cmap=cm, zorder=5,
+    norm = matplotlib.colors.BoundaryNorm(cs1.levels, cm.N)
+    cs2 = bmap.contourf(x_arr, y_arr, vals, levels, cmap=cm, zorder=5,
                       extend="both",
-                      norm=matplotlib.colors.BoundaryNorm(cs1.levels,
-                                                          cm.N))
+                      norm=norm)
+  else:
+    norm = matplotlib.colors.Normalize()
+    cs2 = bmap.pcolormesh(x_arr, y_arr, vals, cmap=cm, zorder=5, norm=norm, shading='gouraud')
 
   if colorbar:
-    bmap.ax.colorbar(cs2, orientation=colorbar_orientation, drawedges=True,
-                 shrink = colorbar_shrink)
+    from mpl_toolkits.axes_grid import make_axes_locatable
+    import  matplotlib.axes as maxes
+
+    divider = make_axes_locatable(bmap.ax)
+    cax = divider.new_horizontal("4%", pad=.5, axes_class=maxes.Axes)
+    bmap.ax.figure.add_axes(cax)
+
+    bmap.ax.figure.colorbar(cs2, orientation=colorbar_orientation, drawedges=not nolines,
+                            cax=cax, format='%.1f')
 
 def draw_events_arrivals(bmap, events, arrivals, sites, ttime, quant=2):
   """

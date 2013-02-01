@@ -40,4 +40,6 @@ urlpatterns = patterns('',
     url(r'^gridsearch/(?P<gsid>\d+)/$', gridsearch_detail_view, name='gsrun_detail'),
     url(r'^gridsearch/(?P<gsid>\d+)/heatmap.png$', gs_heatmap_view, name='gs_heatmap'),
     url(r'^gridsearch/(?P<gsid>\d+)/delete$', delete_gsrun, name='gsrun_delete'),
+    url(r'^gsdebug/(?P<gswid>\d+)/$', gs_debug_view, name='gs_debug'),
+    url(r'^gsdebug/(?P<gswid>\d+)/overlay.png$', gs_debug_wave_view, name='gs_debug_wave'),
 )

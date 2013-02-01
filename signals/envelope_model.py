@@ -58,7 +58,7 @@ class EnvelopeModel:
             for band in self.bands:
                 wave = segment.with_filter(band)[chan]
 
-                f = lambda params: -1 * self.wiggle_model.template_cost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+                f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
 
                 #just use the mean parameters
                 params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
@@ -78,7 +78,7 @@ class EnvelopeModel:
             for band in self.bands:
                 wave = segment.with_filter(band)[chan]
 
-                f = lambda params: -1 * self.wiggle_model.template_cost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+                f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
 
                 #optimize over parameters
                 params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
@@ -103,7 +103,7 @@ class EnvelopeModel:
             for band in self.bands:
                 wave = segment.with_filter(band)[chan]
 
-                f = lambda params: -1 * self.wiggle_model.template_cost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+                f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
 
                 sum_ll = np.float("-inf")
 

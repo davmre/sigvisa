@@ -21,12 +21,7 @@ def event_at(ev, lon=None, lat=None, t=None):
     return ev2
 
 
-
-
-# get the likelihood of an event location, if we don't know the event time.
-# "likelihood" is a function of a segment and an event object (e.g. envelope_model.log_likelihood_optimize wrapped in a lambda)
-def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model):
-
+def propose_origin_times(ev, segments, template_model, phases):
     s = Sigvisa()
 
     # propose origin times based on phase arrival times
@@ -34,11 +29,17 @@ def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model):
     for segment in segments:
         backprojections = []
         arr = segment['arrivals']
-        arr_phases = [s.phasenames[a] for a in arr[:,DET_PHASE_COL]]
-        for phase, arrtime in zip(arr_phases, arr[:, DET_TIME_COL]):
-            projection = arrtime - template_model.travel_time(ev, segment['sta'], phase)
-            event_time_proposals.append(projection)
+        for phase in phases:
+            for arrtime in arr[:, DET_TIME_COL]:
+                projection = arrtime - template_model.travel_time(ev, segment['sta'], phase)
+                event_time_proposals.append(projection)
 
+    return event_time_proposals
+
+# get the likelihood of an event location, if we don't know the event time.
+# "likelihood" is a function of a segment and an event object (e.g. envelope_model.log_likelihood_optimize wrapped in a lambda)
+def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model, phases):
+    event_time_proposals = propose_origin_times(ev, segments, template_model, phases)
     # find the origin time that maximizes the likelihood
     maxll = np.float("-inf")
     maxt = 0
@@ -95,8 +96,8 @@ def main():
     else:
         phases = options.phases.split(',')
 
-#    wm = PlainWiggleModel(tm)
-    wm = StupidL1WiggleModel(tm)
+    wm = PlainWiggleModel(tm)
+#    wm = StupidL1WiggleModel(tm)
     em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases)
     ev_true = get_event(evid=evid)
 
@@ -108,7 +109,7 @@ def main():
     stime = np.min(statimes) - 60
     etime = np.max(statimes) + 240
     segments = load_segments(cursor, sites, stime, etime)
-    segments = [seg.with_filter('hz_%.3f' % options.hz) for seg in segments]
+    segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
 
     if options.method == "mode":
         f_ll = em.log_likelihood_mode
@@ -119,7 +120,7 @@ def main():
     else:
         raise Exception("unrecognized marginalization method %s" % options.method)
 
-    f = lambda lon, lat: ev_loc_ll_at_optimal_time(event_at(ev_true, lon=lon, lat=lat), segments, log_likelihood=f_ll, template_model=tm)
+    f = lambda lon, lat: ev_loc_ll_at_optimal_time(event_at(ev_true, lon=lon, lat=lat), segments, log_likelihood=f_ll, template_model=tm, phases=phases)
 
 
     sta_string = ":".join(sites)
@@ -130,6 +131,7 @@ def main():
     hm = EventHeatmap(f=f, n=options.n, center=(ev_true.lon, ev_true.lat), width=map_width, fname=fname)
     hm.save(fname)
     etime = time.time()
+    print "finished heatmap; saving metadata to database..."
 
     d = {'evid':  ev_true.evid, \
          'timestamp': stime, \
@@ -144,6 +146,7 @@ def main():
          'wiggle_model_type': wm.summary_str(), \
          'heatmap_fname': fname, \
     }
+
     save_gsrun_to_db(d, segments, em, tm)
 
         #hm.add_stations([s['sta'] for s in segments])

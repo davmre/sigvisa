@@ -7,6 +7,7 @@ from utils.draw_earth import draw_events, draw_earth, draw_density
 import utils.geog
 
 import multiprocessing
+import copy
 
 
 def multi_f(f_args):
@@ -165,19 +166,30 @@ class Heatmap(object):
         normed_locations = [self.normalize_lonlat(*location) for location in locations]
         draw_events(self.bmap, normed_locations, labels=labels, **plotargs)
 
-    def plot_density(self, colorbar = True):
+    def plot_density(self, f_preprocess=None, **density_args):
         try:
             bmap = self.bmap
         except:
             self.init_bmap()
 
-        minlevel = scipy.stats.scoreatpercentile([v for v in self.fvals.flatten() if not np.isnan(v)], 20)
-        levels = np.linspace(minlevel, np.max(self.fvals), 10)
-#        else:
-#            levels = None
 
-        draw_density(self.bmap, self.lon_arr, self.lat_arr, self.fvals,
-                     levels = levels, colorbar=colorbar)
+        fv = copy.copy(self.fvals)
+        if f_preprocess:
+            for i in range(fv.shape[0]):
+                for j in range(fv.shape[1]):
+                    v = self.fvals[i,j]
+                    for fp in f_preprocess:
+                        v = fp(v, self.fvals.flatten())
+                    fv[i,j] = v
+
+
+        minlevel = scipy.stats.scoreatpercentile([v for v in fv.flatten() if not np.isnan(v)], 20)
+
+        levels = np.linspace(minlevel, np.max(fv), 10)
+
+
+        draw_density(self.bmap, self.lon_arr, self.lat_arr, fv,
+                     levels = levels, **density_args)
 
     def normalize_lonlat(self, lon, lat):
         """

@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.ma as ma
 import cPickle
 
 def load_armodel_from_file(fname):
@@ -67,16 +68,22 @@ class ARModel:
         prob = 0
         for d in data:
             d_prob = 0
+            skipped = 0
+            masked =  ma.getmaskarray(d)
             for t in range(len(d)):
+                if masked[t]:
+                    continue
+
                 expected = c
                 for i in range(self.p):
-                    if t > i:
+                    if t > i and not masked[t-i-1]:
                         expected += self.params[i] * (d[t-i-1] - c)
                 actual = d[t]
                 error = actual - expected
-                d_prob += self.em.lklhood(error)
+                ell = self.em.lklhood(error)
+                d_prob += ell
             # normalize the sum of probability (no dependency on p value)
-            # prob += d_prob/(len(d)-self.p)*len(d)
+            #prob += d_prob/(len(d)-skipped)*len(d)
             prob += d_prob
 
         return prob
@@ -147,5 +154,6 @@ class ErrorModel:
     def lklhood(self, x):
         t1 = np.log(self.std) + 0.5 * np.log(2 * np.pi)
         t2 = 0.5 * np.square((x - self.mean) / self.std)
+        ll = -(t1 + t2)
 
-        return -(t1 + t2)
+        return ll

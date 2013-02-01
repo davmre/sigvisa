@@ -7,7 +7,7 @@
 <table>
  <tr>
   <td>
-   <img src={% url gs_heatmap gsid=gs.gsid %} width=600 height=600>
+   <img src="{% url gs_heatmap gsid=gs.gsid %}?colorbar=true;smooth=true" width=600 height=600>
   </td>
    <td valign=top rowspan=2>
      <table>
@@ -37,6 +37,7 @@
 	 <td><strong>wave</strong></td>
 	 <td><strong>mode</strong></td>
 	 <td><strong>models</strong></td>
+	 <td><strong>debug</strong></td>
        </tr>
        {% for wave  in gs.sigvisagsrunwave_set.all %}
 
@@ -78,6 +79,7 @@
 	   </table>
 
 	 </td>
+	 <td><a href="{% url gs_debug gswid=wave.gswid %}">debug</a></td>
        </tr>
 
        {% endfor %}

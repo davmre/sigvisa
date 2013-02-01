@@ -48,7 +48,7 @@ class ParamModel(object):
         if event in self.ev_cache:
             a= self.ev_cache[event]
         else:
-            distance = utils.geog.dist_km((event.lon, event.lat), (self.site_lon, self.site_lon))
+            distance = utils.geog.dist_km((event.lon, event.lat), (self.site_lon, self.site_lat))
             azimuth = utils.geog.azimuth((self.site_lon, self.site_lat), (event.lon, event.lat))
             a = np.array(((event.lon, event.lat, event.depth, distance, azimuth),))
             self.ev_cache[event]=a

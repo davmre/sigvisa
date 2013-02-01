@@ -1,11 +1,20 @@
 from noise.noise_model import get_noise_model
 
+
+def wiggle_model_by_name(name, **kwargs):
+    if name == "base":
+        return WiggleModel(**kwargs)
+    elif name == "stupidiid":
+        return StupidL1WiggleModel(**kwargs)
+    elif name == "plain":
+        return PlainWiggleModel(**kwargs)
+
 class WiggleModel(object):
 
     def __init__(self, tm):
         self.tm = tm
 
-    def template_cost(wave, phases, params):
+    def template_ncost(wave, phases, params):
         raise Exception("not implemented")
 
     def summary_str(self):
@@ -14,7 +23,7 @@ class WiggleModel(object):
 
 class StupidL1WiggleModel(WiggleModel):
 
-    def template_cost(self, wave, phases, params):
+    def template_ncost(self, wave, phases, params):
         return self.tm.waveform_log_likelihood_iid(wave, (phases, params))
 
     def summary_str(self):
@@ -29,10 +38,11 @@ class PlainWiggleModel(WiggleModel):
 
     """
 
-    def template_cost(self, wave, phases, params):
+    def template_ncost(self, wave, phases, params):
         generated = self.tm.generate_template_waveform((phases, params), model_waveform=wave)
         nm = get_noise_model(wave)
-        return nm.lklhood(data = (wave.data - generated.data), zero_mean=True)
+        ll = nm.lklhood(data = (wave.data - generated.data), zero_mean=True)
+        return ll
 
     def summary_str(self):
         return "plain"

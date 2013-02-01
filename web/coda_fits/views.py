@@ -76,8 +76,8 @@ def get_fit_queryset(runid="all", sta="all", chan="all", band="all", fit_quality
     return qset
 
 class FitListView(django.views.generic.ListView):
-    template_name = 'coda_fits/fits.html' 
-    context_object_name = "fit_list"  
+    template_name = 'coda_fits/fits.html'
+    context_object_name = "fit_list"
     paginate_by = 20  #and that's it !!
 
     def get_queryset(self):
@@ -130,7 +130,7 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
         wave_stime_str = datetime.fromtimestamp(wave['stime'], timezone('UTC')).strftime(time_format)
         wave_etime_str = datetime.fromtimestamp(wave['etime'], timezone('UTC')).strftime(time_format)
         nm = get_noise_model(waveform=wave)
-        
+
     except Exception as e:
         wave = Waveform()
         wave_stime_str = str(e)
@@ -216,7 +216,7 @@ def FitImageView(request, fitid):
 
     except Exception as e:
         return error_wave(e)
-    
+
     canvas=FigureCanvas(fig)
     response=django.http.HttpResponse(content_type='image/png')
     fig.tight_layout()
@@ -265,7 +265,7 @@ def fit_cost_quality(request, runid):
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     fig.suptitle("%s iter %d fit quality" % (run.run_name, run.iter))
-    
+
     axes.set_xlabel("Acost")
     axes.set_ylabel("mb")
 
@@ -286,11 +286,11 @@ def fit_cost_quality(request, runid):
             axes.scatter(b[:,0], b[:, 1], c='r', alpha=0.5)
 
     if unknown:
-        unknown_fits = run.sigvisacodafit_set.filter(human_approved=0)    
+        unknown_fits = run.sigvisacodafit_set.filter(human_approved=0)
         u = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in unknown_fits])
         if unknown_fits.count() > 0:
             axes.scatter(u[:,0], u[:, 1], c='b', alpha=0.5)
-    
+
     process_plot_args(request, axes)
 
 
@@ -299,5 +299,3 @@ def fit_cost_quality(request, runid):
     fig.tight_layout()
     canvas.print_png(response)
     return response
-
-
