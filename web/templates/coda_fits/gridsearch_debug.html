@@ -66,9 +66,13 @@
 </form>
 <table>
 <tr><td>time</td><td>error</td><td>wavell</td><td>paramll</td><td>ll</td><td>params</td><td>template</td></tr>
+
+
+<tr border=1><td valign=top>{{ gproposal.0 }}<strong>(global)</strong></td><td valign=top>{{ gproposal.1 }}</td><td valign=top>{{gproposal.3.0}}</td><td valign=top>{{gproposal.3.1}}</td><td valign=top>{{gproposal.3.2}}</td><td valign=top><table>{% for row in gproposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param|floatformat:-3}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url gs_debug_wave gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{gproposal.0}}"></td></tr>
+
 {% for proposal in proposals %}
 
-<tr><td valign=top>{{ proposal.0 }}</td><td valign=top>{{ proposal.1 }}</td><td valign=top>{{proposal.3.0}}</td><td valign=top>{{proposal.3.1}}</td><td valign=top>{{proposal.3.2}}</td><td valign=top><table>{% for row in proposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url gs_debug_wave gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{proposal.0}}"></td></tr>
+<tr><td valign=top>{{ proposal.0 }}</td><td valign=top>{{ proposal.1 }}</td><td valign=top>{{proposal.3.0}}</td><td valign=top>{{proposal.3.1}}</td><td valign=top>{{proposal.3.2}}</td><td valign=top><table>{% for row in proposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param|floatformat:-3}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url gs_debug_wave gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{proposal.0}}"></td></tr>
 {% endfor %}
 </table>
 </body>

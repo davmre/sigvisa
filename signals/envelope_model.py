@@ -48,6 +48,18 @@ class EnvelopeModel:
             self.phases = phases
 
 
+    def get_method(self, method_str):
+        f_ll = None
+        if method_str == "mode":
+            f_ll = self.log_likelihood_mode
+        elif method_str == "monte_carlo":
+            f_ll = self.log_likelihood_montecarlo
+        elif method_str == "optimize":
+            f_ll = self.log_likelihood_optimize
+        else:
+            raise Exception("unrecognized marginalization method %s" % options.method)
+        return f_ll
+
     def log_likelihood_mode(self, segment, event):
 
         total_ll = 0

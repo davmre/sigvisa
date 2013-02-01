@@ -23,7 +23,7 @@ ev = read_event(cursor, evid)
 
 ss_cond = "and site.statype='ss'" if options.ss_only else ""
 
-sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from leb_arrival iarr, leb_assoc iass, leb_origin ior, static_siteid site, static_phaseid ph where iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.arid=iass.arid and iass.orid=ior.orid and ior.evid=%d %s order by iarr.snr desc" %  (evid, ss_cond)
+sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from leb_arrival iarr, leb_assoc iass, leb_origin ior, static_siteid site, static_phaseid ph where iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.arid=iass.arid and iass.orid=ior.orid and ior.evid=%d %s order by iarr.snr desc" %  (evid, ss_cond)
 
 cursor.execute(sql_query)
 dets = cursor.fetchall()

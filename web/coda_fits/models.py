@@ -262,6 +262,7 @@ class SigvisaGridsearchRun(models.Model):
     heatmap_fname = models.CharField(max_length=255)
     class Meta:
         db_table = u'sigvisa_gridsearch_run'
+        ordering = ['gsid']
 
 class SigvisaGsrunWave(models.Model):
     gswid = models.IntegerField(primary_key=True)
@@ -274,6 +275,7 @@ class SigvisaGsrunWave(models.Model):
     hz = models.FloatField()
     class Meta:
         db_table = u'sigvisa_gsrun_wave'
+        ordering = ['gswid']
 
 class SigvisaGsrunTModel(models.Model):
     gsmid = models.IntegerField(primary_key=True)

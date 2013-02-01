@@ -20,7 +20,7 @@ from learn.extract_wiggles import create_wiggled_phase
 from signals.waveform_matching.fourier_features import FourierFeatures
 from signals.common import Waveform
 from source.event import Event
-from signals.io import fetch_waveform
+from signals.io import fetch_waveform, Segment
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -37,7 +37,9 @@ from coda_fits.views import process_plot_args, error_wave
 from signals.common import load_waveform_from_file
 from utils.geog import lonlatstr
 from wiggles.wiggle_models import wiggle_model_by_name
-from infer.gridsearch import propose_origin_times
+from infer.gridsearch import propose_origin_times, ev_loc_ll_at_optimal_time
+from signals.envelope_model import EnvelopeModel
+
 
 def gridsearch_list_view(request):
     runs = SigvisaGridsearchRun.objects.all()
@@ -139,6 +141,23 @@ def gs_heatmap_view(request, gsid):
     return response
 
 
+def get_all_segments_for_gsrun(gs):
+    segs = []
+    waves = dict()
+    hz = dict()
+    for other_wave in gs.sigvisagsrunwave_set.all():
+        sta = str(other_wave.sta)
+        wave = fetch_waveform(station=str(other_wave.sta), chan=str(other_wave.chan), stime=calendar.timegm(other_wave.stime.timetuple()), etime=calendar.timegm(other_wave.etime.timetuple()))
+        if sta not in waves:
+            waves[sta] = []
+        waves[sta].append(wave)
+        hz[sta] = other_wave.hz
+
+    for sta in waves:
+        seg = Segment(waves[sta])
+        segs.append(seg.with_filter("env;hz_%f" % hz[sta]))
+    return segs
+
 def gs_debug_view(request, gswid):
 
     gs_wave = get_object_or_404(SigvisaGsrunWave, pk=gswid)
@@ -149,7 +168,19 @@ def gs_debug_view(request, gswid):
     lat = float(request.GET.get('lat', ev_true.lat))
     depth = float(request.GET.get('depth', 0))
 
+    # propose times based on this waveform
     times = propose_origin_times(Event(lon=lon, lat=lat, depth=depth), [wave,], tm, phases)
+
+    # get the globally optimal time with regard to all waveforms
+    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases)
+    segs = get_all_segments_for_gsrun(gs_wave.gsid)
+    maxll, maxt = ev_loc_ll_at_optimal_time(
+        Event(lon=lon, lat=lat, time=-1, depth=depth, mb=ev_true.mb, natural_source=ev_true.natural_source),
+        segs,
+        em.get_method(gs_wave.gsid.likelihood_method),
+        tm, phases, return_time=True)
+    times.append(maxt)
+    print "maxt is", maxt, "over %d segments" % len(segs)
 
     errors = [ev_true.time-t for t in times]
 
@@ -168,6 +199,10 @@ def gs_debug_view(request, gswid):
 
     proposals = zip(times, errors, all_params, lls)
 
+
+    global_proposal = proposals[-1]
+    proposals = proposals[:-1]
+
     return render_to_response('coda_fits/gridsearch_debug.html', {
         'wave': gs_wave,
         'lon': lon,
@@ -175,11 +210,12 @@ def gs_debug_view(request, gswid):
         'depth': depth,
         'proposals': proposals,
         'ev_true': ev_true,
+        'gproposal': global_proposal,
         }, context_instance=RequestContext(request))
 
 def get_wave_stuff(gs_wave):
 
-    cache_key = "gs_wave_%d" % (gs_wave.gswid, )
+    cache_key = "gs_wave_%d_17" % (gs_wave.gswid, )
     r = cache.get(cache_key)
     if r is None:
 
@@ -194,9 +230,12 @@ def get_wave_stuff(gs_wave):
         wave = fetch_waveform(sta, chan, stime, etime).filter(band + ";env;hz_%f" % gs_wave.hz)
 
         tp_models = gs_wave.sigvisagsruntmodel_set.all()
-        modelids = [tpm.modelid.modelid for tpm in tp_models]
+        all_modelids = []
+        for other_wave in gs_wave.gsid.sigvisagsrunwave_set.all():
+             wave_modelids = [tpm.modelid.modelid for tpm in other_wave.sigvisagsruntmodel_set.all()]
+             all_modelids += wave_modelids
         phases = list(set([str(tpm.modelid.phase) for tpm in tp_models]))
-        tm = load_template_model(tp_models[0].modelid.template_shape, modelids=modelids)
+        tm = load_template_model(tp_models[0].modelid.template_shape, modelids=all_modelids)
         wm = wiggle_model_by_name(name=gs_wave.gsid.wiggle_model_type, tm=tm)
 
 

@@ -38,7 +38,7 @@ def propose_origin_times(ev, segments, template_model, phases):
 
 # get the likelihood of an event location, if we don't know the event time.
 # "likelihood" is a function of a segment and an event object (e.g. envelope_model.log_likelihood_optimize wrapped in a lambda)
-def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model, phases):
+def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model, phases, return_time=False):
     event_time_proposals = propose_origin_times(ev, segments, template_model, phases)
     # find the origin time that maximizes the likelihood
     maxll = np.float("-inf")
@@ -49,7 +49,11 @@ def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model, phas
         if ll > maxll:
             maxll = ll
             maxt = proposed_t
-    return maxll
+
+    if return_time:
+        return maxll, maxt
+    else:
+        return maxll
 
 
 def main():
@@ -65,7 +69,7 @@ def main():
     parser.add_option("-n", dest="n", default=20, type="int", help="detail level of the heatmap, in number of points per side")
     parser.add_option("--method", dest="method", default="monte_carlo", help="method for signal likelihood computation (monte_carlo)")
     parser.add_option("--phases", dest="phases", default="all", help="comma-separated list of phases to include in predicted templates (all)")
-    parser.add_option("--model_types", dest="model_types", default="peak_offset:constant_gaussian,amp_transfer:linear_distance,coda_decay:linear_distance", help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:linear_distance,coda_decay:linear_distance)")
+    parser.add_option("--model_types", dest="model_types", default="peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian", help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)")
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
 
     (options, args) = parser.parse_args()
@@ -111,15 +115,7 @@ def main():
     segments = load_segments(cursor, sites, stime, etime)
     segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
 
-    if options.method == "mode":
-        f_ll = em.log_likelihood_mode
-    elif options.method == "monte_carlo":
-        f_ll = em.log_likelihood_montecarlo
-    elif options.method == "optimize":
-        f_ll = em.log_likelihood_optimize
-    else:
-        raise Exception("unrecognized marginalization method %s" % options.method)
-
+    f_ll = em.get_method(options.method)
     f = lambda lon, lat: ev_loc_ll_at_optimal_time(event_at(ev_true, lon=lon, lat=lat), segments, log_likelihood=f_ll, template_model=tm, phases=phases)
 
 
