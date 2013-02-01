@@ -2,6 +2,10 @@ import numpy as np
 import numpy.ma as ma
 import cPickle
 
+import scipy.weave as weave
+from scipy.weave import converters
+import time
+
 def load_armodel_from_file(fname):
     f = open(fname, 'r')
     try:
@@ -55,6 +59,59 @@ class ARModel:
                 data[t] = s + self.em.sample()
         return data
 
+
+    def fast_AR(self, d, c, std):
+        #
+        n = len(d)
+        m = d.mask
+        d = d.data - c
+        p = np.array(self.params)
+        n_p = len(p)
+        t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+
+        code = """
+        double d_prob = 0;
+        for (int t=0; t < n; ++t) {
+            if (m(t)) { continue; }
+
+           double expected = 0;
+           for (int i=0; i < n_p; ++i) {
+               if (t > i && !m(t-i-1)) {
+                  double ne = p(i) * d(t-i-1);
+                  expected += ne;
+               }
+           }
+           double err = d(t) - expected;
+           double x = err/std;
+           double ll = (double)t1 + 0.5 * x*x;
+           d_prob -= ll;
+        }
+        return_val = d_prob;
+        """
+        ll = weave.inline(code,
+                           ['n', 'n_p', 'm', 'd', 't1', 'std', 'p'],
+                           type_converters=converters.blitz,
+                           compiler = 'gcc')
+        return ll
+
+    def slow_AR(self, d, c):
+        d_prob = 0
+        skipped = 0
+        masked =  ma.getmaskarray(d)
+        for t in range(len(d)):
+            if masked[t]:
+                continue
+
+            expected = c
+            for i in range(self.p):
+                if t > i and not masked[t-i-1]:
+                    expected += self.params[i] * (d[t-i-1] - c)
+            actual = d[t]
+            error = actual - expected
+            ell = self.em.lklhood(error)
+            d_prob += ell
+        return d_prob
+
     # likelihood in log scale
     def lklhood(self, data, zero_mean=False):
         if not isinstance(data, (list, tuple)):
@@ -63,28 +120,20 @@ class ARModel:
         if zero_mean:
             c = 0
         else:
-            mean = self.c
+            c = self.c
 
         prob = 0
         for d in data:
-            d_prob = 0
-            skipped = 0
-            masked =  ma.getmaskarray(d)
-            for t in range(len(d)):
-                if masked[t]:
-                    continue
+#            t1 = time.time()
+#            d_prob = self.slow_AR(d, c)
+#            t2 = time.time()
+            d_prob_fast = self.fast_AR(d, c, self.em.std)
+#            t3 = time.time()
 
-                expected = c
-                for i in range(self.p):
-                    if t > i and not masked[t-i-1]:
-                        expected += self.params[i] * (d[t-i-1] - c)
-                actual = d[t]
-                error = actual - expected
-                ell = self.em.lklhood(error)
-                d_prob += ell
-            # normalize the sum of probability (no dependency on p value)
-            #prob += d_prob/(len(d)-skipped)*len(d)
-            prob += d_prob
+#            print (t2-t1), d_prob, (t3-t2), d_prob_fast
+
+
+            prob += d_prob_fast
 
         return prob
 
