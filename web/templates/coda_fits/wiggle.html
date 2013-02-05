@@ -1,30 +1,45 @@
 <html>
 <head>
-<title>phase {{ phase.fpid }} wiggles -- sigvisa</title>
+<title>wiggles -- phase {{ phase.fpid }} -- sigvisa</title>
 </head>
 <body>
-<h1></h1>
-TODO for this page:
-<ul>
-<li>table headings</li>
-<li>show metadata for each wiggle model</li>
-<li>standardize x- and y-axes between plots</li>
-<li>standardize wiggle length: if we trained on only 10s worth of wiggle, then we should show 10s everywhere (or show the whole thing everywhere)</li>
-</ul>
-</ul>
+<strong>wiggles for evid {{fit.evid}} phase {{phase.phase}} at station {{fit.sta}}</strong><br/>
+run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}}
+
 <table>
 <tr>
-<td colspan=2><img src="{% url visual fitid=fit.fitid  %}" width=500 height=300></td>
+<td colspan=3 align=center>
+<strong>Real signal with template fit</strong><br/>
+<img src="{% url visual fitid=fit.fitid  %}?ymax={{env_ymax}};ymin={{env_ymin}}" width=500 height=300></td>
 </tr>
 <tr>
-<td><img src="{% url raw_wiggle fpid=phase.fpid  %}" width=500 height=300></td>
-<td><img src="{% url template_wiggle fpid=phase.fpid  %}" width=500 height=300></td>
+<td>(true wiggle, extracted from fit template)</td>
+<td><strong><center>raw wiggle:</center></strong><br/><img src="{% url raw_wiggle fpid=phase.fpid  %}?ymax={{wiggle_ymax}};ymin={{wiggle_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
+<td><strong><center>template * wiggle:</center></strong><br/><img src="{% url template_wiggle fpid=phase.fpid  %}?ymax={{env_ymax}};ymin={{env_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
 </tr>
 
 {% for wiggle in phase.sigvisawiggle_set.all %}
 <tr>
-<td><img src="{% url reconstructed_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
-<td><img src="{% url reconstructed_template_wiggle wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
+<td>
+
+<table>
+<tr><td><strong>wiggleid:</strong></td><td>{{wiggle.wiggleid}}</td></tr>
+<tr><td><strong>stime:</strong></td><td>{{wiggle.stime}}</td></tr>
+<tr><td><strong>etime:</strong></td><td>{{wiggle.etime}}</td></tr>
+<tr><td><strong>srate:</strong></td><td>{{wiggle.srate}}</td></tr>
+<tr><td><strong>timestamp:</strong></td><td>{{wiggle.timestamp}}</td></tr>
+<tr><td><strong>type:</strong></td><td>{{wiggle.type}}</td></tr>
+<tr><td><strong>logscale:</strong></td><td>{% if wiggle.log == '1' %}true{% else %}false{% endif %}</td></tr>
+<tr><td><strong>{% if wiggle.type == "fourier" %}fundamental{% else %}meta0{% endif %}:</strong></td><td>{{wiggle.meta0}}</td></tr>
+<tr><td><strong>{% if wiggle.type == "fourier" %}min_hz{% else %}meta1{% endif %}:</strong></td><td>{{wiggle.meta1}}</td></tr>
+<tr><td><strong>{% if wiggle.type == "fourier" %}max_hz{% else %}meta2{% endif %}:</strong></td><td>{{wiggle.meta2}}</td></tr>
+<tr><td><strong>{% if wiggle.type == "fourier" %}{% else %}meta3{% endif %}:</strong></td><td>{{wiggle.meta3}}</td></tr>
+<tr><td><strong>meta_str:</strong></td><td>{{wiggle.meta_str}}</td></tr>
+</table>
+
+</td>
+<td><strong><center>reconstructed wiggle:</center></strong><br/><img src="{% url reconstructed_wiggle wiggleid=wiggle.wiggleid  %}?ymax={{wiggle_ymax}};ymin={{wiggle_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
+<td><strong><center>template * reconstructed wiggle:</center></strong><br/><img src="{% url reconstructed_template_wiggle wiggleid=wiggle.wiggleid  %}?ymax={{env_ymax}};ymin={{env_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
 </tr>
 {% endfor %}
 </table>

@@ -2,13 +2,13 @@
 <html>
 <head>
 
-{% if page_obj.has_next %}
-<link rel='prev'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.previous_page_number %}" />
+{% if prev %}
+<link rel='prev'  href="{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}" />
 {% endif %}
-{% if page_obj.has_next %}
-<link rel='next'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}" />
-<link rel='prerender'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}" />
-<link rel='prefetch'  href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}" />
+{% if next %}
+<link rel='next'  href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}" />
+<link rel='prerender'  href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}" />
+<link rel='prefetch'  href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}" />
 {% endif %}
 
 
@@ -21,7 +21,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 </head>
 <body>
 
-<h1>{{ fit.sta }}: {{ fit.evid }} ({{ fit.chan }}, {{fit.band }})</h1>
+<h1>{{fit.runid.run_name}}/{{fit.runid.iter}}: evid {{ fit.evid }} at {{ fit.sta }}</h1>
 <table>
 <tr>
   <td><img id="fit" src="" width=500 height=300 onload="hideLoading()"><br \>
@@ -131,10 +131,10 @@ document.getElementById('loading').style.visibility = 'hidden';
 	<td>
 	{% if phase.wiggle_fname and phase.wiggle_fname != 'NONE' %}
 	<a href="{% url fit_phase_wiggles fpid=phase.fpid%}">{{ phase.sigvisawiggle_set.count }} parameterization{{ phase.sigvisawiggle_set.count|pluralize }}</a>
-	  {% endif %} 
+	  {% endif %}
 	{% if phase.wiggle_fname == 'NONE' %}
 	could not extract wiggle.
-	  {% endif %} 
+	  {% endif %}
 	</td>
       </tr>
       {% endfor %}
@@ -143,9 +143,9 @@ document.getElementById('loading').style.visibility = 'hidden';
 </tr>
 <tr>
   <td colspan=1 align="center">
-  
 
-    <form action="{% url rate_fit runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.number %}" method="post" id='approval_form'>
+
+    <form action="{% url rate_fit fitid=fit.fitid %}?{{filter_GET_params}}" method="post" id='approval_form'>
       {% csrf_token %}
       <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
       <label for="unknown">Unknown</label>
@@ -155,23 +155,24 @@ document.getElementById('loading').style.visibility = 'hidden';
       <label for="good">Good fit</label>
       <input type="submit" value="Submit" />
     </form>
-<p><a href="{% url delete_fit fitid=fit.fitid %}">delete fit</a></p>
+<p><a href="{% url delete_fit  fitid=fit.fitid %}">delete fit</a></p>
   </td>
 </tr>
 </table>
-<br/>
 <center>
-{% if page_obj.has_previous %}
-<a href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.previous_page_number %}">previous</a>
+<p>{% if prev %}
+<a href="{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}">previous</a>
 {% endif %}
-<span class="page-current">
-  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
-</span>
-{% if page_obj.has_next %}
-<a href="{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}">next</a>
-{% endif %}
+{% if next %}
+<a href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}">next</a>
+{% endif %}</p>
 </center>
-<img id="nextfit" src="" style="display: none">
+<hr/>
+<div><strong>Filters: </strong>
+
+(<a href="{% url fit_list runid=fit.runid.runid %}?{{filter_GET_params}}">back to list</a>)
+
+  <br/>{{ fits_filter }}</div>
 
 
 
@@ -188,15 +189,15 @@ var rbuttons = document.getElementsByName('approval');
 switch(KeyID)
 {
 
-{% if page_obj.has_previous %}
+{% if prev %}
 case 37:
-window.location = "{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.previous_page_number %}";
+window.location = "{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}";
 break;
 {% endif %}
 
-{% if page_obj.has_next %}
+{% if next %}
 case 39:
-window.location = "{% url fit_run_detail runid=filter_args.runid sta=filter_args.sta chan=filter_args.chan band=filter_args.band fit_quality=filter_args.fit_quality pageid=page_obj.next_page_number %}";
+window.location = "{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}";
 break;
 {% endif %}
 

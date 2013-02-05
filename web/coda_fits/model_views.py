@@ -29,7 +29,7 @@ import plotting.histogram as histogram
 import textwrap
 
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaTemplateParamModel
-from coda_fits.views import get_fit_queryset, process_plot_args
+from coda_fits.views import filterset_GET_string, process_plot_args, FitsFilterSet
 
 class ModelsFilterSet(FilterSet):
     fields = [
@@ -55,27 +55,28 @@ def get_all_params(fit_qset, phase, template_shape):
 
     cachekey = hashlib.sha1(str(fit_qset.count) + str(fit_qset.query) + str(phase) + str(template_shape)).hexdigest()
     print cachekey
+    print fit_qset.query
     x = cache.get(cachekey)
-    if x is None:    
+    if x is None:
         x = []
+        i = 0
         for fit in fit_qset:
             p = fit.sigvisacodafitphase_set.filter(phase=phase, template_model=template_shape)
             if len(p) != 1: continue
             else: p = p[0]
             x.append((p.param1, p.param2, p.param3, p.param4, fit.dist, fit.azi, fit.acost, p.amp_transfer, int(fit.human_approved)))
+            i += 1
+            if i % 100 == 0:
+                print i
         x = np.array(x)
 
         cache.set(cachekey, x, 60*60*24*365)
-        
+
     return x
 
 
 
-def plot_empirical_distance(request, runid, sta, chan, band, phases, fit_quality, axes, param_idx, max_acost, min_amp, template_shape):
-
-    # get the fit corresponding to the given pageid for this run
-    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
-    qset = get_fit_queryset(**filter_args)
+def plot_empirical_distance(request, qset, phases, axes, param_idx, max_acost, min_amp, template_shape, **kwargs):
 
     min_azi = float(request.GET.get("min_azi", "0"))
     max_azi = float(request.GET.get("max_azi", "360"))
@@ -87,7 +88,7 @@ def plot_empirical_distance(request, runid, sta, chan, band, phases, fit_quality
     for phase in phases:
         x[phase] = np.array([(z[4], z[param_idx]) for z in get_all_params(qset, phase, template_shape=template_shape) if z[2] > min_amp and z[6] < max_acost and z[5] > min_azi and z[5] < max_azi])
         print len(x[phase])
-        
+
     colors = ['b', 'r', 'g', 'y']
 
     xmin = np.float('-inf')
@@ -112,7 +113,7 @@ def plot_linear_model_distance(request, model_record, axes):
     var_x = np.concatenate((distances, distances[::-1]))
     var_y = np.concatenate((pred + 2*std, (pred - 2*std)[::-1]))
     axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
-    
+
 
 def plot_gp_model_distance(request, model_record, axes):
 
@@ -169,7 +170,7 @@ def plot_fit_param(request, modelid=None, plot_type="histogram", **kwargs):
                 plot_linear_model_distance(request, model_record=model, axes=axes)
             elif model.model_type[:2]=="gp":
                 plot_gp_model_distance(request, model_record=model, axes=axes)
-                
+
     else:
         param = request.GET.get("plot_param", "coda_decay")
         d['max_acost'] = float(request.GET.get("max_acost", "inf"))
@@ -180,21 +181,26 @@ def plot_fit_param(request, modelid=None, plot_type="histogram", **kwargs):
     if 'runid' in d:
         d['param_idx'] = param_names.index(param)
 
+
+        fits = SigvisaCodaFit.objects.filter(runid=int(d['runid']))
+        fits_filter = FitsFilterSet(fits, request.GET)
+
+
         if plot_type == "histogram":
-            plot_empirical_histogram(request=request, axes=axes, **d)
+            plot_empirical_histogram(request=request, qset=fits_filter.qs, axes=axes, **d)
         elif plot_type == "distance":
-            plot_empirical_distance(request=request, axes=axes, **d)
+            plot_empirical_distance(request=request, qset=fits_filter.qs, axes=axes, **d)
 
     if plot_type == "histogram":
         axes.set_xlabel(param, fontsize=8)
     elif plot_type == "distance":
         axes.set_xlabel("distance (km)", fontsize=8)
         axes.set_ylabel(param, fontsize=8)
-        
+
         default_bounds = {'coda_decay': [-0.05,0], 'amp_transfer': [-7, 10], 'peak_offset': [0,25]}
         if param in default_bounds:
             axes.set_ylim(default_bounds[param])
-            
+
     process_plot_args(request, axes)
 
     canvas=FigureCanvas(fig)
@@ -205,11 +211,9 @@ def plot_fit_param(request, modelid=None, plot_type="histogram", **kwargs):
 
 
 
-def plot_empirical_histogram(request, runid, sta, chan, band, phases, fit_quality, axes, param_idx, max_acost, min_amp, template_shape):
-    
+def plot_empirical_histogram(request, qset, phases, axes, param_idx, max_acost, min_amp, template_shape, **kwargs):
+
     # get the fit corresponding to the given pageid for this run
-    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
-    qset = get_fit_queryset(**filter_args)
 
     min_azi = float(request.GET.get("min_azi", "0"))
     max_azi = float(request.GET.get("max_azi", "360"))

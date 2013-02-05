@@ -19,7 +19,7 @@ def main():
     parser.add_option("--min_mb", dest="min_mb", default=5, type="float", help="exclude all events with mb less than this value (0)")
     parser.add_option("--max_mb", dest="max_mb", default=10, type="float", help="exclude all events with mb greater than this value (10)")
     parser.add_option("--min_snr", dest="min_snr", default=5, type="float", help="exclude all events with snr less than this value (0)")
-    parser.add_option("--max_snr", dest="max_snr", default=float(inf), type="float", help="exclude all events with snr greater than this value (10)")
+    parser.add_option("--max_snr", dest="max_snr", default=float('inf'), type="float", help="exclude all events with snr greater than this value (inf)")
     parser.add_option("--start_time", dest="start_time", default=None, type="float", help="exclude all events with time less than this value (0)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float", help="exclude all events with time greater than this value (1237680000)")
 
@@ -48,12 +48,6 @@ def main():
                 f.write('%s %d\n'% (sta, evid))
 
     print "done."
-                
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
-

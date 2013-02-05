@@ -173,6 +173,7 @@ def read_evids_detected_at_station(cursor, sta, start_time, end_time, phases = [
     else:
         phase_condition = ""
 #    ev_condition = "and l.time between %f and %f and lebo.mb between %f and %f and l.snr > 5" % (start_time, end_time, min_mb, max_mb)
+    if max_snr > 99999: max_snr = 99999 # avoid trouble with inf
     ev_condition = "and lebo.mb between %f and %f and l.snr between %f and %f" % (min_mb, max_mb, min_snr, max_snr)
 
     sql_query="SELECT lebo.evid, l.time FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s" % (phase_condition, sta, ev_condition)
@@ -186,7 +187,7 @@ def read_evids_detected_at_station(cursor, sta, start_time, end_time, phases = [
         if i % 1000 == 0:
             print ".",
             sys.stdout.flush()
-    print 
+    print
     return evids
 
 def read_detections(cursor, start_time, end_time,arrival_table="idcx_arrival", noarrays=False):

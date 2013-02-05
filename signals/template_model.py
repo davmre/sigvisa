@@ -254,12 +254,14 @@ class TemplateModel(object):
             arr_time = v[0]
             start = (arr_time - st) * srate
             start_idx = int(np.floor(start))
-            if start_idx > npts:
+            if start_idx >= npts:
                 continue
 
             offset = start - start_idx
             phase_env = self.abstract_logenv_raw(v, idx_offset = offset, srate=srate)
             end_idx = start_idx + len(phase_env)
+            if end_idx <= 0:
+                continue
 
             try:
                 early = max(0, -start_idx)

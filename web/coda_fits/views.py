@@ -7,6 +7,8 @@ from django.template import RequestContext
 from django.http import HttpResponse, HttpResponseRedirect
 from django.core.urlresolvers import reverse
 from django.core.paginator import Paginator
+from django_easyfilters import FilterSet
+from django_easyfilters.filters import NumericRangeFilter
 
 import numpy as np
 import sys
@@ -44,6 +46,11 @@ def process_plot_args(request, axes):
     if ymin != "auto" and ymax != "auto":
         axes.set_ylim(float(ymin), float(ymax))
 
+    if xmin == "auto" and xmax == "auto":
+        xmin, xmax = axes.get_xlim()
+        xlen = float(request.GET.get('len', "-1"))
+        if xlen > 0:
+            axes.set_xlim(xmin, xmin + xlen)
 
 def error_wave(exception):
     error_text = 'Error plotting waveform: \"%s\"' % str(exception)
@@ -58,51 +65,87 @@ def error_wave(exception):
     canvas.print_png(response)
     return response
 
+def filterset_GET_string(filterset):
+    """
 
-def get_fit_queryset(runid="all", sta="all", chan="all", band="all", fit_quality="all"):
-    a = dict()
-    if runid != "all":
-        a['runid'] = runid
-    if sta != "all":
-        a['sta'] = sta
-    if chan != "all":
-        a['chan'] = chan
-    if band != "all":
-        a['band'] = band
-    if fit_quality != "all":
-        a['human_approved'] = fit_quality
+    Given a django_easyfilters FilterSet object, return a dictionary
+    of field->field_value mappings (where the value could be a string
+    indicating a range), and a string containing these mappings that
+    can be used in a new GET request to recreate the FilterSet.
 
-    qset = SigvisaCodaFit.objects.filter(**a).order_by('fitid')
-    return qset
+    """
 
-class FitListView(django.views.generic.ListView):
-    template_name = 'coda_fits/fits.html'
-    context_object_name = "fit_list"
-    paginate_by = 20  #and that's it !!
 
-    def get_queryset(self):
-        return get_fit_queryset(**(self.kwargs))
+    def field_names(self):
+        field_names = []
+        for field in self.fields:
+            if isinstance(field, basestring):
+                field_names.append(field)
+            else:
+                field_names.append(field[0])
+        return field_names
 
-    def get_context_data(self, **kwargs):
-        context = super(FitListView, self).get_context_data(**kwargs)
-        context['filter_args'] = self.kwargs
-        run = SigvisaCodaFittingRun.objects.get(pk=self.kwargs['runid'])
-        context['run'] = run
-        s = Sigvisa()
-        context['queryset'] = self.get_queryset()
-        context['mean_acost'] = np.mean([fit.acost for fit in context['queryset']])
-        context['mean_time'] = np.mean([fit.elapsed for fit in context['queryset']])
-        return context
+
+    def dict_to_GET(d):
+        return ';'.join(['%s=%s' % (k, d[k]) for k in d if d[k]])
+
+    field_vals = {}
+    for field in field_names(filterset):
+        field_vals[field] = filterset.params.get(field, "")
+    filter_GET_params = dict_to_GET(field_vals)
+    return filter_GET_params, field_vals
+
+
+def fit_list_view(request, runid):
+    run = SigvisaCodaFittingRun.objects.get(pk=runid)
+    fits = SigvisaCodaFit.objects.filter(runid=runid)
+    fits_filter = FitsFilterSet(fits, request.GET)
+
+    mean_acost = np.mean([fit.acost for fit in fits_filter.qs])
+    mean_time = np.mean([fit.elapsed for fit in fits_filter.qs])
+    total_fits = fits_filter.qs.count
+
+    filter_GET_params, filter_args = filterset_GET_string(fits_filter)
+    filter_args['runid']=runid
+
+    return render_to_response("coda_fits/fits.html",
+                  {'fit_list': fits_filter.qs,
+                   'fits_filter': fits_filter,
+                   'filter_args': filter_args,
+                   'filter_GET_params': filter_GET_params,
+                   'runid': runid,
+                   'mean_acost': mean_acost,
+                   'mean_time': mean_time,
+                   'total_fits': total_fits,
+                   'run': run,
+                   }, context_instance=RequestContext(request))
+
+class FitsFilterSet(FilterSet):
+    fields = [
+        ('evid', {}, NumericRangeFilter),
+        'sta',
+        'chan',
+        'band',
+        'human_approved',
+        'optim_method',
+        ]
+
+
 
 # detail view for a particular fit
-def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
+def fit_detail(request, fitid):
 
-    # get the fit corresponding to the given pageid for this run
-    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
-    qset = get_fit_queryset(**filter_args)
-    p = Paginator(qset, 1)
-    current_fit_page = p.page(pageid)
-    fit = current_fit_page[0]
+    fit = SigvisaCodaFit.objects.get(fitid=fitid)
+
+    # use a FilterSet to determine links to next/previous fits
+    fits = SigvisaCodaFit.objects.filter(runid=fit.runid)
+    fits_filter = FitsFilterSet(fits, request.GET)
+    filter_GET_params, filter_args = filterset_GET_string(fits_filter)
+
+    next = fits_filter.qs.filter(fitid__gt = fitid)
+    next = next[0] if next else False
+    prev = fits_filter.qs.filter(fitid__lt = fitid)
+    prev = prev[0] if prev else False
 
     time_format = "%b %d %Y, %H:%M:%S"
 
@@ -158,7 +201,9 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
             'fit': fit,
             'fit_time_str': fit_time_str,
             'fit_view_options': fit_view_options,
-            'page_obj': current_fit_page,
+            'filter_GET_params': filter_GET_params,
+            'next': next,
+            'prev': prev,
             'wave': wave,
             'wave_stime_str': wave_stime_str,
             'wave_etime_str': wave_etime_str,
@@ -167,12 +212,10 @@ def fit_detail(request, runid, sta, chan, band, fit_quality, pageid):
             'loc_str': loc_str,
             'dist': dist,
             'azi': azi,
-            'filter_args': filter_args,
             'noise_model': nm,
+            'fits_filter': fits_filter,
             }, context_instance=RequestContext(request))
 
-    #
-    # SigvisaCodaFit.objects.filter(runid=self.run)
 
 
 @cache_page(60*60*24*365)
@@ -213,6 +256,7 @@ def FitImageView(request, fitid):
         synth_wave = tm.generate_template_waveform((phases, vals), wave, sample=sample)
         plot.subplot_waveform(wave.filter("smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
         plot.subplot_waveform(synth_wave, axes, color="green", linewidth=3, logscale=logscale, plot_dets=False)
+        process_plot_args(request, axes)
 
     except Exception as e:
         return error_wave(e)
@@ -223,12 +267,8 @@ def FitImageView(request, fitid):
     canvas.print_png(response)
     return response
 
-def rate_fit(request, runid, sta, chan, band, fit_quality, pageid):
-    filter_args = {'runid':runid, 'sta':sta, 'chan':chan, 'band':band, 'fit_quality': fit_quality}
-    qset = get_fit_queryset(**filter_args)
-    p = Paginator(qset, 1)
-    current_fit_page = p.page(pageid)
-    fit = current_fit_page[0]
+def rate_fit(request, fitid):
+    fit = SigvisaCodaFit.objects.get(fitid=int(fitid))
 
     try:
         rating = int(request.POST['approval'])

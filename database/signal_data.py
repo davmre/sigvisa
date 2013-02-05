@@ -183,12 +183,9 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
 
     (phases, fit_params) = template_params
 
-    ev = get_event(evid=evid)
-
-
     for (i, phase) in enumerate(phases):
 
-        transfer = fit_params[i,2] - ev.source_logamp(band, phase)
+        transfer = fit_params[i,2] - event.source_logamp(band, phase)
 
         phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3], transfer)
         cursor.execute(phase_insert_query)

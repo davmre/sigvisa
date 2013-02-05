@@ -21,14 +21,14 @@ def construct_optim_params(optim_param_str):
         if len(keys) == 0: keys = src.keys()
         for key in keys:
             dest[key] = src[key]
-        
+
     defaults = {
         "method": "bfgscoord",
         "fix_first_cols": 1,
         "normalize": True,
         'disp': False,
         "eps": 1e-4, # increment for approximate gradient evaluation
-        
+
         "bfgscoord_iters": 5,
         "bfgs_factr": 10, # used by bfgscoord and bfgs
         "xtol": 0.01, # used by simplex
@@ -41,7 +41,7 @@ def construct_optim_params(optim_param_str):
     optim_params['method'] = overrides['method'] if 'method' in overrides else defaults['method']
     copy_dict_entries(["fix_first_cols", "normalize", "disp", "eps"], src=defaults, dest=optim_params)
     method = optim_params['method']
-    
+
     # load appropriate defaults for each method
     if method == "bfgscoord":
         copy_dict_entries(["bfgscoord_iters", "bfgs_factr"], src=defaults, dest=optim_params)
@@ -62,7 +62,7 @@ def fit_template(wave, ev, tm, optim_params, init_run_name=None, init_iteration=
     Return the template parameters which best fit the given waveform.
     """
 
-    s = tm.sigvisa
+    s = Sigvisa()
     cursor = s.dbconn.cursor()
     sta = wave['sta']
     chan = wave['chan']
@@ -160,7 +160,7 @@ def main():
     parser.add_option("--template_model", dest = "template_model", default="gp_dad", type="str", help="")
     parser.add_option("--band", dest = "band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest = "chan", default="BHZ", type="str", help="")
-    
+
 
     (options, args) = parser.parse_args()
 
@@ -208,9 +208,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-

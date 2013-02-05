@@ -167,6 +167,7 @@ class SigvisaCodaFittingRun(models.Model):
     iter = models.IntegerField(null=True, blank=True)
     class Meta:
         db_table = u'sigvisa_coda_fitting_run'
+        ordering = ['run_name', 'iter']
 
     def __unicode__(self):
         return "%s_iter%04d" % (self.run_name, self.runid)
@@ -191,6 +192,7 @@ class SigvisaCodaFit(models.Model):
     human_approved = models.IntegerField(default=0)
     class Meta:
         db_table = u'sigvisa_coda_fit'
+
 
 class SigvisaCodaFitPhase(models.Model):
     fpid = models.IntegerField(primary_key=True)

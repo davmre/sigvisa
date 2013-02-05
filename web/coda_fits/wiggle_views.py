@@ -30,6 +30,22 @@ import textwrap
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle
 from coda_fits.views import process_plot_args, error_wave
 from signals.common import load_waveform_from_file
+from signals.io import *
+
+def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
+
+    # if data is a masked array, ignore the masked entries
+    try:
+        data = data.compressed()
+    except:
+        pass
+
+    min_bound = scipy.stats.scoreatpercentile(data, per = (100-coverage)/2.0)
+    max_bound = scipy.stats.scoreatpercentile(data, per = 100-(100-coverage)/2.0)
+    padding = (max_bound-min_bound) * epsilon
+
+
+    return min_bound-padding, max_bound + padding
 
 # detail view for a particular fit
 def wiggle_detail_view(request, fpid):
@@ -44,11 +60,37 @@ def wiggle_detail_view(request, fpid):
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
     run = get_object_or_404(SigvisaCodaFittingRun, pk=fit.runid.runid)
 
+    cursor = s.dbconn.cursor()
+    env_wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
+
+    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
+    wiggle_wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
+
+    env_ymin, env_ymax = bounds_without_outliers(env_wave.data)
+    wiggle_ymin, wiggle_ymax = bounds_without_outliers(wiggle_wave.data)
+
+
+    wiggle_len = float(request.GET.get('wiggle_len', '-1'))
+    if wiggle_len == -1:
+        if phase.sigvisawiggle_set.count > 0:
+            wiggle_len = np.max([(w.etime - w.stime) * 1.2 for w in phase.sigvisawiggle_set.all()])
+        else:
+            wiggle_len = wiggle_wave['len']
+
+    xmin = wiggle_wave['stime']-4
+    xmax = xmin + wiggle_len + 8
+
     return render_to_response('coda_fits/wiggle.html', {
 #        'wiggle': wiggle,
         'phase': phase,
         'fit': fit,
         'run': run,
+        'env_ymin': env_ymin,
+        'env_ymax': env_ymax,
+        'wiggle_ymin': wiggle_ymin,
+        'wiggle_ymax': wiggle_ymax,
+        'xmax': xmax,
+        'xmin': xmin,
         }, context_instance=RequestContext(request))
 
 def view_wave(request, wave, **kwargs):
@@ -59,6 +101,7 @@ def view_wave(request, wave, **kwargs):
     axes.set_xlabel("Time (s)", fontsize=8)
     plot.subplot_waveform(wave, axes, **kwargs)
     #matplotlib.rcParams.update({'font.size': 8})
+    process_plot_args(request, axes)
     canvas=FigureCanvas(fig)
     response=django.http.HttpResponse(content_type='image/png')
     fig.tight_layout()
@@ -66,8 +109,8 @@ def view_wave(request, wave, **kwargs):
     return response
 #    except Exception as e:
 #        return error_wave(e)
-    
-   
+
+
 
 def raw_wiggle_view(request, fpid):
 
@@ -79,7 +122,7 @@ def raw_wiggle_view(request, fpid):
 
     tm = load_template_model(phase.template_model, run_name=None, run_iter=0, model_type="dummy")
 
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
+    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
 
     #    try:
     wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
@@ -97,7 +140,7 @@ def template_wiggle_view(request, fpid):
 
     tm = load_template_model(phase.template_model, run_name=None, run_iter=0, model_type="dummy")
 
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
+    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
 
     #try:
 
@@ -140,7 +183,7 @@ def reconstructed_wiggle_view(request, wiggleid):
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
 
     tm = load_template_model(phase.template_model, run_name=None, run_iter=0, model_type="dummy")
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
+    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
 
     #    try:
     reconstructed_wiggle = reconstruct_wiggle_data(wiggle)
@@ -156,7 +199,7 @@ def reconstructed_template_wiggle_view(request, wiggleid):
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
 
     tm = load_template_model(phase.template_model, run_name=None, run_iter=0, model_type="dummy")
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
+    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
 
     s = Sigvisa()
 
