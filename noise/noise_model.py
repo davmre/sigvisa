@@ -293,6 +293,7 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     read.
 
     """
+
     if waveform is not None:
         sta = waveform['sta']
         chan = waveform['chan']
@@ -321,7 +322,6 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
             print "building noise models for hour %d at %s" % (noise_hour, sta)
             construct_and_save_hourly_noise_models(noise_hour, sta, chan, filter_str, srate, order)
         elif noise_mode == NOISE_MODE_IMMEDIATE:
-            # block_start and block_end are computed above
             construct_and_save_immediate_noise_models(time, sta, chan, filter_str, srate, order)
 
     armodel = load_armodel_from_file(os.path.join(model_dir, model_fname))
@@ -333,12 +333,14 @@ def block_waveform_exists(sta, chan, stime, etime):
     except MissingWaveform as e:
         return False
 
-    return model_wave['fraction_valid'] > 0.6
+    return model_wave['fraction_valid'] > 0.4
 
 
 def get_recent_safe_block(time, sta, chan, margin_seconds = 10, preferred_len_seconds = 120, min_len_seconds = 60, arrival_window_seconds=1200):
     """ Get a block of time preceding the specified time, and ending at least margin_seconds before that time, for which waveform data exists, and during which there are no recorded arrivals at the station."""
-    arrival_times = load_arrival_times(sta, time, time - arrival_window_seconds)
+
+    print "getting safe block at", sta, chan, "in", time - arrival_window_seconds, time
+    arrival_times = load_arrival_times(sta, time - arrival_window_seconds, time)
 
     block_end = time - margin_seconds
     block_start = block_end - preferred_len_seconds
@@ -362,12 +364,21 @@ def get_recent_safe_block(time, sta, chan, margin_seconds = 10, preferred_len_se
         block_start -= 10
         block_end -= 10
         bad_block = arrivals_intersect_block(block_start, block_end, arrival_times)
+
+        # if the block is otherwise fine, make sure the waveform exists
         if not bad_block:
             bad_block =  not block_waveform_exists(sta, chan, block_start, block_end)
 
+
+            #if bad_block:
+            #    print "block", block_start, block_end, "was otherwise fine but no waveform :-("
+            #else:
+            #    print "found good block!", block_start, block_end
+
+
         # if we get all the way back to before we've loaded arrivals, try again with a longer window
         if block_start < time - arrival_window_seconds:
-            block_start, block_end = get_recent_safe_block(time, sta, chan, margin_seconds = margin_seconds, preferred_len_seconds = preferred_len_seconds, min_len_seconds = min_len_seconds, arrival_window_seconds=arrival_window_seconds*2)
+            block_start, block_end = get_recent_safe_block(time-arrival_window_seconds, sta, chan, margin_seconds = margin_seconds, preferred_len_seconds = preferred_len_seconds, min_len_seconds = min_len_seconds, arrival_window_seconds=arrival_window_seconds*2)
             break
 
     return block_start, block_end
