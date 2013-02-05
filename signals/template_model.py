@@ -89,7 +89,7 @@ class TemplateModel(object):
     def high_bounds(self, phases):
         raise Exception("abstract class: method not implemented")
 
-    def __init__(self, run_name=None, run_iter=None, model_type = None, verbose=True, modelids=None):
+    def __init__(self, run_name=None, run_iter=None, model_type = None, verbose=True, sites=None, modelids=None):
         s = Sigvisa()
         cursor = s.dbconn.cursor()
 
@@ -120,7 +120,12 @@ class TemplateModel(object):
                 else:
                     raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
 
-                sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where %s and fitting_runid=%d" % (model_type_cond, runid)
+                if sites is not None:
+                    site_cond = " and (" + " or ".join(["site='%s'" % site for site in sites]) + ")"
+                else:
+                    site_cond = ""
+
+                sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where %s %s and fitting_runid=%d" % (model_type_cond, site_cond, runid)
                 cursor.execute(sql_query)
                 models = cursor.fetchall()
             else:
