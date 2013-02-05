@@ -12,7 +12,7 @@ from database.signal_data import ensure_dir_exists
 from signals.armodel.model import ARModel, ErrorModel, load_armodel_from_file
 from signals.armodel.learner import ARLearner
 
-from signals.io import fetch_waveform
+from signals.io import fetch_waveform, MissingWaveform
 from signals.common import filter_str_extract_band
 
 import hashlib
@@ -237,7 +237,7 @@ def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, o
             raise BadParamTreeException("tried to symlink %s to %s, but symlink already exists and points to %s!" % (hour_dir, minute_dir_path, current_link_target))
 
 def construct_and_save_immediate_noise_models(time, sta, chan, filter_str, srate, order):
-    block_start, block_end = get_recent_safe_block(time, sta)
+    block_start, block_end = get_recent_safe_block(time, sta, chan)
     minute_dir = construct_and_save_noise_models(block_start, block_end-block_start, sta, chan, filter_str, srate, order)
 
     immediate_dir, model_fname = model_path(sta, chan, filter_str, srate, order, anchor_time=time)
@@ -327,8 +327,17 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     armodel = load_armodel_from_file(os.path.join(model_dir, model_fname))
     return armodel
 
-def get_recent_safe_block(time, sta, margin_seconds = 10, preferred_len_seconds = 120, min_len_seconds = 60, arrival_window_seconds=1200):
-    """ Get a block of time preceding the specified time, and ending at least margin_seconds before that time, during which there are no recorded arrivals at the station."""
+def block_waveform_exists(sta, chan, stime, etime):
+    try:
+        model_wave = fetch_waveform(sta, chan, stime, etime, pad_seconds=NOISE_PAD_SECONDS)
+    except MissingWaveform as e:
+        return False
+
+    return model_wave['fraction_valid'] > 0.6
+
+
+def get_recent_safe_block(time, sta, chan, margin_seconds = 10, preferred_len_seconds = 120, min_len_seconds = 60, arrival_window_seconds=1200):
+    """ Get a block of time preceding the specified time, and ending at least margin_seconds before that time, for which waveform data exists, and during which there are no recorded arrivals at the station."""
     arrival_times = load_arrival_times(sta, time, time - arrival_window_seconds)
 
     block_end = time - margin_seconds
@@ -337,25 +346,28 @@ def get_recent_safe_block(time, sta, margin_seconds = 10, preferred_len_seconds 
     # try a full-length block
     bad_block = arrivals_intersect_block(block_start, block_end, arrival_times)
 
-    if not bad_block:
+    if not bad_block and block_waveform_exists(sta, chan, block_start, block_end):
         return block_start, block_end
 
     # if that didn't work, try a shorter block
     block_start = block_end - min_len_seconds
     bad_block = arrivals_intersect_block(block_start, block_end, arrival_times)
 
-    if not bad_block:
+    if not bad_block and block_waveform_exists(sta, chan, block_start, block_end):
         return block_start, block_end
 
     # if that didn't work, slide backwards until in time until we hit a good block
+    bad_block=True
     while bad_block:
         block_start -= 10
         block_end -= 10
         bad_block = arrivals_intersect_block(block_start, block_end, arrival_times)
+        if not bad_block:
+            bad_block =  not block_waveform_exists(sta, chan, block_start, block_end)
 
         # if we get all the way back to before we've loaded arrivals, try again with a longer window
         if block_start < time - arrival_window_seconds:
-            block_start, block_end = get_recent_safe_block(time, sta, margin_seconds = margin_seconds, preferred_len_seconds = preferred_len_seconds, min_len_seconds = min_len_seconds, arrival_window_seconds=arrival_window_seconds*2)
+            block_start, block_end = get_recent_safe_block(time, sta, chan, margin_seconds = margin_seconds, preferred_len_seconds = preferred_len_seconds, min_len_seconds = min_len_seconds, arrival_window_seconds=arrival_window_seconds*2)
             break
 
     return block_start, block_end

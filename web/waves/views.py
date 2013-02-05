@@ -51,6 +51,7 @@ def WaveImageView(request):
         plot.subplot_waveform(wave.filter(filter_str), axes, color='black', linewidth=1.5, logscale=logscale)
 
     except Exception as e:
+        raise
         error_text = 'Error plotting waveform: \"%s\"' % str(e)
         fig = Figure(figsize=(5,3), dpi=144)
         fig.patch.set_facecolor('white')
