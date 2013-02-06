@@ -1,3 +1,5 @@
+{% load dict_filter %}
+
 <html>
 <head>
 <title>gsrun {{ gs.gsid }} -- sigvisa</title>
@@ -13,13 +15,14 @@
      <table>
        <tr>
 	 <tr><td><strong>gsid: </strong></td><td>{{ gs.gsid }}</td></tr>
-	 <tr><td><strong>evid: </strong></td><td>{{ gs.evid }}</td></tr>
+	 <tr><td><strong>evid: </strong></td><td><a href="{% url event evid=gs.evid %}">{{ gs.evid }}</a></td></tr>
 	 <tr><tr><td><strong>timestamp: </strong></td><td>{{ gs.timestamp }}</td></tr>
 	 <tr><td><strong>elapsed: </strong></td><td>{{ gs.elapsed }}</td></tr>
 	 <tr><tr><td><strong>nw: </strong></td><td>{{ nw_str }}</td></tr>
 	 <tr><td><strong>se: </strong></td><td>{{ se_str }}</td></tr>
 	 <tr><td><strong>n: </strong></td><td>{{ gs.pts_per_side }}</td></tr>
 	 <tr><td><strong>method: </strong></td><td>{{ gs.likelihood_method }}</td></tr>
+	 <tr><td><strong>max_evtime_proposals: </strong></td><td>{{ gs.max_evtime_proposals }}</td></tr>
 	 <tr><td><strong>phases: </strong></td><td>{{ gs.phases }}</td></tr>
 	 <tr><td><strong>wiggle_model_type: </strong></td><td>{{ gs.wiggle_model_type }}</td></tr>
        </tr>
@@ -37,12 +40,12 @@
 	 <td><strong>wave</strong></td>
 	 <td><strong>mode</strong></td>
 	 <td><strong>models</strong></td>
-	 <td><strong>debug</strong></td>
+	 <td><strong>debug</strong> {% if wave_likelihood_tuples %}{{ overall_ll }}{% else %}<a href="{% url gsrun_detail gsid=gs.gsid %}?debug=true">details</a>{% endif %} </td>
        </tr>
        {% for wave  in gs.sigvisagsrunwave_set.all %}
 
        <tr>
-	 <td valign=top>{{ wave.sta }}</td>
+	 <td valign=top><a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a></td>
 	 <td valign=top>{{ wave.band }}</td>
 	 <td valign=top>{{ wave.chan }}</td>
 	 <td valign=top>{{ wave.hz }}</td>
@@ -79,7 +82,12 @@
 	   </table>
 
 	 </td>
-	 <td><a href="{% url gs_debug gswid=wave.gswid %}">debug</a></td>
+	 <td><a href="{% url gs_debug gswid=wave.gswid %}">debug</a>
+
+	   {% if wave_likelihood_tuples %}
+	   {{wave_likelihood_tuples|get_item:wave.gswid}}
+	   {% endif %}
+	 </td>
        </tr>
 
        {% endfor %}
@@ -89,7 +97,7 @@
 
   </td>
  </tr>
-<tr>   <td><strong>True event</strong>: {{ true_ev_str }}<br>
+<tr>   <td valign=top><strong>True event</strong>: {{ true_ev_str }}<br>
 <strong>MAP event</strong>: {{ max_ev_str }}<br>
 <strong>distance</strong>: {{ dist }}km
 </td>

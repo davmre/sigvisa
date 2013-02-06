@@ -1,0 +1,66 @@
+<html>
+<head>
+
+<title>evid {{ ev.evid }}</title>
+
+</head>
+<body>
+
+
+<table>
+<tr><td>
+
+<b>LEB origin:</b>
+<table>
+<tr><td><strong>lat</strong></td><td>{{ ev.lat }}</td></tr>
+<tr><td><strong>lon</strong></td><td>{{ ev.lon }}</td></tr>
+<tr><td><strong>depth</strong></td><td>{{ ev.depth }}</td></tr>
+<tr><td><strong>time</strong></td><td>{{ ev.time }}</td></tr>
+<tr><td><strong>orid</strong></td><td>{{ ev.orid }}</td></tr>
+<tr><td><strong>evid</strong></td><td>{{ ev.evid }}</td></tr>
+<tr><td><strong>jdate</strong></td><td>{{ ev.jdate }}</td></tr>
+<tr><td><strong>nass</strong></td><td>{{ ev.nass }}</td></tr>
+<tr><td><strong>ndef</strong></td><td>{{ ev.ndef }}</td></tr>
+<tr><td><strong>ndp</strong></td><td>{{ ev.ndp }}</td></tr>
+<tr><td><strong>grn</strong></td><td>{{ ev.grn }}</td></tr>
+<tr><td><strong>srn</strong></td><td>{{ ev.srn }}</td></tr>
+<tr><td><strong>etype</strong></td><td>{{ ev.etype }}</td></tr>
+<tr><td><strong>depdp</strong></td><td>{{ ev.depdp }}</td></tr>
+<tr><td><strong>dtype</strong></td><td>{{ ev.dtype }}</td></tr>
+<tr><td><strong>mb</strong></td><td>{{ ev.mb }}</td></tr>
+<tr><td><strong>mbid</strong></td><td>{{ ev.mbid }}</td></tr>
+<tr><td><strong>ms</strong></td><td>{{ ev.ms }}</td></tr>
+<tr><td><strong>msid</strong></td><td>{{ ev.msid }}</td></tr>
+<tr><td><strong>ml</strong></td><td>{{ ev.ml }}</td></tr>
+<tr><td><strong>mlid</strong></td><td>{{ ev.mlid }}</td></tr>
+<tr><td><strong>algorithm</strong></td><td>{{ ev.algorithm }}</td></tr>
+<tr><td><strong>auth</strong></td><td>{{ ev.auth }}</td></tr>
+<tr><td><strong>commid</strong></td><td>{{ ev.commid }}</td></tr>
+<tr><td><strong>lddate</strong></td><td>{{ ev.lddate }}</td></tr>
+</table>
+
+
+</td>
+<td>
+<img src="{% url event_context_img evid=ev.evid %}" width=700 height=700>
+</td>
+</tr>
+
+<tr><td colspan=2>
+
+<table>
+<tr><td><strong>sta</strong></td><td><strong>arr</strong></td><td><strong>phase</strong></td><td><strong>snr</strong></td><td><strong>dist</strong></td><td><strong>time</strong></td><td><strong>amp</strong></td><td><strong>true azi</strong></td><td><strong>det azi</strong></td><td><strong>slo</strong></td><td><strong>wave</strong></td></tr>
+
+{% for det in dets %}
+
+<tr><td><a href="{% url site sta=det.sta %}">{{ det.sta }}</a></td><td>{{ det.arr }}</td><td>{{ det.phase }}</td><td>{{ det.snr }}</td><td>{{ det.dist }}</td><td>{{ det.time }}</td><td>{{ det.amp }}</td><td>{{ det.true_azi }}</td><td>{{ det.det_azi }}</td><td>{{ det.slo }}</td><td><a href="{% url wave_image %}?sta={{ det.sta }};chan=BHZ;stime={{ det.time|add:-10 }};etime={{ det.time|add:300 }};filter_str=freq_0.5_5.0%3B">view wave</a></td></tr>
+
+{% endfor %}
+
+</table>
+
+</td></tr>
+</table>
+
+</body>
+</html>

@@ -3,6 +3,8 @@ from coda_fits.views import *
 from coda_fits.wiggle_views import *
 from coda_fits.model_views import *
 from coda_fits.gridsearch_views import *
+from coda_fits.event_views import *
+from coda_fits.site_views import *
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
@@ -43,4 +45,8 @@ urlpatterns = patterns('',
     url(r'^gridsearch/(?P<gsid>\d+)/delete$', delete_gsrun, name='gsrun_delete'),
     url(r'^gsdebug/(?P<gswid>\d+)/$', gs_debug_view, name='gs_debug'),
     url(r'^gsdebug/(?P<gswid>\d+)/overlay.png$', gs_debug_wave_view, name='gs_debug_wave'),
+    url(r'^event/(?P<evid>\d+)/$', event_view, name='event'),
+    url(r'^event/(?P<evid>\d+)/context.png$', event_context_img_view, name='event_context_img'),
+    url(r'^site/(?P<sta>\w+)/$', site_view, name='site'),
+    url(r'^site/(?P<sta>\w+)/context.png$', site_det_img_view, name='site_det_img'),
 )

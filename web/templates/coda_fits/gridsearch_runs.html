@@ -32,6 +32,8 @@ window.location = url;
 	<td><strong>n</strong></td>
 	<td><strong>phases</strong></td>
 	<td><strong>likelihood_method</strong></td>
+	<td><strong>proposals</strong></td>
+	<td><strong>assumed true depth?</strong></td>
 	<td><strong>wiggle_model_type</strong></td>
 	<td><strong>details</strong></td>
 	<td><strong>delete</strong></td>
@@ -39,7 +41,7 @@ window.location = url;
         {% for run in run_list %}
             <tr>
                 <td>{{ run.gsid }}</td>
-                <td>{{ run.evid }}</td>
+                <td><a href="{% url event evid=run.evid %}">{{ run.evid }}</a></td>
                 <td>{{ run.sigvisagsrunwave_set.count }}</td>
 		<td>{{ run.timestamp }}</td>
                 <td>{{ run.elapsed }}</td>
@@ -48,6 +50,8 @@ window.location = url;
                 <td>{{ run.pts_per_side }}</td>
                 <td>{{ run.phases }}</td>
                 <td>{{ run.likelihood_method }}</td>
+                <td>{{ run.max_evtime_proposals }}</td>
+                <td>{{ run.true_depth }}</td>
                 <td>{{ run.wiggle_model_type }}</td>
                 <td><a href="{% url gsrun_detail gsid=run.gsid %}">details</a></td>
                 <td><input type="button" onclick="confirm_delete({{ run.gsid }}, '{% url gsrun_delete gsid=run.gsid %}')" value="delete"/></td>

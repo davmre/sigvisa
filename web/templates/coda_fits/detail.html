@@ -29,7 +29,7 @@ document.getElementById('loading').style.visibility = 'hidden';
   <td valign=top rowspan=1>
     <b>Event</b>
     <table>
-      <tr><td>evid</td><td>{{ ev.evid|stringformat:'d' }}</td></tr>
+      <tr><td>evid</td><td><a href="{% url event evid=ev.evid|stringformat:'d' %}">{{ ev.evid|stringformat:'d' }}</a></td></tr>
       <tr><td>orid</td><td>{{ ev.orid|stringformat:'d' }}</td></tr>
       <tr><td>loc</td><td>{{ loc_str }}</td></tr>
       <tr><td>depth</td><td>{{ ev.depth|stringformat:'.1f' }}km</td></tr>
@@ -44,7 +44,7 @@ document.getElementById('loading').style.visibility = 'hidden';
   <td valign=top rowspan=1>
     <b>Waveform</b>
     <table>
-      <tr><td>sta</td><td>{{ wave.sta }}</td></tr>
+      <tr><td>sta</td><td><a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a></td></tr>
       <tr><td>npts</td><td>{{ wave.npts }}</td></tr>
       <tr><td>srate</td><td>{{ wave.srate }}Hz</td></tr>
       <tr><td>len</td><td>{{ wave.len }}s</td></tr>

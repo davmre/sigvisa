@@ -40,7 +40,7 @@
                 <td><a href="{% url fit_list runid=model.fitting_runid.runid %}?chan={{model.chan}};band={{model.band}};sta={{model.site}}">{{ model.fitting_runid.run_name }} iter {{ model.fitting_runid.iter }}</a></td>
                 <td>{{ model.template_shape }}</td>
                 <td>{{ model.param }}</td>
-                <td>{{ model.site }}</td>
+                <td><a href="{% url site sta=model.site %}">{{ model.site }}</a></td>
                 <td>{{ model.chan }}</td>
                 <td>{{ model.band }}</td>
                 <td>{{ model.phase }}</td>

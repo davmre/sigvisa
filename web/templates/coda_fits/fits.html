@@ -15,6 +15,7 @@
  <tr>
   <td rowspan=3>
    <p>{{ total_fits }} fits, average cost {{ mean_acost }}, average time {{ mean_time }}.</p>
+   <p><a href="{% url model_list %}?fitting_runid={{run.runid}}">{{ run.sigvisatemplateparammodel_set.count }} template param models trained on fits from this run</a></p>
   </td>
   <td><b>onset_seconds</b></td>
   <td>
@@ -57,18 +58,19 @@
 	<td><strong>fit timestamp</strong></td>
 	<td><strong>running time</strong></td>
 	<td><strong>acost</strong></td>
+	<td><strong>detail</strong></td>
       </tr>
         {% for fit in fit_list %}
             <tr>
-                <td>{{ fit.evid }}</td>
-                <td>{{ fit.sta }}</td>
+                <td><a href="{% url event evid=fit.evid %}">{{ fit.evid }}</a></td>
+                <td><a href="{% url site sta=fit.sta %}">{{ fit.sta }}</a></td>
                 <td>{{ fit.chan }}</td>
                 <td>{{ fit.band }}</td>
                 <td>{{ fit.stime }}</td>
                 <td>{{ fit.timestamp }}</td>
                 <td>{{ fit.elapsed }}</td>
                 <td>{{ fit.acost }}</td>
-                <td><a href="{% url fit_run_detail fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail</a></td>
+                <td><a href="{% url fit_run_detail fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url visual fitid=fit.fitid %}?smooth=8;logscale=true;saveprefs=false" width=150 height=100></a></td>
             </tr>
         {% endfor %}
     </table>

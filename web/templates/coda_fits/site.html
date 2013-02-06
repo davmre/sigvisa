@@ -1,0 +1,21 @@
+<html>
+<head>
+
+<title>{{ site.sta }} -- sigvisa</title>
+
+</head>
+<body>
+
+<img src="{% url site_det_img sta=site.sta %}" width=700 height=700>
+
+<table>
+<tr><td><strong>id</strong></td><td>{{ site.id }}</td></tr>
+<tr><td><strong>sta</strong></td><td>{{ site.sta }}</td></tr>
+<tr><td><strong>lon</strong></td><td>{{ site.lon }}</td></tr>
+<tr><td><strong>lat</strong></td><td>{{ site.lat }}</td></tr>
+<tr><td><strong>elev</strong></td><td>{{ site.elev }}</td></tr>
+<tr><td><strong>staname</strong></td><td>{{ site.staname }}</td></tr>
+<tr><td><strong>statype</strong></td><td>{{ site.statype }}</td></tr>
+</table>
+</body>
+</html>
