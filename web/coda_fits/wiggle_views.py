@@ -72,7 +72,7 @@ def wiggle_detail_view(request, fpid):
 
     wiggle_len = float(request.GET.get('wiggle_len', '-1'))
     if wiggle_len == -1:
-        if phase.sigvisawiggle_set.count > 0:
+        if phase.sigvisawiggle_set.count() > 0:
             wiggle_len = np.max([(w.etime - w.stime) * 1.2 for w in phase.sigvisawiggle_set.all()])
         else:
             wiggle_len = wiggle_wave['len']
