@@ -128,6 +128,8 @@ class FitsFilterSet(FilterSet):
         'band',
         'human_approved',
         'optim_method',
+        'dist',
+        'azi',
         ]
 
 
@@ -317,19 +319,19 @@ def fit_cost_quality(request, runid):
         good_fits = run.sigvisacodafit_set.filter(human_approved=2)
         g = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in good_fits])
         if good_fits.count() > 0:
-            axes.scatter(g[:,0], g[:, 1], c='g', alpha=0.5)
+            axes.scatter(g[:,0], g[:, 1], c='g', alpha=0.5, s=10, marker='.', edgecolors='none')
 
     if bad:
         bad_fits = run.sigvisacodafit_set.filter(human_approved=1)
         b = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in bad_fits])
         if bad_fits.count() > 0:
-            axes.scatter(b[:,0], b[:, 1], c='r', alpha=0.5)
+            axes.scatter(b[:,0], b[:, 1], c='r', alpha=0.5, s=10, marker='.', edgecolors='none')
 
     if unknown:
         unknown_fits = run.sigvisacodafit_set.filter(human_approved=0)
         u = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in unknown_fits])
         if unknown_fits.count() > 0:
-            axes.scatter(u[:,0], u[:, 1], c='b', alpha=0.5)
+            axes.scatter(u[:,0], u[:, 1], c='b', alpha=0.5, s=10, marker='.', edgecolors='none')
 
     process_plot_args(request, axes)
 

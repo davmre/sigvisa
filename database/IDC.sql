@@ -290,6 +290,8 @@ create table sigvisa_gridsearch_run (
  lon_se float(24) not null,
  lat_se float(24) not null,
  pts_per_side int not null,
+ max_evtime_proposals int not null,
+ true_depth varchar(1) not null,
  phases varchar(127) not null,
  likelihood_method varchar(63) not null,
  wiggle_model_type varchar(31) not null,

@@ -131,12 +131,16 @@ def draw_events(bmap, events, labels = None, **args):
     bmap.plot([x], [y], **args)
 
 
-    if labels is not None and labels[enum] is not None and 'ax' in args:
-      axes = args['ax']
+    if labels is not None and labels[enum] is not None:
+      axes = bmap.ax
       axes.annotate(
-        labels[enum][0],
+        labels[enum],
         xy = (x, y),
-        size=4,
+        xytext=(4, 4),
+        textcoords='offset points',
+        size=8,
+        color = 'white',
+        zorder=args['zorder'],
         arrowprops = None)
 
 def draw_events_mag(bmap, events, **args):

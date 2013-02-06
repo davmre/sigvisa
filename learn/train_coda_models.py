@@ -23,6 +23,9 @@ from optparse import OptionParser
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
 
+class NoDataException(Exception):
+    pass
+
 def learn_model(X, y, model_type, sta, target=None):
     if model_type.startswith("gp"):
         distfn = model_type[3:]
@@ -107,24 +110,29 @@ def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_ty
     fname = ".".join([evidhash, model_type])
     return os.path.join(path, fname)
 
-def get_training_data(run_name, run_iter, sta, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10):
+def get_training_data(run_name, run_iter, sta, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
     print "loading %s fit data... " % (phases),
-    fit_data = load_shape_data(cursor, chan=chan, band=band, sta=sta, runids=[runid,], phases=phases, require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp)
+    fit_data = load_shape_data(cursor, chan=chan, band=band, sta=sta, runids=[runid,], phases=phases, require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
     print str(fit_data.shape[0]) + " entries loaded"
 
-    if target=="coda_decay":
-        y = fit_data[:, FIT_CODA_DECAY]
-    elif target=="amp_transfer":
-        y = fit_data[:, FIT_AMP_TRANSFER]
-    elif target=="peak_offset":
-        y = fit_data[:, FIT_PEAK_DELAY]
-    else:
-        raise KeyError("invalid target param %s" % (target))
+    try:
+        if target=="coda_decay":
+            y = fit_data[:, FIT_CODA_DECAY]
+        elif target=="amp_transfer":
+            y = fit_data[:, FIT_AMP_TRANSFER]
+        elif target=="coda_height":
+            y = fit_data[:, FIT_CODA_HEIGHT]
+        elif target=="peak_offset":
+            y = fit_data[:, FIT_PEAK_DELAY]
+        else:
+            raise KeyError("invalid target param %s" % (target))
+    except IndexError as e:
+        raise NoDataException()
 
     X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
 
@@ -178,11 +186,14 @@ def main():
                 min_amp = options.min_amp_for_at
             else:
                 min_amp = options.min_amp
-            
+
             for phase in phases:
 
-                X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp)
-
+                try:
+                    X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp)
+                except NoDataException:
+                    print "no data for %s %s %s, skipping..."% (site, target, phase)
+                    continue
 
 
                 model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape)
@@ -192,9 +203,13 @@ def main():
                 distfn = model_type[3:]
                 model = learn_model(X, y, model_type, target=target, sta=site)
 
+                if np.isnan(model.log_likelihood()):
+                    print "error training model for %s %s %s, likelihood is nan! skipping.." % (site, target, phase)
+                    continue
+
                 model.save_trained_model(model_fname)
                 modelid = insert_model(s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll = model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp)
                 print "inserted as", modelid, "ll", model.log_likelihood()
-                
+
 if __name__ == "__main__":
     main()

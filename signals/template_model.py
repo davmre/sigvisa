@@ -295,6 +295,7 @@ class TemplateModel(object):
         if not sample:
             env = self.generate_trace_python(model_waveform, template_params) #env = s.sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
         else:
+            raise Exception("sampling is currently (somewhat) broken...")
             env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
 

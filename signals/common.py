@@ -203,7 +203,7 @@ class Waveform(object):
             rounded_ratio = int(np.round(ratio))
             if np.abs(ratio - rounded_ratio) > 0.00000001:
                 raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
-            f= lambda x : ma.masked_array(data=scipy.signal.decimate(x, rounded_ratio), mask = x.mask[::rounded_ratio])
+            f= lambda x : ma.masked_array(data=scipy.signal.decimate(x, rounded_ratio), mask = x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
             fstats['srate'] = new_srate
         elif name == "env":
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
@@ -323,6 +323,17 @@ class Segment(object):
                 filtered = self.with_filter(band)
                 old_segment[chan][band] = filtered[chan].as_obspy_trace()
         return old_segment
+
+    # return a waveform with stats corresponding to the given channel,
+    # but with no data. this is useful when computing the filtered
+    # data would take a long time.
+    def dummy_chan(self, chan_str):
+        chan = self.__chans[chan_str]
+        dummy_chan = Waveform(data = np.random.randn(100), segment_stats = self.stats, my_stats=copy.copy(chan.my_stats))
+        dummy_chan = dummy_chan.filter(self.filter_str)
+        dummy_chan.data = None
+        dummy_chan.my_stats['npts'] = chan['npts']
+        return dummy_chan
 
     def get_chans(self):
         return self.__chans.keys()

@@ -54,15 +54,17 @@ class EventHeatmap(Heatmap):
 
         self.init_bmap(axes=axes)
         self.plot_earth()
-        self.plot_density( **density_args)
+
+        if self.f is not None or not np.isnan(self.fvals).all():
+            self.plot_density( **density_args)
 
         self.plot_locations(self.event_locations, labels=self.event_labels,
-                            marker=".", ms=12, mfc="none", mec="red", mew=2, alpha=event_alpha)
+                            marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=event_alpha)
 
         if self.true_event is not None:
             (lon, lat) = self.true_event
             self.plot_locations(((lon, lat),), labels=None,
-                                marker="*", ms=26, mfc="none", mec="#44FF44", mew=2, alpha=1)
+                                marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
 
 
         sta_locations = [self.sitenames[n][0:2] for n in self.stations]

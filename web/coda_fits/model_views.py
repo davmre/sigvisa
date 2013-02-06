@@ -15,7 +15,7 @@ from database.dataset import *
 from database.signal_data import *
 from sigvisa import *
 from signals.template_models.load_by_name import load_template_model
-from learn.train_coda_models import load_model
+from learn.train_coda_models import load_model, get_training_data
 
 
 from matplotlib.figure import Figure
@@ -34,6 +34,7 @@ from coda_fits.views import filterset_GET_string, process_plot_args, FitsFilterS
 class ModelsFilterSet(FilterSet):
     fields = [
         'template_shape',
+        'fitting_runid',
         'param',
         'site',
         'chan',
@@ -50,53 +51,17 @@ def model_list_view(request):
                    'model_filter': model_filter,
                    }, context_instance=RequestContext(request))
 
-
-def get_all_params(fit_qset, phase, template_shape):
-
-    cachekey = hashlib.sha1(str(fit_qset.count) + str(fit_qset.query) + str(phase) + str(template_shape)).hexdigest()
-    print cachekey
-    print fit_qset.query
-    x = cache.get(cachekey)
-    if x is None:
-        x = []
-        i = 0
-        for fit in fit_qset:
-            p = fit.sigvisacodafitphase_set.filter(phase=phase, template_model=template_shape)
-            if len(p) != 1: continue
-            else: p = p[0]
-            x.append((p.param1, p.param2, p.param3, p.param4, fit.dist, fit.azi, fit.acost, p.amp_transfer, int(fit.human_approved)))
-            i += 1
-            if i % 100 == 0:
-                print i
-        x = np.array(x)
-
-        cache.set(cachekey, x, 60*60*24*365)
-
-    return x
-
-
-
-def plot_empirical_distance(request, qset, phases, axes, param_idx, max_acost, min_amp, template_shape, **kwargs):
-
-    min_azi = float(request.GET.get("min_azi", "0"))
-    max_azi = float(request.GET.get("max_azi", "360"))
-    min_depth = float(request.GET.get("min_depth", "0"))
-    max_depth = float(request.GET.get("max_depth", "10000"))
-
-    x = {}
-    # for each phase, get all (distance, param) pairs
-    for phase in phases:
-        x[phase] = np.array([(z[4], z[param_idx]) for z in get_all_params(qset, phase, template_shape=template_shape) if z[2] > min_amp and z[6] < max_acost and z[5] > min_azi and z[5] < max_azi])
-        print len(x[phase])
+def plot_empirical_distance(request, xy_by_phase, axes):
 
     colors = ['b', 'r', 'g', 'y']
 
     xmin = np.float('-inf')
     xmax = np.float('inf')
-    for (i, phase) in enumerate(phases):
-        axes.scatter(x[phase][:, 0], x[phase][:, 1], alpha=1 / np.log(x[phase].shape[0]), c=colors[i], s=10, marker='.', edgecolors="none")
-        xmin = max(xmin, np.min(x[phase][:, 0]))
-        xmax = min(xmax, np.max(x[phase][:, 0]))
+    for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
+        X, y = xy_by_phase[phase]
+        axes.scatter(X[:, 3], y, alpha=1 / np.log(len(y)), c=colors[i], s=10, marker='.', edgecolors="none")
+        xmin = max(xmin, np.min(X[:, 3]))
+        xmax = min(xmax, np.max(X[:, 3]))
     r = xmax-xmin
     axes.set_xlim([xmin-r/20.0, xmax+r/20.0])
 
@@ -142,26 +107,25 @@ def plot_gaussian(request, model_record, axes):
     pdf = scipy.stats.norm.pdf(x, loc=model.mean, scale=model.std)
     axes.plot(x, pdf, 'k-')
 
-def plot_fit_param(request, modelid=None, plot_type="histogram", **kwargs):
+def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     fig = Figure(figsize=(5,3), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
-    param_names = ["arr_time", "peak_offset", "coda_height", "coda_decay", "dist", "azi", "cost", "amp_transfer", "human_approved"]
 
-    d = kwargs
+    d = {}
 
     if modelid is not None:
         model = SigvisaTemplateParamModel.objects.get(modelid=modelid)
-        d['runid'] = model.fitting_runid.runid
-        d['sta'] = model.site
-        d['chan'] = model.chan
-        d['band'] = model.band
-        d['phases'] = [model.phase,]
+        runid = model.fitting_runid.runid
+        sta = model.site
+        chan = model.chan
+        band = model.band
+        phases = [model.phase,]
         param = model.param
-        d['template_shape'] = model.template_shape
-        d['min_amp'] = model.min_amp
-        d['max_acost'] = model.max_acost
-        d['fit_quality'] = "all" if model.require_human_approved!='t' else "2"
+        template_shape = model.template_shape
+        min_amp = model.min_amp
+        max_acost = model.max_acost
+        require_human_approved =  (model.require_human_approved=='t')
 
         if plot_type == "histogram":
             plot_gaussian(request, model, axes=axes)
@@ -173,23 +137,32 @@ def plot_fit_param(request, modelid=None, plot_type="histogram", **kwargs):
 
     else:
         param = request.GET.get("plot_param", "coda_decay")
-        d['max_acost'] = float(request.GET.get("max_acost", "inf"))
-        d['phases'] = request.GET.get("phases", "P").split(',')
-        d['min_amp'] = float(request.GET.get("min_amp", "-inf"))
-        d['template_shape'] = request.GET.get("shape", "paired_exp")
+        sta = request.GET.get("sta", None)
+        chan = request.GET.get("chan", None)
+        band = request.GET.get("band", None)
+        max_acost = float(request.GET.get("max_acost", "200"))
+        phases = request.GET.get("phases", "P").split(',')
+        min_amp = float(request.GET.get("min_amp", "-10"))
+        template_shape = request.GET.get("shape", "paired_exp")
+        require_human_approved = str(request.GET.get("human_approved", "0")) == "2"
 
-    if 'runid' in d:
-        d['param_idx'] = param_names.index(param)
+        azi_range = request.GET.get("azi", "0i..360i")
+        (min_azi, max_azi) = [float(x[:-1]) if x[-1]=='i' else float(x) for x in azi_range.split('..')]
+        d['min_azi'] = min_azi
+        d['max_azi'] = max_azi
 
+    if runid is not None:
+        run = SigvisaCodaFittingRun.objects.get(runid=runid)
 
-        fits = SigvisaCodaFit.objects.filter(runid=int(d['runid']))
-        fits_filter = FitsFilterSet(fits, request.GET)
-
+        xy_by_phase = {}
+        for phase in phases:
+            X, y, evids = get_training_data(run.run_name, run.iter, sta, chan, band, phases, param, require_human_approved = require_human_approved, max_acost=max_acost, min_amp=min_amp, **d)
+            xy_by_phase[phase] = (X,y)
 
         if plot_type == "histogram":
-            plot_empirical_histogram(request=request, qset=fits_filter.qs, axes=axes, **d)
+            plot_empirical_histogram(request=request, xy_by_phase=xy_by_phase, axes=axes)
         elif plot_type == "distance":
-            plot_empirical_distance(request=request, qset=fits_filter.qs, axes=axes, **d)
+            plot_empirical_distance(request=request, xy_by_phase=xy_by_phase, axes=axes)
 
     if plot_type == "histogram":
         axes.set_xlabel(param, fontsize=8)
@@ -211,25 +184,13 @@ def plot_fit_param(request, modelid=None, plot_type="histogram", **kwargs):
 
 
 
-def plot_empirical_histogram(request, qset, phases, axes, param_idx, max_acost, min_amp, template_shape, **kwargs):
+def plot_empirical_histogram(request, xy_by_phase, axes):
 
     # get the fit corresponding to the given pageid for this run
 
-    min_azi = float(request.GET.get("min_azi", "0"))
-    max_azi = float(request.GET.get("max_azi", "360"))
-
-    pstr = "p[0].param%d" % param_idx
-
-    x = {}
-    for phase in phases:
-        x[phase] = [z[param_idx] for z in get_all_params(qset, phase, template_shape=template_shape) if z[2] > min_amp and z[6] < max_acost  and z[5] > min_azi and z[5] < max_azi]
-        print "got", len(x[phase]), "params"
-
-
-    colors = ['b', 'r', 'g', 'y']
-
-    for (i, phase) in enumerate(phases):
-        histogram.plot_histogram(x[phase], axes=axes, normed=True)
+    for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
+        y = xy_by_phase[phase][1]
+        histogram.plot_histogram(y, axes=axes, normed=True)
 
 
 

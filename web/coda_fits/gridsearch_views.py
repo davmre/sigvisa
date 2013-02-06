@@ -32,7 +32,7 @@ from plotting.event_heatmap import EventHeatmap
 import textwrap
 import hashlib
 
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave
+from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaTemplateParamModel
 from coda_fits.views import process_plot_args, error_wave
 from signals.common import load_waveform_from_file
 from utils.geog import lonlatstr
@@ -71,6 +71,46 @@ def gridsearch_detail_view(request, gsid):
     maxlon, maxlat, maxll = hm.max()
     max_ev_str = lonlatstr(maxlon, maxlat)
 
+    debug = request.GET.get("debug", "false").lower().startswith('t')
+    if debug:
+        # for each segment, get the likelihoods at the MAP location and the true location, and their difference
+        wave_likelihood_tuples = {}
+
+        segs = get_all_segments_for_gsrun(gs)
+        ev_true, tm, wm, phases = get_run_stuff(gs)
+        em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases)
+        maxll, maxt = ev_loc_ll_at_optimal_time(
+                Event(lon=maxlon, lat=maxlat, time=-1, depth=ev.depth, mb=ev.mb, natural_source=ev.natural_source),
+                segs.values(),
+                em.get_method(gs.likelihood_method),
+                tm, phases, return_time=True,
+                max_proposals = gs.max_evtime_proposals)
+
+        truell, truet = ev_loc_ll_at_optimal_time(
+                Event(lon=ev.lon, lat=ev.lat, time=-1, depth=ev.depth, mb=ev.mb, natural_source=ev.natural_source),
+                segs.values(),
+                em.get_method(gs.likelihood_method),
+                tm, phases, return_time=True,
+                max_proposals = gs.max_evtime_proposals)
+
+        ev_max_opt = Event(lon=maxlon, lat=maxlat, time=maxt, depth=ev.depth, mb=ev.mb, natural_source=ev.natural_source)
+        ev_true_opt = Event(lon=ev.lon, lat=ev.lat, time=truet, depth=ev.depth, mb=ev.mb, natural_source=ev.natural_source)
+        f = em.get_method(gs.likelihood_method)
+        overall_maxll = 0
+        overall_truell = 0
+        for gs_wave in gs.sigvisagsrunwave_set.all():
+            seg = segs[gs_wave.gswid]
+            wave_maxll, maxparams = f(seg, ev_max_opt)
+            wave_truell, trueparams = f(seg, ev_true_opt)
+            logodds = wave_truell-wave_maxll
+            wave_likelihood_tuples[gs_wave.gswid] = (wave_maxll, wave_truell, logodds)
+            overall_maxll += wave_maxll
+            overall_truell += wave_truell
+        overall_logodds = overall_truell-overall_maxll
+        overall_ll = {'maxll': overall_maxll, 'truell': overall_truell, 'logodds': overall_logodds, 'maxev': (ev_max_opt.lon, ev_max_opt.lat, '%.1f' % ev_max_opt.time), 'trueev': (ev_true_opt.lon, ev_true_opt.lat, '%.1f' %  ev_true_opt.time)}
+    else:
+        overall_ll = ()
+        wave_likelihood_tuples = None
 
     return render_to_response('coda_fits/gridsearch_detail.html', {
         'gs': gs,
@@ -79,6 +119,8 @@ def gridsearch_detail_view(request, gsid):
         'max_ev_str': max_ev_str,
         'true_ev_str': true_ev_str,
         'dist': dist,
+        'wave_likelihood_tuples': wave_likelihood_tuples,
+        'overall_ll': overall_ll,
         }, context_instance=RequestContext(request))
 
 def delete_gsrun(request, gsid):
@@ -142,20 +184,20 @@ def gs_heatmap_view(request, gsid):
 
 
 def get_all_segments_for_gsrun(gs):
-    segs = []
+    segs = dict()
     waves = dict()
     hz = dict()
     for other_wave in gs.sigvisagsrunwave_set.all():
-        sta = str(other_wave.sta)
+        gswid = other_wave.gswid
         wave = fetch_waveform(station=str(other_wave.sta), chan=str(other_wave.chan), stime=calendar.timegm(other_wave.stime.timetuple()), etime=calendar.timegm(other_wave.etime.timetuple()))
-        if sta not in waves:
-            waves[sta] = []
-        waves[sta].append(wave)
-        hz[sta] = other_wave.hz
+        if gswid not in waves:
+            waves[gswid] = []
+        waves[gswid].append(wave)
+        hz[gswid] = other_wave.hz
 
-    for sta in waves:
-        seg = Segment(waves[sta])
-        segs.append(seg.with_filter("env;hz_%f" % hz[sta]))
+    for gswid in waves:
+        seg = Segment(waves[gswid])
+        segs[gswid] = seg.with_filter("env;hz_%f" % hz[gswid])
     return segs
 
 def gs_debug_view(request, gswid):
@@ -166,19 +208,19 @@ def gs_debug_view(request, gswid):
 
     lon = float(request.GET.get('lon', ev_true.lon))
     lat = float(request.GET.get('lat', ev_true.lat))
-    depth = float(request.GET.get('depth', 0))
+    depth = float(request.GET.get('depth', ev_true.depth))
 
     # propose times based on this waveform
-    times = propose_origin_times(Event(lon=lon, lat=lat, depth=depth), [wave,], tm, phases)
+    times = propose_origin_times(Event(lon=lon, lat=lat, depth=depth), [wave,], tm, phases, max_proposals=gs_wave.gsid.max_evtime_proposals)
 
     # get the globally optimal time with regard to all waveforms
     em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases)
     segs = get_all_segments_for_gsrun(gs_wave.gsid)
     maxll, maxt = ev_loc_ll_at_optimal_time(
         Event(lon=lon, lat=lat, time=-1, depth=depth, mb=ev_true.mb, natural_source=ev_true.natural_source),
-        segs,
+        segs.values(),
         em.get_method(gs_wave.gsid.likelihood_method),
-        tm, phases, return_time=True)
+        tm, phases, return_time=True, max_proposals = gs_wave.gsid.max_evtime_proposals)
     times.append(maxt)
     print "maxt is", maxt, "over %d segments" % len(segs)
 
@@ -213,13 +255,27 @@ def gs_debug_view(request, gswid):
         'gproposal': global_proposal,
         }, context_instance=RequestContext(request))
 
+
+def get_run_stuff(gs):
+    ev_true = Event(evid=gs.evid)
+    all_modelids = []
+    for wave in gs.sigvisagsrunwave_set.all():
+        wave_modelids = [tpm.modelid.modelid for tpm in wave.sigvisagsruntmodel_set.all()]
+        all_modelids += wave_modelids
+
+    shape = SigvisaTemplateParamModel.objects.get(modelid=all_modelids[0]).template_shape
+    tm = load_template_model(shape, modelids=all_modelids)
+    wm = wiggle_model_by_name(name=gs.wiggle_model_type, tm=tm)
+    phases = gs.phases.split(',')
+    return ev_true, tm, wm, phases
+
 def get_wave_stuff(gs_wave):
 
-    cache_key = "gs_wave_%d_17" % (gs_wave.gswid, )
+    cache_key = "gs_wave_%d_117" % (gs_wave.gswid, )
     r = cache.get(cache_key)
     if r is None:
 
-        ev_true = Event(evid=gs_wave.gsid.evid)
+
 
         sta = str(gs_wave.sta)
         chan = str(gs_wave.chan)
@@ -229,15 +285,7 @@ def get_wave_stuff(gs_wave):
 
         wave = fetch_waveform(sta, chan, stime, etime).filter(band + ";env;hz_%f" % gs_wave.hz)
 
-        tp_models = gs_wave.sigvisagsruntmodel_set.all()
-        all_modelids = []
-        for other_wave in gs_wave.gsid.sigvisagsrunwave_set.all():
-             wave_modelids = [tpm.modelid.modelid for tpm in other_wave.sigvisagsruntmodel_set.all()]
-             all_modelids += wave_modelids
-        phases = list(set([str(tpm.modelid.phase) for tpm in tp_models]))
-        tm = load_template_model(tp_models[0].modelid.template_shape, modelids=all_modelids)
-        wm = wiggle_model_by_name(name=gs_wave.gsid.wiggle_model_type, tm=tm)
-
+        ev_true, tm, wm, phases = get_run_stuff(gs_wave.gsid)
 
         r = (ev_true, sta, chan, band, stime, etime, wave, tm, wm, phases)
 
@@ -251,7 +299,7 @@ def shash(a):
     return hashlib.sha1(s).hexdigest()
 
 def get_wave_ev_stuff(gs_wave, ev):
-    cache_key = "gs_wave_%d_ev_%s" % (gs_wave.gswid, shash(ev))
+    cache_key = "gs_wave_%d_ev_%s_117" % (gs_wave.gswid, shash(ev))
     #r = cache.get(cache_key)
     r = None
     if r is None:

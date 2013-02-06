@@ -253,7 +253,7 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
 
     sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fit.acost<%f and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s" % (max_acost, min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond)
 
-    fname = "db_cache/%s.txt" % str(hashlib.md5(sql_query).hexdigest())
+    fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
     try:
         shape_data = np.loadtxt(fname, dtype=float)
     except:
@@ -305,13 +305,13 @@ def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band,
 
 def save_gsrun_to_db(d, segments, em, tm):
     s = Sigvisa()
-    sql_query = "insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, phases, wiggle_model_type, heatmap_fname) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :phases, :wiggle_model_type, :heatmap_fname)"
+    sql_query = "insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, phases, wiggle_model_type, heatmap_fname, max_evtime_proposals, true_depth) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :phases, :wiggle_model_type, :heatmap_fname, :max_evtime_proposals, :true_depth)"
     gsid = execute_and_return_id(s.dbconn, sql_query, "gsid", **d)
 
     for seg in segments:
         for chan in em.chans:
             for band in em.bands:
-                gswid = execute_and_return_id(s.dbconn, "insert into sigvisa_gsrun_wave (gsid, sta, chan, band, stime, etime, hz) values (%d, '%s', '%s', '%s', %f, %f, %f)" % (gsid, seg['sta'], chan, band, seg['stime'], seg['etime'], seg[chan]['srate']), 'gswid')
+                gswid = execute_and_return_id(s.dbconn, "insert into sigvisa_gsrun_wave (gsid, sta, chan, band, stime, etime, hz) values (%d, '%s', '%s', '%s', %f, %f, %f)" % (gsid, seg['sta'], chan, band, seg['stime'], seg['etime'], seg.dummy_chan(chan)['srate']), 'gswid')
                 for phase in em.phases:
                     for param in tm.models.keys():
                         modelid = tm.models[param][seg['sta']][phase][chan][band].modelid

@@ -55,6 +55,12 @@ class Heatmap(object):
             else:
                 raise RuntimeError("Heat map requires either a bounding box, or a center and a width")
 
+            if self.min_lat < -90:
+                self.min_lat = -90
+
+            if self.max_lat > 90:
+                self.max_lat = 90
+
             self.fvals = np.empty((n, n))
             self.fvals.fill(np.nan)
 
@@ -161,7 +167,6 @@ class Heatmap(object):
             bmap = self.bmap
         except:
             self.init_bmap()
-
 
         normed_locations = [self.normalize_lonlat(*location) for location in locations]
         draw_events(self.bmap, normed_locations, labels=labels, **plotargs)
