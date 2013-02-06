@@ -21,7 +21,7 @@ from signals.template_models.load_by_name import load_template_model
 
 
 def create_wiggled_phase(template_params, tm, phase, wiggle, st, npts, srate, chan, sta):
-    
+
     (phases, vals) = template_params
 
     phase_idx = phases.index(phase)
@@ -43,7 +43,7 @@ def create_wiggled_phase(template_params, tm, phase, wiggle, st, npts, srate, ch
     wiggled_phase_data += template_without_phase.data
     template_with_phase.data = wiggled_phase_data
     return template_with_phase
-    
+
 def extract_phase_wiggle(wave, template_params, tm, phase):
     (phases, vals) = template_params
 
@@ -71,7 +71,7 @@ def extract_phase_wiggle(wave, template_params, tm, phase):
 
         st = vals[phase_idx, 0]
         et = st + i/wave['srate']
-        
+
     return wiggle_data, st, et
 
 
@@ -95,7 +95,7 @@ def main():
     else:
         iteration = options.run_iter
 
-    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
+    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
     run_wiggle_dir = os.path.join(wiggle_dir, options.run_name, str(options.run_iter))
     ensure_dir_exists(run_wiggle_dir)
 
@@ -123,7 +123,7 @@ def main():
             fname = os.path.join(options.run_name, str(options.run_iter), "%d.wave" % (fpid,))
             wiggle_wave.dump_to_file(os.path.join(wiggle_dir, fname))
             print "extracted wiggle for fpid %d." % fpid
-        
+
         sql_query = "update sigvisa_coda_fit_phase set wiggle_fname='%s' where fpid=%d" % (fname, fpid,)
         cursor.execute(sql_query)
         s.dbconn.commit()
