@@ -16,8 +16,6 @@ from database.signal_data import *
 from sigvisa import *
 
 from signals.template_models.load_by_name import load_template_model
-from learn.extract_wiggles import create_wiggled_phase
-from signals.waveform_matching.fourier_features import FourierFeatures
 from signals.common import Waveform
 from source.event import Event
 from signals.io import fetch_waveform, Segment
@@ -41,6 +39,7 @@ from infer.gridsearch import propose_origin_times, ev_loc_ll_at_optimal_time
 from signals.envelope_model import EnvelopeModel
 
 
+@cache_page(60*60)
 def gridsearch_list_view(request):
     runs = SigvisaGridsearchRun.objects.all()
     #run_filter = ModelsFilterSet(models, request.GET)
@@ -51,6 +50,7 @@ def gridsearch_list_view(request):
 
 
 # detail view for a particular fit
+
 def gridsearch_detail_view(request, gsid):
 
     # get the fit corresponding to the given pageid for this run
@@ -135,6 +135,7 @@ def delete_gsrun(request, gsid):
     except Exception as e:
         return HttpResponse("<html><head></head><body>Error deleting gsrun %d: %s %s</body></html>" % (int(gsid), type(e), str(e)))
 
+@cache_page(60*60)
 def gs_heatmap_view(request, gsid):
     gs = get_object_or_404(SigvisaGridsearchRun, pk=gsid)
 
@@ -200,6 +201,7 @@ def get_all_segments_for_gsrun(gs):
         segs[gswid] = seg.with_filter("env;hz_%f" % hz[gswid])
     return segs
 
+@cache_page(60*60)
 def gs_debug_view(request, gswid):
 
     gs_wave = get_object_or_404(SigvisaGsrunWave, pk=gswid)

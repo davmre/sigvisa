@@ -96,6 +96,7 @@ def filterset_GET_string(filterset):
     return filter_GET_params, field_vals
 
 
+@cache_page(60*60)
 def fit_list_view(request, runid):
     run = SigvisaCodaFittingRun.objects.get(pk=runid)
     fits = SigvisaCodaFit.objects.filter(runid=runid)
@@ -220,7 +221,7 @@ def fit_detail(request, fitid):
 
 
 
-@cache_page(60*60*24*365)
+@cache_page(60*60)
 def FitImageView(request, fitid):
 
     fit = get_object_or_404(SigvisaCodaFit, pk=fitid)

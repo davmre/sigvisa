@@ -15,7 +15,7 @@ from database.signal_data import *
 from sigvisa import *
 
 from signals.template_models.load_by_name import load_template_model
-from learn.extract_wiggles import create_wiggled_phase
+from wiggles.extract_wiggles import create_wiggled_phase
 from signals.waveform_matching.fourier_features import FourierFeatures
 from signals.common import Waveform
 
@@ -153,7 +153,7 @@ def template_wiggle_view(request, fpid):
 
     st = calendar.timegm(fit.stime.timetuple())
     et = calendar.timegm(fit.etime.timetuple())
-    wave = create_wiggled_phase((phases, vals), tm, phase.phase, wave.data, st, npts=((et-st) * wave['srate']), srate = wave['srate'], chan=str(fit.chan), sta=str(fit.sta))
+    wave = create_wiggled_phase((phases, vals), tm, phase.phase, wiggle=wave.data, wiggle_stime=phase.wiggle_stime, st=st, npts=((et-st) * wave['srate']), srate = wave['srate'], chan=str(fit.chan), sta=str(fit.sta))
     return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)
     #except Exception as e:
     #    return error_wave(e)
@@ -213,7 +213,7 @@ def reconstructed_template_wiggle_view(request, wiggleid):
 
     st = calendar.timegm(fit.stime.timetuple())
     et = calendar.timegm(fit.etime.timetuple())
-    wave = create_wiggled_phase((phases, vals), tm, phase.phase, reconstructed_wiggle_data, st, npts=((et-st) * wiggle.srate), srate = wiggle.srate, chan=str(fit.chan), sta=str(fit.sta))
+    wave = create_wiggled_phase((phases, vals), tm, phase.phase, wiggle=reconstructed_wiggle_data, wiggle_stime=phase.wiggle_stime, st=st, npts=((et-st) * wiggle.srate), srate = wiggle.srate, chan=str(fit.chan), sta=str(fit.sta))
     return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)
 #    except Exception as e:
 #        return error_wave(e)

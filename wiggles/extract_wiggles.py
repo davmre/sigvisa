@@ -1,4 +1,4 @@
-import os, errno, sys, time, traceback
+import os, errno, sys, time, traceback, pdb
 import numpy as np
 from scipy import stats
 
@@ -20,7 +20,7 @@ from signals.template_models.load_by_name import load_template_model
 
 
 
-def create_wiggled_phase(template_params, tm, phase, wiggle, st, npts, srate, chan, sta):
+def create_wiggled_phase(template_params, tm, phase, wiggle, wiggle_stime, st, npts, srate, chan, sta):
 
     (phases, vals) = template_params
 
@@ -32,7 +32,7 @@ def create_wiggled_phase(template_params, tm, phase, wiggle, st, npts, srate, ch
     template_with_phase = tm.generate_template_waveform((phases, vals), wave, sample=False)
     template_without_phase = tm.generate_template_waveform((other_phases, other_vals), wave, sample=False)
 
-    start_idx = int((vals[phase_idx, 0] - wave['stime']) * wave['srate']) + 1 # plus one to avoid div-by-zero
+    start_idx = int((vals[phase_idx, 0] - wave['stime']) * wave['srate'])
     peak_idx = int(start_idx + ( vals[phase_idx, 1] * wave['srate'])) - 1
 
 
@@ -54,8 +54,15 @@ def extract_phase_wiggle(wave, template_params, tm, phase):
     template_with_phase = tm.generate_template_waveform((phases, vals), wave, sample=False)
     template_without_phase = tm.generate_template_waveform((other_phases, other_vals), wave, sample=False)
 
-    start_idx = int((vals[phase_idx, 0] - wave['stime']) * wave['srate']) + 1 # plus one to avoid div-by-zero
-    peak_idx = int(start_idx + ( vals[phase_idx, 1] * wave['srate'])) - 1
+
+
+    # ignore the first half-second of arrival since the template is so
+    # small that the wiggles are basically meaningless
+    skip_initial_s = 0.5
+    start_idx = int(np.floor((vals[phase_idx, 0] + skip_initial_s - wave['stime']) * wave['srate']))
+    wiggle_stime = wave['stime'] + float(start_idx)/wave['srate'] # this will be close to 0.5s after the wave stime, but not exactly, depending on the sampling rate.
+
+    peak_idx = max(start_idx, int(start_idx + ( ( vals[phase_idx, 1] - skip_initial_s ) * wave['srate'])))
 
     def wiggle_well_defined(with_phase, without_phase, idx, threshold=2):
         return np.log(with_phase.data[idx]) - np.log(without_phase.data[idx]) > threshold
@@ -69,7 +76,7 @@ def extract_phase_wiggle(wave, template_params, tm, phase):
             i += 1
         wiggle_data = (wave.data[start_idx:i] - template_without_phase.data[start_idx:i]) / (template_with_phase.data[start_idx:i] - template_without_phase.data[start_idx:i])
 
-        st = vals[phase_idx, 0]
+        st = wiggle_stime
         et = st + i/wave['srate']
 
     return wiggle_data, st, et
@@ -100,7 +107,7 @@ def main():
     ensure_dir_exists(run_wiggle_dir)
 
     runid = get_fitting_runid(cursor, run_name, iteration, create_if_new=False)
-    sql_query = "select fp.fpid, fp.phase, f.fitid, fp.template_model from sigvisa_coda_fit_phase fp, sigvisa_coda_fit f where f.runid=%d and fp.fitid=f.fitid and fp.wiggle_fname IS NULL" % (runid, )
+    sql_query = "select fp.fpid, fp.phase, f.fitid, fp.template_model from sigvisa_coda_fit_phase fp, sigvisa_coda_fit f where f.runid=%d and fp.fitid=f.fitid and fp.wiggle_stime IS NULL" % (runid, )
     cursor.execute(sql_query)
     phases = cursor.fetchall()
     for (fpid, phase, fitid, template_shape) in phases:
@@ -118,15 +125,25 @@ def main():
         if len(wiggle) < wave['srate']:
             print "evid %d phase %s at %s (%s, %s) is not prominent enough to extract a wiggle, skipping..." % (evid, phase, sta, chan, band)
             fname = "NONE"
+            st = -1
         else:
             wiggle_wave = Waveform(data=wiggle, srate=wave['srate'], stime=st, sta=sta, chan=chan, evid=evid)
             fname = os.path.join(options.run_name, str(options.run_iter), "%d.wave" % (fpid,))
             wiggle_wave.dump_to_file(os.path.join(wiggle_dir, fname))
             print "extracted wiggle for fpid %d." % fpid
 
-        sql_query = "update sigvisa_coda_fit_phase set wiggle_fname='%s' where fpid=%d" % (fname, fpid,)
+        sql_query = "update sigvisa_coda_fit_phase set wiggle_fname='%s', wiggle_stime=%f where fpid=%d" % (fname, st, fpid,)
         cursor.execute(sql_query)
         s.dbconn.commit()
 
 if __name__ == "__main__":
-    main()
+
+    try:
+        main()
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        print e
+        type, value, tb = sys.exc_info()
+        traceback.print_exc()
+        pdb.post_mortem(tb)

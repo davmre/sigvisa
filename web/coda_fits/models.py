@@ -204,6 +204,7 @@ class SigvisaCodaFitPhase(models.Model):
     param3 = models.FloatField(null=True, blank=True)
     param4 = models.FloatField(null=True, blank=True)
     amp_transfer = models.FloatField(null=True, blank=True)
+    wiggle_stime = models.FloatField(null=True, blank=True)
     wiggle_fname = models.CharField(max_length=255, blank=True)
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'

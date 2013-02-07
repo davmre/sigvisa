@@ -8,10 +8,10 @@
 
 <table>
  <tr>
-  <td>
+  <td rowspan=2>
    <img src="{% url gs_heatmap gsid=gs.gsid %}?colorbar=true;smooth=true" width=600 height=600>
   </td>
-   <td valign=top rowspan=2>
+   <td valign=top>
      <table>
        <tr>
 	 <tr><td><strong>gsid: </strong></td><td>{{ gs.gsid }}</td></tr>
@@ -28,9 +28,18 @@
        </tr>
      </table>
    </td>
-   <td rowspan=2 valign=top>
+ </tr>
+<tr>
+ <td valign=center><strong>True event</strong>: {{ true_ev_str }}<br>
+<strong>MAP event</strong>: {{ max_ev_str }}<br>
+<strong>distance</strong>: {{ dist }}km
+</td>
+</tr>
 
-     <table>
+<tr>
+<td colspan=2 valign=top>
+
+     <table border=1>
 
        <tr>
 	 <td><strong>sta</strong></td>
@@ -38,9 +47,9 @@
 	 <td><strong>chan</strong></td>
 	 <td><strong>hz</strong></td>
 	 <td><strong>wave</strong></td>
-	 <td><strong>mode</strong></td>
+<!--	 <td><strong>mode</strong></td> -->
 	 <td><strong>models</strong></td>
-	 <td><strong>debug</strong> {% if wave_likelihood_tuples %}{{ overall_ll }}{% else %}<a href="{% url gsrun_detail gsid=gs.gsid %}?debug=true">details</a>{% endif %} </td>
+	 <td><strong>debug</strong> {% if wave_likelihood_tuples %}{{ overall_ll }}{% else %}<a href="{% url gsrun_detail gsid=gs.gsid %}?debug=true">compute logodds</a>{% endif %} </td>
        </tr>
        {% for wave  in gs.sigvisagsrunwave_set.all %}
 
@@ -50,7 +59,7 @@
 	 <td valign=top>{{ wave.chan }}</td>
 	 <td valign=top>{{ wave.hz }}</td>
 	 <td valign=top><a href="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}}"><img src="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}};ratio=2;dpi=30" width=150 height=75></a></td>
-	 <td valign=top><a href=""><img src="" width=150 height=75></a></td>
+<!--	 <td valign=top><a href=""><img src="" width=150 height=75></a></td> -->
 	 <td valign=top>
 
 	   <table>
@@ -95,11 +104,6 @@
      </table>
 
 
-  </td>
- </tr>
-<tr>   <td valign=top><strong>True event</strong>: {{ true_ev_str }}<br>
-<strong>MAP event</strong>: {{ max_ev_str }}<br>
-<strong>distance</strong>: {{ dist }}km
 </td>
 </tr>
 </table>
