@@ -86,7 +86,7 @@ def minimize(f, x0, optim_params, bounds=None):
     eps = optim_params['eps']
     disp = optim_params['disp']
     normalize = optim_params['normalize']
-    
+
     if normalize:
         if bounds is not None:
             low_bounds, high_bounds = zip(*bounds)
@@ -105,7 +105,7 @@ def minimize(f, x0, optim_params, bounds=None):
         success=False
         x1 = x0
         while iters < optim_params['bfgscoord_iters']:
-            x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f1, x1, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds)
+            x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f1, x1, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp)
             success = (d['warnflag'] == 0)
             v1 = best_cost
             x2 = coord_steps(f1, x1, eps=eps, bounds=bounds)
@@ -115,7 +115,7 @@ def minimize(f, x0, optim_params, bounds=None):
                 break
             x1 = x2
             iters += 1
-            
+
     elif method=="bfgs":
         x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(f1, x0, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp)
     elif method=="tnc":
@@ -149,7 +149,7 @@ def scale_unnormalize(x, low_bounds, high_bounds):
 
 
 def minimize_matrix(f, start, optim_params, low_bounds=None, high_bounds=None, **other_args):
-    
+
     ffc = optim_params['fix_first_cols']
     if ffc > 0:
         n = ffc
@@ -180,4 +180,3 @@ def minimize_matrix(f, start, optim_params, low_bounds=None, high_bounds=None, *
 
     result_vector, cost = minimize(f_to_minimize, start, optim_params=optim_params,bounds=bounds)
     return restore_matrix_form(result_vector), cost
-

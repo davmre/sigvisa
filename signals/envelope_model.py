@@ -2,9 +2,11 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
 
+from database.signal_data import filter_and_sort_template_params
 from database.dataset import *
 from database import db
 
+from learn.optimize import minimize_matrix
 
 from optparse import OptionParser
 
@@ -47,18 +49,32 @@ class EnvelopeModel:
         else:
             self.phases = phases
 
-
-    def get_method(self, method_str):
+    def get_method(self, method_str, segment=True):
         f_ll = None
         if method_str == "mode":
-            f_ll = self.log_likelihood_mode
+            f_ll = self.log_likelihood_mode if segment else self.wave_log_likelihood_mode
         elif method_str == "monte_carlo":
-            f_ll = self.log_likelihood_montecarlo
+            f_ll = self.log_likelihood_montecarlo if segment else self.wave_log_likelihood_montecarlo
         elif method_str == "optimize":
-            f_ll = self.log_likelihood_optimize
+            f_ll = self.log_likelihood_optimize if segment else self.wave_log_likelihood_optimize
         else:
             raise Exception("unrecognized marginalization method %s" % options.method)
         return f_ll
+
+    def wave_log_likelihood_mode(self, wave, event):
+
+        sta = wave['sta']
+        chan = wave['chan']
+        band = wave['band']
+
+        # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
+        f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+
+        # just use the mode parameters
+        params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
+        ll = f(params)
+
+        return ll, params
 
     def log_likelihood_mode(self, segment, event):
 
@@ -69,16 +85,42 @@ class EnvelopeModel:
         for chan in self.chans:
             for band in self.bands:
                 wave = segment.with_filter(band)[chan]
-
-                f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
-
-                #just use the mean parameters
-                params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
-                ll = f(params)
+                ll, params = self.wave_log_likelihood_mode(wave, event)
                 all_params[chan][band] = params
                 total_ll += ll
 
         return total_ll, all_params
+
+    def wave_log_likelihood_optimize(self, wave, event, use_leb_phases=False, optim_params = None):
+
+        if optim_params is None:
+            optim_params = construct_optim_params("")
+
+        sta = wave['sta']
+        chan = wave['chan']
+        band = wave['band']
+
+        if use_leb_phases:
+            (phases, start_param_vals) = self.template_model.heuristic_starting_params(wave)
+            (phases, start_param_vals) = filter_and_sort_template_params(phases, start_param_vals, Sigvisa().phases)
+        else:
+            phases = self.phases
+            start_param_vals = self.template_model.predictTemplate(event, sta, chan, band, phases=phases)
+
+        # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
+        f = lambda params: -self.wiggle_model.template_ncost(wave, phases, params) - self.template_model.log_likelihood((phases, params), event, sta, chan, band)
+
+        low_bounds = None
+        high_bounds = None
+        if optim_params['method'] != "simplex":
+            atimes = start_param_vals[:, 0]
+            low_bounds = self.template_model.low_bounds(phases, default_atimes=atimes)
+            high_bounds = self.template_model.high_bounds(phases, default_atimes=atimes)
+
+        params, nll = minimize_matrix(f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, optim_params=optim_params)
+
+
+        return nll, (phases, params)
 
     def log_likelihood_optimize(self, segment, event):
 
@@ -89,74 +131,50 @@ class EnvelopeModel:
         for chan in self.chans:
             for band in self.bands:
                 wave = segment.with_filter(band)[chan]
-
-                f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
-
-                #optimize over parameters
-                params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
-
-                sf = lambda flat_params : -1 * f(np.reshape(flat_params, (len(self.phases), -1)))
-                params = scipy.optimize.fmin(sf, params.flatten(), maxfun=30)
-                ll = f(params)
+                ll, params = self.wave_log_likelihood_optimize(wave, event)
                 all_params[chan][band] = params
-                print "found best value", ll
-
                 total_ll += ll
 
         return total_ll, all_params
 
-    def log_likelihood_montecarlo(self, segment, event, n=50):
+
+    def wave_log_likelihood_montecarlo(self, wave, event, n=50):
+
+
+        sta = wave['sta']
+        chan = wave['chan']
+        band = wave['band']
+
+        # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
+        f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+
+        sum_ll = np.float("-inf")
+
+        samples = []
+
+        for i in range(n):
+            params = self.template_model.sample(event, sta, chan, band, self.phases)
+            ll = f(params)
+            samples.append((ll, params))
+            sum_ll = np.logaddexp(sum_ll, ll) if not (ll < 1e-300) else sum_ll
+            assert (not np.isnan(sum_ll))
+
+        ll = sum_ll - np.log(n)
+
+        return ll, samples
+
+
+    def log_likelihood_montecarlo(self, segment, event):
 
         total_ll = 0
-        all_params = NestedDict()
+        all_samples = NestedDict()
         sta = segment['sta']
 
         for chan in self.chans:
             for band in self.bands:
                 wave = segment.with_filter(band)[chan]
-
-                f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
-
-                sum_ll = np.float("-inf")
-
-                best_params = None
-                best_param_ll = np.float("-inf")
-
-                for i in range(n):
-                    params = self.template_model.sample(event, sta, chan, band, self.phases)
-                    ll = f(params)
-                    sum_ll = np.logaddexp(sum_ll, ll) if not (ll < 1e-300) else sum_ll
-
-                    if ll > best_param_ll:
-                        best_params = params
-                        best_param_ll = ll
-
-                    if np.isnan(sum_ll):
-                        print "sum_ll is nan!!"
-                        import pdb
-                        pdb.set_trace()
-
-                all_params[chan][band] = best_params
-
-                ll = sum_ll - np.log(n)
-                print "got ll", ll
+                ll, samples = self.wave_log_likelihood_montecarlo(wave, event)
+                all_samples[chan][band] = samples
                 total_ll += ll
 
-        return total_ll, all_params
-
-    """
-    def plot_predicted_signal(self, s, event, pp, band='narrow_envelope_2.00_3.00', chan='BHZ'):
-
-        tr = s[chan][band]
-        siteid = tr.stats.siteid
-
-        ll, pdict  = self.log_likelihood(s, event, pp=pp, marginalize_method="mode")
-        params = pdict[chan][band]
-        if params is not None and not isinstance(params, NestedDict):
-            gen_tr = get_template(self.sigmodel, tr, [1, 5], params)
-            fig = plot.plot_trace(gen_tr, title="siteid %d ll %f \n p_arr %f p_height %f decay %f" % (siteid, ll, params[0, ARR_TIME_PARAM], params[0, CODA_HEIGHT_PARAM], params[0, CODA_DECAY_PARAM]))
-            pp.savefig()
-            plt.close(fig)
-
-
-            """
+        return total_ll, all_samples

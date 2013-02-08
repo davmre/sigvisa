@@ -60,7 +60,7 @@ def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model, phas
     maxt = 0
     f = lambda t: np.sum([log_likelihood(s, event_at(ev, t=t))[0] for s in segments])
     for proposed_t in event_time_proposals:
-        ll = f(proposed_t)
+        ll, params = f(proposed_t)
         if ll > maxll:
             maxll = ll
             maxt = proposed_t

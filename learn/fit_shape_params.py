@@ -14,6 +14,8 @@ from optparse import OptionParser
 from sigvisa import Sigvisa
 from signals.io import *
 from learn.optimize import minimize_matrix
+from wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
+from signals.envelope_model import EnvelopeModel
 
 def construct_optim_params(optim_param_str):
 
@@ -57,67 +59,11 @@ def construct_optim_params(optim_param_str):
     copy_dict_entries([], src=overrides, dest=optim_params)
     return optim_params
 
-def fit_template(wave, ev, tm, optim_params, init_run_name=None, init_iteration=None, iid=False, hz=None):
-    """
-    Return the template parameters which best fit the given waveform.
-    """
-
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-    sta = wave['sta']
-    chan = wave['chan']
-    band = wave['band']
-
-    print "fitting template for", sta, chan, band
-
-    best_params = None
-
-    # initialize the search using the outcome of a previous run
-    if init_run_name is not None:
-        start_param_vals, phaseids_loaded, fit_cost = load_template_params(cursor, ev.evid, sta, chan, band, run_name=init_run_name, iteration=init_iteration)
-        phases = [s.phasenames[phaseid-1] for phaseid in phaseids_loaded]
-
-        arriving_phases = s.arriving_phases(ev, wave['sta'])
-        assert(phases == arriving_phases)
-
-    # or if this is the first run, initialize heuristically
-    else:
-        print "getting heuristic start params..."
-        (phases, start_param_vals) = tm.heuristic_starting_params(wave)
-        (phases, start_param_vals) = filter_and_sort_template_params(phases, start_param_vals, s.phases)
-        print "done"
-
-    if hz is not None:
-        wave_to_fit = wave.filter("hz_%.1f" % hz)
-    else:
-        wave_to_fit = wave
-
-
-    if iid:
-        wave_to_fit = wave_to_fit.filter("smooth")
-        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood_iid(wave_to_fit, (phases, vals))
-    else:
-        f = lambda vals: -tm.log_likelihood((phases, vals), ev, sta, chan, band) - tm.waveform_log_likelihood(wave_to_fit, (phases, vals))
-
-    low_bounds = None
-    high_bounds = None
-    if optim_params['method'] != "simplex":
-        atimes = start_param_vals[:, 0]
-        low_bounds = tm.low_bounds(phases, default_atimes=atimes)
-        high_bounds = tm.high_bounds(phases, default_atimes=atimes)
-
-
-    print "minimizing matrix", start_param_vals
-    best_param_vals, best_cost = minimize_matrix(f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, optim_params=optim_params)
-    print "done", best_param_vals, best_cost
-
-    range = np.log(np.max(wave_to_fit.data)) - np.log(np.min(wave_to_fit.data))
-    acost = best_cost / (range * wave_to_fit['npts']) * 1000
 
 
     return (phases, best_param_vals), acost
 
-def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, plot=False, optim_params=None, iid=False, fit_hz=5):
+def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, optim_params=None, fit_hz=5):
     """
     Find the best-fitting template parameters for each band/channel of
     a particular event at a particular station. Store the template
@@ -129,20 +75,22 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
 
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
 
+    wm = PlainWiggleModel(tm)
+    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
+
     # DO THE FITTING
     method = optim_params['method']
-    if method == "load":
-        fit_params, fit_cost, fitid = load_template_params(cursor, event.evid, chan, band, init_run_name, siteid)
-        if fit_params is None:
-            raise Exception("no params in database for evid %d siteid %d runid %d chan %s band %s, skipping" % (evid, siteid, init_run_name, chan, band))
-    else:
-        st = time.time()
-        fit_params, acost = fit_template(wave, ev=event, tm=tm, optim_params=optim_params, iid=iid, init_run_name=init_run_name, init_iteration=init_iteration, hz=fit_hz)
-        et = time.time()
-        fitid = store_template_params(wave, fit_params, optim_param_str=repr(optim_params)[1:-1], iid=iid, acost=acost, run_name=output_run_name, iteration=output_iteration, elapsed=et-st, hz=fit_hz)
-        s.dbconn.commit()
-    return fitid
+    st = time.time()
 
+    if fit_hz != wave['srate']:
+        wave = wave.filter('hz_%.2f' % fit_hz)
+
+    ll, fit_params = em.wave_log_likelihood_optimize(wave, event, use_leb_phases=True, optim_params=optim_params)
+
+    et = time.time()
+    fitid = store_template_params(wave, fit_params, optim_param_str=repr(optim_params)[1:-1], iid=False, acost=ll, run_name=output_run_name, iteration=output_iteration, elapsed=et-st, hz=fit_hz)
+    s.dbconn.commit()
+    return fitid
 
 def main():
     parser = OptionParser()
@@ -155,7 +103,6 @@ def main():
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
     parser.add_option("--init_run_name", dest="init_run_name", default=None, type="str", help="initialize template fitting with results from this run name")
     parser.add_option("--init_run_iteration", dest="init_run_iteration", default=None, type="int", help="initialize template fitting with results from this run iteration (default: most recent)")
-    parser.add_option("-p", "--plot", dest="plot", default=False, action="store_true", help="save plots")
     parser.add_option("--template_shape", dest = "template_shape", default="paired_exp", type="str", help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest = "template_model", default="gp_dad", type="str", help="")
     parser.add_option("--band", dest = "band", default="freq_2.0_3.0", type="str", help="")
@@ -196,15 +143,24 @@ def main():
         raise Exception("Must specify event id (evid) or origin id (orid) to fit.")
 
     try:
-        fitid = fit_event_wave(event=ev, sta=options.sta, band=options.band, chan=options.chan, tm = tm, output_run_name=options.run_name, output_iteration=options.run_iteration, init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, plot=options.plot, optim_params=construct_optim_params(options.optim_params), iid=iid)
+        fitid = fit_event_wave(event=ev, sta=options.sta, band=options.band, chan=options.chan, tm = tm, output_run_name=options.run_name, output_iteration=options.run_iteration, init_run_name=options.init_run_name, init_iteration=options.init_run_iteration,  optim_params=construct_optim_params(options.optim_params))
     except KeyboardInterrupt:
         s.dbconn.commit()
         raise
     except:
         s.dbconn.commit()
         print traceback.format_exc()
-
+        raise
     print "fit id %d completed successfully." % fitid
 
 if __name__ == "__main__":
-    main()
+
+    try:
+        main()
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        print e
+        type, value, tb = sys.exc_info()
+        traceback.print_exc()
+        import pdb; pdb.post_mortem(tb)

@@ -18,19 +18,19 @@ import sys, subprocess, multiprocessing, shlex, os, shutil, re
 
 def run_fit_and_rename_output(args):
     """
-    
+
     Runs the provided fitting command, and blocks until it
     completes. Saves the output to a temporary file, and upon
     completion moves it to a new directory according to whether the
     fitting run completed successfully.
-    
+
     """
     cmd, runid = args
 
     paramhash = hashlib.sha1(str(cmd)).hexdigest()[:8]
 
     print "about to run", cmd
-    
+
     base_output = os.path.join(os.getenv("SIGVISA_HOME"), "logs", "fitting")
     tmp_output_dir = os.path.join(base_output, "temp")
     tmp_output_file = os.path.join(tmp_output_dir, "run%d_%s.log" % (runid, paramhash))
@@ -121,7 +121,7 @@ def main():
             init_str = "--init_run_name=%s --init_run_iteration=%d" % (init_run_name, init_run_iteration)
             """
         init_str = ""
-        
+
     runid = get_fitting_runid(cursor, run_name, iteration)
 
     print "hello", runid
@@ -130,7 +130,7 @@ def main():
     with open(options.evidfile, 'r') as f:
         for line in f:
             (sta, evid) = [i.strip() for i in line.split(' ')]
-                        
+
             cmd_str = "/vdec/software/site/usr/bin/python2.6 -m learn.fit_shape_params -e %d -s %s %s --template_shape=%s --template_model=%s --run_name=%s --run_iteration=%d %s %s" % (int(evid), sta, "-w %s" % options.wiggles if options.wiggles else "", options.template_shape, options.template_model, run_name, iteration, init_str, "--optim_params=\"%s\" " % options.optim_params if options.optim_params is not None else "")
 
 #            run_fit_and_rename_output((cmd_str, runid))
@@ -138,18 +138,11 @@ def main():
             cmds.append((cmd_str, runid))
 #            print cmd_str
 
-    
     count = multiprocessing.cpu_count()
     print "starting thread pool with %d concurrent processes..." % count
     pool = multiprocessing.Pool(processes=count)
     r = pool.map_async(run_fit_and_rename_output, cmds)
     r.wait()
-    
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
