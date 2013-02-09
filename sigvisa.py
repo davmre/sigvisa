@@ -59,7 +59,7 @@ class Sigvisa(object):
 #        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
         self.bands = ("freq_2.0_3.0",)
 #        self.chans = ('BHZ', 'BHN', 'BHE')
-        self.chans = ('BHZ',)
+        self.chans = ('BHZ', 'BHN', 'BHE')
         self.phases = ('P', 'Pn', 'Pg', 'PcP', 'S', 'Sn', 'Lg')
 
         self.P_phases = ('P', 'Pn', 'PcP')

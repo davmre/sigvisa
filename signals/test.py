@@ -155,10 +155,7 @@ class TestSegments(unittest.TestCase):
         self.seg = Segment([self.bhz, self.bhe, self.bhn])
 
     def test_segment_stats(self):
-
         self.assertEqual( self.seg['sta'], "CTA")
-        self.assertEqual( self.seg['srate'], 10)
-        self.assertEqual( self.seg['npts'], 1000)
         self.assertEqual( self.seg['stime'], 103)
         self.assertEqual( self.seg['etime'], 203)
 
@@ -253,8 +250,6 @@ class TestIO(unittest.TestCase):
         s = s.with_filter('smooth')
         plotting.plot.plot_segment(s)
         plt.savefig("URZ_5301405_env_2_3_smooth")
-
-
 
 if __name__ == '__main__':
     unittest.main()
