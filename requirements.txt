@@ -1,7 +1,10 @@
 numpy
 scipy
+scikit-learn
 matplotlib
+obspy
 django
+cx_Oracle
 MySQL-python
 python-dateutil
 functools32
