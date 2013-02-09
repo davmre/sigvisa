@@ -10,3 +10,4 @@ python-dateutil
 functools32
 django-pagination
 django-easyfilters
+nose
