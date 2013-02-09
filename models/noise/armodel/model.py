@@ -98,18 +98,99 @@ class ARModel:
         d_prob = 0
         skipped = 0
         masked =  ma.getmaskarray(d)
+        skipped = 0
+
+        n = len(d)
+        m = d.mask
+        d = d.data - c
+        p = np.array(self.params)
+        n_p = len(p)
+
+        A = np.zeros((n_p, n_p))
+        A[0, :] = p
+        A[1:, :-1] = np.eye(n_p-1)
+
+        K = None
+
+        u = None
+
+        # update on missing data is
+        # K = A*K*A^T + U
+
+        orig_std = self.em.std
+        std = orig_std
+        t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+
+        t_since_mask = np.float('inf')
+
+        # suppose an AR2 process, we see t=100 is masked
+        # when we get to t=100, we have all our covariances are zero
+        # we then update to get K with a sigma^2 in the top right corner
+        # now on t=101 we have time_since_mask = 1
+        # now there are two components we need for t=101, namely the 100 and 99 components
+        # now our prediction for 101 is u[0] after we update u
+        # and our variance for 101 is K[0,0] after we update K
+        # THEN we observe the real 101 and can zero out the 0th row and column of K,
+        # and we can also update the 0th row of u.
+
         for t in range(len(d)):
+
             if masked[t]:
+
+                # initialize kalman filtering when we encounter a masked zone
+                if K is None:
+                    K = np.zeros((n_p, n_p))
+                    u = np.zeros((n_p,))
+                    len_history = min(t, n_p)
+                    u[:len_history] = d[t-1:t-len_history-1:-1]
+                    t_since_mask = 0
+
+                # for each masked timestep, do a Kalman update
+                K = np.dot(A, np.dot(K, A.T))
+                K[0,0] += orig_std
+                u = np.dot(A, u)
                 continue
 
-            expected = c
-            for i in range(self.p):
-                if t > i and not masked[t-i-1]:
-                    expected += self.params[i] * (d[t-i-1] - c)
+            # if we have just recently left a masked region, compute
+            # process expectation and variance based on the Kalman
+            # state.
+            if t_since_mask <= n_p:
+                t_since_mask += 1
+                u = np.dot(A, u)
+                K = np.dot(A, np.dot(K, A.T))
+                K[0,0] += orig_std
+
+                expected = u[0]
+                std = K[0,0]
+                t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+            # otherwise, compute expectation in the normal way (variance is constant)
+            else:
+                expected = 0
+                for i in range(n_p):
+                    if t > i and not masked[t-i-1]:
+                        expected += p[i] * d[t-i-1]
+
             actual = d[t]
             error = actual - expected
-            ell = self.em.lklhood(error)
+            t2 = 0.5 * np.square((error - self.em.mean) / std)
+            ell = -t2-t1
             d_prob += ell
+
+            # if we have recently left a masked region, continue
+            # Kalman updating by adding an observation of the timestep
+            # we just saw.
+            if t_since_mask <= n_p:
+                K[0,:] = 0
+                K[:,0] = 0
+                u[0] = d[t]
+            # if we are now sufficiently far from a masked region, stop Kalman updating
+            elif t_since_mask == n_p + 1:
+                K = None
+                u = None
+                std = orig_std
+                t1 = np.log(orig_std) + 0.5 * np.log(2 * np.pi)
+
+        print "skipped", skipped
         return d_prob
 
     # likelihood in log scale
@@ -125,15 +206,15 @@ class ARModel:
         prob = 0
         for d in data:
 #            t1 = time.time()
-#            d_prob = self.slow_AR(d, c)
+            d_prob = self.slow_AR(d, c)
 #            t2 = time.time()
-            d_prob_fast = self.fast_AR(d, c, self.em.std)
+#            d_prob_fast = self.fast_AR(d, c, self.em.std)
 #            t3 = time.time()
 
 #            print (t2-t1), d_prob, (t3-t2), d_prob_fast
 
 
-            prob += d_prob_fast
+            prob += d_prob
 
         return prob
 

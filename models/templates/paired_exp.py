@@ -32,7 +32,6 @@ class PairedExpTemplateModel(TemplateModel):
     def model_name(self):
         return "paired_exp"
 
-
     def abstract_logenv_raw(self, vals, min_logenv = -7, idx_offset = 0, srate=40):
         arr_time, peak_offset, coda_height, coda_decay = vals
         assert(idx_offset >= 0 and idx_offset < 1)
@@ -79,17 +78,6 @@ class PairedExpTemplateModel(TemplateModel):
             print e
             raise
         return d
-
-
-    def waveform_log_likelihood(self, wave, template_params):
-        s = self.sigvisa
-        phases, vals = template_params
-        phaseids = [s.phaseids[phase] for phase in phases]
-        noise_model.set_noise_process(wave)
-        tr = wave.as_obspy_trace()
-        tr.data = tr.data.filled(np.float('nan'))
-        ll = s.sigmodel.trace_log_likelihood(tr, phaseids, vals);
-        return ll
 
     def low_bounds(self, phases, default_atimes=None):
         bounds = np.ones((len(phases), len(self.params()))) * -np.inf
