@@ -15,7 +15,7 @@ from database.signal_data import *
 
 from sigvisa import *
 
-from signals.template_models.load_by_name import load_template_model
+from models.templates.load_by_name import load_template_model
 from signals.common import Waveform
 from source.event import Event
 from signals.io import fetch_waveform, Segment
@@ -36,7 +36,7 @@ from signals.common import load_waveform_from_file
 from utils.geog import lonlatstr
 from wiggles.wiggle_models import wiggle_model_by_name
 from infer.gridsearch import propose_origin_times, ev_loc_ll_at_optimal_time
-from signals.envelope_model import EnvelopeModel
+from models.envelope_model import EnvelopeModel
 
 
 @cache_page(60*60)

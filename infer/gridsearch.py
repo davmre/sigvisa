@@ -8,8 +8,8 @@ from source.event import *
 import itertools, copy
 
 from optparse import OptionParser
-from signals.template_models.load_by_name import load_template_model
-from signals.envelope_model import EnvelopeModel
+from models.templates.load_by_name import load_template_model
+from models.envelope_model import EnvelopeModel
 from signals.io import load_segments
 from plotting.event_heatmap import EventHeatmap
 from wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel

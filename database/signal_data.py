@@ -8,12 +8,12 @@ from database import db
 from sigvisa import Sigvisa
 from source.event import get_event
 import sigvisa_c
-from signals.armodel.learner import ARLearner
-from signals.armodel.model import ARModel, ErrorModel
+from models.noise.armodel.learner import ARLearner
+from models.noise.armodel.model import ARModel, ErrorModel
 import utils.geog
 import obspy.signal.util
 
-# from signals.template_models.paired_exp import *
+# from models.templates.paired_exp import *
 
 (FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_AMP_TRANSFER, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(15+1)
 

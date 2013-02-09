@@ -5,7 +5,7 @@ import numpy.ma as ma
 
 
 from sigvisa import Sigvisa
-from signals.template_models.paired_exp import PairedExpTemplateModel
+from models.templates.paired_exp import PairedExpTemplateModel
 from source.event import get_event
 
 

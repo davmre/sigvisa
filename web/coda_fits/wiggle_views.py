@@ -14,9 +14,9 @@ from database.signal_data import *
 
 from sigvisa import *
 
-from signals.template_models.load_by_name import load_template_model
-from wiggles.extract_wiggles import create_wiggled_phase
-from signals.waveform_matching.fourier_features import FourierFeatures
+from models.templates.load_by_name import load_template_model
+from models.wiggles.wiggle import create_wiggled_phase
+from models.wiggles.fourier_features import FourierFeatures
 from signals.common import Waveform
 
 from matplotlib.figure import Figure

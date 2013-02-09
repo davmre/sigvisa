@@ -15,7 +15,7 @@ matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from signals.template_models.paired_exp import *
+from models.templates.paired_exp import *
 from sigvisa import *
 
 
@@ -67,7 +67,7 @@ def main():
 
     print "loaded", len(evids), "evids"
 
-    from signals.template_models.load_by_name import load_template_model
+    from models.templates.load_by_name import load_template_model
     tm = load_template_model("paired_exp", run_name=None, run_iter=0, model_type="dummy")
 
     for evid in evids:
@@ -130,4 +130,3 @@ if __name__ == "__main__":
         type, value, tb = sys.exc_info()
         traceback.print_exc()
         pdb.post_mortem(tb)
-

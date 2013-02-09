@@ -14,7 +14,7 @@ import sys
 from database.dataset import *
 from database.signal_data import *
 from sigvisa import *
-from signals.template_models.load_by_name import load_template_model
+from models.templates.load_by_name import load_template_model
 from learn.train_coda_models import load_model, get_training_data
 
 

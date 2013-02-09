@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.gridspec as gridspec
 from plotting.plot import subplot_waveform
-    
+
 from optparse import OptionParser
 
 from sigvisa import *
@@ -23,13 +23,13 @@ from signals.io import fetch_waveform
 from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
 from source.event import get_event
 from plotting.event_heatmap import get_eventHeatmap
-from signals.waveform_matching.fourier_features import FourierFeatures
+from models.wiggles.fourier_features import FourierFeatures
 from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
 from explore.doublets.xcorr_pairs import extract_phase_window
 from train_model import train_and_save_models, read_training_events
 
 from gpr.gp import GaussianProcess
-from learn.SpatialGP import SpatialGP
+from models.spatial_regression.SpatialGP import SpatialGP
 
 
 def normalize(x):
@@ -64,7 +64,7 @@ def predict_signal_at_point(pt, models, ff, n):
 
 def load_models_from_dir(model_folder):
     models = NestedDict()
-    
+
     for m in os.listdir(model_folder):
         model = SpatialGP(fname=os.path.join(model_folder, m))
         hz, f = m[:-12].split('_')
@@ -84,7 +84,7 @@ def main():
     parser.add_option("-o", "--outfile", dest="outfile", default=None, type="str", help="save pdf plots to this file")
 
     (options, args) = parser.parse_args()
-        
+
 
     sta = options.sta
     chan = options.chan
@@ -117,7 +117,7 @@ def main():
 
 
     training_events = read_training_events(sta, center.time-7*24*3600, center.time+7*24*3600, 3.5, 10, center, 100)
-    
+
     prediction_points = []
     for i in np.linspace(-.2, .2, 41):
         pt = (center.lon+i, center.lat, center.depth)
@@ -154,7 +154,7 @@ def main():
         axes.plot(x, true_center_wave, color="blue")
 
         plt.ylim([-5,5])
-        
+
 #        axes = plt.subplot(gs[1,0], sharey=axes)
 
 

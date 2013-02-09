@@ -4,7 +4,7 @@ import numpy as np, scipy
 from database.dataset import *
 from database.signal_data import *
 from database import db
-from signals.template_models.load_by_name import load_template_model
+from models.templates.load_by_name import load_template_model
 
 import utils.geog
 import obspy.signal.util
@@ -13,9 +13,9 @@ from optparse import OptionParser
 
 from sigvisa import Sigvisa
 from signals.io import *
-from learn.optimize import minimize_matrix
+from infer.optimize.optim_utils import minimize_matrix
 from wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
-from signals.envelope_model import EnvelopeModel
+from models.envelope_model import EnvelopeModel
 
 def construct_optim_params(optim_param_str):
 

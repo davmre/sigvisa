@@ -15,8 +15,8 @@ import numpy as np
 import scipy.linalg
 import hashlib
 
-from learn.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
-import learn.baseline_models as baseline_models
+from models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
+import models.spatial_regression.baseline_models as baseline_models
 import gpr.learn
 from gpr.distributions import InvGamma, LogNormal
 from optparse import OptionParser

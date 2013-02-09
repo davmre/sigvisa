@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.gridspec as gridspec
 from plotting.plot import subplot_waveform
-    
+
 from optparse import OptionParser
 
 from sigvisa import *
@@ -23,7 +23,7 @@ from signals.io import fetch_waveform
 from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
 from source.event import get_event
 from plotting.event_heatmap import get_eventHeatmap
-from signals.waveform_matching.fourier_features import FourierFeatures
+from models.wiggles.fourier_features import FourierFeatures
 
 
 def normalize(x):
@@ -41,7 +41,7 @@ def main():
     parser.add_option("-o", "--outfile", dest="outfile", default=None, type="str", help="save pdf plots to this file")
 
     (options, args) = parser.parse_args()
-        
+
 
     sta = options.sta
     chan = options.chan
@@ -77,7 +77,7 @@ def main():
         wave1_loaded = fetch_waveform(sta, chan, atime1 - 1, atime1 + window_len, pad_seconds = PAD)
         filtered1 = wave1_loaded.filter(filter_str)
         pad_samples = filtered1['srate']*PAD
-        
+
         wave2_loaded = fetch_waveform(sta, chan, atime2 - 1, atime2 + window_len, pad_seconds = PAD)
         filtered2 = wave2_loaded.filter(filter_str)
 
@@ -118,7 +118,7 @@ def main():
         axes.plot(x+offset, p2, color="blue")
 
         print "plotting", pair
-        
+
         pp.savefig()
 
 

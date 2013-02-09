@@ -10,10 +10,10 @@ from source.event import get_event
 from signals.common import Waveform, Segment, load_waveform_from_file
 from signals.mask_util import *
 from signals.io import load_event_station
-from signals.template_models.paired_exp import PairedExpTemplateModel
-from signals.armodel.model import ARModel, ErrorModel, load_armodel_from_file
-from signals.armodel.learner import ARLearner
-from noise.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
+from models.templates.paired_exp import PairedExpTemplateModel
+from models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
+from models.noise.armodel.learner import ARLearner
+from models.noise.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
 
 import matplotlib
 matplotlib.use("Agg")
@@ -254,83 +254,7 @@ class TestIO(unittest.TestCase):
         plotting.plot.plot_segment(s)
         plt.savefig("URZ_5301405_env_2_3_smooth")
 
-class TestAutoregressiveModels(unittest.TestCase):
 
-    def setUp(self):
-        np.random.seed(0)
-
-    def test_AR_learning(self):
-        true_params = np.array([.8, .1])
-        true_std = .11
-        errormodel = ErrorModel(mean=0, std=true_std)
-        true_model = ARModel(true_params, errormodel)
-        sampled_data = true_model.sample(1000)
-
-        learner = ARLearner(sampled_data)
-        learned_params, learned_std = learner.yulewalker(2)
-
-        self.assertAlmostEqual(np.sum(true_params - learned_params), 0, places=1)
-        self.assertAlmostEqual(true_std, learned_std, places=1)
-
-    def test_pickle(self):
-        true_params = np.array([.8, .1])
-        true_std = .11
-        errormodel = ErrorModel(mean=0, std=true_std)
-        true_model = ARModel(true_params, errormodel)
-        true_model.dump_to_file("test.armodel")
-
-        loaded_model = load_armodel_from_file("test.armodel")
-        self.assertAlmostEqual(np.sum(true_model.params - loaded_model.params), 0)
-        self.assertAlmostEqual(true_model.em.std, loaded_model.em.std)
-
-
-class TestSignalLikelihood(unittest.TestCase):
-
-    def setUp(self):
-        self.seg = load_event_station(evid=5301405, sta="URZ").with_filter('freq_2.0_3.0;env')
-        self.event = get_event(evid=5301405)
-        self.tm =  PairedExpTemplateModel(run_name = "", model_type="dummy")
-
-    def test_generate(self):
-        st = self.seg['stime']
-        param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
-        bhz_23_template =(('P', 'S'), param_vals)
-        template = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'])
-
-        sampled = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'], sample=True)
-
-        plotting.plot.plot_waveform(template, logscale=True)
-        plt.savefig('template.png')
-
-        plotting.plot.plot_waveform(sampled, logscale=True)
-        plt.savefig('sampled.png')
-
-    def test_iid_cost(self):
-        smoothed = self.seg.with_filter("smooth")
-        st = self.seg['stime']
-        param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
-        ll = self.tm.waveform_log_likelihood_iid(smoothed['BHZ'], (('P', 'S'), param_vals))
-        print ll
-
-        missing_bhz = self.seg.with_filter("smooth")['BHZ']
-        missing_bhz.data[50:5000] = ma.masked
-        ll_missing = self.tm.waveform_log_likelihood_iid(missing_bhz, (('P', 'S'), param_vals))
-        print "missing iid ll", ll_missing
-
-        self.assertGreater(ll_missing, ll)
-
-    def test_likelihood(self):
-        st = self.seg['stime']
-        param_vals = np.array( ((st+10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04))  )
-        ll = self.tm.waveform_log_likelihood(self.seg['BHZ'], (('P', 'S'), param_vals))
-        print ll
-
-        missing_bhz = self.seg['BHZ']
-        missing_bhz.data[50:5000] = ma.masked
-        ll_missing = self.tm.waveform_log_likelihood(missing_bhz, (('P', 'S'), param_vals))
-        print "missing ll", ll_missing
-
-        self.assertGreater(ll_missing, ll)
 
 if __name__ == '__main__':
     unittest.main()

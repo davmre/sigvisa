@@ -19,7 +19,7 @@ from optparse import OptionParser
 
 from sigvisa import *
 from signals.io import fetch_waveform
-from signals.waveform_matching.fourier_features import FourierFeatures
+from models.wiggles.fourier_features import FourierFeatures
 
 from source.event import get_event
 from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
@@ -30,7 +30,7 @@ from plotting.event_heatmap import get_eventHeatmap
 
 #from gpr import munge, kernels, evaluate, learn, distributions, plot
 from gpr.gp import GaussianProcess
-from learn.SpatialGP import SpatialGP
+from models.spatial_regression.SpatialGP import SpatialGP
 
 
 def train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder, amp_params = [.05, .05, 1.5], phase_params = [.05, .05, 4]):

@@ -5,7 +5,7 @@ from optparse import OptionParser
 
 from learn.train_coda_models import learn_model, load_model, get_model_fname, get_training_data, analyze_model_fname
 from sigvisa import *
-from learn.SpatialGP import distfns, SpatialGP, start_params
+from models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
 from database.signal_data import *
 
 class RedirectStdStreams(object):

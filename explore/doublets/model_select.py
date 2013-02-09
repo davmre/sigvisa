@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.gridspec as gridspec
 from plotting.plot import subplot_waveform
-    
+
 from optparse import OptionParser
 
 from sigvisa import *
@@ -20,12 +20,12 @@ from signals.io import fetch_waveform
 from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
 from source.event import get_event
 from plotting.event_heatmap import get_eventHeatmap
-from signals.waveform_matching.fourier_features import FourierFeatures
+from models.wiggles.fourier_features import FourierFeatures
 from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
 from explore.doublets.xcorr_pairs import extract_phase_window
 
 from gpr.gp import GaussianProcess
-from learn.SpatialGP import SpatialGP
+from models.spatial_regression.SpatialGP import SpatialGP
 
 from predict_doublet import predict_signal_at_point, load_models_from_dir
 from train_model import train_and_save_models, read_training_events
@@ -33,11 +33,11 @@ from visualize_best_correlations import normalize
 
 def main():
     parser = OptionParser()
-    
+
     parser.add_option("-s", "--sta", dest="sta", default=None, type="str", help="name of station")
     parser.add_option("-c", "--chan", dest="chan", default="BHZ", type="str", help="channel to correlate")
     parser.add_option("--center", dest="center_evid", default=None, type="int", help="evid to center on")
-    
+
     parser.add_option("-f", "--filter_str", dest="filter_str", default="freq_0.8_3.5", type="str", help="filter string to process waveforms")
     parser.add_option("--window_len", dest="window_len", default=30.0, type=float, help="length of window to extract / cross-correlate")
     parser.add_option("-o", "--model_folder", dest="model_folder", default=None, type="str", help="folder to save learned model")
@@ -50,7 +50,7 @@ def main():
     (options, args) = parser.parse_args()
 
     s = Sigvisa()
-        
+
     sta = options.sta
     chan = options.chan
     filter_str = options.filter_str
@@ -143,7 +143,7 @@ def main():
         except Exception as e:
             print e
             continue
-    
+
     pp.close()
 
 if __name__ == "__main__":

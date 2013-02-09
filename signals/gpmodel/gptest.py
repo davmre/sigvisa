@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from gaussian import *
 from gridutil import *
 from data import *
-import signals.armodel.learner as lnr
+import models.noise.armodel.learner as lnr
 from matplotlib.backends.backend_pdf import PdfPages
 import database.db
 from database.dataset import *

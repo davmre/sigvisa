@@ -16,10 +16,10 @@ from database.dataset import *
 from database.signal_data import *
 from signals.io import *
 from sigvisa import *
-from noise.noise_model import get_noise_model
-from signals.template_models.load_by_name import load_template_model
+from models.noise.noise_model import get_noise_model
+from models.templates.load_by_name import load_template_model
 from source.event import get_event, EventNotFound
-from signals.armodel.model import ARModel, ErrorModel
+from models.noise.armodel.model import ARModel, ErrorModel
 import utils.geog
 
 from matplotlib.figure import Figure

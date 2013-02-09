@@ -10,7 +10,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import plot
 
 import sigvisa, sigvisa_util, learn
-import signals.armodel.model, signals.armodel.learner
+import models.noise.armodel.model, models.noise.armodel.learner
 from database.dataset import *
 from database import db
 
@@ -39,11 +39,11 @@ class TestPurePythonFunctions(unittest.TestCase):
 
     def test_learn_armodel(self):
         arparams = np.array((1.531985598646, -1.0682484475528535, 1.0396481745808401, -1.3279255479118346, 0.98655767845516618, -0.83922136571517214, 0.76677157354780778, -0.59579319975231027, 0.36945613335446836, -0.17841016307209667))
-        model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(0, .1), c=0)
+        model = models.noise.armodel.model.ARModel(arparams, models.noise.armodel.model.ErrorModel(0, .1), c=0)
         s1 = model.sample(100000)
         s2 = model.sample(1000)
         s3 = model.sample(55555)
-        ar_learner = signals.armodel.learner.ARLearner([s1,s2,s3], 40)
+        ar_learner = models.noise.armodel.learner.ARLearner([s1,s2,s3], 40)
         params, std = ar_learner.yulewalker(10)
 
         for v in (np.array(params)-arparams):
@@ -91,7 +91,7 @@ class TestCFunctions(unittest.TestCase):
         noise_var = .001
         wiggle_var = .001
 
-        self.ar_noise_model = signals.armodel.model.ARModel(arparams, signals.armodel.model.ErrorModel(0, np.sqrt(noise_var)), c=noise_mean)
+        self.ar_noise_model = models.noise.armodel.model.ARModel(arparams, models.noise.armodel.model.ErrorModel(0, np.sqrt(noise_var)), c=noise_mean)
 
         band = sigvisa.canonical_band_num("narrow_envelope_2.00_3.00")
         chan_BHZ = sigvisa.canonical_channel_num("BHZ")

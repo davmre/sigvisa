@@ -1,7 +1,7 @@
 import numpy as np
 import os
-import learn.do_training
 from database import db, dataset
+from load_c_components import load_sigvisa, load_earth
 import sigvisa_c
 
 class NestedDict(dict):
@@ -53,8 +53,8 @@ class Sigvisa(object):
         self.site_up = dataset.read_uptime(cursor, st, et)
         self.phasenames, self.phasetimedef = dataset.read_phases(cursor)
         self.phaseids = dict(zip(self.phasenames, range(1, len(self.phasenames)+1)))
-        self.earthmodel = learn.do_training.load_earth(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), self.sites, self.phasenames, self.phasetimedef)
-        self.sigmodel = learn.do_training.load_sigvisa(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
+        self.earthmodel = load_earth(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), self.sites, self.phasenames, self.phasetimedef)
+        self.sigmodel = load_sigvisa(os.path.join(os.getenv("SIGVISA_HOME"), "parameters"), st, et, "spectral_envelope", self.site_up, self.sites, self.phasenames, self.phasetimedef, load_signal_params = False)
 
 #        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
         self.bands = ("freq_2.0_3.0",)
@@ -115,9 +115,3 @@ def set_noise_processes(sigmodel, seg):
 #                print "no noise model found for chan %s band %s, not setting.." % (chan, band)
                 continue
             sigmodel.set_noise_process(siteid, b, c, arm.c, arm.em.std**2, np.array(arm.params))
-
-
-
-
-
-

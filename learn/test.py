@@ -9,12 +9,12 @@ from source.event import get_event
 
 from signals.common import Waveform, Segment
 from signals.io import load_event_station
-from signals.template_models.paired_exp import PairedExpTemplateModel
+from models.templates.paired_exp import PairedExpTemplateModel
 
 from learn.fit_shape_params import fit_template
-from learn.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
+from models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
 
-import learn.optimize as optimize
+import infer.optimize.optim_utils as optimize
 
 import matplotlib
 matplotlib.use('PDF')
@@ -150,7 +150,7 @@ class TestModels(unittest.TestCase):
         self.assertAlmostEqual(ll, ll1)
 
         s = nmodel.sample(self.X)
-        
+
     def test_GP(self):
         model = learn_model(self.X, self.y, model_type="gp_dad_log", target="coda_decay", sta='AAK')
         pred1 = model.predict(self.testX1)

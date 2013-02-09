@@ -3,7 +3,7 @@ import sys, os, itertools
 
 from optparse import OptionParser
 
-from signals.template_models.paired_exp import PairedExpTemplateModel
+from models.templates.paired_exp import PairedExpTemplateModel
 from source.event import get_event
 from sigvisa import *
 from signals.io import fetch_waveform
@@ -83,7 +83,7 @@ def main():
         except Exception as e:
             print "exception:", e
             continue
-        
+
         if abs(atime1-atime2)<30:
             print "skipping simultaneous events", evid1, evid2
             continue
