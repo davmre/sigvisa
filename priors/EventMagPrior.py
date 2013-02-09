@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,8 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
-import matplotlib.pyplot as plt
+#
 import numpy as np
 
 from database.dataset import *
@@ -36,24 +35,24 @@ def learn(param_fname, options, leb_events):
   mb_rate = np.log(10)
 
   fp = open(param_fname, "w")
-  
+
   print >>fp, "%f %f" % (MIN_MAGNITUDE, mb_rate)
-  
+
   fp.close()
-  
+
   if options.gui:
     mbs = []
-    
+
     # events with the minimum mb actually value have unknown mb, best to
     # leave them out for estimation
     for mb in leb_events[:, EV_MB_COL]:
       if mb > MIN_MAGNITUDE:
         mbs.append(mb)
-    
+
     mbs = np.array(mbs)
-    
+
     plt.figure(figsize=(8,4.8))
-    if not options.type1:    
+    if not options.type1:
       plt.title("Event mb")
     plt.xlim(MIN_MAGNITUDE, MAX_MAGNITUDE)
     xpts = np.arange(MIN_MAGNITUDE, MAX_MAGNITUDE, .1)
@@ -74,5 +73,3 @@ def learn(param_fname, options, leb_events):
         plt.savefig(basename+".pdf")
       else:
         plt.savefig(basename+".png")
-    
-  

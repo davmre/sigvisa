@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,9 +24,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.stats import gamma
 from scipy.stats import laplace
 import sys
@@ -58,7 +57,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   """
   assoc_coda_detpair, coda_coda_detpair = compute_coda_pairs(detections,
                                                              leb_evlist)
-  
+
   # the prefix "pc" stands for phase -> coda
   pc_time_data, pc_az_data, pc_slo_data, pc_logamp_data, pc_snr_data \
                 = [], [], [], [], []
@@ -77,7 +76,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
       continue
 
     secdet = detections[secdetnum]
-    
+
     delta = secdet[DET_TIME_COL] - det[DET_TIME_COL]
     assert(delta >= MIN_SECDET_DELAY and delta <= MAX_SECDET_DELAY)
     pc_time_data.append(delta)
@@ -86,7 +85,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
     pc_logamp_data.append(np.log(secdet[DET_AMP_COL]) - np.log(det[DET_AMP_COL]))
     pc_snr_data.append(secdet[DET_SNR_COL] - det[DET_SNR_COL])
     pc_sec_phase[int(secdet[DET_PHASE_COL])] += 1
-    
+
     if (np.log(det[DET_AMP_COL]) < HIGH_LOGAMP and
         np.log(det[DET_AMP_COL]) >= LOW_LOGAMP):
       pc_logamp_det[(np.log(det[DET_AMP_COL]) - LOW_LOGAMP) // STEP_LOGAMP] += 1
@@ -104,13 +103,13 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
                                                     + len(pc_neg_snr_data))
   pc_snr_lambda_plus = 1.0 / np.average(pc_pos_snr_data)
   pc_snr_lambda_minus = 1.0 / np.average(pc_neg_snr_data)
-  
+
   pc_sec_phase += 1.0                   # add one smoothing
   pc_sec_phase /= pc_sec_phase.sum()
 
   pc_logamp_det += .000001
   pc_logamp_tot += .001
-  
+
   print "Phase -> Coda Arrival :"
   print "DetProb(logamp)", pc_logamp_det / pc_logamp_tot
   print "Time", pc_time_shape, MIN_SECDET_DELAY-.1, pc_time_scale,\
@@ -143,7 +142,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
       continue
 
     secdet = detections[secdetnum]
-    
+
     delta = secdet[DET_TIME_COL] - det[DET_TIME_COL]
     assert(delta >= MIN_SECDET_DELAY and delta <= MAX_SECDET_DELAY)
     cc_time_data.append(delta)
@@ -152,7 +151,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
     cc_logamp_data.append(np.log(secdet[DET_AMP_COL]) - np.log(det[DET_AMP_COL]))
     cc_snr_data.append(secdet[DET_SNR_COL] - det[DET_SNR_COL])
     cc_sec_phase[int(secdet[DET_PHASE_COL])] += 1
-    
+
     if (np.log(det[DET_AMP_COL]) < HIGH_LOGAMP and
         np.log(det[DET_AMP_COL]) >= LOW_LOGAMP):
       cc_logamp_det[(np.log(det[DET_AMP_COL]) - LOW_LOGAMP) // STEP_LOGAMP] += 1
@@ -170,13 +169,13 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
                                                     + len(cc_neg_snr_data))
   cc_snr_lambda_plus = 1.0 / np.average(cc_pos_snr_data)
   cc_snr_lambda_minus = 1.0 / np.average(cc_neg_snr_data)
-  
+
   cc_sec_phase += 1.0                   # add one smoothing
   cc_sec_phase /= cc_sec_phase.sum()
 
   cc_logamp_det += .000001
   cc_logamp_tot += .001
-  
+
   print "Coda -> Coda Arrival :"
   print "DetProb(logamp)", cc_logamp_det / cc_logamp_tot
   print "Time", cc_time_shape, MIN_SECDET_DELAY-.1, cc_time_scale,\
@@ -190,7 +189,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   print "SNR", cc_snr_prob_plus, cc_snr_lambda_plus, cc_snr_lambda_minus
   print "Phase:",
   print_list(sys.stdout, cc_sec_phase)
-  
+
   if options.gui:
     plt.figure(figsize=(8,4.8))
     if not options.type1:
@@ -207,7 +206,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".png")
     if options.pdf:
       options.pdf.savefig()
-    
+
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Probability of coda arrival vs coda arrival amp")
@@ -223,7 +222,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".png")
     if options.pdf:
       options.pdf.savefig()
-    
+
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Phase to Coda time delay")
@@ -263,7 +262,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".png")
     if options.pdf:
       options.pdf.savefig()
-      
+
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Phase to Coda azimuth difference")
@@ -299,7 +298,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".png")
     if options.pdf:
       options.pdf.savefig()
-    
+
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Phase to Coda slowness difference")
@@ -317,7 +316,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".png")
     if options.pdf:
       options.pdf.savefig()
-    
+
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Coda to Coda slowness difference")
@@ -335,7 +334,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".png")
     if options.pdf:
       options.pdf.savefig()
-    
+
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Phase to Coda logamp difference")
@@ -375,7 +374,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         return prob_plus * lambda_plus * np.exp(- lambda_plus * x)
       else:
         return (1-prob_plus) * lambda_minus * np.exp(lambda_minus * x)
-    
+
     plt.figure(figsize=(8,4.8))
     if not options.type1:
       plt.title("Phase to Coda SNR difference")
@@ -449,7 +448,7 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".png")
     if options.pdf:
       options.pdf.savefig()
-  
+
   fp = open(param_fname, "w")
   print >> fp, len(pc_logamp_det), LOW_LOGAMP, STEP_LOGAMP
   print_list(fp, pc_logamp_det / pc_logamp_tot)
@@ -470,14 +469,14 @@ def learn(param_fname, options, earthmodel, detections, leb_events,
   print >> fp, len(cc_sec_phase)
   print_list(fp, pc_sec_phase)
   print_list(fp, cc_sec_phase)
-  
+
   fp.close()
 
 def compute_secondary_dets(earthmodel, detections, leb_events, leb_evlist):
   assoc_coda_detpair, coda_coda_detpair = compute_coda_pairs(detections,
                                                              leb_evlist)
   det_coda = dict(assoc_coda_detpair + coda_coda_detpair)
-  
+
   leb_seclist = []
   for detlist in leb_evlist:
     seclist = []
@@ -551,9 +550,9 @@ def compute_false_detections(detections, leb_evlist):
   for detnum, secdetnum in assoc_coda_detpair:
     phase_dets.add(detnum)
     coda_dets.add(secdetnum)
-    
+
   for detnum, secdetnum in coda_coda_detpair:
     coda_dets.add(secdetnum)
-    
+
   return set(detnum for detnum in xrange(len(detections))
              if detnum not in phase_dets and detnum not in coda_dets)

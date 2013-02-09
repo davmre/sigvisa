@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,9 +24,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 import numpy as np
-import matplotlib.pyplot as plt
 
 from utils import LogNormal
 
@@ -45,7 +44,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       if snr >= len(SNR_BINS):
         snr = len(SNR_BINS) - 1
       true_bins[phase, snr] += 1
-  
+
   # smooth the distribution by add one smoothing
   true_bins += 1.
   # normalize
@@ -60,7 +59,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     if snr >= len(SNR_BINS):
       snr = len(SNR_BINS) - 1
     false_bins[snr] += 1
-  
+
   # smooth the distribution by add one smoothing
   false_bins += 1.
   # normalize
@@ -80,11 +79,11 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     for x in arr:
       print >>fp, x,
     print >> fp
-  
+
   print_arr(fp, false_bins)
   for phase in range(earthmodel.NumTimeDefPhases()):
     print_arr(fp, true_bins[phase])
-  
+
   fp.close()
 
   if options.gui:
@@ -106,4 +105,3 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
         plt.savefig(basename+".pdf")
       else:
         plt.savefig(basename+".png")
-    

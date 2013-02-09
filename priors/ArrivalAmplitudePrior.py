@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,9 +24,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 import csv
-import matplotlib.pyplot as plt
 import numpy as np
 from database.dataset import *
 import utils.GMM, utils.LinearModel
@@ -51,7 +50,7 @@ def print_2gmm(wts, means, stds):
 def print_list(fp, list):
   for x in list:
     print >>fp, x,
-  
+
 def predict_amp_model(coeffs, mb, depth, ttime):
   return coeffs[0] + coeffs[1] * mb + coeffs[2] * depth \
          + coeffs[3] * ttime + coeffs[4] * np.exp(-ttime / 50.)
@@ -63,16 +62,16 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   site_false_logamps = dict((sitenum, []) for sitenum in
                             range(earthmodel.NumSites()))
   for detnum in false_dets:
-    
+
     if -1 == detections[detnum, DET_AMP_COL]:
       continue
-    
+
     sitenum = int(detections[detnum, DET_SITE_COL])
     datum = np.log(detections[detnum, DET_AMP_COL])
 
     false_logamps.append(datum)
     site_false_logamps[sitenum].append(datum)
-    
+
   # sample some points from the overall false detection empirical distribution
   false_prior = [false_logamps[np.random.randint(len(false_logamps))] for
                  i in range(NUM_PRIOR)]
@@ -84,24 +83,24 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
     wts, means, stds = utils.GMM.estimate(2, data)
 
     site_false_params.append((wts, means, stds))
-    
+
     if options.verbose:
       print "[%d]: False" % (sitenum,),
       print_2gmm(wts, means, stds)
-  
-  
+
+
   # next, the set of true detections
   # create a dataset for each phase and site
   phase_site_data = [[([],[]) for site in xrange(earthmodel.NumSites())]
                      for phase in xrange(earthmodel.NumTimeDefPhases())]
-  
+
   for evnum, detlist in enumerate(leb_evlist):
     for phase, detnum in detlist:
-      
+
       # -1 => amplitude not observed
       if -1 == detections[detnum, DET_AMP_COL]:
         continue
-      
+
       sitenum = int(detections[detnum, DET_SITE_COL])
 
       # compute the predictors
@@ -112,13 +111,13 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       data = phase_site_data[phase][sitenum]
       data[0].append(pred)
       data[1].append(np.log(detections[detnum, DET_AMP_COL]))
-      
+
   # convert each phase-site's data into a matrix
   phase_site_data = [[(np.array(phase_site_data[phase][site][0]),
                        np.array(phase_site_data[phase][site][1]))
                       for site in xrange(earthmodel.NumSites())]
                      for phase in xrange(earthmodel.NumTimeDefPhases())]
-  
+
   phase_site_coeffs = []
   phase_site_sigma = []
   print "Arrival Amplitude"
@@ -133,7 +132,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   # write out the arrival parameters
   fp = open(param_filename, "w")
   print >>fp, earthmodel.NumSites(), earthmodel.NumTimeDefPhases()
-  
+
   # for each site
   for siteid in xrange(earthmodel.NumSites()):
     # first write the false arrival parameters
@@ -148,7 +147,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
                      + [phase_site_sigma[phaseid][siteid]])
       print >> fp
   fp.close()
-  
+
   if options.datadir:
     fname = os.path.join(options.datadir, "ArrivalAmplitude.csv")
     writer = csv.writer(open(fname, "wb"))
@@ -164,10 +163,10 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
 
   if not options.gui:
     return
-  
+
   # learn the overall false detection model (for all sites)
   false_wts, false_means, false_stds = utils.GMM.estimate(2, false_logamps)
-  
+
   if options.verbose:
     print "Overall False log(Amp):",
     print_2gmm(false_wts, false_means, false_stds)
@@ -182,7 +181,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
                                      x+STEP/2)
                   * STEP * len(false_logamps) for x in bins], label="model",
            linewidth=3, color="black")
-  
+
   plt.xlabel("log(amp)")
   plt.ylabel("frequency")
   plt.legend(loc="upper left")
@@ -193,13 +192,13 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
       plt.savefig(basename+".pdf")
     else:
       plt.savefig(basename+".png")
-  
+
   # visualize some of the site-specific models
   for sitenum in range(earthmodel.NumSites()):
-    
+
     data = site_false_logamps[sitenum] + false_prior
     wts, means, stds = site_false_params[sitenum]
-    
+
     if sitenum in [6, 113]:
       plt.figure(figsize=(8,4.8))
       if not options.type1:
@@ -225,18 +224,18 @@ def create_featureset(earthmodel,start_time, end_time, detections, leb_events,
 
   phase_data = [([[] for _ in FEATURE_NAMES], [])
                 for phaseid in xrange(phasetimedef.sum())]
-  
+
   for evnum, detlist in enumerate(leb_evlist):
     for phase, detnum in detlist:
-      
+
       # -1 => amplitude not observed
       if -1 == detections[detnum, DET_AMP_COL]:
         continue
-      
+
       sitenum = int(detections[detnum, DET_SITE_COL])
       if sitenum != 6:
         continue
-      
+
       # compute the predictors
       pred = extract_features(leb_events[evnum, EV_MB_COL],
                               leb_events[evnum, EV_DEPTH_COL],
@@ -248,27 +247,27 @@ def create_featureset(earthmodel,start_time, end_time, detections, leb_events,
       data[1].append(np.log(detections[detnum, DET_AMP_COL]))
 
   return phase_data
-  
+
 def test_model(earthmodel, train, test):
   train_feat = create_featureset(earthmodel, *train)
   test_feat = create_featureset(earthmodel, *test)
   # we will evaluate with increasing number of features
   for numfeatures in range(1, len(FEATURE_NAMES)+1):
     print "Evaluating features:", FEATURE_NAMES[:numfeatures]
-    
+
     # train a model for each phase
     phase_model = []
     for phaseid, (predictors, output) in enumerate(train_feat):
       if len(output) < 2:
         phase_model.append(None)
         continue
-      
+
       model = utils.LinearModel.LinearModel("Amp", FEATURE_NAMES[:numfeatures],
                                             predictors[:numfeatures], output,
                                             verbose=False)
 
       phase_model.append(tuple(model.coeffs) + (model.std,))
-      
+
     # now predict on the test data
     totcnt = 0
     tot_logprob = 0.
@@ -276,7 +275,7 @@ def test_model(earthmodel, train, test):
       model = phase_model[phaseid]
       if model is None:
         continue
-      
+
       for idx in range(len(output)):
         guess = sum(predictors[f][idx] * model[f]
                     for f in xrange(numfeatures))
@@ -285,6 +284,5 @@ def test_model(earthmodel, train, test):
 
         totcnt += 1
         tot_logprob += logprob
-    
+
     print "Avg. log likelihood", tot_logprob / totcnt
-    
