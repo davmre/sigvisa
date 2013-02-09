@@ -14,54 +14,11 @@ from optparse import OptionParser
 from sigvisa import Sigvisa
 from signals.io import *
 from infer.optimize.optim_utils import minimize_matrix
-from wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
+from models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
 from models.envelope_model import EnvelopeModel
 
-def construct_optim_params(optim_param_str):
-
-    def copy_dict_entries(keys, src, dest):
-        if len(keys) == 0: keys = src.keys()
-        for key in keys:
-            dest[key] = src[key]
-
-    defaults = {
-        "method": "bfgscoord",
-        "fix_first_cols": 1,
-        "normalize": True,
-        'disp': False,
-        "eps": 1e-4, # increment for approximate gradient evaluation
-
-        "bfgscoord_iters": 5,
-        "bfgs_factr": 10, # used by bfgscoord and bfgs
-        "xtol": 0.01, # used by simplex
-        "ftol": 0.01, # used by simplex, tnc
-        "grad_stopping_eps": 1e-4,
-        }
-    overrides = eval("{%s}" % optim_param_str)
-
-    optim_params = {}
-    optim_params['method'] = overrides['method'] if 'method' in overrides else defaults['method']
-    copy_dict_entries(["fix_first_cols", "normalize", "disp", "eps"], src=defaults, dest=optim_params)
-    method = optim_params['method']
-
-    # load appropriate defaults for each method
-    if method == "bfgscoord":
-        copy_dict_entries(["bfgscoord_iters", "bfgs_factr"], src=defaults, dest=optim_params)
-    elif method == "bfgs":
-        copy_dict_entries(["bfgs_factr",], src=defaults, dest=optim_params)
-    elif method == "tnc":
-        copy_dict_entries(["ftol",], src=defaults, dest=optim_params)
-    elif method == "simplex":
-        copy_dict_entries(["ftol", "xtol",], src=defaults, dest=optim_params)
-    elif method == "grad":
-        copy_dict_entries(["grad_stopping_eps",], src=defaults, dest=optim_params)
-
-    copy_dict_entries([], src=overrides, dest=optim_params)
-    return optim_params
 
 
-
-    return (phases, best_param_vals), acost
 
 def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, optim_params=None, fit_hz=5):
     """

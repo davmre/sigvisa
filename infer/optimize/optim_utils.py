@@ -6,6 +6,48 @@ from utils.gradient_descent import gradient_descent, coord_steps
 class BoundsViolation(Exception):
     pass
 
+def construct_optim_params(optim_param_str=''):
+
+    def copy_dict_entries(keys, src, dest):
+        if len(keys) == 0: keys = src.keys()
+        for key in keys:
+            dest[key] = src[key]
+
+    defaults = {
+        "method": "bfgscoord",
+        "fix_first_cols": 1,
+        "normalize": True,
+        'disp': False,
+        "eps": 1e-4, # increment for approximate gradient evaluation
+
+        "bfgscoord_iters": 5,
+        "bfgs_factr": 10, # used by bfgscoord and bfgs
+        "xtol": 0.01, # used by simplex
+        "ftol": 0.01, # used by simplex, tnc
+        "grad_stopping_eps": 1e-4,
+        }
+    overrides = eval("{%s}" % optim_param_str)
+
+    optim_params = {}
+    optim_params['method'] = overrides['method'] if 'method' in overrides else defaults['method']
+    copy_dict_entries(["fix_first_cols", "normalize", "disp", "eps"], src=defaults, dest=optim_params)
+    method = optim_params['method']
+
+    # load appropriate defaults for each method
+    if method == "bfgscoord":
+        copy_dict_entries(["bfgscoord_iters", "bfgs_factr"], src=defaults, dest=optim_params)
+    elif method == "bfgs":
+        copy_dict_entries(["bfgs_factr",], src=defaults, dest=optim_params)
+    elif method == "tnc":
+        copy_dict_entries(["ftol",], src=defaults, dest=optim_params)
+    elif method == "simplex":
+        copy_dict_entries(["ftol", "xtol",], src=defaults, dest=optim_params)
+    elif method == "grad":
+        copy_dict_entries(["grad_stopping_eps",], src=defaults, dest=optim_params)
+
+    copy_dict_entries([], src=overrides, dest=optim_params)
+    return optim_params
+
 
 def coord_descent(f, x0, converge=0.1, steps=None, maxiters=500):
     """
