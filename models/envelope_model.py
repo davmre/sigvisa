@@ -1,6 +1,11 @@
 
-import os, errno, sys, time, traceback
-import numpy as np, scipy
+import os
+import errno
+import sys
+import time
+import traceback
+import numpy as np
+import scipy
 
 from sigvisa.database.signal_data import filter_and_sort_template_params
 from sigvisa.database.dataset import *
@@ -13,8 +18,6 @@ from optparse import OptionParser
 from sigvisa import Sigvisa, NestedDict
 import sigvisa.utils.geog
 import obspy.signal.util
-
-
 
 
 class EnvelopeModel:
@@ -68,7 +71,8 @@ class EnvelopeModel:
         band = wave['band']
 
         # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
-        f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+        f = lambda params: self.wiggle_model.template_ncost(
+            wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
 
         # just use the mode parameters
         params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
@@ -91,7 +95,7 @@ class EnvelopeModel:
 
         return total_ll, all_params
 
-    def wave_log_likelihood_optimize(self, wave, event, use_leb_phases=False, optim_params = None):
+    def wave_log_likelihood_optimize(self, wave, event, use_leb_phases=False, optim_params=None):
 
         if optim_params is None:
             optim_params = construct_optim_params("")
@@ -108,7 +112,8 @@ class EnvelopeModel:
             start_param_vals = self.template_model.predictTemplate(event, sta, chan, band, phases=phases)
 
         # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
-        f = lambda params: -self.wiggle_model.template_ncost(wave, phases, params) - self.template_model.log_likelihood((phases, params), event, sta, chan, band)
+        f = lambda params: -self.wiggle_model.template_ncost(
+            wave, phases, params) - self.template_model.log_likelihood((phases, params), event, sta, chan, band)
 
         low_bounds = None
         high_bounds = None
@@ -117,8 +122,8 @@ class EnvelopeModel:
             low_bounds = self.template_model.low_bounds(phases, default_atimes=atimes)
             high_bounds = self.template_model.high_bounds(phases, default_atimes=atimes)
 
-        params, nll = minimize_matrix(f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, optim_params=optim_params)
-
+        params, nll = minimize_matrix(
+            f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, optim_params=optim_params)
 
         return nll, (phases, params)
 
@@ -137,16 +142,15 @@ class EnvelopeModel:
 
         return total_ll, all_params
 
-
     def wave_log_likelihood_montecarlo(self, wave, event, n=50):
-
 
         sta = wave['sta']
         chan = wave['chan']
         band = wave['band']
 
         # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
-        f = lambda params: self.wiggle_model.template_ncost(wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+        f = lambda params: self.wiggle_model.template_ncost(
+            wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
 
         sum_ll = np.float("-inf")
 
@@ -162,7 +166,6 @@ class EnvelopeModel:
         ll = sum_ll - np.log(n)
 
         return ll, samples
-
 
     def log_likelihood_montecarlo(self, segment, event):
 

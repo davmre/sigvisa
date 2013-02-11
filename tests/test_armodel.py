@@ -6,6 +6,7 @@ from sigvisa.models.noise.armodel.learner import ARLearner
 
 import unittest
 
+
 class TestAutoregressiveModels(unittest.TestCase):
 
     def setUp(self):
@@ -16,7 +17,7 @@ class TestAutoregressiveModels(unittest.TestCase):
         true_std = .11
         errormodel = ErrorModel(mean=0, std=true_std)
         true_model = ARModel(true_params, errormodel)
-        sampled_data = ma.masked_array(true_model.sample(1000), mask=[False,]*1000)
+        sampled_data = ma.masked_array(true_model.sample(1000), mask=[False, ] * 1000)
 
         origll = true_model.fastAR_missingData(sampled_data, 0, true_std)
         orig_slowll = true_model.slow_AR(sampled_data, 0)

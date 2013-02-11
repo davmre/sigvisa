@@ -10,6 +10,7 @@ def wiggle_model_by_name(name, **kwargs):
     elif name == "plain":
         return PlainWiggleModel(**kwargs)
 
+
 class WiggleModel(object):
 
     def __init__(self, tm):
@@ -44,7 +45,7 @@ class PlainWiggleModel(WiggleModel):
     def template_ncost(self, wave, phases, params):
         generated = self.tm.generate_template_waveform((phases, params), model_waveform=wave)
         nm = get_noise_model(wave)
-        ll = nm.lklhood(data = (wave.data - generated.data), zero_mean=True)
+        ll = nm.lklhood(data=(wave.data - generated.data), zero_mean=True)
         return ll
 
     def summary_str(self):

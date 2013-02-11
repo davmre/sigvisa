@@ -3,30 +3,30 @@ import unittest
 
 from sigvisa.learn.train_coda_models import learn_model, load_model, gp_extract_features
 
+
 class TestModels(unittest.TestCase):
 
     def setUp(self):
-        self.X = np.array([ \
-            [120, 30, 0, 1000, 32], \
-            [118, 31, 0, 1050, 32], \
-            [120, 29, 40, 1000, 34], \
-            [110, 30, 20, 3000, 34], \
-                ])
-        self.y = np.array([ \
-                -0.02, \
-                -0.01, \
-                -0.015, \
-                -0.005, \
-                ])
-        self.evids = np.array([ \
-                1, \
-                2, \
-                3, \
-                4, \
-                ])
-        self.testX1 = np.array([[120, 30, 0, 1025, 32],])
-        self.testX2 = np.array([[119, 31, 0, 1000, 33],])
-
+        self.X = np.array([
+            [120, 30, 0, 1000, 32],
+            [118, 31, 0, 1050, 32],
+            [120, 29, 40, 1000, 34],
+            [110, 30, 20, 3000, 34],
+        ])
+        self.y = np.array([
+            -0.02,
+            -0.01,
+            -0.015,
+            -0.005,
+        ])
+        self.evids = np.array([
+            1,
+            2,
+            3,
+            4,
+        ])
+        self.testX1 = np.array([[120, 30, 0, 1025, 32], ])
+        self.testX2 = np.array([[119, 31, 0, 1000, 33], ])
 
     def test_constant(self):
         model = learn_model(self.X, self.y, model_type="constant_gaussian", sta="AAK")
@@ -46,7 +46,6 @@ class TestModels(unittest.TestCase):
         self.assertAlmostEqual(ll, ll1)
 
         s = nmodel.sample(self.X)
-
 
     def test_linear_distance(self):
         model = learn_model(self.X, self.y, model_type="linear_distance", sta="AAK")

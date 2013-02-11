@@ -10,18 +10,22 @@
 from django.db import models
 from coda_fits.fields import UnixTimestampField, BlobField
 
+
 class view_options(models.Model):
     id = models.IntegerField(primary_key=True)
     smoothing = models.IntegerField()
     logscale = models.BooleanField()
     sample = models.BooleanField()
 
+
 class Dataset(models.Model):
     label = models.CharField(max_length=60)
     start_time = models.FloatField()
     end_time = models.FloatField()
+
     class Meta:
         db_table = u'dataset'
+
 
 class IdcxArrival(models.Model):
     sta = models.CharField(max_length=18)
@@ -50,6 +54,7 @@ class IdcxArrival(models.Model):
     auth = models.CharField(max_length=45, blank=True)
     commid = models.IntegerField(null=True, blank=True)
     lddate = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = u'idcx_arrival'
 
@@ -75,6 +80,7 @@ class IdcxWfdisc(models.Model):
     foff = models.IntegerField(null=True, blank=True)
     commid = models.IntegerField(null=True, blank=True)
     lddate = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = u'idcx_wfdisc'
 
@@ -106,8 +112,10 @@ class LebArrival(models.Model):
     auth = models.CharField(max_length=45, blank=True)
     commid = models.IntegerField(null=True, blank=True)
     lddate = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = u'leb_arrival'
+
 
 class LebAssoc(models.Model):
     arid = models.IntegerField(primary_key=True)
@@ -129,8 +137,10 @@ class LebAssoc(models.Model):
     vmodel = models.CharField(max_length=45, blank=True)
     commid = models.IntegerField(null=True, blank=True)
     lddate = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = u'leb_assoc'
+
 
 class LebOrigin(models.Model):
     lat = models.FloatField()
@@ -158,19 +168,23 @@ class LebOrigin(models.Model):
     auth = models.CharField(max_length=45, blank=True)
     commid = models.IntegerField(null=True, blank=True)
     lddate = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = u'leb_origin'
+
 
 class SigvisaCodaFittingRun(models.Model):
     runid = models.IntegerField(primary_key=True)
     run_name = models.CharField(max_length=765, blank=True)
     iter = models.IntegerField(null=True, blank=True)
+
     class Meta:
         db_table = u'sigvisa_coda_fitting_run'
         ordering = ['run_name', 'iter']
 
     def __unicode__(self):
         return "%s_iter%04d" % (self.run_name, self.runid)
+
 
 class SigvisaCodaFit(models.Model):
     fitid = models.IntegerField(primary_key=True)
@@ -190,6 +204,7 @@ class SigvisaCodaFit(models.Model):
     timestamp = UnixTimestampField(null=True, blank=True)
     elapsed = models.FloatField(null=True, blank=True)
     human_approved = models.IntegerField(default=0)
+
     class Meta:
         db_table = u'sigvisa_coda_fit'
 
@@ -206,6 +221,7 @@ class SigvisaCodaFitPhase(models.Model):
     amp_transfer = models.FloatField(null=True, blank=True)
     wiggle_stime = models.FloatField(null=True, blank=True)
     wiggle_fname = models.CharField(max_length=255, blank=True)
+
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'
 
@@ -224,9 +240,11 @@ class SigvisaWiggle(models.Model):
     meta2 = models.FloatField(null=True, blank=True)
     meta3 = models.FloatField(null=True, blank=True)
     meta_str = models.CharField(max_length=255, blank=True)
-    params = BlobField() # This field type is a guess.
+    params = BlobField()  # This field type is a guess.
+
     class Meta:
         db_table = u'sigvisa_wiggle'
+
 
 class SigvisaTemplateParamModel(models.Model):
     modelid = models.IntegerField(primary_key=True)
@@ -246,8 +264,10 @@ class SigvisaTemplateParamModel(models.Model):
     n_evids = models.IntegerField()
     training_ll = models.FloatField()
     timestamp = UnixTimestampField()
+
     class Meta:
         db_table = u'sigvisa_template_param_model'
+
 
 class SigvisaGridsearchRun(models.Model):
     gsid = models.IntegerField(primary_key=True)
@@ -265,9 +285,11 @@ class SigvisaGridsearchRun(models.Model):
     phases = models.CharField(max_length=127)
     wiggle_model_type = models.CharField(max_length=31)
     heatmap_fname = models.CharField(max_length=255)
+
     class Meta:
         db_table = u'sigvisa_gridsearch_run'
         ordering = ['gsid']
+
 
 class SigvisaGsrunWave(models.Model):
     gswid = models.IntegerField(primary_key=True)
@@ -278,23 +300,29 @@ class SigvisaGsrunWave(models.Model):
     stime = UnixTimestampField()
     etime = UnixTimestampField()
     hz = models.FloatField()
+
     class Meta:
         db_table = u'sigvisa_gsrun_wave'
         ordering = ['gswid']
+
 
 class SigvisaGsrunTModel(models.Model):
     gsmid = models.IntegerField(primary_key=True)
     gswid = models.ForeignKey(SigvisaGsrunWave, db_column='gswid')
     modelid = models.ForeignKey(SigvisaTemplateParamModel, db_column='modelid')
+
     class Meta:
         db_table = u'sigvisa_gsrun_tmodel'
+
 
 class StaticPhaseid(models.Model):
     id = models.IntegerField(primary_key=True)
     phase = models.CharField(max_length=60, unique=True, blank=True)
     timedef = models.CharField(max_length=3, blank=True)
+
     class Meta:
         db_table = u'static_phaseid'
+
 
 class StaticSiteid(models.Model):
     id = models.IntegerField(primary_key=True)
@@ -304,5 +332,6 @@ class StaticSiteid(models.Model):
     elev = models.FloatField(null=True, blank=True)
     staname = models.CharField(max_length=150, blank=True)
     statype = models.CharField(max_length=6, blank=True)
+
     class Meta:
         db_table = u'static_siteid'

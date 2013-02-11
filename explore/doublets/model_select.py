@@ -1,9 +1,11 @@
 import sigvisa.database.db
 from sigvisa.database.dataset import *
 import sigvisa.utils.geog
-import sys, hashlib
+import sys
+import hashlib
 import itertools
-import time, calendar
+import time
+import calendar
 
 
 import matplotlib
@@ -31,6 +33,7 @@ from predict_doublet import predict_signal_at_point, load_models_from_dir
 from train_model import train_and_save_models, read_training_events
 from visualize_best_correlations import normalize
 
+
 def main():
     parser = OptionParser()
 
@@ -38,14 +41,20 @@ def main():
     parser.add_option("-c", "--chan", dest="chan", default="BHZ", type="str", help="channel to correlate")
     parser.add_option("--center", dest="center_evid", default=None, type="int", help="evid to center on")
 
-    parser.add_option("-f", "--filter_str", dest="filter_str", default="freq_0.8_3.5", type="str", help="filter string to process waveforms")
-    parser.add_option("--window_len", dest="window_len", default=30.0, type=float, help="length of window to extract / cross-correlate")
+    parser.add_option(
+        "-f", "--filter_str", dest="filter_str", default="freq_0.8_3.5", type="str", help="filter string to process waveforms")
+    parser.add_option(
+        "--window_len", dest="window_len", default=30.0, type=float, help="length of window to extract / cross-correlate")
     parser.add_option("-o", "--model_folder", dest="model_folder", default=None, type="str", help="folder to save learned model")
-    parser.add_option("--days_before", dest="days_before", default=7, type="float", help="set time window reletive to center event")
+    parser.add_option(
+        "--days_before", dest="days_before", default=7, type="float", help="set time window reletive to center event")
     parser.add_option("--days_after", dest="days_after", default=7, type="float", help="set time window reletive to center event")
-    parser.add_option("--width", dest="width", default=100, type="float", help="only load events within a distance of width km from the center event.")
-    parser.add_option("--min_mb", dest="min_mb", default=1, type="float", help="exclude all events with mb less than this value (0)")
-    parser.add_option("--max_mb", dest="max_mb", default=99, type="float", help="exclude all events with mb greater than this value (10)")
+    parser.add_option("--width", dest="width", default=100, type="float",
+                      help="only load events within a distance of width km from the center event.")
+    parser.add_option(
+        "--min_mb", dest="min_mb", default=1, type="float", help="exclude all events with mb less than this value (0)")
+    parser.add_option(
+        "--max_mb", dest="max_mb", default=99, type="float", help="exclude all events with mb greater than this value (10)")
 
     (options, args) = parser.parse_args()
 
@@ -62,19 +71,17 @@ def main():
     model_folder = os.path.realpath(options.model_folder)
 
     center = Event(center_evid)
-    st = center.time - days_before*24*60*60
-    et = center.time + days_after*24*60*60
-
+    st = center.time - days_before * 24 * 60 * 60
+    et = center.time + days_after * 24 * 60 * 60
 
     fundamental = 0.1
-    min_freq=0.8
-    max_freq=3.5
+    min_freq = 0.8
+    max_freq = 3.5
     ff = FourierFeatures(fundamental=fundamental, min_freq=min_freq, max_freq=max_freq)
-
 
     # laod true waveform at the center point, for evaluation
     center = Event(center_evid)
-    arriving_events, arrival_dict  = get_first_arrivals([center,], sta)
+    arriving_events, arrival_dict = get_first_arrivals([center, ], sta)
     (atime, phase) = arrival_dict[center.evid]
     true_center_wave = normalize(extract_phase_window(sta, chan, phase, atime, window_len, filter_str, center.evid))
     true_center_features = ff.basis_decomposition(true_center_wave)
@@ -83,21 +90,19 @@ def main():
     # first find the events we'll train with: everything near the center, but *not* the center itself
     training_events = read_training_events(sta, st, et, options.min_mb, options.max_mb, center, width)
 
-
-    W =  [1.5, 4.0, 10.0]
+    W = [1.5, 4.0, 10.0]
     SN = [.05, 1]
     SF = [.05, 1]
 
     pp = PdfPages("logs/center_%d_models.pdf" % center.evid)
 
     # plot the training events
-    hm = EventHeatmap(f=lambda x,y: 0, center = (center.lon, center.lat), width = width/70.0)
+    hm = EventHeatmap(f=lambda x, y: 0, center=(center.lon, center.lat), width = width / 70.0)
     hm.add_events([(ev.lon, ev.lat) for ev in training_events])
-    hm.add_stations([sta,])
+    hm.add_stations([sta, ])
     hm.set_true_event(center.lon, center.lat)
     hm.plot()
     pp.savefig()
-
 
     amp_params = itertools.product(SN, SF, W)
     phase_params = itertools.product(SN, SF, W)
@@ -107,11 +112,13 @@ def main():
         hash = "_" + hashlib.sha1(idstr).hexdigest()[0:6]
 
         try:
-            train_and_save_models(training_events, sta, chan, window_len, filter_str, ff, model_folder+hash, amp_params=ap, phase_params=phase_p)
+            train_and_save_models(
+                training_events, sta, chan, window_len, filter_str, ff, model_folder + hash, amp_params=ap, phase_params=phase_p)
 
-            models = load_models_from_dir(model_folder+hash)
+            models = load_models_from_dir(model_folder + hash)
 
-            predicted_center_wave, predicted_features = predict_signal_at_point((center.lon, center.lat, center.depth), models, ff, len(true_center_wave))
+            predicted_center_wave, predicted_features = predict_signal_at_point(
+                (center.lon, center.lat, center.depth), models, ff, len(true_center_wave))
 
             feature_error = np.linalg.norm((predicted_features - true_center_features).flatten(), 1)
             signal_error = np.linalg.norm((predicted_center_wave - true_center_wave).flatten(), 1)
@@ -119,18 +126,18 @@ def main():
             print "evid", center.evid, "params", ap, phase_p, "feature error", feature_error, "signal error", signal_error
 
             fig = plt.figure()
-            gs = gridspec.GridSpec(3,1)
+            gs = gridspec.GridSpec(3, 1)
             gs.update(left=0.1, right=0.95, hspace=1)
             x = np.linspace(-1, window_len, len(true_center_wave))
 
             axes = None
-            axes = plt.subplot(gs[0,0], sharey=axes)
+            axes = plt.subplot(gs[0, 0], sharey=axes)
             axes.plot(x, predicted_center_wave, color="red")
 
-            axes = plt.subplot(gs[1,0], sharey=axes)
+            axes = plt.subplot(gs[1, 0], sharey=axes)
             axes.plot(x, true_center_wave, color="blue")
 
-            axes = plt.subplot(gs[2,0], sharey=axes)
+            axes = plt.subplot(gs[2, 0], sharey=axes)
             axes.plot(x, predicted_center_wave, color="red")
             axes.plot(x, true_center_wave, color="blue")
 

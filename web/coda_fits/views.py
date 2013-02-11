@@ -52,18 +52,21 @@ def process_plot_args(request, axes):
         if xlen > 0:
             axes.set_xlim(xmin, xmin + xlen)
 
+
 def error_wave(exception):
     error_text = 'Error plotting waveform: \"%s\"' % str(exception)
-    fig = Figure(figsize=(5,3), dpi=144)
+    fig = Figure(figsize=(5, 3), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     axes.set_xlabel("Time (s)", fontsize=8)
-    axes.text(.5, .5, "\n".join(textwrap.wrap(error_text, 60)), horizontalalignment='center', verticalalignment='center', transform = axes.transAxes, fontsize=8)
-    canvas=FigureCanvas(fig)
-    response=django.http.HttpResponse(content_type='image/png')
+    axes.text(.5, .5, "\n".join(textwrap.wrap(
+        error_text, 60)), horizontalalignment='center', verticalalignment='center', transform=axes.transAxes, fontsize=8)
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
     fig.tight_layout()
     canvas.print_png(response)
     return response
+
 
 def filterset_GET_string(filterset):
     """
@@ -75,7 +78,6 @@ def filterset_GET_string(filterset):
 
     """
 
-
     def field_names(self):
         field_names = []
         for field in self.fields:
@@ -84,7 +86,6 @@ def filterset_GET_string(filterset):
             else:
                 field_names.append(field[0])
         return field_names
-
 
     def dict_to_GET(d):
         return ';'.join(['%s=%s' % (k, d[k]) for k in d if d[k]])
@@ -96,7 +97,7 @@ def filterset_GET_string(filterset):
     return filter_GET_params, field_vals
 
 
-@cache_page(60*60)
+@cache_page(60 * 60)
 def fit_list_view(request, runid):
     run = SigvisaCodaFittingRun.objects.get(pk=runid)
     fits = SigvisaCodaFit.objects.filter(runid=runid)
@@ -107,19 +108,20 @@ def fit_list_view(request, runid):
     total_fits = fits_filter.qs.count
 
     filter_GET_params, filter_args = filterset_GET_string(fits_filter)
-    filter_args['runid']=runid
+    filter_args['runid'] = runid
 
     return render_to_response("coda_fits/fits.html",
-                  {'fit_list': fits_filter.qs,
-                   'fits_filter': fits_filter,
-                   'filter_args': filter_args,
-                   'filter_GET_params': filter_GET_params,
-                   'runid': runid,
-                   'mean_acost': mean_acost,
-                   'mean_time': mean_time,
-                   'total_fits': total_fits,
-                   'run': run,
-                   }, context_instance=RequestContext(request))
+                              {'fit_list': fits_filter.qs,
+                               'fits_filter': fits_filter,
+                               'filter_args': filter_args,
+                               'filter_GET_params': filter_GET_params,
+                               'runid': runid,
+                               'mean_acost': mean_acost,
+                               'mean_time': mean_time,
+                               'total_fits': total_fits,
+                               'run': run,
+                               }, context_instance=RequestContext(request))
+
 
 class FitsFilterSet(FilterSet):
     fields = [
@@ -131,8 +133,7 @@ class FitsFilterSet(FilterSet):
         'optim_method',
         'dist',
         'azi',
-        ]
-
+    ]
 
 
 # detail view for a particular fit
@@ -145,9 +146,9 @@ def fit_detail(request, fitid):
     fits_filter = FitsFilterSet(fits, request.GET)
     filter_GET_params, filter_args = filterset_GET_string(fits_filter)
 
-    next = fits_filter.qs.filter(fitid__gt = fitid)
+    next = fits_filter.qs.filter(fitid__gt=fitid)
     next = next[0] if next else False
-    prev = fits_filter.qs.filter(fitid__lt = fitid)
+    prev = fits_filter.qs.filter(fitid__lt=fitid)
     prev = prev[0] if prev else False
 
     time_format = "%b %d %Y, %H:%M:%S"
@@ -165,13 +166,12 @@ def fit_detail(request, fitid):
         fit_view_options.sample = False
         fit_view_options.save()
 
-
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
     # load the waveform so that we can display data about it
     try:
-        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band)+";env")
+        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
 
         wave_stime_str = datetime.fromtimestamp(wave['stime'], timezone('UTC')).strftime(time_format)
         wave_etime_str = datetime.fromtimestamp(wave['etime'], timezone('UTC')).strftime(time_format)
@@ -201,27 +201,26 @@ def fit_detail(request, fitid):
         ev_time_str = ""
 
     return render_to_response('coda_fits/detail.html', {
-            'fit': fit,
-            'fit_time_str': fit_time_str,
-            'fit_view_options': fit_view_options,
-            'filter_GET_params': filter_GET_params,
-            'next': next,
-            'prev': prev,
-            'wave': wave,
-            'wave_stime_str': wave_stime_str,
-            'wave_etime_str': wave_etime_str,
-            'ev': ev,
-            'ev_time_str': ev_time_str,
-            'loc_str': loc_str,
-            'dist': dist,
-            'azi': azi,
-            'noise_model': nm,
-            'fits_filter': fits_filter,
-            }, context_instance=RequestContext(request))
+        'fit': fit,
+        'fit_time_str': fit_time_str,
+        'fit_view_options': fit_view_options,
+        'filter_GET_params': filter_GET_params,
+        'next': next,
+        'prev': prev,
+        'wave': wave,
+        'wave_stime_str': wave_stime_str,
+        'wave_etime_str': wave_etime_str,
+        'ev': ev,
+        'ev_time_str': ev_time_str,
+        'loc_str': loc_str,
+        'dist': dist,
+        'azi': azi,
+        'noise_model': nm,
+        'fits_filter': fits_filter,
+    }, context_instance=RequestContext(request))
 
 
-
-@cache_page(60*60)
+@cache_page(60 * 60)
 def FitImageView(request, fitid):
 
     fit = get_object_or_404(SigvisaCodaFit, pk=fitid)
@@ -237,7 +236,6 @@ def FitImageView(request, fitid):
         fit_view_options.logscale = logscale
         fit_view_options.save()
 
-
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     tm = load_template_model("paired_exp", run_name=None, run_iter=0, model_type="dummy")
@@ -245,30 +243,31 @@ def FitImageView(request, fitid):
     fit_phases = fit.sigvisacodafitphase_set.all()
 
     try:
-        fit_params =np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
+        fit_params = np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
         phases = tuple([str(p.phase) for p in fit_phases])
         (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
 
-
         wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
 
-        fig = Figure(figsize=(5,3), dpi=144)
+        fig = Figure(figsize=(5, 3), dpi=144)
         fig.patch.set_facecolor('white')
         axes = fig.add_subplot(111)
         axes.set_xlabel("Time (s)", fontsize=8)
         synth_wave = tm.generate_template_waveform((phases, vals), wave, sample=sample)
-        plot.subplot_waveform(wave.filter("smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
+        plot.subplot_waveform(wave.filter(
+            "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
         plot.subplot_waveform(synth_wave, axes, color="green", linewidth=3, logscale=logscale, plot_dets=False)
         process_plot_args(request, axes)
 
     except Exception as e:
         return error_wave(e)
 
-    canvas=FigureCanvas(fig)
-    response=django.http.HttpResponse(content_type='image/png')
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
     fig.tight_layout()
     canvas.print_png(response)
     return response
+
 
 def rate_fit(request, fitid):
     fit = SigvisaCodaFit.objects.get(fitid=int(fitid))
@@ -280,7 +279,7 @@ def rate_fit(request, fitid):
     else:
         fit.human_approved = rating
         fit.save()
-        filter_args['pageid']=int(pageid)+1
+        filter_args['pageid'] = int(pageid) + 1
         return HttpResponseRedirect(reverse('fit_run_detail', kwargs=filter_args))
     return HttpResponse("Something went wrong.")
 
@@ -293,6 +292,7 @@ def delete_fit(request, fitid):
     except Exception as e:
         return HttpResponse("Error deleting fit %d: %s" % (int(fitid), str(e)))
 
+
 def delete_run(request, runid):
     try:
         run = SigvisaCodaFittingRun.objects.get(runid=int(runid))
@@ -301,10 +301,11 @@ def delete_run(request, runid):
     except Exception as e:
         return HttpResponse("Error deleting run %d: %s" % (int(runid), str(e)))
 
+
 def fit_cost_quality(request, runid):
     run = SigvisaCodaFittingRun.objects.get(runid=int(runid))
 
-    fig = Figure(figsize=(5,3), dpi=144)
+    fig = Figure(figsize=(5, 3), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     fig.suptitle("%s iter %d fit quality" % (run.run_name, run.iter))
@@ -320,25 +321,24 @@ def fit_cost_quality(request, runid):
         good_fits = run.sigvisacodafit_set.filter(human_approved=2)
         g = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in good_fits])
         if good_fits.count() > 0:
-            axes.scatter(g[:,0], g[:, 1], c='g', alpha=0.5, s=10, marker='.', edgecolors='none')
+            axes.scatter(g[:, 0], g[:, 1], c='g', alpha=0.5, s=10, marker='.', edgecolors='none')
 
     if bad:
         bad_fits = run.sigvisacodafit_set.filter(human_approved=1)
         b = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in bad_fits])
         if bad_fits.count() > 0:
-            axes.scatter(b[:,0], b[:, 1], c='r', alpha=0.5, s=10, marker='.', edgecolors='none')
+            axes.scatter(b[:, 0], b[:, 1], c='r', alpha=0.5, s=10, marker='.', edgecolors='none')
 
     if unknown:
         unknown_fits = run.sigvisacodafit_set.filter(human_approved=0)
         u = np.array([(fit.acost, get_event(evid=fit.evid).mb) for fit in unknown_fits])
         if unknown_fits.count() > 0:
-            axes.scatter(u[:,0], u[:, 1], c='b', alpha=0.5, s=10, marker='.', edgecolors='none')
+            axes.scatter(u[:, 0], u[:, 1], c='b', alpha=0.5, s=10, marker='.', edgecolors='none')
 
     process_plot_args(request, axes)
 
-
-    canvas=FigureCanvas(fig)
-    response=django.http.HttpResponse(content_type='image/png')
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
     fig.tight_layout()
     canvas.print_png(response)
     return response

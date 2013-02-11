@@ -1,7 +1,9 @@
 import numpy as np
 import numpy.ma as ma
 import scipy.signal
-import time, copy, cPickle
+import time
+import copy
+import cPickle
 from sigvisa import Sigvisa
 
 import obspy.signal.filter
@@ -11,10 +13,12 @@ from sigvisa.signals.mask_util import *
 
 from sigvisa.database.dataset import *
 
+
 def load_waveform_from_file(fname):
     wave = cPickle.load(open(fname, 'rb'))
     wave.filtered = dict()
     return wave
+
 
 def filter_str_extract_band(filter_str):
     band = "broadband"
@@ -32,7 +36,7 @@ class Waveform(object):
     A single waveform trace. Contains methods for generating filtered versions of itself.
     """
 
-    def __init__(self, data=[], srate = 40, stime=0, sta = "AAK", evid=None, segment_stats = None, my_stats = None, **my_stats_entries):
+    def __init__(self, data=[], srate=40, stime=0, sta="AAK", evid=None, segment_stats=None, my_stats=None, **my_stats_entries):
         if isinstance(data, ma.MaskedArray):
             self.data = data
         else:
@@ -45,28 +49,28 @@ class Waveform(object):
             self.segment_stats = segment_stats
         else:
             npts = len(data)
-            etime = stime + npts/float(srate)
-            self.segment_stats = {"stime" : stime, "sta": sta, "etime": etime, "len": npts/float(srate), "siteid": Sigvisa().name_to_siteid_minus1[sta]+1}
+            etime = stime + npts / float(srate)
+            self.segment_stats = {"stime": stime, "sta": sta, "etime": etime, "len": npts / float(
+                srate), "siteid": Sigvisa().name_to_siteid_minus1[sta] + 1}
 
         # attributes specific to this waveform, e.g. channel or freq band
         if my_stats is not None:
             self.my_stats = my_stats
         else:
-            self.my_stats = {"srate" : float(srate), "npts": npts}
+            self.my_stats = {"srate": float(srate), "npts": npts}
             self.my_stats.update(my_stats_entries)
 
             try:
-                fraction_valid = 1 - np.sum([int(v) for v in self.data.mask])/float(len(self.data))
+                fraction_valid = 1 - np.sum([int(v) for v in self.data.mask]) / float(len(self.data))
             except TypeError:
                 fraction_valid = 1
 
-            self.my_stats.update({"filter_str" : "",
-                                     "freq_low": 0.0,
-                                     "freq_high": self.my_stats["srate"]/2.0,
-                                     "fraction_valid": fraction_valid })
+            self.my_stats.update({"filter_str": "",
+                                  "freq_low": 0.0,
+                                  "freq_high": self.my_stats["srate"] / 2.0,
+                                  "fraction_valid": fraction_valid})
 
         self.filtered = dict()
-
 
     # cost functions for comparing to other waves
     def l1_cost(self, other_wave):
@@ -87,7 +91,6 @@ class Waveform(object):
         allstats['sampling_rate'] = allstats['srate']
         allstats['channel'] = allstats['chan']
         allstats['band'] = self['band']
-
 
         return Trace(header=allstats, data=self.data)
 
@@ -153,7 +156,7 @@ class Waveform(object):
         if isinstance(key, slice):
             srate = self['srate']
             stime = self['stime']
-            newslice = slice(int((key.start - stime)*srate), int((key.stop - stime)*srate), 1)
+            newslice = slice(int((key.start - stime) * srate), int((key.stop - stime) * srate), 1)
             return self.data[newslice]
         # otherwise, we pull from the stats
         elif key in self.segment_stats:
@@ -163,15 +166,18 @@ class Waveform(object):
 
         # if we don't have arrivals for this waveform, look them up and cache them
         elif key == "event_arrivals":
-            event_arrivals = read_event_detections(cursor=Sigvisa().dbconn.cursor(), evid=self['evid'], stations = [self['sta'],], evtype="leb")
+            event_arrivals = read_event_detections(
+                cursor=Sigvisa().dbconn.cursor(), evid=self['evid'], stations=[self['sta'], ], evtype="leb")
             self.segment_stats['event_arrivals'] = event_arrivals
             return event_arrivals
-        elif key == "arrivals": # default to LEB arrivals
-            arrivals = read_station_detections(cursor=Sigvisa().dbconn.cursor(), sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="leb_arrival")
+        elif key == "arrivals":  # default to LEB arrivals
+            arrivals = read_station_detections(cursor=Sigvisa().dbconn.cursor(
+            ), sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="leb_arrival")
             self.segment_stats['arrivals'] = arrivals
             return arrivals
         elif key == "arrivals_idcx":
-            arrivals = read_station_detections(cursor=Sigvisa().dbconn.cursor(), sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="idcx_arrival")
+            arrivals = read_station_detections(cursor=Sigvisa().dbconn.cursor(
+            ), sta=self['sta'], start_time=self['stime'], end_time=self['etime'], arrival_table="idcx_arrival")
             self.segment_stats['arrivals_idcx'] = arrivals
             return arrivals
         elif key == "band":
@@ -194,16 +200,17 @@ class Waveform(object):
 
         f = None
         if name == "center":
-            f = lambda x : ma.masked_array(data = x.data - np.mean(x), mask = x.mask)
+            f = lambda x: ma.masked_array(data=x.data - np.mean(x), mask=x.mask)
         elif name == "log":
-            f = lambda x : np.log(x)
+            f = lambda x: np.log(x)
         elif name == "hz":
             new_srate = float(pieces[1])
-            ratio = self['srate']/new_srate
+            ratio = self['srate'] / new_srate
             rounded_ratio = int(np.round(ratio))
             if np.abs(ratio - rounded_ratio) > 0.00000001:
                 raise Exception("new sampling rate %.3f does not evenly divide old rate %.3f" % (new_srate, self['srate']))
-            f= lambda x : ma.masked_array(data=scipy.signal.decimate(x, rounded_ratio), mask = x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
+            f = lambda x: ma.masked_array(data=scipy.signal.decimate(
+                x, rounded_ratio), mask=x.mask[::rounded_ratio] if isinstance(x.mask, np.ndarray) else False)
             fstats['srate'] = new_srate
         elif name == "env":
             f = lambda x: ma.masked_array(data=obspy.signal.filter.envelope(x.data), mask=x.mask)
@@ -218,7 +225,7 @@ class Waveform(object):
             low = float(pieces[1])
             high = float(pieces[2])
 
-            f = lambda x : bandpass_missing(x, low, high, self.my_stats['srate'])
+            f = lambda x: bandpass_missing(x, low, high, self.my_stats['srate'])
 
             fstats["freq_low"] = low
             fstats["freq_high"] = high
@@ -228,7 +235,7 @@ class Waveform(object):
 
     def dump_to_file(self, fname):
         filtered = self.filtered
-        self.filtered=None
+        self.filtered = None
         cPickle.dump(self, open(fname, 'wb'), protocol=2)
         self.filtered = filtered
 
@@ -240,13 +247,14 @@ class Waveform(object):
         s += ', '.join(['%s: %s' % (k, self.my_stats[k]) for k in sorted(self.my_stats.keys()) if k != 'chan'])
         return s
 
+
 class Segment(object):
 
     STANDARD_STATS = ["sta", "stime", "etime"]
 
     filter_order = ['center', 'freq', 'env', 'log', 'smooth', 'hz']
 
-    def __init__(self, waveforms = []):
+    def __init__(self, waveforms=[]):
         self.__chans = dict()
         self.stats = None
         self.filter_str = ""
@@ -255,7 +263,6 @@ class Segment(object):
 
         for wf in waveforms:
             self.addWaveform(wf)
-
 
     def addWaveform(self, wf):
         if wf["chan"] in self.__chans:
@@ -290,7 +297,8 @@ class Segment(object):
             s2 = set(self.filter_str.split(';'))
             duplicates = s1.intersection(s2)
             if len(duplicates) > 0:
-                raise Exception("filter str '%s' duplicates a filter already in use (currently '%s')! Use force_duplicate to override this error." % (filter_str, self.filter_str))
+                raise Exception("filter str '%s' duplicates a filter already in use (currently '%s')! Use force_duplicate to override this error." % (
+                    filter_str, self.filter_str))
 
         filters = [x for x in (self.filter_str.split(';') + new_filters) if len(x) > 0]
         sorted_filters = []
@@ -329,7 +337,7 @@ class Segment(object):
     # data would take a long time.
     def dummy_chan(self, chan_str):
         chan = self.__chans[chan_str]
-        dummy_chan = Waveform(data = np.random.randn(100), segment_stats = self.stats, my_stats=copy.copy(chan.my_stats))
+        dummy_chan = Waveform(data=np.random.randn(100), segment_stats=self.stats, my_stats=copy.copy(chan.my_stats))
         dummy_chan = dummy_chan.filter(self.filter_str)
         dummy_chan.data = None
         dummy_chan.my_stats['npts'] = chan['npts']
@@ -352,12 +360,13 @@ class Segment(object):
 
     def __str__(self):
         timestr = time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self['stime']))
-        s = "start: %s (%.1f). sta: %s, chans: %s. " % (timestr, self['stime'], self['sta'], ','.join(sorted(self.__chans.keys())))
+        s = "start: %s (%.1f). sta: %s, chans: %s. " % (
+            timestr, self['stime'], self['sta'], ','.join(sorted(self.__chans.keys())))
         s += "filter: '%s'" % self.filter_str
         return s
 
 
-def smooth(x,window_len=121,window='hanning'):
+def smooth(x, window_len=121, window='hanning'):
     """smooth the data using a window with requested size.
 
     This method is based on the convolution of a scaled window with the signal.
@@ -389,37 +398,35 @@ def smooth(x,window_len=121,window='hanning'):
     """
 
     if x.ndim != 1:
-        raise ValueError, "smooth only accepts 1 dimension arrays."
+        raise ValueError("smooth only accepts 1 dimension arrays.")
 
     if x.size < window_len:
-        raise ValueError, "Input vector needs to be bigger than window size."
+        raise ValueError("Input vector needs to be bigger than window size.")
 
-
-    if window_len<3:
+    if window_len < 3:
         return x
 
     if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-        raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
-
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
 
 #    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
-    #print(len(s))
-
-    if window == 'flat': #moving average
-        w=np.ones(window_len,'d')
+    # print(len(s))
+    if window == 'flat':  # moving average
+        w = np.ones(window_len, 'd')
     else:
-        w=eval('np.'+window+'(window_len)')
+        w = eval('np.' + window + '(window_len)')
 
-    y=np.convolve(w/w.sum(),x.data,mode='same')
+    y = np.convolve(w / w.sum(), x.data, mode='same')
     return ma.masked_array(y, x.mask)
 
 
 def bandpass_missing(masked_array, low, high, srate):
     mask = masked_array.mask
 
-    m = obspy.signal.filter.bandpass(masked_array.data, low, high, srate, corners = 4, zerophase=True)
+    m = obspy.signal.filter.bandpass(masked_array.data, low, high, srate, corners=4, zerophase=True)
 
     return ma.masked_array(data=m, mask=mask)
+
 
 def main():
     data1 = np.random.randn(1000)

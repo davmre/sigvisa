@@ -3,13 +3,14 @@ import unittest
 
 import sigvisa.infer.optimize.optim_utils as optimize
 
+
 class TestOptimize(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
 
     def test_minimize(self):
-        f = lambda x : (x-17)**2 + 4
+        f = lambda x: (x - 17) ** 2 + 4
         x0 = np.array([13])
         for method in ["bfgscoord", "bfgs", "tnc", "simplex"]:
             optim_params = optimize.construct_optim_params("'normalize': False, 'method': '%s'" % method)
@@ -19,7 +20,7 @@ class TestOptimize(unittest.TestCase):
 
     def test_minimize_matrix(self):
 
-        f = lambda X : np.dot(X.flatten(), X.flatten())
+        f = lambda X: np.dot(X.flatten(), X.flatten())
         x0 = np.array([[1, 2], [3, 4]])
         x_opt = np.array([[0, 0], [0, 0]])
         x_fixedcol_opt = np.array([[1, 0], [3, 0]])

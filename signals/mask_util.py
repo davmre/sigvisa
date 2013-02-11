@@ -2,10 +2,10 @@ import numpy as np
 import numpy.ma as ma
 
 
-
 def grow_mask(mask, n):
     N = len(mask)
-    return [mask[max(0,i-n):min(N, i+n+1)].any() for i in range(N)]
+    return [mask[max(0, i - n):min(N, i + n + 1)].any() for i in range(N)]
+
 
 def mask_blocks(mask):
     """
@@ -25,16 +25,17 @@ def mask_blocks(mask):
     for i in range(len(mask)):
         if in_block and not mask[i]:        # end of a block
             blocks.append((block_start, i))
-            in_block=False
+            in_block = False
 
         if not in_block and mask[i]:        # start of a block
-            in_block=True
-            block_start=i
+            in_block = True
+            block_start = i
 
-    if in_block: # special case for blocks reaching the end of the mask
-        blocks.append((block_start, i+1))
+    if in_block:  # special case for blocks reaching the end of the mask
+        blocks.append((block_start, i + 1))
 
     return blocks
+
 
 def mirror_missing(m):
 
@@ -57,29 +58,27 @@ def mirror_missing(m):
 
         # we can copy forward into each block an amount of signal
         # equal to the time since the end of the previous block.
-        forward_copy = start if i==0 else (start - blocks[i-1][1])
+        forward_copy = start if i == 0 else (start - blocks[i - 1][1])
 
         # we can copy backwards into each block an amount of signal
         # equal to the time until the start of the next block.
-        backward_copy = (len(data)) - end if i==(len(blocks)-1) else (blocks[i+1][0] - end)
+        backward_copy = (len(data)) - end if i == (len(blocks) - 1) else (blocks[i + 1][0] - end)
 
         max_copy = max(forward_copy, backward_copy)
-        if forward_copy >= n/2 :
-            if backward_copy >= n/2.0:
-                forward_copy = int(np.floor(n/2.0))
-                backward_copy = int(np.ceil(n/2.0))
-                max_copy=backward_copy
+        if forward_copy >= n / 2:
+            if backward_copy >= n / 2.0:
+                forward_copy = int(np.floor(n / 2.0))
+                backward_copy = int(np.ceil(n / 2.0))
+                max_copy = backward_copy
             else:
                 forward_copy = min(forward_copy, n - backward_copy)
-        elif backward_copy >= n/2:
+        elif backward_copy >= n / 2:
             backward_copy = min(backward_copy, n - forward_copy)
 
         for k in range(max_copy):
             if k < forward_copy:
-                data[start+k] = data[start-k-1]
+                data[start + k] = data[start - k - 1]
             if k < backward_copy:
-                data[end-k-1] = data[end+k]
-
+                data[end - k - 1] = data[end + k]
 
     return ma.masked_array(data, mask)
-

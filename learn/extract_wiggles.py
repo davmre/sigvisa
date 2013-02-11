@@ -1,4 +1,9 @@
-import os, errno, sys, time, traceback, pdb
+import os
+import errno
+import sys
+import time
+import traceback
+import pdb
 import numpy as np
 from scipy import stats
 
@@ -10,7 +15,6 @@ from sigvisa.database.signal_data import *
 from optparse import OptionParser
 
 from sigvisa import Sigvisa
-
 
 
 from sigvisa.source.event import get_event
@@ -45,11 +49,12 @@ def main():
     ensure_dir_exists(run_wiggle_dir)
 
     runid = get_fitting_runid(cursor, run_name, iteration, create_if_new=False)
-    sql_query = "select fp.fpid, fp.phase, f.fitid, fp.template_model from sigvisa_coda_fit_phase fp, sigvisa_coda_fit f where f.runid=%d and fp.fitid=f.fitid and fp.wiggle_stime IS NULL" % (runid, )
+    sql_query = "select fp.fpid, fp.phase, f.fitid, fp.template_model from sigvisa_coda_fit_phase fp, sigvisa_coda_fit f where f.runid=%d and fp.fitid=f.fitid and fp.wiggle_stime IS NULL" % (
+        runid, )
     cursor.execute(sql_query)
     phases = cursor.fetchall()
     for (fpid, phase, fitid, template_shape) in phases:
-        tm = load_template_model(template_shape = template_shape, model_type="dummy")
+        tm = load_template_model(template_shape=template_shape, model_type="dummy")
 
         # load the waveform for this fit
         sql_query = "select evid, sta, chan, band from sigvisa_coda_fit where fitid=%d" % fitid

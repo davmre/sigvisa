@@ -1,12 +1,15 @@
 import numpy as np
 
-import sys, traceback, pdb
+import sys
+import traceback
+import pdb
 from optparse import OptionParser
 
 from sigvisa.learn.train_coda_models import learn_model, load_model, get_model_fname, get_training_data, analyze_model_fname
 from sigvisa import *
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
 from sigvisa.database.signal_data import *
+
 
 class RedirectStdStreams(object):
     def __init__(self, stdout=None, stderr=None):
@@ -15,30 +18,33 @@ class RedirectStdStreams(object):
 
     def __enter__(self):
         self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
-        self.old_stdout.flush(); self.old_stderr.flush()
+        self.old_stdout.flush()
+        self.old_stderr.flush()
         sys.stdout, sys.stderr = self._stdout, self._stderr
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self._stdout.flush(); self._stderr.flush()
+        self._stdout.flush()
+        self._stderr.flush()
         sys.stdout = self.old_stdout
         sys.stderr = self.old_stderr
 
 
 def cv_generator(n, k=3):
     data = np.random.permutation(n)
-    fold_size = n/k
-    folds = [data[i*fold_size:(i+1)*fold_size] for i in range(k)]
-    folds[k-1] = data[(k-1)*fold_size:]
+    fold_size = n / k
+    folds = [data[i * fold_size:(i + 1) * fold_size] for i in range(k)]
+    folds[k - 1] = data[(k - 1) * fold_size:]
     for i in range(k):
         train = np.array(())
         for j in range(k):
             if j != i:
                 train = np.concatenate([train, folds[j]])
         test = folds[i]
-        yield ([int (t) for t in train], [int(t) for t in test])
+        yield ([int(t) for t in train], [int(t) for t in test])
+
 
 def save_cv_folds(X, y, evids, cv_dir, folds=3):
-    if os.path.exists(os.path.join(cv_dir, "fold_%02d_test.txt" % (folds-1))):
+    if os.path.exists(os.path.join(cv_dir, "fold_%02d_test.txt" % (folds - 1))):
         print "folds already exist, not regenerating."
         return
 
@@ -59,8 +65,8 @@ def train_cv_models(cv_dir, model_type):
     d = analyze_model_fname(os.path.join(cv_dir, "abcdefg.model"))
 
     i = -1
-    while os.path.exists(os.path.join(cv_dir, "fold_%02d_train.txt" % (i+1))):
-        i+= 1
+    while os.path.exists(os.path.join(cv_dir, "fold_%02d_train.txt" % (i + 1))):
+        i += 1
 
         train = [int(x) for x in np.loadtxt(os.path.join(cv_dir, "fold_%02d_train.txt" % i))]
         test = [int(x) for x in np.loadtxt(os.path.join(cv_dir, "fold_%02d_test.txt" % i))]
@@ -93,7 +99,6 @@ def train_cv_models(cv_dir, model_type):
                 continue
             model.save_trained_model(fullpath)
         logfile.close()
-
 
 
 def cv_eval_models(cv_dir, model_type):
@@ -131,6 +136,7 @@ def cv_eval_models(cv_dir, model_type):
 
     return mean_abs_error, median_abs_error
 
+
 def main():
     parser = OptionParser()
 
@@ -141,10 +147,13 @@ def main():
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
     parser.add_option("-i", "--run_iter", dest="run_iter", default="latest", type="str", help="run iteration (latest)")
     parser.add_option("-c", "--channel", dest="chan", default="BHZ", type="str", help="name of channel to examine (BHZ)")
-    parser.add_option("-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
-    parser.add_option("-p", "--phase", dest="phase", default=",".join(s.phases), type="str", help="phase for which to train models)")
+    parser.add_option(
+        "-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
+    parser.add_option(
+        "-p", "--phase", dest="phase", default=",".join(s.phases), type="str", help="phase for which to train models)")
     parser.add_option("-t", "--target", dest="target", default="decay", type="str", help="target parameter name (decay)")
-    parser.add_option("-m", "--model_types", dest="model_types", default="gp_dad_log,constant,linear_distance", type="str", help="types of model to train (gp_dad_log,constant,linear_distance)")
+    parser.add_option("-m", "--model_types", dest="model_types", default="gp_dad_log,constant,linear_distance",
+                      type="str", help="types of model to train (gp_dad_log,constant,linear_distance)")
 
     (options, args) = parser.parse_args()
 
@@ -163,14 +172,15 @@ def main():
     else:
         run_iter = int(options.run_iter)
 
-    X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target)
+    X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase, ], target)
 
-    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_types[0], evids, model_name="paired_exp", prefix="eval")
+    model_fname = get_model_fname(
+        run_name, run_iter, site, chan, band, phase, target, model_types[0], evids, model_name="paired_exp", prefix="eval")
 
     cv_dir = os.path.dirname(model_fname)
 
     print "generating cross-validation folds in dir", cv_dir
-    save_cv_folds(X,y,evids, cv_dir)
+    save_cv_folds(X, y, evids, cv_dir)
 
     for model_type in model_types:
         print "training cross-validation models for", model_type

@@ -30,7 +30,7 @@ from distutils.core import setup, Extension
 import numpy as np
 import os
 
-nonempty = lambda x : len(x) > 0
+nonempty = lambda x: len(x) > 0
 
 if os.getenv("C_INCLUDE_PATH") is not None:
     sys_includes = filter(nonempty, os.getenv("C_INCLUDE_PATH").split(':'))
@@ -55,7 +55,8 @@ priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'Poisson.c',
                   'Gaussian.c', 'Gamma.c']
 
-signals_sources = ['SignalModelCommon.c', 'SignalModelUtil.c', 'SpectralEnvelopeModel.c', 'matrix_util.c', 'score_sig.c', 'kalman_filter.c', 'python_interface.c']
+signals_sources = ['SignalModelCommon.c', 'SignalModelUtil.c', 'SpectralEnvelopeModel.c', 'matrix_util.c', 'score_sig.c',
+                   'kalman_filter.c', 'python_interface.c']
 
 main_sources = ['sigvisa.c', 'network.c', 'signal.c']
 
@@ -63,14 +64,14 @@ infer_sources = ['infer.c', 'propose.c', 'quickselect.c']
 misc_sources = ['logging.c']
 
 sigvisa_module = Extension('sigvisa_c',
-                           sources = ([os.path.join("priors", f)
-                                       for f in priors_sources]
-                                      + [os.path.join("signals/envelope_likelihood", f)
+                           sources=([os.path.join("priors", f)
+                                     for f in priors_sources]
+                                    + [os.path.join("signals/envelope_likelihood", f)
                                        for f in signals_sources]
-                                      + [os.path.join("infer", f)
-                                         for f in infer_sources]
-                                      + [f for f in misc_sources]
-                                      + [f for f in main_sources]),
+                                    + [os.path.join("infer", f)
+                                       for f in infer_sources]
+                                    + [f for f in misc_sources]
+                                    + [f for f in main_sources]),
                            libraries = ['logger', 'gsl', 'gslcblas'],
                            library_dirs = sys_libraries,
                            runtime_library_dirs = sys_libraries,
@@ -78,9 +79,8 @@ sigvisa_module = Extension('sigvisa_c',
                            extra_link_args = extra_link_args,
                            )
 
-setup (name = 'sigvisa',
-       version = '1.0',
-       description = 'Signal-Based Vertically Integrated Seismological Processing',
-       include_dirs = [np.get_include()] +  sys_includes,
-       ext_modules = [sigvisa_module,])
-
+setup(name='sigvisa',
+      version='1.0',
+      description='Signal-Based Vertically Integrated Seismological Processing',
+      include_dirs=[np.get_include()] + sys_includes,
+      ext_modules=[sigvisa_module, ])

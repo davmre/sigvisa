@@ -11,6 +11,7 @@ from optparse import OptionParser
 
 from sigvisa.signals.io import fetch_waveform
 
+
 def main():
 
     parser = OptionParser()

@@ -10,15 +10,17 @@ import functools32
 
 KNOWN_EXPLOSIONS = (5393637,)  # 2009 DPRK event
 
+
 class EventNotFound(Exception):
     pass
+
 
 @functools32.lru_cache(1024)
 def get_event(*args, **kwargs):
     return Event(*args, **kwargs)
 
-class Event(object):
 
+class Event(object):
 
     __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source']
 
@@ -35,14 +37,14 @@ class Event(object):
             self.natural_source = False if evid in KNOWN_EXPLOSIONS else True
 
         else:
-            self.lon=lon
-            self.lat=lat
-            self.depth=depth
-            self.time=time
-            self.mb=mb
-            self.orid=None
-            self.evid=evid
-            self.natural_source=natural_source
+            self.lon = lon
+            self.lat = lat
+            self.depth = depth
+            self.time = time
+            self.mb = mb
+            self.orid = None
+            self.evid = evid
+            self.natural_source = natural_source
 
     def as_tuple(self):
         return (self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid)
@@ -54,5 +56,6 @@ class Event(object):
             return mm.source_logamp(event=self, band=band, phase=phase)
 
     def __str__(self):
-        s = "evid %d, loc %s, depth %.1fkm, time %.1f, mb %.1f, %s source" % (self.evid, lonlatstr(self.lon, self.lat), self.depth, self.time, self.mb, "natural" if self.natural_source else "explosion")
+        s = "evid %d, loc %s, depth %.1fkm, time %.1f, mb %.1f, %s source" % (self.evid, lonlatstr(
+            self.lon, self.lat), self.depth, self.time, self.mb, "natural" if self.natural_source else "explosion")
         return s

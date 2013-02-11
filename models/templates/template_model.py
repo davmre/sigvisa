@@ -1,5 +1,6 @@
 import numpy as np
-import sys, os
+import sys
+import os
 from sigvisa import *
 
 
@@ -40,12 +41,12 @@ class TemplateModel(object):
         raise Exception("abstract class: method not implemented")
 
     def param_str(self, template_params):
-        phases, vals= template_params
+        phases, vals = template_params
         pstr = ""
         for (i, phase) in enumerate(phases):
             pstr += "%s: " % phase
             for (j, param) in enumerate(self.params()):
-                pstr += "%s: %.3f " % (param, vals[i,j])
+                pstr += "%s: %.3f " % (param, vals[i, j])
             pstr += "\n"
         return pstr
 
@@ -58,7 +59,7 @@ class TemplateModel(object):
     def high_bounds(self, phases):
         raise Exception("abstract class: method not implemented")
 
-    def __init__(self, run_name=None, run_iter=None, model_type = None, verbose=True, sites=None, modelids=None):
+    def __init__(self, run_name=None, run_iter=None, model_type=None, verbose=True, sites=None, modelids=None):
         s = Sigvisa()
         cursor = s.dbconn.cursor()
 
@@ -67,10 +68,10 @@ class TemplateModel(object):
         self.models = NestedDict()
 
         if model_type == "dummy":
-            self.dummy=True
+            self.dummy = True
             return
         else:
-            self.dummy=False
+            self.dummy = False
             basedir = os.getenv('SIGVISA_HOME')
 
             if modelids is not None:
@@ -85,7 +86,8 @@ class TemplateModel(object):
                 if isinstance(model_type, str):
                     model_type_cond = "model_type = '%s'" % model_type
                 elif isinstance(model_type, dict):
-                    model_type_cond = "(" + " or ".join(["(model_type = '%s' and param = '%s')" % (v, k) for (k, v) in model_type.items()]) + ")"
+                    model_type_cond = "(" + " or ".join(
+                        ["(model_type = '%s' and param = '%s')" % (v, k) for (k, v) in model_type.items()]) + ")"
                 else:
                     raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
 
@@ -94,7 +96,8 @@ class TemplateModel(object):
                 else:
                     site_cond = ""
 
-                sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where %s %s and fitting_runid=%d" % (model_type_cond, site_cond, runid)
+                sql_query = "select param, site, phase, chan, band, model_type, model_fname, modelid from sigvisa_template_param_model where %s %s and fitting_runid=%d" % (
+                    model_type_cond, site_cond, runid)
                 cursor.execute(sql_query)
                 models = cursor.fetchall()
             else:
@@ -106,49 +109,50 @@ class TemplateModel(object):
                 self.models[param][sta][phase][chan][band] = load_model(os.path.join(basedir, fname), db_model_type)
                 self.models[param][sta][phase][chan][band].modelid = modelid
                 if verbose:
-                    print "loaded model type '%s' for param %s at %s:%s:%s phase %s (modelid %d)" % ( db_model_type, param, sta, chan, band, phase, modelid)
+                    print "loaded model type '%s' for param %s at %s:%s:%s phase %s (modelid %d)" % (db_model_type, param, sta, chan, band, phase, modelid)
 
     def predictTemplate(self, event, sta, chan, band, phases):
 
         params = self.params()
-        predictions = np.zeros((len(phases),  len(params)))
+        predictions = np.zeros((len(phases), len(params)))
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(params):
                 if param == "arrival_time":
-                    predictions[i,j] = event.time + self.travel_time(event, sta, phase)
+                    predictions[i, j] = event.time + self.travel_time(event, sta, phase)
                 else:
                     model = self.models[param][sta][phase][chan][band]
                     if isinstance(model, NestedDict):
-                        raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+                        raise Exception(
+                            "no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
                     if param == "coda_height":
                         source_logamp = event.source_logamp(band, phase)
-                        predictions[i,j] = source_logamp + model.predict(event)
+                        predictions[i, j] = source_logamp + model.predict(event)
                     else:
-                        predictions[i,j] = model.predict(event)
+                        predictions[i, j] = model.predict(event)
         return predictions
-
 
     def sample(self, event, sta, chan, band, phases):
 
         params = self.params()
 
-        samples = np.zeros((len(phases),  len(params)))
+        samples = np.zeros((len(phases), len(params)))
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(params):
 
                 if param == "arrival_time":
-                    samples[i,j] = event.time + self.sample_travel_time(event, sta, phase)
+                    samples[i, j] = event.time + self.sample_travel_time(event, sta, phase)
                 else:
                     model = self.models[param][sta][phase][chan][band]
                     if isinstance(model, NestedDict):
-                        raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+                        raise Exception(
+                            "no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
                     if param == "coda_height":
                         source_logamp = event.source_logamp(band, phase)
-                        samples[i,j] =  source_logamp + model.predict(event)
+                        samples[i, j] = source_logamp + model.predict(event)
                     else:
-                        samples[i,j] = model.sample(event)
+                        samples[i, j] = model.sample(event)
         return samples
 
     def log_likelihood(self, template_params, event, sta, chan, band):
@@ -163,17 +167,19 @@ class TemplateModel(object):
         for (i, phase) in enumerate(phases):
             for (j, param) in enumerate(self.params()):
                 if param == "arrival_time":
-                    log_likelihood = self.travel_time_log_likelihood(tt=param_vals[i,j]-event.time, event=event, sta=sta, phase=phase)
+                    log_likelihood = self.travel_time_log_likelihood(
+                        tt=param_vals[i, j] - event.time, event=event, sta=sta, phase=phase)
                 else:
                     model = self.models[param][sta][phase][chan][band]
                     if isinstance(model, NestedDict):
-                        raise Exception ("no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
+                        raise Exception(
+                            "no model loaded for param %s, phase %s (sta=%s, chan=%s, band=%s)" % (param, phase, sta, chan, band))
 
                     if param == "coda_height":
                         source_logamp = event.source_logamp(band, phase)
-                        log_likelihood += model.posterior_log_likelihood(event, param_vals[i,j] - source_logamp)
+                        log_likelihood += model.posterior_log_likelihood(event, param_vals[i, j] - source_logamp)
                     else:
-                        log_likelihood += model.posterior_log_likelihood(event, param_vals[i,j])
+                        log_likelihood += model.posterior_log_likelihood(event, param_vals[i, j])
 
         return log_likelihood
 
@@ -181,7 +187,7 @@ class TemplateModel(object):
         s = Sigvisa()
         siteid = s.name_to_siteid_minus1[sta] + 1
         phaseid = s.phaseids[phase]
-        meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid-1, phaseid-1)
+        meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid - 1, phaseid - 1)
         return meantt
 
     def sample_travel_time(self, event, sta, phase):
@@ -193,11 +199,11 @@ class TemplateModel(object):
         # evaluating the density at the peak
         siteid = s.name_to_siteid_minus1[sta] + 1
         phaseid = s.phaseids[phase]
-        ttscale = 2.0 / np.exp(s.sigmodel.arrtime_logprob(0, 0, 0, siteid-1, phaseid-1))
+        ttscale = 2.0 / np.exp(s.sigmodel.arrtime_logprob(0, 0, 0, siteid - 1, phaseid - 1))
 
         # sample from a Laplace distribution:
         U = np.random.random() - .5
-        tt = meantt - ttscale * np.sign(U) * np.log(1 - 2*np.abs(U))
+        tt = meantt - ttscale * np.sign(U) * np.log(1 - 2 * np.abs(U))
         return tt
 
     def travel_time_log_likelihood(self, tt, event, sta, phase):
@@ -207,9 +213,8 @@ class TemplateModel(object):
         siteid = s.name_to_siteid_minus1[sta] + 1
         phaseid = s.phaseids[phase]
 
-        ll = s.sigmodel.arrtime_logprob(tt, meantt, 0, siteid-1, phaseid-1)
+        ll = s.sigmodel.arrtime_logprob(tt, meantt, 0, siteid - 1, phaseid - 1)
         return ll
-
 
     def generate_trace_python(self, model_waveform, template_params):
         nm = noise_model.get_noise_model(model_waveform)
@@ -222,9 +227,8 @@ class TemplateModel(object):
         data = np.ones((npts,)) * nm.c
         phases, vals = template_params
 
-
         for (i, phase) in enumerate(phases):
-            v = vals[i,:]
+            v = vals[i, :]
             arr_time = v[0]
             start = (arr_time - st) * srate
             start_idx = int(np.floor(start))
@@ -232,7 +236,7 @@ class TemplateModel(object):
                 continue
 
             offset = start - start_idx
-            phase_env = self.abstract_logenv_raw(v, idx_offset = offset, srate=srate)
+            phase_env = self.abstract_logenv_raw(v, idx_offset=offset, srate=srate)
             end_idx = start_idx + len(phase_env)
             if end_idx <= 0:
                 continue
@@ -240,7 +244,7 @@ class TemplateModel(object):
             try:
                 early = max(0, -start_idx)
                 overshoot = max(0, end_idx - len(data))
-                data[start_idx+early:end_idx-overshoot] += np.exp(phase_env[early:len(phase_env)-overshoot])
+                data[start_idx + early:end_idx - overshoot] += np.exp(phase_env[early:len(phase_env) - overshoot])
             except Exception as e:
                 print e
                 raise
@@ -259,24 +263,22 @@ class TemplateModel(object):
         phases, vals = template_params
         phaseids = [s.phaseids[phase] for phase in phases]
 
-
-
         if not sample:
-            env = self.generate_trace_python(model_waveform, template_params) #env = s.sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
+            env = self.generate_trace_python(
+                model_waveform, template_params)  # env = s.sigmodel.generate_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
         else:
             raise Exception("sampling is currently (somewhat) broken...")
             env = s.sigmodel.sample_trace(st, et, int(siteid), int(b), int(c), srate, phaseids, vals)
 
-
-        if len(env) == len(model_waveform.data)-1:
+        if len(env) == len(model_waveform.data) - 1:
             le = len(env)
-            new_env = np.ones(le+1)
+            new_env = np.ones(le + 1)
             new_env[0:le] = env
             new_env[le] = env[-1]
             env = new_env
         assert len(env) == len(model_waveform.data)
 
-        wave = Waveform(data = env, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
+        wave = Waveform(data=env, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
 
         try:
             del wave.segment_stats['evid']

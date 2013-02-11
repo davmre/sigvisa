@@ -1,8 +1,10 @@
 import numpy as np
-import sys, os
+import sys
+import os
 
 from sigvisa import *
 from train_coda_models import analyze_model_fname
+
 
 def main():
 
@@ -10,11 +12,10 @@ def main():
     # python learn/cross_validation_aggregate_results.py eval/run8/iter_00/paired_exp/*/*/P/BHZ/freq_2.0_3.0/*_results.txt
     result_files = sys.argv[1:]
 
-
     # nested dict structure: target->model_type->key->sta->value
     results = NestedDict()
     stations = set()
-    
+
     for result_file in result_files:
         cv_dir, fname = os.path.split(result_file)
         model_type = "_".join(fname.split("_")[:-1])
@@ -27,8 +28,7 @@ def main():
         for line in f:
             key, value = line.split()
             value = float(value)
-            results[d['target']+"_"+key][model_type][d['sta']]=value
-
+            results[d['target'] + "_" + key][model_type][d['sta']] = value
 
     stations = list(stations)
     for target_key in results.keys():
