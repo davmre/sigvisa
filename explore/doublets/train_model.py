@@ -22,8 +22,8 @@ from sigvisa.signals.io import fetch_waveform
 from sigvisa.models.wiggles.fourier_features import FourierFeatures
 
 from sigvisa.source.event import get_event
-from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
-from explore.doublets.xcorr_pairs import extract_phase_window
+from sigvisa.explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
+from sigvisa.explore.doublets.xcorr_pairs import extract_phase_window
 
 from sigvisa.plotting.event_heatmap import get_eventHeatmap
 

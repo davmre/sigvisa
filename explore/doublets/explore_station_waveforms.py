@@ -15,7 +15,7 @@ from optparse import OptionParser
 from sigvisa.source.event import get_event
 from sigvisa import *
 
-from explore.doublets.xcorr_pairs import extract_phase_window
+from sigvisa.explore.doublets.xcorr_pairs import extract_phase_window
 
 def get_first_arrivals(events, sta):
     s = Sigvisa()

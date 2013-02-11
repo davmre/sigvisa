@@ -20,12 +20,12 @@ from optparse import OptionParser
 
 from sigvisa import *
 from sigvisa.signals.io import fetch_waveform
-from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
+from sigvisa.explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
 from sigvisa.source.event import get_event
 from sigvisa.plotting.event_heatmap import get_eventHeatmap
 from sigvisa.models.wiggles.fourier_features import FourierFeatures
-from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
-from explore.doublets.xcorr_pairs import extract_phase_window
+from sigvisa.explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
+from sigvisa.explore.doublets.xcorr_pairs import extract_phase_window
 from train_model import train_and_save_models, read_training_events
 
 from gpr.gp import GaussianProcess

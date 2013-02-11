@@ -20,7 +20,7 @@ from optparse import OptionParser
 
 from sigvisa import *
 from sigvisa.signals.io import fetch_waveform
-from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
+from sigvisa.explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
 from sigvisa.source.event import get_event
 from sigvisa.plotting.event_heatmap import get_eventHeatmap
 from sigvisa.models.wiggles.fourier_features import FourierFeatures
