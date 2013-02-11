@@ -18,3 +18,4 @@ workon sigvisa
 echo "export SIGVISA_HOME=$HOME/python/sigvisa" >> $VIRTUAL_ENV/bin/postactivate
 echo "export PYTHONPATH=\$HOME/python:\$PYTHONPATH" >> $VIRTUAL_ENV/bin/postactivate
 source $VIRTUAL_ENV/bin/postactivate
+ln -s githooks/pre-commit .git/hooks/pre-commit
