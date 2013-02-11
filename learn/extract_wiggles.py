@@ -33,6 +33,7 @@ def main():
     parser = OptionParser()
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="")
     parser.add_option("-i", "--run_iter", dest="run_iter", default=None, type="int", help="")
+    parser.add_option("--overwrite_existing", dest="overwrite_existing", default=False, action="store_true", help="")
     (options, args) = parser.parse_args()
 
     if options.run_name is None:
@@ -49,8 +50,9 @@ def main():
     ensure_dir_exists(run_wiggle_dir)
 
     runid = get_fitting_runid(cursor, run_name, iteration, create_if_new=False)
-    sql_query = "select fp.fpid, fp.phase, f.fitid, fp.template_model from sigvisa_coda_fit_phase fp, sigvisa_coda_fit f where f.runid=%d and fp.fitid=f.fitid and fp.wiggle_stime IS NULL" % (
-        runid, )
+    overwrite_cond = "" if options.overwrite_existing else "and fp.wiggle_stime IS NULL"
+    sql_query = "select fp.fpid, fp.phase, f.fitid, fp.template_model from sigvisa_coda_fit_phase fp, sigvisa_coda_fit f where f.runid=%d and fp.fitid=f.fitid %s" % (
+        runid, overwrite_cond)
     cursor.execute(sql_query)
     phases = cursor.fetchall()
     for (fpid, phase, fitid, template_shape) in phases:

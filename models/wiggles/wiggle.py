@@ -1,3 +1,7 @@
+import numpy as np
+
+from sigvisa.signals.common import Waveform
+
 def create_wiggled_phase(template_params, tm, phase, wiggle, wiggle_stime, st, npts, srate, chan, sta):
 
     (phases, vals) = template_params
