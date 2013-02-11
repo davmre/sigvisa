@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 #  This software code is made available "AS IS" without warranties of any
 #  kind.  You may copy, display, modify and redistribute the software
 #  code either by itself or as incorporated into your code; provided that
@@ -52,12 +52,14 @@ except ImportError:
 import csv
 
 DEFAULT_HOST = 'ec2.amazonaws.com'
-PORTS_BY_SECURITY = { True: 443, False: 80 }
+PORTS_BY_SECURITY = {True: 443, False: 80}
 API_VERSION = '2011-12-15'
 RELEASE_VERSION = "1"
 
+
 class InstanceNotFound(Exception):
     pass
+
 
 class AWSAuthConnection(object):
 
@@ -72,7 +74,7 @@ class AWSAuthConnection(object):
     some debug information is printed.
 
     """
-    
+
     def __init__(self, aws_access_key_id, aws_secret_access_key,
                  is_secure=True, server=DEFAULT_HOST, port=None):
 
@@ -110,7 +112,8 @@ class AWSAuthConnection(object):
         omitted, all addresses will be described.
 
         """
-        if publicIps == None: publicIps = []
+        if publicIps == None:
+            publicIps = []
         params = self.pathlist("PublicIp", publicIps)
         return DescribeAddressesResponse(self.make_request("DescribeAddresses", params))
 
@@ -120,7 +123,7 @@ class AWSAuthConnection(object):
         @param publicIp: Address to release
 
         """
-        params = { "PublicIp": publicIp }
+        params = {"PublicIp": publicIp}
         return ReleaseAddressResponse(self.make_request("ReleaseAddress", params))
 
     def associate_address(self, publicIp, instanceId):
@@ -130,7 +133,7 @@ class AWSAuthConnection(object):
         @param instanceId: Instance to associate address with
 
         """
-        params = { "PublicIp": publicIp, "InstanceId": instanceId }
+        params = {"PublicIp": publicIp, "InstanceId": instanceId}
         return AssociateAddressResponse(self.make_request("AssociateAddress", params))
 
     def disassociate_address(self, publicIp):
@@ -139,7 +142,7 @@ class AWSAuthConnection(object):
         @param publicIp: Address to disassociate
 
         """
-        params = { "PublicIp": publicIp }
+        params = {"PublicIp": publicIp}
         return DisassociateAddressResponse(self.make_request("DisassociateAddress", params))
 
     def describe_availability_zones(self, zoneNames=None):
@@ -149,7 +152,8 @@ class AWSAuthConnection(object):
         empty or omitted, all availability zones will be described.
 
         """
-        if zoneNames == None: zoneNames = []
+        if zoneNames == None:
+            zoneNames = []
         params = self.pathlist("ZoneName", zoneNames)
         return DescribeAvailabilityZonesResponse(self.make_request("DescribeAvailabilityZones", params))
 
@@ -160,19 +164,19 @@ class AWSAuthConnection(object):
         @param instanceId: The instance id to make the image from
         @param description: The description of the new image
         """
-        params = {"Name": name, "InstanceId" : instanceId}
+        params = {"Name": name, "InstanceId": instanceId}
         if description is not None:
             params["Description"] = description
         return CreateImageResponse(self.make_request("CreateImage", params))
-    
+
     def register_image(self, imageLocation):
         """Makes a C{RegisterImage} call.
 
         @param imageLocation: The location of the image manifest to
         register in S3.
-        
+
         """
-        params = { "ImageLocation": imageLocation }
+        params = {"ImageLocation": imageLocation}
         return RegisterImageResponse(self.make_request("RegisterImage", params))
 
     def describe_images(self, imageIds=None, owners=None, executableBy=None):
@@ -189,9 +193,12 @@ class AWSAuthConnection(object):
         omitted, no filtering is done.
 
         """
-        if imageIds == None: imageIds = []
-        if owners == None: owners = []
-        if executableBy == None: executableBy = []
+        if imageIds == None:
+            imageIds = []
+        if owners == None:
+            owners = []
+        if executableBy == None:
+            executableBy = []
         params = self.pathlist("ImageId", imageIds)
         params.update(self.pathlist("Owner", owners))
         params.update(self.pathlist("ExecutableBy", executableBy))
@@ -203,7 +210,7 @@ class AWSAuthConnection(object):
         @param imageId: The image id to deregister.
 
         """
-        params = { "ImageId": imageId }
+        params = {"ImageId": imageId}
         return DeregisterImageResponse(self.make_request("DeregisterImage", params))
 
     def create_keypair(self, keyName):
@@ -212,7 +219,7 @@ class AWSAuthConnection(object):
         @param keyName: Name for the new keypair.
 
         """
-        params = { "KeyName": keyName }
+        params = {"KeyName": keyName}
         return CreateKeyPairResponse(self.make_request("CreateKeyPair", params))
 
     def describe_keypairs(self, keyNames=None):
@@ -222,7 +229,8 @@ class AWSAuthConnection(object):
         omitted, all keypairs are returned.
 
         """
-        if keyNames == None: keyNames = []
+        if keyNames == None:
+            keyNames = []
         params = self.pathlist("KeyName", keyNames)
         return DescribeKeyPairsResponse(self.make_request("DescribeKeyPairs", params))
 
@@ -233,7 +241,7 @@ class AWSAuthConnection(object):
 
         """
 
-        params = { "KeyName": keyName }
+        params = {"KeyName": keyName}
         return DeleteKeyPairResponse(self.make_request("DeleteKeyPair", params))
 
     def run_instances(self, imageId, minCount=1, maxCount=1, keyName=None,
@@ -281,12 +289,13 @@ class AWSAuthConnection(object):
         is the device name.
 
         """
-        if groupIds == None: groupIds = []
+        if groupIds == None:
+            groupIds = []
         params = {
             "ImageId": imageId,
             "MinCount": str(minCount),
             "MaxCount": str(maxCount),
-            }
+        }
         if addressingType is not None:
             params["AddressingType"] = addressingType
         params.update(self.pathlist("SecurityGroup", groupIds))
@@ -311,7 +320,7 @@ class AWSAuthConnection(object):
                 i += 1
                 params["BlockDeviceMapping.%s.VirtualName" % (i)] = virtualNames[i]
                 params["BlockDeviceMapping.%s.DeviceName" % (i)] = deviceNames[i]
-            
+
         return RunInstancesResponse(self.make_request("RunInstances", params))
 
     def describe_instances(self, instanceIds=[]):
@@ -332,7 +341,7 @@ class AWSAuthConnection(object):
 
         for i, nodeid in enumerate(nodeids):
             params['ResourceId.%d' % i] = nodeid
-        
+
         for i, key in enumerate(tags):
             params['Tag.%d.Key' % i] = key
             params['Tag.%d.Value' % i] = tags[key]
@@ -345,14 +354,14 @@ class AWSAuthConnection(object):
         params['Filter.1.Value'] = resourceId
 
         return DescribeTagsResponse(self.make_request("DescribeTags", params))
-    
+
     def get_console_output(self, instanceId):
         """Makes a C{GetConsoleOutput} call.
 
         @param instanceId: Instance from which to get console output.
 
         """
-        params = { "InstanceId": instanceId }
+        params = {"InstanceId": instanceId}
         return GetConsoleOutputResponse(self.make_request("GetConsoleOutput", params))
 
     def reboot_instances(self, instanceIds):
@@ -405,7 +414,7 @@ class AWSAuthConnection(object):
         params = {
             "GroupName": groupName,
             "GroupDescription": groupDescription
-            }
+        }
         return CreateSecurityGroupResponse(self.make_request("CreateSecurityGroup", params))
 
     def describe_securitygroups(self, groupNames=None):
@@ -415,7 +424,8 @@ class AWSAuthConnection(object):
         empty or omitted, all security groups will be described.
 
         """
-        if groupNames == None: groupNames = []
+        if groupNames == None:
+            groupNames = []
         params = self.pathlist("GroupName", groupNames)
         return DescribeSecurityGroupsResponse(self.make_request("DescribeSecurityGroups", params))
 
@@ -425,7 +435,7 @@ class AWSAuthConnection(object):
         @param groupName: Name of security group to delete.
 
         """
-        params = { "GroupName": groupName }
+        params = {"GroupName": groupName}
         return DeleteSecurityGroupResponse(self.make_request("DeleteSecurityGroup", params))
 
     def authorize(self, *args, **kwargs):
@@ -473,7 +483,7 @@ class AWSAuthConnection(object):
             "ImageId": imageId,
             "Attribute": attribute,
             "OperationType": operationType
-            }
+        }
         if attribute == "launchPermission":
             if "userIds" in kwargs:
                 params.update(self.pathlist("UserId", kwargs["userIds"]))
@@ -483,7 +493,7 @@ class AWSAuthConnection(object):
             if "productCodes" in kwargs:
                 params.update(self.pathlist("ProductCode", kwargs["productCodes"]))
         return ModifyImageAttributeResponse(self.make_request("ModifyImageAttribute", params))
-    
+
     def reset_image_attribute(self, imageId, attribute):
         """Makes a C{ResetImageAttribute} call.
 
@@ -492,9 +502,9 @@ class AWSAuthConnection(object):
         @param attribute: Name of attribute to reset.
 
         """
-        params = { "ImageId": imageId, "Attribute": attribute }
+        params = {"ImageId": imageId, "Attribute": attribute}
         return ResetImageAttributeResponse(self.make_request("ResetImageAttribute", params))
-    
+
     def describe_image_attribute(self, imageId, attribute):
         """Makes a C{DescribeImageAttribute} call.
 
@@ -503,7 +513,7 @@ class AWSAuthConnection(object):
         @param attribute: Name of attribute to describe.
 
         """
-        params = { "ImageId": imageId, "Attribute": attribute }
+        params = {"ImageId": imageId, "Attribute": attribute}
         return DescribeImageAttributeResponse(self.make_request("DescribeImageAttribute", params))
 
     def auth_revoke_impl(self, groupName, ipProtocol=None, fromPort=None,
@@ -529,11 +539,15 @@ class AWSAuthConnection(object):
         in rule.
 
         """
-        params = { "GroupName": groupName }
-        if ipProtocol != None: params["IpProtocol"] = ipProtocol
-        if fromPort != None: params["FromPort"] = str(fromPort)
-        if toPort != None: params["ToPort"] = str(toPort)
-        if cidrIp != None: params["CidrIp"] = cidrIp
+        params = {"GroupName": groupName}
+        if ipProtocol != None:
+            params["IpProtocol"] = ipProtocol
+        if fromPort != None:
+            params["FromPort"] = str(fromPort)
+        if toPort != None:
+            params["ToPort"] = str(toPort)
+        if cidrIp != None:
+            params["CidrIp"] = cidrIp
         if sourceSecurityGroupName != None:
             params["SourceSecurityGroupName"] = sourceSecurityGroupName
         if sourceSecurityGroupOwnerId != None:
@@ -546,9 +560,9 @@ class AWSAuthConnection(object):
         @param productCode: The product code to confirm
 
         @param instanceId: The instance for which to confirm the product code.
-        
+
         """
-        params = { "ProcudtCode": productCode, "InstanceId": instanceId }
+        params = {"ProcudtCode": productCode, "InstanceId": instanceId}
         return ConfirmProductInstanceResponse(self.make_request("ConfirmProductInstance", params))
 
     def make_request(self, action, params, data=''):
@@ -563,7 +577,7 @@ class AWSAuthConnection(object):
 
         params = zip(params.keys(), params.values())
         params.sort(key=lambda x: str.lower(x[0]))
-        
+
         sig = self.get_aws_auth_param(params, self.aws_secret_access_key)
 
         path = "?%s&Signature=%s" % (
@@ -575,7 +589,7 @@ class AWSAuthConnection(object):
 
         headers = {
             'User-Agent': 'ec2-python-query 1.2-%s' % (RELEASE_VERSION)
-            }
+        }
 
         self.connection.request("GET", "/%s" % path, data, headers)
         return self.connection.getresponse()
@@ -595,14 +609,13 @@ class AWSAuthConnection(object):
             return b64_hmac
 
 
-
 class Response(object):
     """Base class for XML response parsers.
 
     This class does everything except the API-call dependent parsing,
     which is handled in the child classes below.  Each child class
     should override the L{parse} method.
-    
+
     """
 
     ERROR_XPATH = "Errors/Error"
@@ -646,17 +659,19 @@ class Response(object):
         return element.find(self.fixxpath(xpath))
 
     def fixnone(self, strnone):
-        if strnone is None: return ""
+        if strnone is None:
+            return ""
         return strnone
 
 
 class DescribeImagesResponse(Response):
     """Response parser class for C{DescribeImages} API call."""
     ELEMENT_XPATH = "imagesSet/item"
+
     def translate_isPublic(self, isPublic):
-        return { "true": "public",
-                 "false": "private" }[isPublic]
-    
+        return {"true": "public",
+                "false": "private"}[isPublic]
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -679,13 +694,16 @@ class DescribeImagesResponse(Response):
 class CreateImageResponse(Response):
     """Response parser class for C{CreateImage} API call."""
     ELEMENT_XPATH = "imageId"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         return [["IMAGE", self.findtext(doc, self.ELEMENT_XPATH)]]
 
+
 class RegisterImageResponse(Response):
     """Response parser class for C{RegisterImage} API call."""
     ELEMENT_XPATH = "imageId"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         return [["IMAGE", self.findtext(doc, self.ELEMENT_XPATH)]]
@@ -711,6 +729,7 @@ class CreateKeyPairResponse(Response):
 class DescribeKeyPairsResponse(Response):
     """Response parser class for C{DescribeKeyPairs} API call."""
     ELEMENT_XPATH = "keySet/item"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -752,6 +771,7 @@ class InstanceSetResponse(Response):
                           ])
         return lines
 
+
 class RunInstancesResponse(InstanceSetResponse):
     """Response parser class for C{RunInstances} API call."""
     def parse(self):
@@ -768,6 +788,7 @@ class RunInstancesResponse(InstanceSetResponse):
 class DescribeInstancesResponse(InstanceSetResponse):
     """Response parser class for C{DescribeInstances} API call."""
     ELEMENT_XPATH = "reservationSet/item"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -779,18 +800,19 @@ class DescribeInstancesResponse(InstanceSetResponse):
             lines.extend(self.parseInstanceSet(rootelement))
         return lines
 
-    
+
 class GetConsoleOutputResponse(Response):
     def parse(self):
         doc = ET.XML(self.http_xml)
-        return [ [self.findtext(doc, "instanceId")],
-                 [self.findtext(doc, "timestamp")],
-                 [self.findtext(doc, "output")] ]
+        return [[self.findtext(doc, "instanceId")],
+                [self.findtext(doc, "timestamp")],
+                [self.findtext(doc, "output")]]
 
 
 class InstancesStatusResponse(Response):
     """Response parser class for C{TerminateInstances} API call."""
     ELEMENT_XPATH = "instancesSet/item"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -822,6 +844,7 @@ class CreateSecurityGroupResponse(Response):
 class DescribeSecurityGroupsResponse(Response):
     """Response parser class for C{DescribeSecurityGroups} API call."""
     ELEMENT_XPATH = "securityGroupInfo/item"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -843,7 +866,7 @@ class DescribeSecurityGroupsResponse(Response):
                     fromPort,
                     toPort,
                     "FROM"
-                    ]
+                ]
                 for subelement in self.findall(element, "groups/item"):
                     userId = self.findtext(subelement, "userId")
                     targetGroupName = self.findtext(subelement, "groupName")
@@ -906,8 +929,8 @@ class DescribeImageAttributeResponse(Response):
                     imageId,
                     subelement.tag.split("}")[1],
                     subelement.text
-                    ])
-        
+                ])
+
         # Handle launchPermission attributes:
         element = self.find(doc, "productCodes/item")
         if element != None:
@@ -916,9 +939,10 @@ class DescribeImageAttributeResponse(Response):
                     "productCode",
                     imageId,
                     subelement.text
-                    ])
-        
+                ])
+
         return lines
+
 
 class AllocateAddressResponse(Response):
     """Response parser class for C{AllocateAddress} API call."""
@@ -927,9 +951,11 @@ class AllocateAddressResponse(Response):
         publicIp = self.findtext(doc, "publicIp")
         return [["ADDRESS", publicIp]]
 
+
 class DescribeAddressesResponse(Response):
     """Response parser class for C{DescribeAddresses} API call."""
     ELEMENT_XPATH = "addressesSet/item"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -939,11 +965,13 @@ class DescribeAddressesResponse(Response):
             lines.append(["ADDRESS", publicIp, instanceId])
         return lines
 
+
 class ReleaseAddressResponse(Response):
     """Response parser class for C{ReleaseAddress} API call."""
     def parse(self):
         # If we don't get an error, reset succeeded.
         return [["Address released."]]
+
 
 class AssociateAddressResponse(Response):
     """Response parser class for C{AssociateAddress} API call."""
@@ -951,11 +979,13 @@ class AssociateAddressResponse(Response):
         # If we don't get an error, reset succeeded.
         return [["Address associated."]]
 
+
 class DisassociateAddressResponse(Response):
     """Response parser class for C{DisassociateAddress} API call."""
     def parse(self):
         # If we don't get an error, reset succeeded.
         return [["Address disassociated."]]
+
 
 class ConfirmProductInstanceResponse(Response):
     """Response parser class for C{ConfirmProductInstance} API call."""
@@ -966,9 +996,11 @@ class ConfirmProductInstanceResponse(Response):
         if result == "true":
             lines[0].append(self.findtext(doc, "ownerId"))
 
+
 class DescribeAvailabilityZonesResponse(Response):
     """Response parser class for C{DescribeAvailabilityZones} API call."""
     ELEMENT_XPATH = "availabilityZoneInfo/item"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -978,15 +1010,18 @@ class DescribeAvailabilityZonesResponse(Response):
             lines.append(["AVAILABILITYZONE", zoneName, zoneState])
         return lines
 
+
 class CreateTagsResponse(Response):
     """Response parser class for C{CreateTags} API call."""
     def parse(self):
         doc = ET.XML(self.http_xml)
         return [[self.findtext(doc, "return")]]
 
+
 class DescribeTagsResponse(Response):
     """Response parser class for C{DescribeTags} API call."""
     ELEMENT_XPATH = "tagSet/item"
+
     def parse(self):
         doc = ET.XML(self.http_xml)
         lines = []
@@ -998,6 +1033,7 @@ class DescribeTagsResponse(Response):
 
 # some utilities
 
+
 def connect_with_credfile(cred_fname):
     """
     connect with a credentials file
@@ -1005,18 +1041,18 @@ def connect_with_credfile(cred_fname):
     rows = csv.reader(file(cred_fname))
     rows.next()
     ec2user, ec2accesskey, ec2secretkey = rows.next()
-  
+
     # connect to EC2
     ec2conn = AWSAuthConnection(ec2accesskey, ec2secretkey)
-    
+
     return ec2conn
 
+
 def find_instid(ec2conn, instid):
-    ec2insts =  ec2conn.describe_instances([instid])
-  
+    ec2insts = ec2conn.describe_instances([instid])
+
     for inst in ec2insts.structure:
         if inst[0] == 'INSTANCE' and inst[1] == instid:
             return inst
-    
-    raise InstanceNotFound()
 
+    raise InstanceNotFound()

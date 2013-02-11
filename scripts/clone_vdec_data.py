@@ -7,6 +7,7 @@ import os
 
 cursor = db.connect().cursor()
 
+
 def dump_table(cursor, table_name):
     sql_query = "select * from %s" % table_name
     cursor.execute(sql_query)
@@ -19,7 +20,7 @@ def dump_table(cursor, table_name):
     print "writing table %s to %s..." % (table_name, fname)
     for r in cursor:
         csvWriter.writerow(r)
-        nrows= nrows + 1
+        nrows = nrows + 1
         if nrows % 10000 == 0:
             print "... wrote %d rows" % nrows
     print "... wrote %d rows" % nrows
@@ -31,10 +32,12 @@ def clear_table(cursor, table_name):
     print sql_query
     cursor.execute(sql_query)
 
+
 def load_table(cursor, table_name, fname):
     sql_query = "load data infile '%s' into table %s fields terminated by ','" % (os.path.abspath(fname), table_name)
     print sql_query
     cursor.execute(sql_query)
+
 
 def main():
 
@@ -45,7 +48,7 @@ def main():
     parser.add_option("--preserve", dest="preserve", default=False, action="store_true")
     (options, args) = parser.parse_args()
 
-    if (options.dump and options.load)  or (not options.dump and not options.load):
+    if (options.dump and options.load) or (not options.dump and not options.load):
         raise Exception("must specify exactly one of --dump or --import")
 
     cursor = db.connect().cursor()
@@ -59,7 +62,7 @@ def main():
         if len(args) == 0:
             raise Exception("must specify list of .csv files to import...")
         for fname in args:
-            a,b = os.path.splitext(fname)
+            a, b = os.path.splitext(fname)
             if b != ".csv":
                 raise Exception("filename must be in format <db_table_name>.csv (got %s)" % fname)
             tname = os.path.split(a)[-1]

@@ -11,9 +11,10 @@ import obspy.signal.filter
 phase = 0.70_1.00, 1.00_1.50,
 """
 
+
 class Location(object):
-    def __init__(self,lat=None,lon=None,depth=None,pos=None):
-        if pos==None:
+    def __init__(self, lat=None, lon=None, depth=None, pos=None):
+        if pos == None:
             self.lat = lat
             self.lon = lon
             self.depth = depth
@@ -22,15 +23,15 @@ class Location(object):
             self.pos = pos
 
     def dist(self, e):
-        return np.sqrt(sum(np.square(self.pos-e.pos)))
+        return np.sqrt(sum(np.square(self.pos - e.pos)))
 
     def getpos(self):
         R = 6356.8
-        r = R-self.depth
-        x = r*np.cos(np.radians(self.lat))*np.cos(np.radians(self.lon))
-        y = r*np.cos(np.radians(self.lat))*np.sin(np.radians(self.lon))
-        z = r*np.sin(np.radians(self.lat))
-        return np.array([x,y,z])
+        r = R - self.depth
+        x = r * np.cos(np.radians(self.lat)) * np.cos(np.radians(self.lon))
+        y = r * np.cos(np.radians(self.lat)) * np.sin(np.radians(self.lon))
+        z = r * np.sin(np.radians(self.lat))
+        return np.array([x, y, z])
 
 
 class Event(Location):
@@ -43,23 +44,23 @@ class Event(Location):
             self.feature = feature
         cursor = database.db.connect().cursor()
         command = "select runid, siteid, phaseid from sigvisa_wiggle_wfdisc \
-        where evid=%d" %evid
+        where evid=%d" % evid
         cursor.execute(command)
         runid, siteid, phaseid = cursor.fetchall()[0]
-        prefix=os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
-        suffix="_BHZ.dat"
-        if phase==None:
+        prefix = os.path.join(os.getenv("SIGVISA_HOME"), "wiggles")
+        suffix = "_BHZ.dat"
+        if phase == None:
             suffix = "_BHZ_band13.dat"
-            filtered_addr="%s/%s/%s/%s/%s%s"%(prefix,runid,siteid,phaseid,evid,suffix)
+            filtered_addr = "%s/%s/%s/%s/%s%s" % (prefix, runid, siteid, phaseid, evid, suffix)
         else:
-            filtered_addr="%s/%s/%s/%s/%s/%s%s"%(prefix,runid,siteid,phaseid,phase,evid,suffix)
+            filtered_addr = "%s/%s/%s/%s/%s/%s%s" % (prefix, runid, siteid, phaseid, phase, evid, suffix)
 
         try:
-            self.data=np.loadtxt(filtered_addr)
+            self.data = np.loadtxt(filtered_addr)
 #            self.data = obspy.signal.filter.bandpass(self.data, 1, 3, 40, corners=4, zerophase=True)
 
             if normalize:
-                self.x=(self.data-np.mean(self.data))/np.std(self.data) # normalized
+                self.x = (self.data - np.mean(self.data)) / np.std(self.data)  # normalized
             else:
                 self.x = self.data
         except:
@@ -71,11 +72,10 @@ class Event(Location):
             self.y = self.feature(self.data)
         else:
             self.y = None
-        command = "select lon, lat, depth from leb_origin where evid=%d" %evid
+        command = "select lon, lat, depth from leb_origin where evid=%d" % evid
         cursor.execute(command)
         self.lon, self.lat, self.depth = cursor.fetchall()[0]
         self.pos = self.getpos()
-
 
         self.gpval = self.feature(self.x)
 """
@@ -95,6 +95,7 @@ def event_signal_matrix(events):
         evtdata.append(event.x)
     return np.array(evtdata)
 
+
 def event_locations(events):
     locations = []
     for event in events:
@@ -102,8 +103,10 @@ def event_locations(events):
     return np.array(locations)
 
 # return evid numbers which meet criteria as in utils.closest_event_pairs
+
+
 def validevids(sta):
-    command ="select distinct lebo.evid from leb_origin lebo, leb_assoc leba, \
+    command = "select distinct lebo.evid from leb_origin lebo, leb_assoc leba, \
     leb_arrival l, sigvisa_coda_fits fit, sigvisa_wiggle_wfdisc wf where \
     leba.arid=fit.arid and leba.orid=lebo.orid and l.arid=leba.arid and \
     l.sta='%s' and fit.acost<10 and leba.phase='P' and \
@@ -111,7 +114,8 @@ def validevids(sta):
     and wf.chan='BHZ'" % (sta)
     cursor = database.db.connect().cursor()
     cursor.execute(command)
-    return np.array(cursor.fetchall())[:,0]
+    return np.array(cursor.fetchall())[:, 0]
+
 
 def validevents(sta):
     evids = validevids(sta)
@@ -122,17 +126,18 @@ def validevents(sta):
             events.append(e)
     return events
 
+
 def validevids2():
     cursor = database.db.connect().cursor()
     command = "select distinct evid from sigvisa_wiggle_wfdisc where runid=6 \
     and siteid=66 and phaseid=2"
     cursor.execute(command)
-    evid = np.array(cursor.fetchall())[:,0]
+    evid = np.array(cursor.fetchall())[:, 0]
     return evid
 
 
-#ex excludes a certain event
-def validevents2(ex=None,feature=None):
+# ex excludes a certain event
+def validevents2(ex=None, feature=None):
     evids = validevids2()
     events = []
     for evid in evids:
@@ -143,17 +148,18 @@ def validevents2(ex=None,feature=None):
     return events
 
 
-#LPAZ, GNI, AFI, JNU
+# LPAZ, GNI, AFI, JNU
 
 def validstations():
-    command ="select distinct l.sta from leb_origin lebo, leb_assoc leba, \
+    command = "select distinct l.sta from leb_origin lebo, leb_assoc leba, \
     leb_arrival l, sigvisa_coda_fits fit, sigvisa_wiggle_wfdisc wf where \
     leba.arid=fit.arid and leba.orid=lebo.orid and l.arid=leba.arid and \
     fit.acost<10 and leba.phase='P' and (fit.runid=3 or fit.runid=4) and \
     wf.arid=fit.arid and wf.band='1.00_1.50' and wf.chan='BHZ'"
     cursor = database.db.connect().cursor()
     cursor.execute(command)
-    return np.array(cursor.fetchall())[:,0]
+    return np.array(cursor.fetchall())[:, 0]
+
 
 def closest2(evid=None):
     events = validevents2(ex=evid)
@@ -161,23 +167,26 @@ def closest2(evid=None):
     if evid == None:
         for i in range(len(events)):
             ei = events[i]
-            for j in range(i+1,len(events)):
+            for j in range(i + 1, len(events)):
                 ej = events[j]
-                list.append((ei.dist(ej),ei.evid, ej.evid))
+                list.append((ei.dist(ej), ei.evid, ej.evid))
     else:
         e = get_event(evid)
         for ei in events:
-            list.append((e.dist(ei),ei.evid))
+            list.append((e.dist(ei), ei.evid))
 
     list.sort()
     return list
 
 # returns inputs for 2D
+
+
 def inputs2d(events):
     inputs = np.zeros([len(events), 2])
     for i in range(len(events)):
         inputs[i] = [events[i].lat, events[i].lon]
     return np.array(inputs)
+
 
 def gpvals(events, index):
     outputs = np.zeros(len(events))

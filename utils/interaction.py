@@ -1,8 +1,9 @@
 import sys
 
+
 def query_yes_no(question, default="yes"):
     """Ask a yes/no/quit question via raw_input() and return their answer.
-    
+
     "question" is a string that is presented to the user.
     "default" is the presumed answer if the user just hits <Enter>.
         It must be "yes" (the default), "no", "quit" or None (meaning
@@ -10,8 +11,8 @@ def query_yes_no(question, default="yes"):
 
     The "answer" return value is one of "yes", "no" or "quit".
     """
-    valid = {"yes": True,   "y": True,    "ye": True,
-             "no": False,     "n": False }
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
     if default == None:
         prompt = " [y/n] "
     elif default == "yes":

@@ -1,8 +1,10 @@
 import numpy as np
 import warnings
 
+
 class LineSearchFailed(Exception):
     pass
+
 
 def project_into_bounds(x, low_bounds, high_bounds):
     if low_bounds is not None:
@@ -14,6 +16,7 @@ def project_into_bounds(x, low_bounds, high_bounds):
         if violations.any():
             x[violations] = high_bounds[violations]
     return x
+
 
 def backtracking_line_search(f, x, step, grad_x, alpha, beta, max_iters=1000, low_bounds=None, high_bounds=None):
     t = 1
@@ -33,7 +36,7 @@ def backtracking_line_search(f, x, step, grad_x, alpha, beta, max_iters=1000, lo
                     raise LineSearchFailed("stopping condition not reached after %d iters." % i)
         except RuntimeWarning as w:
             raise LineSearchFailed("runtime warning during function evaluation: " + str(w))
-            
+
     return t
 
 
@@ -49,9 +52,10 @@ def coord_steps(f, x, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", 
         step = np.zeros((dims,))
         if grad_x[d] == 0:
             continue
-        step[d] = -.3 * grad_x[d]/np.abs(grad_x[d])
+        step[d] = -.3 * grad_x[d] / np.abs(grad_x[d])
         try:
-            t = backtracking_line_search(f, x1, step, grad_x, alpha=0.3, beta=0.9, max_iters=50, low_bounds=low_bounds, high_bounds=high_bounds)
+            t = backtracking_line_search(
+                f, x1, step, grad_x, alpha=0.3, beta=0.9, max_iters=50, low_bounds=low_bounds, high_bounds=high_bounds)
         except LineSearchFailed as e:
             if disp:
                 print e
@@ -61,7 +65,8 @@ def coord_steps(f, x, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", 
         print "end w/ f", f(x1), "x", x1
     return x1
 
-def gradient_descent(f, x0, eps = 1e-4, stopping_eps = 1e-2, alpha = 0.3, beta=0.9, f_grad=None, bounds=None, max_iters = 999999, maxfun="this_argment_is_ignored", return_details=False, disp=False):
+
+def gradient_descent(f, x0, eps=1e-4, stopping_eps=1e-2, alpha=0.3, beta=0.9, f_grad=None, bounds=None, max_iters=999999, maxfun="this_argment_is_ignored", return_details=False, disp=False):
     """
     Gradient descent with backtracking line search.
     """
@@ -69,10 +74,10 @@ def gradient_descent(f, x0, eps = 1e-4, stopping_eps = 1e-2, alpha = 0.3, beta=0
 
     low_bounds, high_bounds = unpack_bounds(bounds)
 
-    xvals = [x,]
-    fvals = [f(x),]
+    xvals = [x, ]
+    fvals = [f(x), ]
     stop_vals = []
-    i=0
+    i = 0
     while True and i < max_iters:
 
         # compute gradient
@@ -86,14 +91,14 @@ def gradient_descent(f, x0, eps = 1e-4, stopping_eps = 1e-2, alpha = 0.3, beta=0
             except RuntimeWarning as w:
                 print "error computing gradient:", w
                 break
-            
+
         stopping_criterion = np.linalg.norm(grad_x, 2)
         stop_vals.append(stopping_criterion)
         if disp:
             print "iter %d fval %f norm_grad %f, x = %s" % (i, f(x), stopping_criterion, str(x))
             print "  grad", grad_x
         i += 1
-        
+
         if stopping_criterion < stopping_eps:
             break
         try:
@@ -112,6 +117,7 @@ def gradient_descent(f, x0, eps = 1e-4, stopping_eps = 1e-2, alpha = 0.3, beta=0
     else:
         return x
 
+
 def approx_gradient(f, x0, eps):
     n = len(x0)
     grad = np.zeros((n,))
@@ -119,7 +125,7 @@ def approx_gradient(f, x0, eps):
     for i in range(n):
         x_new = x0.copy()
         x_new[i] += eps
-        grad[i] = (f(x_new) - fx0)/eps
+        grad[i] = (f(x_new) - fx0) / eps
     return grad
 
 
@@ -128,6 +134,6 @@ def unpack_bounds(bounds):
     high_bounds = None
     if bounds is not None:
         low_bounds, high_bounds = zip(*bounds)
-        low_bounds=np.asarray(low_bounds)
-        high_bounds=np.asarray(high_bounds)
+        low_bounds = np.asarray(low_bounds)
+        high_bounds = np.asarray(high_bounds)
     return low_bounds, high_bounds

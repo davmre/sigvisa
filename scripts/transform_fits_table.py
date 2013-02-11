@@ -49,7 +49,8 @@ for row in cursor:
 
     lowband, highband = tuple([float(st) for st in row[3].split('_')])
 
-    insert_query = "insert into sigvisa_coda_fits_shadow (runid, evid, sta, chan, lowband, highband, phase, atime, peak_delay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) values (%d, %d, '%s', '%s', %f, %f, '%s', %f, %f, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (row[0], misc[3], misc[0], row[2], lowband, highband, misc[1], misc[2], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
+    insert_query = "insert into sigvisa_coda_fits_shadow (runid, evid, sta, chan, lowband, highband, phase, atime, peak_delay, coda_height, coda_decay, optim_method, iid, stime, etime, acost, dist, azi) values (%d, %d, '%s', '%s', %f, %f, '%s', %f, %f, %f, %f, '%s', %d, %f, %f, %f, %f, %f)" % (
+        row[0], misc[3], misc[0], row[2], lowband, highband, misc[1], misc[2], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
 #    print insert_query
     cursor2.execute(insert_query)
 

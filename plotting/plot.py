@@ -9,161 +9,143 @@ from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
 
+
 def plot_det_times(wave, axes=None, logscale=False):
-  if wave is None:
-    return
+    if wave is None:
+        return
 
-  if axes is None:
-    axes = plt.subplot(1, 1, 1)
+    if axes is None:
+        axes = plt.subplot(1, 1, 1)
 
-  try:
-    arrivals = wave['event_arrivals']
-  except:
-    arrivals = wave['arrivals']
+    try:
+        arrivals = wave['event_arrivals']
+    except:
+        arrivals = wave['arrivals']
 
-  if arrivals.shape[0] == 0:
-    return
+    if arrivals.shape[0] == 0:
+        return
 
-  all_det_times = arrivals[:, DET_TIME_COL]
-  all_det_labels = [Sigvisa().phasenames[arrivals[i, DET_PHASE_COL]] for i in range(arrivals.shape[0])]
+    all_det_times = arrivals[:, DET_TIME_COL]
+    all_det_labels = [Sigvisa().phasenames[arrivals[i, DET_PHASE_COL]] for i in range(arrivals.shape[0])]
 
-  if all_det_times is not None:
+    if all_det_times is not None:
 
-    maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
+        maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
 
-    if logscale:
-      (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
-    axes.bar(left=all_det_times, height=[maxwave-minwave for _ in all_det_times],
-            width=.25, bottom=minwave, edgecolor="red", color="red", linewidth=1, alpha=.5)
-    if all_det_labels is not None:
-      for (t, lbl) in zip(all_det_times, all_det_labels):
-        axes.text(t+3, maxwave - (maxwave-minwave)*0.1, lbl, color="red", fontsize=10)
+        if logscale:
+            (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
+        axes.bar(left=all_det_times, height=[maxwave - minwave for _ in all_det_times],
+                 width=.25, bottom=minwave, edgecolor="red", color="red", linewidth=1, alpha=.5)
+        if all_det_labels is not None:
+            for (t, lbl) in zip(all_det_times, all_det_labels):
+                axes.text(t + 3, maxwave - (maxwave - minwave) * 0.1, lbl, color="red", fontsize=10)
 
 # does not save for you - you need to call savefig() yourself!
+
+
 def plot_segment(segment, title=None, chans=None, logscale=False):
-  fig = Figure(figsize=(10,8), dpi=250)
+    fig = Figure(figsize=(10, 8), dpi=250)
 
+    # if no title is given, try to generate a simple one based on the event being plotted
+    if title is None:
+        evid = None
+        try:
+            evid = segment['evid']
+            title = "Event %d at %s" % (evid, segment['sta'])
+        except KeyError:
+            pass
 
-  # if no title is given, try to generate a simple one based on the event being plotted
-  if title is None:
-    evid=None
-    try:
-      evid = segment['evid']
-      title = "Event %d at %s" % (evid, segment['sta'])
-    except KeyError:
-      pass
+    if title is not None:
+        fig.suptitle(title, fontsize=20)
 
-  if title is not None:
-    fig.suptitle(title, fontsize=20)
+    # loop over channels to plot each channel
+    chans = segment.get_chans() if chans is None else chans
+    n = len(chans)
+    gs = gridspec.GridSpec(n * 3 + 1, 1)
+    gs.update(left=0.1, right=0.95, hspace=1)
+    axes = None
+    for chidx, chan in enumerate(sorted(chans)):
+        axes = fig.add_subplot(gs[chidx * 3:chidx * 3 + 3, 0], sharex=axes)
+        axes.set_xlabel("Time (s)")
+        wave = segment[chan]
+        subplot_waveform(wave, logscale=logscale, axes=axes)
 
-
-
-  # loop over channels to plot each channel
-  chans = segment.get_chans() if chans is None else chans
-  n = len(chans)
-  gs = gridspec.GridSpec(n*3+1, 1)
-  gs.update(left=0.1, right=0.95, hspace=1)
-  axes = None
-  for chidx, chan in enumerate(sorted(chans)):
-      axes = fig.add_subplot(gs[chidx*3:chidx*3+3, 0], sharex=axes)
-      axes.set_xlabel("Time (s)")
-      wave = segment[chan]
-      subplot_waveform(wave, logscale=logscale, axes=axes)
-
-  axes = fig.add_subplot(gs[n*3, 0])
-  axes.axis('off')
+    axes = fig.add_subplot(gs[n * 3, 0])
+    axes.axis('off')
 #  axes.get_xaxis().set_visible(False)
 #  axes.get_yaxis().set_visible(False)
-  descr = "Segment: " + str(segment)
-  try:
-    evid = segment['evid']
-    e = get_event(evid)
-    descr = descr + "\n\n" + "Event: " + str(e)
-  except KeyError as e:
-    pass
-  axes.text(0.5, 0, descr, fontsize=8, color="black", horizontalalignment='center', verticalalignment='center')
+    descr = "Segment: " + str(segment)
+    try:
+        evid = segment['evid']
+        e = get_event(evid)
+        descr = descr + "\n\n" + "Event: " + str(e)
+    except KeyError as e:
+        pass
+    axes.text(0.5, 0, descr, fontsize=8, color="black", horizontalalignment='center', verticalalignment='center')
 
-  return fig
+    return fig
 
 
 def plot_waveform(wave, title=None, logscale=False):
-  fig = Figure()
+    fig = Figure()
 
+    if title is not None:
+        fig.suptitle(title)
 
-  if title is not None:
-    fig.suptitle(title)
+    axes = fig.add_subplot(1, 1, 1)
+    axes.set_xlabel("Time (s)")
+    subplot_waveform(wave, axes, logscale=logscale)
+    return fig
 
-  axes = fig.add_subplot(1,1,1)
-  axes.set_xlabel("Time (s)")
-  subplot_waveform(wave, axes, logscale=logscale)
-  return fig
 
 def subplot_waveform(wave, axes, logscale=False, plot_dets=True, **kwargs):
     srate = wave['srate']
     npts = wave['npts']
     stime = wave['stime']
-    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
+    timevals = np.arange(stime, stime + npts / srate, 1.0 / srate)[0:npts]
 
     wave_data = np.log(wave.data) if logscale else wave.data
 
     axes.set_ylabel(wave['chan'])
     axes.plot(timevals, wave_data, **kwargs)
     if plot_dets:
-      plot_det_times(wave, axes=axes, logscale=logscale)
+        plot_det_times(wave, axes=axes, logscale=logscale)
 
 
 # does not save for you - you need to call savefig() yourself!
 def plot_bands(wave, bands=None, title=None):
-  format = "k-"
+    format = "k-"
 
-  if bands is None:
-    bands=Sigvisa().bands
+    if bands is None:
+        bands = Sigvisa().bands
 
-  Figure(figsize=(12, 30))
-  fig.xlabel("Time (s)")
+    Figure(figsize=(12, 30))
+    fig.xlabel("Time (s)")
 
-  for (bidx, band) in enumerate(sorted(bands)):
-    if bidx == 0:
-      axes = fig.subplot(len(bands), 1, 1)
-      if title is not None:
-        fig.title(title)
-    else:
-      fig.subplot(len(bands), 1, bidx+1, sharex=axes)
+    for (bidx, band) in enumerate(sorted(bands)):
+        if bidx == 0:
+            axes = fig.subplot(len(bands), 1, 1)
+            if title is not None:
+                fig.title(title)
+        else:
+            fig.subplot(len(bands), 1, bidx + 1, sharex=axes)
 
-    fig.ylabel(yl)
+        fig.ylabel(yl)
 
-    npts = wave["npts"]
-    srate = wave["srate"]
-    stime = wave["stime"]
-    timevals = np.arange(stime, stime + npts/srate, 1.0 /srate)[0:npts]
+        npts = wave["npts"]
+        srate = wave["srate"]
+        stime = wave["stime"]
+        timevals = np.arange(stime, stime + npts / srate, 1.0 / srate)[0:npts]
 
-    nwave = wave.filter(band)
+        nwave = wave.filter(band)
 
-    fig.plot(timevals, nwave.data, format)
+        fig.plot(timevals, nwave.data, format)
 
-    plot_det_times(wave)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        plot_det_times(wave)
 
 
 #################################################################
 #################################################################
-
 """
 matplotlib text wrapping code from
 http://stackoverflow.com/questions/4018860/text-box-in-matplotlib
@@ -173,6 +155,7 @@ fig.canvas.mpl_connect('draw_event', on_draw)
 at the very end of constructing the figure
 
 """
+
 
 def on_draw(event):
     """Auto-wraps all text objects in a figure at draw-time"""
@@ -194,6 +177,7 @@ def on_draw(event):
     fig.canvas.draw()
     # Reset the draw event callbacks
     fig.canvas.callbacks.callbacks[event.name] = func_handles
+
 
 def autowrap_text(textobj, renderer):
     """Wraps the given matplotlib text object so that it exceed the boundaries
@@ -222,7 +206,7 @@ def autowrap_text(textobj, renderer):
         new_width = 2 * min(left_space, right_space)
 
     # Estimate the width of the new size in characters...
-    aspect_ratio = 0.5 # This varies with the font!!
+    aspect_ratio = 0.5  # This varies with the font!!
     fontsize = textobj.get_size()
     pixels_per_char = aspect_ratio * renderer.points_to_pixels(fontsize)
 
@@ -234,6 +218,7 @@ def autowrap_text(textobj, renderer):
         # This appears to be a single word
         wrapped_text = textobj.get_text()
     textobj.set_text(wrapped_text)
+
 
 def min_dist_inside(point, rotation, box):
     """Gets the space in a given direction from "point" to the boundaries of

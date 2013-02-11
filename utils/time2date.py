@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,17 +24,19 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # converts a unix timestamp to a data in UTC
-import sys, time
+import sys
+import time
+
 
 def main():
-  if len(sys.argv) != 2:
-    print "Usage: python -m utils.time2date timestamp"
-    sys.exit(1)
+    if len(sys.argv) != 2:
+        print "Usage: python -m utils.time2date timestamp"
+        sys.exit(1)
 
-  timetuple = time.gmtime(int(sys.argv[1]))
-  print time.strftime("%Y-%m-%d %H:%M:%S", timetuple)
-  
+    timetuple = time.gmtime(int(sys.argv[1]))
+    print time.strftime("%Y-%m-%d %H:%M:%S", timetuple)
+
 if __name__ == "__main__":
-  main()
+    main()

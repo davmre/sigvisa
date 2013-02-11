@@ -3,7 +3,7 @@ from sigvisa.database.dataset import *
 import sigvisa.utils.geog
 
 cursor = database.db.connect().cursor()
-detections, arid2num = read_detections(cursor, 1237680000, 1237680000 + 168*3600, arrival_table="leb_arrival", noarrays=False)
+detections, arid2num = read_detections(cursor, 1237680000, 1237680000 + 168 * 3600, arrival_table="leb_arrival", noarrays=False)
 
 last_det = dict()
 
@@ -16,7 +16,7 @@ for det in detections:
         gap = time - last_det[site]
         if gap < 5:
             print " arrival %d at siteid %d occured %f seconds after previous at %f : phase %s" % (det[1], site, gap, last_det[site], det[DET_PHASE_COL])
-            overlaps = overlaps+1
+            overlaps = overlaps + 1
     last_det[site] = time
 
 print "total overlaps: ", overlaps, " out of ", len(detections), " detections"

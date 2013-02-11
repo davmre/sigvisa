@@ -6,6 +6,7 @@ from sigvisa.database.dataset import *
 from sigvisa.database import db
 from sigvisa import Sigvisa
 
+
 class EventHeatmap(Heatmap):
 
     def __init__(self, f, **args):
@@ -26,19 +27,19 @@ class EventHeatmap(Heatmap):
         else:
             labels = [None for loc in locations]
 
-        self.event_locations.extend([(l[0], l[1]) for l in  locations])
+        self.event_locations.extend([(l[0], l[1]) for l in locations])
         self.event_labels.extend(labels)
 
     def add_stations(self, names):
         if isinstance(names, str):
-            names = [names,]
+            names = [names, ]
         self.stations.extend(names)
 
     def set_true_event(self, lon, lat):
         self.true_event = (lon, lat)
         return dist_km((lon, lat), self.max()[0:2])
 
-    def savefig(self, fname, title = None, **args):
+    def savefig(self, fname, title=None, **args):
         plt.figure()
         self.plot(**args)
         if title is None:
@@ -49,14 +50,13 @@ class EventHeatmap(Heatmap):
 
         self.save(fname + ".log")
 
-
-    def plot(self,  event_alpha=0.6, axes=None, **density_args):
+    def plot(self, event_alpha=0.6, axes=None, **density_args):
 
         self.init_bmap(axes=axes)
         self.plot_earth()
 
         if self.f is not None or not np.isnan(self.fvals).all():
-            self.plot_density( **density_args)
+            self.plot_density(**density_args)
 
         self.plot_locations(self.event_locations, labels=self.event_labels,
                             marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=event_alpha)
@@ -66,12 +66,9 @@ class EventHeatmap(Heatmap):
             self.plot_locations(((lon, lat),), labels=None,
                                 marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
 
-
         sta_locations = [self.sitenames[n][0:2] for n in self.stations]
         self.plot_locations(sta_locations, labels=self.stations,
                             marker="x", ms=7, mfc="none", mec="white", mew=2, alpha=1)
-
-
 
     def title(self):
         peak = self.max()[0:2]

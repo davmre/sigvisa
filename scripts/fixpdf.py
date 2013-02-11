@@ -3,9 +3,10 @@
 
 
 import re
-import sys, os
+import sys
+import os
 
-font_magic="""
+font_magic = """
 3 0 obj
 << /F1 %d 0 R >>
 endobj
@@ -30,9 +31,10 @@ for fname in fnames:
     pagestrs = ["%s R" % (match.group(1),) for match in i]
 
     objs = [int(x) for x in re.findall("(\d+) 0 obj\n", s)]
-    next_obj = max(objs)+1
-    font_str = font_magic % (next_obj,next_obj)
-    trailer_str = "2 0 obj\n << /Count %d /Kids [ %s ] /Type /Pages >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%%%EOF" % (len(pagestrs), " ".join(pagestrs))
+    next_obj = max(objs) + 1
+    font_str = font_magic % (next_obj, next_obj)
+    trailer_str = "2 0 obj\n << /Count %d /Kids [ %s ] /Type /Pages >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%%%EOF" % (
+        len(pagestrs), " ".join(pagestrs))
     new_s = s + font_str + trailer_str
 #    fn, fe = os.path.splitext(fname)
     new_fname = fname

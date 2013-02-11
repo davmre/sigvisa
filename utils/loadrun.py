@@ -27,83 +27,89 @@
 #
 # load the results of a run from a file
 
-import sys, tarfile, os, csv
+import sys
+import tarfile
+import os
+import csv
 
 import sigvisa.database.db
 
+
 def importtable(curs, tar, fname, tabname, inp_runid=None):
-  fobj = tar.extractfile(fname)
-  inp = csv.reader(fobj)
+    fobj = tar.extractfile(fname)
+    inp = csv.reader(fobj)
 
-  colnames = inp.next()
+    colnames = inp.next()
 
-  for runid_pos in xrange(len(colnames)):
-    if colnames[runid_pos].lower() == "runid":
-      break
-  else:
-    print >> sys.stderr, "No runid in table"
-    sys.exit(1)
-
-  if inp_runid is None:
-    colnames.pop(runid_pos)
-
-  query = "insert into %s (%s) values (%s)" % (tabname, ",".join(colnames),
-                                           ",".join(["%s" for _ in colnames]))
-
-  for line in inp:
-    if inp_runid is None:
-      line.pop(runid_pos)
+    for runid_pos in xrange(len(colnames)):
+        if colnames[runid_pos].lower() == "runid":
+            break
     else:
-      line[runid_pos] = str(inp_runid)
+        print >> sys.stderr, "No runid in table"
+        sys.exit(1)
 
-    for i in range(len(line)):
-      if line[i] == '':
-        line[i] = 'null'
-      else:
-        line[i] = "'" + line[i] + "'"
+    if inp_runid is None:
+        colnames.pop(runid_pos)
 
-    curs.execute(query % tuple(line))
+    query = "insert into %s (%s) values (%s)" % (tabname, ",".join(colnames),
+                                                 ",".join(["%s" for _ in colnames]))
 
+    for line in inp:
+        if inp_runid is None:
+            line.pop(runid_pos)
+        else:
+            line[runid_pos] = str(inp_runid)
 
-  if inp_runid is None:
-    curs.execute("select max(runid) from visa_run")
-    runid, = curs.fetchone()
+        for i in range(len(line)):
+            if line[i] == '':
+                line[i] = 'null'
+            else:
+                line[i] = "'" + line[i] + "'"
 
-    return runid
+        curs.execute(query % tuple(line))
+
+    if inp_runid is None:
+        curs.execute("select max(runid) from visa_run")
+        runid, = curs.fetchone()
+
+        return runid
+
 
 def main():
 
-  if len(sys.argv) != 2:
-    print >> sys.stderr, "Usage: python loadrun.py <filename>.tar"
-    sys.exit(1)
+    if len(sys.argv) != 2:
+        print >> sys.stderr, "Usage: python loadrun.py <filename>.tar"
+        sys.exit(1)
 
-  tarfname = sys.argv[1]
-  if not tarfname.endswith(".tar"):
-    tarfname += ".tar"
+    tarfname = sys.argv[1]
+    if not tarfname.endswith(".tar"):
+        tarfname += ".tar"
 
-  conn = database.db.connect()
-  curs = conn.cursor()
+    conn = database.db.connect()
+    curs = conn.cursor()
 
-  # grab the next runid
-  tar = tarfile.open(name = tarfname, mode='r')
+    # grab the next runid
+    tar = tarfile.open(name=tarfname, mode='r')
 
-  runid = importtable(curs, tar, "visa_run.csv", "visa_run")
+    runid = importtable(curs, tar, "visa_run.csv", "visa_run")
 
-  print "RUNID", runid
+    print "RUNID", runid
 
-  importtable(curs, tar, "visa_origin.csv", "visa_origin", runid)
+    importtable(curs, tar, "visa_origin.csv", "visa_origin", runid)
 
-  importtable(curs, tar, "visa_assoc.csv", "visa_assoc", runid)
+    importtable(curs, tar, "visa_assoc.csv", "visa_assoc", runid)
 
-  tar.close()
+    tar.close()
 
 if __name__ == "__main__":
-  try:
-    main()
-  except SystemExit:
-    raise
-  except:
-    import pdb, traceback, sys
-    traceback.print_exc(file=sys.stdout)
-    pdb.post_mortem(sys.exc_traceback)
-    raise
+    try:
+        main()
+    except SystemExit:
+        raise
+    except:
+        import pdb
+        import traceback
+        import sys
+        traceback.print_exc(file=sys.stdout)
+        pdb.post_mortem(sys.exc_traceback)
+        raise

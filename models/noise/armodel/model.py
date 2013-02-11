@@ -6,6 +6,7 @@ import scipy.weave as weave
 from scipy.weave import converters
 import time
 
+
 def load_armodel_from_file(fname):
     f = open(fname, 'r')
     try:
@@ -28,11 +29,12 @@ def load_armodel_from_file(fname):
     return arm
 #    return cPickle.load(open(fname, 'rb'))
 
+
 class ARModel:
-    #params: array of parameters
-    #p: number of parametesr
-    #em: error model
-    #sf: sampling frequency in Hz.
+    # params: array of parameters
+    # p: number of parametesr
+    # em: error model
+    # sf: sampling frequency in Hz.
     def __init__(self, params, em, c=0, sf=40):
         self.params = params
         self.p = len(params)
@@ -40,9 +42,9 @@ class ARModel:
         self.c = c
         self.sf = sf
 
-    #samples based on the defined AR Model
-    #if init data is not given, then the first p points are
-    #sampled from error model (i.e. normally distributed)
+    # samples based on the defined AR Model
+    # if init data is not given, then the first p points are
+    # sampled from error model (i.e. normally distributed)
     def sample(self, num, initdata=[]):
         data = np.zeros(num)
         for t in range(num):
@@ -55,7 +57,7 @@ class ARModel:
             else:
                 s = self.c
                 for i in range(self.p):
-                    s += self.params[i] * data[t-i-1]
+                    s += self.params[i] * data[t - i - 1]
                 data[t] = s + self.em.sample()
         return data
 
@@ -70,7 +72,6 @@ class ARModel:
 
         K = np.zeros((n_p, n_p))
         u = np.zeros((n_p,))
-
 
         code = """
         int t_since_mask = 0;
@@ -210,12 +211,11 @@ class ARModel:
 """
 
         ll = weave.inline(code,
-                           ['n', 'n_p', 'm', 'd', 'std', 'p', 'tmp', 'K', 'u'],
-                           type_converters=converters.blitz,
-                           support_code=support,
-                           compiler = 'gcc')
+                          ['n', 'n_p', 'm', 'd', 'std', 'p', 'tmp', 'K', 'u'],
+                          type_converters=converters.blitz,
+                          support_code=support,
+                          compiler='gcc')
         return ll
-
 
     def fast_AR(self, d, c, std):
         #
@@ -247,15 +247,15 @@ class ARModel:
         return_val = d_prob;
         """
         ll = weave.inline(code,
-                           ['n', 'n_p', 'm', 'd', 't1', 'std', 'p'],
-                           type_converters=converters.blitz,
-                           compiler = 'gcc')
+                          ['n', 'n_p', 'm', 'd', 't1', 'std', 'p'],
+                          type_converters=converters.blitz,
+                          compiler='gcc')
         return ll
 
     def slow_AR(self, d, c):
         d_prob = 0
         skipped = 0
-        masked =  ma.getmaskarray(d)
+        masked = ma.getmaskarray(d)
         skipped = 0
 
         n = len(d)
@@ -266,7 +266,7 @@ class ARModel:
 
         A = np.zeros((n_p, n_p))
         A[0, :] = p
-        A[1:, :-1] = np.eye(n_p-1)
+        A[1:, :-1] = np.eye(n_p - 1)
 
         K = None
 
@@ -300,12 +300,12 @@ class ARModel:
                     K = np.zeros((n_p, n_p))
                     u = np.zeros((n_p,))
                     len_history = min(t, n_p)
-                    u[:len_history] = d[t-1:t-len_history-1:-1]
+                    u[:len_history] = d[t - 1:t - len_history - 1:-1]
                     t_since_mask = 0
 
                 # for each masked timestep, do a Kalman update
                 K = np.dot(A, np.dot(K, A.T))
-                K[0,0] += orig_std
+                K[0, 0] += orig_std
                 u = np.dot(A, u)
                 continue
 
@@ -316,22 +316,22 @@ class ARModel:
                 t_since_mask += 1
                 u = np.dot(A, u)
                 K = np.dot(A, np.dot(K, A.T))
-                K[0,0] += orig_std
+                K[0, 0] += orig_std
 
                 expected = u[0]
-                std = K[0,0]
+                std = K[0, 0]
                 t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
             # otherwise, compute expectation in the normal way (variance is constant)
             else:
                 expected = 0
                 for i in range(n_p):
-                    if t > i and not masked[t-i-1]:
-                        expected += p[i] * d[t-i-1]
+                    if t > i and not masked[t - i - 1]:
+                        expected += p[i] * d[t - i - 1]
 
             actual = d[t]
             error = actual - expected
             t2 = 0.5 * np.square((error - self.em.mean) / std)
-            ell = -t2-t1
+            ell = -t2 - t1
             d_prob += ell
 
             # print "py t %d error %f s %f t2 %f ell %f d_prob %f" % (t, error, std, t2, ell, d_prob)
@@ -340,8 +340,8 @@ class ARModel:
             # Kalman updating by adding an observation of the timestep
             # we just saw.
             if t_since_mask <= n_p:
-                K[0,:] = 0
-                K[:,0] = 0
+                K[0, :] = 0
+                K[:, 0] = 0
                 u[0] = d[t]
             # if we are now sufficiently far from a masked region, stop Kalman updating
             elif t_since_mask == n_p + 1:
@@ -356,7 +356,7 @@ class ARModel:
     # likelihood in log scale
     def lklhood(self, data, zero_mean=False):
         if not isinstance(data, (list, tuple)):
-            data = [data,]
+            data = [data, ]
 
         if zero_mean:
             c = 0
@@ -383,22 +383,22 @@ class ARModel:
 
         return prob
 
-    #given data as argument,
+    # given data as argument,
     def errors(self, data):
-        out = np.zeros(len(data)-self.p)
-        for t in range(len(data)-self.p):
+        out = np.zeros(len(data) - self.p)
+        for t in range(len(data) - self.p):
             expected = self.c
             for i in range(self.p):
-                expected += self.params[i] * data[t+self.p-i-1]
-            actual = data[t+self.p]
+                expected += self.params[i] * data[t + self.p - i - 1]
+            actual = data[t + self.p]
             out[t] = actual - expected
         return out
 
-    #returns optimal psd determined by the ar parameters, in log scale
+    # returns optimal psd determined by the ar parameters, in log scale
     def psd(self, size=1024):
         params = self.params
         std = self.em.std
-        ws = np.linspace(0,0.5,size)
+        ws = np.linspace(0, 0.5, size)
         S = np.zeros(size)
         p = len(params)
 
@@ -406,17 +406,17 @@ class ARModel:
             w = ws[j]
             sigma = 0
             for k in range(p):
-                sigma += params[k]*np.exp(-2*np.pi*w*complex(0,1)*(k+1))
-            S[j] = 2*(np.log(std)-np.log(np.abs(1-sigma)))
+                sigma += params[k] * np.exp(-2 * np.pi * w * complex(0, 1) * (k + 1))
+            S[j] = 2 * (np.log(std) - np.log(np.abs(1 - sigma)))
 
-        return (ws*self.sf,S)
+        return (ws * self.sf, S)
 
-    #returns residual sum of squares of log scale psd values
+    # returns residual sum of squares of log scale psd values
     def psdrss(self, psd, r=0.8):
         n = len(psd)
         S = self.psd(size=n)[1]
         rss = 0
-        for i in range(int(float(n)*0.8)):
+        for i in range(int(float(n) * 0.8)):
             rss += np.square(psd[i] - S[i])
         return rss
 
@@ -433,7 +433,7 @@ class ARModel:
             f.write("%.8f\n" % p)
         f.close()
 
-        #cPickle.dump(self, open(fname, 'wb'), protocol=0)
+        # cPickle.dump(self, open(fname, 'wb'), protocol=0)
 
 
 # error model obeys normal distribution
@@ -443,7 +443,7 @@ class ErrorModel:
         self.std = std
 
     def sample(self):
-        return np.random.normal(loc = self.mean, scale = self.std)
+        return np.random.normal(loc=self.mean, scale=self.std)
 
     # likelihood in log scale
     def lklhood(self, x):

@@ -27,105 +27,106 @@
 #
 
 import numpy as np
-import math, random
+import math
+import random
 import rpy2.robjects as robjects
 
 from sigvisa.database.dataset import *
 
+
 def learn_site(earthmodel, start_time, end_time, detections, leb_events,
                leb_evlist, site_up, numtimedefphases, siteid):
-  # initialize feature vectors
-  mag_feat = []
-  dist_feat = []
-  dep_feat = []
-  phaseid_feat = [[] for _ in range(numtimedefphases)]
-  output = []
+    # initialize feature vectors
+    mag_feat = []
+    dist_feat = []
+    dep_feat = []
+    phaseid_feat = [[] for _ in range(numtimedefphases)]
+    output = []
 
-  for evnum, event in enumerate(leb_events):
-    # compute the list of phases detected for this event at this site
-    det_phase = np.zeros(numtimedefphases, int)
-    for true_phaseid, detnum in leb_evlist[evnum]:
-      det = detections[detnum]
-      if det[DET_SITE_COL] == siteid:
-        det_phase[true_phaseid] = 1
+    for evnum, event in enumerate(leb_events):
+        # compute the list of phases detected for this event at this site
+        det_phase = np.zeros(numtimedefphases, int)
+        for true_phaseid, detnum in leb_evlist[evnum]:
+            det = detections[detnum]
+            if det[DET_SITE_COL] == siteid:
+                det_phase[true_phaseid] = 1
 
-    dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
+        dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
 
-    # we assume that only time-defining phases are detected
-    for pnum in range(numtimedefphases):
-      arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
-                                       event[EV_DEPTH_COL],
-                                       event[EV_TIME_COL], pnum, siteid)
-      # check if the site is in the shadow zone of this phase
-      if arrtime < 0:
-        continue
+        # we assume that only time-defining phases are detected
+        for pnum in range(numtimedefphases):
+            arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
+                                             event[EV_DEPTH_COL],
+                                             event[EV_TIME_COL], pnum, siteid)
+            # check if the site is in the shadow zone of this phase
+            if arrtime < 0:
+                continue
 
-      # check if the site was up at the expected arrival time
-      if arrtime < start_time or arrtime >= end_time \
-         or not site_up[siteid, int((arrtime - start_time) / UPTIME_QUANT)]:
-        continue
+            # check if the site was up at the expected arrival time
+            if arrtime < start_time or arrtime >= end_time \
+               or not site_up[siteid, int((arrtime - start_time) / UPTIME_QUANT)]:
+                continue
 
-      output.append(det_phase[pnum])
-      mag_feat.append(event[EV_MB_COL])
-      dep_feat.append(event[EV_DEPTH_COL])
-      dist_feat.append(dist)
-      # construct the features, one per phase
-      for i in range(numtimedefphases):
-        phaseid_feat[i].append(int(i == pnum))
+            output.append(det_phase[pnum])
+            mag_feat.append(event[EV_MB_COL])
+            dep_feat.append(event[EV_DEPTH_COL])
+            dist_feat.append(dist)
+            # construct the features, one per phase
+            for i in range(numtimedefphases):
+                phaseid_feat[i].append(int(i == pnum))
 
-  print "%d event-phases detected out of %d" % (sum(output), len(output))
+    print "%d event-phases detected out of %d" % (sum(output), len(output))
 
-  # copy the original dataset
-  mag_feat2 = [x for x in mag_feat]
-  dep_feat2 = [x for x in dep_feat]
-  dist_feat2 = [x for x in dist_feat]
-  phaseid_feat2 = [[x for x in y] for y in phaseid_feat]
-  output2 = [x for x in output]
+    # copy the original dataset
+    mag_feat2 = [x for x in mag_feat]
+    dep_feat2 = [x for x in dep_feat]
+    dist_feat2 = [x for x in dist_feat]
+    phaseid_feat2 = [[x for x in y] for y in phaseid_feat]
+    output2 = [x for x in output]
+
+    print "y", len(output2), sum(output2)
+
+    return mag_feat2, dep_feat2, dist_feat2, phaseid_feat2, output2
 
 
-  print "y",len(output2),sum(output2)
-
-
-  return mag_feat2,dep_feat2,dist_feat2,phaseid_feat2,output2
-
-def learn(param_dirname,earthmodel, start_time, end_time,
+def learn(param_dirname, earthmodel, start_time, end_time,
           detections, leb_events, leb_evlist,
           site_up, sites, phasenames, phasetimedef):
 
-  param_fname = "utils/EventDetectionTEMP.txt"
-  param_fout = param_dirname + "/EventDetectionPrior.txt"
-  param_rfile = "utils/empBayesLogistic_4py.R"
+    param_fname = "utils/EventDetectionTEMP.txt"
+    param_fout = param_dirname + "/EventDetectionPrior.txt"
+    param_rfile = "utils/empBayesLogistic_4py.R"
 
-  fp = open(param_fname, "w")
+    fp = open(param_fname, "w")
 
-  # assume that the time-defining phases precede the non-time-defining ones
-  numtimedefphases = earthmodel.NumTimeDefPhases()
+    # assume that the time-defining phases precede the non-time-defining ones
+    numtimedefphases = earthmodel.NumTimeDefPhases()
 
-  print >>fp,"site det mag dep dist",
-  for item in phasenames[:-4]:
-      print >>fp,item,
-  print >>fp,"\r"
+    print >>fp, "site det mag dep dist",
+    for item in phasenames[:-4]:
+        print >>fp, item,
+    print >>fp, "\r"
 
-  for siteid in range(len(sites)):
-    a,b,c,d,e = learn_site(earthmodel, start_time, end_time,
-                       detections, leb_events, leb_evlist, site_up,
-                       numtimedefphases, siteid)
+    for siteid in range(len(sites)):
+        a, b, c, d, e = learn_site(earthmodel, start_time, end_time,
+                                   detections, leb_events, leb_evlist, site_up,
+                                   numtimedefphases, siteid)
 
-    for i in range(len(a)):
-        print >>fp,siteid,e[i],a[i],b[i],c[i],
-        for j in range(len(d)):
-            print >>fp,d[j][i],
-        print >>fp,'\r'
-    print "learnt site id", siteid
+        for i in range(len(a)):
+            print >>fp, siteid, e[i], a[i], b[i], c[i],
+            for j in range(len(d)):
+                print >>fp, d[j][i],
+            print >>fp, '\r'
+        print "learnt site id", siteid
 
-    del a,b,c,d,e
+        del a, b, c, d, e
 
-  fp.close()
+    fp.close()
 
-  #use R script to read in file and build phase-site specific logistic regression
- ### R CMD BATCH empBayesLogistic_4py.R param_fname param_fout
+    # use R script to read in file and build phase-site specific logistic regression
+   ### R CMD BATCH empBayesLogistic_4py.R param_fname param_fout
 
-  robjects.r("source('" + param_rfile + "')")
-  robjects.r.FitLogistic(param_fname,outfile=param_fout,
-                         pwd = os.path.curdir, ossep=os.path.sep);
-  os.system("rm " + param_fname)
+    robjects.r("source('" + param_rfile + "')")
+    robjects.r.FitLogistic(param_fname, outfile=param_fout,
+                           pwd=os.path.curdir, ossep=os.path.sep)
+    os.system("rm " + param_fname)

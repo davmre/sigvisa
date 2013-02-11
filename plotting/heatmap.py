@@ -14,6 +14,7 @@ def multi_f(f_args):
     """Takes a tuple (f, loni, lati, lon, lat), evaluates and returns f(lon, lat)"""
     return f_args[0](*f_args[3:5])
 
+
 class Heatmap(object):
 
     def __init__(self, f, n=20, center=None, width=None, lonbounds=None, latbounds=None, autobounds=None, fname=None, calc=True):
@@ -48,10 +49,10 @@ class Heatmap(object):
                 self.min_lat = latbounds[0]
                 self.max_lat = latbounds[1]
             elif center is not None and width is not None:
-                self.min_lon = center[0]-width/2.0
-                self.max_lon = center[0]+width/2.0
-                self.min_lat = center[1]-width/2.0
-                self.max_lat = center[1]+width/2.0
+                self.min_lon = center[0] - width / 2.0
+                self.max_lon = center[0] + width / 2.0
+                self.min_lat = center[1] - width / 2.0
+                self.max_lat = center[1] + width / 2.0
             else:
                 raise RuntimeError("Heat map requires either a bounding box, or a center and a width")
 
@@ -68,7 +69,7 @@ class Heatmap(object):
         self.lat_arr = np.linspace(self.min_lat, self.max_lat, self.n)
 
         if calc:
-            self.calc(checkpoint = self.fname)
+            self.calc(checkpoint=self.fname)
 
     def save(self, fname=None):
         if fname is None:
@@ -138,12 +139,11 @@ class Heatmap(object):
         self.bmap = draw_earth("",
                                projection="cyl",
                                resolution="l",
-                               llcrnrlon = self.min_lon, urcrnrlon = self.max_lon,
-                               llcrnrlat = self.min_lat, urcrnrlat = self.max_lat,
+                               llcrnrlon=self.min_lon, urcrnrlon=self.max_lon,
+                               llcrnrlat=self.min_lat, urcrnrlat=self.max_lat,
                                nofillcontinents=True,
                                ax=axes,
-                           )
-
+                               )
 
     def plot_earth(self):
         try:
@@ -151,16 +151,16 @@ class Heatmap(object):
         except:
             self.init_bmap()
 
-        parallels = np.arange(int(self.min_lat)-1,int(self.max_lat+1))
+        parallels = np.arange(int(self.min_lat) - 1, int(self.max_lat + 1))
         if len(parallels) > 10:
-            parallels = [int(k) for k in np.linspace(int(self.min_lat)-1,int(self.max_lat+1), 10)]
+            parallels = [int(k) for k in np.linspace(int(self.min_lat) - 1, int(self.max_lat + 1), 10)]
 
-        self.bmap.drawparallels(parallels,labels=[False,True,True,False])
-        meridians = np.arange(int(self.min_lon)-1, int(self.max_lon)+1)
+        self.bmap.drawparallels(parallels, labels=[False, True, True, False])
+        meridians = np.arange(int(self.min_lon) - 1, int(self.max_lon) + 1)
         if len(meridians) > 10:
-            meridians = [int(k) for k in np.linspace(int(self.min_lon)-1,int(self.max_lon+1), 10)]
+            meridians = [int(k) for k in np.linspace(int(self.min_lon) - 1, int(self.max_lon + 1), 10)]
 
-        self.bmap.drawmeridians(meridians,labels=[True,False,False,True])
+        self.bmap.drawmeridians(meridians, labels=[True, False, False, True])
 
     def plot_locations(self, locations, labels=None, **plotargs):
         try:
@@ -177,24 +177,21 @@ class Heatmap(object):
         except:
             self.init_bmap()
 
-
         fv = copy.copy(self.fvals)
         if f_preprocess:
             for i in range(fv.shape[0]):
                 for j in range(fv.shape[1]):
-                    v = self.fvals[i,j]
+                    v = self.fvals[i, j]
                     for fp in f_preprocess:
                         v = fp(v, self.fvals.flatten())
-                    fv[i,j] = v
-
+                    fv[i, j] = v
 
         minlevel = scipy.stats.scoreatpercentile([v for v in fv.flatten() if not np.isnan(v)], 20)
 
         levels = np.linspace(minlevel, np.max(fv), 10)
 
-
         draw_density(self.bmap, self.lon_arr, self.lat_arr, fv,
-                     levels = levels, **density_args)
+                     levels=levels, **density_args)
 
     def normalize_lonlat(self, lon, lat):
         """
@@ -221,16 +218,15 @@ class Heatmap(object):
 
         def find_center(X):
 
-            rX = np.radians(X) + np.array((0, np.pi/2.0))
+            rX = np.radians(X) + np.array((0, np.pi / 2.0))
 
-            pts_cartesian = [(np.sin(lat)*np.cos(lon), np.sin(lat)*np.sin(lon), np.cos(lat)) for (lon, lat) in rX]
+            pts_cartesian = [(np.sin(lat) * np.cos(lon), np.sin(lat) * np.sin(lon), np.cos(lat)) for (lon, lat) in rX]
             center_cartesian = np.mean(pts_cartesian, axis=0)
-            (x,y,z) = center_cartesian
-            lat_center = np.degrees(np.arccos(z) - np.pi/2.0)
-            lon_center = np.degrees(np.arctan2(y,x))
+            (x, y, z) = center_cartesian
+            lat_center = np.degrees(np.arccos(z) - np.pi / 2.0)
+            lon_center = np.degrees(np.arctan2(y, x))
 
             return (lon_center, lat_center)
-
 
         center = find_center(X)
         lon_distances = sorted(np.abs([utils.geog.degdiff(pt[0], center[0]) for pt in X]))
@@ -238,14 +234,12 @@ class Heatmap(object):
         lon_width = lon_distances[int(np.ceil(len(lon_distances) * float(quantile)))]
         lat_width = lat_distances[int(np.ceil(len(lat_distances) * float(quantile)))]
 
-
-        min_lon = center[0]-lon_width
-        max_lon = center[0]+lon_width
-        min_lat = center[1]-lat_width
-        max_lat = center[1]+lat_width
+        min_lon = center[0] - lon_width
+        max_lon = center[0] + lon_width
+        min_lat = center[1] - lat_width
+        max_lat = center[1] + lat_width
 
         return [min_lon, max_lon], [min_lat, max_lat], center
-
 
     def max(self):
         maxlon = 0
@@ -258,7 +252,6 @@ class Heatmap(object):
                     maxlon = lon
                     maxlat = lat
         return (maxlon, maxlat, maxval)
-
 
     def min(self):
         minlon = 0
@@ -273,7 +266,6 @@ class Heatmap(object):
 
         return (minlon, minlat, minval)
 
-
     def __mul__(self, other):
         if other is None:
             # Treat "None" as the identity heatmap, so that we can use
@@ -287,7 +279,7 @@ class Heatmap(object):
         new_vals = self.fvals * other.fvals
 
         hm = type(self)(f=newf, n=self.n, lonbounds=[self.min_lon, self.max_lon],
-                     latbounds=[self.min_lat, self.max_lat], calc=False)
+                        latbounds=[self.min_lat, self.max_lat], calc=False)
         hm.fvals = new_vals
         return hm
 
@@ -304,23 +296,24 @@ class Heatmap(object):
         new_vals = self.fvals + other.fvals
 
         hm = type(self)(f=newf, n=self.n, lonbounds=[self.min_lon, self.max_lon],
-                     latbounds=[self.min_lat, self.max_lat], calc = False)
+                        latbounds=[self.min_lat, self.max_lat], calc=False)
         hm.fvals = new_vals
         return hm
 
 
 def testfn(lon, lat):
-    return lon*lat
+    return lon * lat
+
 
 def main():
 
-    h = Heatmap(f = testfn, n=20, lonbounds=[-180, 180], latbounds=[-90, 90])
-    h.calc(checkpoint = "test.heatmap")
+    h = Heatmap(f=testfn, n=20, lonbounds=[-180, 180], latbounds=[-90, 90])
+    h.calc(checkpoint="test.heatmap")
 
-    h2 = Heatmap(f = testfn, n=20, lonbounds=[-180, 180], latbounds=[-90, 90])
-    h2.calc_parallel(checkpoint = "test2.heatmap")
+    h2 = Heatmap(f=testfn, n=20, lonbounds=[-180, 180], latbounds=[-90, 90])
+    h2.calc_parallel(checkpoint="test2.heatmap")
 
-    hnew = Heatmap(f =f, fname = "test.heatmap")
+    hnew = Heatmap(f=f, fname="test.heatmap")
     hnew.plot_density()
 
     plt.savefig("heatmap.png")

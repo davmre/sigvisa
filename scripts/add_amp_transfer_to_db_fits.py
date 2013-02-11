@@ -9,7 +9,7 @@ cursor1.execute(sql_query)
 
 cursor2 = s.dbconn.cursor()
 
-i=0
+i = 0
 for (evid, band, phase, amp, fpid) in cursor1:
     ev = get_event(evid=evid)
     try:

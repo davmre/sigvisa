@@ -8,7 +8,6 @@ def main():
     parser = OptionParser()
     (options, args) = parser.parse_args()
 
-
     if "DISPLAY" in os.environ:
         matplotlib.use("TkAgg")
         interactive = True

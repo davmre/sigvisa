@@ -1,5 +1,8 @@
-import os, sys, traceback
-import numpy as np, scipy
+import os
+import sys
+import traceback
+import numpy as np
+import scipy
 
 
 from sigvisa.database.dataset import *
@@ -11,7 +14,8 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 import plot
-import learn, sigvisa_util
+import learn
+import sigvisa_util
 import signals.SignalPrior
 from sigvisa.utils.waveform import *
 import sigvisa.utils.geog
@@ -20,17 +24,13 @@ import obspy.signal.util
 from sigvisa.signals.coda_decay_common import *
 
 
-
-
 def label_station(plot_idx, fname):
-    ax = plt.subplot(len(sys.argv)-1, 5, plot_idx)
-    plt.text(0.5, 0.5,fname,
+    ax = plt.subplot(len(sys.argv) - 1, 5, plot_idx)
+    plt.text(0.5, 0.5, fname,
              horizontalalignment='center',
              verticalalignment='center',
-             transform = ax.transAxes,
-             fontsize = 18)
-
-
+             transform=ax.transAxes,
+             fontsize=18)
 
 
 def write_plot(plot_idx, l, get_col, P):
@@ -42,10 +42,9 @@ def write_plot(plot_idx, l, get_col, P):
     for i in range(l.shape[0]):
         pl[i, 0] = l[i, DISTANCE_COL]
         pl[i, 1] = l[i, AZI_COL]
-        pl[i, 2] = get_col(l[i,:])
+        pl[i, 2] = get_col(l[i, :])
 
-
-    plt.subplot(len(sys.argv)-1, 5, plot_idx+1)
+    plt.subplot(len(sys.argv) - 1, 5, plot_idx + 1)
     plt.xlabel("distance (km)")
     plt.ylabel("b")
     plt.ylim([-.1, 0])
@@ -59,7 +58,8 @@ def write_plot(plot_idx, l, get_col, P):
 #    plt.xlim([0, 360])
 #    plt.plot(pl[:, 1], pl[:, 2], 'ro')
 
-def write_grid(in_dirs, out_fname, get_col = None, P=True, vert=True):
+
+def write_grid(in_dirs, out_fname, get_col=None, P=True, vert=True):
 
     if get_col is None:
         if P and vert:
@@ -70,10 +70,10 @@ def write_grid(in_dirs, out_fname, get_col = None, P=True, vert=True):
             b_col = VERT_S_FIT_B
         elif not P and not vert:
             b_col = HORIZ_S_FIT_B
-        get_col = lambda x : x[b_col]
+        get_col = lambda x: x[b_col]
 
     pp = PdfPages(out_fname)
-    plt.figure(figsize = (35,45))
+    plt.figure(figsize=(35, 45))
     sta_idx = 0
     for base_coda_dir in in_dirs:
 
@@ -93,11 +93,12 @@ def write_grid(in_dirs, out_fname, get_col = None, P=True, vert=True):
                 print traceback.format_exc()
                 continue
 
-        label_station(sta_idx*5+1, fname.split("_")[1])
+        label_station(sta_idx * 5 + 1, fname.split("_")[1])
         sta_idx = sta_idx + 1
 
     pp.savefig()
     pp.close()
+
 
 def main():
     write_grid(sys.argv[1:], 'logs/shape_params_all_stations_P.pdf', P=True, vert=True)
@@ -105,8 +106,8 @@ def main():
 
     cursor = db.connect().cursor()
     sites = read_sites(cursor)
-    st  = 1237680000
-    et = st + 3600*24
+    st = 1237680000
+    et = st + 3600 * 24
     site_up = read_uptime(cursor, st, et)
     detections, arid2num = read_detections(cursor, st, et, arrival_table="leb_arrival", noarrays=True)
     phasenames, phasetimedef = read_phases(cursor)
@@ -119,23 +120,17 @@ def main():
 #    write_grid(sys.argv[1:], 'logs/pred_offset_all_stations_S.pdf', get_col=get_col, P=False, vert=False)
 
 
-
 #    get_col = lambda x : x[VERT_P_FIT_PEAK_OFFSET] - VERT_P_FIT_PHASE_START_TIME]
 #    write_grid(sys.argv[1:], 'logs/peak_offset_all_stations_P.pdf', get_col=get_col, P=True, vert=True)
 #    get_col = lambda x : x[HORIZ_S_FIT_PEAK_OFFSET] - x[HORIZ_S_FIT_PHASE_START_TIME]
 #    write_grid(sys.argv[1:], 'logs/peak_offset_all_stations_S.pdf', get_col=get_col, P=False, vert=False)
-
 #    get_col = lambda x : x[VERT_P_FIT_PEAK_HEIGHT]
 #    write_grid(sys.argv[1:], 'logs/peak_height_all_stations_P.pdf', get_col=get_col, P=True, vert=True)
 #    get_col = lambda x : x[HORIZ_S_FIT_PEAK_HEIGHT]
 #    write_grid(sys.argv[1:], 'logs/peak_height_all_stations_S.pdf', get_col=get_col, P=False, vert=False)
-
-
-
 #    get_col = lambda x : x[VERT_P_FIT_HEIGHT] - x[VERT_P_FIT_B] * (x[VERT_P_FIT_CODA_START_OFFSET] - x[VERT_P_FIT_PEAK_OFFSET])
 #    write_grid(sys.argv[1:], 'logs/fit_height_all_stations_P.pdf', P=True, vert=True)
 #    get_col = lambda x : x[HORIZ_S_FIT_HEIGHT] - x[HORIZ_S_FIT_B] * (x[HORIZ_S_FIT_CODA_START_OFFSET] - x[HORIZ_S_FIT_PEAK_OFFSET])
 #    write_grid(sys.argv[1:], 'logs/fit_height_all_stations_S.pdf', get_col=get_col, P=False, vert=False)
-
 if __name__ == "__main__":
     main()
