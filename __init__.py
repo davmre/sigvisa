@@ -1,8 +1,8 @@
 import numpy as np
 import os
 from sigvisa.database import db, dataset
-from load_c_components import load_sigvisa, load_earth
-import sigvisa_c
+from sigvisa.load_c_components import load_sigvisa, load_earth
+import sigvisa.sigvisa_c
 
 
 class NestedDict(dict):
@@ -81,11 +81,11 @@ class Sigvisa(object):
 
         self.set_dummy_wiggles()
 
-    def __del__():
+    def __del__(self):
         self.dbconn.close()
 
     def phasenames(self, phase_id_minus1_list):
-        return [self.phasenames[id] for id in phase_id_minus1_list]
+        return [self.phasenames[pid] for pid in phase_id_minus1_list]
 
     def arriving_phases(self, event, sta):
         siteid = self.name_to_siteid_minus1[sta] + 1
@@ -116,19 +116,3 @@ class Sigvisa(object):
         high_match = [band for band in low_match if np.abs(
             float(band.split('_')[2]) - high_band) < 0.01] if high_band is not None else low_match
         return high_match[0]
-
-
-def set_noise_processes(sigmodel, seg):
-    for chan in seg.keys():
-        c = sigvisa_c.canonical_channel_num(chan)
-        for band in seg[chan].keys():
-            b = sigvisa_c.canonical_band_num(band)
-            siteid = seg[chan][band].stats.siteid
-            try:
-                arm = seg[chan][band].stats.noise_model
-            except KeyError:
-# print "no noise model found for chan %s band %s, not setting.." % (chan,
-# band)
-                continue
-            sigmodel.set_noise_process(
-                siteid, b, c, arm.c, arm.em.std ** 2, np.array(arm.params))

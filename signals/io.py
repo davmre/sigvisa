@@ -1,7 +1,6 @@
 import time
 import sys
 import struct
-import sys
 import os
 import gzip
 import functools32
@@ -15,10 +14,8 @@ import obspy.signal.filter
 from obspy.signal.trigger import triggerOnset
 
 from sigvisa.database.dataset import *
-
 from sigvisa.signals.common import *
 from sigvisa.signals.mask_util import *
-# from sigvisa.signals.coda_decay_common import *
 
 from sigvisa import Sigvisa
 
@@ -54,30 +51,6 @@ def load_event_station(evid, sta, evtype="leb", cursor=None):
     return seg
 
 
-def has_trace(cursor, sta=None, start_time=None, end_time=None, evid=None, earthmodel=None, siteid=None):
-
-    if start_time is None or end_time is None:
-        arr_times, phaseids = predict_event_arrivals(cursor, earthmodel, evid, siteid, [1, 2, 4, 5])
-        arr_times = [a for a in arr_times if a > 0]
-        start_time = np.min(arr_times) - 5
-        end_time = np.max(arr_times) + 300
-
-    if sta is None:
-        sta = siteid_to_sta(siteid, cursor)
-
-    sql = "select distinct chan,time,endtime from idcx_wfdisc where sta='%s' and endtime > %f and time < %f order by time,endtime" % (
-        sta, start_time, end_time)
-    cursor.execute(sql)
-    wfdiscs = cursor.fetchall()
-    wfdiscs = filter(lambda x: x[0] in ["BHE", "BHN", "BHZ", "BH1", "BH2"], wfdiscs)
-
-    s1 = map(lambda x: [x], wfdiscs)
-    s2 = reduce(lambda a, b: a + b, aggregate_segments(s1), [])
-    s3 = [s for s in s2 if max(s[1], float(start_time)) < min(s[2], float(end_time))]
-
-    return len(s3) > 0
-
-
 def load_segments(cursor, stations, start_time, end_time, chans=None):
     """
     Return a list of waveform segments corresponding to the given channels
@@ -92,15 +65,15 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
     # standardize channel names to avoid duplicates
     chans = [Sigvisa().canonical_channel_name[c] for c in chans]
 
-    for (idx, sta) in enumerate(stations):
+    for sta in stations:
 
         waves = []
 
-        for (chanidx, chan) in enumerate(chans):
+        for chan in chans:
             print "loading sta %s chan %s time [%.1f, %.1f]" % (sta, chan, start_time, end_time),
             sys.stdout.flush()
             try:
-                wave = fetch_waveform(sta, chan, start_time, end_time)
+                wave = fetch_waveform(sta, chan, start_time, end_time, cursor=cursor)
                 print " ... successfully loaded."
             except (MissingWaveform, IOError) as e:
                 print " ... not found, skipping. (%s)" % e
@@ -119,7 +92,7 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
 
 
 @functools32.lru_cache(maxsize=1024)
-def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
+def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
     """
     Returns a single Waveform for the given channel at the station in
     the given interval. If there are periods for which data are not
@@ -130,13 +103,12 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
     artifacts.
     """
     s = Sigvisa()
-    cursor = s.dbconn.cursor()
+    if cursor is None:
+        cursor = s.dbconn.cursor()
 
     # scan the waveforms for the given interval
     samprate = None
 
-    orig_stime = stime
-    orig_etime = etime
     stime = stime - pad_seconds
     etime = etime + pad_seconds
 
@@ -170,14 +142,6 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20):
     for waveform_values in waveforms:
 
         waveform = dict(zip([x[0].lower() for x in table_description], waveform_values))
-        cursor.execute("select id from static_siteid where sta = '%s'" % (station))
-        try:
-            if station == "MK31":
-                siteid = 66
-            else:
-                siteid = cursor.fetchone()[0]
-        except:
-            raise MissingWaveform("couldn't get siteid for station %s" % (station))
 
         # check the samprate is consistent for all waveforms in this interval
         assert(samprate is None or samprate == waveform['samprate'])

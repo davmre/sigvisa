@@ -36,7 +36,7 @@ class Waveform(object):
     A single waveform trace. Contains methods for generating filtered versions of itself.
     """
 
-    def __init__(self, data=[], srate=40, stime=0, sta="AAK", evid=None, segment_stats=None, my_stats=None, **my_stats_entries):
+    def __init__(self, data=[], srate=40, stime=0, sta="AAK", segment_stats=None, my_stats=None, **my_stats_entries):
         if isinstance(data, ma.MaskedArray):
             self.data = data
         else:
@@ -266,7 +266,7 @@ class Segment(object):
 
     def addWaveform(self, wf):
         if wf["chan"] in self.__chans:
-            raise Exception("this segment already has a waveform for channel %s! (%s)" % (chan))
+            raise Exception("this segment already has a waveform for channel %s! (%s)" % (wf["chan"]))
 
         if self.stats is None:
             # if this is the first waveform in the signal, check to make sure it has the necessary info
