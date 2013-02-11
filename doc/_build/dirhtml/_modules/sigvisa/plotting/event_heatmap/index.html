@@ -1,0 +1,201 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.plotting.event_heatmap &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.plotting.event_heatmap</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.plotting.heatmap</span> <span class="kn">import</span> <span class="n">Heatmap</span>
+<span class="kn">from</span> <span class="nn">sigvisa.utils.geog</span> <span class="kn">import</span> <span class="n">dist_km</span><span class="p">,</span> <span class="n">lonlatstr</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database</span> <span class="kn">import</span> <span class="n">db</span>
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+
+
+<div class="viewcode-block" id="EventHeatmap"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.event_heatmap.EventHeatmap">[docs]</a><span class="k">class</span> <span class="nc">EventHeatmap</span><span class="p">(</span><span class="n">Heatmap</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">):</span>
+        <span class="n">Heatmap</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="o">=</span><span class="n">f</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sitenames</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">stations</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_locations</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_labels</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stations</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="EventHeatmap.add_events"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.event_heatmap.EventHeatmap.add_events">[docs]</a>    <span class="k">def</span> <span class="nf">add_events</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">locations</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">locations</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;wrong number of labels given for these locations!&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">labels</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span> <span class="k">for</span> <span class="n">loc</span> <span class="ow">in</span> <span class="n">locations</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_locations</span><span class="o">.</span><span class="n">extend</span><span class="p">([(</span><span class="n">l</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">l</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">locations</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_labels</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">labels</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="EventHeatmap.add_stations"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.event_heatmap.EventHeatmap.add_stations">[docs]</a>    <span class="k">def</span> <span class="nf">add_stations</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">names</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">names</span><span class="p">,</span> <span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stations</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">names</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="EventHeatmap.set_true_event"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.event_heatmap.EventHeatmap.set_true_event">[docs]</a>    <span class="k">def</span> <span class="nf">set_true_event</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span> <span class="o">=</span> <span class="p">(</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dist_km</span><span class="p">((</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">max</span><span class="p">()[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="EventHeatmap.savefig"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.event_heatmap.EventHeatmap.savefig">[docs]</a>    <span class="k">def</span> <span class="nf">savefig</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fname</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">):</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="o">**</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">fname</span> <span class="o">+</span> <span class="s">&quot;.log&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="EventHeatmap.plot"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.event_heatmap.EventHeatmap.plot">[docs]</a>    <span class="k">def</span> <span class="nf">plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event_alpha</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">density_args</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_bmap</span><span class="p">(</span><span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_earth</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">f</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fvals</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plot_density</span><span class="p">(</span><span class="o">**</span><span class="n">density_args</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_locations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">event_locations</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">event_labels</span><span class="p">,</span>
+                            <span class="n">marker</span><span class="o">=</span><span class="s">&quot;.&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="n">event_alpha</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="p">(</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plot_locations</span><span class="p">(((</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">),),</span> <span class="n">labels</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                                <span class="n">marker</span><span class="o">=</span><span class="s">&quot;*&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;#44FF44&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">sta_locations</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sitenames</span><span class="p">[</span><span class="n">n</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stations</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_locations</span><span class="p">(</span><span class="n">sta_locations</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stations</span><span class="p">,</span>
+                            <span class="n">marker</span><span class="o">=</span><span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;white&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="EventHeatmap.title"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.event_heatmap.EventHeatmap.title">[docs]</a>    <span class="k">def</span> <span class="nf">title</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">peak</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max</span><span class="p">()[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">title</span> <span class="o">=</span> <span class="s">&quot;Peak: &quot;</span> <span class="o">+</span> <span class="n">utils</span><span class="o">.</span><span class="n">geog</span><span class="o">.</span><span class="n">lonlatstr</span><span class="p">(</span><span class="o">*</span><span class="n">peak</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">title</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">True: &quot;</span> <span class="o">+</span> <span class="n">utils</span><span class="o">.</span><span class="n">geog</span><span class="o">.</span><span class="n">lonlatstr</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">true_event</span><span class="p">)</span>
+            <span class="n">title</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">Distance: </span><span class="si">%.2f</span><span class="s"> km&quot;</span> <span class="o">%</span> <span class="n">dist_km</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">true_event</span><span class="p">,</span> <span class="n">peak</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">title</span>
+</div>
+    <span class="k">def</span> <span class="nf">__aggregate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">,</span> <span class="n">hm</span><span class="p">):</span>
+        <span class="n">hm</span><span class="o">.</span><span class="n">sitenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sitenames</span>
+
+        <span class="n">my_ev</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">event_locations</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_labels</span><span class="p">)</span>
+        <span class="n">other_ev</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">event_locations</span><span class="p">,</span> <span class="n">other</span><span class="o">.</span><span class="n">event_labels</span><span class="p">)</span>
+        <span class="n">all_ev</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">my_ev</span> <span class="o">+</span> <span class="n">other_ev</span><span class="p">))</span>
+        <span class="n">hm</span><span class="o">.</span><span class="n">event_locations</span><span class="p">,</span> <span class="n">hm</span><span class="o">.</span><span class="n">event_labels</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">all_ev</span><span class="p">)</span>
+
+        <span class="n">hm</span><span class="o">.</span><span class="n">stations</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stations</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">stations</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">hm</span><span class="o">.</span><span class="n">true_event</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">true_event</span>
+        <span class="k">elif</span> <span class="n">other</span><span class="o">.</span><span class="n">true_event</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">true_event</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;tried to combine heatmaps with different true events&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">hm</span><span class="o">.</span><span class="n">true_event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">true_event</span>
+
+        <span class="k">return</span> <span class="n">hm</span>
+
+    <span class="k">def</span> <span class="nf">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="n">hm</span> <span class="o">=</span> <span class="n">Heatmap</span><span class="o">.</span><span class="n">__mul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__aggregate</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">hm</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="n">hm</span> <span class="o">=</span> <span class="n">Heatmap</span><span class="o">.</span><span class="n">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__aggregate</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">hm</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

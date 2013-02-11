@@ -1,0 +1,375 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>plotting Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="sigvisa Package" href="../sigvisa/" />
+    <link rel="next" title="priors Package" href="../sigvisa.priors/" />
+    <link rel="prev" title="wiggles Package" href="../sigvisa.models.wiggles/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.priors/" title="priors Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.wiggles/" title="wiggles Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" accesskey="U">sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="plotting-package">
+<h1>plotting Package<a class="headerlink" href="#plotting-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.plotting.event_heatmap">
+<span id="event-heatmap-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">event_heatmap</span></tt> Module<a class="headerlink" href="#module-sigvisa.plotting.event_heatmap" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.plotting.event_heatmap.EventHeatmap">
+<em class="property">class </em><tt class="descclassname">sigvisa.plotting.event_heatmap.</tt><tt class="descname">EventHeatmap</tt><big>(</big><em>f</em>, <em>**args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/event_heatmap/#EventHeatmap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.event_heatmap.EventHeatmap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.plotting.heatmap.Heatmap" title="sigvisa.plotting.heatmap.Heatmap"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.plotting.heatmap.Heatmap</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.plotting.event_heatmap.EventHeatmap.add_events">
+<tt class="descname">add_events</tt><big>(</big><em>locations</em>, <em>labels=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/event_heatmap/#EventHeatmap.add_events"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.event_heatmap.EventHeatmap.add_events" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.event_heatmap.EventHeatmap.add_stations">
+<tt class="descname">add_stations</tt><big>(</big><em>names</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/event_heatmap/#EventHeatmap.add_stations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.event_heatmap.EventHeatmap.add_stations" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.event_heatmap.EventHeatmap.plot">
+<tt class="descname">plot</tt><big>(</big><em>event_alpha=0.6</em>, <em>axes=None</em>, <em>**density_args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/event_heatmap/#EventHeatmap.plot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.event_heatmap.EventHeatmap.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.event_heatmap.EventHeatmap.savefig">
+<tt class="descname">savefig</tt><big>(</big><em>fname</em>, <em>title=None</em>, <em>**args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/event_heatmap/#EventHeatmap.savefig"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.event_heatmap.EventHeatmap.savefig" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.event_heatmap.EventHeatmap.set_true_event">
+<tt class="descname">set_true_event</tt><big>(</big><em>lon</em>, <em>lat</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/event_heatmap/#EventHeatmap.set_true_event"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.event_heatmap.EventHeatmap.set_true_event" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.event_heatmap.EventHeatmap.title">
+<tt class="descname">title</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/event_heatmap/#EventHeatmap.title"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.event_heatmap.EventHeatmap.title" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.plotting.heatmap">
+<span id="heatmap-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">heatmap</span></tt> Module<a class="headerlink" href="#module-sigvisa.plotting.heatmap" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.plotting.heatmap.Heatmap">
+<em class="property">class </em><tt class="descclassname">sigvisa.plotting.heatmap.</tt><tt class="descname">Heatmap</tt><big>(</big><em>f</em>, <em>n=20</em>, <em>center=None</em>, <em>width=None</em>, <em>lonbounds=None</em>, <em>latbounds=None</em>, <em>autobounds=None</em>, <em>fname=None</em>, <em>calc=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.calc">
+<tt class="descname">calc</tt><big>(</big><em>checkpoint=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.calc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.calc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.calc_parallel">
+<tt class="descname">calc_parallel</tt><big>(</big><em>processes=4</em>, <em>checkpoint=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.calc_parallel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.calc_parallel" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.event_bounds">
+<tt class="descname">event_bounds</tt><big>(</big><em>X</em>, <em>quantile=0.9</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.event_bounds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.event_bounds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.init_bmap">
+<tt class="descname">init_bmap</tt><big>(</big><em>axes=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.init_bmap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.init_bmap" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.load">
+<tt class="descname">load</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.load" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.max">
+<tt class="descname">max</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.max"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.max" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.min">
+<tt class="descname">min</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.min"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.min" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.normalize_lonlat">
+<tt class="descname">normalize_lonlat</tt><big>(</big><em>lon</em>, <em>lat</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.normalize_lonlat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.normalize_lonlat" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the given location represented within the coordinate
+scheme of the current heatmap (e.g. [-180, 180] vs [0, 360]).
+If the location isn&#8217;t part of the current heatmap,
+its representation is undefined.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.plot_density">
+<tt class="descname">plot_density</tt><big>(</big><em>f_preprocess=None</em>, <em>**density_args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.plot_density"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.plot_density" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.plot_earth">
+<tt class="descname">plot_earth</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.plot_earth"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.plot_earth" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.plot_locations">
+<tt class="descname">plot_locations</tt><big>(</big><em>locations</em>, <em>labels=None</em>, <em>**plotargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.plot_locations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.plot_locations" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.plotting.heatmap.Heatmap.save">
+<tt class="descname">save</tt><big>(</big><em>fname=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#Heatmap.save"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.Heatmap.save" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.heatmap.main">
+<tt class="descclassname">sigvisa.plotting.heatmap.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.heatmap.multi_f">
+<tt class="descclassname">sigvisa.plotting.heatmap.</tt><tt class="descname">multi_f</tt><big>(</big><em>f_args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#multi_f"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.multi_f" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a tuple (f, loni, lati, lon, lat), evaluates and returns f(lon, lat)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.heatmap.testfn">
+<tt class="descclassname">sigvisa.plotting.heatmap.</tt><tt class="descname">testfn</tt><big>(</big><em>lon</em>, <em>lat</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/heatmap/#testfn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.heatmap.testfn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.plotting.histogram">
+<span id="histogram-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">histogram</span></tt> Module<a class="headerlink" href="#module-sigvisa.plotting.histogram" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.plotting.histogram.plot_histogram">
+<tt class="descclassname">sigvisa.plotting.histogram.</tt><tt class="descname">plot_histogram</tt><big>(</big><em>data</em>, <em>axes=None</em>, <em>draw_stats=True</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/histogram/#plot_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.histogram.plot_histogram" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.plotting.plot">
+<span id="plot-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">plot</span></tt> Module<a class="headerlink" href="#module-sigvisa.plotting.plot" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.plotting.plot.autowrap_text">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">autowrap_text</tt><big>(</big><em>textobj</em>, <em>renderer</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#autowrap_text"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.autowrap_text" title="Permalink to this definition">¶</a></dt>
+<dd><p>Wraps the given matplotlib text object so that it exceed the boundaries
+of the axis it is plotted in.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot.min_dist_inside">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">min_dist_inside</tt><big>(</big><em>point</em>, <em>rotation</em>, <em>box</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#min_dist_inside"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.min_dist_inside" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets the space in a given direction from &#8220;point&#8221; to the boundaries of
+&#8220;box&#8221; (where box is an object with x0, y0, x1, &amp; y1 attributes, point is a
+tuple of x,y, and rotation is the angle in degrees)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot.on_draw">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">on_draw</tt><big>(</big><em>event</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#on_draw"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.on_draw" title="Permalink to this definition">¶</a></dt>
+<dd><p>Auto-wraps all text objects in a figure at draw-time</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot.plot_bands">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">plot_bands</tt><big>(</big><em>wave</em>, <em>bands=None</em>, <em>title=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#plot_bands"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.plot_bands" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot.plot_det_times">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">plot_det_times</tt><big>(</big><em>wave</em>, <em>axes=None</em>, <em>logscale=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#plot_det_times"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.plot_det_times" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot.plot_segment">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">plot_segment</tt><big>(</big><em>segment</em>, <em>title=None</em>, <em>chans=None</em>, <em>logscale=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#plot_segment"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.plot_segment" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot.plot_waveform">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">plot_waveform</tt><big>(</big><em>wave</em>, <em>title=None</em>, <em>logscale=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#plot_waveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.plot_waveform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot.subplot_waveform">
+<tt class="descclassname">sigvisa.plotting.plot.</tt><tt class="descname">subplot_waveform</tt><big>(</big><em>wave</em>, <em>axes</em>, <em>logscale=False</em>, <em>plot_dets=True</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot/#subplot_waveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot.subplot_waveform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.plotting.plot_coda_decays">
+<span id="plot-coda-decays-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">plot_coda_decays</span></tt> Module<a class="headerlink" href="#module-sigvisa.plotting.plot_coda_decays" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.generate_scatter_plots">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">generate_scatter_plots</tt><big>(</big><em>cursor</em>, <em>runid</em>, <em>siteid</em>, <em>min_azi</em>, <em>max_azi</em>, <em>acost_threshold</em>, <em>base_coda_dir</em>, <em>target_str</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#generate_scatter_plots"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.generate_scatter_plots" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.main">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.merge_plots">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">merge_plots</tt><big>(</big><em>base_coda_dir</em>, <em>bands</em>, <em>all_data</em>, <em>min_azi</em>, <em>max_azi</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#merge_plots"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.merge_plots" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.plot_channels">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">plot_channels</tt><big>(</big><em>pp</em>, <em>vert_trace</em>, <em>vert_noise_floor</em>, <em>vert_fits</em>, <em>vert_formats</em>, <em>horiz_trace</em>, <em>horiz_noise_floor</em>, <em>horiz_fits</em>, <em>horiz_formats</em>, <em>all_det_times=None</em>, <em>all_det_labels=None</em>, <em>title=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#plot_channels"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.plot_channels" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.plot_channels_with_pred">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">plot_channels_with_pred</tt><big>(</big><em>sigmodel</em>, <em>vert_trace</em>, <em>vert_params</em>, <em>phaseids</em>, <em>horiz_trace</em>, <em>horiz_params</em>, <em>title=None</em>, <em>logscale=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#plot_channels_with_pred"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.plot_channels_with_pred" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.plot_envelopes">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">plot_envelopes</tt><big>(</big><em>axes</em>, <em>trace</em>, <em>noise_floor</em>, <em>fits</em>, <em>formats</em>, <em>all_det_times=None</em>, <em>all_det_labels=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#plot_envelopes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.plot_envelopes" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.plot_geog">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">plot_geog</tt><big>(</big><em>band_data</em>, <em>pp</em>, <em>azistr</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#plot_geog"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.plot_geog" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.plot_scatter">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">plot_scatter</tt><big>(</big><em>lp</em>, <em>ls</em>, <em>pp</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#plot_scatter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.plot_scatter" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.plot_waveform_with_pred">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">plot_waveform_with_pred</tt><big>(</big><em>wave</em>, <em>tm</em>, <em>template_params</em>, <em>title=None</em>, <em>sample=False</em>, <em>logscale=True</em>, <em>smooth=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#plot_waveform_with_pred"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.plot_waveform_with_pred" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.plotting.plot_coda_decays.predict_trace">
+<tt class="descclassname">sigvisa.plotting.plot_coda_decays.</tt><tt class="descname">predict_trace</tt><big>(</big><em>cursor</em>, <em>ev</em>, <em>row</em>, <em>noise_floor</em>, <em>cm_p</em>, <em>cm_s</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/plotting/plot_coda_decays/#predict_trace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.plotting.plot_coda_decays.predict_trace" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="plot-multi-station-params-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">plot_multi_station_params</span></tt> Module<a class="headerlink" href="#plot-multi-station-params-module" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">plotting Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.plotting.event_heatmap"><tt class="docutils literal"><span class="pre">event_heatmap</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.plotting.heatmap"><tt class="docutils literal"><span class="pre">heatmap</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.plotting.histogram"><tt class="docutils literal"><span class="pre">histogram</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.plotting.plot"><tt class="docutils literal"><span class="pre">plot</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.plotting.plot_coda_decays"><tt class="docutils literal"><span class="pre">plot_coda_decays</span></tt> Module</a></li>
+<li><a class="reference internal" href="#plot-multi-station-params-module"><tt class="docutils literal"><span class="pre">plot_multi_station_params</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.models.wiggles/"
+                        title="previous chapter">wiggles Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.priors/"
+                        title="next chapter">priors Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.plotting.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.priors/" title="priors Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.wiggles/" title="wiggles Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

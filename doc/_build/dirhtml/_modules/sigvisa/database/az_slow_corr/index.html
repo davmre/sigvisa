@@ -1,0 +1,306 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.database.az_slow_corr &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.database.az_slow_corr</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="n">sin</span><span class="p">,</span> <span class="n">cos</span><span class="p">,</span> <span class="n">asin</span><span class="p">,</span> <span class="n">atan2</span><span class="p">,</span> <span class="n">degrees</span><span class="p">,</span> <span class="n">radians</span><span class="p">,</span> <span class="n">hypot</span><span class="p">,</span> <span class="n">sqrt</span>
+
+<span class="n">SASC_WARNINGS</span> <span class="o">=</span> <span class="mi">1</span>
+
+
+<div class="viewcode-block" id="AzSlowCorr"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.az_slow_corr.AzSlowCorr">[docs]</a><span class="k">class</span> <span class="nc">AzSlowCorr</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        def_sx_corr;      /* Default x-vector slowness (sx) corr */</span>
+<span class="sd">        def_sy_corr;      /* Default y-vector slowness (sy) corr */</span>
+<span class="sd">        def_slow_mdl_err; /* Default slowness modeling error */</span>
+<span class="sd">        a11;              /* A11 x-vector affine slowness coefficient */</span>
+<span class="sd">        a12;              /* A12 y-vector affine slowness coefficient */</span>
+<span class="sd">        a21;              /* A21 x-vector affine slowness coefficient */</span>
+<span class="sd">        a22;              /* A22 y-vector affine slowness coefficient */</span>
+<span class="sd">        bins array of tuples:</span>
+<span class="sd">          lb_slo, ub_slo, lb_az, ub_az, corr_slo, corr_az, mdl_err_slow, mdl_err_az</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bins</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">READ_DEFAULTS</span><span class="p">,</span> <span class="n">READ_NUM_BINS</span><span class="p">,</span> <span class="n">READ_CORRECTIONS</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="n">READ_DEFAULTS</span>
+
+        <span class="n">fp</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&quot;r&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fp</span><span class="o">.</span><span class="n">readlines</span><span class="p">():</span>
+            <span class="n">line</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span>              <span class="c"># remove trailing newlines</span>
+
+            <span class="k">if</span> <span class="ow">not</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">))</span> <span class="ow">or</span> <span class="n">line</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;#&#39;</span><span class="p">:</span>
+                <span class="k">continue</span>                        <span class="c"># skip comments</span>
+
+            <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="n">READ_DEFAULTS</span><span class="p">:</span>
+                <span class="n">def_vals</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()]</span>
+
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">def_vals</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">def_sx_corr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">def_sy_corr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">def_slow_mdl_err</span> <span class="o">=</span> <span class="n">def_vals</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">a11</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a12</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a21</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a22</span> <span class="o">=</span> <span class="mf">1.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">1.</span>
+                <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">def_vals</span><span class="p">)</span> <span class="o">==</span> <span class="mi">7</span><span class="p">:</span>
+                    <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">def_sx_corr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">def_sy_corr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">def_slow_mdl_err</span><span class="p">,</span>
+                     <span class="bp">self</span><span class="o">.</span><span class="n">a11</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a12</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a21</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a22</span><span class="p">)</span> <span class="o">=</span> <span class="n">def_vals</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Invalid defaults in SASC file&quot;</span> <span class="o">+</span> <span class="n">filename</span><span class="p">)</span>
+
+                <span class="n">state</span> <span class="o">=</span> <span class="n">READ_NUM_BINS</span>
+
+            <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="n">READ_NUM_BINS</span><span class="p">:</span>
+                <span class="n">num_bins</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                <span class="n">state</span> <span class="o">=</span> <span class="n">READ_CORRECTIONS</span>
+
+            <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="n">READ_CORRECTIONS</span><span class="p">:</span>
+                <span class="c"># print &quot;&#39;&quot; + line + &quot;&#39;&quot;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()))</span>
+                <span class="c"># there better be exactly 8 numbers in the line</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">!=</span> <span class="mi">8</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">ValueErorr</span><span class="p">(</span><span class="s">&quot;Bad bin number </span><span class="si">%d</span><span class="s"> in SASC file </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span>
+                                     <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="p">)),</span> <span class="n">filename</span><span class="p">)</span>
+
+        <span class="c"># on exit check if we read any corrections, and if we did, whether we</span>
+        <span class="c"># read the right number of corrections</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="o">==</span> <span class="n">READ_DEFAULTS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Empty SASC file: &quot;</span> <span class="o">+</span> <span class="n">filename</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="n">READ_NUM_BINS</span><span class="p">:</span>
+            <span class="n">num_bins</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">elif</span> <span class="n">state</span> <span class="o">==</span> <span class="n">READ_CORRECTIONS</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">num_bins</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="p">):</span>
+                <span class="k">global</span> <span class="n">SASC_WARNINGS</span>
+                <span class="k">if</span> <span class="n">SASC_WARNINGS</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="p">(</span><span class="s">&quot;Warning: Expecting </span><span class="si">%d</span><span class="s"> corrections got </span><span class="si">%d</span><span class="s"> in SASC file: </span><span class="si">%s</span><span class="s">&quot;</span>
+                           <span class="o">%</span> <span class="p">(</span><span class="n">num_bins</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="p">),</span> <span class="n">filename</span><span class="p">))</span>
+                    <span class="n">SASC_WARNINGS</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="n">fp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+<div class="viewcode-block" id="AzSlowCorr.correct"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.az_slow_corr.AzSlowCorr.correct">[docs]</a>    <span class="k">def</span> <span class="nf">correct</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_azimuth</span><span class="p">,</span> <span class="n">raw_slow</span><span class="p">,</span> <span class="n">delaz</span><span class="p">,</span> <span class="n">delslo</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns corrected azimuth slowness and their errors</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># if the input values are not valid return them unmodified</span>
+        <span class="k">if</span> <span class="n">raw_azimuth</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">raw_slow</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">delaz</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">delslo</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">raw_azimuth</span><span class="p">,</span> <span class="n">raw_slow</span><span class="p">,</span> <span class="n">delaz</span><span class="p">,</span> <span class="n">delslo</span>
+
+        <span class="n">azimuth</span><span class="p">,</span> <span class="n">slow</span> <span class="o">=</span> <span class="n">raw_azimuth</span><span class="p">,</span> <span class="n">raw_slow</span>
+        <span class="n">tot_az_error</span><span class="p">,</span> <span class="n">tot_slow_err</span> <span class="o">=</span> <span class="n">delaz</span><span class="p">,</span> <span class="n">delslo</span>
+
+        <span class="c"># first convert default vector slowness corrections to a localized</span>
+        <span class="c"># slowness/azimuth correction.  Also store slowness modeling error.</span>
+        <span class="n">slow_mdl_err</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">def_slow_mdl_err</span>
+
+        <span class="c"># Determine default modeling error for azimuth as a function of</span>
+        <span class="c"># the default slowness modeling error.</span>
+        <span class="n">azimuth_mdl_err</span> <span class="o">=</span> <span class="n">slow_mdl_err</span> <span class="o">/</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">slow</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">azimuth_mdl_err</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">:</span>
+            <span class="n">azimuth_mdl_err</span> <span class="o">=</span> <span class="n">degrees</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">asin</span><span class="p">(</span><span class="n">azimuth_mdl_err</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">azimuth_mdl_err</span> <span class="o">=</span> <span class="mf">180.0</span>
+
+        <span class="k">for</span> <span class="nb">bin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="p">:</span>
+            <span class="p">(</span><span class="n">lb_slo</span><span class="p">,</span> <span class="n">ub_slo</span><span class="p">,</span> <span class="n">lb_az</span><span class="p">,</span> <span class="n">ub_az</span><span class="p">,</span> <span class="n">corr_slo</span><span class="p">,</span> <span class="n">corr_az</span><span class="p">,</span>
+             <span class="n">mdl_err_slow</span><span class="p">,</span> <span class="n">mdl_err_az</span><span class="p">)</span> <span class="o">=</span> <span class="nb">bin</span>
+
+            <span class="k">if</span> <span class="p">(</span><span class="n">slow</span> <span class="o">&lt;</span> <span class="n">ub_slo</span> <span class="ow">and</span> <span class="n">slow</span> <span class="o">&gt;=</span> <span class="n">lb_slo</span> <span class="ow">and</span> <span class="n">azimuth</span> <span class="o">&lt;</span> <span class="n">ub_az</span> <span class="ow">and</span>
+                    <span class="n">azimuth</span> <span class="o">&gt;=</span> <span class="n">lb_az</span><span class="p">):</span>
+                <span class="n">azimuth_mdl_err</span> <span class="o">=</span> <span class="n">mdl_err_az</span>
+                <span class="n">slow_mdl_err</span> <span class="o">=</span> <span class="n">mdl_err_slow</span>
+
+                <span class="c"># Update azimuth and slowness with corrected values.</span>
+                <span class="n">azimuth</span> <span class="o">-=</span> <span class="n">corr_az</span>
+                <span class="n">slow</span> <span class="o">-=</span> <span class="n">corr_slo</span>
+                <span class="k">if</span> <span class="n">azimuth</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span>
+                    <span class="n">azimuth</span> <span class="o">+=</span> <span class="mf">360.0</span>
+                <span class="k">if</span> <span class="n">azimuth</span> <span class="o">&gt;</span> <span class="mf">360.0</span><span class="p">:</span>
+                    <span class="n">azimuth</span> <span class="o">-=</span> <span class="mf">360.0</span>
+
+                <span class="k">break</span>
+
+        <span class="c"># Apply affine and default slowness vector corrections here.  First</span>
+        <span class="c"># decompose the original azimuth and slowness into vector slowness</span>
+        <span class="c"># componenets (sx, sy), and then, apply affine transform.  Then</span>
+        <span class="c"># apply default slowness vector corrections in x- and y-directions.</span>
+        <span class="c"># Finally, adjust input azimuth and slow based on these updated</span>
+        <span class="c"># slowness vector component adjustments.</span>
+
+        <span class="c"># Affine transform: corrected_sx = (a11*sx + a12*sy) - def_sx_corr</span>
+        <span class="c">#                   corrected_sy = (a21*sx + a22*sy) - def_sy_corr</span>
+        <span class="c"># where,</span>
+        <span class="c">#      sx and sy have already been bin corrected.</span>
+        <span class="c">#</span>
+
+        <span class="k">if</span> <span class="n">slow</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">azr</span> <span class="o">=</span> <span class="n">radians</span><span class="p">(</span><span class="n">azimuth</span><span class="p">)</span>
+            <span class="n">sx</span> <span class="o">=</span> <span class="n">slow</span> <span class="o">*</span> <span class="n">sin</span><span class="p">(</span><span class="n">azr</span><span class="p">)</span>
+            <span class="n">sy</span> <span class="o">=</span> <span class="n">slow</span> <span class="o">*</span> <span class="n">cos</span><span class="p">(</span><span class="n">azr</span><span class="p">)</span>
+            <span class="n">adj_sx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a11</span> <span class="o">*</span> <span class="n">sx</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">a12</span> <span class="o">*</span> <span class="n">sy</span>
+            <span class="n">adj_sy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a21</span> <span class="o">*</span> <span class="n">sx</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">a22</span> <span class="o">*</span> <span class="n">sy</span>
+            <span class="n">sx</span> <span class="o">=</span> <span class="n">adj_sx</span>
+            <span class="n">sy</span> <span class="o">=</span> <span class="n">adj_sy</span>
+
+            <span class="c"># Apply default sx and sy corrections here to get the total affine</span>
+            <span class="c"># transformed slowness vector positiions.</span>
+            <span class="n">sx</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">def_sx_corr</span>            <span class="c"># Apply default sx corr. here</span>
+            <span class="n">sy</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">def_sy_corr</span>            <span class="c"># Apply default sy corr. here</span>
+
+            <span class="c"># Revert back to azimuth/slowness space</span>
+            <span class="n">azimuth</span> <span class="o">=</span> <span class="n">degrees</span><span class="p">(</span><span class="n">atan2</span><span class="p">(</span><span class="n">sx</span><span class="p">,</span> <span class="n">sy</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">azimuth</span> <span class="o">&lt;</span> <span class="mf">0.0</span><span class="p">:</span>
+                <span class="n">azimuth</span> <span class="o">+=</span> <span class="mf">360.0</span>
+            <span class="n">slow</span> <span class="o">=</span> <span class="n">hypot</span><span class="p">(</span><span class="n">sx</span><span class="p">,</span> <span class="n">sy</span><span class="p">)</span>
+
+        <span class="c"># Total azimuth and slowness errors are an RMS measure of the</span>
+        <span class="c"># combined measurement error (delaz and delslo) and the modeling</span>
+        <span class="c"># error (azimuth_mdl_err and slow_mdl_err).</span>
+
+        <span class="k">if</span> <span class="n">azimuth_mdl_err</span> <span class="o">&lt;</span> <span class="mf">180.0</span><span class="p">:</span>
+            <span class="n">tot_az_err</span> <span class="o">=</span> <span class="n">hypot</span><span class="p">(</span><span class="n">delaz</span><span class="p">,</span> <span class="n">azimuth_mdl_err</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">tot_az_err</span> <span class="o">=</span> <span class="mf">180.0</span>
+
+        <span class="n">tot_slow_err</span> <span class="o">=</span> <span class="n">hypot</span><span class="p">(</span><span class="n">delslo</span><span class="p">,</span> <span class="n">slow_mdl_err</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">azimuth</span><span class="p">,</span> <span class="n">slow</span><span class="p">,</span> <span class="n">tot_az_error</span><span class="p">,</span> <span class="n">tot_slow_err</span>
+
+</div></div>
+<div class="viewcode-block" id="load_az_slow_corr"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.az_slow_corr.load_az_slow_corr">[docs]</a><span class="k">def</span> <span class="nf">load_az_slow_corr</span><span class="p">(</span><span class="n">sasc_dir</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a dictionary of station names mapped to AzSlowCorr structures</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">corr_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">sasc_dir</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">fname</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;sasc.&#39;</span><span class="p">:</span>
+            <span class="n">sta</span> <span class="o">=</span> <span class="n">fname</span><span class="p">[</span><span class="mi">5</span><span class="p">:]</span>
+            <span class="n">corr_dict</span><span class="p">[</span><span class="n">sta</span><span class="p">]</span> <span class="o">=</span> <span class="n">AzSlowCorr</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sasc_dir</span><span class="p">,</span> <span class="n">fname</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">corr_dict</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">corr_dict</span> <span class="o">=</span> <span class="n">load_az_slow_corr</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&quot;SIGVISA_HOME&quot;</span><span class="p">),</span> <span class="s">&#39;parameters&#39;</span><span class="p">,</span> <span class="s">&#39;sasc&#39;</span><span class="p">))</span>
+    <span class="k">print</span> <span class="nb">len</span><span class="p">(</span><span class="n">corr_dict</span><span class="p">),</span> <span class="s">&quot;corrections loaded&quot;</span>
+
+    <span class="n">t</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;ASAR&#39;</span><span class="p">,</span> <span class="mf">86.808</span><span class="p">,</span> <span class="mf">8.219</span><span class="p">,</span> <span class="mf">1.698</span><span class="p">,</span> <span class="mf">0.244</span><span class="p">]</span>
+
+    <span class="k">print</span> <span class="n">t</span><span class="p">,</span> <span class="s">&quot;-&gt;&quot;</span><span class="p">,</span> <span class="n">corr_dict</span><span class="p">[</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">correct</span><span class="p">(</span><span class="o">*</span><span class="n">t</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

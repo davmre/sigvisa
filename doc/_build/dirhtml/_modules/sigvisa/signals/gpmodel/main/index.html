@@ -1,0 +1,213 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.signals.gpmodel.main &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../../" />
+    <link rel="up" title="Module code" href="../../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.signals.gpmodel.main</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">gaussian</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">gridutil</span> <span class="kn">import</span> <span class="o">*</span>
+
+
+<div class="viewcode-block" id="mpd4test"><a class="viewcode-back" href="../../../../../sigvisa.signals.gpmodel/#sigvisa.signals.gpmodel.main.mpd4test">[docs]</a><span class="k">def</span> <span class="nf">mpd4test</span><span class="p">(</span><span class="n">fmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdom</span><span class="p">,</span> <span class="n">trndom</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">grid</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+    <span class="n">margin</span> <span class="o">=</span> <span class="mf">0.2</span>
+    <span class="n">pd</span><span class="p">,</span> <span class="n">fr</span> <span class="o">=</span> <span class="n">pd4test</span><span class="p">(</span><span class="n">fmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdom</span><span class="p">,</span> <span class="n">trndom</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">grid</span><span class="p">)</span>
+    <span class="n">pd</span> <span class="o">+=</span> <span class="n">margin</span>
+    <span class="k">for</span> <span class="n">temp</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">currpd</span><span class="p">,</span> <span class="n">currfr</span> <span class="o">=</span> <span class="n">pd4test</span><span class="p">(</span><span class="n">fmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdom</span><span class="p">,</span> <span class="n">trndom</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">grid</span><span class="p">)</span>
+        <span class="n">pd</span> <span class="o">*=</span> <span class="p">(</span><span class="n">currpd</span> <span class="o">+</span> <span class="n">margin</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pd</span>
+
+</div>
+<div class="viewcode-block" id="pd4test"><a class="viewcode-back" href="../../../../../sigvisa.signals.gpmodel/#sigvisa.signals.gpmodel.main.pd4test">[docs]</a><span class="k">def</span> <span class="nf">pd4test</span><span class="p">(</span><span class="n">fmodel</span><span class="p">,</span> <span class="n">tmodel</span><span class="p">,</span> <span class="n">testdom</span><span class="p">,</span> <span class="n">trndom</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">grid</span><span class="p">):</span>
+    <span class="n">fullrange</span> <span class="o">=</span> <span class="n">fmodel</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span>
+    <span class="n">testrange</span> <span class="o">=</span> <span class="n">fullrange</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="n">trnrange</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fullrange</span><span class="p">[:</span><span class="n">i</span><span class="p">],</span> <span class="n">fullrange</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">testlnr</span> <span class="o">=</span> <span class="n">GPLearner</span><span class="p">(</span><span class="n">tmodel</span><span class="p">,</span> <span class="n">trnrange</span><span class="p">)</span>
+    <span class="n">pd</span> <span class="o">=</span> <span class="n">testlnr</span><span class="o">.</span><span class="n">lklhood</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">testrange</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pd</span><span class="p">,</span> <span class="n">fullrange</span>
+
+</div>
+<div class="viewcode-block" id="test3"><a class="viewcode-back" href="../../../../../sigvisa.signals.gpmodel/#sigvisa.signals.gpmodel.main.test3">[docs]</a><span class="k">def</span> <span class="nf">test3</span><span class="p">():</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="mf">0.8</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">vn</span> <span class="o">=</span> <span class="mf">0.01</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">vs</span><span class="p">,</span> <span class="n">vn</span><span class="p">)</span>
+    <span class="n">fullgrid</span> <span class="o">=</span> <span class="n">makegrid</span><span class="p">([</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">],</span> <span class="n">res</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+    <span class="n">fulldomain</span> <span class="o">=</span> <span class="n">grid2list</span><span class="p">(</span><span class="n">fullgrid</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">grid</span> <span class="o">=</span> <span class="n">makegrid</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">res</span><span class="o">=</span><span class="mi">101</span><span class="p">)</span>
+    <span class="n">gd</span> <span class="o">=</span> <span class="n">grid2list</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">testi</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">())</span>
+
+    <span class="n">testdomain</span> <span class="o">=</span> <span class="n">fulldomain</span><span class="p">[</span><span class="n">testi</span><span class="p">]</span>
+    <span class="n">trndomain</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">[:</span><span class="n">testi</span><span class="p">],</span> <span class="n">fulldomain</span><span class="p">[</span><span class="n">testi</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">fullmodel</span> <span class="o">=</span> <span class="n">GPModel</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    <span class="n">trnmodel</span> <span class="o">=</span> <span class="n">GPModel</span><span class="p">(</span><span class="n">trndomain</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+
+    <span class="n">pd</span> <span class="o">=</span> <span class="n">mpd4test</span><span class="p">(</span><span class="n">fullmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdomain</span><span class="p">,</span> <span class="n">trndomain</span><span class="p">,</span> <span class="n">testi</span><span class="p">,</span> <span class="n">gd</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">pdgrid</span> <span class="o">=</span> <span class="n">list2grid</span><span class="p">(</span><span class="n">pd</span><span class="p">,</span> <span class="p">[</span><span class="mi">101</span><span class="p">,</span> <span class="mi">101</span><span class="p">])</span>
+    <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">=</span> <span class="n">testdomain</span>
+    <span class="k">print</span> <span class="n">testdomain</span>
+    <span class="k">print</span> <span class="n">np</span><span class="o">.</span><span class="n">unravel_index</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">pdgrid</span><span class="p">),</span> <span class="n">pdgrid</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">pdgrid</span><span class="p">,</span> <span class="n">extent</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">interpolation</span><span class="o">=</span><span class="s">&#39;none&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;white&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;white&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="test2"><a class="viewcode-back" href="../../../../../sigvisa.signals.gpmodel/#sigvisa.signals.gpmodel.main.test2">[docs]</a><span class="k">def</span> <span class="nf">test2</span><span class="p">():</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="mf">0.8</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">vn</span> <span class="o">=</span> <span class="mf">0.01</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">vs</span><span class="p">,</span> <span class="n">vn</span><span class="p">)</span>
+    <span class="n">fulldomain</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mi">17</span><span class="p">)</span>
+    <span class="n">gd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">201</span><span class="p">)</span>
+    <span class="n">testi</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">())</span>
+
+    <span class="n">testdomain</span> <span class="o">=</span> <span class="n">fulldomain</span><span class="p">[</span><span class="n">testi</span><span class="p">]</span>
+    <span class="n">trndomain</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">[:</span><span class="n">testi</span><span class="p">],</span> <span class="n">fulldomain</span><span class="p">[</span><span class="n">testi</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:])</span>
+    <span class="n">fullmodel</span> <span class="o">=</span> <span class="n">GPModel</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    <span class="n">trnmodel</span> <span class="o">=</span> <span class="n">GPModel</span><span class="p">(</span><span class="n">trndomain</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+
+    <span class="n">pd</span> <span class="o">=</span> <span class="n">mpd4test</span><span class="p">(</span><span class="n">fullmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdomain</span><span class="p">,</span> <span class="n">trndomain</span><span class="p">,</span> <span class="n">testi</span><span class="p">,</span> <span class="n">gd</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
+    <span class="n">maxi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">pd</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">gd</span><span class="p">,</span> <span class="n">pd</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">testdomain</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">gd</span><span class="p">[</span><span class="n">maxi</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;green&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="test1"><a class="viewcode-back" href="../../../../../sigvisa.signals.gpmodel/#sigvisa.signals.gpmodel.main.test1">[docs]</a><span class="k">def</span> <span class="nf">test1</span><span class="p">():</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="mf">0.5</span>
+    <span class="n">vs</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">vn</span> <span class="o">=</span> <span class="mf">0.01</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">vs</span><span class="p">,</span> <span class="n">vn</span><span class="p">)</span>
+    <span class="n">fulldomain</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mi">17</span><span class="p">)</span>
+    <span class="n">gd</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">201</span><span class="p">)</span>
+    <span class="n">testi</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">())</span>
+
+    <span class="n">testdomain</span> <span class="o">=</span> <span class="n">fulldomain</span><span class="p">[</span><span class="n">testi</span><span class="p">]</span>
+    <span class="n">trndomain</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">[:</span><span class="n">testi</span><span class="p">],</span> <span class="n">fulldomain</span><span class="p">[</span><span class="n">testi</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:])</span>
+    <span class="n">fullmodel</span> <span class="o">=</span> <span class="n">GPModel</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+    <span class="n">trnmodel</span> <span class="o">=</span> <span class="n">GPModel</span><span class="p">(</span><span class="n">trndomain</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+
+    <span class="n">pd1</span><span class="p">,</span> <span class="n">fr1</span> <span class="o">=</span> <span class="n">pd4test</span><span class="p">(</span><span class="n">fullmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdomain</span><span class="p">,</span> <span class="n">trndomain</span><span class="p">,</span> <span class="n">testi</span><span class="p">,</span> <span class="n">gd</span><span class="p">)</span>
+    <span class="n">pd2</span><span class="p">,</span> <span class="n">fr2</span> <span class="o">=</span> <span class="n">pd4test</span><span class="p">(</span><span class="n">fullmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdomain</span><span class="p">,</span> <span class="n">trndomain</span><span class="p">,</span> <span class="n">testi</span><span class="p">,</span> <span class="n">gd</span><span class="p">)</span>
+    <span class="n">pd3</span><span class="p">,</span> <span class="n">fr3</span> <span class="o">=</span> <span class="n">pd4test</span><span class="p">(</span><span class="n">fullmodel</span><span class="p">,</span> <span class="n">trnmodel</span><span class="p">,</span> <span class="n">testdomain</span><span class="p">,</span> <span class="n">trndomain</span><span class="p">,</span> <span class="n">testi</span><span class="p">,</span> <span class="n">gd</span><span class="p">)</span>
+
+    <span class="n">pd</span> <span class="o">=</span> <span class="n">pd1</span> <span class="o">*</span> <span class="n">pd2</span> <span class="o">*</span> <span class="n">pd3</span>
+
+    <span class="n">ax1</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">241</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">,</span> <span class="n">fr1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">245</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">ax1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">gd</span><span class="p">,</span> <span class="n">pd1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">testdomain</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">)</span>
+
+    <span class="n">ax2</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">242</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">,</span> <span class="n">fr2</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">246</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">ax2</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">gd</span><span class="p">,</span> <span class="n">pd2</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">testdomain</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">)</span>
+
+    <span class="n">ax3</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">243</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">fulldomain</span><span class="p">,</span> <span class="n">fr3</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">247</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">ax3</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">gd</span><span class="p">,</span> <span class="n">pd3</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">testdomain</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">248</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">gd</span><span class="p">,</span> <span class="n">pd</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">testdomain</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<span class="n">test3</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

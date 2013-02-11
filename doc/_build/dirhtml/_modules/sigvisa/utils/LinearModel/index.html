@@ -1,0 +1,356 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.utils.LinearModel &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.utils.LinearModel</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">scipy.optimize</span> <span class="kn">import</span> <span class="n">fmin_ncg</span>
+
+
+<div class="viewcode-block" id="test_linear"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.LinearModel.test_linear">[docs]</a><span class="k">def</span> <span class="nf">test_linear</span><span class="p">():</span>
+    <span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+    <span class="n">intercept</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10000</span><span class="p">)]</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10000</span><span class="p">)]</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="p">[</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10000</span><span class="p">)]</span>
+
+    <span class="n">y</span> <span class="o">=</span> <span class="p">[</span><span class="n">random</span><span class="o">.</span><span class="n">normalvariate</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">a</span> <span class="o">-</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="mi">5</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">)]</span>
+
+    <span class="n">model</span> <span class="o">=</span> <span class="n">LinearModel</span><span class="p">(</span><span class="s">&quot;y&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">],</span> <span class="p">[</span><span class="n">intercept</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">],</span> <span class="n">y</span><span class="p">)</span>
+
+    <span class="n">ypred</span> <span class="o">=</span> <span class="p">[</span><span class="n">model</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w</span><span class="p">)]</span>
+
+    <span class="k">print</span> <span class="s">&quot;linear&quot;</span>
+    <span class="k">print</span> <span class="s">&quot;coeffs&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">coeffs</span><span class="p">,</span> <span class="s">&quot;std&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">std</span>
+
+    <span class="n">err</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="nb">sum</span><span class="p">((</span><span class="n">y1</span> <span class="o">-</span> <span class="n">y2</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">y1</span><span class="p">,</span> <span class="n">y2</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">ypred</span><span class="p">)))</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+
+    <span class="k">print</span> <span class="s">&quot;RMSE&quot;</span><span class="p">,</span> <span class="n">err</span>
+    <span class="k">assert</span><span class="p">(</span><span class="n">err</span> <span class="o">&lt;</span> <span class="o">.</span><span class="mi">11</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="LinearModel"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.LinearModel.LinearModel">[docs]</a><span class="k">class</span> <span class="nc">LinearModel</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">dim_names</span><span class="p">,</span> <span class="n">dim_vals</span><span class="p">,</span> <span class="n">samples</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Learns a linear function of the input dimensions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dim_names</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">dim_vals</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim_names</span> <span class="o">=</span> <span class="n">name</span><span class="p">,</span> <span class="n">dim_names</span>
+
+        <span class="n">datalen</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">samples</span><span class="p">)</span>
+
+        <span class="n">dim_vals</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dim_vals</span><span class="p">]</span>              <span class="c"># make a copy</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dim_vals</span><span class="p">])</span><span class="o">.</span><span class="n">T</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span><span class="p">,</span> <span class="n">residues</span><span class="p">,</span> <span class="n">rank</span><span class="p">,</span> <span class="n">sing</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">lstsq</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">samples</span><span class="p">,</span> <span class="mf">1e-6</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">residues</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">residues</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">datalen</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">std</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">converged</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="c"># print &quot;Rank:&quot;, rank</span>
+        <span class="c"># print &quot;Singular values:&quot;, sing</span>
+        <span class="k">if</span> <span class="n">rank</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">dim_vals</span><span class="p">)</span> <span class="ow">and</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;Warning: LinearModel: predictors are not independent&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init2__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">dim_names</span><span class="p">,</span> <span class="n">dim_vals</span><span class="p">,</span> <span class="n">samples</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Learns a linear function of the input dimensions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span> <span class="nn">rpy2.robjects</span> <span class="kn">as</span> <span class="nn">robjects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim_names</span> <span class="o">=</span> <span class="n">name</span><span class="p">,</span> <span class="n">dim_names</span>
+
+        <span class="n">num_dims</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">dim_names</span><span class="p">)</span>
+        <span class="n">param_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="s">&quot;x&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_dims</span><span class="p">))</span>
+
+        <span class="n">fmla</span> <span class="o">=</span> <span class="n">robjects</span><span class="o">.</span><span class="n">RFormula</span><span class="p">(</span><span class="s">&quot;y ~ &quot;</span> <span class="o">+</span> <span class="s">&quot;+&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">param_names</span><span class="p">))</span>
+        <span class="n">fmla</span><span class="o">.</span><span class="n">environment</span><span class="p">[</span><span class="s">&quot;y&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">robjects</span><span class="o">.</span><span class="n">FloatVector</span><span class="p">(</span><span class="n">samples</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_dims</span><span class="p">):</span>
+            <span class="n">fmla</span><span class="o">.</span><span class="n">environment</span><span class="p">[</span><span class="n">param_names</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="n">robjects</span><span class="o">.</span><span class="n">FloatVector</span><span class="p">(</span><span class="n">dim_vals</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+        <span class="n">fit</span> <span class="o">=</span> <span class="n">robjects</span><span class="o">.</span><span class="n">r</span><span class="o">.</span><span class="n">glm</span><span class="p">(</span><span class="n">formula</span><span class="o">=</span><span class="n">fmla</span><span class="p">,</span> <span class="n">family</span><span class="o">=</span><span class="n">robjects</span><span class="o">.</span><span class="n">r</span><span class="o">.</span><span class="n">gaussian</span><span class="p">())</span>
+
+        <span class="n">coeffs</span> <span class="o">=</span> <span class="n">fit</span><span class="o">.</span><span class="n">subset</span><span class="p">(</span><span class="s">&quot;coefficients&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span> <span class="o">=</span> <span class="p">[</span><span class="n">coeffs</span><span class="p">[</span><span class="mi">1</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_dims</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">coeffs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">converged</span> <span class="o">=</span> <span class="n">fit</span><span class="o">.</span><span class="n">subset</span><span class="p">(</span><span class="s">&quot;converged&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">index</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">tuple</span><span class="p">:</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="p">(</span><span class="n">index</span><span class="p">,)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">index</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim_names</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%d</span><span class="s"> dimensions expected got </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim_names</span><span class="p">),</span>
+                                                                <span class="nb">len</span><span class="p">(</span><span class="n">index</span><span class="p">)))</span>
+
+        <span class="n">val</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coeffs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">idx</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">index</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">val</span>
+
+</div>
+<div class="viewcode-block" id="linearreg"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.LinearModel.linearreg">[docs]</a><span class="k">def</span> <span class="nf">linearreg</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">samples</span><span class="p">,</span> <span class="n">init_coeffs</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+              <span class="n">noise_prec</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coeff_mean</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">coeff_prec</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    data is an n x d array</span>
+<span class="sd">    samples is a length n array</span>
+
+<span class="sd">    noise_prec -&gt; precision of gaussian noise around linear model (float)</span>
+<span class="sd">    coeff_mean -&gt; prior mean of the coefficients (length d array)</span>
+<span class="sd">    coeff_prec -&gt; prior precision of coefficients (length d array)</span>
+
+<span class="sd">    returns a length d array of coefficients</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">numfeats</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">numsamples</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">assert</span><span class="p">(</span><span class="n">numsamples</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">samples</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">init_coeffs</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">init_coeffs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">numfeats</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">coeff_mean</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">coeff_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">numfeats</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">coeff_prec</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">coeff_prec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">numfeats</span><span class="p">)</span>
+
+    <span class="c"># the gradient of the negative log likelihood</span>
+    <span class="k">def</span> <span class="nf">grad_neg_log_lik</span><span class="p">(</span><span class="n">coeffs</span><span class="p">):</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">coeffs</span><span class="p">)</span> <span class="o">-</span> <span class="n">samples</span>
+        <span class="k">return</span> <span class="n">noise_prec</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="o">+</span> <span class="n">coeff_prec</span> <span class="o">*</span> <span class="p">(</span><span class="n">coeffs</span> <span class="o">-</span> <span class="n">coeff_mean</span><span class="p">)</span>
+
+    <span class="c"># the Hessian of the negative log likelihood</span>
+    <span class="n">hess</span> <span class="o">=</span> <span class="n">noise_prec</span> <span class="o">*</span> <span class="nb">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">numsamples</span><span class="p">))</span>\
+        <span class="o">+</span> <span class="n">coeff_prec</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">numfeats</span><span class="p">)</span>
+
+    <span class="c"># since this is a second order function we can directly compute its minima</span>
+    <span class="n">coeffs</span> <span class="o">=</span> <span class="n">init_coeffs</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">hess</span><span class="p">),</span>
+                                  <span class="n">grad_neg_log_lik</span><span class="p">(</span><span class="n">init_coeffs</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">coeffs</span>
+
+<span class="c"># site_data: [([data x_k^i i=1..n_k], [samples y_k^i i=1..n_k]) k=1..K sites]</span>
+<span class="c">#</span>
+<span class="c"># where x_k is a vector of length F</span>
+<span class="c">#</span>
+<span class="c"># Returns [coeffs c_k k=1..K]   where c_k is a vector of length F</span>
+<span class="c">#</span>
+<span class="c"># y_k^i        ~ Normal(x_k^i . c_k, sigma_k)</span>
+<span class="c"># c_k^f        ~ Normal(mean^f, sigma^f)</span>
+<span class="c"># mean^f       ~ Normal(mean0, sigma0)</span>
+<span class="c"># sigma^f^{-2} ~ Gamma(alpha0, beta0)</span>
+<span class="c"># sigma_k^{-2} ~ Gamma(alpha1, beta)</span>
+<span class="c"># beta^{-1}    ~ Gamma(alpha2, beta2)</span>
+<span class="c">#</span>
+<span class="c"># We use the following update rules</span>
+<span class="c"># c_k = argmin_{c_k} .5 * (1/sigma_k)^2 * \sum_i (y_k^i - x_k^i . c_k)^2</span>
+<span class="c">#                  + .5 * \sum_f (1/sigma^f)^2 * (c_k^f - mean^f)^2</span>
+<span class="c">#        --&gt; computed in linearreg above</span>
+<span class="c"># mean^f  = ((1/sigma^f)^2 * \sum_k c_k + (1/sigma0)^2 * mean0)</span>
+<span class="c">#            / ( (1/sigma^f)^2 *K + (1/sigma0)^2 )</span>
+<span class="c"># sigma^f = sqrt[(\sum_k (c_k^f-mean^f)^2 + 2/beta0) / (K + 2*alpha0 -2) ]</span>
+<span class="c"># sigma_k = sqrt[(\sum_i=1..n_k (y_k^i - x_k^i.c_k)^2 + 2/beta)</span>
+<span class="c">#                / (n_k + 2 * alpha1 - 2)]</span>
+<span class="c"># beta = \frac{\sum_{k=1..K} (1/sigma_k)^2 + 1/beta2}{K alpha1 + alpha2 - 1}</span>
+<span class="c">#</span>
+<span class="c"># We iterate till mean, sigma, and beta and converged till the given tolerance</span>
+
+</div>
+<div class="viewcode-block" id="hier_linearreg"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.LinearModel.hier_linearreg">[docs]</a><span class="k">def</span> <span class="nf">hier_linearreg</span><span class="p">(</span><span class="n">site_data</span><span class="p">,</span> <span class="n">init_mean</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">init_sigma</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">init_beta</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                   <span class="n">mean0</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span> <span class="n">sigma0</span><span class="o">=</span><span class="mf">100.</span><span class="p">,</span> <span class="n">alpha0</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">beta0</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                   <span class="n">alpha1</span><span class="o">=</span><span class="mf">100.</span><span class="p">,</span> <span class="n">alpha2</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">beta2</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">tolerance</span><span class="o">=.</span><span class="mo">01</span><span class="p">,</span>
+                   <span class="n">maxiters</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+    <span class="n">numsites</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">site_data</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">numsites</span> <span class="o">&gt;</span> <span class="mi">1</span>                    <span class="c"># there should be more than one site</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">samples</span><span class="p">)</span> <span class="ow">in</span> <span class="n">site_data</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+            <span class="n">numfeats</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">break</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;No data for regression&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">init_mean</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">init_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">numfeats</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">init_sigma</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">init_prec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">numfeats</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">init_prec</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">init_sigma</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="n">mean</span><span class="p">,</span> <span class="n">prec</span><span class="p">,</span> <span class="n">beta</span> <span class="o">=</span> <span class="n">init_mean</span><span class="p">,</span> <span class="n">init_prec</span><span class="p">,</span> <span class="n">init_beta</span>
+    <span class="n">site_coeffs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="n">numsites</span><span class="p">,</span> <span class="n">numfeats</span><span class="p">))</span>
+    <span class="n">site_coeffs</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">init_mean</span>
+    <span class="n">site_prec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">numsites</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">alpha1</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">site_prec</span><span class="p">[:]</span> <span class="o">=</span> <span class="p">(</span><span class="n">alpha1</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">beta</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">site_prec</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">beta</span>
+
+    <span class="k">for</span> <span class="n">iternum</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">maxiters</span><span class="p">):</span>
+        <span class="n">prev_mean</span><span class="p">,</span> <span class="n">prev_prec</span><span class="p">,</span> <span class="n">prev_beta</span> <span class="o">=</span> <span class="n">mean</span><span class="p">,</span> <span class="n">prec</span><span class="p">,</span> <span class="n">beta</span>
+
+        <span class="c"># update coefficients and precision for each site</span>
+        <span class="k">for</span> <span class="n">siteid</span><span class="p">,</span> <span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">samples</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">site_data</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+                <span class="n">this_coeffs</span> <span class="o">=</span> <span class="n">mean</span>
+                <span class="k">if</span> <span class="n">alpha1</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">this_prec</span> <span class="o">=</span> <span class="n">beta</span> <span class="o">*</span> <span class="p">(</span><span class="n">alpha1</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c"># we pick the mean since the mode is undefined for alpha1&lt;=1</span>
+                    <span class="n">this_prec</span> <span class="o">=</span> <span class="n">beta</span> <span class="o">*</span> <span class="n">alpha1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">this_coeffs</span> <span class="o">=</span> <span class="n">linearreg</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">samples</span><span class="p">,</span>
+                                        <span class="n">init_coeffs</span><span class="o">=</span><span class="n">site_coeffs</span><span class="p">[</span><span class="n">siteid</span><span class="p">],</span>
+                                        <span class="n">noise_prec</span><span class="o">=</span><span class="n">site_prec</span><span class="p">[</span><span class="n">siteid</span><span class="p">],</span>
+                                        <span class="n">coeff_mean</span><span class="o">=</span><span class="n">mean</span><span class="p">,</span> <span class="n">coeff_prec</span><span class="o">=</span><span class="n">prec</span><span class="p">)</span>
+                <span class="n">this_prec</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">alpha1</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span> \
+                    <span class="o">/</span> <span class="p">(((</span><span class="n">samples</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">this_coeffs</span><span class="p">))</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+                       <span class="o">+</span> <span class="p">(</span><span class="mf">2.</span> <span class="o">/</span> <span class="n">beta</span><span class="p">))</span>
+
+            <span class="n">site_coeffs</span><span class="p">[</span><span class="n">siteid</span><span class="p">]</span> <span class="o">=</span> <span class="n">this_coeffs</span>
+            <span class="n">site_prec</span><span class="p">[</span><span class="n">siteid</span><span class="p">]</span> <span class="o">=</span> <span class="n">this_prec</span>
+
+        <span class="c"># update global mean, prec, and beta</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="p">(</span><span class="n">site_coeffs</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="n">prec</span> <span class="o">+</span> <span class="n">mean0</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">sigma0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> \
+            <span class="o">/</span> <span class="p">(</span><span class="n">numsites</span> <span class="o">*</span> <span class="n">prec</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">sigma0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="n">prec</span> <span class="o">=</span> <span class="p">(</span><span class="n">numsites</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">alpha0</span> <span class="o">-</span> <span class="mi">2</span> <span class="p">)</span> \
+            <span class="o">/</span> <span class="p">(((</span><span class="n">site_coeffs</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mf">2.</span> <span class="o">/</span> <span class="n">beta0</span><span class="p">))</span>
+
+        <span class="n">beta</span> <span class="o">=</span> <span class="p">(</span><span class="n">site_prec</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">beta2</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="n">numsites</span> <span class="o">*</span> <span class="n">alpha1</span> <span class="o">+</span> <span class="n">alpha2</span> <span class="o">-</span> <span class="mf">1.</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">prev_mean</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">tolerance</span> \
+            <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">prev_prec</span> <span class="o">-</span> <span class="n">prec</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">tolerance</span>\
+                <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">prev_beta</span> <span class="o">-</span> <span class="n">beta</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tolerance</span><span class="p">:</span>
+            <span class="k">break</span>
+
+    <span class="k">return</span> <span class="n">site_coeffs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">site_prec</span><span class="p">),</span> <span class="n">mean</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">prec</span><span class="p">),</span> <span class="n">beta</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_test</span><span class="p">():</span>
+    <span class="n">test_linear</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">_test</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

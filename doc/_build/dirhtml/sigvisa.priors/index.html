@@ -1,0 +1,386 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>priors Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="sigvisa Package" href="../sigvisa/" />
+    <link rel="next" title="results Package" href="../sigvisa.results/" />
+    <link rel="prev" title="plotting Package" href="../sigvisa.plotting/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.results/" title="results Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.plotting/" title="plotting Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" accesskey="U">sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="priors-package">
+<h1>priors Package<a class="headerlink" href="#priors-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.priors.ArrivalAmplitudePrior">
+<span id="arrivalamplitudeprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ArrivalAmplitudePrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.ArrivalAmplitudePrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.create_featureset">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">create_featureset</tt><big>(</big><em>earthmodel</em>, <em>start_time</em>, <em>end_time</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>sel3_events</em>, <em>sel3_evlist</em>, <em>site_up</em>, <em>sites</em>, <em>phasenames</em>, <em>phasetimedef</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#create_featureset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.create_featureset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.extract_features">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">extract_features</tt><big>(</big><em>mb</em>, <em>depth</em>, <em>ttime</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#extract_features"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.extract_features" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.gtf">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">gtf</tt><big>(</big><em>val</em>, <em>m</em>, <em>s</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#gtf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.gtf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.learn">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_filename</em>, <em>options</em>, <em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>false_dets</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.predict_amp_model">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">predict_amp_model</tt><big>(</big><em>coeffs</em>, <em>mb</em>, <em>depth</em>, <em>ttime</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#predict_amp_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.predict_amp_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.print_2gmm">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">print_2gmm</tt><big>(</big><em>wts</em>, <em>means</em>, <em>stds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#print_2gmm"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.print_2gmm" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.print_list">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">print_list</tt><big>(</big><em>fp</em>, <em>list</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#print_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.print_list" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAmplitudePrior.test_model">
+<tt class="descclassname">sigvisa.priors.ArrivalAmplitudePrior.</tt><tt class="descname">test_model</tt><big>(</big><em>earthmodel</em>, <em>train</em>, <em>test</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAmplitudePrior/#test_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAmplitudePrior.test_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.ArrivalAzimuthPrior">
+<span id="arrivalazimuthprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ArrivalAzimuthPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.ArrivalAzimuthPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalAzimuthPrior.learn">
+<tt class="descclassname">sigvisa.priors.ArrivalAzimuthPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_filename</em>, <em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalAzimuthPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalAzimuthPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.ArrivalPhasePrior">
+<span id="arrivalphaseprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ArrivalPhasePrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.ArrivalPhasePrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalPhasePrior.learn">
+<tt class="descclassname">sigvisa.priors.ArrivalPhasePrior.</tt><tt class="descname">learn</tt><big>(</big><em>filename</em>, <em>options</em>, <em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>false_dets</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalPhasePrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalPhasePrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.ArrivalSNR">
+<span id="arrivalsnr-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ArrivalSNR</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.ArrivalSNR" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalSNR.learn">
+<tt class="descclassname">sigvisa.priors.ArrivalSNR.</tt><tt class="descname">learn</tt><big>(</big><em>param_filename</em>, <em>options</em>, <em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>false_dets</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalSNR/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalSNR.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.ArrivalSlownessPrior">
+<span id="arrivalslownessprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ArrivalSlownessPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.ArrivalSlownessPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalSlownessPrior.learn">
+<tt class="descclassname">sigvisa.priors.ArrivalSlownessPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_filename</em>, <em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalSlownessPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalSlownessPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.ArrivalTimePrior">
+<span id="arrivaltimeprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ArrivalTimePrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.ArrivalTimePrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalTimePrior.compare_laplace_gaussian">
+<tt class="descclassname">sigvisa.priors.ArrivalTimePrior.</tt><tt class="descname">compare_laplace_gaussian</tt><big>(</big><em>trainres</em>, <em>testres</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalTimePrior/#compare_laplace_gaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalTimePrior.compare_laplace_gaussian" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalTimePrior.corrcoeff">
+<tt class="descclassname">sigvisa.priors.ArrivalTimePrior.</tt><tt class="descname">corrcoeff</tt><big>(</big><em>xvals</em>, <em>yvals</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalTimePrior/#corrcoeff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalTimePrior.corrcoeff" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalTimePrior.create_featureset">
+<tt class="descclassname">sigvisa.priors.ArrivalTimePrior.</tt><tt class="descname">create_featureset</tt><big>(</big><em>earthmodel</em>, <em>start_time</em>, <em>end_time</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>sel3_events</em>, <em>sel3_evlist</em>, <em>site_up</em>, <em>sites</em>, <em>phasenames</em>, <em>phasetimedef</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalTimePrior/#create_featureset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalTimePrior.create_featureset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalTimePrior.learn">
+<tt class="descclassname">sigvisa.priors.ArrivalTimePrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_filename</em>, <em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalTimePrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalTimePrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.ArrivalTimePrior.test_model">
+<tt class="descclassname">sigvisa.priors.ArrivalTimePrior.</tt><tt class="descname">test_model</tt><big>(</big><em>options</em>, <em>earthmodel</em>, <em>train</em>, <em>test</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/ArrivalTimePrior/#test_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.ArrivalTimePrior.test_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="eda-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">EDA</span></tt> Module<a class="headerlink" href="#eda-module" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-sigvisa.priors.EventDetectionPrior">
+<span id="eventdetectionprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">EventDetectionPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.EventDetectionPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPrior.create_featureset">
+<tt class="descclassname">sigvisa.priors.EventDetectionPrior.</tt><tt class="descname">create_featureset</tt><big>(</big><em>earthmodel</em>, <em>start_time</em>, <em>end_time</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>sel3_events</em>, <em>sel3_evlist</em>, <em>site_up</em>, <em>sites</em>, <em>phasenames</em>, <em>phasetimedef</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPrior/#create_featureset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPrior.create_featureset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPrior.extract_features">
+<tt class="descclassname">sigvisa.priors.EventDetectionPrior.</tt><tt class="descname">extract_features</tt><big>(</big><em>raw</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPrior/#extract_features"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPrior.extract_features" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPrior.gtf">
+<tt class="descclassname">sigvisa.priors.EventDetectionPrior.</tt><tt class="descname">gtf</tt><big>(</big><em>val</em>, <em>m</em>, <em>s</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPrior/#gtf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPrior.gtf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPrior.learn">
+<tt class="descclassname">sigvisa.priors.EventDetectionPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_fname</em>, <em>earthmodel</em>, <em>start_time</em>, <em>end_time</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>site_up</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPrior.test_model">
+<tt class="descclassname">sigvisa.priors.EventDetectionPrior.</tt><tt class="descname">test_model</tt><big>(</big><em>earthmodel</em>, <em>train</em>, <em>test</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPrior/#test_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPrior.test_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.EventDetectionPriorNew">
+<span id="eventdetectionpriornew-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">EventDetectionPriorNew</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.EventDetectionPriorNew" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPriorNew.gtf">
+<tt class="descclassname">sigvisa.priors.EventDetectionPriorNew.</tt><tt class="descname">gtf</tt><big>(</big><em>val</em>, <em>m</em>, <em>s</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPriorNew/#gtf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPriorNew.gtf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPriorNew.learn">
+<tt class="descclassname">sigvisa.priors.EventDetectionPriorNew.</tt><tt class="descname">learn</tt><big>(</big><em>param_fname</em>, <em>earthmodel</em>, <em>start_time</em>, <em>end_time</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em>, <em>site_up</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPriorNew/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPriorNew.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventDetectionPriorNew.learn_phase_site">
+<tt class="descclassname">sigvisa.priors.EventDetectionPriorNew.</tt><tt class="descname">learn_phase_site</tt><big>(</big><em>phasename</em>, <em>true_data</em>, <em>fake_data</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventDetectionPriorNew/#learn_phase_site"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventDetectionPriorNew.learn_phase_site" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.EventLocationPrior">
+<span id="eventlocationprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">EventLocationPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.EventLocationPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.priors.EventLocationPrior.Dummy">
+<em class="property">class </em><tt class="descclassname">sigvisa.priors.EventLocationPrior.</tt><tt class="descname">Dummy</tt><a class="reference internal" href="../_modules/sigvisa/priors/EventLocationPrior/#Dummy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventLocationPrior.Dummy" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventLocationPrior.compute_density">
+<tt class="descclassname">sigvisa.priors.EventLocationPrior.</tt><tt class="descname">compute_density</tt><big>(</big><em>bandwidth</em>, <em>events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventLocationPrior/#compute_density"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventLocationPrior.compute_density" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventLocationPrior.kernel">
+<tt class="descclassname">sigvisa.priors.EventLocationPrior.</tt><tt class="descname">kernel</tt><big>(</big><em>bandwidth</em>, <em>distance</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventLocationPrior/#kernel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventLocationPrior.kernel" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventLocationPrior.learn">
+<tt class="descclassname">sigvisa.priors.EventLocationPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_fname</em>, <em>options</em>, <em>leb_events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventLocationPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventLocationPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventLocationPrior.leave_oneout_avg_loglike">
+<tt class="descclassname">sigvisa.priors.EventLocationPrior.</tt><tt class="descname">leave_oneout_avg_loglike</tt><big>(</big><em>bandwidth</em>, <em>events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventLocationPrior/#leave_oneout_avg_loglike"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventLocationPrior.leave_oneout_avg_loglike" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.EventLocationPrior.main">
+<tt class="descclassname">sigvisa.priors.EventLocationPrior.</tt><tt class="descname">main</tt><big>(</big><em>param_fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventLocationPrior/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventLocationPrior.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.EventMagPrior">
+<span id="eventmagprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">EventMagPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.EventMagPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.EventMagPrior.learn">
+<tt class="descclassname">sigvisa.priors.EventMagPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_fname</em>, <em>options</em>, <em>leb_events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/EventMagPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.EventMagPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.NumEventPrior">
+<span id="numeventprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">NumEventPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.NumEventPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.NumEventPrior.learn">
+<tt class="descclassname">sigvisa.priors.NumEventPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_fname</em>, <em>options</em>, <em>start_time</em>, <em>end_time</em>, <em>leb_events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/NumEventPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.NumEventPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.NumFalseDetPrior">
+<span id="numfalsedetprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">NumFalseDetPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.NumFalseDetPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.NumFalseDetPrior.learn">
+<tt class="descclassname">sigvisa.priors.NumFalseDetPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_filename</em>, <em>detections</em>, <em>false_dets</em>, <em>site_up</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/NumFalseDetPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.NumFalseDetPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.priors.SecDetPrior">
+<span id="secdetprior-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">SecDetPrior</span></tt> Module<a class="headerlink" href="#module-sigvisa.priors.SecDetPrior" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.priors.SecDetPrior.compute_coda_pairs">
+<tt class="descclassname">sigvisa.priors.SecDetPrior.</tt><tt class="descname">compute_coda_pairs</tt><big>(</big><em>detections</em>, <em>leb_evlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/SecDetPrior/#compute_coda_pairs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.SecDetPrior.compute_coda_pairs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.SecDetPrior.compute_false_detections">
+<tt class="descclassname">sigvisa.priors.SecDetPrior.</tt><tt class="descname">compute_false_detections</tt><big>(</big><em>detections</em>, <em>leb_evlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/SecDetPrior/#compute_false_detections"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.SecDetPrior.compute_false_detections" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.SecDetPrior.compute_secondary_dets">
+<tt class="descclassname">sigvisa.priors.SecDetPrior.</tt><tt class="descname">compute_secondary_dets</tt><big>(</big><em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/SecDetPrior/#compute_secondary_dets"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.SecDetPrior.compute_secondary_dets" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.SecDetPrior.learn">
+<tt class="descclassname">sigvisa.priors.SecDetPrior.</tt><tt class="descname">learn</tt><big>(</big><em>param_fname</em>, <em>options</em>, <em>earthmodel</em>, <em>detections</em>, <em>leb_events</em>, <em>leb_evlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/SecDetPrior/#learn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.SecDetPrior.learn" title="Permalink to this definition">¶</a></dt>
+<dd><p>The secondary detection model consists of multiple models which predict:
+- The probability of a secondary detection
+- The time delay of the secondary detection
+- The azimuth diff
+- The slowness diff
+- The log-amp diff
+- The secondary phase</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.priors.SecDetPrior.print_list">
+<tt class="descclassname">sigvisa.priors.SecDetPrior.</tt><tt class="descname">print_list</tt><big>(</big><em>fp</em>, <em>list</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/priors/SecDetPrior/#print_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.priors.SecDetPrior.print_list" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">priors Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.priors.ArrivalAmplitudePrior"><tt class="docutils literal"><span class="pre">ArrivalAmplitudePrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.ArrivalAzimuthPrior"><tt class="docutils literal"><span class="pre">ArrivalAzimuthPrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.ArrivalPhasePrior"><tt class="docutils literal"><span class="pre">ArrivalPhasePrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.ArrivalSNR"><tt class="docutils literal"><span class="pre">ArrivalSNR</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.ArrivalSlownessPrior"><tt class="docutils literal"><span class="pre">ArrivalSlownessPrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.ArrivalTimePrior"><tt class="docutils literal"><span class="pre">ArrivalTimePrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#eda-module"><tt class="docutils literal"><span class="pre">EDA</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.EventDetectionPrior"><tt class="docutils literal"><span class="pre">EventDetectionPrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.EventDetectionPriorNew"><tt class="docutils literal"><span class="pre">EventDetectionPriorNew</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.EventLocationPrior"><tt class="docutils literal"><span class="pre">EventLocationPrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.EventMagPrior"><tt class="docutils literal"><span class="pre">EventMagPrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.NumEventPrior"><tt class="docutils literal"><span class="pre">NumEventPrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.NumFalseDetPrior"><tt class="docutils literal"><span class="pre">NumFalseDetPrior</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.priors.SecDetPrior"><tt class="docutils literal"><span class="pre">SecDetPrior</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.plotting/"
+                        title="previous chapter">plotting Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.results/"
+                        title="next chapter">results Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.priors.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.results/" title="results Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.plotting/" title="plotting Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

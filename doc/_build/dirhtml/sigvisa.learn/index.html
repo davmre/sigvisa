@@ -1,0 +1,299 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>learn Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="sigvisa Package" href="../sigvisa/" />
+    <link rel="next" title="models Package" href="../sigvisa.models/" />
+    <link rel="prev" title="optimize Package" href="../sigvisa.infer.optimize/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models/" title="models Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.infer.optimize/" title="optimize Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" accesskey="U">sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="learn-package">
+<h1>learn Package<a class="headerlink" href="#learn-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.learn.batch_fit_from_evids">
+<span id="batch-fit-from-evids-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">batch_fit_from_evids</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.batch_fit_from_evids" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.learn.batch_fit_from_evids.main">
+<tt class="descclassname">sigvisa.learn.batch_fit_from_evids.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/batch_fit_from_evids/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.batch_fit_from_evids.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.batch_fit_from_evids.run_fit_and_rename_output">
+<tt class="descclassname">sigvisa.learn.batch_fit_from_evids.</tt><tt class="descname">run_fit_and_rename_output</tt><big>(</big><em>args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/batch_fit_from_evids/#run_fit_and_rename_output"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.batch_fit_from_evids.run_fit_and_rename_output" title="Permalink to this definition">¶</a></dt>
+<dd><p>Runs the provided fitting command, and blocks until it
+completes. Saves the output to a temporary file, and upon
+completion moves it to a new directory according to whether the
+fitting run completed successfully.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.batch_fit_from_evids.work">
+<tt class="descclassname">sigvisa.learn.batch_fit_from_evids.</tt><tt class="descname">work</tt><big>(</big><em>cmd</em>, <em>output_file_str</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/batch_fit_from_evids/#work"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.batch_fit_from_evids.work" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.learn.cross_validation">
+<span id="cross-validation-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">cross_validation</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.cross_validation" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.learn.cross_validation.RedirectStdStreams">
+<em class="property">class </em><tt class="descclassname">sigvisa.learn.cross_validation.</tt><tt class="descname">RedirectStdStreams</tt><big>(</big><em>stdout=None</em>, <em>stderr=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/cross_validation/#RedirectStdStreams"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.cross_validation.RedirectStdStreams" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.cross_validation.cv_eval_models">
+<tt class="descclassname">sigvisa.learn.cross_validation.</tt><tt class="descname">cv_eval_models</tt><big>(</big><em>cv_dir</em>, <em>model_type</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/cross_validation/#cv_eval_models"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.cross_validation.cv_eval_models" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.cross_validation.cv_generator">
+<tt class="descclassname">sigvisa.learn.cross_validation.</tt><tt class="descname">cv_generator</tt><big>(</big><em>n</em>, <em>k=3</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/cross_validation/#cv_generator"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.cross_validation.cv_generator" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.cross_validation.main">
+<tt class="descclassname">sigvisa.learn.cross_validation.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/cross_validation/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.cross_validation.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.cross_validation.save_cv_folds">
+<tt class="descclassname">sigvisa.learn.cross_validation.</tt><tt class="descname">save_cv_folds</tt><big>(</big><em>X</em>, <em>y</em>, <em>evids</em>, <em>cv_dir</em>, <em>folds=3</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/cross_validation/#save_cv_folds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.cross_validation.save_cv_folds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.cross_validation.train_cv_models">
+<tt class="descclassname">sigvisa.learn.cross_validation.</tt><tt class="descname">train_cv_models</tt><big>(</big><em>cv_dir</em>, <em>model_type</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/cross_validation/#train_cv_models"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.cross_validation.train_cv_models" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.learn.cross_validation_aggregate_results">
+<span id="cross-validation-aggregate-results-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">cross_validation_aggregate_results</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.cross_validation_aggregate_results" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.learn.cross_validation_aggregate_results.main">
+<tt class="descclassname">sigvisa.learn.cross_validation_aggregate_results.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/cross_validation_aggregate_results/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.cross_validation_aggregate_results.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.learn.extract_wiggles">
+<span id="extract-wiggles-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">extract_wiggles</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.extract_wiggles" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.learn.extract_wiggles.main">
+<tt class="descclassname">sigvisa.learn.extract_wiggles.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/extract_wiggles/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.extract_wiggles.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.learn.filter_evids_for_run">
+<span id="filter-evids-for-run-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">filter_evids_for_run</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.filter_evids_for_run" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.learn.filter_evids_for_run.main">
+<tt class="descclassname">sigvisa.learn.filter_evids_for_run.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/filter_evids_for_run/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.filter_evids_for_run.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.learn.fit_shape_params">
+<span id="fit-shape-params-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">fit_shape_params</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.fit_shape_params" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.learn.fit_shape_params.fit_event_wave">
+<tt class="descclassname">sigvisa.learn.fit_shape_params.</tt><tt class="descname">fit_event_wave</tt><big>(</big><em>event</em>, <em>sta</em>, <em>chan</em>, <em>band</em>, <em>tm</em>, <em>output_run_name</em>, <em>output_iteration</em>, <em>init_run_name=None</em>, <em>init_iteration=None</em>, <em>optim_params=None</em>, <em>fit_hz=5</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/fit_shape_params/#fit_event_wave"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.fit_shape_params.fit_event_wave" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find the best-fitting template parameters for each band/channel of
+a particular event at a particular station. Store the template
+parameters in the database.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.fit_shape_params.main">
+<tt class="descclassname">sigvisa.learn.fit_shape_params.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/fit_shape_params/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.fit_shape_params.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.learn.train_coda_models">
+<span id="train-coda-models-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">train_coda_models</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.train_coda_models" title="Permalink to this headline">¶</a></h2>
+<dl class="exception">
+<dt id="sigvisa.learn.train_coda_models.NoDataException">
+<em class="property">exception </em><tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">NoDataException</tt><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#NoDataException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.NoDataException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.analyze_model_fname">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">analyze_model_fname</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#analyze_model_fname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.analyze_model_fname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.get_model_fname">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">get_model_fname</tt><big>(</big><em>run_name</em>, <em>run_iter</em>, <em>sta</em>, <em>chan</em>, <em>band</em>, <em>phase</em>, <em>target</em>, <em>model_type</em>, <em>evids</em>, <em>model_name='paired_exp'</em>, <em>prefix='parameters/runs'</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#get_model_fname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.get_model_fname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.get_training_data">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">get_training_data</tt><big>(</big><em>run_name</em>, <em>run_iter</em>, <em>sta</em>, <em>chan</em>, <em>band</em>, <em>phases</em>, <em>target</em>, <em>require_human_approved=False</em>, <em>max_acost=200</em>, <em>min_amp=-10</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#get_training_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.get_training_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.learn_constant_gaussian">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">learn_constant_gaussian</tt><big>(</big><em>X</em>, <em>y</em>, <em>sta</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#learn_constant_gaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.learn_constant_gaussian" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.learn_gp">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">learn_gp</tt><big>(</big><em>sta</em>, <em>X</em>, <em>y</em>, <em>distfn</em>, <em>params</em>, <em>optimize=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#learn_gp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.learn_gp" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.learn_linear">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">learn_linear</tt><big>(</big><em>X</em>, <em>y</em>, <em>sta</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#learn_linear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.learn_linear" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.learn_model">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">learn_model</tt><big>(</big><em>X</em>, <em>y</em>, <em>model_type</em>, <em>sta</em>, <em>target=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#learn_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.learn_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.load_model">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">load_model</tt><big>(</big><em>fname</em>, <em>model_type</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#load_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.load_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_coda_models.main">
+<tt class="descclassname">sigvisa.learn.train_coda_models.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_coda_models/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_coda_models.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.learn.train_wiggles">
+<span id="train-wiggles-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">train_wiggles</span></tt> Module<a class="headerlink" href="#module-sigvisa.learn.train_wiggles" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.learn.train_wiggles.main">
+<tt class="descclassname">sigvisa.learn.train_wiggles.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_wiggles/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_wiggles.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.learn.train_wiggles.wiggles">
+<tt class="descclassname">sigvisa.learn.train_wiggles.</tt><tt class="descname">wiggles</tt><big>(</big><em>dbconn</em>, <em>run_name</em>, <em>iteration</em>, <em>skip_type=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/learn/train_wiggles/#wiggles"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.learn.train_wiggles.wiggles" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">learn Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.learn.batch_fit_from_evids"><tt class="docutils literal"><span class="pre">batch_fit_from_evids</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.learn.cross_validation"><tt class="docutils literal"><span class="pre">cross_validation</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.learn.cross_validation_aggregate_results"><tt class="docutils literal"><span class="pre">cross_validation_aggregate_results</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.learn.extract_wiggles"><tt class="docutils literal"><span class="pre">extract_wiggles</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.learn.filter_evids_for_run"><tt class="docutils literal"><span class="pre">filter_evids_for_run</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.learn.fit_shape_params"><tt class="docutils literal"><span class="pre">fit_shape_params</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.learn.train_coda_models"><tt class="docutils literal"><span class="pre">train_coda_models</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.learn.train_wiggles"><tt class="docutils literal"><span class="pre">train_wiggles</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.infer.optimize/"
+                        title="previous chapter">optimize Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.models/"
+                        title="next chapter">models Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.learn.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models/" title="models Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.infer.optimize/" title="optimize Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

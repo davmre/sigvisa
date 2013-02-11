@@ -1,0 +1,393 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.database.signal_data &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.database.signal_data</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">errno</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">hashlib</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+<span class="kn">import</span> <span class="nn">scipy.stats</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database</span> <span class="kn">import</span> <span class="n">db</span>
+
+
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="n">get_event</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.armodel.learner</span> <span class="kn">import</span> <span class="n">ARLearner</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.armodel.model</span> <span class="kn">import</span> <span class="n">ARModel</span><span class="p">,</span> <span class="n">ErrorModel</span>
+<span class="kn">import</span> <span class="nn">sigvisa.utils.geog</span>
+<span class="kn">import</span> <span class="nn">obspy.signal.util</span>
+
+<span class="c"># from sigvisa.models.templates.paired_exp import *</span>
+
+<span class="p">(</span><span class="n">FIT_EVID</span><span class="p">,</span> <span class="n">FIT_MB</span><span class="p">,</span> <span class="n">FIT_LON</span><span class="p">,</span> <span class="n">FIT_LAT</span><span class="p">,</span> <span class="n">FIT_DEPTH</span><span class="p">,</span> <span class="n">FIT_PHASEID</span><span class="p">,</span> <span class="n">FIT_ATIME</span><span class="p">,</span> <span class="n">FIT_PEAK_DELAY</span><span class="p">,</span> <span class="n">FIT_CODA_HEIGHT</span><span class="p">,</span> <span class="n">FIT_CODA_DECAY</span><span class="p">,</span>
+ <span class="n">FIT_AMP_TRANSFER</span><span class="p">,</span> <span class="n">FIT_SITEID</span><span class="p">,</span> <span class="n">FIT_DISTANCE</span><span class="p">,</span> <span class="n">FIT_AZIMUTH</span><span class="p">,</span> <span class="n">FIT_LOWBAND</span><span class="p">,</span> <span class="n">FIT_NUM_COLS</span><span class="p">)</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">15</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ensure_dir_exists"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.ensure_dir_exists">[docs]</a><span class="k">def</span> <span class="nf">ensure_dir_exists</span><span class="p">(</span><span class="n">dname</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">dname</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">exc</span><span class="o">.</span><span class="n">errno</span> <span class="o">==</span> <span class="n">errno</span><span class="o">.</span><span class="n">EEXIST</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span>
+    <span class="k">return</span> <span class="n">dname</span>
+
+</div>
+<div class="viewcode-block" id="get_base_dir"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.get_base_dir">[docs]</a><span class="k">def</span> <span class="nf">get_base_dir</span><span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ensure_dir_exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&quot;logs&quot;</span><span class="p">,</span> <span class="s">&quot;codas_</span><span class="si">%s</span><span class="s">_</span><span class="si">%s</span><span class="s">_</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">run_name</span><span class="p">)))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ensure_dir_exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&quot;logs&quot;</span><span class="p">,</span> <span class="s">&quot;codas_</span><span class="si">%s</span><span class="s">_</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">run_name</span><span class="p">)))</span>
+
+</div>
+<div class="viewcode-block" id="get_next_runid"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.get_next_runid">[docs]</a><span class="k">def</span> <span class="nf">get_next_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">):</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select max(runid) from sigvisa_coda_fitting_run&quot;</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">r</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">runid</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">runid</span> <span class="o">=</span> <span class="n">r</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">runid</span>
+
+</div>
+<div class="viewcode-block" id="get_fitting_runid"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.get_fitting_runid">[docs]</a><span class="k">def</span> <span class="nf">get_fitting_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">,</span> <span class="n">create_if_new</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select runid from sigvisa_coda_fitting_run where run_name=&#39;</span><span class="si">%s</span><span class="s">&#39; and iter=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">create_if_new</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;no existing runid for iteration </span><span class="si">%d</span><span class="s"> of run </span><span class="si">%s</span><span class="s">!&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">iteration</span><span class="p">,</span> <span class="n">run_name</span><span class="p">))</span>
+        <span class="n">runid</span> <span class="o">=</span> <span class="n">get_next_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">)</span>
+        <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;insert into sigvisa_coda_fitting_run (runid, run_name, iter) values (</span><span class="si">%d</span><span class="s">, &#39;</span><span class="si">%s</span><span class="s">&#39;, </span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">runid</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">)</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">runid</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">runid</span>
+
+</div>
+<div class="viewcode-block" id="read_fitting_run"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.read_fitting_run">[docs]</a><span class="k">def</span> <span class="nf">read_fitting_run</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">runid</span><span class="p">):</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select run_name, iter from sigvisa_coda_fitting_run where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">runid</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;no entry in DB for runid </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">runid</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="p">(</span><span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">)</span> <span class="o">=</span> <span class="n">info</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="get_last_iteration"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.get_last_iteration">[docs]</a><span class="k">def</span> <span class="nf">get_last_iteration</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">):</span>
+    <span class="n">iters</span> <span class="o">=</span> <span class="n">read_fitting_run_iterations</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">)</span>
+    <span class="n">last_iter</span> <span class="o">=</span> <span class="n">iters</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">iters</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="n">last_iter</span>
+
+</div>
+<div class="viewcode-block" id="read_fitting_run_iterations"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.read_fitting_run_iterations">[docs]</a><span class="k">def</span> <span class="nf">read_fitting_run_iterations</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">):</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select iter, runid from sigvisa_coda_fitting_run where run_name=&#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="n">run_name</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()),</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">r</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="get_fitid"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.get_fitid">[docs]</a><span class="k">def</span> <span class="nf">get_fitid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">run_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">iteration</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">runid</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="n">runid</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">runid</span> <span class="o">=</span> <span class="n">get_fitting_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">,</span> <span class="n">create_if_new</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select fitid from sigvisa_coda_fit where sta=&#39;</span><span class="si">%s</span><span class="s">&#39; and evid=</span><span class="si">%d</span><span class="s"> and chan=&#39;</span><span class="si">%s</span><span class="s">&#39; and band=&#39;</span><span class="si">%s</span><span class="s">&#39; and runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">sta</span><span class="p">,</span> <span class="n">evid</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">runid</span><span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">fitid</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">fitid</span>
+
+</div>
+<div class="viewcode-block" id="filter_and_sort_template_params"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.filter_and_sort_template_params">[docs]</a><span class="k">def</span> <span class="nf">filter_and_sort_template_params</span><span class="p">(</span><span class="n">unsorted_phases</span><span class="p">,</span> <span class="n">unsorted_params</span><span class="p">,</span> <span class="n">filter_list</span><span class="p">):</span>
+    <span class="n">phase_indices</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">unsorted_phases</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">unsorted_phases</span><span class="p">)))</span>
+    <span class="n">phase_indices</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="ow">in</span> <span class="n">phase_indices</span> <span class="k">if</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">filter_list</span><span class="p">]</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">phase_indices</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">z</span><span class="p">:</span> <span class="n">filter_list</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">z</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">permutation</span><span class="p">)</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">tmp</span><span class="p">)</span>
+    <span class="n">fit_params</span> <span class="o">=</span> <span class="n">unsorted_params</span><span class="p">[</span><span class="n">permutation</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">fit_params</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="benchmark_fitting_run"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.benchmark_fitting_run">[docs]</a><span class="k">def</span> <span class="nf">benchmark_fitting_run</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">runid</span><span class="p">,</span> <span class="n">return_raw_data</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select acost, elapsed from sigvisa_coda_fit where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">runid</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+    <span class="n">acosts</span> <span class="o">=</span> <span class="n">results</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">times</span> <span class="o">=</span> <span class="n">results</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">return_raw_data</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">acosts</span><span class="p">,</span> <span class="n">times</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">acosts</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">times</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="load_template_params_by_fitid"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.load_template_params_by_fitid">[docs]</a><span class="k">def</span> <span class="nf">load_template_params_by_fitid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">fitid</span><span class="p">,</span> <span class="n">return_cost</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select phase, round(param1,16), round(param2, 16), round(param3, 16), round(param4, 16) from sigvisa_coda_fit_phase where fitid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">fitid</span><span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">fit_params</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asfarray</span><span class="p">([</span><span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">])</span>
+        <span class="n">phases</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">])</span>
+        <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">fit_params</span><span class="p">)</span> <span class="o">=</span> <span class="n">filter_and_sort_template_params</span><span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">fit_params</span><span class="p">,</span> <span class="n">filter_list</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">phases</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">IndexError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">e</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">),</span> <span class="bp">None</span>
+
+    <span class="k">if</span> <span class="n">return_cost</span><span class="p">:</span>
+        <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select acost from sigvisa_coda_fit where fitid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">fitid</span>
+        <span class="k">print</span> <span class="n">sql_query</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+        <span class="n">fit_cost</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">fit_params</span><span class="p">),</span> <span class="n">fit_cost</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">fit_params</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="load_template_params"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.load_template_params">[docs]</a><span class="k">def</span> <span class="nf">load_template_params</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">run_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">iteration</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">runid</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">fitid</span> <span class="o">=</span> <span class="n">get_fitid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">run_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">iteration</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">runid</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+    <span class="n">p</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">load_template_params_by_fitid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">fitid</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">p</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">fitid</span>
+
+</div>
+<div class="viewcode-block" id="execute_and_return_id"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.execute_and_return_id">[docs]</a><span class="k">def</span> <span class="nf">execute_and_return_id</span><span class="p">(</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">idname</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="k">if</span> <span class="s">&quot;cx_Oracle&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">dbconn</span><span class="p">)):</span>
+        <span class="kn">import</span> <span class="nn">cx_Oracle</span>
+        <span class="n">myseq</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">cx_Oracle</span><span class="o">.</span><span class="n">NUMBER</span><span class="p">)</span>
+        <span class="n">query</span> <span class="o">+=</span> <span class="s">&quot; returning </span><span class="si">%s</span><span class="s"> into :rbfhaj&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idname</span><span class="p">,)</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">rbfhaj</span><span class="o">=</span><span class="n">myseq</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">lrid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">myseq</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
+    <span class="k">elif</span> <span class="s">&quot;MySQLdb&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">)):</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+        <span class="n">lrid</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">lastrowid</span>
+
+    <span class="n">cursor</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">dbconn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">lrid</span>
+
+</div>
+<div class="viewcode-block" id="store_template_params"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.store_template_params">[docs]</a><span class="k">def</span> <span class="nf">store_template_params</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">template_params</span><span class="p">,</span> <span class="n">optim_param_str</span><span class="p">,</span> <span class="n">iid</span><span class="p">,</span> <span class="n">hz</span><span class="p">,</span> <span class="n">acost</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">,</span> <span class="n">elapsed</span><span class="p">):</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">runid</span> <span class="o">=</span> <span class="n">get_fitting_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">)</span>
+
+    <span class="n">sta</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span>
+    <span class="n">siteid</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;siteid&#39;</span><span class="p">]</span>
+    <span class="n">chan</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;chan&#39;</span><span class="p">]</span>
+    <span class="n">band</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;band&#39;</span><span class="p">]</span>
+    <span class="n">st</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;stime&#39;</span><span class="p">]</span>
+    <span class="n">et</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;etime&#39;</span><span class="p">]</span>
+    <span class="n">event</span> <span class="o">=</span> <span class="n">get_event</span><span class="p">(</span><span class="n">evid</span><span class="o">=</span><span class="n">wave</span><span class="p">[</span><span class="s">&#39;evid&#39;</span><span class="p">])</span>
+
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">geog</span><span class="o">.</span><span class="n">dist_km</span><span class="p">((</span><span class="n">event</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">lat</span><span class="p">),</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">s</span><span class="o">.</span><span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="n">azimuth</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">geog</span><span class="o">.</span><span class="n">azimuth</span><span class="p">((</span><span class="n">s</span><span class="o">.</span><span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">s</span><span class="o">.</span><span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">lat</span><span class="p">))</span>
+
+    <span class="n">optim_param_str</span> <span class="o">=</span> <span class="n">optim_param_str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s">&quot;&#39;&#39;&quot;</span><span class="p">)</span>
+
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed) values (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">, &#39;</span><span class="si">%s</span><span class="s">&#39;, &#39;</span><span class="si">%s</span><span class="s">&#39;, &#39;</span><span class="si">%s</span><span class="s">&#39;, &#39;</span><span class="si">%s</span><span class="s">&#39;, </span><span class="si">%d</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">runid</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">optim_param_str</span><span class="p">,</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">iid</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span> <span class="n">st</span><span class="p">,</span> <span class="n">et</span><span class="p">,</span> <span class="n">hz</span><span class="p">,</span> <span class="n">acost</span><span class="p">,</span> <span class="n">distance</span><span class="p">,</span> <span class="n">azimuth</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span> <span class="n">elapsed</span><span class="p">)</span>
+
+    <span class="n">fitid</span> <span class="o">=</span> <span class="n">execute_and_return_id</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">sql_query</span><span class="p">,</span> <span class="s">&quot;fitid&quot;</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">fit_params</span><span class="p">)</span> <span class="o">=</span> <span class="n">template_params</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">phases</span><span class="p">):</span>
+
+        <span class="n">transfer</span> <span class="o">=</span> <span class="n">fit_params</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">event</span><span class="o">.</span><span class="n">source_logamp</span><span class="p">(</span><span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span>
+
+        <span class="n">phase_insert_query</span> <span class="o">=</span> <span class="s">&quot;insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (</span><span class="si">%d</span><span class="s">, &#39;</span><span class="si">%s</span><span class="s">&#39;, &#39;paired_exp&#39;, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">fitid</span><span class="p">,</span> <span class="n">phase</span><span class="p">,</span> <span class="n">fit_params</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">fit_params</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">fit_params</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">fit_params</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">transfer</span><span class="p">)</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">phase_insert_query</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">fitid</span>
+
+</div>
+<div class="viewcode-block" id="load_shape_data"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.load_shape_data">[docs]</a><span class="k">def</span> <span class="nf">load_shape_data</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">runids</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">evids</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">exclude_evids</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">max_acost</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">min_azi</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_azi</span><span class="o">=</span><span class="mi">360</span><span class="p">,</span> <span class="n">min_mb</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_mb</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">min_dist</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_dist</span><span class="o">=</span><span class="mi">20000</span><span class="p">,</span> <span class="n">require_human_approved</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">min_amp</span><span class="o">=-</span><span class="mi">10</span><span class="p">):</span>
+
+    <span class="n">chan_cond</span> <span class="o">=</span> <span class="s">&quot;and fit.chan=&#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">chan</span><span class="p">)</span> <span class="k">if</span> <span class="n">chan</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+    <span class="n">band_cond</span> <span class="o">=</span> <span class="s">&quot;and fit.band=&#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">band</span><span class="p">)</span> <span class="k">if</span> <span class="n">band</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+    <span class="n">site_cond</span> <span class="o">=</span> <span class="s">&quot;and fit.sta=&#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">sta</span><span class="p">)</span> <span class="k">if</span> <span class="n">sta</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+    <span class="n">run_cond</span> <span class="o">=</span> <span class="s">&quot;and (&quot;</span> <span class="o">+</span> <span class="s">&quot; or &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;fit.runid = </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="nb">int</span><span class="p">(</span><span class="n">runid</span><span class="p">)</span> <span class="k">for</span> <span class="n">runid</span> <span class="ow">in</span> <span class="n">runids</span><span class="p">])</span> <span class="o">+</span> <span class="s">&quot;)&quot;</span> <span class="k">if</span> <span class="n">runids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+    <span class="n">phase_cond</span> <span class="o">=</span> <span class="s">&quot;and (&quot;</span> <span class="o">+</span> <span class="s">&quot; or &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;fp.phase = &#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="n">phase</span> <span class="k">for</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">phases</span><span class="p">])</span> <span class="o">+</span> <span class="s">&quot;)&quot;</span> <span class="k">if</span> <span class="n">phases</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+    <span class="n">evid_cond</span> <span class="o">=</span> <span class="s">&quot;and (&quot;</span> <span class="o">+</span> <span class="s">&quot; or &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;lebo.evid = </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">evid</span> <span class="k">for</span> <span class="n">evid</span> <span class="ow">in</span> <span class="n">evids</span><span class="p">])</span> <span class="o">+</span> <span class="s">&quot;)&quot;</span> <span class="k">if</span> <span class="n">evids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+    <span class="n">evid_cond</span> <span class="o">=</span> <span class="s">&quot;and (&quot;</span> <span class="o">+</span> <span class="s">&quot; or &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+        <span class="p">[</span><span class="s">&quot;lebo.evid != </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">evid</span> <span class="k">for</span> <span class="n">evid</span> <span class="ow">in</span> <span class="n">exclude_evids</span><span class="p">])</span> <span class="o">+</span> <span class="s">&quot;)&quot;</span> <span class="k">if</span> <span class="n">exclude_evids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+    <span class="n">approval_cond</span> <span class="o">=</span> <span class="s">&quot;and human_approved==2&quot;</span> <span class="k">if</span> <span class="n">require_human_approved</span> <span class="k">else</span> <span class="s">&quot;&quot;</span>
+
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fit.acost&lt;</span><span class="si">%f</span><span class="s"> and fp.param3 &gt; </span><span class="si">%f</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> and fit.azi between </span><span class="si">%f</span><span class="s"> and </span><span class="si">%f</span><span class="s"> and fit.evid=lebo.evid and lebo.mb between </span><span class="si">%f</span><span class="s"> and </span><span class="si">%f</span><span class="s"> and fit.dist between </span><span class="si">%f</span><span class="s"> and </span><span class="si">%f</span><span class="s"> </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">max_acost</span><span class="p">,</span> <span class="n">min_amp</span><span class="p">,</span> <span class="n">chan_cond</span><span class="p">,</span> <span class="n">band_cond</span><span class="p">,</span> <span class="n">site_cond</span><span class="p">,</span> <span class="n">run_cond</span><span class="p">,</span> <span class="n">phase_cond</span><span class="p">,</span> <span class="n">evid_cond</span><span class="p">,</span> <span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="p">,</span> <span class="n">min_mb</span><span class="p">,</span> <span class="n">max_mb</span><span class="p">,</span> <span class="n">min_dist</span><span class="p">,</span> <span class="n">max_dist</span><span class="p">,</span> <span class="n">approval_cond</span><span class="p">)</span>
+
+    <span class="n">fname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&#39;SIGVISA_HOME&#39;</span><span class="p">),</span> <span class="s">&quot;db_cache&quot;</span><span class="p">,</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s">.txt&quot;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">hashlib</span><span class="o">.</span><span class="n">md5</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()))</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">shape_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+        <span class="n">shape_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+        <span class="k">print</span> <span class="n">shape_data</span><span class="o">.</span><span class="n">size</span>
+
+        <span class="k">if</span> <span class="n">shape_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+            <span class="n">shape_data</span><span class="p">[:,</span> <span class="n">FIT_SITEID</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">name_to_siteid_minus1</span><span class="p">[</span><span class="n">sta</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">sta</span> <span class="ow">in</span> <span class="n">shape_data</span><span class="p">[:,</span> <span class="n">FIT_SITEID</span><span class="p">]])</span>
+            <span class="n">shape_data</span><span class="p">[:,</span> <span class="n">FIT_PHASEID</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="n">s</span><span class="o">.</span><span class="n">phaseids</span><span class="p">[</span><span class="n">phase</span><span class="p">]</span> <span class="k">for</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">shape_data</span><span class="p">[:,</span> <span class="n">FIT_PHASEID</span><span class="p">]])</span>
+            <span class="n">shape_data</span><span class="p">[:,</span> <span class="n">FIT_LOWBAND</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">shape_data</span><span class="p">[:,</span> <span class="n">FIT_LOWBAND</span><span class="p">]]</span>
+            <span class="n">shape_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">shape_data</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">shape_data</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;found no shape data matching query </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">sql_query</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">shape_data</span>
+
+</div>
+<div class="viewcode-block" id="insert_wiggle"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.insert_wiggle">[docs]</a><span class="k">def</span> <span class="nf">insert_wiggle</span><span class="p">(</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">p</span><span class="p">):</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;insert into sigvisa_wiggle (fpid, stime, etime, srate, timestamp, type, log, meta0, meta1, meta2, params) values (:fpid, :stime, :etime, :srate, :timestamp, :type, :log, :meta0, :meta1, :meta2, :params)&quot;</span>
+
+    <span class="k">if</span> <span class="s">&quot;cx_Oracle&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">dbconn</span><span class="p">)):</span>
+        <span class="kn">import</span> <span class="nn">cx_Oracle</span>
+        <span class="n">binary_var</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">cx_Oracle</span><span class="o">.</span><span class="n">BLOB</span><span class="p">)</span>
+        <span class="n">binary_var</span><span class="o">.</span><span class="n">setvalue</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="s">&#39;params&#39;</span><span class="p">])</span>
+        <span class="n">p</span><span class="p">[</span><span class="s">&#39;params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">binary_var</span>
+        <span class="n">wiggleid</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">cx_Oracle</span><span class="o">.</span><span class="n">NUMBER</span><span class="p">)</span>
+        <span class="n">sql_query</span> <span class="o">+=</span> <span class="s">&quot; returning wiggleid into :x&quot;</span>
+        <span class="n">p</span><span class="p">[</span><span class="s">&#39;x&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">wiggleid</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">setinputsizes</span><span class="p">(</span><span class="n">params</span><span class="o">=</span><span class="n">cx_Oracle</span><span class="o">.</span><span class="n">BLOB</span><span class="p">)</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+        <span class="n">wiggleid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">wiggleid</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
+
+    <span class="k">elif</span> <span class="s">&quot;MySQLdb&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">dbconn</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;blob insertion for mysql not yet implemented&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">wiggleid</span>
+
+</div>
+<div class="viewcode-block" id="read_wiggle"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.read_wiggle">[docs]</a><span class="k">def</span> <span class="nf">read_wiggle</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">wiggleid</span><span class="p">):</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select * from sigvisa_wiggle where wiggleid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">wiggleid</span><span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="insert_model"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.insert_model">[docs]</a><span class="k">def</span> <span class="nf">insert_model</span><span class="p">(</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">fitting_runid</span><span class="p">,</span> <span class="n">template_shape</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">site</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="p">,</span> <span class="n">model_type</span><span class="p">,</span> <span class="n">model_fname</span><span class="p">,</span> <span class="n">training_set_fname</span><span class="p">,</span> <span class="n">training_ll</span><span class="p">,</span> <span class="n">require_human_approved</span><span class="p">,</span> <span class="n">max_acost</span><span class="p">,</span> <span class="n">n_evids</span><span class="p">,</span> <span class="n">min_amp</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">execute_and_return_id</span><span class="p">(</span><span class="n">dbconn</span><span class="p">,</span> <span class="s">&quot;insert into sigvisa_template_param_model (fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp) values (:fr,:ts,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp)&quot;</span><span class="p">,</span> <span class="s">&quot;modelid&quot;</span><span class="p">,</span> <span class="n">fr</span><span class="o">=</span><span class="n">fitting_runid</span><span class="p">,</span> <span class="n">ts</span><span class="o">=</span><span class="n">template_shape</span><span class="p">,</span> <span class="n">param</span><span class="o">=</span><span class="n">param</span><span class="p">,</span> <span class="n">site</span><span class="o">=</span><span class="n">site</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="o">=</span><span class="n">phase</span><span class="p">,</span> <span class="n">mt</span><span class="o">=</span><span class="n">model_type</span><span class="p">,</span> <span class="n">mf</span><span class="o">=</span><span class="n">model_fname</span><span class="p">,</span> <span class="n">tf</span><span class="o">=</span><span class="n">training_set_fname</span><span class="p">,</span> <span class="n">tll</span><span class="o">=</span><span class="n">training_ll</span><span class="p">,</span> <span class="n">timestamp</span><span class="o">=</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span> <span class="n">require_human_approved</span><span class="o">=</span><span class="s">&#39;t&#39;</span> <span class="k">if</span> <span class="n">require_human_approved</span> <span class="k">else</span> <span class="s">&#39;f&#39;</span><span class="p">,</span> <span class="n">max_acost</span><span class="o">=</span><span class="n">max_acost</span><span class="p">,</span> <span class="n">ne</span><span class="o">=</span><span class="n">n_evids</span><span class="p">,</span> <span class="n">min_amp</span><span class="o">=</span><span class="n">min_amp</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="save_gsrun_to_db"><a class="viewcode-back" href="../../../../sigvisa.database/#sigvisa.database.signal_data.save_gsrun_to_db">[docs]</a><span class="k">def</span> <span class="nf">save_gsrun_to_db</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">segments</span><span class="p">,</span> <span class="n">em</span><span class="p">,</span> <span class="n">tm</span><span class="p">):</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, phases, wiggle_model_type, heatmap_fname, max_evtime_proposals, true_depth) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :phases, :wiggle_model_type, :heatmap_fname, :max_evtime_proposals, :true_depth)&quot;</span>
+    <span class="n">gsid</span> <span class="o">=</span> <span class="n">execute_and_return_id</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">sql_query</span><span class="p">,</span> <span class="s">&quot;gsid&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">d</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">seg</span> <span class="ow">in</span> <span class="n">segments</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">chan</span> <span class="ow">in</span> <span class="n">em</span><span class="o">.</span><span class="n">chans</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">band</span> <span class="ow">in</span> <span class="n">em</span><span class="o">.</span><span class="n">bands</span><span class="p">:</span>
+                <span class="n">gswid</span> <span class="o">=</span> <span class="n">execute_and_return_id</span><span class="p">(</span>
+                    <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">,</span> <span class="s">&quot;insert into sigvisa_gsrun_wave (gsid, sta, chan, band, stime, etime, hz) values (</span><span class="si">%d</span><span class="s">, &#39;</span><span class="si">%s</span><span class="s">&#39;, &#39;</span><span class="si">%s</span><span class="s">&#39;, &#39;</span><span class="si">%s</span><span class="s">&#39;, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">gsid</span><span class="p">,</span> <span class="n">seg</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">],</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span>
+                                                                                                                                                      <span class="n">seg</span><span class="p">[</span><span class="s">&#39;stime&#39;</span><span class="p">],</span> <span class="n">seg</span><span class="p">[</span><span class="s">&#39;etime&#39;</span><span class="p">],</span> <span class="n">seg</span><span class="o">.</span><span class="n">dummy_chan</span><span class="p">(</span><span class="n">chan</span><span class="p">)[</span><span class="s">&#39;srate&#39;</span><span class="p">]),</span> <span class="s">&#39;gswid&#39;</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">em</span><span class="o">.</span><span class="n">phases</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">tm</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                        <span class="n">modelid</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">models</span><span class="p">[</span><span class="n">param</span><span class="p">][</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]][</span><span class="n">phase</span><span class="p">][</span><span class="n">chan</span><span class="p">][</span><span class="n">band</span><span class="p">]</span><span class="o">.</span><span class="n">modelid</span>
+                        <span class="n">gsmid</span> <span class="o">=</span> <span class="n">execute_and_return_id</span><span class="p">(</span>
+                            <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">,</span> <span class="s">&quot;insert into sigvisa_gsrun_tmodel (gswid, modelid) values (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">gswid</span><span class="p">,</span> <span class="n">modelid</span><span class="p">),</span> <span class="s">&#39;gsmid&#39;</span><span class="p">)</span>
+
+    <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

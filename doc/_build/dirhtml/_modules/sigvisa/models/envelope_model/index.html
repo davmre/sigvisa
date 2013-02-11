@@ -1,0 +1,276 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.models.envelope_model &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.models.envelope_model</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">errno</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.signal_data</span> <span class="kn">import</span> <span class="n">filter_and_sort_template_params</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database</span> <span class="kn">import</span> <span class="n">db</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.infer.optimize.optim_utils</span> <span class="kn">import</span> <span class="n">minimize_matrix</span>
+
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span><span class="p">,</span> <span class="n">NestedDict</span>
+<span class="kn">import</span> <span class="nn">sigvisa.utils.geog</span>
+<span class="kn">import</span> <span class="nn">obspy.signal.util</span>
+
+
+<span class="k">class</span> <span class="nc">EnvelopeModel</span><span class="p">:</span>
+<div class="viewcode-block" id="EnvelopeModel"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel">[docs]</a>
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Compute the probability of a set of segments (signal</span>
+<span class="sd">    envelopes), given a set of events. This is doen by either</span>
+<span class="sd">    maximizing or integrating the probability over the template</span>
+<span class="sd">    parameters describing the signals.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">template_model</span><span class="p">,</span> <span class="n">wiggle_model</span><span class="p">,</span> <span class="n">bands</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">chans</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigvisa</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span> <span class="o">=</span> <span class="n">template_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wiggle_model</span> <span class="o">=</span> <span class="n">wiggle_model</span>
+
+        <span class="k">if</span> <span class="n">bands</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bands</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigvisa</span><span class="o">.</span><span class="n">bands</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bands</span> <span class="o">=</span> <span class="n">bands</span>
+
+        <span class="k">if</span> <span class="n">chans</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">chans</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigvisa</span><span class="o">.</span><span class="n">chans</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">chans</span> <span class="o">=</span> <span class="n">chans</span>
+
+        <span class="k">if</span> <span class="n">phases</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">phases</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigvisa</span><span class="o">.</span><span class="n">phases</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">phases</span> <span class="o">=</span> <span class="n">phases</span>
+
+    <span class="k">def</span> <span class="nf">get_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method_str</span><span class="p">,</span> <span class="n">segment</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+<div class="viewcode-block" id="EnvelopeModel.get_method"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel.get_method">[docs]</a>        <span class="n">f_ll</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">method_str</span> <span class="o">==</span> <span class="s">&quot;mode&quot;</span><span class="p">:</span>
+            <span class="n">f_ll</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_likelihood_mode</span> <span class="k">if</span> <span class="n">segment</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">wave_log_likelihood_mode</span>
+        <span class="k">elif</span> <span class="n">method_str</span> <span class="o">==</span> <span class="s">&quot;monte_carlo&quot;</span><span class="p">:</span>
+            <span class="n">f_ll</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_likelihood_montecarlo</span> <span class="k">if</span> <span class="n">segment</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">wave_log_likelihood_montecarlo</span>
+        <span class="k">elif</span> <span class="n">method_str</span> <span class="o">==</span> <span class="s">&quot;optimize&quot;</span><span class="p">:</span>
+            <span class="n">f_ll</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_likelihood_optimize</span> <span class="k">if</span> <span class="n">segment</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">wave_log_likelihood_optimize</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;unrecognized marginalization method </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">options</span><span class="o">.</span><span class="n">method</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">f_ll</span>
+
+    <span class="k">def</span> <span class="nf">wave_log_likelihood_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span></div>
+<div class="viewcode-block" id="EnvelopeModel.wave_log_likelihood_mode"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel.wave_log_likelihood_mode">[docs]</a>
+        <span class="n">sta</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span>
+        <span class="n">chan</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;chan&#39;</span><span class="p">]</span>
+        <span class="n">band</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;band&#39;</span><span class="p">]</span>
+
+        <span class="c"># p(template | wave, event) ~ p(wave | template, event) * p(template | event)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">wiggle_model</span><span class="o">.</span><span class="n">template_ncost</span><span class="p">(</span>
+            <span class="n">wave</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">),</span> <span class="n">event</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span>
+
+        <span class="c"># just use the mode parameters</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">predictTemplate</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">phases</span><span class="p">)</span>
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ll</span><span class="p">,</span> <span class="n">params</span>
+
+    <span class="k">def</span> <span class="nf">log_likelihood_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">segment</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span></div>
+<div class="viewcode-block" id="EnvelopeModel.log_likelihood_mode"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel.log_likelihood_mode">[docs]</a>
+        <span class="n">total_ll</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">all_params</span> <span class="o">=</span> <span class="n">NestedDict</span><span class="p">()</span>
+        <span class="n">sta</span> <span class="o">=</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">chan</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">chans</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">band</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bands</span><span class="p">:</span>
+                <span class="n">wave</span> <span class="o">=</span> <span class="n">segment</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">band</span><span class="p">)[</span><span class="n">chan</span><span class="p">]</span>
+                <span class="n">ll</span><span class="p">,</span> <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wave_log_likelihood_mode</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+                <span class="n">all_params</span><span class="p">[</span><span class="n">chan</span><span class="p">][</span><span class="n">band</span><span class="p">]</span> <span class="o">=</span> <span class="n">params</span>
+                <span class="n">total_ll</span> <span class="o">+=</span> <span class="n">ll</span>
+
+        <span class="k">return</span> <span class="n">total_ll</span><span class="p">,</span> <span class="n">all_params</span>
+
+    <span class="k">def</span> <span class="nf">wave_log_likelihood_optimize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">use_leb_phases</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">optim_params</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span></div>
+<div class="viewcode-block" id="EnvelopeModel.wave_log_likelihood_optimize"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel.wave_log_likelihood_optimize">[docs]</a>
+        <span class="k">if</span> <span class="n">optim_params</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">optim_params</span> <span class="o">=</span> <span class="n">construct_optim_params</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="n">sta</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span>
+        <span class="n">chan</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;chan&#39;</span><span class="p">]</span>
+        <span class="n">band</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;band&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">use_leb_phases</span><span class="p">:</span>
+            <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">start_param_vals</span><span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">heuristic_starting_params</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+            <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">start_param_vals</span><span class="p">)</span> <span class="o">=</span> <span class="n">filter_and_sort_template_params</span><span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">start_param_vals</span><span class="p">,</span> <span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">phases</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">phases</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">phases</span>
+            <span class="n">start_param_vals</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">predictTemplate</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="n">phases</span><span class="p">)</span>
+
+        <span class="c"># p(template | wave, event) ~ p(wave | template, event) * p(template | event)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">wiggle_model</span><span class="o">.</span><span class="n">template_ncost</span><span class="p">(</span>
+            <span class="n">wave</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">((</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">),</span> <span class="n">event</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span>
+
+        <span class="n">low_bounds</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">high_bounds</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;method&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&quot;simplex&quot;</span><span class="p">:</span>
+            <span class="n">atimes</span> <span class="o">=</span> <span class="n">start_param_vals</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+            <span class="n">low_bounds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">low_bounds</span><span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">default_atimes</span><span class="o">=</span><span class="n">atimes</span><span class="p">)</span>
+            <span class="n">high_bounds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">high_bounds</span><span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">default_atimes</span><span class="o">=</span><span class="n">atimes</span><span class="p">)</span>
+
+        <span class="n">params</span><span class="p">,</span> <span class="n">nll</span> <span class="o">=</span> <span class="n">minimize_matrix</span><span class="p">(</span>
+            <span class="n">f</span><span class="p">,</span> <span class="n">start_param_vals</span><span class="p">,</span> <span class="n">low_bounds</span><span class="o">=</span><span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="o">=</span><span class="n">high_bounds</span><span class="p">,</span> <span class="n">optim_params</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">nll</span><span class="p">,</span> <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">log_likelihood_optimize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">segment</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span></div>
+<div class="viewcode-block" id="EnvelopeModel.log_likelihood_optimize"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel.log_likelihood_optimize">[docs]</a>
+        <span class="n">total_ll</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">all_params</span> <span class="o">=</span> <span class="n">NestedDict</span><span class="p">()</span>
+        <span class="n">sta</span> <span class="o">=</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">chan</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">chans</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">band</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bands</span><span class="p">:</span>
+                <span class="n">wave</span> <span class="o">=</span> <span class="n">segment</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">band</span><span class="p">)[</span><span class="n">chan</span><span class="p">]</span>
+                <span class="n">ll</span><span class="p">,</span> <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wave_log_likelihood_optimize</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+                <span class="n">all_params</span><span class="p">[</span><span class="n">chan</span><span class="p">][</span><span class="n">band</span><span class="p">]</span> <span class="o">=</span> <span class="n">params</span>
+                <span class="n">total_ll</span> <span class="o">+=</span> <span class="n">ll</span>
+
+        <span class="k">return</span> <span class="n">total_ll</span><span class="p">,</span> <span class="n">all_params</span>
+
+    <span class="k">def</span> <span class="nf">wave_log_likelihood_montecarlo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">event</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">50</span><span class="p">):</span></div>
+<div class="viewcode-block" id="EnvelopeModel.wave_log_likelihood_montecarlo"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel.wave_log_likelihood_montecarlo">[docs]</a>
+        <span class="n">sta</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span>
+        <span class="n">chan</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;chan&#39;</span><span class="p">]</span>
+        <span class="n">band</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;band&#39;</span><span class="p">]</span>
+
+        <span class="c"># p(template | wave, event) ~ p(wave | template, event) * p(template | event)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">wiggle_model</span><span class="o">.</span><span class="n">template_ncost</span><span class="p">(</span>
+            <span class="n">wave</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">),</span> <span class="n">event</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span>
+
+        <span class="n">sum_ll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">(</span><span class="s">&quot;-inf&quot;</span><span class="p">)</span>
+
+        <span class="n">samples</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_model</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">phases</span><span class="p">)</span>
+            <span class="n">ll</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+            <span class="n">samples</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">ll</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+            <span class="n">sum_ll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">logaddexp</span><span class="p">(</span><span class="n">sum_ll</span><span class="p">,</span> <span class="n">ll</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">ll</span> <span class="o">&lt;</span> <span class="mf">1e-300</span><span class="p">)</span> <span class="k">else</span> <span class="n">sum_ll</span>
+            <span class="k">assert</span> <span class="p">(</span><span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">sum_ll</span><span class="p">))</span>
+
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">sum_ll</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ll</span><span class="p">,</span> <span class="n">samples</span>
+
+    <span class="k">def</span> <span class="nf">log_likelihood_montecarlo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">segment</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span></div>
+<div class="viewcode-block" id="EnvelopeModel.log_likelihood_montecarlo"><a class="viewcode-back" href="../../../../sigvisa.models/#sigvisa.models.envelope_model.EnvelopeModel.log_likelihood_montecarlo">[docs]</a>
+        <span class="n">total_ll</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">all_samples</span> <span class="o">=</span> <span class="n">NestedDict</span><span class="p">()</span>
+        <span class="n">sta</span> <span class="o">=</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">chan</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">chans</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">band</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bands</span><span class="p">:</span>
+                <span class="n">wave</span> <span class="o">=</span> <span class="n">segment</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">band</span><span class="p">)[</span><span class="n">chan</span><span class="p">]</span>
+                <span class="n">ll</span><span class="p">,</span> <span class="n">samples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wave_log_likelihood_montecarlo</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">event</span><span class="p">)</span>
+                <span class="n">all_samples</span><span class="p">[</span><span class="n">chan</span><span class="p">][</span><span class="n">band</span><span class="p">]</span> <span class="o">=</span> <span class="n">samples</span>
+                <span class="n">total_ll</span> <span class="o">+=</span> <span class="n">ll</span>
+
+        <span class="k">return</span> <span class="n">total_ll</span><span class="p">,</span> <span class="n">all_samples</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

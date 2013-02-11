@@ -1,0 +1,224 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.explore.visualize_fitted_envelopes &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.explore.visualize_fitted_envelopes</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">pdb</span>
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.plotting.plot_coda_decays</span> <span class="kn">import</span> <span class="n">plot_waveform_with_pred</span>
+
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database.signal_data</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.io</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib</span>
+<span class="n">matplotlib</span><span class="o">.</span><span class="n">use</span><span class="p">(</span><span class="s">&#39;PDF&#39;</span><span class="p">)</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">matplotlib.backends.backend_pdf</span> <span class="kn">import</span> <span class="n">PdfPages</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.models.templates.paired_exp</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="o">*</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.explore/#sigvisa.explore.visualize_fitted_envelopes.main">[docs]</a>    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-s&quot;</span><span class="p">,</span> <span class="s">&quot;--site&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;site&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;site for which to train models&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--run_name&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_name&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;run_name&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--run_iter&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_iter&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;latest&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;run iteration (latest)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-c&quot;</span><span class="p">,</span> <span class="s">&quot;--channel&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;chan&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;BHZ&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;name of channel to examine (BHZ)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-n&quot;</span><span class="p">,</span> <span class="s">&quot;--band&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;band&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;freq_2.0_3.0&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;name of band to examine (freq_2.0_3.0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--require_p_s&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;require_p_s&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;only plot events with both P and S detected&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--max_cost&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_cost&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;maximum cost&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--min_amp&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_amp&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;minimum coda height&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--evid&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;evid&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;specific evid&quot;</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">sta</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">site</span>
+    <span class="n">chan</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">chan</span>
+    <span class="n">band</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">band</span>
+    <span class="n">acost_threshold</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">max_cost</span>
+    <span class="n">run_name</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">run_name</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">run_iter</span> <span class="o">==</span> <span class="s">&quot;latest&quot;</span><span class="p">:</span>
+        <span class="n">iters</span> <span class="o">=</span> <span class="n">read_fitting_run_iterations</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">)</span>
+        <span class="n">run_iter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">iters</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">run_iter</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">run_iter</span><span class="p">)</span>
+    <span class="n">runid</span> <span class="o">=</span> <span class="n">get_fitting_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">create_if_new</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="n">pieces</span> <span class="o">=</span> <span class="n">band</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">evid</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">lowband</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">pieces</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">highband</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">pieces</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select distinct evid from sigvisa_coda_fits where runid=</span><span class="si">%d</span><span class="s"> and sta=&#39;</span><span class="si">%s</span><span class="s">&#39; and chan=&#39;</span><span class="si">%s</span><span class="s">&#39; and lowband=</span><span class="si">%f</span><span class="s"> and highband=</span><span class="si">%f</span><span class="s"> and acost &lt; </span><span class="si">%f</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">runid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">lowband</span><span class="p">,</span> <span class="n">highband</span><span class="p">,</span> <span class="n">acost_threshold</span><span class="p">)</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+        <span class="n">evids</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">evids</span> <span class="o">=</span> <span class="p">[[</span><span class="n">options</span><span class="o">.</span><span class="n">evid</span><span class="p">,</span> <span class="p">],</span> <span class="p">]</span>
+
+    <span class="k">print</span> <span class="s">&quot;loaded&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">evids</span><span class="p">),</span> <span class="s">&quot;evids&quot;</span>
+
+    <span class="kn">from</span> <span class="nn">sigvisa.models.templates.load_by_name</span> <span class="kn">import</span> <span class="n">load_template_model</span>
+    <span class="n">tm</span> <span class="o">=</span> <span class="n">load_template_model</span><span class="p">(</span><span class="s">&quot;paired_exp&quot;</span><span class="p">,</span> <span class="n">run_name</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">run_iter</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">model_type</span><span class="o">=</span><span class="s">&quot;dummy&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">evid</span> <span class="ow">in</span> <span class="n">evids</span><span class="p">:</span>
+        <span class="n">evid</span> <span class="o">=</span> <span class="n">evid</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c"># todo: make fit_shape_params also save to these directories</span>
+            <span class="n">fname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&quot;logs&quot;</span><span class="p">,</span> <span class="s">&quot;template_fits&quot;</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="s">&quot;</span><span class="si">%02d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span>
+            <span class="n">ensure_dir_exists</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+            <span class="n">fname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">evid</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot;.pdf&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">fname</span><span class="p">):</span>
+                <span class="k">print</span> <span class="n">fname</span><span class="p">,</span> <span class="s">&quot;already exists, skipping...&quot;</span>
+                <span class="k">continue</span>
+
+            <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">vals</span><span class="p">),</span> <span class="n">cost</span><span class="p">,</span> <span class="n">fitid</span> <span class="o">=</span> <span class="n">load_template_params</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">require_p_s</span><span class="p">:</span>
+                <span class="n">P_arrivals</span> <span class="o">=</span> <span class="p">[</span><span class="n">phase</span> <span class="k">for</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">phases</span> <span class="k">if</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">P_phases</span><span class="p">]</span>
+                <span class="n">S_arrivals</span> <span class="o">=</span> <span class="p">[</span><span class="n">phase</span> <span class="k">for</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">phases</span> <span class="k">if</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">S_phases</span><span class="p">]</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">P_arrivals</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">S_arrivals</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="s">&quot;skipping, phases are&quot;</span><span class="p">,</span> <span class="n">phases</span>
+                    <span class="k">continue</span>
+
+            <span class="c"># skip poorly detected events</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">vals</span><span class="p">[:,</span> <span class="n">CODA_HEIGHT_PARAM</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">options</span><span class="o">.</span><span class="n">min_amp</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;skipping, coda height is&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">vals</span><span class="p">[:,</span> <span class="n">CODA_HEIGHT_PARAM</span><span class="p">])</span>
+                <span class="k">continue</span>
+
+            <span class="c"># skip weird fits</span>
+<span class="c">#            if np.max(np.abs(vals[:, PEAK_OFFSET_PARAM])) &gt; 30:</span>
+<span class="c">#                print &quot;skipping, offset is &quot;, np.max(np.abs(vals[:, PEAK_OFFSET_PARAM]))</span>
+<span class="c">#                continue</span>
+
+            <span class="n">pp</span> <span class="o">=</span> <span class="n">PdfPages</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+            <span class="k">print</span> <span class="s">&quot;writing ev </span><span class="si">%d</span><span class="s"> to </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">evid</span><span class="p">,</span> <span class="n">fname</span><span class="p">)</span>
+
+            <span class="n">seg</span> <span class="o">=</span> <span class="n">load_event_station</span><span class="p">(</span><span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">cursor</span><span class="o">=</span><span class="n">cursor</span><span class="p">)</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&quot;env;&quot;</span> <span class="o">+</span> <span class="n">band</span><span class="p">)</span>
+            <span class="n">wave</span> <span class="o">=</span> <span class="n">seg</span><span class="p">[</span><span class="n">chan</span><span class="p">]</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span>
+            <span class="n">plot_waveform_with_pred</span><span class="p">(</span><span class="n">pp</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">tm</span><span class="p">,</span> <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">vals</span><span class="p">),</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&quot;log scale&quot;</span><span class="p">)</span>
+            <span class="n">plot_waveform_with_pred</span><span class="p">(</span><span class="n">pp</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">tm</span><span class="p">,</span> <span class="p">(</span><span class="n">phases</span><span class="p">,</span> <span class="n">vals</span><span class="p">),</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&quot;linear scale&quot;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;Warning: exception&quot;</span><span class="p">,</span> <span class="n">e</span>
+            <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+            <span class="k">raise</span>
+            <span class="k">continue</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span></div>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">main</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="n">pdb</span><span class="o">.</span><span class="n">post_mortem</span><span class="p">(</span><span class="n">tb</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

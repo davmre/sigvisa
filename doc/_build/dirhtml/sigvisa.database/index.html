@@ -1,0 +1,503 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>database Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="sigvisa Package" href="../sigvisa/" />
+    <link rel="next" title="explore Package" href="../sigvisa.explore/" />
+    <link rel="prev" title="sigvisa Package" href="../sigvisa/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.explore/" title="explore Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa/" title="sigvisa Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" accesskey="U">sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="database-package">
+<h1>database Package<a class="headerlink" href="#database-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.database.az_slow_corr">
+<span id="az-slow-corr-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">az_slow_corr</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.az_slow_corr" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.database.az_slow_corr.AzSlowCorr">
+<em class="property">class </em><tt class="descclassname">sigvisa.database.az_slow_corr.</tt><tt class="descname">AzSlowCorr</tt><big>(</big><em>filename</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/az_slow_corr/#AzSlowCorr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.az_slow_corr.AzSlowCorr" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="sigvisa.database.az_slow_corr.AzSlowCorr.correct">
+<tt class="descname">correct</tt><big>(</big><em>raw_azimuth</em>, <em>raw_slow</em>, <em>delaz</em>, <em>delslo</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/az_slow_corr/#AzSlowCorr.correct"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.az_slow_corr.AzSlowCorr.correct" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns corrected azimuth slowness and their errors</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.az_slow_corr.load_az_slow_corr">
+<tt class="descclassname">sigvisa.database.az_slow_corr.</tt><tt class="descname">load_az_slow_corr</tt><big>(</big><em>sasc_dir</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/az_slow_corr/#load_az_slow_corr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.az_slow_corr.load_az_slow_corr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a dictionary of station names mapped to AzSlowCorr structures</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.database.dataset">
+<span id="dataset-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">dataset</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.dataset" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.database.dataset.compute_arid2num">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">compute_arid2num</tt><big>(</big><em>detections</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#compute_arid2num"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.compute_arid2num" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.compute_orid2num">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">compute_orid2num</tt><big>(</big><em>events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#compute_orid2num"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.compute_orid2num" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_assoc">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_assoc</tt><big>(</big><em>cursor</em>, <em>start_time</em>, <em>end_time</em>, <em>orid2num</em>, <em>arid2num</em>, <em>evtype</em>, <em>runid=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_assoc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_assoc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_data">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_data</tt><big>(</big><em>label='training'</em>, <em>hours=None</em>, <em>skip=0</em>, <em>verbose=1</em>, <em>visa_leb_runid=None</em>, <em>read_leb_detections=False</em>, <em>noarrays=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reads
+- LEB events/assoc, with IDCX arrivals
+- SEL3 events/assoc,
+- IDCX arrivals with delaz&gt;0 and delsnr&gt;0 (upto 2000 secs beyond end_time)
+- Site information
+- Phase information
+- LEB assoc with LEB arrivals
+- LEB arrivals</p>
+<p>The data is divided into the following labels:</p>
+<ul class="simple">
+<li>validation</li>
+<li>test</li>
+<li>training</li>
+</ul>
+<p>Setting &#8216;hours&#8217; to None will return all the data from the specified
+dataset. &#8216;skip&#8217; controls the number of initial hours to skip, for
+example for testing the second 2 hour window set hours=2
+skip=2. &#8216;noarrays&#8217; prohibits using data from array stations.</p>
+<dl class="docutils">
+<dt>Returns the following tuple</dt>
+<dd>start_time, end_time, detections, leb_events, leb_evlist, sel3_events,
+sel3_evlist, site_up, sites, phasenames, phasetimedef</dd>
+</dl>
+<p>where:</p>
+<dl class="docutils">
+<dt>events:</dt>
+<dd>o. lon, lat, depth
+o. time
+o. mb
+o. orid</dd>
+</dl>
+<p>evlist maps evnum -&gt; list of detection numbers</p>
+<dl class="docutils">
+<dt>detections:</dt>
+<dd>sitenum
+arid
+time
+deltim
+azimuth
+delaz
+slow
+delslo
+snr
+phasenum
+amp
+period</dd>
+<dt>sites:</dt>
+<dd><ol class="first last loweralpha simple" start="15">
+<li>lon, lat, elev, is_array?</li>
+</ol>
+</dd>
+</dl>
+<p>visa_leb_runid is a special parameter which says that a certain visa run
+is to be treated as leb</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_detections">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_detections</tt><big>(</big><em>cursor</em>, <em>start_time</em>, <em>end_time</em>, <em>arrival_table='idcx_arrival'</em>, <em>noarrays=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_detections"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_detections" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_event">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_event</tt><big>(</big><em>cursor</em>, <em>evid=None</em>, <em>evtype='leb'</em>, <em>runid=None</em>, <em>orid=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_event"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_event" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_event_detections">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_event_detections</tt><big>(</big><em>cursor</em>, <em>evid</em>, <em>stations=None</em>, <em>evtype='leb'</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_event_detections"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_event_detections" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_events">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_events</tt><big>(</big><em>cursor</em>, <em>start_time</em>, <em>end_time</em>, <em>evtype</em>, <em>runid=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_events"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_events" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_evids_detected_at_station">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_evids_detected_at_station</tt><big>(</big><em>cursor</em>, <em>sta</em>, <em>start_time</em>, <em>end_time</em>, <em>phases=</em><span class="optional">[</span><span class="optional">]</span>, <em>min_mb=0</em>, <em>max_mb=99999</em>, <em>min_snr=0</em>, <em>max_snr=99999</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_evids_detected_at_station"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_evids_detected_at_station" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_isc_events">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_isc_events</tt><big>(</big><em>cursor</em>, <em>start_time</em>, <em>end_time</em>, <em>author</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_isc_events"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_isc_events" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_phases">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_phases</tt><big>(</big><em>cursor</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_phases"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_phases" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_sitenames">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_sitenames</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_sitenames"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_sitenames" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_sites">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_sites</tt><big>(</big><em>cursor</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_sites"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_sites" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_sites_by_name">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_sites_by_name</tt><big>(</big><em>cursor</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_sites_by_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_sites_by_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_station_detections">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_station_detections</tt><big>(</big><em>cursor</em>, <em>sta</em>, <em>start_time</em>, <em>end_time</em>, <em>arrival_table='idcx_arrival'</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_station_detections"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_station_detections" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_timerange">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_timerange</tt><big>(</big><em>cursor</em>, <em>label</em>, <em>hours</em>, <em>skip</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_timerange"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_timerange" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.read_uptime">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">read_uptime</tt><big>(</big><em>cursor</em>, <em>start_time</em>, <em>end_time</em>, <em>arrival_table='idcx_arrival'</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#read_uptime"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.read_uptime" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.sql_multi">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">sql_multi</tt><big>(</big><em>key</em>, <em>values</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#sql_multi"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.sql_multi" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.dataset.sql_multi_str">
+<tt class="descclassname">sigvisa.database.dataset.</tt><tt class="descname">sql_multi_str</tt><big>(</big><em>key</em>, <em>values</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/dataset/#sql_multi_str"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.dataset.sql_multi_str" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.database.db">
+<span id="db-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">db</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.db" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.database.db.connect">
+<tt class="descclassname">sigvisa.database.db.</tt><tt class="descname">connect</tt><big>(</big><em>unix_socket=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/db/#connect"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.db.connect" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.database.export2csv">
+<span id="export2csv-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">export2csv</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.export2csv" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.database.export2csv.convert_table">
+<tt class="descclassname">sigvisa.database.export2csv.</tt><tt class="descname">convert_table</tt><big>(</big><em>orcl</em>, <em>tablename</em>, <em>filename</em>, <em>where</em>, <em>orderby</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/export2csv/#convert_table"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.export2csv.convert_table" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.export2csv.main">
+<tt class="descclassname">sigvisa.database.export2csv.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/export2csv/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.export2csv.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.database.iris2csv">
+<span id="iris2csv-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">iris2csv</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.iris2csv" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.database.iris2csv.main">
+<tt class="descclassname">sigvisa.database.iris2csv.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/iris2csv/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.iris2csv.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.database.isc2csv">
+<span id="isc2csv-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">isc2csv</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.isc2csv" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.database.isc2csv.INT">
+<tt class="descclassname">sigvisa.database.isc2csv.</tt><tt class="descname">INT</tt><big>(</big><em>string</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/isc2csv/#INT"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.isc2csv.INT" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.isc2csv.main">
+<tt class="descclassname">sigvisa.database.isc2csv.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/isc2csv/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.isc2csv.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.database.signal_data">
+<span id="signal-data-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">signal_data</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.signal_data" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.database.signal_data.benchmark_fitting_run">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">benchmark_fitting_run</tt><big>(</big><em>cursor</em>, <em>runid</em>, <em>return_raw_data=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#benchmark_fitting_run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.benchmark_fitting_run" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.ensure_dir_exists">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">ensure_dir_exists</tt><big>(</big><em>dname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#ensure_dir_exists"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.ensure_dir_exists" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.execute_and_return_id">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">execute_and_return_id</tt><big>(</big><em>dbconn</em>, <em>query</em>, <em>idname</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#execute_and_return_id"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.execute_and_return_id" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.filter_and_sort_template_params">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">filter_and_sort_template_params</tt><big>(</big><em>unsorted_phases</em>, <em>unsorted_params</em>, <em>filter_list</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#filter_and_sort_template_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.filter_and_sort_template_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.get_base_dir">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">get_base_dir</tt><big>(</big><em>sta</em>, <em>run_name</em>, <em>label=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#get_base_dir"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.get_base_dir" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.get_fitid">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">get_fitid</tt><big>(</big><em>cursor</em>, <em>evid</em>, <em>sta</em>, <em>chan</em>, <em>band</em>, <em>run_name=None</em>, <em>iteration=None</em>, <em>runid=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#get_fitid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.get_fitid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.get_fitting_runid">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">get_fitting_runid</tt><big>(</big><em>cursor</em>, <em>run_name</em>, <em>iteration</em>, <em>create_if_new=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#get_fitting_runid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.get_fitting_runid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.get_last_iteration">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">get_last_iteration</tt><big>(</big><em>cursor</em>, <em>run_name</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#get_last_iteration"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.get_last_iteration" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.get_next_runid">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">get_next_runid</tt><big>(</big><em>cursor</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#get_next_runid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.get_next_runid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.insert_model">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">insert_model</tt><big>(</big><em>dbconn</em>, <em>fitting_runid</em>, <em>template_shape</em>, <em>param</em>, <em>site</em>, <em>chan</em>, <em>band</em>, <em>phase</em>, <em>model_type</em>, <em>model_fname</em>, <em>training_set_fname</em>, <em>training_ll</em>, <em>require_human_approved</em>, <em>max_acost</em>, <em>n_evids</em>, <em>min_amp</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#insert_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.insert_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.insert_wiggle">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">insert_wiggle</tt><big>(</big><em>dbconn</em>, <em>p</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#insert_wiggle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.insert_wiggle" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.load_shape_data">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">load_shape_data</tt><big>(</big><em>cursor</em>, <em>chan=None</em>, <em>band=None</em>, <em>sta=None</em>, <em>runids=None</em>, <em>phases=None</em>, <em>evids=None</em>, <em>exclude_evids=None</em>, <em>max_acost=200</em>, <em>min_azi=0</em>, <em>max_azi=360</em>, <em>min_mb=0</em>, <em>max_mb=100</em>, <em>min_dist=0</em>, <em>max_dist=20000</em>, <em>require_human_approved=False</em>, <em>min_amp=-10</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#load_shape_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.load_shape_data" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.load_template_params">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">load_template_params</tt><big>(</big><em>cursor</em>, <em>evid</em>, <em>sta</em>, <em>chan</em>, <em>band</em>, <em>run_name=None</em>, <em>iteration=None</em>, <em>runid=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#load_template_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.load_template_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.load_template_params_by_fitid">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">load_template_params_by_fitid</tt><big>(</big><em>cursor</em>, <em>fitid</em>, <em>return_cost=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#load_template_params_by_fitid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.load_template_params_by_fitid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.read_fitting_run">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">read_fitting_run</tt><big>(</big><em>cursor</em>, <em>runid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#read_fitting_run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.read_fitting_run" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.read_fitting_run_iterations">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">read_fitting_run_iterations</tt><big>(</big><em>cursor</em>, <em>run_name</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#read_fitting_run_iterations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.read_fitting_run_iterations" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.read_wiggle">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">read_wiggle</tt><big>(</big><em>cursor</em>, <em>wiggleid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#read_wiggle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.read_wiggle" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.save_gsrun_to_db">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">save_gsrun_to_db</tt><big>(</big><em>d</em>, <em>segments</em>, <em>em</em>, <em>tm</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#save_gsrun_to_db"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.save_gsrun_to_db" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.signal_data.store_template_params">
+<tt class="descclassname">sigvisa.database.signal_data.</tt><tt class="descname">store_template_params</tt><big>(</big><em>wave</em>, <em>template_params</em>, <em>optim_param_str</em>, <em>iid</em>, <em>hz</em>, <em>acost</em>, <em>run_name</em>, <em>iteration</em>, <em>elapsed</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/signal_data/#store_template_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.signal_data.store_template_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.database.wave">
+<span id="wave-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">wave</span></tt> Module<a class="headerlink" href="#module-sigvisa.database.wave" title="Permalink to this headline">¶</a></h2>
+<dl class="exception">
+<dt id="sigvisa.database.wave.MissingSite">
+<em class="property">exception </em><tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">MissingSite</tt><a class="reference internal" href="../_modules/sigvisa/database/wave/#MissingSite"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.MissingSite" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="exception">
+<dt id="sigvisa.database.wave.MissingWaveform">
+<em class="property">exception </em><tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">MissingWaveform</tt><a class="reference internal" href="../_modules/sigvisa/database/wave/#MissingWaveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.MissingWaveform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.wave.fetch_waveform">
+<tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">fetch_waveform</tt><big>(</big><em>station</em>, <em>chan</em>, <em>stime</em>, <em>etime</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/wave/#fetch_waveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.fetch_waveform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a single obspy trace corresponding to the waveform for the given
+channel at the station in the given interval.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.wave.highpass_filter">
+<tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">highpass_filter</tt><big>(</big><em>data</em>, <em>samprate</em>, <em>cutoff_freq</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/wave/#highpass_filter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.highpass_filter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the data with the lower frequencies below cutoff_freq removed</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.wave.lowpass_filter">
+<tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">lowpass_filter</tt><big>(</big><em>data</em>, <em>samprate</em>, <em>cutoff_freq</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/wave/#lowpass_filter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.lowpass_filter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the data with the higher frequencies above cutoff_freq removed</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.wave.read_site">
+<tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">read_site</tt><big>(</big><em>cursor</em>, <em>sta</em>, <em>epoch</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/wave/#read_site"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.read_site" title="Permalink to this definition">¶</a></dt>
+<dd><p>reads the static site table for this station around the epoch time
+raises MissingSite</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.wave.read_site_ss">
+<tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">read_site_ss</tt><big>(</big><em>cursor</em>, <em>refsta</em>, <em>epoch</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/wave/#read_site_ss"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.read_site_ss" title="Permalink to this definition">¶</a></dt>
+<dd><p>reads the all the static site records for single station sites
+which have this refsta around the epoch</p>
+<p>raises MissingSite</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.database.wave.read_sitechan">
+<tt class="descclassname">sigvisa.database.wave.</tt><tt class="descname">read_sitechan</tt><big>(</big><em>cursor</em>, <em>sta</em>, <em>epoch</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/database/wave/#read_sitechan"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.database.wave.read_sitechan" title="Permalink to this definition">¶</a></dt>
+<dd><p>returns all the static sitechan table for this station around the epoch time</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">database Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.database.az_slow_corr"><tt class="docutils literal"><span class="pre">az_slow_corr</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.database.dataset"><tt class="docutils literal"><span class="pre">dataset</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.database.db"><tt class="docutils literal"><span class="pre">db</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.database.export2csv"><tt class="docutils literal"><span class="pre">export2csv</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.database.iris2csv"><tt class="docutils literal"><span class="pre">iris2csv</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.database.isc2csv"><tt class="docutils literal"><span class="pre">isc2csv</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.database.signal_data"><tt class="docutils literal"><span class="pre">signal_data</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.database.wave"><tt class="docutils literal"><span class="pre">wave</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa/"
+                        title="previous chapter">sigvisa Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.explore/"
+                        title="next chapter">explore Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.database.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.explore/" title="explore Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa/" title="sigvisa Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

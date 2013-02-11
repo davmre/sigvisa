@@ -1,0 +1,333 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.learn.train_coda_models &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.learn.train_coda_models</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database.signal_data</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database</span> <span class="kn">import</span> <span class="n">db</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+
+
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+
+<span class="kn">import</span> <span class="nn">sigvisa.utils.geog</span>
+<span class="kn">import</span> <span class="nn">obspy.signal.util</span>
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy.linalg</span>
+<span class="kn">import</span> <span class="nn">hashlib</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.models.spatial_regression.SpatialGP</span> <span class="kn">import</span> <span class="n">distfns</span><span class="p">,</span> <span class="n">SpatialGP</span><span class="p">,</span> <span class="n">start_params</span><span class="p">,</span> <span class="n">gp_extract_features</span>
+<span class="kn">import</span> <span class="nn">sigvisa.models.spatial_regression.baseline_models</span> <span class="kn">as</span> <span class="nn">baseline_models</span>
+<span class="kn">import</span> <span class="nn">gpr.learn</span>
+<span class="kn">from</span> <span class="nn">gpr.distributions</span> <span class="kn">import</span> <span class="n">InvGamma</span><span class="p">,</span> <span class="n">LogNormal</span>
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+
+<span class="n">X_LON</span><span class="p">,</span> <span class="n">X_LAT</span><span class="p">,</span> <span class="n">X_DEPTH</span><span class="p">,</span> <span class="n">X_DIST</span><span class="p">,</span> <span class="n">X_AZI</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">NoDataException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<div class="viewcode-block" id="NoDataException"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.NoDataException">[docs]</a>    <span class="k">pass</span>
+
+
+<span class="k">def</span> <span class="nf">learn_model</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">model_type</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span></div>
+<div class="viewcode-block" id="learn_model"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.learn_model">[docs]</a>    <span class="k">if</span> <span class="n">model_type</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&quot;gp&quot;</span><span class="p">):</span>
+        <span class="n">distfn</span> <span class="o">=</span> <span class="n">model_type</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">start_params</span><span class="p">[</span><span class="n">distfn</span><span class="p">][</span><span class="n">target</span><span class="p">]</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">learn_gp</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">distfn</span><span class="o">=</span><span class="n">distfn</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s">&quot;constant_gaussian&quot;</span><span class="p">:</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">learn_constant_gaussian</span><span class="p">(</span><span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s">&quot;linear_distance&quot;</span><span class="p">:</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">learn_linear</span><span class="p">(</span><span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;invalid model type </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">model_type</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">model</span>
+
+
+<span class="k">def</span> <span class="nf">learn_gp</span><span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">distfn</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">optimize</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span></div>
+<div class="viewcode-block" id="learn_gp"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.learn_gp">[docs]</a>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">gp_extract_features</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">distfn</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">optimize</span><span class="p">:</span>
+        <span class="n">priors</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">params</span><span class="p">]</span>
+
+        <span class="c"># subsample for efficient hyperparam learning</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="mi">250</span><span class="p">:</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">perm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">n</span><span class="p">)[</span><span class="mi">0</span><span class="p">:</span><span class="mi">250</span><span class="p">]</span>
+            <span class="n">sX</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">perm</span><span class="p">,</span> <span class="p">:]</span>
+            <span class="n">sy</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="n">perm</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sX</span> <span class="o">=</span> <span class="n">X</span>
+            <span class="n">sy</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="k">print</span> <span class="s">&quot;learning hyperparams on&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">sy</span><span class="p">),</span> <span class="s">&quot;examples&quot;</span>
+
+        <span class="n">params</span><span class="p">,</span> <span class="n">ll</span> <span class="o">=</span> <span class="n">gpr</span><span class="o">.</span><span class="n">learn</span><span class="o">.</span><span class="n">learn_hyperparams</span><span class="p">(</span>
+            <span class="n">sX</span><span class="p">,</span> <span class="n">sy</span><span class="p">,</span> <span class="n">kernel</span><span class="o">=</span><span class="s">&quot;distfn&quot;</span><span class="p">,</span> <span class="n">start_kernel_params</span><span class="o">=</span><span class="n">params</span><span class="p">,</span> <span class="n">kernel_priors</span><span class="o">=</span><span class="n">priors</span><span class="p">,</span> <span class="n">kernel_extra</span><span class="o">=</span><span class="n">distfns</span><span class="p">[</span><span class="n">distfn</span><span class="p">])</span>
+
+        <span class="k">print</span> <span class="s">&quot;got params&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="s">&quot;giving ll&quot;</span><span class="p">,</span> <span class="n">ll</span>
+
+    <span class="n">gp</span> <span class="o">=</span> <span class="n">SpatialGP</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">distfn_str</span><span class="o">=</span><span class="n">distfn</span><span class="p">,</span> <span class="n">kernel_params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">gp</span>
+
+
+<span class="k">def</span> <span class="nf">learn_linear</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">sta</span><span class="p">):</span></div>
+<div class="viewcode-block" id="learn_linear"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.learn_linear">[docs]</a>    <span class="k">return</span> <span class="n">baseline_models</span><span class="o">.</span><span class="n">LinearModel</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">learn_constant_gaussian</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">sta</span><span class="p">):</span></div>
+<div class="viewcode-block" id="learn_constant_gaussian"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.learn_constant_gaussian">[docs]</a>    <span class="k">return</span> <span class="n">baseline_models</span><span class="o">.</span><span class="n">ConstGaussianModel</span><span class="p">(</span><span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">load_model</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">model_type</span><span class="p">):</span></div>
+<div class="viewcode-block" id="load_model"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.load_model">[docs]</a>    <span class="k">if</span> <span class="n">model_type</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&quot;gp&quot;</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">SpatialGP</span><span class="p">(</span><span class="n">fname</span><span class="o">=</span><span class="n">fname</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s">&quot;constant_gaussian&quot;</span><span class="p">:</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">baseline_models</span><span class="o">.</span><span class="n">ConstGaussianModel</span><span class="p">(</span><span class="n">fname</span><span class="o">=</span><span class="n">fname</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">model_type</span> <span class="o">==</span> <span class="s">&quot;linear_distance&quot;</span><span class="p">:</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">baseline_models</span><span class="o">.</span><span class="n">LinearModel</span><span class="p">(</span><span class="n">fname</span><span class="o">=</span><span class="n">fname</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;invalid model type </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">model_type</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">model</span>
+
+
+<span class="k">def</span> <span class="nf">analyze_model_fname</span><span class="p">(</span><span class="n">fname</span><span class="p">):</span></div>
+<div class="viewcode-block" id="analyze_model_fname"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.analyze_model_fname">[docs]</a>    <span class="n">d</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;filename&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">d</span><span class="p">[</span><span class="s">&#39;evidhash&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;model_type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;filename&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;.&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">:]</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;band&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;chan&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;phase&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;target&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;model_name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;run_iter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;run_name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">fname</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;prefix&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">d</span>
+
+
+<span class="k">def</span> <span class="nf">get_model_fname</span><span class="p">(</span><span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">model_type</span><span class="p">,</span> <span class="n">evids</span><span class="p">,</span> <span class="n">model_name</span><span class="o">=</span><span class="s">&quot;paired_exp&quot;</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">,</span> <span class="s">&quot;runs&quot;</span><span class="p">)):</span></div>
+<div class="viewcode-block" id="get_model_fname"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.get_model_fname">[docs]</a>    <span class="n">path_components</span> <span class="o">=</span> <span class="p">[</span><span class="n">prefix</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="s">&quot;iter_</span><span class="si">%02d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">run_iter</span><span class="p">,</span> <span class="s">&quot;paired_exp&quot;</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">phase</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">]</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="o">*</span><span class="n">path_components</span><span class="p">)</span>
+
+    <span class="n">ensure_dir_exists</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+    <span class="n">evidhash</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha1</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">evids</span><span class="p">))</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()[</span><span class="mi">0</span><span class="p">:</span><span class="mi">8</span><span class="p">]</span>
+    <span class="n">fname</span> <span class="o">=</span> <span class="s">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">evidhash</span><span class="p">,</span> <span class="n">model_type</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">fname</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">get_training_data</span><span class="p">(</span><span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">require_human_approved</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">max_acost</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">min_amp</span><span class="o">=-</span><span class="mi">10</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span></div>
+<div class="viewcode-block" id="get_training_data"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.get_training_data">[docs]</a>    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">runid</span> <span class="o">=</span> <span class="n">get_fitting_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">create_if_new</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;loading </span><span class="si">%s</span><span class="s"> fit data... &quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">phases</span><span class="p">),</span>
+    <span class="n">fit_data</span> <span class="o">=</span> <span class="n">load_shape_data</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">runids</span><span class="o">=</span><span class="p">[</span><span class="n">runid</span><span class="p">,</span> <span class="p">],</span> <span class="n">phases</span><span class="o">=</span><span class="n">phases</span><span class="p">,</span>
+                               <span class="n">require_human_approved</span><span class="o">=</span><span class="n">require_human_approved</span><span class="p">,</span> <span class="n">max_acost</span><span class="o">=</span><span class="n">max_acost</span><span class="p">,</span> <span class="n">min_amp</span><span class="o">=</span><span class="n">min_amp</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">print</span> <span class="nb">str</span><span class="p">(</span><span class="n">fit_data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">+</span> <span class="s">&quot; entries loaded&quot;</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">target</span> <span class="o">==</span> <span class="s">&quot;coda_decay&quot;</span><span class="p">:</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">fit_data</span><span class="p">[:,</span> <span class="n">FIT_CODA_DECAY</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">target</span> <span class="o">==</span> <span class="s">&quot;amp_transfer&quot;</span><span class="p">:</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">fit_data</span><span class="p">[:,</span> <span class="n">FIT_AMP_TRANSFER</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">target</span> <span class="o">==</span> <span class="s">&quot;coda_height&quot;</span><span class="p">:</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">fit_data</span><span class="p">[:,</span> <span class="n">FIT_CODA_HEIGHT</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">target</span> <span class="o">==</span> <span class="s">&quot;peak_offset&quot;</span><span class="p">:</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">fit_data</span><span class="p">[:,</span> <span class="n">FIT_PEAK_DELAY</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s">&quot;invalid target param </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">target</span><span class="p">))</span>
+    <span class="k">except</span> <span class="ne">IndexError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NoDataException</span><span class="p">()</span>
+
+    <span class="n">X</span> <span class="o">=</span> <span class="n">fit_data</span><span class="p">[:,</span> <span class="p">[</span><span class="n">FIT_LON</span><span class="p">,</span> <span class="n">FIT_LAT</span><span class="p">,</span> <span class="n">FIT_DEPTH</span><span class="p">,</span> <span class="n">FIT_DISTANCE</span><span class="p">,</span> <span class="n">FIT_AZIMUTH</span><span class="p">]]</span>
+
+    <span class="n">evids</span> <span class="o">=</span> <span class="n">fit_data</span><span class="p">[:,</span> <span class="n">FIT_EVID</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">evids</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span></div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_coda_models.main">[docs]</a>    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-s&quot;</span><span class="p">,</span> <span class="s">&quot;--sites&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;sites&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;comma-separated list of sites for which to train models&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--run_name&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_name&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;run_name&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--run_iter&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_iter&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;latest&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;run iteration (latest)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-c&quot;</span><span class="p">,</span> <span class="s">&quot;--channel&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;chan&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;BHZ&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;name of channel to examine (BHZ)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-n&quot;</span><span class="p">,</span> <span class="s">&quot;--band&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;band&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;freq_2.0_3.0&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;name of band to examine (freq_2.0_3.0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-p&quot;</span><span class="p">,</span> <span class="s">&quot;--phases&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;phases&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">phases</span><span class="p">),</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;comma-separated list of phases for which to train models)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-t&quot;</span><span class="p">,</span> <span class="s">&quot;--targets&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;targets&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;coda_decay,amp_transfer,peak_offset&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--template_shape&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;template_shape&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;paired_exp&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-m&quot;</span><span class="p">,</span> <span class="s">&quot;--model_type&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;model_type&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;gp_dad_log&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;type of model to train (gp_dad_log)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--require_human_approved&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;require_human_approved&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;only train on human-approved good fits&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--max_acost&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_acost&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;maximum fitting cost of fits in training set (200)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--min_amp&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_amp&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;only consider fits above the given amplitude (does not apply to amp_transfer fits)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--min_amp_for_at&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_amp_for_at&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=-</span><span class="mi">5</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;only consider fits above the given amplitude (for amp_transfer fits)&quot;</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">sites</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">sites</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)</span>
+    <span class="n">chan</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">chan</span>
+    <span class="n">phases</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">phases</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)</span>
+    <span class="n">targets</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">targets</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)</span>
+    <span class="n">model_type</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">model_type</span>
+    <span class="n">band</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">band</span>
+
+    <span class="n">run_name</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">run_name</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">run_iter</span> <span class="o">==</span> <span class="s">&quot;latest&quot;</span><span class="p">:</span>
+        <span class="n">iters</span> <span class="o">=</span> <span class="n">read_fitting_run_iterations</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">)</span>
+        <span class="n">run_iter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">iters</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">run_iter</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">run_iter</span><span class="p">)</span>
+
+    <span class="n">runid</span> <span class="o">=</span> <span class="n">get_fitting_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">create_if_new</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">site</span> <span class="ow">in</span> <span class="n">sites</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="n">target</span> <span class="o">==</span> <span class="s">&quot;amp_transfer&quot;</span><span class="p">:</span>
+                <span class="n">min_amp</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">min_amp_for_at</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">min_amp</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">min_amp</span>
+
+            <span class="k">for</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">phases</span><span class="p">:</span>
+
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">evids</span> <span class="o">=</span> <span class="n">get_training_data</span><span class="p">(</span><span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">site</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="p">[</span><span class="n">phase</span><span class="p">,</span> <span class="p">],</span> <span class="n">target</span><span class="p">,</span>
+                                                    <span class="n">require_human_approved</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">require_human_approved</span><span class="p">,</span> <span class="n">max_acost</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">max_acost</span><span class="p">,</span> <span class="n">min_amp</span><span class="o">=</span><span class="n">min_amp</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">NoDataException</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="s">&quot;no data for </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">, skipping...&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">site</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span>
+                    <span class="k">continue</span>
+
+                <span class="n">model_fname</span> <span class="o">=</span> <span class="n">get_model_fname</span><span class="p">(</span>
+                    <span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="p">,</span> <span class="n">site</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">model_type</span><span class="p">,</span> <span class="n">evids</span><span class="p">,</span> <span class="n">model_name</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">template_shape</span><span class="p">)</span>
+                <span class="n">evid_fname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">model_fname</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s">&#39;.evids&#39;</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">evid_fname</span><span class="p">,</span> <span class="n">evids</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%d</span><span class="s">&#39;</span><span class="p">)</span>
+
+                <span class="n">distfn</span> <span class="o">=</span> <span class="n">model_type</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span>
+                <span class="n">model</span> <span class="o">=</span> <span class="n">learn_model</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">model_type</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="n">target</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">site</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">()):</span>
+                    <span class="k">print</span> <span class="s">&quot;error training model for </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s"> </span><span class="si">%s</span><span class="s">, likelihood is nan! skipping..&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">site</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span>
+                    <span class="k">continue</span>
+
+                <span class="n">model</span><span class="o">.</span><span class="n">save_trained_model</span><span class="p">(</span><span class="n">model_fname</span><span class="p">)</span>
+                <span class="n">modelid</span> <span class="o">=</span> <span class="n">insert_model</span><span class="p">(</span>
+                    <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">fitting_runid</span><span class="o">=</span><span class="n">runid</span><span class="p">,</span> <span class="n">template_shape</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">template_shape</span><span class="p">,</span> <span class="n">param</span><span class="o">=</span><span class="n">target</span><span class="p">,</span> <span class="n">site</span><span class="o">=</span><span class="n">site</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="o">=</span><span class="n">phase</span><span class="p">,</span> <span class="n">model_type</span><span class="o">=</span><span class="n">model_type</span><span class="p">,</span> <span class="n">model_fname</span><span class="o">=</span><span class="n">model_fname</span><span class="p">,</span> <span class="n">training_set_fname</span><span class="o">=</span><span class="n">evid_fname</span><span class="p">,</span> <span class="n">training_ll</span><span class="o">=</span><span class="n">model</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">(</span>
+                    <span class="p">),</span>
+                    <span class="n">require_human_approved</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">require_human_approved</span><span class="p">,</span> <span class="n">max_acost</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">max_acost</span><span class="p">,</span> <span class="n">n_evids</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">evids</span><span class="p">),</span> <span class="n">min_amp</span><span class="o">=</span><span class="n">min_amp</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&quot;inserted as&quot;</span><span class="p">,</span> <span class="n">modelid</span><span class="p">,</span> <span class="s">&quot;ll&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span></div>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

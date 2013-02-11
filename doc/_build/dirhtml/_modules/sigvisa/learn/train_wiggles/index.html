@@ -1,0 +1,214 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.learn.train_wiggles &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.learn.train_wiggles</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">errno</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">stats</span>
+<span class="kn">import</span> <span class="nn">pdb</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database</span> <span class="kn">import</span> <span class="n">db</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database.signal_data</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span><span class="p">,</span> <span class="n">OptionGroup</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+
+
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="n">get_event</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.common</span> <span class="kn">import</span> <span class="n">Waveform</span><span class="p">,</span> <span class="n">load_waveform_from_file</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.io</span> <span class="kn">import</span> <span class="n">load_event_station_chan</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.templates.load_by_name</span> <span class="kn">import</span> <span class="n">load_template_model</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.wiggles.fourier_features</span> <span class="kn">import</span> <span class="n">FourierFeatures</span>
+
+
+<div class="viewcode-block" id="wiggles"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_wiggles.wiggles">[docs]</a><span class="k">def</span> <span class="nf">wiggles</span><span class="p">(</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">,</span> <span class="n">skip_type</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">runid</span> <span class="o">=</span> <span class="n">get_fitting_runid</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">,</span> <span class="n">create_if_new</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select fp.fpid, fp.phase, fp.wiggle_fname, f.fitid, fp.template_model from sigvisa_coda_fit_phase fp, sigvisa_coda_fit f where f.runid=</span><span class="si">%d</span><span class="s"> and fp.fitid=f.fitid and fp.wiggle_fname IS NOT NULL and fp.wiggle_fname != &#39;NONE&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">runid</span><span class="p">,</span> <span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">cursor</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="n">skip_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">cursor2</span> <span class="o">=</span> <span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+            <span class="n">cursor2</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select count(wiggleid) from sigvisa_wiggle where fpid=</span><span class="si">%d</span><span class="s"> and type=&#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_type</span><span class="p">))</span>
+            <span class="n">num_dupes</span> <span class="o">=</span> <span class="n">cursor2</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">cursor2</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">num_dupes</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c"># print &#39;skipping %d with %d dupes&#39; % (row[0], num_dupes)</span>
+                <span class="k">continue</span>
+
+        <span class="k">yield</span> <span class="n">row</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.learn/#sigvisa.learn.train_wiggles.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--run_name&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_name&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-i&quot;</span><span class="p">,</span> <span class="s">&quot;--run_iter&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_iter&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--log&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;log&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;use log wiggles&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-t&quot;</span><span class="p">,</span> <span class="s">&quot;--lead_time&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;lead_time&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">(</span><span class="s">&quot;inf&quot;</span><span class="p">),</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;use only the first n seconds of the extracted wiggle&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-p&quot;</span><span class="p">,</span> <span class="s">&quot;--parameterization&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;parameterization&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;fourier&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;how to parameterize the extracted waveform (fourier)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--no_duplicates&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;no_duplicates&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;skip any wiggles which already have wiggle params of the same type&quot;</span><span class="p">)</span>
+
+    <span class="n">fourier_group</span> <span class="o">=</span> <span class="n">OptionGroup</span><span class="p">(</span><span class="n">parser</span><span class="p">,</span> <span class="s">&quot;Fourier params&quot;</span><span class="p">)</span>
+    <span class="n">fourier_group</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-f&quot;</span><span class="p">,</span> <span class="s">&quot;--fundamental&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;fundamental&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;0.1&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;fundamental frequency (0.1Hz)&quot;</span><span class="p">)</span>
+    <span class="n">fourier_group</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--min_freq&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_freq&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;using fourier params, this is the min freq&quot;</span><span class="p">)</span>
+    <span class="n">fourier_group</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--max_freq&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_freq&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;using fourier params, this is the max freq&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option_group</span><span class="p">(</span><span class="n">fourier_group</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">run_name</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;must specify a run name!&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">run_name</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">run_name</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">run_iter</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;must specify a run iteration!&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">iteration</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">run_iter</span>
+
+    <span class="n">wiggle_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&quot;SIGVISA_HOME&quot;</span><span class="p">),</span> <span class="s">&quot;wiggle_data&quot;</span><span class="p">)</span>
+    <span class="n">run_wiggle_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">wiggle_dir</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">run_name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">run_iter</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">parameterization</span> <span class="o">==</span> <span class="s">&quot;fourier&quot;</span><span class="p">:</span>
+        <span class="n">min_freq</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">min_freq</span> <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">min_freq</span> <span class="k">else</span> <span class="n">options</span><span class="o">.</span><span class="n">fundamental</span>
+        <span class="n">max_freq</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">max_freq</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">FourierFeatures</span><span class="p">(</span><span class="n">fundamental</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">fundamental</span><span class="p">,</span> <span class="n">min_freq</span><span class="o">=</span><span class="n">min_freq</span><span class="p">,</span> <span class="n">max_freq</span><span class="o">=</span><span class="n">max_freq</span><span class="p">)</span>
+        <span class="n">meta0</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">fundamental</span>
+        <span class="n">meta1</span> <span class="o">=</span> <span class="n">min_freq</span>
+        <span class="n">meta2</span> <span class="o">=</span> <span class="n">max_freq</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">fpid</span><span class="p">,</span> <span class="n">phase</span><span class="p">,</span> <span class="n">wiggle_fname</span><span class="p">,</span> <span class="n">fitid</span><span class="p">,</span> <span class="n">template_shape</span><span class="p">)</span> <span class="ow">in</span> <span class="n">wiggles</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">iteration</span><span class="p">,</span> <span class="n">skip_type</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">parameterization</span> <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">no_duplicates</span> <span class="k">else</span> <span class="bp">None</span><span class="p">):</span>
+        <span class="n">tm</span> <span class="o">=</span> <span class="n">load_template_model</span><span class="p">(</span><span class="n">template_shape</span><span class="o">=</span><span class="n">template_shape</span><span class="p">,</span> <span class="n">model_type</span><span class="o">=</span><span class="s">&quot;dummy&quot;</span><span class="p">)</span>
+        <span class="n">wave</span> <span class="o">=</span> <span class="n">load_waveform_from_file</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">wiggle_dir</span><span class="p">,</span> <span class="n">wiggle_fname</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">log</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;log with min value&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">wave</span> <span class="o">=</span> <span class="n">wave</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s">&quot;log&quot;</span><span class="p">)</span>
+        <span class="n">extract_idx</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">wave</span><span class="p">[</span><span class="s">&#39;npts&#39;</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">lead_time</span> <span class="o">*</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;srate&#39;</span><span class="p">]))</span>
+        <span class="n">param_blob</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">encode_params_from_signal</span><span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">data</span><span class="p">[:</span><span class="n">extract_idx</span><span class="p">],</span> <span class="n">srate</span><span class="o">=</span><span class="n">wave</span><span class="p">[</span><span class="s">&#39;srate&#39;</span><span class="p">])</span>
+
+        <span class="n">p</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;fpid&quot;</span><span class="p">:</span> <span class="n">fpid</span><span class="p">,</span> <span class="s">&quot;stime&quot;</span><span class="p">:</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;stime&#39;</span><span class="p">],</span> <span class="s">&quot;etime&quot;</span><span class="p">:</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;stime&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">extract_idx</span><span class="p">)</span> <span class="o">/</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;srate&#39;</span><span class="p">],</span> <span class="s">&quot;srate&quot;</span><span class="p">:</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;srate&#39;</span><span class="p">],</span> <span class="s">&#39;timestamp&#39;</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(</span>
+        <span class="p">),</span> <span class="s">&quot;type&quot;</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">parameterization</span><span class="p">,</span> <span class="s">&quot;log&quot;</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">log</span><span class="p">,</span> <span class="s">&quot;meta0&quot;</span><span class="p">:</span> <span class="n">meta0</span><span class="p">,</span> <span class="s">&quot;meta1&quot;</span><span class="p">:</span> <span class="n">meta1</span><span class="p">,</span> <span class="s">&quot;meta2&quot;</span><span class="p">:</span> <span class="n">meta2</span><span class="p">,</span> <span class="s">&quot;params&quot;</span><span class="p">:</span> <span class="n">param_blob</span><span class="p">}</span>
+        <span class="n">wiggleid</span> <span class="o">=</span> <span class="n">insert_wiggle</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&quot;inserted wiggle </span><span class="si">%d</span><span class="s"> for fpid </span><span class="si">%d</span><span class="s">.&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">wiggleid</span><span class="p">,</span> <span class="n">fpid</span><span class="p">)</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">main</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">e</span>
+        <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="n">pdb</span><span class="o">.</span><span class="n">post_mortem</span><span class="p">(</span><span class="n">tb</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,650 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.plotting.plot_coda_decays &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.plotting.plot_coda_decays</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">errno</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database</span> <span class="kn">import</span> <span class="n">db</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">matplotlib.gridspec</span> <span class="kn">as</span> <span class="nn">gridspec</span>
+<span class="kn">from</span> <span class="nn">matplotlib.backends.backend_pdf</span> <span class="kn">import</span> <span class="n">PdfPages</span>
+
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="n">get_event</span>
+<span class="kn">import</span> <span class="nn">sigvisa.plotting.plot</span> <span class="kn">as</span> <span class="nn">plot</span>
+<span class="kn">import</span> <span class="nn">sigvisa.utils.geog</span> <span class="kn">as</span> <span class="nn">geog</span>
+<span class="kn">import</span> <span class="nn">obspy.signal.util</span>
+
+
+<div class="viewcode-block" id="plot_channels_with_pred"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.plot_channels_with_pred">[docs]</a><span class="k">def</span> <span class="nf">plot_channels_with_pred</span><span class="p">(</span><span class="n">sigmodel</span><span class="p">,</span> <span class="n">vert_trace</span><span class="p">,</span> <span class="n">vert_params</span><span class="p">,</span> <span class="n">phaseids</span><span class="p">,</span> <span class="n">horiz_trace</span><span class="p">,</span> <span class="n">horiz_params</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+
+    <span class="n">bhz_axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="c">#    bhz_axes = plt.subplot(1, 1, 1)</span>
+
+    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+
+    <span class="n">plot_envelopes_with_pred</span><span class="p">(</span><span class="n">bhz_axes</span><span class="p">,</span> <span class="n">vert_trace</span><span class="p">,</span> <span class="n">phaseids</span><span class="p">,</span> <span class="n">vert_params</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="n">logscale</span><span class="p">)</span>
+    <span class="n">horiz_axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">bhz_axes</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="n">bhz_axes</span><span class="p">)</span>
+    <span class="n">plot_envelopes_with_pred</span><span class="p">(</span><span class="n">horiz_axes</span><span class="p">,</span> <span class="n">vert_trace</span><span class="p">,</span> <span class="n">phaseids</span><span class="p">,</span> <span class="n">vert_params</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="n">logscale</span><span class="p">)</span>
+<span class="c">#    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)</span>
+
+<span class="c">#    horiz_axes = plt.subplot(2, 1, 2, sharex=bhz_axes, sharey = bhz_axes)</span>
+<span class="c">#    plot_envelopes_with_pred(sigmodel, horiz_axes, horiz_trace, phaseids, horiz_params)</span>
+    <span class="k">return</span> <span class="n">fig</span>
+
+</div>
+<div class="viewcode-block" id="plot_waveform_with_pred"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.plot_waveform_with_pred">[docs]</a><span class="k">def</span> <span class="nf">plot_waveform_with_pred</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">tm</span><span class="p">,</span> <span class="n">template_params</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">smooth</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;Time (s)&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+
+    <span class="n">synth_wave</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">generate_template_waveform</span><span class="p">(</span><span class="n">template_params</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="n">sample</span><span class="p">)</span>
+
+    <span class="n">gs</span> <span class="o">=</span> <span class="n">gridspec</span><span class="o">.</span><span class="n">GridSpec</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">gs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">left</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="mf">0.95</span><span class="p">,</span> <span class="n">hspace</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="n">plot</span><span class="o">.</span><span class="n">subplot_waveform</span><span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s">&quot;smooth&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">smooth</span> <span class="k">else</span> <span class="n">wave</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;black&#39;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="n">logscale</span><span class="p">)</span>
+    <span class="n">plot</span><span class="o">.</span><span class="n">subplot_waveform</span><span class="p">(</span><span class="n">synth_wave</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;green&quot;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="n">logscale</span><span class="p">,</span> <span class="n">plot_dets</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="n">axes</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s">&#39;off&#39;</span><span class="p">)</span>
+    <span class="n">descr</span> <span class="o">=</span> <span class="n">tm</span><span class="o">.</span><span class="n">param_str</span><span class="p">(</span><span class="n">template_params</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n\n</span><span class="s">&quot;</span>
+    <span class="n">descr</span> <span class="o">+=</span> <span class="s">&quot;Waveform: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">evid</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;evid&#39;</span><span class="p">]</span>
+        <span class="n">e</span> <span class="o">=</span> <span class="n">get_event</span><span class="p">(</span><span class="n">evid</span><span class="p">)</span>
+        <span class="n">descr</span> <span class="o">=</span> <span class="n">descr</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n\n</span><span class="s">&quot;</span> <span class="o">+</span> <span class="s">&quot;Event: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+        <span class="n">station_location</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">stations</span><span class="p">[</span><span class="n">wave</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">]][</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">dist</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">dist_km</span><span class="p">((</span><span class="n">e</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">lat</span><span class="p">),</span> <span class="n">station_location</span><span class="p">)</span>
+        <span class="n">azi</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">azimuth</span><span class="p">(</span><span class="n">station_location</span><span class="p">,</span> <span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">lat</span><span class="p">))</span>
+        <span class="n">descr</span> <span class="o">=</span> <span class="n">descr</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">+</span> <span class="s">&quot;event-station distance: </span><span class="si">%.1f</span><span class="s">km, azimuth </span><span class="si">%.1f</span><span class="s"> deg&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">azi</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="n">axes</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">descr</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;black&quot;</span><span class="p">,</span> <span class="n">horizontalalignment</span><span class="o">=</span><span class="s">&#39;center&#39;</span><span class="p">,</span> <span class="n">verticalalignment</span><span class="o">=</span><span class="s">&#39;center&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">fig</span>
+
+</div>
+<div class="viewcode-block" id="plot_channels"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.plot_channels">[docs]</a><span class="k">def</span> <span class="nf">plot_channels</span><span class="p">(</span><span class="n">pp</span><span class="p">,</span> <span class="n">vert_trace</span><span class="p">,</span> <span class="n">vert_noise_floor</span><span class="p">,</span> <span class="n">vert_fits</span><span class="p">,</span> <span class="n">vert_formats</span><span class="p">,</span> <span class="n">horiz_trace</span><span class="p">,</span> <span class="n">horiz_noise_floor</span><span class="p">,</span> <span class="n">horiz_fits</span><span class="p">,</span> <span class="n">horiz_formats</span><span class="p">,</span> <span class="n">all_det_times</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">all_det_labels</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+
+    <span class="n">bhz_axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+
+    <span class="n">plot_envelopes</span><span class="p">(</span><span class="n">bhz_axes</span><span class="p">,</span> <span class="n">vert_trace</span><span class="p">,</span> <span class="n">vert_noise_floor</span><span class="p">,</span> <span class="n">vert_fits</span><span class="p">,</span> <span class="n">vert_formats</span><span class="p">,</span> <span class="n">all_det_times</span><span class="p">,</span> <span class="n">all_det_labels</span><span class="p">)</span>
+    <span class="n">horiz_axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">bhz_axes</span><span class="p">,</span> <span class="n">sharey</span><span class="o">=</span><span class="n">bhz_axes</span><span class="p">)</span>
+    <span class="n">plot_envelopes</span><span class="p">(</span><span class="n">horiz_axes</span><span class="p">,</span> <span class="n">horiz_trace</span><span class="p">,</span> <span class="n">horiz_noise_floor</span><span class="p">,</span> <span class="n">horiz_fits</span><span class="p">,</span> <span class="n">horiz_formats</span><span class="p">,</span> <span class="n">all_det_times</span><span class="p">,</span> <span class="n">all_det_labels</span><span class="p">)</span>
+
+    <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="plot_envelopes"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.plot_envelopes">[docs]</a><span class="k">def</span> <span class="nf">plot_envelopes</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">trace</span><span class="p">,</span> <span class="n">noise_floor</span><span class="p">,</span> <span class="n">fits</span><span class="p">,</span> <span class="n">formats</span><span class="p">,</span> <span class="n">all_det_times</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">all_det_labels</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">srate</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s">&#39;sampling_rate&#39;</span><span class="p">]</span>
+
+<span class="c">#    siteid = int(arrival[AR_SITEID_COL])</span>
+<span class="c">#    phaseid = int(arrival[AR_PHASEID_COL])</span>
+
+    <span class="n">traces</span> <span class="o">=</span> <span class="p">[</span><span class="n">trace</span><span class="p">,</span> <span class="p">]</span>
+    <span class="n">formats</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;k-&quot;</span><span class="p">,</span> <span class="p">]</span> <span class="o">+</span> <span class="n">formats</span>
+    <span class="n">linewidths</span> <span class="o">=</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">fit</span> <span class="ow">in</span> <span class="n">fits</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">fit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">fit</span><span class="p">[</span><span class="n">FIT_CODA_LENGTH</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">stats</span> <span class="o">=</span> <span class="n">trace</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">stats</span><span class="p">[</span><span class="s">&#39;starttime_unix&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="n">fit</span><span class="p">[</span><span class="n">FIT_CODA_START_OFFSET</span><span class="p">]</span>
+            <span class="n">fit_trace</span> <span class="o">=</span> <span class="n">Trace</span><span class="p">(</span><span class="n">gen_logenvelope</span><span class="p">(</span><span class="n">fit</span><span class="p">[</span><span class="n">FIT_CODA_LENGTH</span><span class="p">],</span> <span class="n">srate</span><span class="p">,</span> <span class="n">fit</span><span class="p">[</span><span class="n">FIT_HEIGHT</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">fit</span><span class="p">[</span><span class="n">FIT_B</span><span class="p">]),</span> <span class="n">stats</span><span class="p">)</span>
+            <span class="n">fit_trace</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">npts</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">fit_trace</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">traces</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fit_trace</span><span class="p">)</span>
+<span class="c">#            formats.append(&quot;r-&quot;)</span>
+            <span class="n">linewidths</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+
+<span class="c">#    pred_stats = trace.stats.copy()</span>
+<span class="c">#    pred_stats[&#39;starttime_unix&#39;] = arrival[8] + netmodel.mean_travel_time(arrival[2], arrival[3], arrival[9], siteid-1, phaseid-1)</span>
+<span class="c">#    pred_para_b = unfair_para_predict(shape_params, arrival, band, distance)[0]</span>
+<span class="c">#    pred_nonpara_b = fair_nonpara_predict(arrival, lb, 30)</span>
+
+<span class="c">#    pred_trace_para = Trace(gen_logenvelope(coda_length, srate, gamma, 0, pred_para_b), pred_stats)</span>
+<span class="c">#    pred_trace_para.stats.npts = len(pred_trace_para.data)</span>
+
+<span class="c">#    if pred_nonpara_b is not None:</span>
+<span class="c">#        pred_trace_nonpara = Trace(gen_logenvelope(coda_length, srate, gamma, 0, pred_nonpara_b), pred_stats.copy())</span>
+<span class="c">#    else:</span>
+<span class="c">#        pred_trace_nonpara = Trace(np.array(()), pred_stats.copy())</span>
+<span class="c">#    pred_trace_nonpara.stats.npts = len(pred_trace_nonpara.data)</span>
+
+    <span class="n">plot</span><span class="o">.</span><span class="n">plot_traces_subplot</span><span class="p">(</span>
+        <span class="n">axes</span><span class="p">,</span> <span class="n">traces</span><span class="p">,</span> <span class="n">all_det_times</span><span class="o">=</span><span class="n">all_det_times</span><span class="p">,</span> <span class="n">all_det_labels</span><span class="o">=</span><span class="n">all_det_labels</span><span class="p">,</span> <span class="n">formats</span><span class="o">=</span><span class="n">formats</span><span class="p">,</span> <span class="n">linewidths</span><span class="o">=</span><span class="n">linewidths</span><span class="p">)</span>
+<span class="c"># plot.plot_traces([trace, fake_trace, pred_trace_para,</span>
+<span class="c"># pred_trace_nonpara], title=title + &quot; pb %f npb %f&quot; % (pred_para_b,</span>
+<span class="c"># pred_nonpara_b), all_det_times=all_det_times,</span>
+<span class="c"># all_det_labels=all_det_labels, formats = [&quot;k-&quot;, &quot;r-&quot;, &quot;b:&quot;, &quot;g:&quot;],</span>
+<span class="c"># linewidths = [5,5,1,1])</span>
+    <span class="n">maxtrc</span><span class="p">,</span> <span class="n">mintrc</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">trace</span><span class="o">.</span><span class="n">data</span><span class="p">)),</span> <span class="nb">float</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">trace</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+<span class="c">#    plt.bar(left = trace.stats[&#39;starttime_unix&#39;] + phase_start_time - .2, height = maxtrc-mintrc, width=.25, bottom=mintrc, color=&quot;blue&quot;, linewidth=1, alpha=.5)</span>
+<span class="c"># plt.bar(left = trace.stats[&#39;starttime_unix&#39;] + (peak_offset_time +</span>
+<span class="c"># coda_length) - .2, height = maxtrc-mintrc, width=.25, bottom=mintrc,</span>
+<span class="c"># color=&quot;blue&quot;, linewidth=1, alpha=.5)</span>
+
+    <span class="n">xvals</span> <span class="o">=</span> <span class="p">[</span><span class="n">trace</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">starttime_unix</span><span class="p">,</span> <span class="n">trace</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">starttime_unix</span> <span class="o">+</span> <span class="n">trace</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">npts</span> <span class="o">/</span> <span class="n">srate</span><span class="p">]</span>
+    <span class="n">axes</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">xvals</span><span class="p">,</span> <span class="p">[</span><span class="n">noise_floor</span><span class="p">,</span> <span class="n">noise_floor</span><span class="p">],</span> <span class="s">&quot;g-&quot;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="plot_scatter"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.plot_scatter">[docs]</a><span class="k">def</span> <span class="nf">plot_scatter</span><span class="p">(</span><span class="n">lp</span><span class="p">,</span> <span class="n">ls</span><span class="p">,</span> <span class="n">pp</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="n">lp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">lp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;P codas/distance&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;distance (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">lp</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">lp</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">ls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">ls</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;S codas/distance&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;distance (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ls</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">ls</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">lp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">lp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;tele P codas/depth&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;depth (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">tele_i</span> <span class="o">=</span> <span class="p">(</span><span class="n">lp</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1000</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">lp</span><span class="p">[</span><span class="n">tele_i</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">lp</span><span class="p">[</span><span class="n">tele_i</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">ls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">ls</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;tele S codas/depth&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;distance (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">tele_i</span> <span class="o">=</span> <span class="p">(</span><span class="n">ls</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1000</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ls</span><span class="p">[</span><span class="n">tele_i</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">ls</span><span class="p">[</span><span class="n">tele_i</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">lp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">lp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;shallow (0-30km) P codas/distance&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;distance (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">shallow_i</span> <span class="o">=</span> <span class="p">(</span><span class="n">lp</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">30</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">lp</span><span class="p">[</span><span class="n">shallow_i</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">lp</span><span class="p">[</span><span class="n">shallow_i</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">ls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">ls</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;shallow (0-30km) S codas/distance&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;distance (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">shallow_i</span> <span class="o">=</span> <span class="p">(</span><span class="n">ls</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">30</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ls</span><span class="p">[</span><span class="n">shallow_i</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">ls</span><span class="p">[</span><span class="n">shallow_i</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">lp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">lp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;deep (100+ km) P codas/distance&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;distance (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">deep_i</span> <span class="o">=</span> <span class="p">(</span><span class="n">lp</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">lp</span><span class="p">[</span><span class="n">deep_i</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">lp</span><span class="p">[</span><span class="n">deep_i</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">ls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">ls</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;deep (100+km) S codas/distance&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;distance (km)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">deep_i</span> <span class="o">=</span> <span class="p">(</span><span class="n">ls</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ls</span><span class="p">[</span><span class="n">deep_i</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">ls</span><span class="p">[</span><span class="n">deep_i</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">lp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">lp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;P codas / azimuth&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;azimuth (deg)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">360</span><span class="p">])</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">lp</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">lp</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">ls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">ls</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;S codas / azimuth&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;azimuth (deg)&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;b&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">360</span><span class="p">])</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ls</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">ls</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">],</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+            <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;error plotting learned params&quot;</span>
+        <span class="k">print</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">pp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="plot_geog"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.plot_geog">[docs]</a><span class="k">def</span> <span class="nf">plot_geog</span><span class="p">(</span><span class="n">band_data</span><span class="p">,</span> <span class="n">pp</span><span class="p">,</span> <span class="n">azistr</span><span class="p">):</span>
+
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">sites</span> <span class="o">=</span> <span class="n">read_sites</span><span class="p">(</span><span class="n">cursor</span><span class="p">)</span>
+    <span class="n">siteid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">band_data</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">SITEID_COL</span><span class="p">])</span>
+    <span class="n">site_lonlat</span> <span class="o">=</span> <span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="k">print</span> <span class="n">band_data</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="n">ev_lonlat</span> <span class="o">=</span> <span class="n">band_data</span><span class="p">[:,</span> <span class="p">(</span><span class="n">LON_COL</span><span class="p">,</span> <span class="n">LAT_COL</span><span class="p">)]</span>
+    <span class="n">allll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">([</span><span class="n">ev_lonlat</span><span class="p">,</span> <span class="n">site_lonlat</span><span class="p">])</span>
+    <span class="p">(</span><span class="n">max_lon</span><span class="p">,</span> <span class="n">max_lat</span><span class="p">)</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">allll</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">min_lon</span><span class="p">,</span> <span class="n">min_lat</span><span class="p">)</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">allll</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">max_lon</span> <span class="o">=</span> <span class="mi">180</span>
+    <span class="n">min_lon</span> <span class="o">=</span> <span class="o">-</span><span class="mi">180</span>
+    <span class="n">max_lat</span> <span class="o">=</span> <span class="mi">90</span>
+    <span class="n">min_lat</span> <span class="o">=</span> <span class="o">-</span><span class="mi">90</span>
+
+    <span class="kn">from</span> <span class="nn">sigvisa.utils.draw_earth</span> <span class="kn">import</span> <span class="n">draw_earth</span><span class="p">,</span> <span class="n">draw_events</span>
+    <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">,</span>
+                      <span class="n">projection</span><span class="o">=</span><span class="s">&quot;cyl&quot;</span><span class="p">,</span>
+                      <span class="n">resolution</span><span class="o">=</span><span class="s">&quot;l&quot;</span><span class="p">,</span>
+                      <span class="n">llcrnrlon</span><span class="o">=</span><span class="n">min_lon</span><span class="p">,</span> <span class="n">urcrnrlon</span><span class="o">=</span><span class="n">max_lon</span><span class="p">,</span>
+                      <span class="n">llcrnrlat</span><span class="o">=</span><span class="n">min_lat</span><span class="p">,</span> <span class="n">urcrnrlat</span><span class="o">=</span><span class="n">max_lat</span><span class="p">,</span>
+                      <span class="n">nofillcontinents</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                      <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ev</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ev_lonlat</span><span class="p">):</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="p">((</span><span class="n">ev</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="mi">1</span><span class="p">]),),</span> <span class="n">marker</span><span class="o">=</span><span class="s">&quot;o&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;yellow&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="p">(</span><span class="n">site_lonlat</span><span class="p">,),</span> <span class="n">marker</span><span class="o">=</span><span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;purple&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;siteid &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">siteid</span><span class="p">)</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">azistr</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="generate_scatter_plots"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.generate_scatter_plots">[docs]</a><span class="k">def</span> <span class="nf">generate_scatter_plots</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">runid</span><span class="p">,</span> <span class="n">siteid</span><span class="p">,</span> <span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="p">,</span> <span class="n">acost_threshold</span><span class="p">,</span> <span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">target_str</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="n">target_str</span> <span class="o">==</span> <span class="s">&quot;decay&quot;</span><span class="p">:</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">FIT_CODA_DECAY</span>
+    <span class="k">elif</span> <span class="n">target_str</span> <span class="o">==</span> <span class="s">&quot;onset&quot;</span><span class="p">:</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">FIT_PEAK_DELAY</span>
+    <span class="k">elif</span> <span class="n">target_str</span> <span class="o">==</span> <span class="s">&quot;amp&quot;</span><span class="p">:</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">FIT_CODA_HEIGHT</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">chan_idx</span><span class="p">,</span> <span class="n">chan</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">chans</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">chan</span> <span class="o">!=</span> <span class="s">&quot;BHZ&quot;</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">band_idx</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">bands</span><span class="p">):</span>
+
+            <span class="n">short_band</span> <span class="o">=</span> <span class="n">band</span><span class="p">[</span><span class="mi">16</span><span class="p">:]</span>
+
+            <span class="n">orig_data</span> <span class="o">=</span> <span class="n">load_shape_data</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">short_band</span><span class="o">=</span><span class="n">short_band</span><span class="p">,</span> <span class="n">siteid</span><span class="o">=</span><span class="n">siteid</span><span class="p">,</span> <span class="n">runid</span><span class="o">=</span><span class="n">runid</span><span class="p">,</span>
+                                        <span class="n">acost_threshold</span><span class="o">=</span><span class="n">acost_threshold</span><span class="p">,</span> <span class="n">min_azi</span><span class="o">=</span><span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="o">=</span><span class="n">max_azi</span><span class="p">)</span>
+
+            <span class="n">lp</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">ls</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">orig_data</span><span class="p">:</span>
+
+                <span class="n">r</span> <span class="o">=</span> <span class="n">row</span><span class="p">[[</span><span class="n">FIT_DISTANCE</span><span class="p">,</span> <span class="n">FIT_AZIMUTH</span><span class="p">,</span> <span class="n">FIT_DEPTH</span><span class="p">,</span> <span class="n">t</span><span class="p">]]</span>
+                <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="n">FIT_PHASEID</span><span class="p">]</span> <span class="ow">in</span> <span class="n">P_PHASEIDS</span><span class="p">:</span>
+                    <span class="n">lp</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">row</span><span class="p">[</span><span class="n">FIT_PHASEID</span><span class="p">]</span> <span class="ow">in</span> <span class="n">S_PHASEIDS</span><span class="p">:</span>
+                    <span class="n">ls</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+            <span class="n">lp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">lp</span><span class="p">)</span>
+            <span class="n">ls</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ls</span><span class="p">)</span>
+
+            <span class="n">pdf_dir</span> <span class="o">=</span> <span class="n">ensure_dir_exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">short_band</span><span class="p">))</span>
+            <span class="n">fname</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span> <span class="s">&quot;plots_</span><span class="si">%s</span><span class="s">_</span><span class="si">%s</span><span class="s">_</span><span class="si">%.0f</span><span class="s">_</span><span class="si">%.0f</span><span class="s">.pdf&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">chan</span><span class="p">,</span> <span class="n">target_str</span><span class="p">,</span> <span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="p">))</span>
+            <span class="n">pp</span> <span class="o">=</span> <span class="n">PdfPages</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+            <span class="k">print</span> <span class="s">&quot;opening pp in &quot;</span><span class="p">,</span> <span class="n">fname</span>
+
+            <span class="n">plot_scatter</span><span class="p">(</span><span class="n">lp</span><span class="p">,</span> <span class="n">ls</span><span class="p">,</span> <span class="n">pp</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="merge_plots"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.merge_plots">[docs]</a><span class="k">def</span> <span class="nf">merge_plots</span><span class="p">(</span><span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">bands</span><span class="p">,</span> <span class="n">all_data</span><span class="p">,</span> <span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="p">):</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">band_idx</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">bands</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+
+            <span class="n">pdf_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">bands</span><span class="p">[</span><span class="n">band_idx</span><span class="p">][</span><span class="mi">19</span><span class="p">:])</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span> <span class="s">&quot;everything.pdf&quot;</span><span class="p">))</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+            <span class="n">band_data</span> <span class="o">=</span> <span class="n">extract_band</span><span class="p">(</span><span class="n">all_data</span><span class="p">,</span> <span class="n">band_idx</span><span class="p">)</span>
+            <span class="n">evlist</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span> <span class="s">&quot;plots_</span><span class="si">%d</span><span class="s">_</span><span class="si">%d</span><span class="s">.pdf&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="p">))</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span>
+                                                                                                        <span class="s">&quot;geog_</span><span class="si">%d</span><span class="s">_</span><span class="si">%d</span><span class="s">.pdf&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">band_data</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="n">AZI_COL</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">min_azi</span> <span class="ow">and</span> <span class="n">row</span><span class="p">[</span><span class="n">AZI_COL</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">max_azi</span><span class="p">:</span>
+                    <span class="n">evlist</span> <span class="o">=</span> <span class="n">evlist</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">]))</span> <span class="o">+</span> <span class="s">&quot;.pdf&quot;</span><span class="p">)</span>
+            <span class="n">cmd</span> <span class="o">=</span> <span class="s">&quot;gs -dNOPAUSE -sDEVICE=pdfwrite -sOUTPUTFILE=</span><span class="si">%s</span><span class="s"> -dBATCH </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span> <span class="s">&quot;everything_</span><span class="si">%d</span><span class="s">_</span><span class="si">%d</span><span class="s">.pdf&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">min_azi</span><span class="p">,</span> <span class="n">max_azi</span><span class="p">)),</span> <span class="n">evlist</span><span class="p">)</span>
+            <span class="k">print</span> <span class="s">&quot;running&quot;</span><span class="p">,</span> <span class="n">cmd</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">popen</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+            <span class="k">continue</span>
+
+</div>
+<div class="viewcode-block" id="predict_trace"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.predict_trace">[docs]</a><span class="k">def</span> <span class="nf">predict_trace</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">noise_floor</span><span class="p">,</span> <span class="n">cm_p</span><span class="p">,</span> <span class="n">cm_s</span><span class="p">):</span>
+    <span class="n">siteid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">SITEID_COL</span><span class="p">])</span>
+    <span class="n">evid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="n">EV_EVID_COL</span><span class="p">])</span>
+    <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;SELECT l.time, l.arid FROM leb_arrival l , static_siteid sid, leb_origin lebo, leb_assoc leba where lebo.evid=</span><span class="si">%d</span><span class="s"> and lebo.orid=leba.orid and leba.arid=l.arid and sid.sta=l.sta and sid.id=</span><span class="si">%d</span><span class="s"> order by l.time&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">evid</span><span class="p">,</span> <span class="n">siteid</span><span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+    <span class="n">other_arrivals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+    <span class="n">other_arrivals</span> <span class="o">=</span> <span class="n">other_arrivals</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">starttime</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">other_arrivals</span><span class="p">)</span> <span class="o">-</span> <span class="mi">30</span>
+    <span class="n">endtime</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">other_arrivals</span><span class="p">)</span> <span class="o">+</span> <span class="mi">150</span>
+    <span class="n">srate</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">npts</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(((</span><span class="n">endtime</span> <span class="o">-</span> <span class="n">starttime</span><span class="p">)</span> <span class="o">*</span> <span class="n">srate</span><span class="p">))</span>
+    <span class="n">stats</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;starttime_unix&quot;</span><span class="p">:</span> <span class="n">starttime</span><span class="p">,</span> <span class="s">&quot;sampling_rate&quot;</span><span class="p">:</span> <span class="n">srate</span><span class="p">,</span> <span class="s">&quot;npts&quot;</span><span class="p">:</span> <span class="n">npts</span><span class="p">,</span> <span class="s">&quot;siteid&quot;</span><span class="p">:</span> <span class="n">siteid</span><span class="p">}</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">noise_floor</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">npts</span><span class="p">,))</span>
+
+    <span class="n">phase</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">P_PHASEID_COL</span><span class="p">]</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="n">P_PHASEID_COL</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">1</span>
+    <span class="n">pred_arr_time</span> <span class="o">=</span> <span class="n">ev</span><span class="p">[</span><span class="n">EV_TIME_COL</span><span class="p">]</span> <span class="o">+</span> <span class="n">cm_p</span><span class="o">.</span><span class="n">netmodel</span><span class="o">.</span><span class="n">mean_travel_time</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">LON_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">LAT_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">DEPTH_COL</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span>
+        <span class="n">row</span><span class="p">[</span><span class="n">SITEID_COL</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">phase</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">cm_p</span><span class="o">.</span><span class="n">predict_peak_time</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">CodaModel</span><span class="o">.</span><span class="n">MODEL_TYPE_GAUSSIAN</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">])</span>
+    <span class="n">pred_arr_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">pred_arr_time</span> <span class="o">-</span> <span class="n">starttime</span><span class="p">)</span> <span class="o">*</span> <span class="n">srate</span><span class="p">)</span>
+    <span class="n">pred_arr_height</span> <span class="o">=</span> <span class="n">ev</span><span class="p">[</span><span class="n">EV_MB_COL</span><span class="p">]</span> <span class="o">*</span> <span class="n">cm_p</span><span class="o">.</span><span class="n">predict_peak_amp</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">CodaModel</span><span class="o">.</span><span class="n">MODEL_TYPE_GAUSSIAN</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">])</span>
+    <span class="k">print</span> <span class="s">&quot;pred amp p&quot;</span><span class="p">,</span> <span class="n">pred_arr_height</span>
+    <span class="n">pred_decay_rate</span> <span class="o">=</span> <span class="n">cm_p</span><span class="o">.</span><span class="n">predict_decay</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">CodaModel</span><span class="o">.</span><span class="n">MODEL_TYPE_GAUSSIAN</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">pred_arr_offset</span><span class="p">,</span> <span class="n">npts</span><span class="p">):</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">i</span> <span class="o">-</span> <span class="n">pred_arr_offset</span><span class="p">)</span> <span class="o">/</span> <span class="n">srate</span>
+        <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pred_arr_height</span> <span class="o">+</span> <span class="n">t</span> <span class="o">*</span> <span class="n">pred_decay_rate</span><span class="p">)</span>
+
+    <span class="n">phase</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">S_PHASEID_COL</span><span class="p">]</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="n">S_PHASEID_COL</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">5</span>
+    <span class="n">pred_arr_time</span> <span class="o">=</span> <span class="n">ev</span><span class="p">[</span><span class="n">EV_TIME_COL</span><span class="p">]</span> <span class="o">+</span> <span class="n">cm_s</span><span class="o">.</span><span class="n">netmodel</span><span class="o">.</span><span class="n">mean_travel_time</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">LON_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">LAT_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">DEPTH_COL</span><span class="p">],</span> <span class="nb">int</span><span class="p">(</span>
+        <span class="n">row</span><span class="p">[</span><span class="n">SITEID_COL</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">phase</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">cm_s</span><span class="o">.</span><span class="n">predict_peak_time</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">CodaModel</span><span class="o">.</span><span class="n">MODEL_TYPE_GAUSSIAN</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">])</span>
+    <span class="n">pred_arr_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">pred_arr_time</span> <span class="o">-</span> <span class="n">starttime</span><span class="p">)</span> <span class="o">*</span> <span class="n">srate</span><span class="p">)</span>
+    <span class="n">pred_arr_height</span> <span class="o">=</span> <span class="n">ev</span><span class="p">[</span><span class="n">EV_MB_COL</span><span class="p">]</span> <span class="o">*</span> <span class="n">cm_s</span><span class="o">.</span><span class="n">predict_peak_amp</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">CodaModel</span><span class="o">.</span><span class="n">MODEL_TYPE_GAUSSIAN</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">])</span>
+    <span class="k">print</span> <span class="s">&quot;pred amp s&quot;</span><span class="p">,</span> <span class="n">pred_arr_height</span>
+    <span class="n">pred_decay_rate</span> <span class="o">=</span> <span class="n">cm_s</span><span class="o">.</span><span class="n">predict_decay</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">CodaModel</span><span class="o">.</span><span class="n">MODEL_TYPE_GAUSSIAN</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">pred_arr_offset</span><span class="p">,</span> <span class="n">npts</span><span class="p">):</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">i</span> <span class="o">-</span> <span class="n">pred_arr_offset</span><span class="p">)</span> <span class="o">/</span> <span class="n">srate</span>
+        <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pred_arr_height</span> <span class="o">+</span> <span class="n">t</span> <span class="o">*</span> <span class="n">pred_decay_rate</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">Trace</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="n">stats</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot_coda_decays.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-s&quot;</span><span class="p">,</span> <span class="s">&quot;--siteid&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;siteid&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;siteid of station for which to generate plots&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--runid&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;runid&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;runid of coda fits to examine&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--maxcost&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_cost&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;consider only coda fits with average cost below this threshold (10)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--max_azi&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_azi&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">360</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;(360)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--min_azi&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_azi&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;(360)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--scatter&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;scatter&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;create scatter plots (False)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--events&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;events&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;(re)creates individual event coda plots (False)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--pred_events&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;pred_events&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;predicts individual event coda plots (False)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--merge&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;merge&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;merge all available plots for each band (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--min_azi&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_azi&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with azimuth less than this value (0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--max_azi&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_azi&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">360</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with azimuth greater than this value (360)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--target&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;target&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;decay&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;decay, onset, or amp (decay)&quot;</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">siteid</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">siteid</span>
+    <span class="n">runid</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">runid</span>
+
+    <span class="n">base_coda_dir</span> <span class="o">=</span> <span class="n">get_base_dir</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">siteid</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">runid</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">scatter</span><span class="p">:</span>
+        <span class="n">generate_scatter_plots</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">siteid</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">min_azi</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">max_azi</span><span class="p">,</span>
+                               <span class="n">options</span><span class="o">.</span><span class="n">max_cost</span><span class="p">,</span> <span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">target</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">events</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">all_data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">])</span> <span class="o">!=</span> <span class="mi">5418898</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">band</span> <span class="o">=</span> <span class="n">bands</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">BANDID_COL</span><span class="p">])]</span>
+            <span class="n">short_band</span> <span class="o">=</span> <span class="n">band</span><span class="p">[</span><span class="mi">19</span><span class="p">:]</span>
+            <span class="n">vert_noise_floor</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_NOISE_FLOOR_COL</span><span class="p">]</span>
+            <span class="n">horiz_noise_floor</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_NOISE_FLOOR_COL</span><span class="p">]</span>
+
+            <span class="p">(</span><span class="n">arrival_segment</span><span class="p">,</span> <span class="n">noise_segment</span><span class="p">,</span> <span class="n">other_arrivals</span><span class="p">,</span> <span class="n">other_arrival_phases</span><span class="p">)</span> <span class="o">=</span> <span class="n">load_signal_slice</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span>
+                                                                                                       <span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">SITEID_COL</span><span class="p">],</span> <span class="n">load_noise</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+            <span class="n">vert_smoothed</span><span class="p">,</span> <span class="n">horiz_smoothed</span> <span class="o">=</span> <span class="n">smoothed_traces</span><span class="p">(</span><span class="n">arrival_segment</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span>
+
+            <span class="n">fit_p_vert</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">fit_p_horiz</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">fit_s_vert</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">fit_s_horiz</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+            <span class="n">accept_p_vert</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_p_vert</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_p_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+            <span class="n">accept_p_horiz</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_p_horiz</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_p_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+            <span class="n">accept_s_vert</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_s_vert</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_s_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+            <span class="n">accept_s_horiz</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_s_horiz</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_s_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+
+            <span class="n">pdf_dir</span> <span class="o">=</span> <span class="n">ensure_dir_exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">short_band</span><span class="p">))</span>
+            <span class="n">pp</span> <span class="o">=</span> <span class="n">PdfPages</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">]))</span> <span class="o">+</span> <span class="s">&quot;_log.pdf&quot;</span><span class="p">))</span>
+
+            <span class="n">title</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> evid </span><span class="si">%d</span><span class="s"> siteid </span><span class="si">%d</span><span class="s"> mb </span><span class="si">%f</span><span class="s"> </span><span class="se">\n</span><span class="s"> dist </span><span class="si">%f</span><span class="s"> azi </span><span class="si">%f</span><span class="s"> </span><span class="se">\n</span><span class="s"> p_b </span><span class="si">%f</span><span class="s"> p_acost </span><span class="si">%f</span><span class="s"> p_len </span><span class="si">%f</span><span class="s"> </span><span class="se">\n</span><span class="s"> s_b </span><span class="si">%f</span><span class="s"> s_acost </span><span class="si">%f</span><span class="s"> s_len </span><span class="si">%f</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">short_band</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">SITEID_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">MB_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">AZI_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_P_FIT_B</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_P_FIT_AVG_COST</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_P_FIT_CODA_LENGTH</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_B</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_AVG_COST</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_CODA_LENGTH</span><span class="p">])</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">plot_channels</span><span class="p">(</span><span class="n">pp</span><span class="p">,</span> <span class="n">vert_smoothed</span><span class="p">,</span> <span class="n">vert_noise_floor</span><span class="p">,</span> <span class="p">[],</span> <span class="p">[],</span> <span class="n">horiz_smoothed</span><span class="p">,</span> <span class="n">horiz_noise_floor</span><span class="p">,</span>
+                              <span class="p">[],</span> <span class="p">[],</span> <span class="n">all_det_times</span><span class="o">=</span><span class="n">other_arrivals</span><span class="p">,</span> <span class="n">all_det_labels</span><span class="o">=</span><span class="n">other_arrival_phases</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&quot;&quot;</span><span class="p">)</span>
+
+<span class="c"># plot_channels(pp, vert_smoothed, vert_noise_floor, [fit_p_vert,</span>
+<span class="c"># fit_s_vert], [&quot;g-&quot; if accept_p_vert else &quot;r-&quot;, &quot;g-&quot; if accept_s_vert</span>
+<span class="c"># else &quot;r-&quot;], horiz_smoothed, horiz_noise_floor, [fit_p_horiz,</span>
+<span class="c"># fit_s_horiz], [&quot;g-&quot; if accept_p_horiz else &quot;r-&quot;, &quot;g-&quot; if accept_s_horiz</span>
+<span class="c"># else &quot;r-&quot;], all_det_times = other_arrivals, all_det_labels =</span>
+<span class="c"># other_arrival_phases, title = title)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;error plotting:&quot;</span>
+                <span class="k">print</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="n">pp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">pred_events</span><span class="p">:</span>
+
+        <span class="n">pv_data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">ph_data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">sv_data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">sh_data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">band_idx</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">bands</span><span class="p">):</span>
+            <span class="n">band_data</span> <span class="o">=</span> <span class="n">extract_band</span><span class="p">(</span><span class="n">all_data</span><span class="p">,</span> <span class="n">band_idx</span><span class="p">)</span>
+            <span class="n">pv_data</span><span class="p">[</span><span class="n">band</span><span class="p">]</span> <span class="o">=</span> <span class="n">clean_points</span><span class="p">(</span><span class="n">band_data</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+            <span class="n">ph_data</span><span class="p">[</span><span class="n">band</span><span class="p">]</span> <span class="o">=</span> <span class="n">clean_points</span><span class="p">(</span><span class="n">band_data</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+            <span class="n">sv_data</span><span class="p">[</span><span class="n">band</span><span class="p">]</span> <span class="o">=</span> <span class="n">clean_points</span><span class="p">(</span><span class="n">band_data</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+            <span class="n">sh_data</span><span class="p">[</span><span class="n">band</span><span class="p">]</span> <span class="o">=</span> <span class="n">clean_points</span><span class="p">(</span><span class="n">band_data</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">all_data</span><span class="p">:</span>
+
+            <span class="n">band</span> <span class="o">=</span> <span class="n">bands</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">BANDID_COL</span><span class="p">])]</span>
+            <span class="n">short_band</span> <span class="o">=</span> <span class="n">band</span><span class="p">[</span><span class="mi">19</span><span class="p">:]</span>
+            <span class="n">vert_noise_floor</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_NOISE_FLOOR_COL</span><span class="p">]</span>
+            <span class="n">horiz_noise_floor</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_NOISE_FLOOR_COL</span><span class="p">]</span>
+
+            <span class="n">fit_p_vert</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">fit_p_horiz</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">fit_s_vert</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">fit_s_horiz</span> <span class="o">=</span> <span class="n">fit_from_row</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">P</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">vert</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">accept_p_vert</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_p_vert</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_p_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+            <span class="n">accept_p_horiz</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_p_horiz</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_p_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+            <span class="n">accept_s_vert</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_s_vert</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_s_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+            <span class="n">accept_s_horiz</span> <span class="o">=</span> <span class="n">accept_fit</span><span class="p">(</span><span class="n">fit_s_horiz</span><span class="p">,</span> <span class="n">min_coda_length</span><span class="o">=</span><span class="n">min_s_coda_length</span><span class="p">,</span> <span class="n">max_avg_cost</span><span class="o">=</span><span class="n">avg_cost_bound</span><span class="p">)</span>
+
+            <span class="c"># need to fabricate vert_smoothed and horiz_smoothed. each will be at the</span>
+            <span class="c"># noise level until the predicted arrival time, then will</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">ev</span> <span class="o">=</span> <span class="n">row_to_ev</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">row</span><span class="p">)</span>
+                <span class="n">cm_pv</span> <span class="o">=</span> <span class="n">CodaModel</span><span class="p">(</span><span class="n">pv_data</span><span class="p">[</span><span class="n">band</span><span class="p">],</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="n">ignore_evids</span><span class="o">=</span><span class="p">(</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">]),),</span> <span class="n">w1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.00001</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">],</span> <span class="n">w2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">],</span> <span class="n">s2</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.01</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+                <span class="n">cm_ph</span> <span class="o">=</span> <span class="n">CodaModel</span><span class="p">(</span><span class="n">ph_data</span><span class="p">[</span><span class="n">band</span><span class="p">],</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="n">ignore_evids</span><span class="o">=</span><span class="p">(</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">]),),</span> <span class="n">w1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.00001</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">],</span> <span class="n">w2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">],</span> <span class="n">s2</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.01</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+                <span class="n">cm_sv</span> <span class="o">=</span> <span class="n">CodaModel</span><span class="p">(</span><span class="n">sv_data</span><span class="p">[</span><span class="n">band</span><span class="p">],</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="n">ignore_evids</span><span class="o">=</span><span class="p">(</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">]),),</span> <span class="n">w1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.00001</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">],</span> <span class="n">w2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">],</span> <span class="n">s2</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.01</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+                <span class="n">cm_sh</span> <span class="o">=</span> <span class="n">CodaModel</span><span class="p">(</span><span class="n">sh_data</span><span class="p">[</span><span class="n">band</span><span class="p">],</span> <span class="s">&quot;&quot;</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="n">ignore_evids</span><span class="o">=</span><span class="p">(</span>
+                    <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">]),),</span> <span class="n">w1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.00001</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">],</span> <span class="n">w2</span> <span class="o">=</span> <span class="p">[</span><span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">25</span><span class="p">],</span> <span class="n">s2</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.01</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+
+                <span class="n">vert_predicted</span> <span class="o">=</span> <span class="n">predict_trace</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">vert_noise_floor</span><span class="p">,</span> <span class="n">cm_pv</span><span class="p">,</span> <span class="n">cm_sv</span><span class="p">)</span>
+                <span class="n">horiz_predicted</span> <span class="o">=</span> <span class="n">predict_trace</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="n">row</span><span class="p">,</span> <span class="n">horiz_noise_floor</span><span class="p">,</span> <span class="n">cm_ph</span><span class="p">,</span> <span class="n">cm_sh</span><span class="p">)</span>
+
+                <span class="p">(</span><span class="n">b_col</span><span class="p">,</span> <span class="n">gen_decay</span><span class="p">,</span> <span class="n">gen_onset</span><span class="p">,</span> <span class="n">gen_amp</span><span class="p">)</span> <span class="o">=</span> <span class="n">construct_output_generators</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">cm_pv</span><span class="o">.</span><span class="n">netmodel</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+
+                <span class="n">amp</span> <span class="o">=</span> <span class="n">gen_amp</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&quot;gen amp&quot;</span><span class="p">,</span> <span class="n">amp</span>
+
+                <span class="k">print</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_PEAK_HEIGHT</span><span class="p">]</span> <span class="o">-</span> <span class="n">horiz_noise_floor</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">MB_COL</span><span class="p">]</span>
+
+                <span class="k">print</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_PEAK_HEIGHT</span><span class="p">]</span>
+
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">pdf_dir</span> <span class="o">=</span> <span class="n">ensure_dir_exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">short_band</span><span class="p">))</span>
+            <span class="n">pp</span> <span class="o">=</span> <span class="n">PdfPages</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pdf_dir</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">]))</span> <span class="o">+</span> <span class="s">&quot;_pred.pdf&quot;</span><span class="p">))</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="s">&quot;PREDICTED </span><span class="si">%s</span><span class="s"> evid </span><span class="si">%d</span><span class="s"> siteid </span><span class="si">%d</span><span class="s"> mb </span><span class="si">%f</span><span class="s"> </span><span class="se">\n</span><span class="s"> dist </span><span class="si">%f</span><span class="s"> azi </span><span class="si">%f</span><span class="s"> </span><span class="se">\n</span><span class="s"> p_b </span><span class="si">%f</span><span class="s"> p_acost </span><span class="si">%f</span><span class="s"> p_len </span><span class="si">%f</span><span class="s"> </span><span class="se">\n</span><span class="s"> s_b </span><span class="si">%f</span><span class="s"> s_acost </span><span class="si">%f</span><span class="s"> s_len </span><span class="si">%f</span><span class="s"> &quot;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">short_band</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">EVID_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">SITEID_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">MB_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">DISTANCE_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">AZI_COL</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_P_FIT_B</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_P_FIT_AVG_COST</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">VERT_P_FIT_CODA_LENGTH</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_B</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_AVG_COST</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="n">HORIZ_S_FIT_CODA_LENGTH</span><span class="p">])</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">plot_channels</span><span class="p">(</span>
+                    <span class="n">pp</span><span class="p">,</span> <span class="n">vert_predicted</span><span class="p">,</span> <span class="n">vert_noise_floor</span><span class="p">,</span> <span class="p">[</span><span class="n">fit_p_vert</span><span class="p">,</span> <span class="n">fit_s_vert</span><span class="p">],</span> <span class="p">[</span>
+                        <span class="s">&quot;g-&quot;</span> <span class="k">if</span> <span class="n">accept_p_vert</span> <span class="k">else</span> <span class="s">&quot;r-&quot;</span><span class="p">,</span> <span class="s">&quot;g-&quot;</span> <span class="k">if</span> <span class="n">accept_s_vert</span> <span class="k">else</span> <span class="s">&quot;r-&quot;</span><span class="p">],</span>
+                    <span class="n">horiz_predicted</span><span class="p">,</span> <span class="n">horiz_noise_floor</span><span class="p">,</span> <span class="p">[</span><span class="n">fit_p_horiz</span><span class="p">,</span> <span class="n">fit_s_horiz</span><span class="p">],</span> <span class="p">[</span><span class="s">&quot;g-&quot;</span> <span class="k">if</span> <span class="n">accept_p_horiz</span> <span class="k">else</span> <span class="s">&quot;r-&quot;</span><span class="p">,</span> <span class="s">&quot;g-&quot;</span> <span class="k">if</span> <span class="n">accept_s_horiz</span> <span class="k">else</span> <span class="s">&quot;r-&quot;</span><span class="p">],</span> <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;error plotting:&quot;</span>
+                <span class="k">print</span> <span class="n">traceback</span><span class="o">.</span><span class="n">format_exc</span><span class="p">()</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="n">pp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">merge</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">min_azi</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">options</span><span class="o">.</span><span class="n">max_azi</span> <span class="o">!=</span> <span class="mi">360</span><span class="p">:</span>
+            <span class="n">merge_plots</span><span class="p">(</span><span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">bands</span><span class="p">,</span> <span class="n">all_data</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">min_azi</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">max_azi</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">merge_plots</span><span class="p">(</span><span class="n">base_coda_dir</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,183 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.tests.test_spatial_regression &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.tests.test_spatial_regression</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">unittest</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.learn.train_coda_models</span> <span class="kn">import</span> <span class="n">learn_model</span><span class="p">,</span> <span class="n">load_model</span><span class="p">,</span> <span class="n">gp_extract_features</span>
+
+
+<div class="viewcode-block" id="TestModels"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_spatial_regression.TestModels">[docs]</a><span class="k">class</span> <span class="nc">TestModels</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TestModels.setUp"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_spatial_regression.TestModels.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+            <span class="p">[</span><span class="mi">120</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">32</span><span class="p">],</span>
+            <span class="p">[</span><span class="mi">118</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1050</span><span class="p">,</span> <span class="mi">32</span><span class="p">],</span>
+            <span class="p">[</span><span class="mi">120</span><span class="p">,</span> <span class="mi">29</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">34</span><span class="p">],</span>
+            <span class="p">[</span><span class="mi">110</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">3000</span><span class="p">,</span> <span class="mi">34</span><span class="p">],</span>
+        <span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+            <span class="o">-</span><span class="mf">0.02</span><span class="p">,</span>
+            <span class="o">-</span><span class="mf">0.01</span><span class="p">,</span>
+            <span class="o">-</span><span class="mf">0.015</span><span class="p">,</span>
+            <span class="o">-</span><span class="mf">0.005</span><span class="p">,</span>
+        <span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">evids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+            <span class="mi">1</span><span class="p">,</span>
+            <span class="mi">2</span><span class="p">,</span>
+            <span class="mi">3</span><span class="p">,</span>
+            <span class="mi">4</span><span class="p">,</span>
+        <span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">testX1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">120</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1025</span><span class="p">,</span> <span class="mi">32</span><span class="p">],</span> <span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">testX2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">119</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">33</span><span class="p">],</span> <span class="p">])</span>
+</div>
+<div class="viewcode-block" id="TestModels.test_constant"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_spatial_regression.TestModels.test_constant">[docs]</a>    <span class="k">def</span> <span class="nf">test_constant</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">learn_model</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="n">model_type</span><span class="o">=</span><span class="s">&quot;constant_gaussian&quot;</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&quot;AAK&quot;</span><span class="p">)</span>
+        <span class="n">pred1</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX1</span><span class="p">)</span>
+        <span class="n">pred2</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">pred1</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">pred1</span><span class="p">,</span> <span class="n">pred2</span><span class="p">)</span>
+
+        <span class="n">fname</span> <span class="o">=</span> <span class="s">&quot;test_constant_model&quot;</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">save_trained_model</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+        <span class="n">nmodel</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s">&quot;constant_gaussian&quot;</span><span class="p">)</span>
+        <span class="n">pred3</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">pred1</span><span class="p">,</span> <span class="n">pred3</span><span class="p">)</span>
+
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">()</span>
+        <span class="n">ll1</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">posterior_log_likelihood</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">ll</span><span class="p">,</span> <span class="n">ll1</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestModels.test_linear_distance"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_spatial_regression.TestModels.test_linear_distance">[docs]</a>    <span class="k">def</span> <span class="nf">test_linear_distance</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">learn_model</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="n">model_type</span><span class="o">=</span><span class="s">&quot;linear_distance&quot;</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&quot;AAK&quot;</span><span class="p">)</span>
+        <span class="n">pred1</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX1</span><span class="p">)</span>
+        <span class="n">pred2</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">pred1</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.01375</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">pred2</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.0175</span><span class="p">)</span>
+
+        <span class="n">fname</span> <span class="o">=</span> <span class="s">&quot;test_linear_model&quot;</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">save_trained_model</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+        <span class="n">nmodel</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s">&quot;linear_distance&quot;</span><span class="p">)</span>
+        <span class="n">pred3</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">pred1</span><span class="p">,</span> <span class="n">pred3</span><span class="p">)</span>
+
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">()</span>
+        <span class="n">ll1</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">posterior_log_likelihood</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">ll</span><span class="p">,</span> <span class="n">ll1</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestModels.test_GP"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_spatial_regression.TestModels.test_GP">[docs]</a>    <span class="k">def</span> <span class="nf">test_GP</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">learn_model</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="n">model_type</span><span class="o">=</span><span class="s">&quot;gp_dad_log&quot;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s">&quot;coda_decay&quot;</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&#39;AAK&#39;</span><span class="p">)</span>
+        <span class="n">pred1</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX1</span><span class="p">)</span>
+        <span class="n">pred2</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX2</span><span class="p">)</span>
+
+        <span class="n">fname</span> <span class="o">=</span> <span class="s">&quot;test_gp_model&quot;</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">save_trained_model</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+        <span class="n">nmodel</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s">&quot;gp_dad_log&quot;</span><span class="p">)</span>
+        <span class="n">pred3</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">testX1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">pred1</span><span class="p">,</span> <span class="n">pred3</span><span class="p">)</span>
+
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">log_likelihood</span><span class="p">()</span>
+        <span class="n">ll1</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">posterior_log_likelihood</span><span class="p">(</span><span class="n">gp_extract_features</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="s">&quot;dad_log&quot;</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+        <span class="c"># unlike with the other models, these likelihoods are not</span>
+        <span class="c"># necessarily equal in the GP case</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">nmodel</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span>
+
+</div></div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

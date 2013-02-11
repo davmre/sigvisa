@@ -1,0 +1,267 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>wiggles Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="models Package" href="../sigvisa.models/" />
+    <link rel="next" title="plotting Package" href="../sigvisa.plotting/" />
+    <link rel="prev" title="templates Package" href="../sigvisa.models.templates/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.plotting/" title="plotting Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.templates/" title="templates Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" accesskey="U">models Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="wiggles-package">
+<h1>wiggles Package<a class="headerlink" href="#wiggles-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.models.wiggles.featurizer">
+<span id="featurizer-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">featurizer</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.wiggles.featurizer" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.models.wiggles.featurizer.Featurizer">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.wiggles.featurizer.</tt><tt class="descname">Featurizer</tt><a class="reference internal" href="../_modules/sigvisa/models/wiggles/featurizer/#Featurizer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.featurizer.Featurizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="method">
+<dt id="sigvisa.models.wiggles.featurizer.Featurizer.basis_decomposition">
+<tt class="descname">basis_decomposition</tt><big>(</big><em>signal</em>, <em>srate=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/featurizer/#Featurizer.basis_decomposition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.featurizer.Featurizer.basis_decomposition" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.featurizer.Featurizer.cost">
+<tt class="descname">cost</tt><big>(</big><em>signal</em>, <em>features</em>, <em>srate=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/featurizer/#Featurizer.cost"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.featurizer.Featurizer.cost" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.featurizer.Featurizer.encode_params_from_signal">
+<tt class="descname">encode_params_from_signal</tt><big>(</big><em>signal</em>, <em>srate</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/featurizer/#Featurizer.encode_params_from_signal"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.featurizer.Featurizer.encode_params_from_signal" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.featurizer.Featurizer.project_down">
+<tt class="descname">project_down</tt><big>(</big><em>signal</em>, <em>srate=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/featurizer/#Featurizer.project_down"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.featurizer.Featurizer.project_down" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.featurizer.Featurizer.signal_from_encoded_params">
+<tt class="descname">signal_from_encoded_params</tt><big>(</big><em>encoded</em>, <em>srate</em>, <em>len_seconds=30</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/featurizer/#Featurizer.signal_from_encoded_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.featurizer.Featurizer.signal_from_encoded_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.featurizer.Featurizer.signal_from_features">
+<tt class="descname">signal_from_features</tt><big>(</big><em>features</em>, <em>srate=None</em>, <em>len_seconds=30</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/featurizer/#Featurizer.signal_from_features"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.featurizer.Featurizer.signal_from_features" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.models.wiggles.fourier_features">
+<span id="fourier-features-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">fourier_features</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.wiggles.fourier_features" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.models.wiggles.fourier_features.FourierFeatures">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.wiggles.fourier_features.</tt><tt class="descname">FourierFeatures</tt><big>(</big><em>fundamental=0.1</em>, <em>min_freq=0.8</em>, <em>max_freq=3.5</em>, <em>srate=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/fourier_features/#FourierFeatures"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.fourier_features.FourierFeatures" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.models.wiggles.featurizer.Featurizer" title="sigvisa.models.wiggles.featurizer.Featurizer"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.models.wiggles.featurizer.Featurizer</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.models.wiggles.fourier_features.FourierFeatures.basis_decomposition">
+<tt class="descname">basis_decomposition</tt><big>(</big><em>signal</em>, <em>srate=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/fourier_features/#FourierFeatures.basis_decomposition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.fourier_features.FourierFeatures.basis_decomposition" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.fourier_features.FourierFeatures.signal_from_features">
+<tt class="descname">signal_from_features</tt><big>(</big><em>features</em>, <em>srate=None</em>, <em>len_seconds=30</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/fourier_features/#FourierFeatures.signal_from_features"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.fourier_features.FourierFeatures.signal_from_features" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.wiggles.fourier_features.main">
+<tt class="descclassname">sigvisa.models.wiggles.fourier_features.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/fourier_features/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.fourier_features.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.models.wiggles.wiggle">
+<span id="wiggle-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">wiggle</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.wiggles.wiggle" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.models.wiggles.wiggle.create_wiggled_phase">
+<tt class="descclassname">sigvisa.models.wiggles.wiggle.</tt><tt class="descname">create_wiggled_phase</tt><big>(</big><em>template_params</em>, <em>tm</em>, <em>phase</em>, <em>wiggle</em>, <em>wiggle_stime</em>, <em>st</em>, <em>npts</em>, <em>srate</em>, <em>chan</em>, <em>sta</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle/#create_wiggled_phase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle.create_wiggled_phase" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.wiggles.wiggle.extract_phase_wiggle">
+<tt class="descclassname">sigvisa.models.wiggles.wiggle.</tt><tt class="descname">extract_phase_wiggle</tt><big>(</big><em>wave</em>, <em>template_params</em>, <em>tm</em>, <em>phase</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle/#extract_phase_wiggle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle.extract_phase_wiggle" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.models.wiggles.wiggle_models">
+<span id="wiggle-models-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">wiggle_models</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.wiggles.wiggle_models" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.models.wiggles.wiggle_models.PlainWiggleModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.wiggles.wiggle_models.</tt><tt class="descname">PlainWiggleModel</tt><big>(</big><em>tm</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#PlainWiggleModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.PlainWiggleModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.models.wiggles.wiggle_models.WiggleModel" title="sigvisa.models.wiggles.wiggle_models.WiggleModel"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.models.wiggles.wiggle_models.WiggleModel</span></tt></a></p>
+<p>Model signal as AR noise + plain template (no wiggles)</p>
+<dl class="method">
+<dt id="sigvisa.models.wiggles.wiggle_models.PlainWiggleModel.summary_str">
+<tt class="descname">summary_str</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#PlainWiggleModel.summary_str"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.PlainWiggleModel.summary_str" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.wiggle_models.PlainWiggleModel.template_ncost">
+<tt class="descname">template_ncost</tt><big>(</big><em>wave</em>, <em>phases</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#PlainWiggleModel.template_ncost"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.PlainWiggleModel.template_ncost" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.wiggles.wiggle_models.</tt><tt class="descname">StupidL1WiggleModel</tt><big>(</big><em>tm</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#StupidL1WiggleModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.models.wiggles.wiggle_models.WiggleModel" title="sigvisa.models.wiggles.wiggle_models.WiggleModel"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.models.wiggles.wiggle_models.WiggleModel</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel.summary_str">
+<tt class="descname">summary_str</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#StupidL1WiggleModel.summary_str"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel.summary_str" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel.template_ncost">
+<tt class="descname">template_ncost</tt><big>(</big><em>wave</em>, <em>phases</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#StupidL1WiggleModel.template_ncost"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel.template_ncost" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.models.wiggles.wiggle_models.WiggleModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.wiggles.wiggle_models.</tt><tt class="descname">WiggleModel</tt><big>(</big><em>tm</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#WiggleModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.WiggleModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="method">
+<dt id="sigvisa.models.wiggles.wiggle_models.WiggleModel.summary_str">
+<tt class="descname">summary_str</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#WiggleModel.summary_str"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.WiggleModel.summary_str" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.wiggles.wiggle_models.WiggleModel.template_ncost">
+<tt class="descname">template_ncost</tt><big>(</big><em>wave</em>, <em>phases</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#WiggleModel.template_ncost"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.WiggleModel.template_ncost" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.wiggles.wiggle_models.wiggle_model_by_name">
+<tt class="descclassname">sigvisa.models.wiggles.wiggle_models.</tt><tt class="descname">wiggle_model_by_name</tt><big>(</big><em>name</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/wiggles/wiggle_models/#wiggle_model_by_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.wiggles.wiggle_models.wiggle_model_by_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">wiggles Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.models.wiggles.featurizer"><tt class="docutils literal"><span class="pre">featurizer</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.models.wiggles.fourier_features"><tt class="docutils literal"><span class="pre">fourier_features</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.models.wiggles.wiggle"><tt class="docutils literal"><span class="pre">wiggle</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.models.wiggles.wiggle_models"><tt class="docutils literal"><span class="pre">wiggle_models</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.models.templates/"
+                        title="previous chapter">templates Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.plotting/"
+                        title="next chapter">plotting Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.models.wiggles.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.plotting/" title="plotting Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.templates/" title="templates Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" >models Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

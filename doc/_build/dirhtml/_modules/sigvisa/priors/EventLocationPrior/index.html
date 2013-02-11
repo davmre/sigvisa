@@ -1,0 +1,303 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.priors.EventLocationPrior &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.priors.EventLocationPrior</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">exp</span><span class="p">,</span> <span class="n">log</span><span class="p">,</span> <span class="n">pi</span><span class="p">,</span> <span class="n">degrees</span><span class="p">,</span> <span class="n">radians</span><span class="p">,</span> <span class="n">arange</span><span class="p">,</span> <span class="n">arcsin</span><span class="p">,</span> <span class="n">zeros</span><span class="p">,</span> <span class="n">sin</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.utils.geog</span> <span class="kn">import</span> <span class="n">dist_deg</span>
+
+
+<span class="c"># we will use these many events to compute the optimal bandwidth</span>
+<span class="n">SAMPLE_EVENTS</span> <span class="o">=</span> <span class="mi">1000</span>
+
+<span class="n">UNIFORM_PROB</span> <span class="o">=</span> <span class="o">.</span><span class="mo">001</span>
+
+<span class="n">LON_INTERVAL</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="c"># use half as many latitude buckets as longitude buckets</span>
+<span class="n">Z_INTERVAL</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="p">(</span><span class="mf">2.0</span> <span class="o">/</span> <span class="mf">360.</span><span class="p">)</span> <span class="o">*</span> <span class="n">LON_INTERVAL</span>
+<span class="n">lon_arr</span> <span class="o">=</span> <span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="mf">180.</span><span class="p">,</span> <span class="mf">180.</span><span class="p">,</span> <span class="n">LON_INTERVAL</span><span class="p">)</span>
+<span class="n">lat_arr</span> <span class="o">=</span> <span class="n">degrees</span><span class="p">(</span><span class="n">arcsin</span><span class="p">(</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">Z_INTERVAL</span><span class="p">)))</span>
+<span class="n">lat_grid</span><span class="p">,</span> <span class="n">lon_grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">lat_arr</span><span class="p">,</span> <span class="n">lon_arr</span><span class="p">)</span>
+
+<span class="n">EARTH_AREA</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">AVG_EARTH_RADIUS_KM</span> <span class="o">**</span> <span class="mi">2</span>
+<span class="n">PATCH_AREA</span> <span class="o">=</span> <span class="n">EARTH_AREA</span> <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lon_arr</span><span class="p">)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">lat_arr</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="kernel"><a class="viewcode-back" href="../../../../sigvisa.priors/#sigvisa.priors.EventLocationPrior.kernel">[docs]</a><span class="k">def</span> <span class="nf">kernel</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">distance</span><span class="p">):</span>
+    <span class="c"># convert bandwidth and distance to radians</span>
+    <span class="n">b</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">radians</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">),</span> <span class="n">radians</span><span class="p">(</span><span class="n">distance</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">b</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>  <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">pi</span> <span class="o">*</span> <span class="n">AVG_EARTH_RADIUS_KM</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> \
+        <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">d</span> <span class="o">/</span> <span class="n">b</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">pi</span> <span class="o">/</span> <span class="n">b</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="compute_density"><a class="viewcode-back" href="../../../../sigvisa.priors/#sigvisa.priors.EventLocationPrior.compute_density">[docs]</a><span class="k">def</span> <span class="nf">compute_density</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+    <span class="n">density</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">lon_arr</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">lat_arr</span><span class="p">)),</span> <span class="nb">float</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">density</span> <span class="o">+=</span> <span class="n">kernel</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span>
+                          <span class="n">dist_deg</span><span class="p">((</span><span class="n">lon_grid</span><span class="p">,</span> <span class="n">lat_grid</span><span class="p">),</span>
+                                   <span class="n">ev</span><span class="p">[[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]]))</span>
+    <span class="n">density</span> <span class="o">/=</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">density</span>
+
+</div>
+<div class="viewcode-block" id="leave_oneout_avg_loglike"><a class="viewcode-back" href="../../../../sigvisa.priors/#sigvisa.priors.EventLocationPrior.leave_oneout_avg_loglike">[docs]</a><span class="k">def</span> <span class="nf">leave_oneout_avg_loglike</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+    <span class="k">print</span> <span class="s">&quot;computing leave one out bw </span><span class="si">%f</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">bandwidth</span><span class="p">,</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">))</span>
+    <span class="n">density</span> <span class="o">=</span> <span class="n">compute_density</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">events</span><span class="p">)</span>
+    <span class="n">tot</span> <span class="o">=</span> <span class="mf">0.</span>
+    <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">evdens</span> <span class="o">=</span> <span class="n">kernel</span><span class="p">(</span><span class="n">bandwidth</span><span class="p">,</span> <span class="n">dist_deg</span><span class="p">((</span><span class="n">lon_grid</span><span class="p">,</span> <span class="n">lat_grid</span><span class="p">),</span>
+                                            <span class="n">ev</span><span class="p">[[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]]))</span>
+        <span class="n">netdensity</span> <span class="o">=</span> <span class="p">(</span><span class="n">n</span> <span class="o">/</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="n">density</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="n">evdens</span>
+        <span class="n">netdensity</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">UNIFORM_PROB</span><span class="p">)</span> <span class="o">*</span> <span class="n">netdensity</span> <span class="o">+</span> <span class="n">UNIFORM_PROB</span> <span class="o">/</span> <span class="n">EARTH_AREA</span>
+
+        <span class="n">loni</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">ev</span><span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">]</span> <span class="o">+</span> <span class="mi">180</span><span class="p">)</span> <span class="o">//</span> <span class="n">LON_INTERVAL</span><span class="p">)</span>
+        <span class="n">lati</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">sin</span><span class="p">(</span><span class="n">radians</span><span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="n">EV_LAT_COL</span><span class="p">]))</span> <span class="o">+</span> <span class="mf">1.</span><span class="p">)</span> <span class="o">//</span> <span class="n">Z_INTERVAL</span><span class="p">)</span>
+        <span class="n">tot</span> <span class="o">+=</span> <span class="n">log</span><span class="p">(</span><span class="n">netdensity</span><span class="p">[</span><span class="n">loni</span><span class="p">,</span> <span class="n">lati</span><span class="p">])</span>
+
+    <span class="n">ans</span> <span class="o">=</span> <span class="n">tot</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;done (in </span><span class="si">%.1f</span><span class="s"> secs) -&gt; </span><span class="si">%f</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">,</span> <span class="n">ans</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ans</span>
+
+</div>
+<div class="viewcode-block" id="learn"><a class="viewcode-back" href="../../../../sigvisa.priors/#sigvisa.priors.EventLocationPrior.learn">[docs]</a><span class="k">def</span> <span class="nf">learn</span><span class="p">(</span><span class="n">param_fname</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">):</span>
+    <span class="c">########</span>
+    <span class="c"># first we will learn the optimal bandwidth (in degrees)</span>
+    <span class="c">########</span>
+
+    <span class="c"># to do so we will pick a random sample of 500 events</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">leb_events</span><span class="p">))</span>
+               <span class="k">if</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">SAMPLE_EVENTS</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">leb_events</span><span class="p">))]</span>
+
+    <span class="c"># then we&#39;ll use leave-one-out cross-validation to select the best</span>
+    <span class="c"># bandwidth</span>
+
+    <span class="n">all_bandw</span><span class="p">,</span> <span class="n">all_loglike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+    <span class="k">for</span> <span class="n">bandw</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="o">.</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="o">.</span><span class="mi">2</span><span class="p">:</span>
+        <span class="n">all_bandw</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">all_bandw</span><span class="p">,</span> <span class="n">bandw</span><span class="p">)</span>
+        <span class="n">all_loglike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">all_loglike</span><span class="p">,</span>
+                                <span class="n">leave_oneout_avg_loglike</span><span class="p">(</span><span class="n">bandw</span><span class="p">,</span>
+                                                         <span class="n">leb_events</span><span class="p">[</span><span class="n">indices</span><span class="p">]))</span>
+
+    <span class="n">best_bandw</span> <span class="o">=</span> <span class="n">all_bandw</span><span class="p">[</span><span class="n">all_loglike</span><span class="o">.</span><span class="n">argmax</span><span class="p">()]</span>
+
+    <span class="k">for</span> <span class="n">bandw</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">best_bandw</span> <span class="o">-</span> <span class="o">.</span><span class="mi">2</span><span class="p">,</span> <span class="n">best_bandw</span> <span class="o">+</span> <span class="o">.</span><span class="mi">2</span><span class="p">,</span> <span class="o">.</span><span class="mo">05</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">bandw</span> <span class="ow">in</span> <span class="n">all_bandw</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">all_bandw</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">all_bandw</span><span class="p">,</span> <span class="n">bandw</span><span class="p">)</span>
+        <span class="n">all_loglike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">all_loglike</span><span class="p">,</span>
+                                <span class="n">leave_oneout_avg_loglike</span><span class="p">(</span><span class="n">bandw</span><span class="p">,</span>
+                                                         <span class="n">leb_events</span><span class="p">[</span><span class="n">indices</span><span class="p">]))</span>
+
+    <span class="n">best_bandw</span> <span class="o">=</span> <span class="n">all_bandw</span><span class="p">[</span><span class="n">all_loglike</span><span class="o">.</span><span class="n">argmax</span><span class="p">()]</span>
+
+    <span class="k">print</span> <span class="s">&quot;best bandwidth&quot;</span><span class="p">,</span> <span class="n">best_bandw</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">gui</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mf">4.8</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="o">.</span><span class="n">type1</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;Leave-One-Out Avg. Log Likelihood&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">scatter</span><span class="p">(</span><span class="n">all_bandw</span><span class="p">,</span> <span class="n">all_loglike</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;bandwidth (degrees)&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;avg. log likelihood&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">2.</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">writefig</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">basename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">writefig</span><span class="p">,</span> <span class="s">&quot;EventLocBandwidth&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">type1</span><span class="p">:</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">basename</span> <span class="o">+</span> <span class="s">&quot;.pdf&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">basename</span> <span class="o">+</span> <span class="s">&quot;.png&quot;</span><span class="p">)</span>
+
+    <span class="n">density</span> <span class="o">=</span> <span class="n">compute_density</span><span class="p">(</span><span class="n">best_bandw</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">)</span>
+    <span class="c"># fold-in a uniform prior</span>
+    <span class="n">density</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">UNIFORM_PROB</span><span class="p">)</span> <span class="o">*</span> <span class="n">density</span> <span class="o">+</span> <span class="n">UNIFORM_PROB</span> <span class="o">/</span> <span class="n">EARTH_AREA</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">gui</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">type1</span><span class="p">:</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="s">&quot;Event Location Log Density (b=</span><span class="si">%.2f</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">best_bandw</span>
+
+        <span class="kn">from</span> <span class="nn">sigvisa.utils.draw_earth</span> <span class="kn">import</span> <span class="n">draw_events</span><span class="p">,</span> <span class="n">draw_earth</span><span class="p">,</span> <span class="n">draw_density</span>
+        <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="n">draw_density</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">lon_arr</span><span class="p">,</span> <span class="n">lat_arr</span><span class="p">,</span> <span class="n">log</span><span class="p">(</span><span class="n">density</span><span class="p">),</span>
+                     <span class="n">colorbar_orientation</span><span class="o">=</span><span class="s">&quot;horizontal&quot;</span><span class="p">,</span> <span class="n">colorbar_shrink</span><span class="o">=</span><span class="mf">0.75</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">writefig</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">basename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">writefig</span><span class="p">,</span> <span class="s">&quot;EventLocationPrior&quot;</span><span class="p">)</span>
+            <span class="c"># a .pdf file would be too huge</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">basename</span> <span class="o">+</span> <span class="s">&quot;.png&quot;</span><span class="p">)</span>
+
+    <span class="c"># convert the density at the grid points into a probability for each</span>
+    <span class="c"># bucket (the grid point is in the lower-left corner of the bucket)</span>
+    <span class="n">prob</span> <span class="o">=</span> <span class="n">density</span> <span class="o">*</span> <span class="n">PATCH_AREA</span>
+
+    <span class="k">print</span> <span class="s">&quot;Total prob:&quot;</span><span class="p">,</span> <span class="n">prob</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+    <span class="n">fp</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">param_fname</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">fp</span><span class="p">,</span> <span class="n">UNIFORM_PROB</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span><span class="n">fp</span><span class="p">,</span> <span class="n">LON_INTERVAL</span><span class="p">,</span> <span class="n">Z_INTERVAL</span>
+
+    <span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">prob</span><span class="p">)</span>                 <span class="c"># writes out row by row</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="Dummy"><a class="viewcode-back" href="../../../../sigvisa.priors/#sigvisa.priors.EventLocationPrior.Dummy">[docs]</a><span class="k">class</span> <span class="nc">Dummy</span><span class="p">:</span>
+    <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.priors/#sigvisa.priors.EventLocationPrior.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">param_fname</span><span class="p">):</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span> <span class="o">=</span> <span class="n">read_timerange</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="s">&quot;training&quot;</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&quot;reading events...&quot;</span><span class="p">,</span>
+    <span class="n">leb_events</span> <span class="o">=</span> <span class="n">read_events</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="s">&quot;leb&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">print</span> <span class="s">&quot;done (</span><span class="si">%d</span><span class="s"> events)&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">leb_events</span><span class="p">)</span>
+
+    <span class="n">options</span> <span class="o">=</span> <span class="n">Dummy</span><span class="p">()</span>
+
+    <span class="n">options</span><span class="o">.</span><span class="n">gui</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="n">options</span><span class="o">.</span><span class="n">type1</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">options</span><span class="o">.</span><span class="n">writefig</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="n">learn</span><span class="p">(</span><span class="n">param_fname</span><span class="p">,</span> <span class="n">options</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">main</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">,</span> <span class="s">&quot;EventLocationPrior.txt&quot;</span><span class="p">))</span>
+    <span class="k">except</span> <span class="ne">SystemExit</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">pdb</span>
+        <span class="kn">import</span> <span class="nn">traceback</span>
+        <span class="kn">import</span> <span class="nn">sys</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">(</span><span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+        <span class="n">pdb</span><span class="o">.</span><span class="n">post_mortem</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_traceback</span><span class="p">)</span>
+        <span class="k">raise</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

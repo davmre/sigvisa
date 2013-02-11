@@ -1,0 +1,155 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.source.event &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.source.event</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">sigvisa.source.brune_source</span> <span class="kn">as</span> <span class="nn">brune</span>
+<span class="kn">import</span> <span class="nn">sigvisa.source.mm_source</span> <span class="kn">as</span> <span class="nn">mm</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.utils.geog</span> <span class="kn">import</span> <span class="n">lonlatstr</span>
+<span class="kn">import</span> <span class="nn">functools32</span>
+
+<span class="n">KNOWN_EXPLOSIONS</span> <span class="o">=</span> <span class="p">(</span><span class="mi">5393637</span><span class="p">,)</span>  <span class="c"># 2009 DPRK event</span>
+
+
+<div class="viewcode-block" id="EventNotFound"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.event.EventNotFound">[docs]</a><span class="k">class</span> <span class="nc">EventNotFound</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+</div>
+<span class="nd">@functools32.lru_cache</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+<div class="viewcode-block" id="get_event"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.event.get_event">[docs]</a><span class="k">def</span> <span class="nf">get_event</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">Event</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="Event"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.event.Event">[docs]</a><span class="k">class</span> <span class="nc">Event</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="n">__slots__</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;lon&#39;</span><span class="p">,</span> <span class="s">&#39;lat&#39;</span><span class="p">,</span> <span class="s">&#39;depth&#39;</span><span class="p">,</span> <span class="s">&#39;time&#39;</span><span class="p">,</span> <span class="s">&#39;mb&#39;</span><span class="p">,</span> <span class="s">&#39;orid&#39;</span><span class="p">,</span> <span class="s">&#39;evid&#39;</span><span class="p">,</span> <span class="s">&#39;natural_source&#39;</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">evid</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">evtype</span><span class="o">=</span><span class="s">&quot;leb&quot;</span><span class="p">,</span> <span class="n">mb</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">lon</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">natural_source</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">orid</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">evid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">orid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">)</span> <span class="ow">and</span> <span class="n">evtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">ev</span> <span class="o">=</span> <span class="n">read_event</span><span class="p">(</span><span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">(),</span> <span class="n">evid</span><span class="o">=</span><span class="n">evid</span><span class="p">,</span> <span class="n">evtype</span><span class="o">=</span><span class="n">evtype</span><span class="p">,</span> <span class="n">orid</span><span class="o">=</span><span class="n">orid</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lat</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">depth</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mb</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">orid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">evid</span> <span class="o">=</span> <span class="n">ev</span>
+            <span class="k">except</span> <span class="ne">TypeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">EventNotFound</span><span class="p">(</span><span class="s">&quot;couldn&#39;t load evid </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">evid</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">natural_source</span> <span class="o">=</span> <span class="bp">False</span> <span class="k">if</span> <span class="n">evid</span> <span class="ow">in</span> <span class="n">KNOWN_EXPLOSIONS</span> <span class="k">else</span> <span class="bp">True</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lon</span> <span class="o">=</span> <span class="n">lon</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lat</span> <span class="o">=</span> <span class="n">lat</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">depth</span> <span class="o">=</span> <span class="n">depth</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">time</span> <span class="o">=</span> <span class="n">time</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mb</span> <span class="o">=</span> <span class="n">mb</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">orid</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">evid</span> <span class="o">=</span> <span class="n">evid</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">natural_source</span> <span class="o">=</span> <span class="n">natural_source</span>
+
+<div class="viewcode-block" id="Event.as_tuple"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.event.Event.as_tuple">[docs]</a>    <span class="k">def</span> <span class="nf">as_tuple</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lat</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">depth</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mb</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">orid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">evid</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Event.source_logamp"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.event.Event.source_logamp">[docs]</a>    <span class="k">def</span> <span class="nf">source_logamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">natural_source</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">brune</span><span class="o">.</span><span class="n">source_logamp</span><span class="p">(</span><span class="n">event</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="o">=</span><span class="n">phase</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">mm</span><span class="o">.</span><span class="n">source_logamp</span><span class="p">(</span><span class="n">event</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="o">=</span><span class="n">phase</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="s">&quot;evid </span><span class="si">%d</span><span class="s">, loc </span><span class="si">%s</span><span class="s">, depth </span><span class="si">%.1f</span><span class="s">km, time </span><span class="si">%.1f</span><span class="s">, mb </span><span class="si">%.1f</span><span class="s">, </span><span class="si">%s</span><span class="s"> source&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">evid</span><span class="p">,</span> <span class="n">lonlatstr</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lat</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">depth</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">mb</span><span class="p">,</span> <span class="s">&quot;natural&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">natural_source</span> <span class="k">else</span> <span class="s">&quot;explosion&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">s</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

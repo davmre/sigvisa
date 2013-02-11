@@ -1,0 +1,1063 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.analyze &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../" />
+    <link rel="up" title="Module code" href="../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.analyze</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># interpret the results of a run</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">results.compare</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.utils.geog</span> <span class="kn">import</span> <span class="n">degdiff</span><span class="p">,</span> <span class="n">dist_deg</span><span class="p">,</span> <span class="n">dist_km</span>
+<span class="kn">import</span> <span class="nn">sigvisa.database.db</span>
+<span class="kn">import</span> <span class="nn">sigvisa.learn</span>
+
+<span class="c"># ignore warnings from matplotlib in python 2.4</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s">&quot;ignore&quot;</span><span class="p">,</span> <span class="ne">DeprecationWarning</span><span class="p">)</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="c"># for type 1 fonts</span>
+<span class="c"># plt.rcParams[&#39;text.usetex&#39;] = True</span>
+<span class="c"># for type 1 fonts</span>
+<span class="c"># plt.rcParams[&#39;ps.useafm&#39;] = True</span>
+<span class="c"># plt.rcParams[&#39;pdf.use14corefonts&#39;] = True</span>
+<span class="kn">from</span> <span class="nn">sigvisa.utils.draw_earth</span> <span class="kn">import</span> <span class="n">draw_events</span><span class="p">,</span> <span class="n">draw_earth</span>
+
+<span class="n">AZGAP_RANGES</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">90</span><span class="p">),</span> <span class="p">(</span><span class="mi">90</span><span class="p">,</span> <span class="mi">180</span><span class="p">),</span> <span class="p">(</span><span class="mi">180</span><span class="p">,</span> <span class="mi">270</span><span class="p">),</span> <span class="p">(</span><span class="mi">270</span><span class="p">,</span> <span class="mi">360</span><span class="p">)]</span>
+<span class="n">DETCNT_RANGES</span> <span class="o">=</span> <span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">100</span><span class="p">)]</span>
+<span class="n">TPHASE_RANGES</span> <span class="o">=</span> <span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)]</span>
+<span class="n">HPHASE_RANGES</span> <span class="o">=</span> <span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)]</span>
+<span class="n">MAG_RANGES</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">9</span><span class="p">)]</span>
+
+<span class="n">ML_RANGES</span> <span class="o">=</span> <span class="p">[(</span><span class="o">-</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">),</span> <span class="p">(</span><span class="mf">2.5</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mf">4.5</span><span class="p">),</span> <span class="p">(</span><span class="mf">4.5</span><span class="p">,</span> <span class="mi">9</span><span class="p">)]</span>
+<span class="n">DEPTH_RANGES</span> <span class="o">=</span> <span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">),</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">300</span><span class="p">),</span> <span class="p">(</span><span class="mi">300</span><span class="p">,</span> <span class="mi">400</span><span class="p">),</span>
+                <span class="p">(</span><span class="mi">400</span><span class="p">,</span> <span class="mi">500</span><span class="p">),</span> <span class="p">(</span><span class="mi">500</span><span class="p">,</span> <span class="mi">600</span><span class="p">),</span> <span class="p">(</span><span class="mi">600</span><span class="p">,</span> <span class="mi">700</span><span class="p">),</span> <span class="p">(</span><span class="mi">700</span><span class="p">,</span> <span class="mi">999</span><span class="p">)]</span>
+
+<span class="c"># network, (lon1, lon2), (lat1, lat2)</span>
+<span class="n">REGIONS</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="p">(</span><span class="s">&#39;JMA&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">130</span><span class="p">,</span> <span class="mi">145</span><span class="p">),</span> <span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="mi">45</span><span class="p">)),</span>   <span class="c"># Japan</span>
+    <span class="p">(</span><span class="s">&#39;IRIS&#39;</span><span class="p">,</span> <span class="p">(</span><span class="o">-</span><span class="mi">125</span><span class="p">,</span> <span class="o">-</span><span class="mi">70</span><span class="p">),</span> <span class="p">(</span><span class="mi">25</span><span class="p">,</span> <span class="mi">50</span><span class="p">)),</span>  <span class="c"># Continental US</span>
+    <span class="p">(</span><span class="s">&#39;ROM&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">19</span><span class="p">),</span> <span class="p">(</span><span class="mi">36</span><span class="p">,</span> <span class="mi">48</span><span class="p">)),</span>      <span class="c"># Italy</span>
+    <span class="p">(</span><span class="s">&#39;NNC&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">46</span><span class="p">,</span> <span class="mi">86</span><span class="p">),</span> <span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">55</span><span class="p">)),</span>       <span class="c"># Kazakhstan</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="read_sel3_svm_scores"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.read_sel3_svm_scores">[docs]</a><span class="k">def</span> <span class="nf">read_sel3_svm_scores</span><span class="p">():</span>
+    <span class="n">evscores</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&quot;output&quot;</span><span class="p">,</span>
+                                  <span class="s">&quot;preds_linsvm_nimLabels_1_valNimarLabels.txt&quot;</span><span class="p">)):</span>
+        <span class="n">evid</span><span class="p">,</span> <span class="n">istrue</span><span class="p">,</span> <span class="n">score</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="n">evscores</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">evid</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">score</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">evscores</span>
+
+</div>
+<div class="viewcode-block" id="compute_roc_curve"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.compute_roc_curve">[docs]</a><span class="k">def</span> <span class="nf">compute_roc_curve</span><span class="p">(</span><span class="n">gold_events</span><span class="p">,</span> <span class="n">guess_events</span><span class="p">,</span> <span class="n">guess_ev_scores</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">guess_events</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">:</span>
+        <span class="n">freq</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">freq</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">guess_events</span><span class="p">)</span> <span class="o">/</span> <span class="mi">10</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+
+    <span class="n">true_idx</span><span class="p">,</span> <span class="n">false_idx</span><span class="p">,</span> <span class="n">mat</span> <span class="o">=</span> <span class="n">find_true_false_guess</span><span class="p">(</span><span class="n">gold_events</span><span class="p">,</span> <span class="n">guess_events</span><span class="p">)</span>
+    <span class="n">true_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">true_idx</span><span class="p">)</span>
+    <span class="n">istrue_and_scores</span> <span class="o">=</span> <span class="p">[(</span><span class="n">guess_ev_scores</span><span class="p">[</span><span class="n">guess_events</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]],</span>
+                          <span class="nb">int</span><span class="p">(</span><span class="n">i</span> <span class="ow">in</span> <span class="n">true_idx</span><span class="p">))</span>
+                         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">guess_events</span><span class="p">))]</span>
+
+    <span class="n">istrue_and_scores</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="c"># compute the ROC curve</span>
+    <span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="n">num_true</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">for</span> <span class="n">cnt</span><span class="p">,</span> <span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">istrue</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">istrue_and_scores</span><span class="p">):</span>
+        <span class="n">num_true</span> <span class="o">+=</span> <span class="n">istrue</span>
+
+        <span class="k">if</span> <span class="n">cnt</span> <span class="o">%</span> <span class="n">freq</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">cnt</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">istrue_and_scores</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">y_pts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">num_true</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold_events</span><span class="p">))</span>
+            <span class="n">x_pts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">num_true</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">cnt</span> <span class="o">+</span> <span class="mf">1.0</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span>
+
+</div>
+<div class="viewcode-block" id="filter_by_lonlat"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.filter_by_lonlat">[docs]</a><span class="k">def</span> <span class="nf">filter_by_lonlat</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">lon_1</span><span class="p">,</span> <span class="n">lon_2</span><span class="p">,</span> <span class="n">lat_1</span><span class="p">,</span> <span class="n">lat_2</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">events</span><span class="p">[(</span><span class="n">events</span><span class="p">[:,</span> <span class="n">EV_LON_COL</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">lon_1</span><span class="p">)</span>
+                  <span class="o">&amp;</span> <span class="p">(</span><span class="n">events</span><span class="p">[:,</span> <span class="n">EV_LON_COL</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">lon_2</span><span class="p">)</span>
+                  <span class="o">&amp;</span> <span class="p">(</span><span class="n">events</span><span class="p">[:,</span> <span class="n">EV_LAT_COL</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">lat_1</span><span class="p">)</span>
+                  <span class="o">&amp;</span> <span class="p">(</span><span class="n">events</span><span class="p">[:,</span> <span class="n">EV_LAT_COL</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">lat_2</span><span class="p">),</span> <span class="p">:]</span>
+
+</div>
+<div class="viewcode-block" id="split_by_attr"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.split_by_attr">[docs]</a><span class="k">def</span> <span class="nf">split_by_attr</span><span class="p">(</span><span class="n">attr_ranges</span><span class="p">,</span> <span class="n">attr_vals</span><span class="p">):</span>
+    <span class="n">ev_buckets</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">attr_ranges</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">evnum</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">attr_vals</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">bucnum</span><span class="p">,</span> <span class="p">(</span><span class="n">vallo</span><span class="p">,</span> <span class="n">valhi</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">attr_ranges</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">val</span> <span class="o">&gt;</span> <span class="n">vallo</span> <span class="ow">and</span> <span class="n">val</span> <span class="o">&lt;=</span> <span class="n">valhi</span><span class="p">:</span>
+                <span class="n">ev_buckets</span><span class="p">[</span><span class="n">bucnum</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">evnum</span><span class="p">)</span>
+                <span class="k">break</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;WARNING: EVENT NOT IN ANY BUCKET!!&quot;</span>
+
+    <span class="k">return</span> <span class="n">ev_buckets</span>
+
+</div>
+<div class="viewcode-block" id="analyze_by_attr"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.analyze_by_attr">[docs]</a><span class="k">def</span> <span class="nf">analyze_by_attr</span><span class="p">(</span><span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_ranges</span><span class="p">,</span> <span class="n">leb_attrvals</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span>
+                    <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">verbose</span><span class="p">):</span>
+    <span class="c"># for each SEL3 and VISA event find the attribute of the corresponding</span>
+    <span class="c"># LEB event</span>
+    <span class="n">sel3_attrvals</span> <span class="o">=</span> <span class="p">[</span><span class="n">leb_attrvals</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">find_nearest</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span>
+                                                           <span class="n">sel3_events</span><span class="p">)]</span>
+    <span class="n">visa_attrvals</span> <span class="o">=</span> <span class="p">[</span><span class="n">leb_attrvals</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">find_nearest</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span>
+                                                           <span class="n">visa_events</span><span class="p">)]</span>
+
+    <span class="c"># put the LEB, SEL3, and VISA events into buckets based on the LEB attribute</span>
+    <span class="n">leb_buckets</span> <span class="o">=</span> <span class="n">split_by_attr</span><span class="p">(</span><span class="n">attr_ranges</span><span class="p">,</span> <span class="n">leb_attrvals</span><span class="p">)</span>
+    <span class="n">sel3_buckets</span> <span class="o">=</span> <span class="n">split_by_attr</span><span class="p">(</span><span class="n">attr_ranges</span><span class="p">,</span> <span class="n">sel3_attrvals</span><span class="p">)</span>
+    <span class="n">visa_buckets</span> <span class="o">=</span> <span class="n">split_by_attr</span><span class="p">(</span><span class="n">attr_ranges</span><span class="p">,</span> <span class="n">visa_attrvals</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">74</span>
+    <span class="k">print</span> <span class="s">&quot; </span><span class="si">%10s</span><span class="s"> | #ev |          SEL3             |          VISA&quot;</span>\
+          <span class="o">%</span> <span class="n">attr_name</span>
+    <span class="k">print</span> <span class="s">&quot;    &lt; _ &lt;=  |     |  F1     P     R   err  sd |   F1    P     R &quot;</span>\
+          <span class="s">&quot;  err  sd&quot;</span>
+    <span class="k">print</span> <span class="s">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">74</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">vallo</span><span class="p">,</span> <span class="n">valhi</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">attr_ranges</span><span class="p">):</span>
+        <span class="n">sel3_f</span><span class="p">,</span> <span class="n">sel3_p</span><span class="p">,</span> <span class="n">sel3_r</span><span class="p">,</span> <span class="n">sel3_err</span> <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span>
+            <span class="n">leb_events</span><span class="p">[</span><span class="n">leb_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:],</span> <span class="n">sel3_events</span><span class="p">[</span><span class="n">sel3_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:])</span>
+
+        <span class="n">visa_f</span><span class="p">,</span> <span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span> <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span>
+            <span class="n">leb_events</span><span class="p">[</span><span class="n">leb_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:],</span> <span class="n">visa_events</span><span class="p">[</span><span class="n">visa_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:])</span>
+
+        <span class="k">print</span> <span class="p">(</span><span class="s">&quot; </span><span class="si">%3d</span><span class="s"> -- </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> &quot;</span>
+               <span class="s">&quot;| </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s">&quot;</span><span class="p">)</span>\
+            <span class="o">%</span> <span class="p">(</span><span class="n">vallo</span><span class="p">,</span> <span class="n">valhi</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">leb_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span> <span class="n">sel3_f</span><span class="p">,</span> <span class="n">sel3_p</span><span class="p">,</span> <span class="n">sel3_r</span><span class="p">,</span>
+               <span class="n">sel3_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">sel3_err</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+               <span class="n">visa_f</span><span class="p">,</span> <span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">visa_err</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="c"># print unmatched VISA events</span>
+            <span class="n">unmat_idx</span> <span class="o">=</span> <span class="n">find_unmatched</span><span class="p">(</span>
+                <span class="n">leb_events</span><span class="p">[</span><span class="n">leb_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:],</span> <span class="n">visa_events</span><span class="p">[</span><span class="n">visa_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:])</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">unmat_idx</span><span class="p">):</span>
+                <span class="n">unmat_orids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">leb_events</span><span class="p">[</span><span class="n">leb_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">idx</span><span class="p">],</span> <span class="n">EV_ORID_COL</span><span class="p">])</span>
+                               <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">unmat_idx</span><span class="p">]</span>
+                <span class="n">unmat_orids</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+                <span class="k">print</span> <span class="s">&quot;Unmatched VISA:&quot;</span><span class="p">,</span> <span class="n">unmat_orids</span>
+
+            <span class="c"># repeat for SEL3</span>
+            <span class="n">unmat_idx</span> <span class="o">=</span> <span class="n">find_unmatched</span><span class="p">(</span>
+                <span class="n">leb_events</span><span class="p">[</span><span class="n">leb_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:],</span> <span class="n">sel3_events</span><span class="p">[</span><span class="n">sel3_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="p">:])</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">unmat_idx</span><span class="p">):</span>
+                <span class="n">unmat_orids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">leb_events</span><span class="p">[</span><span class="n">leb_buckets</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">idx</span><span class="p">],</span> <span class="n">EV_ORID_COL</span><span class="p">])</span>
+                               <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">unmat_idx</span><span class="p">]</span>
+                <span class="n">unmat_orids</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+                <span class="k">print</span> <span class="s">&quot;Unmatched SEL3:&quot;</span><span class="p">,</span> <span class="n">unmat_orids</span>
+
+</div>
+<div class="viewcode-block" id="azimuth_gap"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.azimuth_gap">[docs]</a><span class="k">def</span> <span class="nf">azimuth_gap</span><span class="p">(</span><span class="n">esazlist</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">esazlist</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">360.</span>
+
+    <span class="n">azlist</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">esazlist</span><span class="p">]</span>        <span class="c"># copy the list</span>
+    <span class="n">azlist</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+    <span class="n">gap</span> <span class="o">=</span> <span class="nb">max</span><span class="p">((</span><span class="mi">360</span> <span class="o">+</span> <span class="n">degdiff</span><span class="p">(</span><span class="n">azlist</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">azlist</span><span class="p">[(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">azlist</span><span class="p">)]))</span> <span class="o">%</span> <span class="mi">360</span>
+              <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">azlist</span><span class="p">)))</span>
+
+    <span class="k">if</span> <span class="n">gap</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">gap</span> <span class="o">=</span> <span class="mi">360</span>
+
+    <span class="k">return</span> <span class="n">gap</span>
+
+<span class="c"># find the nearest leb event for each event</span>
+
+</div>
+<div class="viewcode-block" id="find_nearest"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.find_nearest">[docs]</a><span class="k">def</span> <span class="nf">find_nearest</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+    <span class="n">nearest</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">minevnum</span><span class="p">,</span> <span class="n">mindist</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span>
+        <span class="k">for</span> <span class="n">lebevnum</span><span class="p">,</span> <span class="n">lebev</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">leb_events</span><span class="p">):</span>
+            <span class="n">dist</span> <span class="o">=</span> <span class="n">dist_deg</span><span class="p">((</span><span class="n">ev</span><span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="n">EV_LAT_COL</span><span class="p">]),</span>
+                            <span class="p">(</span><span class="n">lebev</span><span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">],</span> <span class="n">lebev</span><span class="p">[</span><span class="n">EV_LAT_COL</span><span class="p">]))</span>\
+                <span class="o">+</span> <span class="nb">abs</span><span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="n">EV_TIME_COL</span><span class="p">]</span> <span class="o">-</span> <span class="n">lebev</span><span class="p">[</span><span class="n">EV_TIME_COL</span><span class="p">])</span> <span class="o">/</span> <span class="mf">10.0</span>
+            <span class="k">if</span> <span class="n">mindist</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">dist</span> <span class="o">&lt;</span> <span class="n">mindist</span><span class="p">:</span>
+                <span class="n">minevnum</span><span class="p">,</span> <span class="n">mindist</span> <span class="o">=</span> <span class="n">lebevnum</span><span class="p">,</span> <span class="n">dist</span>
+        <span class="n">nearest</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">minevnum</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">nearest</span>
+
+</div>
+<div class="viewcode-block" id="gui"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.gui">[docs]</a><span class="k">def</span> <span class="nf">gui</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+    <span class="c">#</span>
+    <span class="c"># draw and the leb, sel3 and predicted events</span>
+    <span class="c">#</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">events</span><span class="p">:</span>
+        <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;LEB(yellow), SEL3(red) and NET-VISA(blue)&quot;</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;o&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;s&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;blue&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;*&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;yellow&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">write</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">&quot;output/run_</span><span class="si">%d</span><span class="s">_events.png&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">))</span>
+
+        <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;LEB(yellow) and SEL3(red)&quot;</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;o&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;*&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;yellow&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">write</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">&quot;output/run_</span><span class="si">%d</span><span class="s">_leb_sel3.png&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">))</span>
+
+        <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;LEB(yellow) and NET-VISA(blue)&quot;</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;s&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;blue&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;*&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;yellow&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">write</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">&quot;output/run_</span><span class="si">%d</span><span class="s">_leb_visa.png&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">))</span>
+
+        <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;SEL3(red) and NET-VISA(blue)&quot;</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;o&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;s&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;blue&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">write</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">&quot;output/run_</span><span class="si">%d</span><span class="s">_sel3_visa.png&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">))</span>
+
+        <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;Missed LEB events&quot;</span><span class="p">)</span>
+        <span class="n">missed_leb_idx</span> <span class="o">=</span> <span class="n">find_unmatched</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">events</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">[</span><span class="n">missed_leb_idx</span><span class="p">][:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                    <span class="n">marker</span><span class="o">=</span><span class="s">&quot;*&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;yellow&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">write</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">&quot;output/run_</span><span class="si">%d</span><span class="s">_missed.png&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">))</span>
+
+    <span class="c">#</span>
+    <span class="c"># draw an ROC curve</span>
+    <span class="c">#</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">database</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select orid, score from visa_origin where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                   <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">,))</span>
+    <span class="n">evscores</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;Precision-Recall curve with LEB as ground truth&quot;</span><span class="p">)</span>
+
+    <span class="n">sel3_f</span><span class="p">,</span> <span class="n">sel3_p</span><span class="p">,</span> <span class="n">sel3_r</span><span class="p">,</span> <span class="n">sel3_err</span> <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([(</span><span class="n">sel3_p</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">)],</span> <span class="p">[(</span><span class="n">sel3_r</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">)],</span> <span class="n">label</span><span class="o">=</span><span class="s">&quot;SEL3&quot;</span><span class="p">,</span>
+             <span class="n">marker</span><span class="o">=</span><span class="s">&#39;o&#39;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span>
+             <span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">svm</span><span class="p">:</span>
+        <span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span> <span class="o">=</span> <span class="n">compute_roc_curve</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span>
+                                         <span class="n">read_sel3_svm_scores</span><span class="p">())</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s">&quot;SEL3 extrapolation&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span>
+                 <span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;:&quot;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span> <span class="o">=</span> <span class="n">compute_roc_curve</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">events</span><span class="p">,</span> <span class="n">evscores</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">run_name</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;blue&quot;</span><span class="p">,</span>
+             <span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;-&quot;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">runid2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">events2</span> <span class="o">=</span> <span class="n">read_events</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_start</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_end</span><span class="p">,</span>
+                              <span class="s">&quot;visa&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">runid2</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select orid, score from visa_origin where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                       <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid2</span><span class="p">,))</span>
+        <span class="n">evscores2</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">suppress</span><span class="p">:</span>
+            <span class="n">events2</span> <span class="o">=</span> <span class="n">suppress_duplicates</span><span class="p">(</span><span class="n">events2</span><span class="p">,</span> <span class="n">evscores2</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span> <span class="o">=</span> <span class="n">compute_roc_curve</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">events2</span><span class="p">,</span> <span class="n">evscores2</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">run2_name</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;green&quot;</span><span class="p">,</span>
+                 <span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;--&quot;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">runid3</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">events3</span> <span class="o">=</span> <span class="n">read_events</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_start</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_end</span><span class="p">,</span>
+                              <span class="s">&quot;visa&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">runid3</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select orid, score from visa_origin where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                       <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid3</span><span class="p">,))</span>
+        <span class="n">evscores3</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">suppress</span><span class="p">:</span>
+            <span class="n">events3</span> <span class="o">=</span> <span class="n">suppress_duplicates</span><span class="p">(</span><span class="n">events3</span><span class="p">,</span> <span class="n">evscores3</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span> <span class="o">=</span> <span class="n">compute_roc_curve</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">events3</span><span class="p">,</span> <span class="n">evscores3</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">run3_name</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;green&quot;</span><span class="p">,</span>
+                 <span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;:&quot;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="o">.</span><span class="mi">39</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="o">.</span><span class="mi">39</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;precision&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;recall&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s">&quot;upper right&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">write</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">type1</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">&quot;output/run-</span><span class="si">%d</span><span class="s">-pr.pdf&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="s">&quot;output/run-</span><span class="si">%d</span><span class="s">-pr.png&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">))</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="c"># reduce the number of visa events (using the score) until the precision</span>
+<span class="c"># exactly matches that of SEL3</span>
+
+</div>
+<div class="viewcode-block" id="match_sel3_prec"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.match_sel3_prec">[docs]</a><span class="k">def</span> <span class="nf">match_sel3_prec</span><span class="p">(</span><span class="n">visa_events</span><span class="p">,</span> <span class="n">visa_scores</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">):</span>
+    <span class="c"># first find SEL3&#39;s precision</span>
+    <span class="n">sel3_prec</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">find_matching</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">)))</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">sel3_events</span><span class="p">)</span>
+
+    <span class="n">true_visa</span><span class="p">,</span> <span class="n">false_visa</span><span class="p">,</span> <span class="n">mat_leb_visa</span> <span class="o">=</span> \
+        <span class="n">find_true_false_guess</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">)</span>
+
+    <span class="n">num_true</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">true_visa</span><span class="p">)</span>
+    <span class="n">num_false</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">visa_events</span><span class="p">)</span> <span class="o">-</span> <span class="n">num_true</span>
+
+    <span class="n">visa_prec</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">num_true</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">visa_events</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">visa_prec</span> <span class="o">&gt;</span> <span class="n">sel3_prec</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;Visa precision is higher than SEL3&#39;s (no pruning)&quot;</span>
+        <span class="k">return</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">compute_orid2num</span><span class="p">(</span><span class="n">visa_events</span><span class="p">)</span>
+
+    <span class="c"># sort all the visa events by score</span>
+    <span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">evnum</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">visa_events</span><span class="p">):</span>
+        <span class="n">evscore</span> <span class="o">=</span> <span class="n">visa_scores</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">])]</span>
+        <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">evscore</span><span class="p">,</span> <span class="n">evnum</span> <span class="ow">in</span> <span class="n">true_visa</span><span class="p">))</span>
+
+    <span class="n">scores</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+    <span class="c"># now, scan the scores from left to right until the precision is at least as</span>
+    <span class="c"># high as sel3</span>
+    <span class="n">cum_true</span><span class="p">,</span> <span class="n">cum_false</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">evscore</span><span class="p">,</span> <span class="n">istrue</span> <span class="ow">in</span> <span class="n">scores</span><span class="p">:</span>
+        <span class="c"># compute the precision if everything below this event is pruned out</span>
+        <span class="n">visa_prec</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">num_true</span> <span class="o">-</span> <span class="n">cum_true</span><span class="p">)</span>\
+            <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">visa_events</span><span class="p">)</span> <span class="o">-</span> <span class="n">cum_true</span> <span class="o">-</span> <span class="n">cum_false</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">visa_prec</span> <span class="o">&gt;=</span> <span class="n">sel3_prec</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;Pruning visa events below score </span><span class="si">%.1f</span><span class="s"> new prec </span><span class="si">%.1f</span><span class="s">&quot;</span> \
+                  <span class="o">%</span> <span class="p">(</span><span class="n">evscore</span><span class="p">,</span> <span class="n">visa_prec</span> <span class="o">*</span> <span class="mf">100.</span><span class="p">)</span>
+            <span class="n">thresh</span> <span class="o">=</span> <span class="n">evscore</span>
+            <span class="k">break</span>
+
+        <span class="k">if</span> <span class="n">istrue</span><span class="p">:</span>
+            <span class="n">cum_true</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cum_false</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;Pruning all the VISA events!&quot;</span>
+        <span class="n">thresh</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+
+    <span class="n">keep_event</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">visa_events</span><span class="p">),</span> <span class="nb">bool</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">evnum</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">visa_events</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">visa_scores</span><span class="p">[</span><span class="n">event</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">]]</span> <span class="o">&lt;</span> <span class="n">thresh</span><span class="p">:</span>
+            <span class="n">keep_event</span><span class="p">[</span><span class="n">evnum</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">events</span> <span class="o">=</span> <span class="n">visa_events</span><span class="p">[</span><span class="n">keep_event</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">events</span><span class="p">,</span> <span class="n">compute_orid2num</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="suppress_duplicates"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.suppress_duplicates">[docs]</a><span class="k">def</span> <span class="nf">suppress_duplicates</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">evscores</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="c"># we&#39;ll figure out which events to keep, initially we decide to keep</span>
+    <span class="c"># everything</span>
+    <span class="n">keep_event</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">),</span> <span class="nb">bool</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">evnum1</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)):</span>
+        <span class="c"># if we have already discarded this event (due a colliding earlier event)</span>
+        <span class="c"># then move on</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">keep_event</span><span class="p">[</span><span class="n">evnum1</span><span class="p">]:</span>
+            <span class="k">continue</span>
+
+        <span class="c"># otherwise try to find all colliding future events</span>
+        <span class="k">for</span> <span class="n">evnum2</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">evnum1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)):</span>
+            <span class="c"># since events are sorted by time if the following condition fails</span>
+            <span class="c"># then there is no future colliding event</span>
+            <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum1</span><span class="p">,</span> <span class="n">EV_TIME_COL</span><span class="p">]</span>
+                   <span class="o">-</span> <span class="n">events</span><span class="p">[</span><span class="n">evnum2</span><span class="p">,</span> <span class="n">EV_TIME_COL</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">50</span><span class="p">:</span>
+                <span class="k">break</span>
+
+            <span class="c"># the two events collide</span>
+            <span class="k">if</span> <span class="n">dist_deg</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum1</span><span class="p">,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                        <span class="n">events</span><span class="p">[</span><span class="n">evnum2</span><span class="p">,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]])</span> <span class="o">&lt;</span> <span class="mi">5</span><span class="p">:</span>
+
+                <span class="c"># keep the better of the two events</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">evscores</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum1</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">])]</span> <span class="o">&gt;</span>
+                        <span class="n">evscores</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum2</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">])]):</span>
+                    <span class="n">keep_event</span><span class="p">[</span><span class="n">evnum2</span><span class="p">]</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                        <span class="k">print</span> <span class="s">&quot;Discarding </span><span class="si">%d</span><span class="s"> due to </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum2</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]),</span>
+                                                           <span class="nb">int</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum1</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">keep_event</span><span class="p">[</span><span class="n">evnum1</span><span class="p">]</span> <span class="o">=</span> <span class="bp">False</span>
+                    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+                        <span class="k">print</span> <span class="s">&quot;Discarding </span><span class="si">%d</span><span class="s"> due to </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum1</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]),</span>
+                                                           <span class="nb">int</span><span class="p">(</span><span class="n">events</span><span class="p">[</span><span class="n">evnum2</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]))</span>
+                    <span class="k">break</span>
+
+    <span class="n">events</span> <span class="o">=</span> <span class="n">events</span><span class="p">[</span><span class="n">keep_event</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">events</span><span class="p">,</span> <span class="n">compute_orid2num</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="compute_orid2num"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.compute_orid2num">[docs]</a><span class="k">def</span> <span class="nf">compute_orid2num</span><span class="p">(</span><span class="n">events</span><span class="p">):</span>
+    <span class="c"># recompute orid2num</span>
+    <span class="n">orid2num</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">orid2num</span><span class="p">[</span><span class="n">ev</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">orid2num</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">orid2num</span>
+
+</div>
+<div class="viewcode-block" id="assert_time_sorted"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.assert_time_sorted">[docs]</a><span class="k">def</span> <span class="nf">assert_time_sorted</span><span class="p">(</span><span class="n">events</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">evnum</span><span class="p">,</span> <span class="n">event</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">events</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">evnum</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> \
+           <span class="ow">and</span> <span class="n">events</span><span class="p">[</span><span class="n">evnum</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">EV_TIME_COL</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">event</span><span class="p">[</span><span class="n">EV_TIME_COL</span><span class="p">]:</span>
+            <span class="k">assert</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="kleinermackey_match"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.kleinermackey_match">[docs]</a><span class="k">def</span> <span class="nf">kleinermackey_match</span><span class="p">(</span><span class="n">gold_events</span><span class="p">,</span> <span class="n">guess_events</span><span class="p">):</span>
+    <span class="c"># check events are sorted</span>
+    <span class="n">assert_time_sorted</span><span class="p">(</span><span class="n">gold_events</span><span class="p">)</span>
+    <span class="n">assert_time_sorted</span><span class="p">(</span><span class="n">guess_events</span><span class="p">)</span>
+
+    <span class="n">err_dist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">gold_events</span><span class="p">))])</span>
+    <span class="n">is_true</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">guess_events</span><span class="p">))])</span>
+
+    <span class="n">gold_evnum_start</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">guess_evnum</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">guess_events</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">gold_evnum</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">gold_evnum_start</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold_events</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">gold_events</span><span class="p">[</span><span class="n">gold_evnum</span><span class="p">,</span> <span class="n">EV_TIME_COL</span><span class="p">]</span>\
+               <span class="o">&lt;</span> <span class="n">guess_events</span><span class="p">[</span><span class="n">guess_evnum</span><span class="p">,</span> <span class="n">EV_TIME_COL</span><span class="p">]</span> <span class="o">-</span> <span class="mi">40</span><span class="p">:</span>
+                <span class="n">gold_evnum_start</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">gold_evnum_start</span><span class="p">,</span> <span class="n">gold_evnum</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">elif</span> <span class="n">gold_events</span><span class="p">[</span><span class="n">gold_evnum</span><span class="p">,</span> <span class="n">EV_TIME_COL</span><span class="p">]</span>\
+                    <span class="o">&gt;</span> <span class="n">guess_events</span><span class="p">[</span><span class="n">guess_evnum</span><span class="p">,</span> <span class="n">EV_TIME_COL</span><span class="p">]</span> <span class="o">+</span> <span class="mi">40</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">dist</span> <span class="o">=</span> <span class="n">dist_km</span><span class="p">(</span><span class="n">gold_events</span><span class="p">[</span><span class="n">gold_evnum</span><span class="p">,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                           <span class="n">guess_events</span><span class="p">[</span><span class="n">guess_evnum</span><span class="p">,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]])</span>
+            <span class="k">if</span> <span class="n">dist</span> <span class="o">&lt;</span> <span class="mi">250</span><span class="p">:</span>
+                <span class="n">is_true</span><span class="p">[</span><span class="n">guess_evnum</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="n">err_dist</span><span class="p">[</span><span class="n">gold_evnum</span><span class="p">]</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">err_dist</span><span class="p">[</span><span class="n">gold_evnum</span><span class="p">])</span>
+    <span class="n">errs</span> <span class="o">=</span> <span class="n">err_dist</span><span class="p">[</span><span class="n">err_dist</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">]</span>
+    <span class="k">return</span> <span class="p">(</span><span class="mf">100.</span> <span class="o">*</span> <span class="n">is_true</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">guess_events</span><span class="p">),</span>
+            <span class="mf">100.</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">errs</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">gold_events</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">errs</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">errs</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="kleinermackey_display"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.kleinermackey_display">[docs]</a><span class="k">def</span> <span class="nf">kleinermackey_display</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">):</span>
+    <span class="n">sel3_p</span><span class="p">,</span> <span class="n">sel3_r</span><span class="p">,</span> <span class="n">sel3_err</span><span class="p">,</span> <span class="n">sel3_std</span> \
+        <span class="o">=</span> <span class="n">kleinermackey_match</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">)</span>
+    <span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span><span class="p">,</span> <span class="n">visa_std</span> \
+        <span class="o">=</span> <span class="n">kleinermackey_match</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;Kleiner &amp; Mackey criteria (any event in 250km, 40s ball):&quot;</span>
+    <span class="k">print</span> <span class="s">&quot;SEL3: Precision </span><span class="si">%.1f</span><span class="s">, Recall </span><span class="si">%.1f</span><span class="s">, Avg Err </span><span class="si">%.1f</span><span class="s">, Std Err </span><span class="si">%.1f</span><span class="s">&quot;</span> <span class="o">%</span>\
+          <span class="p">(</span><span class="n">sel3_p</span><span class="p">,</span> <span class="n">sel3_r</span><span class="p">,</span> <span class="n">sel3_err</span><span class="p">,</span> <span class="n">sel3_std</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&quot;VISA: Precision </span><span class="si">%.1f</span><span class="s">, Recall </span><span class="si">%.1f</span><span class="s">, Avg Err </span><span class="si">%.1f</span><span class="s">, Std Err </span><span class="si">%.1f</span><span class="s">&quot;</span> <span class="o">%</span>\
+          <span class="p">(</span><span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span><span class="p">,</span> <span class="n">visa_std</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.analyze.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">param_dirname</span><span class="p">):</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-i&quot;</span><span class="p">,</span> <span class="s">&quot;--runid&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;runid&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;the run-identifier to analyze (last runid)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--run_name&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_name&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;NET-VISA&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;the name of the run (NET-VISA)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--runid2&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;runid2&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;the second run-identifier to analyze&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--run2_name&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run2_name&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;NET-VISA2&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;the name of run2 (NET-VISA2)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--runid3&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;runid3&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;the third run-identifier to analyze&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--run3_name&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run3_name&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;NET-VISA3&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;the name of run3 (NET-VISA3)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-m&quot;</span><span class="p">,</span> <span class="s">&quot;--maxtime&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;maxtime&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;Maximum time to analyze for&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-v&quot;</span><span class="p">,</span> <span class="s">&quot;--verbose&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;verbose&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;verbose output (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-1&quot;</span><span class="p">,</span> <span class="s">&quot;--type1&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;type1&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;Type 1 fonts (False)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-b&quot;</span><span class="p">,</span> <span class="s">&quot;--mb&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;mb&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by mb (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--ml&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;ml&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by ML (False)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-d&quot;</span><span class="p">,</span> <span class="s">&quot;--detcnt&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;detcnt&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by number of timedef detections (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-z&quot;</span><span class="p">,</span> <span class="s">&quot;--depth&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;depth&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by depth (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--missdet&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;missdet&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by number of missed detections (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-t&quot;</span><span class="p">,</span> <span class="s">&quot;--tphase&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;tphase&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by number of T phases (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-y&quot;</span><span class="p">,</span> <span class="s">&quot;--hphase&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;hphase&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by number of H phases (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-a&quot;</span><span class="p">,</span> <span class="s">&quot;--az&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;azgap&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze by azimuth gap (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-g&quot;</span><span class="p">,</span> <span class="s">&quot;--gui&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;gui&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;graphically display run (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-s&quot;</span><span class="p">,</span> <span class="s">&quot;--suppress&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;suppress&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;suppress duplicates (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--regional&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;regional&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;compare with regional bulletins (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--svm&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;svm&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;use svm scores to improve SEL3 (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-e&quot;</span><span class="p">,</span> <span class="s">&quot;--error&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;error&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;compute the error of VISA and SEL3 on &quot;</span>
+                      <span class="s">&quot;LEB events predicted by both&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-w&quot;</span><span class="p">,</span> <span class="s">&quot;--write&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;write&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;write the results to output/ sub-directory&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--events&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;events&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;draw predicted events (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-p&quot;</span><span class="p">,</span> <span class="s">&quot;--phase&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;phase&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;analyze predictions by labels (False)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-k&quot;</span><span class="p">,</span> <span class="s">&quot;--kleinermackey&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;kleinermackey&quot;</span><span class="p">,</span>
+                      <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;Use Kleiner&amp;Mackey 250km, 40s criteria, &quot;</span>
+                      <span class="s">&quot;with no matching&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-x&quot;</span><span class="p">,</span> <span class="s">&quot;--sel3_prec&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;sel3_prec&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                      <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;match sel3 precision by dropping events (False)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--datafile&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;datafile&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;tar file with data (None)&quot;</span><span class="p">,</span> <span class="n">metavar</span><span class="o">=</span><span class="s">&quot;FILE&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-l&quot;</span><span class="p">,</span> <span class="s">&quot;--label&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;label&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;validation&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;training, validation (default), or test&quot;</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">database</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">runid</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select max(runid) from visa_run&quot;</span><span class="p">)</span>
+        <span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">,</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+
+    <span class="k">print</span> <span class="s">&quot;RUNID </span><span class="si">%d</span><span class="s">:&quot;</span> <span class="o">%</span> <span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">,</span>
+
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select run_start, run_end, data_start, data_end, descrip, &quot;</span>
+                   <span class="s">&quot;numsamples, window, step from visa_run where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                   <span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">)</span>
+    <span class="n">run_start</span><span class="p">,</span> <span class="n">run_end</span><span class="p">,</span> <span class="n">data_start</span><span class="p">,</span> <span class="n">data_end</span><span class="p">,</span> <span class="n">descrip</span><span class="p">,</span> <span class="n">numsamples</span><span class="p">,</span> <span class="n">window</span><span class="p">,</span> <span class="n">step</span>\
+        <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">data_end</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;NO RESULTS&quot;</span>
+        <span class="k">return</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">maxtime</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">data_end</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">maxtime</span>
+
+    <span class="n">options</span><span class="o">.</span><span class="n">data_start</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_end</span> <span class="o">=</span> <span class="n">data_start</span><span class="p">,</span> <span class="n">data_end</span>
+
+    <span class="k">print</span> <span class="s">&quot;</span><span class="si">%.1f</span><span class="s"> - </span><span class="si">%.1f</span><span class="s"> (</span><span class="si">%.1f</span><span class="s"> hrs), runtime </span><span class="si">%s</span><span class="s">&quot;</span> \
+          <span class="o">%</span> <span class="p">(</span><span class="n">data_start</span><span class="p">,</span> <span class="n">data_end</span><span class="p">,</span> <span class="p">(</span><span class="n">data_end</span> <span class="o">-</span> <span class="n">data_start</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3600.</span><span class="p">,</span>
+             <span class="nb">str</span><span class="p">(</span><span class="n">run_end</span> <span class="o">-</span> <span class="n">run_start</span><span class="p">))</span>
+
+    <span class="k">print</span> <span class="s">&quot;D=&#39;</span><span class="si">%s</span><span class="s">&#39; N=</span><span class="si">%d</span><span class="s"> W=</span><span class="si">%s</span><span class="s"> S=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">descrip</span><span class="p">,</span> <span class="n">numsamples</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">window</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">step</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">datafile</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">detections</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span> <span class="n">leb_evlist</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span>\
+            <span class="n">sel3_evlist</span><span class="p">,</span> <span class="n">site_up</span><span class="p">,</span> <span class="n">sites</span><span class="p">,</span> <span class="n">phasenames</span><span class="p">,</span> <span class="n">phasetimedef</span><span class="p">,</span> <span class="n">sitenames</span> \
+            <span class="o">=</span> <span class="n">learn</span><span class="o">.</span><span class="n">read_datafile_and_sitephase</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">datafile</span><span class="p">,</span> <span class="n">param_dirname</span><span class="p">,</span>
+                                                <span class="n">hours</span><span class="o">=</span><span class="n">data_end</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="n">data_start</span><span class="p">,</span>
+                                                <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">detections</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span> <span class="n">leb_evlist</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> \
+            <span class="n">sel3_evlist</span><span class="p">,</span> <span class="n">site_up</span><span class="p">,</span> <span class="n">sites</span><span class="p">,</span> <span class="n">phasenames</span><span class="p">,</span> <span class="n">phasetimedef</span> \
+            <span class="o">=</span> <span class="n">read_data</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="n">data_end</span><span class="p">,</span>
+                        <span class="n">skip</span><span class="o">=</span><span class="n">data_start</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+
+    <span class="n">visa_events</span><span class="p">,</span> <span class="n">visa_orid2num</span> <span class="o">=</span> <span class="n">read_events</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">data_start</span><span class="p">,</span> <span class="n">data_end</span><span class="p">,</span>
+                                             <span class="s">&quot;visa&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">)</span>
+
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select orid, score from visa_origin where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                   <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">,))</span>
+    <span class="n">visa_scores</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">suppress</span><span class="p">:</span>
+        <span class="n">visa_events</span><span class="p">,</span> <span class="n">visa_orid2num</span> <span class="o">=</span> <span class="n">suppress_duplicates</span><span class="p">(</span><span class="n">visa_events</span><span class="p">,</span> <span class="n">visa_scores</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">sel3_prec</span><span class="p">:</span>
+        <span class="n">visa_events</span><span class="p">,</span> <span class="n">visa_orid2num</span> <span class="o">=</span> <span class="n">match_sel3_prec</span><span class="p">(</span><span class="n">visa_events</span><span class="p">,</span> <span class="n">visa_scores</span><span class="p">,</span>
+                                                     <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">)</span>
+
+    <span class="n">visa_evlist</span> <span class="o">=</span> <span class="n">read_assoc</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">data_start</span><span class="p">,</span> <span class="n">data_end</span><span class="p">,</span> <span class="n">visa_orid2num</span><span class="p">,</span>
+                             <span class="n">compute_arid2num</span><span class="p">(</span><span class="n">detections</span><span class="p">),</span> <span class="s">&quot;visa&quot;</span><span class="p">,</span>
+                             <span class="n">runid</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">)</span>
+
+    <span class="c"># use Type 1 fonts by invoking latex</span>
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">type1</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">rcParams</span><span class="p">[</span><span class="s">&#39;text.usetex&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">kleinermackey</span><span class="p">:</span>
+        <span class="n">kleinermackey_display</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">phase</span><span class="p">:</span>
+        <span class="n">leb_visa</span> <span class="o">=</span> <span class="n">find_matching</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">)</span>
+        <span class="n">buckets</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">MAG_RANGES</span><span class="p">]</span>
+        <span class="nb">all</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">leb_evnum</span><span class="p">,</span> <span class="n">visa_evnum</span><span class="p">)</span> <span class="ow">in</span> <span class="n">leb_visa</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">bnum</span><span class="p">,</span> <span class="p">(</span><span class="n">mag_low</span><span class="p">,</span> <span class="n">mag_high</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">MAG_RANGES</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">leb_events</span><span class="p">[</span><span class="n">leb_evnum</span><span class="p">,</span> <span class="n">EV_MB_COL</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">mag_low</span> \
+                   <span class="ow">and</span> <span class="n">leb_events</span><span class="p">[</span><span class="n">leb_evnum</span><span class="p">,</span> <span class="n">EV_MB_COL</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">mag_high</span><span class="p">:</span>
+                    <span class="n">diff</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">visa_evlist</span><span class="p">[</span><span class="n">visa_evnum</span><span class="p">])</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">leb_evlist</span><span class="p">[</span><span class="n">leb_evnum</span><span class="p">])</span>
+                    <span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span>
+                    <span class="nb">all</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span>
+                    <span class="k">break</span>
+        <span class="k">for</span> <span class="n">bnum</span><span class="p">,</span> <span class="p">(</span><span class="n">mag_low</span><span class="p">,</span> <span class="n">mag_high</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">MAG_RANGES</span><span class="p">):</span>
+            <span class="k">print</span> <span class="s">&quot; </span><span class="si">%d</span><span class="s"> -- </span><span class="si">%d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> </span><span class="si">%3d</span><span class="s">&quot;</span> <span class="o">%</span>\
+                  <span class="p">(</span><span class="n">mag_low</span><span class="p">,</span> <span class="n">mag_high</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">]),</span>
+                   <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">]))</span>
+        <span class="k">print</span> <span class="s">&quot; all  | </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> </span><span class="si">%3d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="nb">all</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="nb">all</span><span class="p">),</span>
+                                         <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="nb">all</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+        <span class="n">leb_sel3</span> <span class="o">=</span> <span class="n">find_matching</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">)</span>
+        <span class="n">leb_visa</span> <span class="o">=</span> <span class="n">find_matching</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">)</span>
+        <span class="c"># leb events common to both</span>
+        <span class="n">common_leb</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">x</span> <span class="k">for</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="ow">in</span> <span class="n">leb_sel3</span><span class="p">])</span>
+                          <span class="o">&amp;</span> <span class="nb">set</span><span class="p">([</span><span class="n">x</span> <span class="k">for</span> <span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="ow">in</span> <span class="n">leb_visa</span><span class="p">]))</span>
+        <span class="n">common_leb_sel3</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">((</span><span class="n">leb_evnum</span><span class="p">,</span> <span class="n">sel3_evnum</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">leb_evnum</span><span class="p">,</span> <span class="n">sel3_evnum</span><span class="p">)</span>
+                               <span class="ow">in</span> <span class="n">leb_sel3</span> <span class="k">if</span> <span class="n">leb_evnum</span> <span class="ow">in</span> <span class="n">common_leb</span><span class="p">)</span>
+        <span class="n">common_leb_visa</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">((</span><span class="n">leb_evnum</span><span class="p">,</span> <span class="n">visa_evnum</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">leb_evnum</span><span class="p">,</span> <span class="n">visa_evnum</span><span class="p">)</span>
+                               <span class="ow">in</span> <span class="n">leb_visa</span> <span class="k">if</span> <span class="n">leb_evnum</span> <span class="ow">in</span> <span class="n">common_leb</span><span class="p">)</span>
+
+        <span class="n">buckets</span> <span class="o">=</span> <span class="p">[([],</span> <span class="p">[])</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">MAG_RANGES</span><span class="p">]</span>
+        <span class="nb">all</span> <span class="o">=</span> <span class="p">([],</span> <span class="p">[])</span>
+        <span class="k">for</span> <span class="n">evnum</span> <span class="ow">in</span> <span class="n">common_leb</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">bnum</span><span class="p">,</span> <span class="p">(</span><span class="n">mag_low</span><span class="p">,</span> <span class="n">mag_high</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">MAG_RANGES</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">leb_events</span><span class="p">[</span><span class="n">evnum</span><span class="p">,</span> <span class="n">EV_MB_COL</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">mag_low</span> \
+                   <span class="ow">and</span> <span class="n">leb_events</span><span class="p">[</span><span class="n">evnum</span><span class="p">,</span> <span class="n">EV_MB_COL</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">mag_high</span><span class="p">:</span>
+                    <span class="n">leb_ev</span> <span class="o">=</span> <span class="n">leb_events</span><span class="p">[</span><span class="n">evnum</span><span class="p">]</span>
+                    <span class="n">sel3_ev</span> <span class="o">=</span> <span class="n">sel3_events</span><span class="p">[</span><span class="n">common_leb_sel3</span><span class="p">[</span><span class="n">evnum</span><span class="p">]]</span>
+                    <span class="n">visa_ev</span> <span class="o">=</span> <span class="n">visa_events</span><span class="p">[</span><span class="n">common_leb_visa</span><span class="p">[</span><span class="n">evnum</span><span class="p">]]</span>
+                    <span class="n">sel3_dist</span> <span class="o">=</span> <span class="n">dist_km</span><span class="p">((</span><span class="n">leb_ev</span><span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">],</span> <span class="n">leb_ev</span><span class="p">[</span><span class="n">EV_LAT_COL</span><span class="p">]),</span>
+                                        <span class="p">(</span><span class="n">sel3_ev</span><span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">],</span> <span class="n">sel3_ev</span><span class="p">[</span><span class="n">EV_LAT_COL</span><span class="p">]))</span>
+                    <span class="n">visa_dist</span> <span class="o">=</span> <span class="n">dist_km</span><span class="p">((</span><span class="n">leb_ev</span><span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">],</span> <span class="n">leb_ev</span><span class="p">[</span><span class="n">EV_LAT_COL</span><span class="p">]),</span>
+                                        <span class="p">(</span><span class="n">visa_ev</span><span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">],</span> <span class="n">visa_ev</span><span class="p">[</span><span class="n">EV_LAT_COL</span><span class="p">]))</span>
+                    <span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sel3_dist</span><span class="p">)</span>
+                    <span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">visa_dist</span><span class="p">)</span>
+                    <span class="nb">all</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sel3_dist</span><span class="p">)</span>
+                    <span class="nb">all</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">visa_dist</span><span class="p">)</span>
+                    <span class="k">break</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Event mag </span><span class="si">%f</span><span class="s"> not found in any mag range&quot;</span>
+                                 <span class="o">%</span> <span class="n">leb_events</span><span class="p">[</span><span class="n">evnum</span><span class="p">,</span> <span class="n">EV_MB_COL</span><span class="p">])</span>
+
+        <span class="k">print</span> <span class="s">&quot;</span><span class="si">%d</span><span class="s"> leb events detected by both sel3 and visa&quot;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">common_leb</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&quot;   mb   | #ev |  SEL3   |  VISA&quot;</span>
+        <span class="k">print</span> <span class="s">&quot;        |     | err  sd | err  sd&quot;</span>
+        <span class="k">print</span> <span class="s">&quot;---------------------------------&quot;</span>
+        <span class="k">for</span> <span class="n">bnum</span><span class="p">,</span> <span class="p">(</span><span class="n">mag_low</span><span class="p">,</span> <span class="n">mag_high</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">MAG_RANGES</span><span class="p">):</span>
+            <span class="k">print</span> <span class="s">&quot; </span><span class="si">%d</span><span class="s"> -- </span><span class="si">%d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> </span><span class="si">%3d</span><span class="s">&quot;</span> \
+                  <span class="o">%</span> <span class="p">(</span><span class="n">mag_low</span><span class="p">,</span> <span class="n">mag_high</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span>
+                     <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span>
+                     <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">buckets</span><span class="p">[</span><span class="n">bnum</span><span class="p">][</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="k">print</span> <span class="s">&quot;   all  | </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%3d</span><span class="s"> </span><span class="si">%3d</span><span class="s">&quot;</span> \
+              <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="nb">all</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                 <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="nb">all</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="nb">all</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                 <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="nb">all</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="nb">all</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">mb</span><span class="p">:</span>
+        <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;mb&quot;</span><span class="p">,</span> <span class="n">MAG_RANGES</span><span class="p">,</span> <span class="p">[</span><span class="n">ev</span><span class="p">[</span><span class="n">EV_MB_COL</span><span class="p">]</span> <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">leb_events</span><span class="p">],</span>
+                        <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">detcnt</span><span class="p">:</span>
+        <span class="n">detcnts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">leb_event</span> <span class="ow">in</span> <span class="n">leb_events</span><span class="p">:</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select count(*) from leb_assoc join idcx_arrival_net &quot;</span>
+                           <span class="s">&quot;using (arid) where orid=</span><span class="si">%d</span><span class="s"> and timedef=&#39;d&#39;&quot;</span> <span class="o">%</span>
+                           <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">leb_event</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">]),))</span>
+            <span class="n">detcnts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;# Det&quot;</span><span class="p">,</span> <span class="n">DETCNT_RANGES</span><span class="p">,</span> <span class="n">detcnts</span><span class="p">,</span>
+                        <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">depth</span><span class="p">:</span>
+        <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;Depth&quot;</span><span class="p">,</span> <span class="n">DEPTH_RANGES</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">[:,</span> <span class="n">EV_DEPTH_COL</span><span class="p">],</span>
+                        <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">missdet</span><span class="p">:</span>
+        <span class="n">detcnts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">leb_event</span> <span class="ow">in</span> <span class="n">leb_events</span><span class="p">:</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select count(*) from leb_assoc  &quot;</span>
+                           <span class="s">&quot;where orid=</span><span class="si">%d</span><span class="s"> and timedef=&#39;d&#39; and arid not in &quot;</span>
+                           <span class="s">&quot;(select arid from idcx_arrival_net)&quot;</span> <span class="o">%</span>
+                           <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">leb_event</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">]),))</span>
+            <span class="n">detcnts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;# Mis&quot;</span><span class="p">,</span> <span class="n">DETCNT_RANGES</span><span class="p">,</span> <span class="n">detcnts</span><span class="p">,</span>
+                        <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">tphase</span><span class="p">:</span>
+        <span class="n">tcnts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">leb_event</span> <span class="ow">in</span> <span class="n">leb_events</span><span class="p">:</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select count(*) from leb_assoc &quot;</span>
+                           <span class="s">&quot;where orid=</span><span class="si">%d</span><span class="s"> and phase=&#39;T&#39;&quot;</span> <span class="o">%</span>
+                           <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">leb_event</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">]),))</span>
+            <span class="n">tcnts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;T Phases&quot;</span><span class="p">,</span> <span class="n">TPHASE_RANGES</span><span class="p">,</span> <span class="n">tcnts</span><span class="p">,</span>
+                        <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">hphase</span><span class="p">:</span>
+        <span class="n">hcnts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">leb_event</span> <span class="ow">in</span> <span class="n">leb_events</span><span class="p">:</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select count(*) from leb_assoc &quot;</span>
+                           <span class="s">&quot;where orid=</span><span class="si">%d</span><span class="s"> and phase=&#39;H&#39;&quot;</span> <span class="o">%</span>
+                           <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">leb_event</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">]),))</span>
+            <span class="n">hcnts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;H Phases&quot;</span><span class="p">,</span> <span class="n">HPHASE_RANGES</span><span class="p">,</span> <span class="n">hcnts</span><span class="p">,</span>
+                        <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">azgap</span><span class="p">:</span>
+        <span class="c"># compute the azimuth gaps for each leb event</span>
+        <span class="n">leb_azgaps</span> <span class="o">=</span> <span class="p">[</span><span class="bp">None</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">leb_events</span><span class="p">]</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">leb_orid</span><span class="p">,</span> <span class="n">leb_evnum</span><span class="p">)</span> <span class="ow">in</span> <span class="n">compute_orid2num</span><span class="p">(</span><span class="n">leb_events</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select esaz from leb_assoc join idcx_arrival &quot;</span>
+                           <span class="s">&quot;using(arid,sta) where orid=</span><span class="si">%d</span><span class="s"> and &quot;</span>
+                           <span class="s">&quot;timedef=&#39;d&#39; and time between </span><span class="si">%f</span><span class="s"> and </span><span class="si">%f</span><span class="s">&quot;</span> <span class="o">%</span>
+                           <span class="p">(</span><span class="n">leb_orid</span><span class="p">,</span> <span class="n">data_start</span><span class="p">,</span> <span class="n">data_end</span><span class="p">))</span>
+            <span class="n">esazlist</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="p">(</span><span class="n">x</span><span class="p">,)</span> <span class="ow">in</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span>
+            <span class="n">leb_azgaps</span><span class="p">[</span><span class="n">leb_evnum</span><span class="p">]</span> <span class="o">=</span> <span class="n">azimuth_gap</span><span class="p">(</span><span class="n">esazlist</span><span class="p">)</span>
+
+        <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;AZIM. GAP&quot;</span><span class="p">,</span> <span class="n">AZGAP_RANGES</span><span class="p">,</span> <span class="n">leb_azgaps</span><span class="p">,</span>
+                        <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">74</span>
+    <span class="k">print</span> <span class="s">&quot;            |     |  F1     P     R   err  sd |   F1    P     R &quot;</span>
+
+    <span class="c"># finally, compute the overall scores</span>
+    <span class="n">sel3_f</span><span class="p">,</span> <span class="n">sel3_p</span><span class="p">,</span> <span class="n">sel3_r</span><span class="p">,</span> <span class="n">sel3_err</span> <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">)</span>
+
+    <span class="n">visa_f</span><span class="p">,</span> <span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span> <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">74</span>
+    <span class="k">print</span> <span class="p">(</span><span class="s">&quot;     --     | </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> &quot;</span>
+           <span class="s">&quot;| </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s">&quot;</span><span class="p">)</span>\
+        <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">leb_events</span><span class="p">),</span> <span class="n">sel3_f</span><span class="p">,</span> <span class="n">sel3_p</span><span class="p">,</span> <span class="n">sel3_r</span><span class="p">,</span>
+           <span class="n">sel3_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">sel3_err</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+           <span class="n">visa_f</span><span class="p">,</span> <span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">visa_err</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">runid2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">visa_events2</span> <span class="o">=</span> <span class="n">read_events</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_start</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_end</span><span class="p">,</span>
+                                   <span class="s">&quot;visa&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">runid2</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">suppress</span><span class="p">:</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select orid, score from visa_origin where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                           <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid2</span><span class="p">,))</span>
+            <span class="n">visa_evscores2</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+            <span class="n">visa_events2</span> <span class="o">=</span> <span class="n">suppress_duplicates</span><span class="p">(</span><span class="n">visa_events2</span><span class="p">,</span> <span class="n">visa_evscores2</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">visa2_f</span><span class="p">,</span> <span class="n">visa2_p</span><span class="p">,</span> <span class="n">visa2_r</span><span class="p">,</span> <span class="n">visa2_err</span> \
+            <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">visa_events2</span><span class="p">)</span>
+
+        <span class="k">print</span> <span class="p">(</span><span class="s">&quot;  NETVISA2                                    |&quot;</span>
+               <span class="s">&quot; </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s">&quot;</span><span class="p">)</span>\
+            <span class="o">%</span> <span class="p">(</span><span class="n">visa2_f</span><span class="p">,</span> <span class="n">visa2_p</span><span class="p">,</span> <span class="n">visa2_r</span><span class="p">,</span> <span class="n">visa2_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">visa2_err</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">runid3</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">visa_events3</span> <span class="o">=</span> <span class="n">read_events</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_start</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">data_end</span><span class="p">,</span>
+                                   <span class="s">&quot;visa&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">runid3</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">suppress</span><span class="p">:</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select orid, score from visa_origin where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                           <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid3</span><span class="p">,))</span>
+            <span class="n">visa_evscores3</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+            <span class="n">visa_events3</span> <span class="o">=</span> <span class="n">suppress_duplicates</span><span class="p">(</span><span class="n">visa_events3</span><span class="p">,</span> <span class="n">visa_evscores3</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">visa3_f</span><span class="p">,</span> <span class="n">visa3_p</span><span class="p">,</span> <span class="n">visa3_r</span><span class="p">,</span> <span class="n">visa3_err</span> \
+            <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">visa_events3</span><span class="p">)</span>
+
+        <span class="k">print</span> <span class="p">(</span><span class="s">&quot;  NETVISA3                                    |&quot;</span>
+               <span class="s">&quot; </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s">&quot;</span><span class="p">)</span>\
+            <span class="o">%</span> <span class="p">(</span><span class="n">visa3_f</span><span class="p">,</span> <span class="n">visa3_p</span><span class="p">,</span> <span class="n">visa3_r</span><span class="p">,</span> <span class="n">visa3_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">visa3_err</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="k">print</span> <span class="s">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">74</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">regional</span><span class="p">:</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">agency</span><span class="p">,</span> <span class="p">(</span><span class="n">minlon</span><span class="p">,</span> <span class="n">maxlon</span><span class="p">),</span> <span class="p">(</span><span class="n">minlat</span><span class="p">,</span> <span class="n">maxlat</span><span class="p">))</span> <span class="ow">in</span> <span class="n">REGIONS</span><span class="p">:</span>
+            <span class="n">agency_events</span> <span class="o">=</span> <span class="n">read_isc_events</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">data_start</span><span class="p">,</span> <span class="n">data_end</span><span class="p">,</span> <span class="n">agency</span><span class="p">)</span>
+            <span class="n">agency_events</span> <span class="o">=</span> <span class="n">filter_by_lonlat</span><span class="p">(</span><span class="n">agency_events</span><span class="p">,</span> <span class="n">minlon</span><span class="p">,</span> <span class="n">maxlon</span><span class="p">,</span>
+                                             <span class="n">minlat</span><span class="p">,</span> <span class="n">maxlat</span><span class="p">)</span>
+            <span class="n">leb_ag_events</span> <span class="o">=</span> <span class="n">filter_by_lonlat</span><span class="p">(</span><span class="n">leb_events</span><span class="p">,</span> <span class="n">minlon</span><span class="p">,</span> <span class="n">maxlon</span><span class="p">,</span>
+                                             <span class="n">minlat</span><span class="p">,</span> <span class="n">maxlat</span><span class="p">)</span>
+            <span class="n">visa_ag_events</span> <span class="o">=</span> <span class="n">filter_by_lonlat</span><span class="p">(</span><span class="n">visa_events</span><span class="p">,</span> <span class="n">minlon</span><span class="p">,</span> <span class="n">maxlon</span><span class="p">,</span>
+                                              <span class="n">minlat</span><span class="p">,</span> <span class="n">maxlat</span><span class="p">)</span>
+
+            <span class="n">leb_f</span><span class="p">,</span> <span class="n">leb_p</span><span class="p">,</span> <span class="n">leb_r</span><span class="p">,</span> <span class="n">leb_err</span> <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span><span class="n">agency_events</span><span class="p">,</span>
+                                                        <span class="n">leb_ag_events</span><span class="p">)</span>
+
+            <span class="n">visa_f</span><span class="p">,</span> <span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span> <span class="o">=</span> <span class="n">f1_and_error</span><span class="p">(</span><span class="n">agency_events</span><span class="p">,</span>
+                                                            <span class="n">visa_ag_events</span><span class="p">)</span>
+
+            <span class="k">print</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s">:              |          LEB              |          VISA&quot;</span>\
+                  <span class="o">%</span> <span class="n">agency</span>
+            <span class="k">print</span> <span class="s">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">74</span>
+            <span class="k">print</span> <span class="p">(</span><span class="s">&quot;     --     | </span><span class="si">%3d</span><span class="s"> | </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> &quot;</span>
+                   <span class="s">&quot;| </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%5.1f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s"> </span><span class="si">%3.0f</span><span class="s">&quot;</span><span class="p">)</span>\
+                <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">agency_events</span><span class="p">),</span> <span class="n">leb_f</span><span class="p">,</span> <span class="n">leb_p</span><span class="p">,</span> <span class="n">leb_r</span><span class="p">,</span>
+                   <span class="n">leb_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">leb_err</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                   <span class="n">visa_f</span><span class="p">,</span> <span class="n">visa_p</span><span class="p">,</span> <span class="n">visa_r</span><span class="p">,</span> <span class="n">visa_err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">visa_err</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+                <span class="n">leb_recalled</span> <span class="o">=</span> <span class="n">find_matching</span><span class="p">(</span><span class="n">agency_events</span><span class="p">,</span> <span class="n">leb_ag_events</span><span class="p">)</span>
+                <span class="n">visa_recalled</span> <span class="o">=</span> <span class="n">find_matching</span><span class="p">(</span><span class="n">agency_events</span><span class="p">,</span> <span class="n">visa_ag_events</span><span class="p">)</span>
+
+                <span class="n">leb_rec_list</span> <span class="o">=</span> <span class="p">[(</span><span class="nb">int</span><span class="p">(</span><span class="n">agency_events</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]),</span>
+                                <span class="nb">int</span><span class="p">(</span><span class="n">leb_ag_events</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]))</span>
+                                <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="ow">in</span> <span class="n">leb_recalled</span><span class="p">]</span>
+                <span class="n">leb_rec_list</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+                <span class="k">print</span> <span class="s">&quot;LEB recall&quot;</span><span class="p">,</span> <span class="n">leb_rec_list</span>
+
+                <span class="n">visa_rec_list</span> <span class="o">=</span> <span class="p">[(</span><span class="nb">int</span><span class="p">(</span><span class="n">agency_events</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]),</span>
+                                 <span class="nb">int</span><span class="p">(</span><span class="n">visa_ag_events</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">EV_ORID_COL</span><span class="p">]))</span>
+                                 <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="ow">in</span> <span class="n">visa_recalled</span><span class="p">]</span>
+                <span class="n">visa_rec_list</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+
+                <span class="k">print</span> <span class="s">&quot;VISA recall&quot;</span><span class="p">,</span> <span class="n">visa_rec_list</span>
+
+            <span class="k">print</span> <span class="s">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">74</span>
+
+            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">ml</span><span class="p">:</span>
+                <span class="n">agency_ml</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">agency_events</span><span class="p">:</span>
+                    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select ml from isc_events where author=&#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span>
+                                   <span class="s">&quot; and eventid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">agency</span><span class="p">,</span> <span class="n">event</span><span class="p">[</span><span class="n">EV_ORID_COL</span><span class="p">]))</span>
+                    <span class="n">ml</span><span class="p">,</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+                    <span class="n">agency_ml</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ml</span><span class="p">)</span>
+
+                <span class="n">analyze_by_attr</span><span class="p">(</span><span class="s">&quot;ML&quot;</span><span class="p">,</span> <span class="n">ML_RANGES</span><span class="p">,</span> <span class="n">agency_ml</span><span class="p">,</span>
+                                <span class="n">agency_events</span><span class="p">,</span> <span class="n">leb_ag_events</span><span class="p">,</span> <span class="n">visa_ag_events</span><span class="p">,</span>
+                                <span class="n">options</span><span class="o">.</span><span class="n">verbose</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">gui</span><span class="p">:</span>
+                <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s"> (orange), LEB (yellow), and NET-VISA (blue)&quot;</span>
+                                  <span class="o">%</span> <span class="n">agency</span><span class="p">,</span>
+                                  <span class="n">projection</span><span class="o">=</span><span class="s">&quot;mill&quot;</span><span class="p">,</span>
+                                  <span class="n">resolution</span><span class="o">=</span><span class="s">&quot;l&quot;</span><span class="p">,</span>
+                                  <span class="n">llcrnrlon</span><span class="o">=</span><span class="n">minlon</span><span class="p">,</span> <span class="n">urcrnrlon</span><span class="o">=</span><span class="n">maxlon</span><span class="p">,</span>
+                                  <span class="n">llcrnrlat</span><span class="o">=</span><span class="n">minlat</span><span class="p">,</span> <span class="n">urcrnrlat</span><span class="o">=</span><span class="n">maxlat</span><span class="p">)</span>
+                <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">agency_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                            <span class="n">marker</span><span class="o">=</span><span class="s">&quot;*&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;orange&quot;</span><span class="p">)</span>
+                <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">leb_ag_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                            <span class="n">marker</span><span class="o">=</span><span class="s">&quot;o&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;yellow&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+                <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">visa_ag_events</span><span class="p">[:,</span> <span class="p">[</span><span class="n">EV_LON_COL</span><span class="p">,</span> <span class="n">EV_LAT_COL</span><span class="p">]],</span>
+                            <span class="n">marker</span><span class="o">=</span><span class="s">&quot;s&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;blue&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+                <span class="c"># draw precision-recall curve</span>
+                <span class="n">cursor</span> <span class="o">=</span> <span class="n">database</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+                <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select orid, score from visa_origin where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span>
+                               <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">runid</span><span class="p">,))</span>
+                <span class="n">evscores</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+
+                <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&quot;Precision-Recall curve with </span><span class="si">%s</span><span class="s"> as ground truth&quot;</span>
+                          <span class="o">%</span> <span class="n">agency</span><span class="p">)</span>
+
+                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([(</span><span class="n">leb_p</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">)],</span> <span class="p">[(</span><span class="n">leb_r</span> <span class="o">/</span> <span class="mf">100.0</span><span class="p">)],</span> <span class="n">label</span><span class="o">=</span><span class="s">&quot;LEB&quot;</span><span class="p">,</span>
+                         <span class="n">marker</span><span class="o">=</span><span class="s">&#39;o&#39;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;yellow&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                         <span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">)</span>
+
+                <span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span> <span class="o">=</span> <span class="n">compute_roc_curve</span><span class="p">(</span><span class="n">agency_events</span><span class="p">,</span> <span class="n">visa_ag_events</span><span class="p">,</span>
+                                                 <span class="n">evscores</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_pts</span><span class="p">,</span> <span class="n">y_pts</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s">&quot;NET-VISA&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;blue&quot;</span><span class="p">)</span>
+
+                <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;precision&quot;</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s">&quot;recall&quot;</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s">&quot;upper right&quot;</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">gui</span><span class="p">:</span>
+        <span class="n">gui</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> <span class="n">visa_events</span><span class="p">)</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">main</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">SystemExit</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="kn">import</span> <span class="nn">pdb</span>
+        <span class="kn">import</span> <span class="nn">traceback</span>
+        <span class="kn">import</span> <span class="nn">sys</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">(</span><span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+        <span class="n">pdb</span><span class="o">.</span><span class="n">post_mortem</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">exc_traceback</span><span class="p">)</span>
+        <span class="k">raise</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

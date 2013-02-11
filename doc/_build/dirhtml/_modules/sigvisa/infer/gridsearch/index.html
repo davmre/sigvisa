@@ -1,0 +1,306 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.infer.gridsearch &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.infer.gridsearch</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy.stats</span> <span class="kn">as</span> <span class="nn">stats</span>
+<span class="kn">import</span> <span class="nn">pdb</span>
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database.signal_data</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.templates.load_by_name</span> <span class="kn">import</span> <span class="n">load_template_model</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.envelope_model</span> <span class="kn">import</span> <span class="n">EnvelopeModel</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.io</span> <span class="kn">import</span> <span class="n">load_segments</span>
+<span class="kn">from</span> <span class="nn">sigvisa.plotting.event_heatmap</span> <span class="kn">import</span> <span class="n">EventHeatmap</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.wiggles.wiggle_models</span> <span class="kn">import</span> <span class="n">PlainWiggleModel</span><span class="p">,</span> <span class="n">StupidL1WiggleModel</span>
+
+
+<div class="viewcode-block" id="event_at"><a class="viewcode-back" href="../../../../sigvisa.infer/#sigvisa.infer.gridsearch.event_at">[docs]</a><span class="k">def</span> <span class="nf">event_at</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">lon</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">ev2</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">ev</span><span class="p">)</span>
+    <span class="n">ev2</span><span class="o">.</span><span class="n">lon</span> <span class="o">=</span> <span class="n">lon</span> <span class="k">if</span> <span class="n">lon</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">ev</span><span class="o">.</span><span class="n">lon</span>
+    <span class="n">ev2</span><span class="o">.</span><span class="n">lat</span> <span class="o">=</span> <span class="n">lat</span> <span class="k">if</span> <span class="n">lat</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">ev</span><span class="o">.</span><span class="n">lat</span>
+    <span class="n">ev2</span><span class="o">.</span><span class="n">depth</span> <span class="o">=</span> <span class="n">depth</span> <span class="k">if</span> <span class="n">depth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">ev</span><span class="o">.</span><span class="n">depth</span>
+    <span class="n">ev2</span><span class="o">.</span><span class="n">time</span> <span class="o">=</span> <span class="n">t</span> <span class="k">if</span> <span class="n">t</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">ev</span><span class="o">.</span><span class="n">time</span>
+    <span class="k">return</span> <span class="n">ev2</span>
+
+</div>
+<div class="viewcode-block" id="propose_origin_times"><a class="viewcode-back" href="../../../../sigvisa.infer/#sigvisa.infer.gridsearch.propose_origin_times">[docs]</a><span class="k">def</span> <span class="nf">propose_origin_times</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">segments</span><span class="p">,</span> <span class="n">template_model</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="n">max_proposals</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+
+    <span class="c"># propose origin times based on phase arrival times</span>
+    <span class="n">event_time_proposals</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">segments</span><span class="p">:</span>
+        <span class="n">backprojections</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;arrivals&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="k">for</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">phases</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">arrtime</span> <span class="ow">in</span> <span class="n">arr</span><span class="p">[:,</span> <span class="n">DET_TIME_COL</span><span class="p">]:</span>
+                <span class="n">projection</span> <span class="o">=</span> <span class="n">arrtime</span> <span class="o">-</span> <span class="n">template_model</span><span class="o">.</span><span class="n">travel_time</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">],</span> <span class="n">phase</span><span class="p">)</span>
+                <span class="n">event_time_proposals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">projection</span><span class="p">)</span>
+
+    <span class="c"># if we have too many event time proposals, use a kernel density</span>
+    <span class="c"># estimate to get a representative sample.</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">event_time_proposals</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">max_proposals</span><span class="p">:</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">kernel</span> <span class="o">=</span> <span class="n">stats</span><span class="o">.</span><span class="n">gaussian_kde</span><span class="p">(</span><span class="n">event_time_proposals</span><span class="p">)</span>
+        <span class="n">kernel</span><span class="o">.</span><span class="n">covariance_factor</span> <span class="o">=</span> <span class="k">lambda</span><span class="p">:</span> <span class="mf">0.01</span>
+        <span class="n">kernel</span><span class="o">.</span><span class="n">_compute_covariance</span><span class="p">()</span>
+        <span class="n">event_time_proposals</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">max_proposals</span><span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">event_time_proposals</span>
+
+<span class="c"># get the likelihood of an event location, if we don&#39;t know the event time.</span>
+<span class="c"># &quot;likelihood&quot; is a function of a segment and an event object (e.g. envelope_model.log_likelihood_optimize wrapped in a lambda)</span>
+
+</div>
+<div class="viewcode-block" id="ev_loc_ll_at_optimal_time"><a class="viewcode-back" href="../../../../sigvisa.infer/#sigvisa.infer.gridsearch.ev_loc_ll_at_optimal_time">[docs]</a><span class="k">def</span> <span class="nf">ev_loc_ll_at_optimal_time</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">segments</span><span class="p">,</span> <span class="n">log_likelihood</span><span class="p">,</span> <span class="n">template_model</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="n">return_time</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">event_time_proposals</span> <span class="o">=</span> <span class="n">propose_origin_times</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">segments</span><span class="p">,</span> <span class="n">template_model</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="c"># find the origin time that maximizes the likelihood</span>
+    <span class="n">maxll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">(</span><span class="s">&quot;-inf&quot;</span><span class="p">)</span>
+    <span class="n">maxt</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">([</span><span class="n">log_likelihood</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">event_at</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">t</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">segments</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">proposed_t</span> <span class="ow">in</span> <span class="n">event_time_proposals</span><span class="p">:</span>
+        <span class="n">ll</span><span class="p">,</span> <span class="n">params</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">proposed_t</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ll</span> <span class="o">&gt;</span> <span class="n">maxll</span><span class="p">:</span>
+            <span class="n">maxll</span> <span class="o">=</span> <span class="n">ll</span>
+            <span class="n">maxt</span> <span class="o">=</span> <span class="n">proposed_t</span>
+
+    <span class="k">if</span> <span class="n">return_time</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">maxll</span><span class="p">,</span> <span class="n">maxt</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">maxll</span>
+
+</div>
+<div class="viewcode-block" id="integrate_ll_over_depth"><a class="viewcode-back" href="../../../../sigvisa.infer/#sigvisa.infer.gridsearch.integrate_ll_over_depth">[docs]</a><span class="k">def</span> <span class="nf">integrate_ll_over_depth</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">depths</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">600</span><span class="p">,</span> <span class="mi">700</span><span class="p">)</span>
+    <span class="n">ll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">(</span><span class="s">&quot;-inf&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">depths</span><span class="p">:</span>
+        <span class="n">new_ev</span> <span class="o">=</span> <span class="n">event_at</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="n">d</span><span class="p">)</span>
+        <span class="n">depth_ll</span> <span class="o">=</span> <span class="n">ev_loc_ll_at_optimal_time</span><span class="p">(</span><span class="n">ev</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">depths</span><span class="p">))</span>
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">logaddexp</span><span class="p">(</span><span class="n">ll</span><span class="p">,</span> <span class="n">depth_ll</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ll</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.infer/#sigvisa.infer.gridsearch.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-e&quot;</span><span class="p">,</span> <span class="s">&quot;--evid&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;evid&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;event ID to locate&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-s&quot;</span><span class="p">,</span> <span class="s">&quot;--sites&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;sites&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;comma-separated list of stations with which to locate the event&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--run_name&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;run_name&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;name of training run specifying the set of models to use&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--template_shape&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;template_shape&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;paired_exp&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;template model type (paired_exp)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-m&quot;</span><span class="p">,</span> <span class="s">&quot;--model&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;model&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;name of training run specifying the set of models to use&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;-w&quot;</span><span class="p">,</span> <span class="s">&quot;--map_width&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;map_width&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;width in degrees of the plotted heat map (2)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-n&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;n&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;detail level of the heatmap, in number of points per side&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--method&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;method&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;monte_carlo&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;method for signal likelihood computation (monte_carlo)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--phases&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;phases&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;all&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;comma-separated list of phases to include in predicted templates (all)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--model_types&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;model_types&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s">&quot;comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--hz&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;hz&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;downsample signals to a given sampling rate, in hz (5)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--max_evtime_proposals&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_evtime_proposals&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;maximum number of event times to consider per gridsearch location&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--use_true_depth&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;use_true_depth&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&quot;store_true&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;use the true depth of the event being searched for (default is to integrate over depth)&quot;</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">evid</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">evid</span>
+    <span class="n">sites</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">sites</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)</span>
+
+    <span class="n">map_width</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">map_width</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="c"># train / load coda models</span>
+    <span class="n">run_name</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">run_name</span>
+    <span class="n">iters</span> <span class="o">=</span> <span class="n">read_fitting_run_iterations</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">run_name</span><span class="p">)</span>
+    <span class="n">run_iter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">iters</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
+
+    <span class="n">model_types</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">model_types</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">):</span>
+        <span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">model_type</span><span class="p">)</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;:&#39;</span><span class="p">)</span>
+        <span class="n">model_types</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="n">model_type</span>
+
+    <span class="n">tm</span> <span class="o">=</span> <span class="n">load_template_model</span><span class="p">(</span>
+        <span class="n">template_shape</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">template_shape</span><span class="p">,</span> <span class="n">model_type</span><span class="o">=</span><span class="n">model_types</span><span class="p">,</span> <span class="n">run_name</span><span class="o">=</span><span class="n">run_name</span><span class="p">,</span> <span class="n">run_iter</span><span class="o">=</span><span class="n">run_iter</span><span class="p">,</span> <span class="n">sites</span><span class="o">=</span><span class="n">sites</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">phases</span> <span class="o">==</span> <span class="s">&quot;all&quot;</span><span class="p">:</span>
+        <span class="n">phases</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">phases</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">phases</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">phases</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)</span>
+
+    <span class="n">wm</span> <span class="o">=</span> <span class="n">PlainWiggleModel</span><span class="p">(</span><span class="n">tm</span><span class="p">)</span>
+<span class="c">#    wm = StupidL1WiggleModel(tm)</span>
+    <span class="n">em</span> <span class="o">=</span> <span class="n">EnvelopeModel</span><span class="p">(</span><span class="n">template_model</span><span class="o">=</span><span class="n">tm</span><span class="p">,</span> <span class="n">wiggle_model</span><span class="o">=</span><span class="n">wm</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="n">phases</span><span class="p">)</span>
+    <span class="n">ev_true</span> <span class="o">=</span> <span class="n">get_event</span><span class="p">(</span><span class="n">evid</span><span class="o">=</span><span class="n">evid</span><span class="p">)</span>
+
+    <span class="c"># inference is based on segments from all specified stations,</span>
+    <span class="c"># starting at the min predicted arrival time (for the true event)</span>
+    <span class="c"># minus 60s, and ending at the max predicted arrival time plus</span>
+    <span class="c"># 240s</span>
+    <span class="n">statimes</span> <span class="o">=</span> <span class="p">[</span><span class="n">ev_true</span><span class="o">.</span><span class="n">time</span> <span class="o">+</span> <span class="n">tm</span><span class="o">.</span><span class="n">travel_time</span><span class="p">(</span><span class="n">ev_true</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="n">sites</span><span class="p">,</span> <span class="n">s</span><span class="o">.</span><span class="n">phases</span><span class="p">)]</span>
+    <span class="n">stime</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">statimes</span><span class="p">)</span> <span class="o">-</span> <span class="mi">60</span>
+    <span class="n">etime</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">statimes</span><span class="p">)</span> <span class="o">+</span> <span class="mi">240</span>
+    <span class="n">segments</span> <span class="o">=</span> <span class="n">load_segments</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">sites</span><span class="p">,</span> <span class="n">stime</span><span class="p">,</span> <span class="n">etime</span><span class="p">)</span>
+    <span class="n">segments</span> <span class="o">=</span> <span class="p">[</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&#39;env;hz_</span><span class="si">%.3f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">options</span><span class="o">.</span><span class="n">hz</span><span class="p">)</span> <span class="k">for</span> <span class="n">seg</span> <span class="ow">in</span> <span class="n">segments</span><span class="p">]</span>
+
+    <span class="n">f_ll</span> <span class="o">=</span> <span class="n">em</span><span class="o">.</span><span class="n">get_method</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">method</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">use_true_depth</span><span class="p">:</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">:</span> <span class="n">ev_loc_ll_at_optimal_time</span><span class="p">(</span><span class="n">event_at</span><span class="p">(</span>
+            <span class="n">ev_true</span><span class="p">,</span> <span class="n">lon</span><span class="o">=</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="n">lat</span><span class="p">),</span> <span class="n">segments</span><span class="p">,</span> <span class="n">log_likelihood</span><span class="o">=</span><span class="n">f_ll</span><span class="p">,</span> <span class="n">template_model</span><span class="o">=</span><span class="n">tm</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="n">phases</span><span class="p">,</span> <span class="n">max_proposals</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">max_evtime_proposals</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">:</span> <span class="n">integrate_ll_over_depth</span><span class="p">(</span><span class="n">event_at</span><span class="p">(</span><span class="n">ev_true</span><span class="p">,</span> <span class="n">lon</span><span class="o">=</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="n">lat</span><span class="p">),</span> <span class="n">segments</span><span class="o">=</span><span class="n">segments</span><span class="p">,</span> <span class="n">log_likelihood</span><span class="o">=</span><span class="n">f_ll</span><span class="p">,</span>
+                                                     <span class="n">template_model</span><span class="o">=</span><span class="n">tm</span><span class="p">,</span> <span class="n">phases</span><span class="o">=</span><span class="n">phases</span><span class="p">,</span> <span class="n">max_proposals</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">max_evtime_proposals</span><span class="p">)</span>
+
+    <span class="n">sta_string</span> <span class="o">=</span> <span class="s">&quot;:&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sites</span><span class="p">)</span>
+    <span class="n">run_label</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+    <span class="n">fname</span> <span class="o">=</span> <span class="bp">None</span> <span class="k">if</span> <span class="n">run_label</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="s">&quot;logs/heatmap_</span><span class="si">%s</span><span class="s">_values.txt&quot;</span> <span class="o">%</span> <span class="n">run_label</span>
+    <span class="k">print</span> <span class="s">&quot;writing heat map to&quot;</span><span class="p">,</span> <span class="n">fname</span>
+    <span class="n">stime</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">hm</span> <span class="o">=</span> <span class="n">EventHeatmap</span><span class="p">(</span><span class="n">f</span><span class="o">=</span><span class="n">f</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="p">(</span><span class="n">ev_true</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="n">ev_true</span><span class="o">.</span><span class="n">lat</span><span class="p">),</span> <span class="n">width</span><span class="o">=</span><span class="n">map_width</span><span class="p">,</span> <span class="n">fname</span><span class="o">=</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">hm</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+    <span class="n">etime</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="k">print</span> <span class="s">&quot;finished heatmap; saving metadata to database...&quot;</span>
+
+    <span class="n">d</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;evid&#39;</span><span class="p">:</span> <span class="n">ev_true</span><span class="o">.</span><span class="n">evid</span><span class="p">,</span>
+         <span class="s">&#39;timestamp&#39;</span><span class="p">:</span> <span class="n">stime</span><span class="p">,</span>
+         <span class="s">&#39;elapsed&#39;</span><span class="p">:</span> <span class="n">etime</span> <span class="o">-</span> <span class="n">stime</span><span class="p">,</span>
+         <span class="s">&#39;lon_nw&#39;</span><span class="p">:</span> <span class="n">hm</span><span class="o">.</span><span class="n">min_lon</span><span class="p">,</span>
+         <span class="s">&#39;lat_nw&#39;</span><span class="p">:</span> <span class="n">hm</span><span class="o">.</span><span class="n">max_lat</span><span class="p">,</span>
+         <span class="s">&#39;lon_se&#39;</span><span class="p">:</span> <span class="n">hm</span><span class="o">.</span><span class="n">max_lon</span><span class="p">,</span>
+         <span class="s">&#39;lat_se&#39;</span><span class="p">:</span> <span class="n">hm</span><span class="o">.</span><span class="n">min_lat</span><span class="p">,</span>
+         <span class="s">&#39;pts_per_side&#39;</span><span class="p">:</span> <span class="n">hm</span><span class="o">.</span><span class="n">n</span><span class="p">,</span>
+         <span class="s">&#39;phases&#39;</span><span class="p">:</span> <span class="s">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">phases</span><span class="p">),</span>
+         <span class="s">&#39;likelihood_method&#39;</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">method</span><span class="p">,</span>
+         <span class="s">&#39;wiggle_model_type&#39;</span><span class="p">:</span> <span class="n">wm</span><span class="o">.</span><span class="n">summary_str</span><span class="p">(),</span>
+         <span class="s">&#39;heatmap_fname&#39;</span><span class="p">:</span> <span class="n">fname</span><span class="p">,</span>
+         <span class="s">&#39;max_evtime_proposals&#39;</span><span class="p">:</span> <span class="n">options</span><span class="o">.</span><span class="n">max_evtime_proposals</span><span class="p">,</span>
+         <span class="s">&#39;true_depth&#39;</span><span class="p">:</span> <span class="s">&#39;t&#39;</span> <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">use_true_depth</span> <span class="k">else</span> <span class="s">&#39;f&#39;</span><span class="p">,</span>
+         <span class="p">}</span>
+
+    <span class="n">save_gsrun_to_db</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">segments</span><span class="p">,</span> <span class="n">em</span><span class="p">,</span> <span class="n">tm</span><span class="p">)</span>
+
+        <span class="c"># hm.add_stations([s[&#39;sta&#39;] for s in segments])</span>
+        <span class="c"># hm.set_true_event(evlon, evlat)</span>
+        <span class="c"># hm.savefig(themap_fname, title=&quot;location of event %d&quot; % evid)</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">main</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">e</span>
+        <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="n">pdb</span><span class="o">.</span><span class="n">post_mortem</span><span class="p">(</span><span class="n">tb</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

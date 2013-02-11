@@ -1,0 +1,358 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.models.spatial_regression.SpatialGP &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../../" />
+    <link rel="up" title="Module code" href="../../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.models.spatial_regression.SpatialGP</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">import</span> <span class="nn">sigvisa.utils.geog</span> <span class="kn">as</span> <span class="nn">geog</span>
+
+
+<span class="kn">from</span> <span class="nn">gpr</span> <span class="kn">import</span> <span class="n">munge</span><span class="p">,</span> <span class="n">kernels</span><span class="p">,</span> <span class="n">evaluate</span><span class="p">,</span> <span class="n">learn</span><span class="p">,</span> <span class="n">distributions</span><span class="p">,</span> <span class="n">plot</span>
+<span class="kn">from</span> <span class="nn">gpr.gp</span> <span class="kn">import</span> <span class="n">GaussianProcess</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.models.spatial_regression.baseline_models</span> <span class="kn">import</span> <span class="n">ParamModel</span>
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="n">Event</span>
+
+<span class="n">start_params_dad_log</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;coda_decay&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">.</span><span class="mo">022</span><span class="p">,</span> <span class="o">.</span><span class="mo">01</span><span class="mi">87</span><span class="p">,</span> <span class="mf">1.00</span><span class="p">,</span> <span class="o">.</span><span class="mi">14</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">],</span>
+                        <span class="s">&quot;amp_transfer&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.1</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mf">9.5</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="o">.</span><span class="mi">31</span><span class="p">],</span>
+                        <span class="s">&quot;peak_offset&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">]</span>
+                        <span class="p">}</span>
+<span class="n">start_params_dad_cuberoot</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;coda_decay&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">.</span><span class="mo">022</span><span class="p">,</span> <span class="o">.</span><span class="mo">01</span><span class="mi">87</span><span class="p">,</span> <span class="mf">1.00</span><span class="p">,</span> <span class="o">.</span><span class="mi">14</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">],</span>
+                             <span class="s">&quot;amp_transfer&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.1</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mf">9.5</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="o">.</span><span class="mi">31</span><span class="p">],</span>
+                             <span class="s">&quot;peak_offset&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">]</span>
+                             <span class="p">}</span>
+<span class="n">start_params_dad_linear</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;coda_decay&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">.</span><span class="mo">022</span><span class="p">,</span> <span class="o">.</span><span class="mo">01</span><span class="mi">87</span><span class="p">,</span> <span class="mf">500.00</span><span class="p">,</span> <span class="o">.</span><span class="mi">14</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">],</span>
+                           <span class="s">&quot;amp_transfer&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.1</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mf">1000.00</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="o">.</span><span class="mi">31</span><span class="p">],</span>
+                           <span class="s">&quot;peak_offset&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mf">500.00</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">]</span>
+                           <span class="p">}</span>
+<span class="n">start_params_lld</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;coda_decay&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">.</span><span class="mo">022</span><span class="p">,</span> <span class="o">.</span><span class="mo">01</span><span class="mi">87</span><span class="p">,</span> <span class="mf">50.00</span><span class="p">],</span>
+                    <span class="s">&quot;amp_transfer&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.1</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mf">100.00</span><span class="p">],</span>
+                    <span class="s">&quot;peak_offset&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mf">50.00</span><span class="p">]</span>
+                    <span class="p">}</span>
+<span class="n">start_params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;dad_log&quot;</span><span class="p">:</span> <span class="n">start_params_dad_log</span><span class="p">,</span>
+                <span class="s">&quot;dad_cuberoot&quot;</span><span class="p">:</span> <span class="n">start_params_dad_cuberoot</span><span class="p">,</span>
+                <span class="s">&quot;dad_linear&quot;</span><span class="p">:</span> <span class="n">start_params_dad_linear</span><span class="p">,</span>
+                <span class="s">&quot;lld&quot;</span><span class="p">:</span> <span class="n">start_params_lld</span>
+                <span class="p">}</span>
+
+
+<span class="n">X_LON</span><span class="p">,</span> <span class="n">X_LAT</span><span class="p">,</span> <span class="n">X_DEPTH</span><span class="p">,</span> <span class="n">X_DIST</span><span class="p">,</span> <span class="n">X_AZI</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="gp_extract_features"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.gp_extract_features">[docs]</a><span class="k">def</span> <span class="nf">gp_extract_features</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">distfn</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">distfn</span> <span class="o">==</span> <span class="s">&quot;lld&quot;</span><span class="p">:</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span> <span class="p">[</span><span class="n">X_LON</span><span class="p">,</span> <span class="n">X_LAT</span><span class="p">,</span> <span class="n">X_DEPTH</span><span class="p">]]</span>
+    <span class="k">elif</span> <span class="n">distfn</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&quot;dad&quot;</span><span class="p">):</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[:,</span> <span class="p">[</span><span class="n">X_DIST</span><span class="p">,</span> <span class="n">X_AZI</span><span class="p">,</span> <span class="n">X_DEPTH</span><span class="p">]]</span>
+    <span class="k">return</span> <span class="n">X</span>
+
+</div>
+<div class="viewcode-block" id="dist_azi_depth_distfn_log"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_log">[docs]</a><span class="k">def</span> <span class="nf">dist_azi_depth_distfn_log</span><span class="p">(</span><span class="n">dad1</span><span class="p">,</span> <span class="n">dad2</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="n">azi_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">depth_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">dist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">avg_dist</span> <span class="o">=</span> <span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">azi</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">degdiff</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">avg_dist</span><span class="p">)</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dist</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">r</span>
+
+</div>
+<div class="viewcode-block" id="dist_azi_depth_distfn_linear"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_linear">[docs]</a><span class="k">def</span> <span class="nf">dist_azi_depth_distfn_linear</span><span class="p">(</span><span class="n">dad1</span><span class="p">,</span> <span class="n">dad2</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="n">azi_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">depth_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">dist</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">avg_dist</span> <span class="o">=</span> <span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">azi</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">degdiff</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="n">avg_dist</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dist</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">r</span>
+
+</div>
+<div class="viewcode-block" id="dist_azi_depth_distfn_cuberoot"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_cuberoot">[docs]</a><span class="k">def</span> <span class="nf">dist_azi_depth_distfn_cuberoot</span><span class="p">(</span><span class="n">dad1</span><span class="p">,</span> <span class="n">dad2</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="n">azi_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">depth_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">dist</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">avg_dist</span> <span class="o">=</span> <span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">azi</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">degdiff</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="n">avg_dist</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dist</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">r</span>
+
+</div>
+<div class="viewcode-block" id="dist_distfn"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.dist_distfn">[docs]</a><span class="k">def</span> <span class="nf">dist_distfn</span><span class="p">(</span><span class="n">lldda1</span><span class="p">,</span> <span class="n">lldda2</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">lldda1</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">lldda2</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="depth_distfn"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.depth_distfn">[docs]</a><span class="k">def</span> <span class="nf">depth_distfn</span><span class="p">(</span><span class="n">lldda1</span><span class="p">,</span> <span class="n">lldda2</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">lldda1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">lldda2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="azi_distfn"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.azi_distfn">[docs]</a><span class="k">def</span> <span class="nf">azi_distfn</span><span class="p">(</span><span class="n">lldda1</span><span class="p">,</span> <span class="n">lldda2</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">avg_dist</span> <span class="o">=</span> <span class="p">(</span><span class="n">lldda1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">lldda2</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="k">return</span> <span class="n">geog</span><span class="o">.</span><span class="n">degdiff</span><span class="p">(</span><span class="n">lldda1</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span> <span class="n">lldda2</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span> <span class="o">*</span> <span class="n">avg_dist</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ll_distfn"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.ll_distfn">[docs]</a><span class="k">def</span> <span class="nf">ll_distfn</span><span class="p">(</span><span class="n">lldda1</span><span class="p">,</span> <span class="n">lldda2</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">geog</span><span class="o">.</span><span class="n">dist_km</span><span class="p">(</span><span class="n">lldda1</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">lldda2</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">])</span>
+
+</div>
+<div class="viewcode-block" id="dist_azi_depth_distfn_deriv_cuberoot"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_cuberoot">[docs]</a><span class="k">def</span> <span class="nf">dist_azi_depth_distfn_deriv_cuberoot</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">dad1</span><span class="p">,</span> <span class="n">dad2</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="n">azi_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">depth_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">dist</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">avg_dist</span> <span class="o">=</span> <span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">azi</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">degdiff</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="n">avg_dist</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dist</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>  <span class="c"># deriv wrt azi_scale</span>
+        <span class="n">deriv</span> <span class="o">=</span> <span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">/</span> <span class="n">r</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="k">elif</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>  <span class="c"># deriv wrt depth_scale</span>
+        <span class="n">deriv</span> <span class="o">=</span> <span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">/</span> <span class="n">r</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;unknown parameter number </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">deriv</span>
+
+</div>
+<div class="viewcode-block" id="dist_azi_depth_distfn_deriv_linear"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_linear">[docs]</a><span class="k">def</span> <span class="nf">dist_azi_depth_distfn_deriv_linear</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">dad1</span><span class="p">,</span> <span class="n">dad2</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="n">azi_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">depth_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">dist</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">avg_dist</span> <span class="o">=</span> <span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">azi</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">degdiff</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="n">avg_dist</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">dad1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dist</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>  <span class="c"># deriv wrt azi_scale</span>
+        <span class="n">deriv</span> <span class="o">=</span> <span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">/</span> <span class="n">r</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="k">elif</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>  <span class="c"># deriv wrt depth_scale</span>
+        <span class="n">deriv</span> <span class="o">=</span> <span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">/</span> <span class="n">r</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;unknown parameter number </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">deriv</span>
+
+</div>
+<div class="viewcode-block" id="dist_azi_depth_distfn_deriv_log"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_log">[docs]</a><span class="k">def</span> <span class="nf">dist_azi_depth_distfn_deriv_log</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">dad1</span><span class="p">,</span> <span class="n">dad2</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+    <span class="n">azi_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">depth_scale</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">dist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">avg_dist</span> <span class="o">=</span> <span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">azi</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">degdiff</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dad2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">avg_dist</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">dad2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">dist</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>  <span class="c"># deriv wrt azi_scale</span>
+        <span class="n">deriv</span> <span class="o">=</span> <span class="n">azi_scale</span> <span class="o">*</span> <span class="n">azi</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">/</span> <span class="n">r</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="k">elif</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>  <span class="c"># deriv wrt depth_scale</span>
+        <span class="n">deriv</span> <span class="o">=</span> <span class="n">depth_scale</span> <span class="o">*</span> <span class="n">depth</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">/</span> <span class="n">r</span> <span class="k">if</span> <span class="n">r</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;unknown parameter number </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">deriv</span>
+
+</div>
+<div class="viewcode-block" id="lon_lat_depth_distfn"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.lon_lat_depth_distfn">[docs]</a><span class="k">def</span> <span class="nf">lon_lat_depth_distfn</span><span class="p">(</span><span class="n">lld1</span><span class="p">,</span> <span class="n">lld2</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">ll</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">dist_km</span><span class="p">(</span><span class="n">lld1</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">lld2</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">])</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">lld1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="n">lld2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">ll</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">depth</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">r</span>
+
+</div>
+<span class="n">distfns</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&quot;dad_cuberoot&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">dist_azi_depth_distfn_cuberoot</span><span class="p">,</span> <span class="n">dist_azi_depth_distfn_deriv_cuberoot</span><span class="p">],</span>
+<span class="s">&quot;dad_linear&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">dist_azi_depth_distfn_linear</span><span class="p">,</span> <span class="n">dist_azi_depth_distfn_deriv_linear</span><span class="p">],</span>
+<span class="s">&quot;dad_log&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">dist_azi_depth_distfn_log</span><span class="p">,</span> <span class="n">dist_azi_depth_distfn_deriv_log</span><span class="p">],</span>
+<span class="s">&quot;lld&quot;</span><span class="p">:</span> <span class="n">lon_lat_depth_distfn</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="SpatialGP"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.SpatialGP">[docs]</a><span class="k">class</span> <span class="nc">SpatialGP</span><span class="p">(</span><span class="n">GaussianProcess</span><span class="p">,</span> <span class="n">ParamModel</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s">&quot;distfn_str&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span> <span class="o">=</span> <span class="s">&quot;dad_log&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ParamModel</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s">&quot;sta&quot;</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;kernel_extra&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">distfns</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span><span class="p">]</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;kernel&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;distfn&quot;</span>
+
+        <span class="n">GaussianProcess</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SpatialGP.variance"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.variance">[docs]</a>    <span class="k">def</span> <span class="nf">variance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="n">Event</span><span class="p">):</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_to_array</span><span class="p">(</span><span class="n">X1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">gp_extract_features</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span><span class="p">)</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">GaussianProcess</span><span class="o">.</span><span class="n">variance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="SpatialGP.sample"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="n">Event</span><span class="p">):</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_to_array</span><span class="p">(</span><span class="n">X1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">gp_extract_features</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span><span class="p">)</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">GaussianProcess</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="SpatialGP.posterior_log_likelihood"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.posterior_log_likelihood">[docs]</a>    <span class="k">def</span> <span class="nf">posterior_log_likelihood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="n">Event</span><span class="p">):</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_to_array</span><span class="p">(</span><span class="n">X1</span><span class="p">)</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="n">y</span><span class="p">,))</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">gp_extract_features</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span><span class="p">)</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">GaussianProcess</span><span class="o">.</span><span class="n">posterior_log_likelihood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="SpatialGP.predict"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.predict">[docs]</a>    <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">):</span>
+        <span class="c"># X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="n">Event</span><span class="p">):</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_to_array</span><span class="p">(</span><span class="n">X1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">X1</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+            <span class="n">X1</span> <span class="o">=</span> <span class="n">gp_extract_features</span><span class="p">(</span><span class="n">X1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span><span class="p">)</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">GaussianProcess</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="SpatialGP.save_trained_model"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.save_trained_model">[docs]</a>    <span class="k">def</span> <span class="nf">save_trained_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Serialize the model to a file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">kname</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="p">,))</span>
+        <span class="n">mname</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">,))</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">savez</span><span class="p">(</span>
+                <span class="n">f</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">mu</span><span class="p">,)),</span> <span class="n">kernel_name</span><span class="o">=</span><span class="n">kname</span><span class="p">,</span> <span class="n">kernel_params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_params</span><span class="p">,</span> <span class="n">mname</span><span class="o">=</span><span class="n">mname</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">,</span>
+                <span class="n">Kinv</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">Kinv</span><span class="p">,</span> <span class="n">L</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">L</span><span class="p">,</span> <span class="n">distfn_str</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span><span class="p">,</span> <span class="n">ll</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ll</span><span class="p">,</span> <span class="n">base_str</span><span class="o">=</span><span class="nb">super</span><span class="p">(</span><span class="n">SpatialGP</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__repr_base_params__</span><span class="p">())</span>
+</div>
+<div class="viewcode-block" id="SpatialGP.load_trained_model"><a class="viewcode-back" href="../../../../../sigvisa.models.spatial_regression/#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.load_trained_model">[docs]</a>    <span class="k">def</span> <span class="nf">load_trained_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="n">npzfile</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">unpack_npz</span><span class="p">(</span><span class="n">npzfile</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">npzfile</span><span class="p">[</span><span class="s">&#39;distfn_str&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernel_extra</span> <span class="o">=</span> <span class="n">distfns</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">distfn_str</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernel</span> <span class="o">=</span> <span class="n">kernels</span><span class="o">.</span><span class="n">setup_kernel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">kernel_params</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_extra</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">SpatialGP</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__unrepr_base_params__</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">npzfile</span><span class="p">[</span><span class="s">&#39;base_str&#39;</span><span class="p">]))</span>
+        <span class="k">del</span> <span class="n">npzfile</span><span class="o">.</span><span class="n">f</span>
+        <span class="n">npzfile</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

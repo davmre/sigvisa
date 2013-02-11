@@ -1,0 +1,548 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.models.noise.armodel.model &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../../../" />
+    <link rel="up" title="Module code" href="../../../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.models.noise.armodel.model</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">numpy.ma</span> <span class="kn">as</span> <span class="nn">ma</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+
+<span class="kn">import</span> <span class="nn">scipy.weave</span> <span class="kn">as</span> <span class="nn">weave</span>
+<span class="kn">from</span> <span class="nn">scipy.weave</span> <span class="kn">import</span> <span class="n">converters</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+
+<div class="viewcode-block" id="load_armodel_from_file"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.load_armodel_from_file">[docs]</a><span class="k">def</span> <span class="nf">load_armodel_from_file</span><span class="p">(</span><span class="n">fname</span><span class="p">):</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">srate</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot; &quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot; &quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot; &quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot; &quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">line</span><span class="p">))</span>
+        <span class="n">em</span> <span class="o">=</span> <span class="n">ErrorModel</span><span class="p">(</span><span class="n">mean</span><span class="p">,</span> <span class="n">std</span><span class="p">)</span>
+        <span class="n">arm</span> <span class="o">=</span> <span class="n">ARModel</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">em</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="n">c</span><span class="p">,</span> <span class="n">sf</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;error reading AR model from file </span><span class="si">%s</span><span class="s">: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)))</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">arm</span>
+<span class="c">#    return cPickle.load(open(fname, &#39;rb&#39;))</span>
+
+</div>
+<div class="viewcode-block" id="ARModel"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel">[docs]</a><span class="k">class</span> <span class="nc">ARModel</span><span class="p">:</span>
+    <span class="c"># params: array of parameters</span>
+    <span class="c"># p: number of parametesr</span>
+    <span class="c"># em: error model</span>
+    <span class="c"># sf: sampling frequency in Hz.</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">em</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">sf</span><span class="o">=</span><span class="mi">40</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">em</span> <span class="o">=</span> <span class="n">em</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">c</span> <span class="o">=</span> <span class="n">c</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sf</span> <span class="o">=</span> <span class="n">sf</span>
+
+    <span class="c"># samples based on the defined AR Model</span>
+    <span class="c"># if init data is not given, then the first p points are</span>
+    <span class="c"># sampled from error model (i.e. normally distributed)</span>
+<div class="viewcode-block" id="ARModel.sample"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">initdata</span><span class="o">=</span><span class="p">[]):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">num</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">t</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">initdata</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">initdata</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span>
+                    <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="n">initdata</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">):</span>
+                    <span class="n">s</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">data</span><span class="p">[</span><span class="n">t</span> <span class="o">-</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+                <span class="n">data</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">sample</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">data</span>
+</div>
+<div class="viewcode-block" id="ARModel.fastAR_missingData"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.fastAR_missingData">[docs]</a>    <span class="k">def</span> <span class="nf">fastAR_missingData</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">std</span><span class="p">):</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">mask</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">data</span> <span class="o">-</span> <span class="n">c</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="n">n_p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+
+        <span class="n">tmp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_p</span><span class="p">,</span> <span class="n">n_p</span><span class="p">))</span>
+
+        <span class="n">K</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_p</span><span class="p">,</span> <span class="n">n_p</span><span class="p">))</span>
+        <span class="n">u</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_p</span><span class="p">,))</span>
+
+        <span class="n">code</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">        int t_since_mask = 0;</span>
+<span class="s">        double s = std;</span>
+<span class="s">        double t1 = log(s) + 0.5 * log(2 * 3.141592653589793);</span>
+
+<span class="s">        int converged_to_stationary = 0;</span>
+
+<span class="s">        double d_prob = 0;</span>
+<span class="s">        for (int t=0; t &lt; n; ++t) {</span>
+<span class="s">            if (m(t)) {</span>
+<span class="s">               if (converged_to_stationary) continue;</span>
+
+<span class="s">               if (t_since_mask &gt; n_p+1) {</span>
+<span class="s">                  // initialize kalman filtering when we encounter a masked zone</span>
+
+<span class="s">                  for (int i=0; i &lt; n_p; ++i) {</span>
+<span class="s">                      for (int j=0; j &lt; n_p; ++j) {</span>
+<span class="s">                           K(i,j) = 0;</span>
+<span class="s">                      }</span>
+<span class="s">                      u(i) = 0;</span>
+<span class="s">                  }</span>
+<span class="s">                  int len_history = t &gt; n_p ? n_p : t;</span>
+<span class="s">                  for (int i=0; i &lt; len_history; ++i) {</span>
+<span class="s">                      u(i) = d(t-1-i);</span>
+<span class="s">                  }</span>
+<span class="s">                  t_since_mask = 0;</span>
+<span class="s">               }</span>
+
+<span class="s">               double old_s = K(0,0);</span>
+<span class="s">               updateK(K, tmp, p, n_p);</span>
+<span class="s">               K(0,0) += std;</span>
+<span class="s">               update_u(u, p, n_p);</span>
+
+<span class="s">               if (old_s &gt; std &amp;&amp; (fabs(old_s - K(0,0)) &lt; 0.00000000000001)) {</span>
+<span class="s">                  converged_to_stationary = 1;</span>
+<span class="s">               }</span>
+
+<span class="s">//               printf (&quot;c t = </span><span class="si">%d</span><span class="s"> std = </span><span class="si">%f</span><span class="s"> old_s </span><span class="si">%f</span><span class="s"> diff </span><span class="si">%f</span><span class="s"> converged=</span><span class="si">%d</span><span class="se">\\</span><span class="s">n&quot;, t, K(0,0), old_s, fabs(old_s - K(0,0)), converged_to_stationary);</span>
+
+<span class="s">               continue;</span>
+<span class="s">          }</span>
+
+
+<span class="s">            double expected = 0;</span>
+<span class="s">            if (t_since_mask &lt;= n_p) {</span>
+<span class="s">                converged_to_stationary = 0;</span>
+
+<span class="s">                t_since_mask++;</span>
+<span class="s">                updateK(K, tmp, p, n_p);</span>
+<span class="s">                K(0,0) += std;</span>
+<span class="s">                update_u(u, p, n_p);</span>
+
+
+<span class="s">                expected = u(0);</span>
+<span class="s">                s = K(0,0);</span>
+<span class="s">//                printf (&quot;c t = </span><span class="si">%d</span><span class="s"> std = </span><span class="si">%f</span><span class="se">\\</span><span class="s">n&quot;, t, K(0,0));</span>
+<span class="s">                t1 = log(s) + 0.5 * log(2 * 3.141592653589793);</span>
+<span class="s">            } else {</span>
+<span class="s">                for (int i=0; i &lt; n_p; ++i) {</span>
+<span class="s">                    if (t &gt; i &amp;&amp; !m(t-i-1)) {</span>
+<span class="s">                       double ne = p(i) * d(t-i-1);</span>
+<span class="s">                       expected += ne;</span>
+<span class="s">                    }</span>
+<span class="s">                }</span>
+<span class="s">            }</span>
+
+<span class="s">            double err = d(t) - expected;</span>
+<span class="s">            double x = err/s;</span>
+<span class="s">            double ll = t1 + 0.5 * x*x;</span>
+<span class="s">            d_prob -= ll;</span>
+
+<span class="s">        // printf(&quot;cm </span><span class="si">%d</span><span class="s"> err = </span><span class="si">%.10f</span><span class="s"> x = </span><span class="si">%.10f</span><span class="s"> ll = </span><span class="si">%.10f</span><span class="s"> d_prob=</span><span class="si">%.10f</span><span class="se">\\</span><span class="s">n&quot;, t, err, x, ll, d_prob);</span>
+
+<span class="s">            if (t_since_mask &lt;= n_p) {</span>
+<span class="s">                u(0) = d(t);</span>
+<span class="s">                for(int i=0; i &lt; n_p; ++i) {</span>
+<span class="s">                    K(0, i) = 0;</span>
+<span class="s">                    K(i, 0) = 0;</span>
+<span class="s">                }</span>
+<span class="s">            } else if (t_since_mask == n_p + 1) {</span>
+<span class="s">                s = std;</span>
+<span class="s">                t1 = log(s) + 0.5 * log(2 * 3.141592653589793);</span>
+<span class="s">                t_since_mask += 1;</span>
+<span class="s">            }</span>
+<span class="s">        }</span>
+
+<span class="s">        return_val = d_prob;</span>
+<span class="s">        &quot;&quot;&quot;</span>
+
+        <span class="n">support</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">        void updateK(blitz::Array&lt;double, 2&gt; &amp;K, blitz::Array&lt;double, 2&gt; &amp;tmp, blitz::Array&lt;double, 1&gt; p, int n_p) {</span>
+
+<span class="s">               // tmp = K * A.T</span>
+<span class="s">               for (int i=0; i &lt; n_p; ++i){  // row of K</span>
+
+<span class="s">                 // first row of A contains the AR params</span>
+<span class="s">                 tmp(i,0) = 0;</span>
+<span class="s">                 for (int j=0; j &lt; n_p; ++j){</span>
+<span class="s">                  tmp(i,0) += K(i,j) * p(j);</span>
+<span class="s">                 }</span>
+
+<span class="s">                 // all the other rows are just the shifted identity matrix</span>
+<span class="s">                 for (int j=1; j &lt; n_p; ++j){</span>
+<span class="s">                    tmp(i,j) = K(i,j-1);</span>
+<span class="s">                 }</span>
+<span class="s">               }</span>
+
+<span class="s">               // K = A * tmp</span>
+<span class="s">               for (int i=0; i &lt; n_p; ++i){  // col of tmp</span>
+
+<span class="s">                 // first row of A contains the AR params</span>
+<span class="s">                 K(0, i) = 0;</span>
+<span class="s">                 for (int j=0; j &lt; n_p; ++j){</span>
+<span class="s">                  K(0, i) += tmp(j,i) * p(j);</span>
+<span class="s">                 }</span>
+
+<span class="s">                 // the other rows are the shifted identity</span>
+<span class="s">                 for (int j=1; j &lt; n_p; ++j){</span>
+<span class="s">                    K(j,i) = tmp(j-1,i);</span>
+<span class="s">                 }</span>
+<span class="s">               }</span>
+<span class="s">             }</span>
+
+
+<span class="s">         void update_u(blitz::Array&lt;double, 1&gt; &amp;u, blitz::Array&lt;double, 1&gt; &amp;p, int n_p) {</span>
+<span class="s">               double newpred = 0;</span>
+<span class="s">               for (int i=0; i &lt; n_p; ++i) {</span>
+<span class="s">                   newpred += u(i) * p(i);</span>
+<span class="s">               }</span>
+<span class="s">               for (int i=n_p-1; i &gt; 0; --i) {</span>
+<span class="s">                   u(i) = u(i-1);</span>
+<span class="s">               }</span>
+<span class="s">               u(0) = newpred;</span>
+<span class="s">          }</span>
+
+<span class="s">&quot;&quot;&quot;</span>
+
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">weave</span><span class="o">.</span><span class="n">inline</span><span class="p">(</span><span class="n">code</span><span class="p">,</span>
+                          <span class="p">[</span><span class="s">&#39;n&#39;</span><span class="p">,</span> <span class="s">&#39;n_p&#39;</span><span class="p">,</span> <span class="s">&#39;m&#39;</span><span class="p">,</span> <span class="s">&#39;d&#39;</span><span class="p">,</span> <span class="s">&#39;std&#39;</span><span class="p">,</span> <span class="s">&#39;p&#39;</span><span class="p">,</span> <span class="s">&#39;tmp&#39;</span><span class="p">,</span> <span class="s">&#39;K&#39;</span><span class="p">,</span> <span class="s">&#39;u&#39;</span><span class="p">],</span>
+                          <span class="n">type_converters</span><span class="o">=</span><span class="n">converters</span><span class="o">.</span><span class="n">blitz</span><span class="p">,</span>
+                          <span class="n">support_code</span><span class="o">=</span><span class="n">support</span><span class="p">,</span>
+                          <span class="n">compiler</span><span class="o">=</span><span class="s">&#39;gcc&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ll</span>
+</div>
+<div class="viewcode-block" id="ARModel.fast_AR"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.fast_AR">[docs]</a>    <span class="k">def</span> <span class="nf">fast_AR</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">std</span><span class="p">):</span>
+        <span class="c">#</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">mask</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">data</span> <span class="o">-</span> <span class="n">c</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="n">n_p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">std</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+
+        <span class="n">code</span> <span class="o">=</span> <span class="s">&quot;&quot;&quot;</span>
+<span class="s">        double d_prob = 0;</span>
+<span class="s">        for (int t=0; t &lt; n; ++t) {</span>
+<span class="s">            if (m(t)) { continue; }</span>
+
+<span class="s">           double expected = 0;</span>
+<span class="s">           for (int i=0; i &lt; n_p; ++i) {</span>
+<span class="s">               if (t &gt; i &amp;&amp; !m(t-i-1)) {</span>
+<span class="s">                  double ne = p(i) * d(t-i-1);</span>
+<span class="s">                  expected += ne;</span>
+<span class="s">               }</span>
+<span class="s">           }</span>
+<span class="s">           double err = d(t) - expected;</span>
+<span class="s">           double x = err/std;</span>
+<span class="s">           double ll = (double)t1 + 0.5 * x*x;</span>
+<span class="s">           d_prob -= ll;</span>
+<span class="s">        // printf(&quot;c </span><span class="si">%d</span><span class="s"> err = </span><span class="si">%.10f</span><span class="s"> x = </span><span class="si">%.10f</span><span class="s"> ll = </span><span class="si">%.10f</span><span class="s"> d_prob=</span><span class="si">%.10f</span><span class="se">\\</span><span class="s">n&quot;, t, err, x, ll, d_prob);</span>
+<span class="s">        }</span>
+<span class="s">        return_val = d_prob;</span>
+<span class="s">        &quot;&quot;&quot;</span>
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">weave</span><span class="o">.</span><span class="n">inline</span><span class="p">(</span><span class="n">code</span><span class="p">,</span>
+                          <span class="p">[</span><span class="s">&#39;n&#39;</span><span class="p">,</span> <span class="s">&#39;n_p&#39;</span><span class="p">,</span> <span class="s">&#39;m&#39;</span><span class="p">,</span> <span class="s">&#39;d&#39;</span><span class="p">,</span> <span class="s">&#39;t1&#39;</span><span class="p">,</span> <span class="s">&#39;std&#39;</span><span class="p">,</span> <span class="s">&#39;p&#39;</span><span class="p">],</span>
+                          <span class="n">type_converters</span><span class="o">=</span><span class="n">converters</span><span class="o">.</span><span class="n">blitz</span><span class="p">,</span>
+                          <span class="n">compiler</span><span class="o">=</span><span class="s">&#39;gcc&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ll</span>
+</div>
+<div class="viewcode-block" id="ARModel.slow_AR"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.slow_AR">[docs]</a>    <span class="k">def</span> <span class="nf">slow_AR</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+        <span class="n">d_prob</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">skipped</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">masked</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">getmaskarray</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+        <span class="n">skipped</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">mask</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">data</span> <span class="o">-</span> <span class="n">c</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="n">n_p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+
+        <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_p</span><span class="p">,</span> <span class="n">n_p</span><span class="p">))</span>
+        <span class="n">A</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">p</span>
+        <span class="n">A</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">n_p</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">K</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="n">u</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c"># update on missing data is</span>
+        <span class="c"># K = A*K*A^T + U</span>
+
+        <span class="n">orig_std</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">std</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">orig_std</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">std</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+
+        <span class="n">t_since_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">(</span><span class="s">&#39;inf&#39;</span><span class="p">)</span>
+
+        <span class="c"># suppose an AR2 process, we see t=100 is masked</span>
+        <span class="c"># when we get to t=100, we have all our covariances are zero</span>
+        <span class="c"># we then update to get K with a sigma^2 in the top right corner</span>
+        <span class="c"># now on t=101 we have time_since_mask = 1</span>
+        <span class="c"># now there are two components we need for t=101, namely the 100 and 99 components</span>
+        <span class="c"># now our prediction for 101 is u[0] after we update u</span>
+        <span class="c"># and our variance for 101 is K[0,0] after we update K</span>
+        <span class="c"># THEN we observe the real 101 and can zero out the 0th row and column of K,</span>
+        <span class="c"># and we can also update the 0th row of u.</span>
+
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">d</span><span class="p">)):</span>
+
+            <span class="k">if</span> <span class="n">masked</span><span class="p">[</span><span class="n">t</span><span class="p">]:</span>
+
+                <span class="c"># initialize kalman filtering when we encounter a masked zone</span>
+                <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="n">K</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_p</span><span class="p">,</span> <span class="n">n_p</span><span class="p">))</span>
+                    <span class="n">u</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_p</span><span class="p">,))</span>
+                    <span class="n">len_history</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">n_p</span><span class="p">)</span>
+                    <span class="n">u</span><span class="p">[:</span><span class="n">len_history</span><span class="p">]</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="n">t</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span><span class="n">t</span> <span class="o">-</span> <span class="n">len_history</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">t_since_mask</span> <span class="o">=</span> <span class="mi">0</span>
+
+                <span class="c"># for each masked timestep, do a Kalman update</span>
+                <span class="n">K</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">K</span><span class="p">,</span> <span class="n">A</span><span class="o">.</span><span class="n">T</span><span class="p">))</span>
+                <span class="n">K</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="n">orig_std</span>
+                <span class="n">u</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="c"># if we have just recently left a masked region, compute</span>
+            <span class="c"># process expectation and variance based on the Kalman</span>
+            <span class="c"># state.</span>
+            <span class="k">if</span> <span class="n">t_since_mask</span> <span class="o">&lt;=</span> <span class="n">n_p</span><span class="p">:</span>
+                <span class="n">t_since_mask</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">u</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
+                <span class="n">K</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">K</span><span class="p">,</span> <span class="n">A</span><span class="o">.</span><span class="n">T</span><span class="p">))</span>
+                <span class="n">K</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="n">orig_std</span>
+
+                <span class="n">expected</span> <span class="o">=</span> <span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">std</span> <span class="o">=</span> <span class="n">K</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">std</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+            <span class="c"># otherwise, compute expectation in the normal way (variance is constant)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">expected</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_p</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">t</span> <span class="o">&gt;</span> <span class="n">i</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">masked</span><span class="p">[</span><span class="n">t</span> <span class="o">-</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]:</span>
+                        <span class="n">expected</span> <span class="o">+=</span> <span class="n">p</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">d</span><span class="p">[</span><span class="n">t</span> <span class="o">-</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+
+            <span class="n">actual</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+            <span class="n">error</span> <span class="o">=</span> <span class="n">actual</span> <span class="o">-</span> <span class="n">expected</span>
+            <span class="n">t2</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">((</span><span class="n">error</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">std</span><span class="p">)</span>
+            <span class="n">ell</span> <span class="o">=</span> <span class="o">-</span><span class="n">t2</span> <span class="o">-</span> <span class="n">t1</span>
+            <span class="n">d_prob</span> <span class="o">+=</span> <span class="n">ell</span>
+
+            <span class="c"># print &quot;py t %d error %f s %f t2 %f ell %f d_prob %f&quot; % (t, error, std, t2, ell, d_prob)</span>
+
+            <span class="c"># if we have recently left a masked region, continue</span>
+            <span class="c"># Kalman updating by adding an observation of the timestep</span>
+            <span class="c"># we just saw.</span>
+            <span class="k">if</span> <span class="n">t_since_mask</span> <span class="o">&lt;=</span> <span class="n">n_p</span><span class="p">:</span>
+                <span class="n">K</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">K</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">u</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+            <span class="c"># if we are now sufficiently far from a masked region, stop Kalman updating</span>
+            <span class="k">elif</span> <span class="n">t_since_mask</span> <span class="o">==</span> <span class="n">n_p</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">K</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="n">u</span> <span class="o">=</span> <span class="bp">None</span>
+                <span class="n">std</span> <span class="o">=</span> <span class="n">orig_std</span>
+                <span class="n">t_since_mask</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">orig_std</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">d_prob</span>
+
+    <span class="c"># likelihood in log scale</span></div>
+<div class="viewcode-block" id="ARModel.lklhood"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.lklhood">[docs]</a>    <span class="k">def</span> <span class="nf">lklhood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">zero_mean</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">,</span> <span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">zero_mean</span><span class="p">:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span>
+
+        <span class="n">prob</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+
+            <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            t1 = time.time()</span>
+<span class="sd">            d_prob = self.slow_AR(d, c)</span>
+<span class="sd">            t2 = time.time()</span>
+<span class="sd">            d_prob_fast_missing = self.fastAR_missingData(d, c, self.em.std)</span>
+<span class="sd">            t3 = time.time()</span>
+<span class="sd">            d_prob_fast = self.fast_AR(d, c, self.em.std)</span>
+<span class="sd">            t4 = time.time()</span>
+<span class="sd">            print (t2-t1), d_prob, (t3-t2), d_prob_fast_missing, (t4-t3), d_prob_fast</span>
+<span class="sd">            &quot;&quot;&quot;</span>
+
+            <span class="n">d_prob</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fastAR_missingData</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">std</span><span class="p">)</span>
+
+            <span class="n">prob</span> <span class="o">+=</span> <span class="n">d_prob</span>
+
+        <span class="k">return</span> <span class="n">prob</span>
+
+    <span class="c"># given data as argument,</span></div>
+<div class="viewcode-block" id="ARModel.errors"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.errors">[docs]</a>    <span class="k">def</span> <span class="nf">errors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">):</span>
+            <span class="n">expected</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">):</span>
+                <span class="n">expected</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">data</span><span class="p">[</span><span class="n">t</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span> <span class="o">-</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+            <span class="n">actual</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">t</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">]</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="n">actual</span> <span class="o">-</span> <span class="n">expected</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+    <span class="c"># returns optimal psd determined by the ar parameters, in log scale</span></div>
+<div class="viewcode-block" id="ARModel.psd"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.psd">[docs]</a>    <span class="k">def</span> <span class="nf">psd</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">1024</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">std</span>
+        <span class="n">ws</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span>
+        <span class="n">S</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">size</span><span class="p">):</span>
+            <span class="n">w</span> <span class="o">=</span> <span class="n">ws</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">sigma</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+                <span class="n">sigma</span> <span class="o">+=</span> <span class="n">params</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">w</span> <span class="o">*</span> <span class="nb">complex</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="n">S</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">std</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">sigma</span><span class="p">)))</span>
+
+        <span class="k">return</span> <span class="p">(</span><span class="n">ws</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sf</span><span class="p">,</span> <span class="n">S</span><span class="p">)</span>
+
+    <span class="c"># returns residual sum of squares of log scale psd values</span></div>
+<div class="viewcode-block" id="ARModel.psdrss"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.psdrss">[docs]</a>    <span class="k">def</span> <span class="nf">psdrss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">psd</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="mf">0.8</span><span class="p">):</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">psd</span><span class="p">)</span>
+        <span class="n">S</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">psd</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">n</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">rss</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.8</span><span class="p">)):</span>
+            <span class="n">rss</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">psd</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">S</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">rss</span>
+</div>
+<div class="viewcode-block" id="ARModel.dump_to_file"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ARModel.dump_to_file">[docs]</a>    <span class="k">def</span> <span class="nf">dump_to_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fname</span><span class="p">):</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;srate </span><span class="si">%d</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">sf</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;c </span><span class="si">%.9f</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">c</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;mean </span><span class="si">%.9f</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">mean</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;std </span><span class="si">%.9f</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">std</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;params</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%.8f</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">p</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="c"># cPickle.dump(self, open(fname, &#39;wb&#39;), protocol=0)</span>
+
+
+<span class="c"># error model obeys normal distribution</span></div></div>
+<div class="viewcode-block" id="ErrorModel"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ErrorModel">[docs]</a><span class="k">class</span> <span class="nc">ErrorModel</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mean</span><span class="p">,</span> <span class="n">std</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">=</span> <span class="n">mean</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">std</span> <span class="o">=</span> <span class="n">std</span>
+
+<div class="viewcode-block" id="ErrorModel.sample"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ErrorModel.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">std</span><span class="p">)</span>
+
+    <span class="c"># likelihood in log scale</span></div>
+<div class="viewcode-block" id="ErrorModel.lklhood"><a class="viewcode-back" href="../../../../../../sigvisa.models.noise.armodel/#sigvisa.models.noise.armodel.model.ErrorModel.lklhood">[docs]</a>    <span class="k">def</span> <span class="nf">lklhood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">t1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">std</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+        <span class="n">t2</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">std</span><span class="p">)</span>
+        <span class="n">ll</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">t1</span> <span class="o">+</span> <span class="n">t2</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ll</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

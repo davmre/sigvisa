@@ -1,0 +1,338 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.plotting.plot &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.plotting.plot</h1><div class="highlight"><pre>
+<span class="kn">from</span> <span class="nn">matplotlib.figure</span> <span class="kn">import</span> <span class="n">Figure</span>
+<span class="kn">import</span> <span class="nn">matplotlib.gridspec</span> <span class="kn">as</span> <span class="nn">gridspec</span>
+
+<span class="kn">from</span> <span class="nn">obspy.core</span> <span class="kn">import</span> <span class="n">Trace</span><span class="p">,</span> <span class="n">Stream</span><span class="p">,</span> <span class="n">UTCDateTime</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">sigvisa.database.db</span>
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+<span class="kn">from</span> <span class="nn">sigvisa.utils.geog</span> <span class="kn">import</span> <span class="n">dist_deg</span><span class="p">,</span> <span class="n">azimuth</span>
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="n">get_event</span>
+
+
+<div class="viewcode-block" id="plot_det_times"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.plot_det_times">[docs]</a><span class="k">def</span> <span class="nf">plot_det_times</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">wave</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="k">if</span> <span class="n">axes</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">arrivals</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;event_arrivals&#39;</span><span class="p">]</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">arrivals</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;arrivals&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">arrivals</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">all_det_times</span> <span class="o">=</span> <span class="n">arrivals</span><span class="p">[:,</span> <span class="n">DET_TIME_COL</span><span class="p">]</span>
+    <span class="n">all_det_labels</span> <span class="o">=</span> <span class="p">[</span><span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">phasenames</span><span class="p">[</span><span class="n">arrivals</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">DET_PHASE_COL</span><span class="p">]]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">arrivals</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+
+    <span class="k">if</span> <span class="n">all_det_times</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+
+        <span class="n">maxwave</span><span class="p">,</span> <span class="n">minwave</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">data</span><span class="p">)),</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">logscale</span><span class="p">:</span>
+            <span class="p">(</span><span class="n">maxwave</span><span class="p">,</span> <span class="n">minwave</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">maxwave</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">minwave</span><span class="p">))</span>
+        <span class="n">axes</span><span class="o">.</span><span class="n">bar</span><span class="p">(</span><span class="n">left</span><span class="o">=</span><span class="n">all_det_times</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="p">[</span><span class="n">maxwave</span> <span class="o">-</span> <span class="n">minwave</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">all_det_times</span><span class="p">],</span>
+                 <span class="n">width</span><span class="o">=.</span><span class="mi">25</span><span class="p">,</span> <span class="n">bottom</span><span class="o">=</span><span class="n">minwave</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=.</span><span class="mi">5</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">all_det_labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">lbl</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">all_det_times</span><span class="p">,</span> <span class="n">all_det_labels</span><span class="p">):</span>
+                <span class="n">axes</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">t</span> <span class="o">+</span> <span class="mi">3</span><span class="p">,</span> <span class="n">maxwave</span> <span class="o">-</span> <span class="p">(</span><span class="n">maxwave</span> <span class="o">-</span> <span class="n">minwave</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.1</span><span class="p">,</span> <span class="n">lbl</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+<span class="c"># does not save for you - you need to call savefig() yourself!</span>
+
+</div>
+<div class="viewcode-block" id="plot_segment"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.plot_segment">[docs]</a><span class="k">def</span> <span class="nf">plot_segment</span><span class="p">(</span><span class="n">segment</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">chans</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">Figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>
+
+    <span class="c"># if no title is given, try to generate a simple one based on the event being plotted</span>
+    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">evid</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">evid</span> <span class="o">=</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;evid&#39;</span><span class="p">]</span>
+            <span class="n">title</span> <span class="o">=</span> <span class="s">&quot;Event </span><span class="si">%d</span><span class="s"> at </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">evid</span><span class="p">,</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">])</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+
+    <span class="c"># loop over channels to plot each channel</span>
+    <span class="n">chans</span> <span class="o">=</span> <span class="n">segment</span><span class="o">.</span><span class="n">get_chans</span><span class="p">()</span> <span class="k">if</span> <span class="n">chans</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">chans</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">chans</span><span class="p">)</span>
+    <span class="n">gs</span> <span class="o">=</span> <span class="n">gridspec</span><span class="o">.</span><span class="n">GridSpec</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">gs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">left</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">right</span><span class="o">=</span><span class="mf">0.95</span><span class="p">,</span> <span class="n">hspace</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">axes</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">for</span> <span class="n">chidx</span><span class="p">,</span> <span class="n">chan</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">chans</span><span class="p">)):</span>
+        <span class="n">axes</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="n">chidx</span> <span class="o">*</span> <span class="mi">3</span><span class="p">:</span><span class="n">chidx</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">+</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">sharex</span><span class="o">=</span><span class="n">axes</span><span class="p">)</span>
+        <span class="n">axes</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s">&quot;Time (s)&quot;</span><span class="p">)</span>
+        <span class="n">wave</span> <span class="o">=</span> <span class="n">segment</span><span class="p">[</span><span class="n">chan</span><span class="p">]</span>
+        <span class="n">subplot_waveform</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="n">logscale</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">)</span>
+
+    <span class="n">axes</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="n">n</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="n">axes</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s">&#39;off&#39;</span><span class="p">)</span>
+<span class="c">#  axes.get_xaxis().set_visible(False)</span>
+<span class="c">#  axes.get_yaxis().set_visible(False)</span>
+    <span class="n">descr</span> <span class="o">=</span> <span class="s">&quot;Segment: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">segment</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">evid</span> <span class="o">=</span> <span class="n">segment</span><span class="p">[</span><span class="s">&#39;evid&#39;</span><span class="p">]</span>
+        <span class="n">e</span> <span class="o">=</span> <span class="n">get_event</span><span class="p">(</span><span class="n">evid</span><span class="p">)</span>
+        <span class="n">descr</span> <span class="o">=</span> <span class="n">descr</span> <span class="o">+</span> <span class="s">&quot;</span><span class="se">\n\n</span><span class="s">&quot;</span> <span class="o">+</span> <span class="s">&quot;Event: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">KeyError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="n">axes</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">descr</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;black&quot;</span><span class="p">,</span> <span class="n">horizontalalignment</span><span class="o">=</span><span class="s">&#39;center&#39;</span><span class="p">,</span> <span class="n">verticalalignment</span><span class="o">=</span><span class="s">&#39;center&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">fig</span>
+
+</div>
+<div class="viewcode-block" id="plot_waveform"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.plot_waveform">[docs]</a><span class="k">def</span> <span class="nf">plot_waveform</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">Figure</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">fig</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+
+    <span class="n">axes</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">axes</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s">&quot;Time (s)&quot;</span><span class="p">)</span>
+    <span class="n">subplot_waveform</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="n">logscale</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">fig</span>
+
+</div>
+<div class="viewcode-block" id="subplot_waveform"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.subplot_waveform">[docs]</a><span class="k">def</span> <span class="nf">subplot_waveform</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">plot_dets</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">srate</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;srate&#39;</span><span class="p">]</span>
+    <span class="n">npts</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;npts&#39;</span><span class="p">]</span>
+    <span class="n">stime</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&#39;stime&#39;</span><span class="p">]</span>
+    <span class="n">timevals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">stime</span><span class="p">,</span> <span class="n">stime</span> <span class="o">+</span> <span class="n">npts</span> <span class="o">/</span> <span class="n">srate</span><span class="p">,</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">srate</span><span class="p">)[</span><span class="mi">0</span><span class="p">:</span><span class="n">npts</span><span class="p">]</span>
+
+    <span class="n">wave_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">data</span><span class="p">)</span> <span class="k">if</span> <span class="n">logscale</span> <span class="k">else</span> <span class="n">wave</span><span class="o">.</span><span class="n">data</span>
+
+    <span class="n">axes</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="n">wave</span><span class="p">[</span><span class="s">&#39;chan&#39;</span><span class="p">])</span>
+    <span class="n">axes</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">timevals</span><span class="p">,</span> <span class="n">wave_data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">plot_dets</span><span class="p">:</span>
+        <span class="n">plot_det_times</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">axes</span><span class="o">=</span><span class="n">axes</span><span class="p">,</span> <span class="n">logscale</span><span class="o">=</span><span class="n">logscale</span><span class="p">)</span>
+
+
+<span class="c"># does not save for you - you need to call savefig() yourself!</span></div>
+<div class="viewcode-block" id="plot_bands"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.plot_bands">[docs]</a><span class="k">def</span> <span class="nf">plot_bands</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">bands</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">format</span> <span class="o">=</span> <span class="s">&quot;k-&quot;</span>
+
+    <span class="k">if</span> <span class="n">bands</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">bands</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">bands</span>
+
+    <span class="n">Figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s">&quot;Time (s)&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">bidx</span><span class="p">,</span> <span class="n">band</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">bands</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">bidx</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">axes</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">bands</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">fig</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">fig</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">bands</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="n">bidx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">sharex</span><span class="o">=</span><span class="n">axes</span><span class="p">)</span>
+
+        <span class="n">fig</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="n">yl</span><span class="p">)</span>
+
+        <span class="n">npts</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&quot;npts&quot;</span><span class="p">]</span>
+        <span class="n">srate</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&quot;srate&quot;</span><span class="p">]</span>
+        <span class="n">stime</span> <span class="o">=</span> <span class="n">wave</span><span class="p">[</span><span class="s">&quot;stime&quot;</span><span class="p">]</span>
+        <span class="n">timevals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">stime</span><span class="p">,</span> <span class="n">stime</span> <span class="o">+</span> <span class="n">npts</span> <span class="o">/</span> <span class="n">srate</span><span class="p">,</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">srate</span><span class="p">)[</span><span class="mi">0</span><span class="p">:</span><span class="n">npts</span><span class="p">]</span>
+
+        <span class="n">nwave</span> <span class="o">=</span> <span class="n">wave</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">band</span><span class="p">)</span>
+
+        <span class="n">fig</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">timevals</span><span class="p">,</span> <span class="n">nwave</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">format</span><span class="p">)</span>
+
+        <span class="n">plot_det_times</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+
+
+<span class="c">#################################################################</span>
+<span class="c">#################################################################</span></div>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">matplotlib text wrapping code from</span>
+<span class="sd">http://stackoverflow.com/questions/4018860/text-box-in-matplotlib</span>
+
+<span class="sd">to use: insert the line</span>
+<span class="sd">fig.canvas.mpl_connect(&#39;draw_event&#39;, on_draw)</span>
+<span class="sd">at the very end of constructing the figure</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="on_draw"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.on_draw">[docs]</a><span class="k">def</span> <span class="nf">on_draw</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Auto-wraps all text objects in a figure at draw-time&quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">matplotlib</span> <span class="kn">as</span> <span class="nn">mpl</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">figure</span>
+
+    <span class="c"># Cycle through all artists in all the axes in the figure</span>
+    <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="n">fig</span><span class="o">.</span><span class="n">axes</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">artist</span> <span class="ow">in</span> <span class="n">ax</span><span class="o">.</span><span class="n">get_children</span><span class="p">():</span>
+            <span class="c"># If it&#39;s a text artist, wrap it...</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">artist</span><span class="p">,</span> <span class="n">mpl</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">Text</span><span class="p">):</span>
+                <span class="n">autowrap_text</span><span class="p">(</span><span class="n">artist</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">renderer</span><span class="p">)</span>
+
+    <span class="c"># Temporarily disconnect any callbacks to the draw event...</span>
+    <span class="c"># (To avoid recursion)</span>
+    <span class="n">func_handles</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">callbacks</span><span class="p">[</span><span class="n">event</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">callbacks</span><span class="p">[</span><span class="n">event</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="c"># Re-draw the figure..</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span>
+    <span class="c"># Reset the draw event callbacks</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">callbacks</span><span class="o">.</span><span class="n">callbacks</span><span class="p">[</span><span class="n">event</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">func_handles</span>
+
+</div>
+<div class="viewcode-block" id="autowrap_text"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.autowrap_text">[docs]</a><span class="k">def</span> <span class="nf">autowrap_text</span><span class="p">(</span><span class="n">textobj</span><span class="p">,</span> <span class="n">renderer</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wraps the given matplotlib text object so that it exceed the boundaries</span>
+<span class="sd">    of the axis it is plotted in.&quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">textwrap</span>
+    <span class="c"># Get the starting position of the text in pixels...</span>
+    <span class="n">x0</span><span class="p">,</span> <span class="n">y0</span> <span class="o">=</span> <span class="n">textobj</span><span class="o">.</span><span class="n">get_transform</span><span class="p">()</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">textobj</span><span class="o">.</span><span class="n">get_position</span><span class="p">())</span>
+    <span class="c"># Get the extents of the current axis in pixels...</span>
+    <span class="n">clip</span> <span class="o">=</span> <span class="n">textobj</span><span class="o">.</span><span class="n">get_axes</span><span class="p">()</span><span class="o">.</span><span class="n">get_window_extent</span><span class="p">()</span>
+    <span class="c"># Set the text to rotate about the left edge (doesn&#39;t make sense otherwise)</span>
+    <span class="n">textobj</span><span class="o">.</span><span class="n">set_rotation_mode</span><span class="p">(</span><span class="s">&#39;anchor&#39;</span><span class="p">)</span>
+
+    <span class="c"># Get the amount of space in the direction of rotation to the left and</span>
+    <span class="c"># right of x0, y0 (left and right are relative to the rotation, as well)</span>
+    <span class="n">rotation</span> <span class="o">=</span> <span class="n">textobj</span><span class="o">.</span><span class="n">get_rotation</span><span class="p">()</span>
+    <span class="n">right_space</span> <span class="o">=</span> <span class="n">min_dist_inside</span><span class="p">((</span><span class="n">x0</span><span class="p">,</span> <span class="n">y0</span><span class="p">),</span> <span class="n">rotation</span><span class="p">,</span> <span class="n">clip</span><span class="p">)</span>
+    <span class="n">left_space</span> <span class="o">=</span> <span class="n">min_dist_inside</span><span class="p">((</span><span class="n">x0</span><span class="p">,</span> <span class="n">y0</span><span class="p">),</span> <span class="n">rotation</span> <span class="o">-</span> <span class="mi">180</span><span class="p">,</span> <span class="n">clip</span><span class="p">)</span>
+
+    <span class="c"># Use either the left or right distance depending on the horiz alignment.</span>
+    <span class="n">alignment</span> <span class="o">=</span> <span class="n">textobj</span><span class="o">.</span><span class="n">get_horizontalalignment</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">alignment</span> <span class="ow">is</span> <span class="s">&#39;left&#39;</span><span class="p">:</span>
+        <span class="n">new_width</span> <span class="o">=</span> <span class="n">right_space</span>
+    <span class="k">elif</span> <span class="n">alignment</span> <span class="ow">is</span> <span class="s">&#39;right&#39;</span><span class="p">:</span>
+        <span class="n">new_width</span> <span class="o">=</span> <span class="n">left_space</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">new_width</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">min</span><span class="p">(</span><span class="n">left_space</span><span class="p">,</span> <span class="n">right_space</span><span class="p">)</span>
+
+    <span class="c"># Estimate the width of the new size in characters...</span>
+    <span class="n">aspect_ratio</span> <span class="o">=</span> <span class="mf">0.5</span>  <span class="c"># This varies with the font!!</span>
+    <span class="n">fontsize</span> <span class="o">=</span> <span class="n">textobj</span><span class="o">.</span><span class="n">get_size</span><span class="p">()</span>
+    <span class="n">pixels_per_char</span> <span class="o">=</span> <span class="n">aspect_ratio</span> <span class="o">*</span> <span class="n">renderer</span><span class="o">.</span><span class="n">points_to_pixels</span><span class="p">(</span><span class="n">fontsize</span><span class="p">)</span>
+
+    <span class="c"># If wrap_width is &lt; 1, just make it 1 character</span>
+    <span class="n">wrap_width</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">new_width</span> <span class="o">//</span> <span class="n">pixels_per_char</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">wrapped_text</span> <span class="o">=</span> <span class="n">textwrap</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="n">textobj</span><span class="o">.</span><span class="n">get_text</span><span class="p">(),</span> <span class="n">wrap_width</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+        <span class="c"># This appears to be a single word</span>
+        <span class="n">wrapped_text</span> <span class="o">=</span> <span class="n">textobj</span><span class="o">.</span><span class="n">get_text</span><span class="p">()</span>
+    <span class="n">textobj</span><span class="o">.</span><span class="n">set_text</span><span class="p">(</span><span class="n">wrapped_text</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="min_dist_inside"><a class="viewcode-back" href="../../../../sigvisa.plotting/#sigvisa.plotting.plot.min_dist_inside">[docs]</a><span class="k">def</span> <span class="nf">min_dist_inside</span><span class="p">(</span><span class="n">point</span><span class="p">,</span> <span class="n">rotation</span><span class="p">,</span> <span class="n">box</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Gets the space in a given direction from &quot;point&quot; to the boundaries of</span>
+<span class="sd">    &quot;box&quot; (where box is an object with x0, y0, x1, &amp; y1 attributes, point is a</span>
+<span class="sd">    tuple of x,y, and rotation is the angle in degrees)&quot;&quot;&quot;</span>
+    <span class="kn">from</span> <span class="nn">math</span> <span class="kn">import</span> <span class="n">sin</span><span class="p">,</span> <span class="n">cos</span><span class="p">,</span> <span class="n">radians</span>
+    <span class="n">x0</span><span class="p">,</span> <span class="n">y0</span> <span class="o">=</span> <span class="n">point</span>
+    <span class="n">rotation</span> <span class="o">=</span> <span class="n">radians</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span>
+    <span class="n">distances</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">threshold</span> <span class="o">=</span> <span class="mf">0.0001</span>
+    <span class="k">if</span> <span class="n">cos</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">:</span>
+        <span class="c"># Intersects the right axis</span>
+        <span class="n">distances</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">box</span><span class="o">.</span><span class="n">x1</span> <span class="o">-</span> <span class="n">x0</span><span class="p">)</span> <span class="o">/</span> <span class="n">cos</span><span class="p">(</span><span class="n">rotation</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">cos</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">threshold</span><span class="p">:</span>
+        <span class="c"># Intersects the left axis</span>
+        <span class="n">distances</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">box</span><span class="o">.</span><span class="n">x0</span> <span class="o">-</span> <span class="n">x0</span><span class="p">)</span> <span class="o">/</span> <span class="n">cos</span><span class="p">(</span><span class="n">rotation</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">sin</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">threshold</span><span class="p">:</span>
+        <span class="c"># Intersects the top axis</span>
+        <span class="n">distances</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">box</span><span class="o">.</span><span class="n">y1</span> <span class="o">-</span> <span class="n">y0</span><span class="p">)</span> <span class="o">/</span> <span class="n">sin</span><span class="p">(</span><span class="n">rotation</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">sin</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">threshold</span><span class="p">:</span>
+        <span class="c"># Intersects the bottom axis</span>
+        <span class="n">distances</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">box</span><span class="o">.</span><span class="n">y0</span> <span class="o">-</span> <span class="n">y0</span><span class="p">)</span> <span class="o">/</span> <span class="n">sin</span><span class="p">(</span><span class="n">rotation</span><span class="p">))</span>
+    <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">distances</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

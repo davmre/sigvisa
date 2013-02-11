@@ -1,0 +1,340 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.signals.io &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.signals.io</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">struct</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">gzip</span>
+<span class="kn">import</span> <span class="nn">functools32</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">numpy.ma</span> <span class="kn">as</span> <span class="nn">ma</span>
+<span class="kn">import</span> <span class="nn">scipy.optimize</span>
+
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+<span class="kn">from</span> <span class="nn">obspy.core</span> <span class="kn">import</span> <span class="n">Trace</span><span class="p">,</span> <span class="n">Stream</span><span class="p">,</span> <span class="n">UTCDateTime</span>
+<span class="kn">import</span> <span class="nn">obspy.signal.filter</span>
+<span class="kn">from</span> <span class="nn">obspy.signal.trigger</span> <span class="kn">import</span> <span class="n">triggerOnset</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.common</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.mask_util</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+
+
+<div class="viewcode-block" id="MissingWaveform"><a class="viewcode-back" href="../../../../sigvisa.signals/#sigvisa.signals.io.MissingWaveform">[docs]</a><span class="k">class</span> <span class="nc">MissingWaveform</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="load_event_station_chan"><a class="viewcode-back" href="../../../../sigvisa.signals/#sigvisa.signals.io.load_event_station_chan">[docs]</a><span class="k">def</span> <span class="nf">load_event_station_chan</span><span class="p">(</span><span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">evtype</span><span class="o">=</span><span class="s">&quot;leb&quot;</span><span class="p">,</span> <span class="n">cursor</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">cursor</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">arrivals</span> <span class="o">=</span> <span class="n">read_event_detections</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">evid</span><span class="p">,</span> <span class="p">(</span><span class="n">sta</span><span class="p">,),</span> <span class="n">evtype</span><span class="o">=</span><span class="n">evtype</span><span class="p">)</span>
+    <span class="n">arrival_times</span> <span class="o">=</span> <span class="n">arrivals</span><span class="p">[:,</span> <span class="n">DET_TIME_COL</span><span class="p">]</span>
+
+    <span class="n">wave</span> <span class="o">=</span> <span class="n">fetch_waveform</span><span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">arrival_times</span><span class="p">)</span> <span class="o">-</span> <span class="mi">10</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">arrival_times</span><span class="p">)</span> <span class="o">+</span> <span class="mi">200</span><span class="p">)</span>
+    <span class="n">wave</span><span class="o">.</span><span class="n">segment_stats</span><span class="p">[</span><span class="s">&#39;evid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">evid</span>
+    <span class="n">wave</span><span class="o">.</span><span class="n">segment_stats</span><span class="p">[</span><span class="s">&#39;event_arrivals&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arrivals</span>
+
+    <span class="k">return</span> <span class="n">wave</span>
+
+</div>
+<div class="viewcode-block" id="load_event_station"><a class="viewcode-back" href="../../../../sigvisa.signals/#sigvisa.signals.io.load_event_station">[docs]</a><span class="k">def</span> <span class="nf">load_event_station</span><span class="p">(</span><span class="n">evid</span><span class="p">,</span> <span class="n">sta</span><span class="p">,</span> <span class="n">evtype</span><span class="o">=</span><span class="s">&quot;leb&quot;</span><span class="p">,</span> <span class="n">cursor</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">cursor</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">arrivals</span> <span class="o">=</span> <span class="n">read_event_detections</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">evid</span><span class="p">,</span> <span class="p">(</span><span class="n">sta</span><span class="p">,),</span> <span class="n">evtype</span><span class="o">=</span><span class="n">evtype</span><span class="p">)</span>
+    <span class="n">arrival_times</span> <span class="o">=</span> <span class="n">arrivals</span><span class="p">[:,</span> <span class="n">DET_TIME_COL</span><span class="p">]</span>
+    <span class="n">seg</span> <span class="o">=</span> <span class="n">load_segments</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="p">(</span><span class="n">sta</span><span class="p">,),</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">arrival_times</span><span class="p">)</span> <span class="o">-</span> <span class="mi">10</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">arrival_times</span><span class="p">)</span> <span class="o">+</span> <span class="mi">200</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">seg</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s">&#39;evid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">evid</span>
+    <span class="n">seg</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s">&#39;event_arrivals&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">arrivals</span>
+
+    <span class="k">return</span> <span class="n">seg</span>
+
+</div>
+<div class="viewcode-block" id="load_segments"><a class="viewcode-back" href="../../../../sigvisa.signals/#sigvisa.signals.io.load_segments">[docs]</a><span class="k">def</span> <span class="nf">load_segments</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">stations</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">chans</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return a list of waveform segments corresponding to the given channels</span>
+<span class="sd">    at the given stations over the given time period.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">segments</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="n">chans</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">chans</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">chans</span>
+
+    <span class="c"># standardize channel names to avoid duplicates</span>
+    <span class="n">chans</span> <span class="o">=</span> <span class="p">[</span><span class="n">Sigvisa</span><span class="p">()</span><span class="o">.</span><span class="n">canonical_channel_name</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">chans</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">sta</span> <span class="ow">in</span> <span class="n">stations</span><span class="p">:</span>
+
+        <span class="n">waves</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">chan</span> <span class="ow">in</span> <span class="n">chans</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;loading sta </span><span class="si">%s</span><span class="s"> chan </span><span class="si">%s</span><span class="s"> time [</span><span class="si">%.1f</span><span class="s">, </span><span class="si">%.1f</span><span class="s">]&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">),</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">wave</span> <span class="o">=</span> <span class="n">fetch_waveform</span><span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">cursor</span><span class="o">=</span><span class="n">cursor</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&quot; ... successfully loaded.&quot;</span>
+            <span class="k">except</span> <span class="p">(</span><span class="n">MissingWaveform</span><span class="p">,</span> <span class="ne">IOError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot; ... not found, skipping. (</span><span class="si">%s</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">e</span>
+                <span class="k">continue</span>
+            <span class="n">waves</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">waves</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">segment</span> <span class="o">=</span> <span class="n">Segment</span><span class="p">(</span><span class="n">waves</span><span class="p">)</span>
+            <span class="n">segments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">segment</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">segments</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">MissingWaveform</span><span class="p">(</span>
+            <span class="s">&quot;couldn&#39;t load any waveforms for this segment; check that the data files are in the correct location.&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">segments</span>
+
+</div>
+<span class="nd">@functools32.lru_cache</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="mi">1024</span><span class="p">)</span>
+<div class="viewcode-block" id="fetch_waveform"><a class="viewcode-back" href="../../../../sigvisa.signals/#sigvisa.signals.io.fetch_waveform">[docs]</a><span class="k">def</span> <span class="nf">fetch_waveform</span><span class="p">(</span><span class="n">station</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">stime</span><span class="p">,</span> <span class="n">etime</span><span class="p">,</span> <span class="n">pad_seconds</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">cursor</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a single Waveform for the given channel at the station in</span>
+<span class="sd">    the given interval. If there are periods for which data are not</span>
+<span class="sd">    available, they are marked as missing data.</span>
+
+<span class="sd">    Loads data for pad_seconds before and after the true start time, and</span>
+<span class="sd">    masks the additional data. This is used to absorb filtering</span>
+<span class="sd">    artifacts.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">cursor</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="c"># scan the waveforms for the given interval</span>
+    <span class="n">samprate</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="n">stime</span> <span class="o">=</span> <span class="n">stime</span> <span class="o">-</span> <span class="n">pad_seconds</span>
+    <span class="n">etime</span> <span class="o">=</span> <span class="n">etime</span> <span class="o">+</span> <span class="n">pad_seconds</span>
+
+    <span class="c"># the global_data array is initialized below once we know the</span>
+    <span class="c"># samprate</span>
+    <span class="n">global_data</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">global_stime</span> <span class="o">=</span> <span class="n">stime</span>
+    <span class="n">global_etime</span> <span class="o">=</span> <span class="n">etime</span>
+
+    <span class="n">chan</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">canonical_channel_name</span><span class="p">[</span><span class="n">chan</span><span class="p">]</span>
+    <span class="n">chan_list</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">equivalent_channels</span><span class="p">(</span><span class="n">chan</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">station</span> <span class="o">==</span> <span class="s">&quot;MKAR&quot;</span><span class="p">:</span>
+        <span class="n">selection</span> <span class="o">=</span> <span class="s">&quot;MK31&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">selection</span> <span class="o">=</span> <span class="n">station</span>
+
+    <span class="c"># explicitly do BETWEEN queries (with generous bounds) rather than just</span>
+    <span class="c"># checking time &lt; etime and endtime &gt; stime, because the latter creates a</span>
+    <span class="c"># monstrous slow database join</span>
+    <span class="n">MAX_SIGNAL_LEN</span> <span class="o">=</span> <span class="mi">3600</span> <span class="o">*</span> <span class="mi">8</span>
+    <span class="n">sql</span> <span class="o">=</span> <span class="s">&quot;select * from idcx_wfdisc where sta = &#39;</span><span class="si">%s</span><span class="s">&#39; and </span><span class="si">%s</span><span class="s"> and time between </span><span class="si">%f</span><span class="s"> and </span><span class="si">%f</span><span class="s"> and endtime between </span><span class="si">%f</span><span class="s"> and </span><span class="si">%f</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">selection</span><span class="p">,</span> <span class="n">sql_multi_str</span><span class="p">(</span><span class="s">&quot;chan&quot;</span><span class="p">,</span> <span class="n">chan_list</span><span class="p">),</span> <span class="n">stime</span> <span class="o">-</span> <span class="n">MAX_SIGNAL_LEN</span><span class="p">,</span> <span class="n">etime</span><span class="p">,</span> <span class="n">stime</span><span class="p">,</span> <span class="n">etime</span> <span class="o">+</span> <span class="n">MAX_SIGNAL_LEN</span><span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span>
+    <span class="n">waveforms</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">waveforms</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">MissingWaveform</span><span class="p">(</span><span class="s">&quot;Can&#39;t find data for sta </span><span class="si">%s</span><span class="s"> chan </span><span class="si">%s</span><span class="s"> time </span><span class="si">%d</span><span class="s">&quot;</span>
+                              <span class="o">%</span> <span class="p">(</span><span class="n">station</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">stime</span><span class="p">))</span>
+    <span class="n">table_description</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">description</span>
+
+    <span class="k">for</span> <span class="n">waveform_values</span> <span class="ow">in</span> <span class="n">waveforms</span><span class="p">:</span>
+
+        <span class="n">waveform</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">([</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">table_description</span><span class="p">],</span> <span class="n">waveform_values</span><span class="p">))</span>
+
+        <span class="c"># check the samprate is consistent for all waveforms in this interval</span>
+        <span class="k">assert</span><span class="p">(</span><span class="n">samprate</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">samprate</span> <span class="o">==</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;samprate&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">samprate</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">samprate</span> <span class="o">=</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;samprate&#39;</span><span class="p">]</span>
+
+            <span class="c"># initialize the data array full of nans.</span>
+            <span class="c"># these will be replace by signals that we load.</span>
+            <span class="n">global_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="nb">int</span><span class="p">((</span><span class="n">global_etime</span> <span class="o">-</span> <span class="n">global_stime</span><span class="p">)</span> <span class="o">*</span> <span class="n">samprate</span><span class="p">),))</span>
+            <span class="n">global_data</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+
+        <span class="c"># at which offset into this waveform should we start collecting samples</span>
+        <span class="n">first_offset_time</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">stime</span> <span class="o">-</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;time&#39;</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">first_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">first_offset_time</span> <span class="o">*</span> <span class="n">samprate</span><span class="p">))</span>
+        <span class="c"># how many samples are needed remaining</span>
+        <span class="n">load_start_time</span> <span class="o">=</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;time&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">first_offset_time</span>
+        <span class="n">desired_samples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">((</span><span class="n">global_etime</span> <span class="o">-</span> <span class="n">load_start_time</span><span class="p">)</span> <span class="o">*</span> <span class="n">samprate</span><span class="p">))</span>
+        <span class="c"># how many samples are actually available</span>
+        <span class="n">available_samples</span> <span class="o">=</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;nsamp&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">first_offset</span>
+        <span class="c"># grab the available and needed samples</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">wave</span> <span class="o">=</span> <span class="n">_read_waveform_from_file</span><span class="p">(</span><span class="n">waveform</span><span class="p">,</span> <span class="n">first_offset</span><span class="p">,</span>
+                                            <span class="nb">min</span><span class="p">(</span><span class="n">desired_samples</span><span class="p">,</span> <span class="n">available_samples</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">IOError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">MissingWaveform</span><span class="p">(</span><span class="s">&quot;Can&#39;t find data for sta </span><span class="si">%s</span><span class="s"> chan </span><span class="si">%s</span><span class="s"> time </span><span class="si">%d</span><span class="s">&quot;</span>
+                                  <span class="o">%</span> <span class="p">(</span><span class="n">station</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">stime</span><span class="p">))</span>
+
+        <span class="c"># copy the data we loaded into the global array</span>
+        <span class="n">t_start</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">((</span><span class="n">waveform</span><span class="p">[</span><span class="s">&#39;time&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">global_stime</span><span class="p">)</span> <span class="o">*</span> <span class="n">samprate</span><span class="p">))</span>
+        <span class="n">t_end</span> <span class="o">=</span> <span class="n">t_start</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+        <span class="n">global_data</span><span class="p">[</span><span class="n">t_start</span><span class="p">:</span><span class="n">t_end</span><span class="p">]</span> <span class="o">=</span> <span class="n">wave</span>
+
+<span class="c">#    print &quot;   loaded data from %d to %d (%.1f to %.1f)&quot; % (t_start, t_end, t_start/samprate, t_end/samprate)</span>
+
+        <span class="c"># do we have all the data that we need</span>
+        <span class="k">if</span> <span class="n">desired_samples</span> <span class="o">&lt;=</span> <span class="n">available_samples</span><span class="p">:</span>
+            <span class="k">break</span>
+
+        <span class="c"># otherwise move the start time forward for the next file</span>
+        <span class="n">stime</span> <span class="o">=</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;endtime&#39;</span><span class="p">]</span>
+        <span class="c"># and adust the end time to ensure that the correct number of samples</span>
+        <span class="c"># will be selected in the next file</span>
+
+    <span class="n">masked_data</span> <span class="o">=</span> <span class="n">mirror_missing</span><span class="p">(</span><span class="n">ma</span><span class="o">.</span><span class="n">masked_invalid</span><span class="p">(</span><span class="n">global_data</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">pad_seconds</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">pad_samples</span> <span class="o">=</span> <span class="n">pad_seconds</span> <span class="o">*</span> <span class="n">samprate</span>
+        <span class="n">masked_data</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">pad_samples</span><span class="p">]</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked</span>
+        <span class="n">masked_data</span><span class="p">[</span><span class="o">-</span><span class="n">pad_samples</span><span class="p">:]</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked</span>
+
+    <span class="k">return</span> <span class="n">Waveform</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">masked_data</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="n">station</span><span class="p">,</span> <span class="n">stime</span><span class="o">=</span><span class="n">global_stime</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="n">samprate</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">)</span>
+
+    <span class="c"># return samprate, np.array(data)</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_read_waveform_from_file</span><span class="p">(</span><span class="n">waveform</span><span class="p">,</span> <span class="n">skip_samples</span><span class="p">,</span> <span class="n">read_samples</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    waveform -- row queried from wfdisc table</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># open the waveform file</span>
+    <span class="c"># filename = os.path.join(*(waveform[&#39;dir&#39;].split(&quot;/&quot;)</span>
+    <span class="c">#                          + [waveform[&#39;dfile&#39;]]))</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;dir&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;dfile&#39;</span><span class="p">]</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">datafile</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&quot;rb&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">IOError</span><span class="p">,</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;cannot open file &quot;</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span>
+        <span class="c"># the file could be compressed try .gz extension</span>
+        <span class="n">datafile</span> <span class="o">=</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">filename</span> <span class="o">+</span> <span class="s">&quot;.gz&quot;</span><span class="p">)</span>
+
+    <span class="k">assert</span><span class="p">(</span><span class="n">waveform</span><span class="p">[</span><span class="s">&#39;datatype&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span><span class="s">&quot;s3&quot;</span><span class="p">,</span> <span class="s">&quot;s4&quot;</span><span class="p">])</span>
+    <span class="n">bytes_per_sample</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">waveform</span><span class="p">[</span><span class="s">&#39;datatype&#39;</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="c"># seek to the desired offset</span>
+    <span class="n">datafile</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="n">waveform</span><span class="p">[</span><span class="s">&#39;foff&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">skip_samples</span> <span class="o">*</span> <span class="n">bytes_per_sample</span><span class="p">)</span>
+    <span class="c"># and read the number of bytes required</span>
+    <span class="k">assert</span><span class="p">(</span><span class="n">read_samples</span> <span class="o">&lt;=</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;nsamp&#39;</span><span class="p">])</span>
+    <span class="nb">bytes</span> <span class="o">=</span> <span class="n">datafile</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">read_samples</span> <span class="o">*</span> <span class="n">bytes_per_sample</span><span class="p">)</span>
+    <span class="n">datafile</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="c"># now convert the bytes into an array of integers</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="n">read_samples</span><span class="p">,),</span> <span class="nb">int</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">waveform</span><span class="p">[</span><span class="s">&#39;datatype&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;s4&quot;</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s">&quot;&gt;</span><span class="si">%d</span><span class="s">i&quot;</span> <span class="o">%</span> <span class="n">read_samples</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c"># s3</span>
+        <span class="k">for</span> <span class="n">dest</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">read_samples</span><span class="p">):</span>
+            <span class="n">src</span> <span class="o">=</span> <span class="n">dest</span> <span class="o">*</span> <span class="mi">3</span>
+
+            <span class="c"># if the first byte&#39;s MSB is set then add an FF to the number</span>
+            <span class="n">first</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s">&quot;B&quot;</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">[</span><span class="n">src</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">first</span> <span class="o">&gt;=</span> <span class="mi">128</span><span class="p">:</span>
+                <span class="n">data</span><span class="p">[</span><span class="n">dest</span><span class="p">]</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s">&quot;&gt;i&quot;</span><span class="p">,</span> <span class="s">&quot;</span><span class="se">\xff</span><span class="s">&quot;</span> <span class="o">+</span> <span class="nb">bytes</span><span class="p">[</span><span class="n">src</span><span class="p">:</span><span class="n">src</span> <span class="o">+</span> <span class="mi">3</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">data</span><span class="p">[</span><span class="n">dest</span><span class="p">]</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s">&quot;&gt;i&quot;</span><span class="p">,</span> <span class="s">&quot;</span><span class="se">\x00</span><span class="s">&quot;</span> <span class="o">+</span> <span class="nb">bytes</span><span class="p">[</span><span class="n">src</span><span class="p">:</span><span class="n">src</span> <span class="o">+</span> <span class="mi">3</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c"># convert the raw values into nm (nanometers)</span>
+    <span class="n">calib</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">waveform</span><span class="p">[</span><span class="s">&#39;calib&#39;</span><span class="p">])</span>
+    <span class="k">return</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">calib</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">data</span><span class="p">]</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

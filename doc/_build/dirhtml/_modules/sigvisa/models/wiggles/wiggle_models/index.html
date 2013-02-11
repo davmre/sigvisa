@@ -1,0 +1,146 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.models.wiggles.wiggle_models &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../../" />
+    <link rel="up" title="Module code" href="../../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.models.wiggles.wiggle_models</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.noise_model</span> <span class="kn">import</span> <span class="n">get_noise_model</span>
+
+
+<div class="viewcode-block" id="wiggle_model_by_name"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.wiggle_model_by_name">[docs]</a><span class="k">def</span> <span class="nf">wiggle_model_by_name</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s">&quot;base&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">WiggleModel</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s">&quot;stupidiid&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StupidL1WiggleModel</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s">&quot;plain&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">PlainWiggleModel</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="WiggleModel"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.WiggleModel">[docs]</a><span class="k">class</span> <span class="nc">WiggleModel</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tm</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tm</span> <span class="o">=</span> <span class="n">tm</span>
+
+<div class="viewcode-block" id="WiggleModel.template_ncost"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.WiggleModel.template_ncost">[docs]</a>    <span class="k">def</span> <span class="nf">template_ncost</span><span class="p">(</span><span class="n">wave</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;not implemented&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="WiggleModel.summary_str"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.WiggleModel.summary_str">[docs]</a>    <span class="k">def</span> <span class="nf">summary_str</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&quot;base&quot;</span>
+
+</div></div>
+<div class="viewcode-block" id="StupidL1WiggleModel"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel">[docs]</a><span class="k">class</span> <span class="nc">StupidL1WiggleModel</span><span class="p">(</span><span class="n">WiggleModel</span><span class="p">):</span>
+
+<div class="viewcode-block" id="StupidL1WiggleModel.template_ncost"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel.template_ncost">[docs]</a>    <span class="k">def</span> <span class="nf">template_ncost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="n">generated</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tm</span><span class="o">.</span><span class="n">generate_template_waveform</span><span class="p">((</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">),</span> <span class="n">model_waveform</span><span class="o">=</span><span class="n">wave</span><span class="p">)</span>
+        <span class="n">diff</span> <span class="o">=</span> <span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">data</span> <span class="o">-</span> <span class="n">generated</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">diff</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="StupidL1WiggleModel.summary_str"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.StupidL1WiggleModel.summary_str">[docs]</a>    <span class="k">def</span> <span class="nf">summary_str</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&quot;stupidiid&quot;</span>
+
+</div></div>
+<div class="viewcode-block" id="PlainWiggleModel"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.PlainWiggleModel">[docs]</a><span class="k">class</span> <span class="nc">PlainWiggleModel</span><span class="p">(</span><span class="n">WiggleModel</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Model signal as AR noise + plain template (no wiggles)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PlainWiggleModel.template_ncost"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.PlainWiggleModel.template_ncost">[docs]</a>    <span class="k">def</span> <span class="nf">template_ncost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wave</span><span class="p">,</span> <span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="n">generated</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tm</span><span class="o">.</span><span class="n">generate_template_waveform</span><span class="p">((</span><span class="n">phases</span><span class="p">,</span> <span class="n">params</span><span class="p">),</span> <span class="n">model_waveform</span><span class="o">=</span><span class="n">wave</span><span class="p">)</span>
+        <span class="n">nm</span> <span class="o">=</span> <span class="n">get_noise_model</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+        <span class="n">ll</span> <span class="o">=</span> <span class="n">nm</span><span class="o">.</span><span class="n">lklhood</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="p">(</span><span class="n">wave</span><span class="o">.</span><span class="n">data</span> <span class="o">-</span> <span class="n">generated</span><span class="o">.</span><span class="n">data</span><span class="p">),</span> <span class="n">zero_mean</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ll</span>
+</div>
+<div class="viewcode-block" id="PlainWiggleModel.summary_str"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.wiggle_models.PlainWiggleModel.summary_str">[docs]</a>    <span class="k">def</span> <span class="nf">summary_str</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&quot;plain&quot;</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

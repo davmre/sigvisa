@@ -1,0 +1,234 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>gpmodel Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="signals Package" href="../sigvisa.signals/" />
+    <link rel="next" title="source Package" href="../sigvisa.source/" />
+    <link rel="prev" title="signals Package" href="../sigvisa.signals/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.source/" title="source Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.signals/" title="signals Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.signals/" accesskey="U">signals Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="gpmodel-package">
+<h1>gpmodel Package<a class="headerlink" href="#gpmodel-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="data-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">data</span></tt> Module<a class="headerlink" href="#data-module" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-sigvisa.signals.gpmodel.gaussian">
+<span id="gaussian-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">gaussian</span></tt> Module<a class="headerlink" href="#module-sigvisa.signals.gpmodel.gaussian" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPLearner">
+<em class="property">class </em><tt class="descclassname">sigvisa.signals.gpmodel.gaussian.</tt><tt class="descname">GPLearner</tt><big>(</big><em>gpm</em>, <em>range</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPLearner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPLearner" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPLearner.lklhood">
+<tt class="descname">lklhood</tt><big>(</big><em>tp</em>, <em>target</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPLearner.lklhood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPLearner.lklhood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPLearner.predict">
+<tt class="descname">predict</tt><big>(</big><em>tp</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPLearner.predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPLearner.predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.signals.gpmodel.gaussian.</tt><tt class="descname">GPModel</tt><big>(</big><em>domain</em>, <em>params=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPModel" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPModel.cov">
+<tt class="descname">cov</tt><big>(</big><em>x</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPModel.cov"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPModel.cov" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPModel.covmat">
+<tt class="descname">covmat</tt><big>(</big><em>X1</em>, <em>X2</em>, <em>same=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPModel.covmat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPModel.covmat" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPModel.covvec">
+<tt class="descname">covvec</tt><big>(</big><em>x1</em>, <em>x2</em>, <em>same=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPModel.covvec"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPModel.covvec" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.gpmodel.gaussian.GPModel.sample">
+<tt class="descname">sample</tt><big>(</big><em>means=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gaussian/#GPModel.sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gaussian.GPModel.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="gptest-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">gptest</span></tt> Module<a class="headerlink" href="#gptest-module" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-sigvisa.signals.gpmodel.gridutil">
+<span id="gridutil-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">gridutil</span></tt> Module<a class="headerlink" href="#module-sigvisa.signals.gpmodel.gridutil" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.gridutil.grid2list">
+<tt class="descclassname">sigvisa.signals.gpmodel.gridutil.</tt><tt class="descname">grid2list</tt><big>(</big><em>grid</em>, <em>n</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gridutil/#grid2list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gridutil.grid2list" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.gridutil.list2grid">
+<tt class="descclassname">sigvisa.signals.gpmodel.gridutil.</tt><tt class="descname">list2grid</tt><big>(</big><em>list</em>, <em>dim</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gridutil/#list2grid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gridutil.list2grid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.gridutil.makegrid">
+<tt class="descclassname">sigvisa.signals.gpmodel.gridutil.</tt><tt class="descname">makegrid</tt><big>(</big><em>init</em>, <em>end</em>, <em>dim=None</em>, <em>res=101</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/gridutil/#makegrid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.gridutil.makegrid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.signals.gpmodel.main">
+<span id="main-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">main</span></tt> Module<a class="headerlink" href="#module-sigvisa.signals.gpmodel.main" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.main.mpd4test">
+<tt class="descclassname">sigvisa.signals.gpmodel.main.</tt><tt class="descname">mpd4test</tt><big>(</big><em>fmodel</em>, <em>trnmodel</em>, <em>testdom</em>, <em>trndom</em>, <em>i</em>, <em>grid</em>, <em>n</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/main/#mpd4test"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.main.mpd4test" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.main.pd4test">
+<tt class="descclassname">sigvisa.signals.gpmodel.main.</tt><tt class="descname">pd4test</tt><big>(</big><em>fmodel</em>, <em>tmodel</em>, <em>testdom</em>, <em>trndom</em>, <em>i</em>, <em>grid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/main/#pd4test"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.main.pd4test" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.main.test1">
+<tt class="descclassname">sigvisa.signals.gpmodel.main.</tt><tt class="descname">test1</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/main/#test1"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.main.test1" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.main.test2">
+<tt class="descclassname">sigvisa.signals.gpmodel.main.</tt><tt class="descname">test2</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/main/#test2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.main.test2" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.gpmodel.main.test3">
+<tt class="descclassname">sigvisa.signals.gpmodel.main.</tt><tt class="descname">test3</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/gpmodel/main/#test3"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.gpmodel.main.test3" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="wave-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">wave</span></tt> Module<a class="headerlink" href="#wave-module" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">gpmodel Package</a><ul>
+<li><a class="reference internal" href="#data-module"><tt class="docutils literal"><span class="pre">data</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.signals.gpmodel.gaussian"><tt class="docutils literal"><span class="pre">gaussian</span></tt> Module</a></li>
+<li><a class="reference internal" href="#gptest-module"><tt class="docutils literal"><span class="pre">gptest</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.signals.gpmodel.gridutil"><tt class="docutils literal"><span class="pre">gridutil</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.signals.gpmodel.main"><tt class="docutils literal"><span class="pre">main</span></tt> Module</a></li>
+<li><a class="reference internal" href="#wave-module"><tt class="docutils literal"><span class="pre">wave</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.signals/"
+                        title="previous chapter">signals Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.source/"
+                        title="next chapter">source Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.signals.gpmodel.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.source/" title="source Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.signals/" title="signals Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.signals/" >signals Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

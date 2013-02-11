@@ -1,0 +1,153 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.tests.test_armodel &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.tests.test_armodel</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">numpy.ma</span> <span class="kn">as</span> <span class="nn">ma</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.armodel.model</span> <span class="kn">import</span> <span class="n">ARModel</span><span class="p">,</span> <span class="n">ErrorModel</span><span class="p">,</span> <span class="n">load_armodel_from_file</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.armodel.learner</span> <span class="kn">import</span> <span class="n">ARLearner</span>
+
+<span class="kn">import</span> <span class="nn">unittest</span>
+
+
+<div class="viewcode-block" id="TestAutoregressiveModels"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_armodel.TestAutoregressiveModels">[docs]</a><span class="k">class</span> <span class="nc">TestAutoregressiveModels</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TestAutoregressiveModels.setUp"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_armodel.TestAutoregressiveModels.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestAutoregressiveModels.test_fastAR"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_armodel.TestAutoregressiveModels.test_fastAR">[docs]</a>    <span class="k">def</span> <span class="nf">test_fastAR</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">true_params</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">.</span><span class="mi">8</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">true_std</span> <span class="o">=</span> <span class="o">.</span><span class="mi">11</span>
+        <span class="n">errormodel</span> <span class="o">=</span> <span class="n">ErrorModel</span><span class="p">(</span><span class="n">mean</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="n">true_std</span><span class="p">)</span>
+        <span class="n">true_model</span> <span class="o">=</span> <span class="n">ARModel</span><span class="p">(</span><span class="n">true_params</span><span class="p">,</span> <span class="n">errormodel</span><span class="p">)</span>
+        <span class="n">sampled_data</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked_array</span><span class="p">(</span><span class="n">true_model</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="mi">1000</span><span class="p">),</span> <span class="n">mask</span><span class="o">=</span><span class="p">[</span><span class="bp">False</span><span class="p">,</span> <span class="p">]</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)</span>
+
+        <span class="n">origll</span> <span class="o">=</span> <span class="n">true_model</span><span class="o">.</span><span class="n">fastAR_missingData</span><span class="p">(</span><span class="n">sampled_data</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">true_std</span><span class="p">)</span>
+        <span class="n">orig_slowll</span> <span class="o">=</span> <span class="n">true_model</span><span class="o">.</span><span class="n">slow_AR</span><span class="p">(</span><span class="n">sampled_data</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">orig_fastll</span> <span class="o">=</span> <span class="n">true_model</span><span class="o">.</span><span class="n">fast_AR</span><span class="p">(</span><span class="n">sampled_data</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">true_std</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">origll</span><span class="p">,</span> <span class="n">orig_slowll</span><span class="p">)</span>
+        <span class="k">print</span> <span class="n">origll</span><span class="p">,</span> <span class="n">orig_slowll</span><span class="p">,</span> <span class="n">orig_fastll</span>
+
+        <span class="n">sampled_data</span><span class="p">[</span><span class="mi">100</span><span class="p">:</span><span class="mi">200</span><span class="p">]</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked</span>
+        <span class="n">sampled_data</span><span class="p">[</span><span class="mi">400</span><span class="p">:</span><span class="mi">600</span><span class="p">]</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked</span>
+        <span class="n">fastll</span> <span class="o">=</span> <span class="n">true_model</span><span class="o">.</span><span class="n">fastAR_missingData</span><span class="p">(</span><span class="n">sampled_data</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">true_std</span><span class="p">)</span>
+        <span class="n">slowll</span> <span class="o">=</span> <span class="n">true_model</span><span class="o">.</span><span class="n">slow_AR</span><span class="p">(</span><span class="n">sampled_data</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">fastll</span><span class="p">,</span> <span class="n">slowll</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestAutoregressiveModels.test_AR_learning"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_armodel.TestAutoregressiveModels.test_AR_learning">[docs]</a>    <span class="k">def</span> <span class="nf">test_AR_learning</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">true_params</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">.</span><span class="mi">8</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">true_std</span> <span class="o">=</span> <span class="o">.</span><span class="mi">11</span>
+        <span class="n">errormodel</span> <span class="o">=</span> <span class="n">ErrorModel</span><span class="p">(</span><span class="n">mean</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="n">true_std</span><span class="p">)</span>
+        <span class="n">true_model</span> <span class="o">=</span> <span class="n">ARModel</span><span class="p">(</span><span class="n">true_params</span><span class="p">,</span> <span class="n">errormodel</span><span class="p">)</span>
+        <span class="n">sampled_data</span> <span class="o">=</span> <span class="n">true_model</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+
+        <span class="n">learner</span> <span class="o">=</span> <span class="n">ARLearner</span><span class="p">(</span><span class="n">sampled_data</span><span class="p">)</span>
+        <span class="n">learned_params</span><span class="p">,</span> <span class="n">learned_std</span> <span class="o">=</span> <span class="n">learner</span><span class="o">.</span><span class="n">yulewalker</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">true_params</span> <span class="o">-</span> <span class="n">learned_params</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="n">places</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">true_std</span><span class="p">,</span> <span class="n">learned_std</span><span class="p">,</span> <span class="n">places</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestAutoregressiveModels.test_pickle"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_armodel.TestAutoregressiveModels.test_pickle">[docs]</a>    <span class="k">def</span> <span class="nf">test_pickle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">true_params</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">.</span><span class="mi">8</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">true_std</span> <span class="o">=</span> <span class="o">.</span><span class="mi">11</span>
+        <span class="n">errormodel</span> <span class="o">=</span> <span class="n">ErrorModel</span><span class="p">(</span><span class="n">mean</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="n">true_std</span><span class="p">)</span>
+        <span class="n">true_model</span> <span class="o">=</span> <span class="n">ARModel</span><span class="p">(</span><span class="n">true_params</span><span class="p">,</span> <span class="n">errormodel</span><span class="p">)</span>
+        <span class="n">true_model</span><span class="o">.</span><span class="n">dump_to_file</span><span class="p">(</span><span class="s">&quot;test.armodel&quot;</span><span class="p">)</span>
+
+        <span class="n">loaded_model</span> <span class="o">=</span> <span class="n">load_armodel_from_file</span><span class="p">(</span><span class="s">&quot;test.armodel&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">true_model</span><span class="o">.</span><span class="n">params</span> <span class="o">-</span> <span class="n">loaded_model</span><span class="o">.</span><span class="n">params</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">true_model</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">std</span><span class="p">,</span> <span class="n">loaded_model</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">std</span><span class="p">)</span>
+</div></div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

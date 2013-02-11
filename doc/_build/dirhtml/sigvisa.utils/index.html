@@ -1,0 +1,1446 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>utils Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="sigvisa Package" href="../sigvisa/" />
+    <link rel="prev" title="tests Package" href="../sigvisa.tests/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.tests/" title="tests Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" accesskey="U">sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="utils-package">
+<h1>utils Package<a class="headerlink" href="#utils-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.utils.EC2">
+<span id="ec2-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">EC2</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.EC2" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">AWSAuthConnection</tt><big>(</big><em>aws_access_key_id</em>, <em>aws_secret_access_key</em>, <em>is_secure=True</em>, <em>server='ec2.amazonaws.com'</em>, <em>port=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>Creates an authorized connection to EC2 containing wrappers for
+Query API calls.</p>
+<p>Each API call has a matching method on this class to perform the
+appropriate E2 action.</p>
+<p>&#64;ivar verbose: Verbosity flag, defaults to false.  If set to true,
+some debug information is printed.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.allocate_address">
+<tt class="descname">allocate_address</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.allocate_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.allocate_address" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes an C{AllocateAddress} call.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.associate_address">
+<tt class="descname">associate_address</tt><big>(</big><em>publicIp</em>, <em>instanceId</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.associate_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.associate_address" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes an C{AssociateAddress} call.</p>
+<p>&#64;param publicIp: Address to associate
+&#64;param instanceId: Instance to associate address with</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.auth_revoke_impl">
+<tt class="descname">auth_revoke_impl</tt><big>(</big><em>groupName</em>, <em>ipProtocol=None</em>, <em>fromPort=None</em>, <em>toPort=None</em>, <em>cidrIp=None</em>, <em>sourceSecurityGroupName=None</em>, <em>sourceSecurityGroupOwnerId=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.auth_revoke_impl"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.auth_revoke_impl" title="Permalink to this definition">¶</a></dt>
+<dd><p>Processes parameters for C{authorize} and C{revoke}.</p>
+<p>&#64;param groupName: Name of security group to modify.</p>
+<p>&#64;param ipProtocol: IP protocol in rule.  Valid vlaues are
+C{&#8216;tcp&#8217;}, C{&#8216;udp&#8217;} and C{&#8216;icmp&#8217;}.</p>
+<p>&#64;param fromPort: Bottom of IP port range in rule.</p>
+<p>&#64;param toPort: Top of IP port range in rule.</p>
+<p>&#64;param cidrIp: CIDR IP range in rule.</p>
+<p>&#64;param sourceSecurityGroupName: Security group name in rule.</p>
+<p>&#64;param sourceSecurityGroupOwnerId: User id of security group
+in rule.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.authorize">
+<tt class="descname">authorize</tt><big>(</big><em>*args</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.authorize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.authorize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes an C{AuthorizeSecurityGroupIngress} call.</p>
+<p>L{authorize} and L{revoke} share parameter parsing code.
+See L{auth_revoke_impl} for parameters.  Also, see API docs
+for details of valid parameter combinations.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.confirm_product_instance">
+<tt class="descname">confirm_product_instance</tt><big>(</big><em>productCode</em>, <em>instanceId</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.confirm_product_instance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.confirm_product_instance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{ConfirmProdcutInstance} call.</p>
+<p>&#64;param productCode: The product code to confirm</p>
+<p>&#64;param instanceId: The instance for which to confirm the product code.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.create_image">
+<tt class="descname">create_image</tt><big>(</big><em>name</em>, <em>instanceId</em>, <em>description=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.create_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.create_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{CreateImage} call.</p>
+<p>&#64;param name: The name of the new image
+&#64;param instanceId: The instance id to make the image from
+&#64;param description: The description of the new image</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.create_keypair">
+<tt class="descname">create_keypair</tt><big>(</big><em>keyName</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.create_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.create_keypair" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{CreateKeypair} call.</p>
+<p>&#64;param keyName: Name for the new keypair.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.create_securitygroup">
+<tt class="descname">create_securitygroup</tt><big>(</big><em>groupName</em>, <em>groupDescription</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.create_securitygroup"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.create_securitygroup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{CreateSecurityGroup} call.</p>
+<p>&#64;param groupName: Name of group to create.</p>
+<p>&#64;param groupDescription: Brief description of security group.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.create_tags">
+<tt class="descname">create_tags</tt><big>(</big><em>nodeids</em>, <em>tags</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.create_tags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.create_tags" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.delete_keypair">
+<tt class="descname">delete_keypair</tt><big>(</big><em>keyName</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.delete_keypair"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.delete_keypair" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DeleteKeypair} call.</p>
+<p>&#64;param keyName: Name of keypair to delete.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.delete_securitygroup">
+<tt class="descname">delete_securitygroup</tt><big>(</big><em>groupName</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.delete_securitygroup"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.delete_securitygroup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DeleteSecurityGroup} call.</p>
+<p>&#64;param groupName: Name of security group to delete.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.deregister_image">
+<tt class="descname">deregister_image</tt><big>(</big><em>imageId</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.deregister_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.deregister_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DeregisterImage} call.</p>
+<p>&#64;param imageId: The image id to deregister.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_addresses">
+<tt class="descname">describe_addresses</tt><big>(</big><em>publicIps=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_addresses"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_addresses" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DescribeAddresses} call.</p>
+<p>&#64;param publicIps: List of addresses to describe.  If empty or
+omitted, all addresses will be described.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_availability_zones">
+<tt class="descname">describe_availability_zones</tt><big>(</big><em>zoneNames=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_availability_zones"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_availability_zones" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DescribeAvailabilityZones} call.</p>
+<p>&#64;param zoneNames: List of availability zones to describe.  If
+empty or omitted, all availability zones will be described.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_image_attribute">
+<tt class="descname">describe_image_attribute</tt><big>(</big><em>imageId</em>, <em>attribute</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_image_attribute"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_image_attribute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DescribeImageAttribute} call.</p>
+<p>&#64;param imageId: AMI to describe attribute of.</p>
+<p>&#64;param attribute: Name of attribute to describe.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_images">
+<tt class="descname">describe_images</tt><big>(</big><em>imageIds=None</em>, <em>owners=None</em>, <em>executableBy=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_images"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_images" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DescribeImages} call.</p>
+<p>&#64;param imageIds: List of images to describe.  If empty or omitted, all
+images visible to the user are returned.</p>
+<p>&#64;param owners: List of users to filter returned images by
+owner.  If empty or omitted, no filtering is done.</p>
+<p>&#64;param executableBy: List of users (or user groups) to filter
+returned images by execution permissions.  If empty or
+omitted, no filtering is done.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_instances">
+<tt class="descname">describe_instances</tt><big>(</big><em>instanceIds=</em><span class="optional">[</span><span class="optional">]</span><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DescribeInstances} call.</p>
+<p>&#64;param instanceIds: List of instances to describe.  If empty
+or omitted, all instances will be returned.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_keypairs">
+<tt class="descname">describe_keypairs</tt><big>(</big><em>keyNames=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_keypairs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_keypairs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DescribeKeypairs} call.</p>
+<p>&#64;param keyNames: List of keypairs to describe.  If empty or
+omitted, all keypairs are returned.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_securitygroups">
+<tt class="descname">describe_securitygroups</tt><big>(</big><em>groupNames=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_securitygroups"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_securitygroups" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DescribeSecurityGroups} call.</p>
+<p>&#64;param groupNames: List of security groups to describe.  If
+empty or omitted, all security groups will be described.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.describe_tags">
+<tt class="descname">describe_tags</tt><big>(</big><em>resourceId</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.describe_tags"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.describe_tags" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.disassociate_address">
+<tt class="descname">disassociate_address</tt><big>(</big><em>publicIp</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.disassociate_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.disassociate_address" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{DisassociateAddress} call.</p>
+<p>&#64;param publicIp: Address to disassociate</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.encode">
+<tt class="descname">encode</tt><big>(</big><em>aws_secret_access_key</em>, <em>str</em>, <em>urlencode=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.encode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.encode" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.get_aws_auth_param">
+<tt class="descname">get_aws_auth_param</tt><big>(</big><em>params</em>, <em>aws_secret_access_key</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.get_aws_auth_param"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.get_aws_auth_param" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.get_console_output">
+<tt class="descname">get_console_output</tt><big>(</big><em>instanceId</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.get_console_output"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.get_console_output" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{GetConsoleOutput} call.</p>
+<p>&#64;param instanceId: Instance from which to get console output.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.make_request">
+<tt class="descname">make_request</tt><big>(</big><em>action</em>, <em>params</em>, <em>data=''</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.make_request"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.make_request" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.modify_image_attribute">
+<tt class="descname">modify_image_attribute</tt><big>(</big><em>imageId</em>, <em>attribute</em>, <em>operationType</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.modify_image_attribute"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.modify_image_attribute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{ModifyImageAttribute} call.</p>
+<p>&#64;param imageId: AMI to modify attribute of.</p>
+<p>&#64;param attribute: Name of attribute to modify.</p>
+<p>&#64;param operationType: Operation to perform on attribute.</p>
+<p>&#64;param kwargs: Values for the attribute operation, documented below.</p>
+<p>&#64;kwarg userIds: List of userIds (valid with
+C{&#8216;launchPermission&#8217;} attribute.)</p>
+<p>&#64;kwarg userGroups: List of userGroups (valid with
+C{&#8216;launchPermission&#8217;} attribute.)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.pathlist">
+<tt class="descname">pathlist</tt><big>(</big><em>key</em>, <em>arr</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.pathlist"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.pathlist" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts a key and an array of values into AWS query param format.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.reboot_instances">
+<tt class="descname">reboot_instances</tt><big>(</big><em>instanceIds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.reboot_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.reboot_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{RebootInstances} call.</p>
+<p>&#64;param instanceIds: List of instances to reboot.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.register_image">
+<tt class="descname">register_image</tt><big>(</big><em>imageLocation</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.register_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.register_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{RegisterImage} call.</p>
+<p>&#64;param imageLocation: The location of the image manifest to
+register in S3.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.release_address">
+<tt class="descname">release_address</tt><big>(</big><em>publicIp</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.release_address"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.release_address" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{ReleaseAddress} call.</p>
+<p>&#64;param publicIp: Address to release</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.reset_image_attribute">
+<tt class="descname">reset_image_attribute</tt><big>(</big><em>imageId</em>, <em>attribute</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.reset_image_attribute"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.reset_image_attribute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{ResetImageAttribute} call.</p>
+<p>&#64;param imageId: AMI to reset attribute of.</p>
+<p>&#64;param attribute: Name of attribute to reset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.revoke">
+<tt class="descname">revoke</tt><big>(</big><em>*args</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.revoke"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.revoke" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes an C{RevokeSecurityGroupIngress} call.</p>
+<p>L{authorize} and L{revoke} share parameter parsing code.
+See L{auth_revoke_impl} for parameters.  Also, see API docs
+for details of valid parameter combinations.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.run_instances">
+<tt class="descname">run_instances</tt><big>(</big><em>imageId</em>, <em>minCount=1</em>, <em>maxCount=1</em>, <em>keyName=None</em>, <em>groupIds=None</em>, <em>userData=None</em>, <em>base64Encode=True</em>, <em>addressingType=None</em>, <em>instanceType=None</em>, <em>availabilityZone=None</em>, <em>kernelId=None</em>, <em>ramdiskId=None</em>, <em>blockDeviceMapping=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.run_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.run_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{RunInstances} call.</p>
+<p>&#64;param imageId: AMI id to launch instances of.</p>
+<p>&#64;param minCount: Minimum number of instances to launch.  If
+EC2 cannot launch at least this many, the call will fail.</p>
+<p>&#64;param maxCount: Maximum number of instances to launch.  EC2
+will make a best-effort attempt to launch this many instances,
+but will not fail unless fewer than C{minCount} are available.</p>
+<p>&#64;param keyName: Name of keypair to launch instances with.</p>
+<p>&#64;param groupIds: List of security groups to launch instances
+in.</p>
+<p>&#64;param userData: String containing user data to inject into
+launched instances.</p>
+<p>&#64;param base64Encode: Specifies whether C{userData} string
+qshould be base64 encoded.  Defaults to True.</p>
+<p>&#64;param addressingType: Specifies the address scheme to use for
+the instance. The supported (default) type is C{&#8220;public&#8221;}, or
+C{None} for the default. See the &#8220;Instance Addressing&#8221; section
+of the latest developer guide for more information.</p>
+<p>&#64;param availabilityZone: Specifies the availability zone to
+launch in.</p>
+<p>&#64;param kernelId: Kernel to launch the instances with.</p>
+<p>&#64;param ramdiskId: Ramdisk to launch the instances with.</p>
+<p>&#64;param blockDeviceMapping: Specifies the virtual block device
+mapping. This parameter is a list of two element lists or
+tuples. The first element is the virtual name and the second
+is the device name.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.start_instances">
+<tt class="descname">start_instances</tt><big>(</big><em>instanceIds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.start_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.start_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{StartInstances} call.</p>
+<p>&#64;param instanceIds: List of instances to terminate.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.stop_instances">
+<tt class="descname">stop_instances</tt><big>(</big><em>instanceIds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.stop_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.stop_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{StopInstances} call.</p>
+<p>&#64;param instanceIds: List of instances to terminate.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AWSAuthConnection.terminate_instances">
+<tt class="descname">terminate_instances</tt><big>(</big><em>instanceIds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AWSAuthConnection.terminate_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AWSAuthConnection.terminate_instances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes a C{TerminateInstances} call.</p>
+<p>&#64;param instanceIds: List of instances to terminate.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.AllocateAddressResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">AllocateAddressResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AllocateAddressResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AllocateAddressResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{AllocateAddress} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AllocateAddressResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AllocateAddressResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AllocateAddressResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.AssociateAddressResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">AssociateAddressResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AssociateAddressResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AssociateAddressResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{AssociateAddress} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AssociateAddressResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AssociateAddressResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AssociateAddressResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.AuthorizeSecurityGroupIngressResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">AuthorizeSecurityGroupIngressResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AuthorizeSecurityGroupIngressResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AuthorizeSecurityGroupIngressResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{AuthorizeSecurityGroupIngress} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.AuthorizeSecurityGroupIngressResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#AuthorizeSecurityGroupIngressResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.AuthorizeSecurityGroupIngressResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.ConfirmProductInstanceResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">ConfirmProductInstanceResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ConfirmProductInstanceResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ConfirmProductInstanceResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{ConfirmProductInstance} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.ConfirmProductInstanceResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ConfirmProductInstanceResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ConfirmProductInstanceResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.CreateImageResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">CreateImageResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateImageResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateImageResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{CreateImage} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.CreateImageResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'imageId'</em><a class="headerlink" href="#sigvisa.utils.EC2.CreateImageResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.CreateImageResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateImageResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateImageResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.CreateKeyPairResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">CreateKeyPairResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateKeyPairResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateKeyPairResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{CreateKeyPair} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.CreateKeyPairResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateKeyPairResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateKeyPairResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.CreateSecurityGroupResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">CreateSecurityGroupResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateSecurityGroupResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateSecurityGroupResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{CreateSecurityGroup} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.CreateSecurityGroupResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateSecurityGroupResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateSecurityGroupResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.CreateTagsResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">CreateTagsResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateTagsResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateTagsResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{CreateTags} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.CreateTagsResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#CreateTagsResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.CreateTagsResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DeleteKeyPairResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DeleteKeyPairResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DeleteKeyPairResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DeleteKeyPairResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DeleteKeyPair} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DeleteKeyPairResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DeleteKeyPairResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DeleteKeyPairResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DeleteSecurityGroupResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DeleteSecurityGroupResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DeleteSecurityGroupResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DeleteSecurityGroupResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DeleteSecurityGroup} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DeleteSecurityGroupResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DeleteSecurityGroupResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DeleteSecurityGroupResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DeregisterImageResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DeregisterImageResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DeregisterImageResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DeregisterImageResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DeregisterImage} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DeregisterImageResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DeregisterImageResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DeregisterImageResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeAddressesResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeAddressesResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeAddressesResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeAddressesResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DescribeAddresses} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.DescribeAddressesResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'addressesSet/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.DescribeAddressesResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeAddressesResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeAddressesResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeAddressesResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeAvailabilityZonesResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeAvailabilityZonesResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeAvailabilityZonesResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeAvailabilityZonesResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DescribeAvailabilityZones} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.DescribeAvailabilityZonesResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'availabilityZoneInfo/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.DescribeAvailabilityZonesResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeAvailabilityZonesResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeAvailabilityZonesResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeAvailabilityZonesResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeImageAttributeResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeImageAttributeResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeImageAttributeResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeImageAttributeResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DescribeImageAttribute} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeImageAttributeResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeImageAttributeResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeImageAttributeResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeImagesResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeImagesResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeImagesResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeImagesResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DescribeImages} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.DescribeImagesResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'imagesSet/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.DescribeImagesResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeImagesResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeImagesResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeImagesResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeImagesResponse.translate_isPublic">
+<tt class="descname">translate_isPublic</tt><big>(</big><em>isPublic</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeImagesResponse.translate_isPublic"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeImagesResponse.translate_isPublic" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeInstancesResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeInstancesResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeInstancesResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeInstancesResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.InstanceSetResponse" title="sigvisa.utils.EC2.InstanceSetResponse"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.InstanceSetResponse</span></tt></a></p>
+<p>Response parser class for C{DescribeInstances} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.DescribeInstancesResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'reservationSet/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.DescribeInstancesResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeInstancesResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeInstancesResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeInstancesResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeKeyPairsResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeKeyPairsResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeKeyPairsResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeKeyPairsResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DescribeKeyPairs} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.DescribeKeyPairsResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'keySet/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.DescribeKeyPairsResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeKeyPairsResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeKeyPairsResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeKeyPairsResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeSecurityGroupsResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeSecurityGroupsResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeSecurityGroupsResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeSecurityGroupsResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DescribeSecurityGroups} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.DescribeSecurityGroupsResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'securityGroupInfo/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.DescribeSecurityGroupsResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeSecurityGroupsResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeSecurityGroupsResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeSecurityGroupsResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DescribeTagsResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DescribeTagsResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeTagsResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeTagsResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DescribeTags} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.DescribeTagsResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'tagSet/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.DescribeTagsResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DescribeTagsResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DescribeTagsResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DescribeTagsResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.DisassociateAddressResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">DisassociateAddressResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DisassociateAddressResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DisassociateAddressResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{DisassociateAddress} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.DisassociateAddressResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#DisassociateAddressResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.DisassociateAddressResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.GetConsoleOutputResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">GetConsoleOutputResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#GetConsoleOutputResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.GetConsoleOutputResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.GetConsoleOutputResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#GetConsoleOutputResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.GetConsoleOutputResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="exception">
+<dt id="sigvisa.utils.EC2.InstanceNotFound">
+<em class="property">exception </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">InstanceNotFound</tt><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#InstanceNotFound"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.InstanceNotFound" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.InstanceSetResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">InstanceSetResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#InstanceSetResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.InstanceSetResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response containing instance set items</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.InstanceSetResponse.parseInstanceSet">
+<tt class="descname">parseInstanceSet</tt><big>(</big><em>root</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#InstanceSetResponse.parseInstanceSet"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.InstanceSetResponse.parseInstanceSet" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse a set of instanceSet/item nodes</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.InstancesStatusResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">InstancesStatusResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#InstancesStatusResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.InstancesStatusResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{TerminateInstances} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.InstancesStatusResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'instancesSet/item'</em><a class="headerlink" href="#sigvisa.utils.EC2.InstancesStatusResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.InstancesStatusResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#InstancesStatusResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.InstancesStatusResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.ModifyImageAttributeResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">ModifyImageAttributeResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ModifyImageAttributeResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ModifyImageAttributeResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{ModifyImageAttribute} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.ModifyImageAttributeResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ModifyImageAttributeResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ModifyImageAttributeResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.RebootInstancesResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">RebootInstancesResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RebootInstancesResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RebootInstancesResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{RebootInstances} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.RebootInstancesResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RebootInstancesResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RebootInstancesResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.RegisterImageResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">RegisterImageResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RegisterImageResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RegisterImageResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{RegisterImage} API call.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.RegisterImageResponse.ELEMENT_XPATH">
+<tt class="descname">ELEMENT_XPATH</tt><em class="property"> = 'imageId'</em><a class="headerlink" href="#sigvisa.utils.EC2.RegisterImageResponse.ELEMENT_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.RegisterImageResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RegisterImageResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RegisterImageResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.ReleaseAddressResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">ReleaseAddressResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ReleaseAddressResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ReleaseAddressResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{ReleaseAddress} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.ReleaseAddressResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ReleaseAddressResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ReleaseAddressResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.ResetImageAttributeResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">ResetImageAttributeResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ResetImageAttributeResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ResetImageAttributeResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{ResetImageAttribute} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.ResetImageAttributeResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#ResetImageAttributeResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.ResetImageAttributeResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.Response">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">Response</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>Base class for XML response parsers.</p>
+<p>This class does everything except the API-call dependent parsing,
+which is handled in the child classes below.  Each child class
+should override the L{parse} method.</p>
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.Response.ERROR_XPATH">
+<tt class="descname">ERROR_XPATH</tt><em class="property"> = 'Errors/Error'</em><a class="headerlink" href="#sigvisa.utils.EC2.Response.ERROR_XPATH" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="sigvisa.utils.EC2.Response.NAMESPACE">
+<tt class="descname">NAMESPACE</tt><em class="property"> = 'http://ec2.amazonaws.com/doc/2011-12-15/'</em><a class="headerlink" href="#sigvisa.utils.EC2.Response.NAMESPACE" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.Response.find">
+<tt class="descname">find</tt><big>(</big><em>element</em>, <em>xpath</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response.find"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response.find" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.Response.findall">
+<tt class="descname">findall</tt><big>(</big><em>element</em>, <em>xpath</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response.findall"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response.findall" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.Response.findtext">
+<tt class="descname">findtext</tt><big>(</big><em>element</em>, <em>xpath</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response.findtext"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response.findtext" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.Response.fixnone">
+<tt class="descname">fixnone</tt><big>(</big><em>strnone</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response.fixnone"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response.fixnone" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.Response.fixxpath">
+<tt class="descname">fixxpath</tt><big>(</big><em>xpath</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response.fixxpath"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response.fixxpath" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.Response.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.utils.EC2.Response.parse_error">
+<tt class="descname">parse_error</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#Response.parse_error"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.Response.parse_error" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.RevokeSecurityGroupIngressResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">RevokeSecurityGroupIngressResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RevokeSecurityGroupIngressResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RevokeSecurityGroupIngressResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.Response" title="sigvisa.utils.EC2.Response"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.Response</span></tt></a></p>
+<p>Response parser class for C{RevokeSecurityGroupIngress} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.RevokeSecurityGroupIngressResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RevokeSecurityGroupIngressResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RevokeSecurityGroupIngressResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.utils.EC2.RunInstancesResponse">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">RunInstancesResponse</tt><big>(</big><em>http_response</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RunInstancesResponse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RunInstancesResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.utils.EC2.InstanceSetResponse" title="sigvisa.utils.EC2.InstanceSetResponse"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.utils.EC2.InstanceSetResponse</span></tt></a></p>
+<p>Response parser class for C{RunInstances} API call.</p>
+<dl class="method">
+<dt id="sigvisa.utils.EC2.RunInstancesResponse.parse">
+<tt class="descname">parse</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#RunInstancesResponse.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.RunInstancesResponse.parse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.EC2.connect_with_credfile">
+<tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">connect_with_credfile</tt><big>(</big><em>cred_fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#connect_with_credfile"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.connect_with_credfile" title="Permalink to this definition">¶</a></dt>
+<dd><p>connect with a credentials file</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.EC2.find_instid">
+<tt class="descclassname">sigvisa.utils.EC2.</tt><tt class="descname">find_instid</tt><big>(</big><em>ec2conn</em>, <em>instid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/EC2/#find_instid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.EC2.find_instid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.GMM">
+<span id="gmm-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">GMM</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.GMM" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.GMM.estimate">
+<tt class="descclassname">sigvisa.utils.GMM.</tt><tt class="descname">estimate</tt><big>(</big><em>n</em>, <em>data</em>, <em>iters=10</em>, <em>tol=0.001</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/GMM/#estimate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.GMM.estimate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.GMM.evaluate">
+<tt class="descclassname">sigvisa.utils.GMM.</tt><tt class="descname">evaluate</tt><big>(</big><em>wts</em>, <em>means</em>, <em>stds</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/GMM/#evaluate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.GMM.evaluate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.GMM.gaussian">
+<tt class="descclassname">sigvisa.utils.GMM.</tt><tt class="descname">gaussian</tt><big>(</big><em>m</em>, <em>s</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/GMM/#gaussian"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.GMM.gaussian" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.GMM.sample">
+<tt class="descclassname">sigvisa.utils.GMM.</tt><tt class="descname">sample</tt><big>(</big><em>wts</em>, <em>means</em>, <em>stds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/GMM/#sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.GMM.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.GMM.test_gmm">
+<tt class="descclassname">sigvisa.utils.GMM.</tt><tt class="descname">test_gmm</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/GMM/#test_gmm"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.GMM.test_gmm" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.Laplace">
+<span id="laplace-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">Laplace</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.Laplace" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.cdf">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">cdf</tt><big>(</big><em>location</em>, <em>scale</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#cdf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.cdf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.estimate">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">estimate</tt><big>(</big><em>vals</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#estimate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.estimate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.estimate_laplace_uniform_dist">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">estimate_laplace_uniform_dist</tt><big>(</big><em>vals</em>, <em>low</em>, <em>high</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#estimate_laplace_uniform_dist"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.estimate_laplace_uniform_dist" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.estimate_trunc">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">estimate_trunc</tt><big>(</big><em>vals</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#estimate_trunc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.estimate_trunc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.hier_estimate">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">hier_estimate</tt><big>(</big><em>site_data</em>, <em>init_loc=0.0</em>, <em>init_scale=1.0</em>, <em>init_beta=1</em>, <em>loc0=0.0</em>, <em>scale0=100.0</em>, <em>alpha0=0.01</em>, <em>beta0=100.0</em>, <em>alpha1=1.0</em>, <em>alpha2=0.01</em>, <em>beta2=0.01</em>, <em>tolerance=0.01</em>, <em>maxiters=100</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#hier_estimate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.hier_estimate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.ldensity">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">ldensity</tt><big>(</big><em>location</em>, <em>scale</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#ldensity"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.ldensity" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.ldensity_laplace_uniform_dist">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">ldensity_laplace_uniform_dist</tt><big>(</big><em>prob_laplace</em>, <em>location</em>, <em>scale</em>, <em>low</em>, <em>high</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#ldensity_laplace_uniform_dist"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.ldensity_laplace_uniform_dist" title="Permalink to this definition">¶</a></dt>
+<dd><p>A mixture of a Laplace and a uniform distribution</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.ldensity_uniform">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">ldensity_uniform</tt><big>(</big><em>low</em>, <em>high</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#ldensity_uniform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.ldensity_uniform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.logprob_trunc">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">logprob_trunc</tt><big>(</big><em>loc</em>, <em>scale</em>, <em>minval</em>, <em>maxval</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#logprob_trunc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.logprob_trunc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.lprob">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">lprob</tt><big>(</big><em>location</em>, <em>scale</em>, <em>val1</em>, <em>val2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#lprob"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.lprob" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.lprob_laplace_uniform_dist">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">lprob_laplace_uniform_dist</tt><big>(</big><em>prob_laplace</em>, <em>location</em>, <em>scale</em>, <em>low</em>, <em>high</em>, <em>val1</em>, <em>val2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#lprob_laplace_uniform_dist"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.lprob_laplace_uniform_dist" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.sample">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">sample</tt><big>(</big><em>location</em>, <em>scale</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.Laplace.sample_trunc">
+<tt class="descclassname">sigvisa.utils.Laplace.</tt><tt class="descname">sample_trunc</tt><big>(</big><em>loc</em>, <em>scale</em>, <em>minval</em>, <em>maxval</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/Laplace/#sample_trunc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.Laplace.sample_trunc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.LinearModel">
+<span id="linearmodel-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">LinearModel</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.LinearModel" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.utils.LinearModel.LinearModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.LinearModel.</tt><tt class="descname">LinearModel</tt><big>(</big><em>name</em>, <em>dim_names</em>, <em>dim_vals</em>, <em>samples</em>, <em>verbose=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LinearModel/#LinearModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LinearModel.LinearModel" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.LinearModel.hier_linearreg">
+<tt class="descclassname">sigvisa.utils.LinearModel.</tt><tt class="descname">hier_linearreg</tt><big>(</big><em>site_data</em>, <em>init_mean=None</em>, <em>init_sigma=None</em>, <em>init_beta=1</em>, <em>mean0=0.0</em>, <em>sigma0=100.0</em>, <em>alpha0=0.01</em>, <em>beta0=100</em>, <em>alpha1=100.0</em>, <em>alpha2=0.01</em>, <em>beta2=100</em>, <em>tolerance=0.01</em>, <em>maxiters=100</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LinearModel/#hier_linearreg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LinearModel.hier_linearreg" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.LinearModel.linearreg">
+<tt class="descclassname">sigvisa.utils.LinearModel.</tt><tt class="descname">linearreg</tt><big>(</big><em>data</em>, <em>samples</em>, <em>init_coeffs=None</em>, <em>noise_prec=1.0</em>, <em>coeff_mean=None</em>, <em>coeff_prec=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LinearModel/#linearreg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LinearModel.linearreg" title="Permalink to this definition">¶</a></dt>
+<dd><p>data is an n x d array
+samples is a length n array</p>
+<p>noise_prec -&gt; precision of gaussian noise around linear model (float)
+coeff_mean -&gt; prior mean of the coefficients (length d array)
+coeff_prec -&gt; prior precision of coefficients (length d array)</p>
+<p>returns a length d array of coefficients</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.LinearModel.test_linear">
+<tt class="descclassname">sigvisa.utils.LinearModel.</tt><tt class="descname">test_linear</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LinearModel/#test_linear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LinearModel.test_linear" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.LogNormal">
+<span id="lognormal-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">LogNormal</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.LogNormal" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.LogNormal.estimate">
+<tt class="descclassname">sigvisa.utils.LogNormal.</tt><tt class="descname">estimate</tt><big>(</big><em>vals</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LogNormal/#estimate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LogNormal.estimate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.LogNormal.sample">
+<tt class="descclassname">sigvisa.utils.LogNormal.</tt><tt class="descname">sample</tt><big>(</big><em>mean</em>, <em>sigma</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LogNormal/#sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LogNormal.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.LogisticModel">
+<span id="logisticmodel-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">LogisticModel</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.LogisticModel" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.utils.LogisticModel.LogisticModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.utils.LogisticModel.</tt><tt class="descname">LogisticModel</tt><big>(</big><em>name</em>, <em>dim_names</em>, <em>dim_vals</em>, <em>samples</em>, <em>weights=None</em>, <em>alpha=0</em>, <em>prior_means=None</em>, <em>prior_precisions=None</em>, <em>verbose=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LogisticModel/#LogisticModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LogisticModel.LogisticModel" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.LogisticModel.logistic">
+<tt class="descclassname">sigvisa.utils.LogisticModel.</tt><tt class="descname">logistic</tt><big>(</big><em>a</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LogisticModel/#logistic"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LogisticModel.logistic" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.LogisticModel.test_logistic">
+<tt class="descclassname">sigvisa.utils.LogisticModel.</tt><tt class="descname">test_logistic</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/LogisticModel/#test_logistic"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.LogisticModel.test_logistic" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="arrival-overlaps-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">arrival_overlaps</span></tt> Module<a class="headerlink" href="#arrival-overlaps-module" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="closest-stations-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">closest_stations</span></tt> Module<a class="headerlink" href="#closest-stations-module" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-sigvisa.utils.date2time">
+<span id="date2time-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">date2time</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.date2time" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.date2time.main">
+<tt class="descclassname">sigvisa.utils.date2time.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/date2time/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.date2time.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.draw_earth">
+<span id="draw-earth-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">draw_earth</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.draw_earth" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.draw_earth.draw_density">
+<tt class="descclassname">sigvisa.utils.draw_earth.</tt><tt class="descname">draw_density</tt><big>(</big><em>bmap</em>, <em>lons</em>, <em>lats</em>, <em>vals</em>, <em>levels=10</em>, <em>colorbar=True</em>, <em>nolines=False</em>, <em>colorbar_orientation='vertical'</em>, <em>colorbar_shrink=0.9</em>, <em>smooth=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/draw_earth/#draw_density"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.draw_earth.draw_density" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.draw_earth.draw_earth">
+<tt class="descclassname">sigvisa.utils.draw_earth.</tt><tt class="descname">draw_earth</tt><big>(</big><em>title</em>, <em>**args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/draw_earth/#draw_earth"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.draw_earth.draw_earth" title="Permalink to this definition">¶</a></dt>
+<dd><p>default projection=&#8221;moll&#8221; and resolution=&#8221;l&#8221;</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.draw_earth.draw_events">
+<tt class="descclassname">sigvisa.utils.draw_earth.</tt><tt class="descname">draw_events</tt><big>(</big><em>bmap</em>, <em>events</em>, <em>labels=None</em>, <em>**args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/draw_earth/#draw_events"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.draw_earth.draw_events" title="Permalink to this definition">¶</a></dt>
+<dd><p>The args can be any collection of marker args like ms, mfc mec</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.draw_earth.draw_events_arrivals">
+<tt class="descclassname">sigvisa.utils.draw_earth.</tt><tt class="descname">draw_events_arrivals</tt><big>(</big><em>bmap</em>, <em>events</em>, <em>arrivals</em>, <em>sites</em>, <em>ttime</em>, <em>quant=2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/draw_earth/#draw_events_arrivals"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.draw_earth.draw_events_arrivals" title="Permalink to this definition">¶</a></dt>
+<dd><p>threshold - time in seconds between expected arrival time and the arrival</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.draw_earth.draw_events_mag">
+<tt class="descclassname">sigvisa.utils.draw_earth.</tt><tt class="descname">draw_events_mag</tt><big>(</big><em>bmap</em>, <em>events</em>, <em>**args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/draw_earth/#draw_events_mag"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.draw_earth.draw_events_mag" title="Permalink to this definition">¶</a></dt>
+<dd><p>The args can be any collection of marker args like ms, mfc mec</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.draw_earth.draw_vectors">
+<tt class="descclassname">sigvisa.utils.draw_earth.</tt><tt class="descname">draw_vectors</tt><big>(</big><em>bmap</em>, <em>vectors</em>, <em>scale</em>, <em>**args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/draw_earth/#draw_vectors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.draw_earth.draw_vectors" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.draw_earth.main">
+<tt class="descclassname">sigvisa.utils.draw_earth.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/draw_earth/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.draw_earth.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.gamma">
+<span id="gamma-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">gamma</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.gamma" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.gamma.digamma">
+<tt class="descclassname">sigvisa.utils.gamma.</tt><tt class="descname">digamma</tt><big>(</big><em>k</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gamma/#digamma"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gamma.digamma" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gamma.estimate">
+<tt class="descclassname">sigvisa.utils.gamma.</tt><tt class="descname">estimate</tt><big>(</big><em>vals</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gamma/#estimate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gamma.estimate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gamma.ldensity">
+<tt class="descclassname">sigvisa.utils.gamma.</tt><tt class="descname">ldensity</tt><big>(</big><em>params</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gamma/#ldensity"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gamma.ldensity" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gamma.ldensity_list">
+<tt class="descclassname">sigvisa.utils.gamma.</tt><tt class="descname">ldensity_list</tt><big>(</big><em>params</em>, <em>vals</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gamma/#ldensity_list"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gamma.ldensity_list" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gamma.loggamma">
+<tt class="descclassname">sigvisa.utils.gamma.</tt><tt class="descname">loggamma</tt><big>(</big><em>num</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gamma/#loggamma"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gamma.loggamma" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gamma.trigamma">
+<tt class="descclassname">sigvisa.utils.gamma.</tt><tt class="descname">trigamma</tt><big>(</big><em>k</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gamma/#trigamma"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gamma.trigamma" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.geog">
+<span id="geog-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">geog</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.geog" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.geog.azimuth">
+<tt class="descclassname">sigvisa.utils.geog.</tt><tt class="descname">azimuth</tt><big>(</big><em>loc1</em>, <em>loc2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/geog/#azimuth"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.geog.azimuth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Angle in degrees measured clockwise from north starting at
+loc1 towards loc2. loc1 and loc2 are (longitude, latitude) in degrees.
+&gt;&gt;&gt; int(azimuth((10,0), (20, 0)))
+90
+&gt;&gt;&gt; int(azimuth((20,0), (10, 0)))
+270
+&gt;&gt;&gt; int(azimuth((10,0), (10, 45)))
+0
+&gt;&gt;&gt; azimuth((10, 45), (10, 0))
+180.0
+&gt;&gt;&gt; int(azimuth((133.9, -23.665), (132.6, -.83)))
+356</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.geog.degdiff">
+<tt class="descclassname">sigvisa.utils.geog.</tt><tt class="descname">degdiff</tt><big>(</big><em>angle1</em>, <em>angle2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/geog/#degdiff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.geog.degdiff" title="Permalink to this definition">¶</a></dt>
+<dd><p>The difference of two angles given in degrees. The answer is an angle from
+-180 to 180. Positive angles imply angle2 is clockwise from angle1 and -ve
+angles imply counter-clockwise.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="nb">int</span><span class="p">(</span><span class="n">degdiff</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+<span class="go">-10</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">int</span><span class="p">(</span><span class="n">degdiff</span><span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="mi">40</span><span class="p">))</span>
+<span class="go">10</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">int</span><span class="p">(</span><span class="n">degdiff</span><span class="p">(</span><span class="mi">361</span><span class="p">,</span> <span class="mi">40</span><span class="p">))</span>
+<span class="go">39</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">int</span><span class="p">(</span><span class="n">degdiff</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">361</span><span class="p">))</span>
+<span class="go">-39</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">degdiff</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span><span class="mi">250</span><span class="p">)</span>
+<span class="go">-150</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">degdiff</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span><span class="mi">200</span><span class="p">)</span>
+<span class="go">160</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">degdiff</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">219</span><span class="p">)</span>
+<span class="go">179</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">degdiff</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">220</span><span class="p">)</span>
+<span class="go">180</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">degdiff</span><span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">221</span><span class="p">)</span>
+<span class="go">-179</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.geog.dist_deg">
+<tt class="descclassname">sigvisa.utils.geog.</tt><tt class="descname">dist_deg</tt><big>(</big><em>loc1</em>, <em>loc2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/geog/#dist_deg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.geog.dist_deg" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the great circle distance between two point on the earth&#8217;s surface
+in degrees.
+loc1 and loc2 are pairs of longitude and latitude
+&gt;&gt;&gt; int(dist_deg((10,0), (20, 0)))
+10
+&gt;&gt;&gt; int(dist_deg((10,0), (10, 45)))
+45
+&gt;&gt;&gt; int(dist_deg((-78, -12), (-10.25, 52)))
+86
+&gt;&gt;&gt; dist_deg((132.86521, -0.45606493), (132.86521, -0.45606493)) &lt; 1e-4
+True
+&gt;&gt;&gt; dist_deg((127.20443, 2.8123965), (127.20443, 2.8123965)) &lt; 1e-4
+True</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.geog.dist_km">
+<tt class="descclassname">sigvisa.utils.geog.</tt><tt class="descname">dist_km</tt><big>(</big><em>loc1</em>, <em>loc2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/geog/#dist_km"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.geog.dist_km" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the distance in km between two locations specified in degrees
+loc = (longitude, latitude)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.geog.lonlatstr">
+<tt class="descclassname">sigvisa.utils.geog.</tt><tt class="descname">lonlatstr</tt><big>(</big><em>lon</em>, <em>lat</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/geog/#lonlatstr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.geog.lonlatstr" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.geog.safe_acos">
+<tt class="descclassname">sigvisa.utils.geog.</tt><tt class="descname">safe_acos</tt><big>(</big><em>mat</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/geog/#safe_acos"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.geog.safe_acos" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.geog.stations_by_distance">
+<tt class="descclassname">sigvisa.utils.geog.</tt><tt class="descname">stations_by_distance</tt><big>(</big><em>evlon</em>, <em>evlat</em>, <em>sites</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/geog/#stations_by_distance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.geog.stations_by_distance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.gradient_descent">
+<span id="gradient-descent-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">gradient_descent</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.gradient_descent" title="Permalink to this headline">¶</a></h2>
+<dl class="exception">
+<dt id="sigvisa.utils.gradient_descent.LineSearchFailed">
+<em class="property">exception </em><tt class="descclassname">sigvisa.utils.gradient_descent.</tt><tt class="descname">LineSearchFailed</tt><a class="reference internal" href="../_modules/sigvisa/utils/gradient_descent/#LineSearchFailed"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gradient_descent.LineSearchFailed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gradient_descent.approx_gradient">
+<tt class="descclassname">sigvisa.utils.gradient_descent.</tt><tt class="descname">approx_gradient</tt><big>(</big><em>f</em>, <em>x0</em>, <em>eps</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gradient_descent/#approx_gradient"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gradient_descent.approx_gradient" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gradient_descent.backtracking_line_search">
+<tt class="descclassname">sigvisa.utils.gradient_descent.</tt><tt class="descname">backtracking_line_search</tt><big>(</big><em>f</em>, <em>x</em>, <em>step</em>, <em>grad_x</em>, <em>alpha</em>, <em>beta</em>, <em>max_iters=1000</em>, <em>low_bounds=None</em>, <em>high_bounds=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gradient_descent/#backtracking_line_search"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gradient_descent.backtracking_line_search" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gradient_descent.coord_steps">
+<tt class="descclassname">sigvisa.utils.gradient_descent.</tt><tt class="descname">coord_steps</tt><big>(</big><em>f</em>, <em>x</em>, <em>eps=0.0001</em>, <em>bounds=None</em>, <em>maxfun='this_argument_is_ignored'</em>, <em>disp=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gradient_descent/#coord_steps"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gradient_descent.coord_steps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gradient_descent.gradient_descent">
+<tt class="descclassname">sigvisa.utils.gradient_descent.</tt><tt class="descname">gradient_descent</tt><big>(</big><em>f</em>, <em>x0</em>, <em>eps=0.0001</em>, <em>stopping_eps=0.01</em>, <em>alpha=0.3</em>, <em>beta=0.9</em>, <em>f_grad=None</em>, <em>bounds=None</em>, <em>max_iters=999999</em>, <em>maxfun='this_argment_is_ignored'</em>, <em>return_details=False</em>, <em>disp=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gradient_descent/#gradient_descent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gradient_descent.gradient_descent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gradient descent with backtracking line search.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gradient_descent.project_into_bounds">
+<tt class="descclassname">sigvisa.utils.gradient_descent.</tt><tt class="descname">project_into_bounds</tt><big>(</big><em>x</em>, <em>low_bounds</em>, <em>high_bounds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gradient_descent/#project_into_bounds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gradient_descent.project_into_bounds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.gradient_descent.unpack_bounds">
+<tt class="descclassname">sigvisa.utils.gradient_descent.</tt><tt class="descname">unpack_bounds</tt><big>(</big><em>bounds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/gradient_descent/#unpack_bounds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.gradient_descent.unpack_bounds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.interaction">
+<span id="interaction-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">interaction</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.interaction" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.interaction.query_yes_no">
+<tt class="descclassname">sigvisa.utils.interaction.</tt><tt class="descname">query_yes_no</tt><big>(</big><em>question</em>, <em>default='yes'</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/interaction/#query_yes_no"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.interaction.query_yes_no" title="Permalink to this definition">¶</a></dt>
+<dd><p>Ask a yes/no/quit question via raw_input() and return their answer.</p>
+<p>&#8220;question&#8221; is a string that is presented to the user.
+&#8220;default&#8221; is the presumed answer if the user just hits &lt;Enter&gt;.</p>
+<blockquote>
+<div>It must be &#8220;yes&#8221; (the default), &#8220;no&#8221;, &#8220;quit&#8221; or None (meaning
+an answer is required of the user).</div></blockquote>
+<p>The &#8220;answer&#8221; return value is one of &#8220;yes&#8221;, &#8220;no&#8221; or &#8220;quit&#8221;.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.kdensity">
+<span id="kdensity-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">kdensity</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.kdensity" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.kdensity.kdensity_cdf">
+<tt class="descclassname">sigvisa.utils.kdensity.</tt><tt class="descname">kdensity_cdf</tt><big>(</big><em>min</em>, <em>max</em>, <em>step</em>, <em>dens</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/kdensity/#kdensity_cdf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.kdensity.kdensity_cdf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.kdensity.kdensity_estimate">
+<tt class="descclassname">sigvisa.utils.kdensity.</tt><tt class="descname">kdensity_estimate</tt><big>(</big><em>min</em>, <em>max</em>, <em>step</em>, <em>vals</em>, <em>densfn</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/kdensity/#kdensity_estimate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.kdensity.kdensity_estimate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the density at each of the points min through max (not including)
+in steps of step</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.kdensity.kdensity_estimate_bw">
+<tt class="descclassname">sigvisa.utils.kdensity.</tt><tt class="descname">kdensity_estimate_bw</tt><big>(</big><em>min</em>, <em>max</em>, <em>step</em>, <em>vals</em>, <em>densfn_bw</em>, <em>bwrange</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/kdensity/#kdensity_estimate_bw"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.kdensity.kdensity_estimate_bw" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the density at each of the points min through max (not including)
+in steps of step plus the optimal bandwidth</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.kdensity.kdensity_pdf">
+<tt class="descclassname">sigvisa.utils.kdensity.</tt><tt class="descname">kdensity_pdf</tt><big>(</big><em>min</em>, <em>max</em>, <em>step</em>, <em>dens</em>, <em>val</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/kdensity/#kdensity_pdf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.kdensity.kdensity_pdf" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.kstest">
+<span id="kstest-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">kstest</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.kstest" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.kstest.kstest">
+<tt class="descclassname">sigvisa.utils.kstest.</tt><tt class="descname">kstest</tt><big>(</big><em>values</em>, <em>cdf</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/kstest/#kstest"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.kstest.kstest" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.loadrun">
+<span id="loadrun-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">loadrun</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.loadrun" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.loadrun.importtable">
+<tt class="descclassname">sigvisa.utils.loadrun.</tt><tt class="descname">importtable</tt><big>(</big><em>curs</em>, <em>tar</em>, <em>fname</em>, <em>tabname</em>, <em>inp_runid=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/loadrun/#importtable"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.loadrun.importtable" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.loadrun.main">
+<tt class="descclassname">sigvisa.utils.loadrun.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/loadrun/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.loadrun.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.nonparametric_regression">
+<span id="nonparametric-regression-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">nonparametric_regression</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.nonparametric_regression" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.nonparametric_regression.kernel_predict">
+<tt class="descclassname">sigvisa.utils.nonparametric_regression.</tt><tt class="descname">kernel_predict</tt><big>(</big><em>x</em>, <em>X</em>, <em>y</em>, <em>kernel=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/nonparametric_regression/#kernel_predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.nonparametric_regression.kernel_predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.nonparametric_regression.knn_predict">
+<tt class="descclassname">sigvisa.utils.nonparametric_regression.</tt><tt class="descname">knn_predict</tt><big>(</big><em>x</em>, <em>X</em>, <em>y</em>, <em>k</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/nonparametric_regression/#knn_predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.nonparametric_regression.knn_predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.nonparametric_regression.main">
+<tt class="descclassname">sigvisa.utils.nonparametric_regression.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/nonparametric_regression/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.nonparametric_regression.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.nonparametric_regression.plot_interpolated_surface">
+<tt class="descclassname">sigvisa.utils.nonparametric_regression.</tt><tt class="descname">plot_interpolated_surface</tt><big>(</big><em>X</em>, <em>y</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/nonparametric_regression/#plot_interpolated_surface"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.nonparametric_regression.plot_interpolated_surface" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.saverun">
+<span id="saverun-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">saverun</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.saverun" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.saverun.export">
+<tt class="descclassname">sigvisa.utils.saverun.</tt><tt class="descname">export</tt><big>(</big><em>curs</em>, <em>tablename</em>, <em>runid</em>, <em>filename</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/saverun/#export"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.saverun.export" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.saverun.main">
+<tt class="descclassname">sigvisa.utils.saverun.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/saverun/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.saverun.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.time2date">
+<span id="time2date-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">time2date</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.time2date" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.time2date.main">
+<tt class="descclassname">sigvisa.utils.time2date.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/time2date/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.time2date.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.utils.wave_sta">
+<span id="wave-sta-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">wave_sta</span></tt> Module<a class="headerlink" href="#module-sigvisa.utils.wave_sta" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.utils.wave_sta.main">
+<tt class="descclassname">sigvisa.utils.wave_sta.</tt><tt class="descname">main</tt><big>(</big><em>param_dirname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/wave_sta/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.wave_sta.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.wave_sta.plot_spectrum">
+<tt class="descclassname">sigvisa.utils.wave_sta.</tt><tt class="descname">plot_spectrum</tt><big>(</big><em>options</em>, <em>cursor</em>, <em>sta</em>, <em>chan</em>, <em>rawdata</em>, <em>start_time</em>, <em>end_time</em>, <em>samprate</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/wave_sta/#plot_spectrum"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.wave_sta.plot_spectrum" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.utils.wave_sta.plot_stalta">
+<tt class="descclassname">sigvisa.utils.wave_sta.</tt><tt class="descname">plot_stalta</tt><big>(</big><em>options</em>, <em>cursor</em>, <em>sta</em>, <em>start_time</em>, <em>end_time</em>, <em>filt_data</em>, <em>samprate</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/utils/wave_sta/#plot_stalta"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.utils.wave_sta.plot_stalta" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="waveform-module">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">waveform</span></tt> Module<a class="headerlink" href="#waveform-module" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">utils Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.utils.EC2"><tt class="docutils literal"><span class="pre">EC2</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.GMM"><tt class="docutils literal"><span class="pre">GMM</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.Laplace"><tt class="docutils literal"><span class="pre">Laplace</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.LinearModel"><tt class="docutils literal"><span class="pre">LinearModel</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.LogNormal"><tt class="docutils literal"><span class="pre">LogNormal</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.LogisticModel"><tt class="docutils literal"><span class="pre">LogisticModel</span></tt> Module</a></li>
+<li><a class="reference internal" href="#arrival-overlaps-module"><tt class="docutils literal"><span class="pre">arrival_overlaps</span></tt> Module</a></li>
+<li><a class="reference internal" href="#closest-stations-module"><tt class="docutils literal"><span class="pre">closest_stations</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.date2time"><tt class="docutils literal"><span class="pre">date2time</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.draw_earth"><tt class="docutils literal"><span class="pre">draw_earth</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.gamma"><tt class="docutils literal"><span class="pre">gamma</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.geog"><tt class="docutils literal"><span class="pre">geog</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.gradient_descent"><tt class="docutils literal"><span class="pre">gradient_descent</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.interaction"><tt class="docutils literal"><span class="pre">interaction</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.kdensity"><tt class="docutils literal"><span class="pre">kdensity</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.kstest"><tt class="docutils literal"><span class="pre">kstest</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.loadrun"><tt class="docutils literal"><span class="pre">loadrun</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.nonparametric_regression"><tt class="docutils literal"><span class="pre">nonparametric_regression</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.saverun"><tt class="docutils literal"><span class="pre">saverun</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.time2date"><tt class="docutils literal"><span class="pre">time2date</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.utils.wave_sta"><tt class="docutils literal"><span class="pre">wave_sta</span></tt> Module</a></li>
+<li><a class="reference internal" href="#waveform-module"><tt class="docutils literal"><span class="pre">waveform</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.tests/"
+                        title="previous chapter">tests Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.utils.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.tests/" title="tests Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

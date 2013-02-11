@@ -1,0 +1,453 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.ec2_infer &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../" />
+    <link rel="up" title="Module code" href="../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.ec2_infer</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># master process for distributed inference</span>
+<span class="c">#</span>
+<span class="c"># This will first farm out the job of birth proposals to be run by each</span>
+<span class="c"># node.</span>
+<span class="c"># The results will be collected from all the nodes and then a final pass will</span>
+<span class="c"># be run with the collected events.</span>
+<span class="c">#</span>
+<span class="c"># The only options that are interpreted are -k or --skip, -r or --hours,</span>
+<span class="c"># and -l or --label. The other options are passed to infer.py as is.</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">shlex</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">MySQLdb</span>
+<span class="kn">from</span> <span class="nn">ec2_start</span> <span class="kn">import</span> <span class="n">locate_keyname</span>
+<span class="kn">import</span> <span class="nn">sigvisa.learn</span>
+
+<span class="c"># we will divide the work with the following time granularity</span>
+<span class="n">TIME_QUANT</span> <span class="o">=</span> <span class="mi">900</span>
+
+<span class="c"># unbuffer stdout</span>
+
+
+<div class="viewcode-block" id="Unbuffered"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_infer.Unbuffered">[docs]</a><span class="k">class</span> <span class="nc">Unbuffered</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stream</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stream</span> <span class="o">=</span> <span class="n">stream</span>
+
+<div class="viewcode-block" id="Unbuffered.write"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_infer.Unbuffered.write">[docs]</a>    <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stream</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stream</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">__getattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">stream</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span></div>
+<span class="n">sys</span><span class="o">.</span><span class="n">stdout</span> <span class="o">=</span> <span class="n">Unbuffered</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_infer.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">param_dirname</span><span class="p">):</span>
+
+    <span class="n">args</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+
+    <span class="n">ec2keyname</span> <span class="o">=</span> <span class="n">locate_keyname</span><span class="p">()</span>
+
+    <span class="n">hours</span> <span class="o">=</span> <span class="n">parse_remove</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--hours&quot;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">hours</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">hours</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">hours</span><span class="p">)</span>
+
+    <span class="n">skip</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">parse_remove</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&quot;-k&quot;</span><span class="p">,</span> <span class="s">&quot;--skip&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+    <span class="n">label</span> <span class="o">=</span> <span class="n">parse_remove</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&quot;-l&quot;</span><span class="p">,</span> <span class="s">&quot;--label&quot;</span><span class="p">,</span> <span class="s">&quot;validation&quot;</span><span class="p">)</span>
+
+    <span class="c"># remove any description and replace it with the key name</span>
+    <span class="n">descrip</span> <span class="o">=</span> <span class="n">parse_remove</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&quot;-d&quot;</span><span class="p">,</span> <span class="s">&quot;--descrip&quot;</span><span class="p">,</span> <span class="s">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">args</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s">&quot;-d&quot;</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">])</span>
+
+    <span class="n">email</span> <span class="o">=</span> <span class="n">parse_remove</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;--email&quot;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+
+    <span class="c"># look for any datafile directive</span>
+    <span class="n">datafile</span> <span class="o">=</span> <span class="n">parse_remove</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;--datafile&quot;</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">datafile</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s">&quot;--datafile&quot;</span><span class="p">,</span> <span class="n">datafile</span><span class="p">])</span>
+
+    <span class="k">print</span> <span class="s">&quot;key&quot;</span><span class="p">,</span> <span class="n">ec2keyname</span>
+    <span class="k">print</span> <span class="s">&quot;descrip&quot;</span><span class="p">,</span> <span class="n">descrip</span>
+    <span class="k">print</span> <span class="s">&quot;label&quot;</span><span class="p">,</span> <span class="n">label</span>
+    <span class="k">print</span> <span class="s">&quot;datafile&quot;</span><span class="p">,</span> <span class="n">datafile</span>
+    <span class="k">print</span> <span class="s">&quot;hours&quot;</span><span class="p">,</span> <span class="n">hours</span>
+    <span class="k">print</span> <span class="s">&quot;skip&quot;</span><span class="p">,</span> <span class="n">skip</span>
+    <span class="k">print</span> <span class="s">&quot;rest:&quot;</span><span class="p">,</span> <span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+
+    <span class="c"># read all the instance names</span>
+    <span class="n">hostnames</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&quot;HOME&quot;</span><span class="p">),</span> <span class="n">ec2keyname</span> <span class="o">+</span> <span class="s">&quot;.instid&quot;</span><span class="p">)):</span>
+        <span class="n">hostnames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="k">print</span> <span class="s">&quot;hosts:&quot;</span><span class="p">,</span> <span class="n">hostnames</span>
+
+    <span class="c"># now read the data to deduce the starting and ending time</span>
+    <span class="k">if</span> <span class="n">datafile</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">detections</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span> <span class="n">leb_evlist</span><span class="p">,</span>\
+            <span class="n">sel3_events</span><span class="p">,</span> <span class="n">sel3_evlist</span><span class="p">,</span> <span class="n">site_up</span><span class="p">,</span> <span class="n">sites</span><span class="p">,</span> <span class="n">phasenames</span><span class="p">,</span> \
+            <span class="n">phasetimedef</span><span class="p">,</span> <span class="n">sitenames</span> \
+            <span class="o">=</span> <span class="n">learn</span><span class="o">.</span><span class="n">read_datafile_and_sitephase</span><span class="p">(</span><span class="n">datafile</span><span class="p">,</span> <span class="n">param_dirname</span><span class="p">,</span>
+                                                <span class="n">hours</span><span class="o">=</span><span class="n">hours</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="n">skip</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">detections</span><span class="p">,</span> <span class="n">leb_events</span><span class="p">,</span> <span class="n">leb_evlist</span><span class="p">,</span> <span class="n">sel3_events</span><span class="p">,</span> \
+            <span class="n">sel3_evlist</span><span class="p">,</span> <span class="n">site_up</span><span class="p">,</span> <span class="n">sites</span><span class="p">,</span> <span class="n">phasenames</span><span class="p">,</span> <span class="n">phasetimedef</span> \
+            <span class="o">=</span> <span class="n">read_data</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">hours</span><span class="o">=</span><span class="n">hours</span><span class="p">,</span> <span class="n">skip</span><span class="o">=</span><span class="n">skip</span><span class="p">)</span>
+
+    <span class="c"># get the current max runid</span>
+    <span class="n">localconn</span> <span class="o">=</span> <span class="n">MySQLdb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="s">&quot;ctbt&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="s">&quot;ctbt3mos&quot;</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s">&quot;127.0.0.1&quot;</span><span class="p">,</span>
+                                <span class="n">port</span><span class="o">=</span><span class="mi">3306</span><span class="p">)</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">localconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select max(runid) from visa_run&quot;</span><span class="p">)</span>
+    <span class="n">prevmaxrunid</span><span class="p">,</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+
+    <span class="c"># count the number of detections in each hour and divide the hours between</span>
+    <span class="c"># the slaves so that each slave has approximately the same total number of</span>
+    <span class="c"># the square of the number of detections</span>
+    <span class="n">hr_cnt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">((</span><span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">)</span> <span class="o">/</span> <span class="n">TIME_QUANT</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">det</span> <span class="ow">in</span> <span class="n">detections</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">det</span><span class="p">[</span><span class="n">DET_TIME_COL</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">end_time</span><span class="p">:</span>
+            <span class="n">hr_cnt</span><span class="p">[(</span><span class="n">det</span><span class="p">[</span><span class="n">DET_TIME_COL</span><span class="p">]</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">)</span> <span class="o">//</span> <span class="n">TIME_QUANT</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">hr_cnt</span> <span class="o">=</span> <span class="n">hr_cnt</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="c"># the target share for each host</span>
+    <span class="n">tgtcnt</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">hr_cnt</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">hostnames</span><span class="p">)</span>
+
+    <span class="n">host_ranges</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">curr_skip</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">curr_cnt</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">cnt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">hr_cnt</span><span class="p">):</span>
+        <span class="n">curr_cnt</span> <span class="o">+=</span> <span class="n">cnt</span>
+        <span class="k">if</span> <span class="n">curr_cnt</span> <span class="o">&gt;=</span> <span class="n">tgtcnt</span> <span class="ow">or</span> <span class="n">idx</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">hr_cnt</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">host_ranges</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">start_time</span> <span class="o">+</span> <span class="n">curr_skip</span> <span class="o">*</span> <span class="n">TIME_QUANT</span><span class="p">,</span>
+                                <span class="nb">min</span><span class="p">(</span><span class="n">start_time</span> <span class="o">+</span> <span class="p">(</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">TIME_QUANT</span><span class="p">,</span>
+                                    <span class="n">end_time</span><span class="p">)))</span>
+            <span class="n">curr_skip</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">curr_cnt</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="c"># complete the host ranges for all the other hosts with dummy values</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">hostnames</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">host_ranges</span><span class="p">)):</span>
+        <span class="n">host_ranges</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">end_time</span> <span class="o">-</span> <span class="mi">50</span><span class="p">,</span> <span class="n">end_time</span><span class="p">))</span>
+
+    <span class="k">print</span> <span class="s">&quot;Host Ranges:&quot;</span><span class="p">,</span> <span class="n">host_ranges</span>
+
+    <span class="c"># now divide the job among all the hosts, we give each host 50 seconds</span>
+    <span class="c"># extra to ensure that events on the border between the two hosts are</span>
+    <span class="c"># not squeezed</span>
+    <span class="c"># we will also open a tunnel in the background to each of the hosts so that</span>
+    <span class="c"># we can monitor their progress using MySQL</span>
+    <span class="k">for</span> <span class="n">hostidx</span><span class="p">,</span> <span class="p">(</span><span class="n">hostname</span><span class="p">,</span> <span class="p">(</span><span class="n">host_start</span><span class="p">,</span> <span class="n">host_end</span><span class="p">))</span>\
+            <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">hostnames</span><span class="p">,</span> <span class="n">host_ranges</span><span class="p">)):</span>
+        <span class="c"># open a tunnel to the host in the background</span>
+        <span class="k">while</span> <span class="n">ssh_tunnel</span><span class="p">(</span><span class="n">hostname</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">,</span> <span class="mi">3307</span> <span class="o">+</span> <span class="n">hostidx</span><span class="p">,</span> <span class="mi">3306</span><span class="p">):</span>
+            <span class="k">print</span> <span class="s">&quot;Retrying ssh_tunnel to hostidx </span><span class="si">%d</span><span class="s"> host </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">hostidx</span><span class="p">,</span> <span class="n">hostname</span><span class="p">)</span>
+        <span class="c"># start inference on the host also in the background</span>
+        <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">hostname</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">,</span> <span class="s">&quot;cd netvisa; utils/bgjob python -u &quot;</span>
+                <span class="s">&quot;infer.py </span><span class="si">%s</span><span class="s"> -n 0 -l </span><span class="si">%s</span><span class="s"> -k </span><span class="si">%f</span><span class="s"> -r </span><span class="si">%f</span><span class="s">&quot;</span>
+                <span class="o">%</span> <span class="p">(</span><span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="p">),</span> <span class="n">label</span><span class="p">,</span> <span class="n">host_start</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">host_end</span> <span class="o">+</span> <span class="mi">50</span><span class="p">,</span> <span class="n">end_time</span><span class="p">)))</span>
+
+    <span class="c"># first wait for the local host to get started with its run to avoid any</span>
+    <span class="c"># confusion in the runids</span>
+    <span class="k">print</span> <span class="s">&quot;Waiting for local run to start...&quot;</span><span class="p">,</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">localconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">runid</span> <span class="o">=</span> <span class="n">prevmaxrunid</span>
+    <span class="k">while</span> <span class="n">runid</span> <span class="o">==</span> <span class="n">prevmaxrunid</span><span class="p">:</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select max(runid) from visa_run&quot;</span><span class="p">)</span>
+        <span class="n">runid</span><span class="p">,</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&quot;done&quot;</span>
+
+    <span class="c"># NOTE: the variable &#39;runid&#39; now contains the runid which is being used by</span>
+    <span class="c"># all the hosts to run the above propose job</span>
+
+    <span class="c"># create a new run for storing the proposal</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;insert into visa_run(run_start, &quot;</span>
+                   <span class="s">&quot;data_start, descrip, numsamples, window, step) &quot;</span>
+                   <span class="s">&quot;values (now(), </span><span class="si">%f</span><span class="s">, &#39;</span><span class="si">%s</span><span class="s">-propose (</span><span class="si">%s</span><span class="s">)&#39;, 0, 0, 0)&quot;</span> <span class="o">%</span>
+                  <span class="p">(</span><span class="n">start_time</span><span class="p">,</span> <span class="n">descrip</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">))</span>
+    <span class="n">localconn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select max(runid) from visa_run&quot;</span><span class="p">)</span>
+    <span class="n">proprunid</span><span class="p">,</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+
+    <span class="c"># we are closing and reopening the connections to avoid errors caused by</span>
+    <span class="c"># the MySQL server going away</span>
+    <span class="n">localconn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="n">host_cpus</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c"># for each host check if it has completed and if so copy over the events</span>
+    <span class="c"># and shutdown the host, also record the cpu time used</span>
+    <span class="n">pending_hostidcs</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">hostnames</span><span class="p">)))</span>
+    <span class="n">num_prop_origin</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">connect_errors</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">propose_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">pending_hostidcs</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">hostidx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">hostnames</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">hostidx</span> <span class="ow">in</span> <span class="n">pending_hostidcs</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>                   <span class="c"># don&#39;t query too often</span>
+                <span class="c"># connect to the MySQL database on the host</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="c"># a connect timeout is needed because the host can be overloaded</span>
+                    <span class="c"># due to heavy activity</span>
+                    <span class="n">hostconn</span> <span class="o">=</span> <span class="n">MySQLdb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="s">&quot;ctbt&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="s">&quot;ctbt3mos&quot;</span><span class="p">,</span>
+                                               <span class="n">host</span><span class="o">=</span><span class="s">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">3307</span> <span class="o">+</span> <span class="n">hostidx</span><span class="p">,</span>
+                                               <span class="n">connect_timeout</span><span class="o">=</span><span class="mi">300</span><span class="p">)</span>
+                <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="n">MySQLdb</span><span class="o">.</span><span class="n">OperationalError</span><span class="p">):</span>
+                    <span class="k">print</span> <span class="s">&quot;Error connecting to MySQL db of hostidx </span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">hostidx</span>
+                    <span class="n">connect_errors</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">connect_errors</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">:</span>
+                        <span class="k">raise</span>
+                <span class="n">hostcursor</span> <span class="o">=</span> <span class="n">hostconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+                <span class="c"># if the run has not even started then skip it</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">hostcursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select f1, data_end from visa_run &quot;</span>
+                                          <span class="s">&quot;where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">runid</span><span class="p">):</span>
+                    <span class="n">hostconn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                    <span class="k">continue</span>
+                <span class="n">host_f1</span><span class="p">,</span> <span class="n">host_data_end</span> <span class="o">=</span> <span class="n">hostcursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+                <span class="c"># when the run is over it populates the f1 column</span>
+                <span class="k">if</span> <span class="n">host_f1</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="c"># we will copy over the results to the current machine</span>
+                    <span class="n">localconn</span> <span class="o">=</span> <span class="n">MySQLdb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="s">&quot;ctbt&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="s">&quot;ctbt3mos&quot;</span><span class="p">,</span>
+                                                <span class="n">host</span><span class="o">=</span><span class="s">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">3306</span><span class="p">)</span>
+                    <span class="n">cursor</span> <span class="o">=</span> <span class="n">localconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+                    <span class="c"># we will pull over all the events (even those in the extra</span>
+                    <span class="c"># 50 second margin)</span>
+                    <span class="n">hostcursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;select lon, lat, depth, time, mb from visa_origin&quot;</span>
+                                       <span class="s">&quot; where runid=</span><span class="si">%d</span><span class="s">&quot;</span>
+                                       <span class="o">%</span> <span class="p">(</span><span class="n">runid</span><span class="p">,))</span>
+                    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">hostcursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">():</span>
+                        <span class="n">num_prop_origin</span> <span class="o">+=</span> <span class="mi">1</span>
+                        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;insert into visa_origin(lon, lat, depth, time, mb,&quot;</span>
+                                       <span class="s">&quot;orid, runid) values (</span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%f</span><span class="s">, </span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&quot;</span>
+                                       <span class="o">%</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span>
+                                          <span class="n">num_prop_origin</span><span class="p">,</span> <span class="n">proprunid</span><span class="p">))</span>
+
+                    <span class="c"># compute the amount of time spent by this host</span>
+                    <span class="n">host_cpu</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">propose_start</span>
+                    <span class="k">print</span> <span class="s">&quot;Host </span><span class="si">%d</span><span class="s"> used </span><span class="si">%.1f</span><span class="s"> cpu seconds&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">hostidx</span><span class="p">,</span> <span class="n">host_cpu</span><span class="p">)</span>
+                    <span class="n">host_cpus</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">host_cpu</span><span class="p">)</span>
+
+                    <span class="c"># forget about this host for future iterations</span>
+                    <span class="n">pending_hostidcs</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">hostidx</span><span class="p">)</span>
+
+                    <span class="c"># and find the minimum pending host index, its start time is the</span>
+                    <span class="c"># maximum time that the propose run has covered</span>
+                    <span class="k">for</span> <span class="n">otheridx</span><span class="p">,</span> <span class="p">(</span><span class="n">othermin</span><span class="p">,</span> <span class="n">othermax</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">host_ranges</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">otheridx</span> <span class="ow">in</span> <span class="n">pending_hostidcs</span><span class="p">:</span>
+                            <span class="n">curr_max_time</span> <span class="o">=</span> <span class="n">othermin</span>
+                            <span class="k">break</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">curr_max_time</span> <span class="o">=</span> <span class="n">end_time</span>
+
+                    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s">&quot;update visa_run set run_end = now(), data_end = </span><span class="si">%f</span><span class="s">&quot;</span>
+                                   <span class="s">&quot; where runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">curr_max_time</span><span class="p">,</span> <span class="n">proprunid</span><span class="p">))</span>
+                    <span class="n">localconn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+                    <span class="n">localconn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+                    <span class="c"># we don&#39;t need a connection to this host anymore</span>
+                    <span class="n">hostconn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+                    <span class="c"># shutdown the host, but don&#39;t shut it down if it&#39;s the master!!</span>
+                    <span class="k">if</span> <span class="n">hostidx</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">print</span> <span class="s">&quot;shutting down hostidx&quot;</span><span class="p">,</span> <span class="n">hostidx</span>
+                        <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">hostnames</span><span class="p">[</span><span class="n">hostidx</span><span class="p">],</span> <span class="n">ec2keyname</span><span class="p">,</span>
+                                <span class="s">&quot;sudo /sbin/shutdown -h now&quot;</span><span class="p">)</span>
+
+    <span class="c"># save the results of the propose run</span>
+    <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;python -m utils.saverun </span><span class="si">%d</span><span class="s"> results-</span><span class="si">%s</span><span class="s">-propose.tar&quot;</span>
+             <span class="o">%</span> <span class="p">(</span><span class="n">proprunid</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">))</span>
+
+    <span class="c"># now we will do a run on the local host using the aggregated events as the</span>
+    <span class="c"># proposal run</span>
+    <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;python -u infer.py </span><span class="si">%s</span><span class="s"> -l </span><span class="si">%s</span><span class="s"> -k </span><span class="si">%f</span><span class="s"> -r </span><span class="si">%f</span><span class="s"> -p </span><span class="si">%d</span><span class="s">&quot;</span>
+             <span class="s">&quot; -d &#39;</span><span class="si">%s</span><span class="s"> (</span><span class="si">%s</span><span class="s">) (#nodes=</span><span class="si">%d</span><span class="s"> node-hrs: sum=</span><span class="si">%.1f</span><span class="s"> max=</span><span class="si">%.1f</span><span class="s">)&#39;&quot;</span>
+             <span class="o">%</span> <span class="p">(</span><span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="p">),</span> <span class="n">label</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span>
+                <span class="n">proprunid</span><span class="p">,</span> <span class="n">descrip</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">hostnames</span><span class="p">),</span>
+                <span class="nb">sum</span><span class="p">(</span><span class="n">host_cpus</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3600.</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">host_cpus</span><span class="p">)</span> <span class="o">/</span> <span class="mf">3600.</span><span class="p">))</span>
+
+    <span class="c"># next we will save the results in a tar file</span>
+    <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;python -m utils.saverun </span><span class="si">%d</span><span class="s"> results-</span><span class="si">%s</span><span class="s">.tar&quot;</span>
+             <span class="o">%</span> <span class="p">(</span><span class="n">proprunid</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">))</span>
+
+    <span class="c"># if the user has requested email then send it out and shutdown</span>
+    <span class="k">if</span> <span class="n">email</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;echo | mutt -s </span><span class="si">%s</span><span class="s">-propose -a results-</span><span class="si">%s</span><span class="s">-propose.tar -- </span><span class="si">%s</span><span class="s">&quot;</span>
+                 <span class="o">%</span> <span class="p">(</span><span class="n">ec2keyname</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">,</span> <span class="n">email</span><span class="p">))</span>
+        <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;echo | mutt -s </span><span class="si">%s</span><span class="s"> -a results-</span><span class="si">%s</span><span class="s">.tar -- </span><span class="si">%s</span><span class="s">&quot;</span>
+                 <span class="o">%</span> <span class="p">(</span><span class="n">ec2keyname</span><span class="p">,</span> <span class="n">ec2keyname</span><span class="p">,</span> <span class="n">email</span><span class="p">))</span>
+        <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;sudo /sbin/shutdown -h now&quot;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ssh_tunnel"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_infer.ssh_tunnel">[docs]</a><span class="k">def</span> <span class="nf">ssh_tunnel</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="n">localport</span><span class="p">,</span> <span class="n">remoteport</span><span class="p">):</span>
+    <span class="n">keypath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&quot;HOME&quot;</span><span class="p">),</span> <span class="n">keyname</span><span class="p">)</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">retcode</span> <span class="o">=</span> <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=</span><span class="si">%s</span><span class="s">.hostkey -i </span><span class="si">%s</span><span class="s">.pem -fNg -L </span><span class="si">%d</span><span class="s">:127.0.0.1:</span><span class="si">%d</span><span class="s"> ubuntu@</span><span class="si">%s</span><span class="s">&quot;</span>
+                       <span class="o">%</span> <span class="p">(</span><span class="n">keypath</span><span class="p">,</span> <span class="n">keypath</span><span class="p">,</span> <span class="n">localport</span><span class="p">,</span> <span class="n">remoteport</span><span class="p">,</span> <span class="n">host</span><span class="p">))</span>
+    <span class="k">print</span> <span class="s">&quot;ssh_tunnel took </span><span class="si">%.1f</span><span class="s"> s&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">retcode</span>
+
+</div>
+<div class="viewcode-block" id="ssh_cmd"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_infer.ssh_cmd">[docs]</a><span class="k">def</span> <span class="nf">ssh_cmd</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="n">cmd</span><span class="p">):</span>
+    <span class="n">keypath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">&quot;HOME&quot;</span><span class="p">),</span> <span class="n">keyname</span><span class="p">)</span>
+    <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">retcode</span> <span class="o">=</span> <span class="n">exec_cmd</span><span class="p">(</span><span class="s">&quot;ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=</span><span class="si">%s</span><span class="s">.hostkey -i </span><span class="si">%s</span><span class="s">.pem ubuntu@</span><span class="si">%s</span><span class="s"> &#39;</span><span class="si">%s</span><span class="s">&#39;&quot;</span>
+                       <span class="o">%</span> <span class="p">(</span><span class="n">keypath</span><span class="p">,</span> <span class="n">keypath</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">cmd</span><span class="p">))</span>
+    <span class="k">print</span> <span class="s">&quot;ssh_cmd took </span><span class="si">%.1f</span><span class="s"> s&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">retcode</span>
+
+</div>
+<div class="viewcode-block" id="exec_cmd"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_infer.exec_cmd">[docs]</a><span class="k">def</span> <span class="nf">exec_cmd</span><span class="p">(</span><span class="n">cmd</span><span class="p">):</span>
+    <span class="n">proc</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">shlex</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">cmd</span><span class="p">))</span>
+    <span class="n">proc</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">proc</span><span class="o">.</span><span class="n">returncode</span>
+
+</div>
+<div class="viewcode-block" id="parse_remove"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_infer.parse_remove">[docs]</a><span class="k">def</span> <span class="nf">parse_remove</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">shortname</span><span class="p">,</span> <span class="n">longname</span><span class="p">,</span> <span class="n">default</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    parse the argument and return the value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">retval</span> <span class="o">=</span> <span class="n">default</span>
+
+    <span class="n">remove_indices</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">longname_eq</span> <span class="o">=</span> <span class="n">longname</span> <span class="o">+</span> <span class="s">&quot;=&quot;</span>
+
+    <span class="c"># scan the arguments</span>
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+        <span class="c"># skip this index if it has already been read as part of the previous one</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">remove_indices</span><span class="p">)</span> <span class="ow">and</span> <span class="n">idx</span> <span class="o">==</span> <span class="n">remove_indices</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+            <span class="k">continue</span>
+
+        <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="n">shortname</span> <span class="ow">or</span> <span class="n">val</span> <span class="o">==</span> <span class="n">longname</span> <span class="ow">and</span> <span class="p">(</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+            <span class="n">retval</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+            <span class="n">remove_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+            <span class="n">remove_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">val</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">longname_eq</span><span class="p">):</span>
+            <span class="n">retval</span> <span class="o">=</span> <span class="n">val</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">longname_eq</span><span class="p">):]</span>
+            <span class="n">remove_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">remove_indices</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">retval</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

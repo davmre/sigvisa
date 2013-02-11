@@ -1,0 +1,261 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.utils.geog &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.utils.geog</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">sigvisa.database.db</span>
+
+<span class="n">AVG_EARTH_RADIUS_KM</span> <span class="o">=</span> <span class="mf">6371.0</span>
+
+
+<div class="viewcode-block" id="lonlatstr"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.geog.lonlatstr">[docs]</a><span class="k">def</span> <span class="nf">lonlatstr</span><span class="p">(</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">):</span>
+    <span class="n">lon</span> <span class="o">=</span> <span class="p">(</span><span class="n">lon</span> <span class="o">+</span> <span class="mi">180</span><span class="p">)</span> <span class="o">%</span> <span class="mi">360</span> <span class="o">-</span> <span class="mi">180</span>
+
+    <span class="n">lonstr</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%.2f</span><span class="s"> W&quot;</span> <span class="o">%</span> <span class="o">-</span><span class="n">lon</span> <span class="k">if</span> <span class="n">lon</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s">&quot;</span><span class="si">%.2f</span><span class="s"> E&quot;</span> <span class="o">%</span> <span class="n">lon</span>
+    <span class="n">latstr</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%.2f</span><span class="s"> S&quot;</span> <span class="o">%</span> <span class="o">-</span><span class="n">lat</span> <span class="k">if</span> <span class="n">lat</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s">&quot;</span><span class="si">%.2f</span><span class="s"> N&quot;</span> <span class="o">%</span> <span class="n">lat</span>
+
+    <span class="k">return</span> <span class="n">lonstr</span> <span class="o">+</span> <span class="s">&quot; &quot;</span> <span class="o">+</span> <span class="n">latstr</span>
+
+
+<span class="c"># strip away any trailing errors which can cause arccos to return nan</span>
+<span class="c"># if mat is -1.0000000000000002 for example</span></div>
+<div class="viewcode-block" id="safe_acos"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.geog.safe_acos">[docs]</a><span class="k">def</span> <span class="nf">safe_acos</span><span class="p">(</span><span class="n">mat</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mat</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mat</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">mat</span><span class="p">)))</span>
+
+</div>
+<div class="viewcode-block" id="dist_deg"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.geog.dist_deg">[docs]</a><span class="k">def</span> <span class="nf">dist_deg</span><span class="p">(</span><span class="n">loc1</span><span class="p">,</span> <span class="n">loc2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute the great circle distance between two point on the earth&#39;s surface</span>
+<span class="sd">    in degrees.</span>
+<span class="sd">    loc1 and loc2 are pairs of longitude and latitude</span>
+<span class="sd">    &gt;&gt;&gt; int(dist_deg((10,0), (20, 0)))</span>
+<span class="sd">    10</span>
+<span class="sd">    &gt;&gt;&gt; int(dist_deg((10,0), (10, 45)))</span>
+<span class="sd">    45</span>
+<span class="sd">    &gt;&gt;&gt; int(dist_deg((-78, -12), (-10.25, 52)))</span>
+<span class="sd">    86</span>
+<span class="sd">    &gt;&gt;&gt; dist_deg((132.86521, -0.45606493), (132.86521, -0.45606493)) &lt; 1e-4</span>
+<span class="sd">    True</span>
+<span class="sd">    &gt;&gt;&gt; dist_deg((127.20443, 2.8123965), (127.20443, 2.8123965)) &lt; 1e-4</span>
+<span class="sd">    True</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lon1</span><span class="p">,</span> <span class="n">lat1</span> <span class="o">=</span> <span class="n">loc1</span>
+    <span class="n">lon2</span><span class="p">,</span> <span class="n">lat2</span> <span class="o">=</span> <span class="n">loc2</span>
+
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">safe_acos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">lat1</span><span class="p">))</span>
+                                <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">lat2</span><span class="p">))</span>
+                                <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">lat1</span><span class="p">))</span>
+                                <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">lat2</span><span class="p">))</span>
+                                <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">lon2</span> <span class="o">-</span> <span class="n">lon1</span><span class="p">))))</span>
+
+</div>
+<div class="viewcode-block" id="dist_km"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.geog.dist_km">[docs]</a><span class="k">def</span> <span class="nf">dist_km</span><span class="p">(</span><span class="n">loc1</span><span class="p">,</span> <span class="n">loc2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the distance in km between two locations specified in degrees</span>
+<span class="sd">    loc = (longitude, latitude)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lon1</span><span class="p">,</span> <span class="n">lat1</span> <span class="o">=</span> <span class="n">loc1</span>
+    <span class="n">lon2</span><span class="p">,</span> <span class="n">lat2</span> <span class="o">=</span> <span class="n">loc2</span>
+
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">dist_deg</span><span class="p">(</span><span class="n">loc1</span><span class="p">,</span> <span class="n">loc2</span><span class="p">))</span> <span class="o">*</span> <span class="n">AVG_EARTH_RADIUS_KM</span>
+
+</div>
+<div class="viewcode-block" id="degdiff"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.geog.degdiff">[docs]</a><span class="k">def</span> <span class="nf">degdiff</span><span class="p">(</span><span class="n">angle1</span><span class="p">,</span> <span class="n">angle2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The difference of two angles given in degrees. The answer is an angle from</span>
+<span class="sd">    -180 to 180. Positive angles imply angle2 is clockwise from angle1 and -ve</span>
+<span class="sd">    angles imply counter-clockwise.</span>
+
+<span class="sd">    &gt;&gt;&gt; int(degdiff(40, 30))</span>
+<span class="sd">    -10</span>
+<span class="sd">    &gt;&gt;&gt; int(degdiff(30, 40))</span>
+<span class="sd">    10</span>
+<span class="sd">    &gt;&gt;&gt; int(degdiff(361, 40))</span>
+<span class="sd">    39</span>
+<span class="sd">    &gt;&gt;&gt; int(degdiff(40, 361))</span>
+<span class="sd">    -39</span>
+<span class="sd">    &gt;&gt;&gt; degdiff(40,250)</span>
+<span class="sd">    -150</span>
+<span class="sd">    &gt;&gt;&gt; degdiff(40,200)</span>
+<span class="sd">    160</span>
+<span class="sd">    &gt;&gt;&gt; degdiff(40, 219)</span>
+<span class="sd">    179</span>
+<span class="sd">    &gt;&gt;&gt; degdiff(40, 220)</span>
+<span class="sd">    180</span>
+<span class="sd">    &gt;&gt;&gt; degdiff(40, 221)</span>
+<span class="sd">    -179</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># bring the angle into the 0 to 360 range</span>
+    <span class="n">delta</span> <span class="o">=</span> <span class="p">((</span><span class="n">angle2</span> <span class="o">-</span> <span class="n">angle1</span><span class="p">)</span> <span class="o">+</span> <span class="mi">360</span><span class="p">)</span> <span class="o">%</span> <span class="mi">360</span>
+    <span class="c"># angles above 180 need to be shifted down by 360 degrees so that 181 is -179</span>
+    <span class="c"># 200 is -160 etc.</span>
+    <span class="k">return</span> <span class="n">delta</span> <span class="o">-</span> <span class="p">(</span><span class="n">delta</span> <span class="o">&gt;</span> <span class="mi">180</span><span class="p">)</span> <span class="o">*</span> <span class="mi">360</span>
+
+</div>
+<div class="viewcode-block" id="azimuth"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.geog.azimuth">[docs]</a><span class="k">def</span> <span class="nf">azimuth</span><span class="p">(</span><span class="n">loc1</span><span class="p">,</span> <span class="n">loc2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Angle in degrees measured clockwise from north starting at</span>
+<span class="sd">    loc1 towards loc2. loc1 and loc2 are (longitude, latitude) in degrees.</span>
+<span class="sd">    &gt;&gt;&gt; int(azimuth((10,0), (20, 0)))</span>
+<span class="sd">    90</span>
+<span class="sd">    &gt;&gt;&gt; int(azimuth((20,0), (10, 0)))</span>
+<span class="sd">    270</span>
+<span class="sd">    &gt;&gt;&gt; int(azimuth((10,0), (10, 45)))</span>
+<span class="sd">    0</span>
+<span class="sd">    &gt;&gt;&gt; azimuth((10, 45), (10, 0))</span>
+<span class="sd">    180.0</span>
+<span class="sd">    &gt;&gt;&gt; int(azimuth((133.9, -23.665), (132.6, -.83)))</span>
+<span class="sd">    356</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sin_delta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">dist_deg</span><span class="p">(</span><span class="n">loc1</span><span class="p">,</span> <span class="n">loc2</span><span class="p">)))</span>
+
+    <span class="c"># convert to degrees and the latitude to colatitude</span>
+    <span class="n">phi1</span><span class="p">,</span> <span class="n">theta1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">loc1</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="mf">90.0</span> <span class="o">-</span> <span class="n">loc1</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">phi2</span><span class="p">,</span> <span class="n">theta2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">loc2</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="mf">90.0</span> <span class="o">-</span> <span class="n">loc2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="n">cos_zeta</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">theta2</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">theta1</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">theta2</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">theta1</span><span class="p">)</span>
+                <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">phi2</span> <span class="o">-</span> <span class="n">phi1</span><span class="p">))</span> <span class="o">/</span> <span class="n">sin_delta</span>
+
+    <span class="c"># zeta known accurate upto half-circle</span>
+    <span class="n">half_zeta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">safe_acos</span><span class="p">(</span><span class="n">cos_zeta</span><span class="p">))</span>
+
+    <span class="n">east</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">phi2</span> <span class="o">-</span> <span class="n">phi1</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span>
+
+    <span class="n">zeta</span> <span class="o">=</span> <span class="n">half_zeta</span> <span class="o">*</span> <span class="n">east</span> <span class="o">+</span> <span class="p">(</span><span class="mi">360</span> <span class="o">-</span> <span class="n">half_zeta</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="o">~</span><span class="n">east</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">zeta</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_test</span><span class="p">():</span>
+    <span class="kn">import</span> <span class="nn">doctest</span>
+    <span class="n">doctest</span><span class="o">.</span><span class="n">testmod</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="stations_by_distance"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.geog.stations_by_distance">[docs]</a><span class="k">def</span> <span class="nf">stations_by_distance</span><span class="p">(</span><span class="n">evlon</span><span class="p">,</span> <span class="n">evlat</span><span class="p">,</span> <span class="n">sites</span><span class="p">):</span>
+    <span class="n">dist</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">site</span><span class="p">:</span> <span class="n">dist_km</span><span class="p">((</span><span class="n">evlon</span><span class="p">,</span> <span class="n">evlat</span><span class="p">),</span> <span class="p">(</span><span class="n">site</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">site</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="n">dists</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">dist</span><span class="p">,</span> <span class="n">sites</span><span class="p">)</span>
+    <span class="n">sites</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">dists</span><span class="p">,</span> <span class="n">sites</span><span class="p">)</span>
+    <span class="n">sites</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sites</span><span class="p">)),</span> <span class="n">sites</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">sites</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">site</span><span class="p">:</span> <span class="n">site</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">_test</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

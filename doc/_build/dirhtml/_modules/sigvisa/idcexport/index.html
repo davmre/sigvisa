@@ -1,0 +1,402 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.idcexport &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../" />
+    <link rel="up" title="Module code" href="../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.idcexport</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">creates a dataset from the IDC database</span>
+<span class="sd">Usage: python idcexport.py &lt;connect-string&gt; &lt;label&gt; &lt;start-time&gt; &lt;end-time&gt; &lt;data.tar&gt;</span>
+
+<span class="sd">The various tables in the dataset are</span>
+<span class="sd">o. README.txt</span>
+<span class="sd">   A text summary of the dataset.</span>
+<span class="sd">o. dataset.csv</span>
+<span class="sd">  - label</span>
+<span class="sd">  - start_time</span>
+<span class="sd">  - end_time</span>
+<span class="sd">o. site.csv</span>
+<span class="sd">  - sta</span>
+<span class="sd">  - lon</span>
+<span class="sd">  - lat</span>
+<span class="sd">  - elev</span>
+<span class="sd">  - isarray</span>
+<span class="sd">o. phase.csv</span>
+<span class="sd">  - phase</span>
+<span class="sd">  - istimedef</span>
+<span class="sd">o. idcx_arrival.csv &amp; leb_arrival.csv</span>
+<span class="sd">  - sta</span>
+<span class="sd">  - arid</span>
+<span class="sd">  - time</span>
+<span class="sd">  - deltime</span>
+<span class="sd">  - azimuth</span>
+<span class="sd">  - delaz</span>
+<span class="sd">  - slo</span>
+<span class="sd">  - delslo</span>
+<span class="sd">  - SNR</span>
+<span class="sd">  - iphase</span>
+<span class="sd">  - amplitude</span>
+<span class="sd">  - period</span>
+<span class="sd">o. leb_assoc.csv &amp; sel3_assoc.csv</span>
+<span class="sd">  - orid</span>
+<span class="sd">  - arid</span>
+<span class="sd">  - phase</span>
+<span class="sd">  - sta</span>
+<span class="sd">o. leb_origin.csv &amp; sel3_origin.csv</span>
+<span class="sd">  - lon</span>
+<span class="sd">  - lat</span>
+<span class="sd">  - depth</span>
+<span class="sd">  - time</span>
+<span class="sd">  - mb</span>
+<span class="sd">  - orid</span>
+
+<span class="sd">Example:</span>
+
+<span class="sd">To extract the Tohoku seismic data from vDEC:</span>
+
+<span class="sd">March 11 to March 13 2012</span>
+<span class="sd">&gt; python idcexport.py nimar/nimar@irdb tohoku-test 1299801600 1299974400 tohoku-test.tar --schemasuffix &quot;_ref.&quot;</span>
+
+<span class="sd">Dec 1 2010 to March 11 2012</span>
+<span class="sd">&gt; python idcexport.py nimar/nimar@irdb tohoku-train 1291161600 1299801600 tohoku-train.tar --schemasuffix &quot;_ref.&quot;</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">tarfile</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">import</span> <span class="nn">cx_Oracle</span>
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+
+<span class="n">TEMPNAME</span> <span class="o">=</span> <span class="s">&quot;tempsave.csv.</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">()</span>
+
+<span class="n">PHASES</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="p">(</span><span class="s">&quot;P&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;Pn&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;PKP&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;Sn&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;S&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;PKPbc&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;PcP&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;pP&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;Lg&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;PKPab&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;ScP&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;PKKPbc&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;Pg&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;Rg&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;tx&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;Sx&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;Px&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&quot;N&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+<span class="n">TIMEDEFPHASESET</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">PHASES</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">ALLPHASESET</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">PHASES</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="export_query"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.idcexport.export_query">[docs]</a><span class="k">def</span> <span class="nf">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">tar</span><span class="p">,</span> <span class="n">destfile</span><span class="p">,</span> <span class="n">filterconds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">returnrows</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">filterconds</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">filterconds</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c"># print query</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="s">&quot;wb&quot;</span><span class="p">),</span> <span class="n">quoting</span><span class="o">=</span><span class="n">csv</span><span class="o">.</span><span class="n">QUOTE_NONNUMERIC</span><span class="p">)</span>
+    <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+    <span class="n">output</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">cursor</span><span class="o">.</span><span class="n">description</span><span class="p">])</span>
+    <span class="n">rowcnt</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">row</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">break</span>
+
+        <span class="c"># check all the filter conditions</span>
+        <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">colnum</span><span class="p">]</span> <span class="ow">in</span> <span class="n">colset</span><span class="p">)</span> <span class="k">for</span> <span class="n">colnum</span><span class="p">,</span> <span class="n">colset</span> <span class="ow">in</span> <span class="n">filterconds</span><span class="p">)</span> \
+           <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">filterconds</span><span class="p">):</span>
+            <span class="k">continue</span>
+
+        <span class="n">output</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">returnrows</span><span class="p">:</span>
+            <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">rowcnt</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">del</span> <span class="n">output</span>
+    <span class="n">tar</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="n">arcname</span><span class="o">=</span><span class="n">destfile</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">returnrows</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">rows</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">rowcnt</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.idcexport.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="c">#</span>
+    <span class="c"># parse arguments</span>
+    <span class="c">#</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">set_usage</span><span class="p">(</span><span class="s">&quot;Usage: python %prog [options] &lt;connect-string&gt; &lt;label&gt; &quot;</span>
+                     <span class="s">&quot;&lt;start-time&gt; &lt;end-time&gt; &lt;output.tar&gt;&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--network&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;network&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;SEISMIC&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;export data from specified network (SEISMIC)&quot;</span><span class="p">,</span>
+                      <span class="n">metavar</span><span class="o">=</span><span class="s">&quot;NAME&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--schemasuffix&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;schemasuffix&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;.&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;suffix after schema e.g. &#39;_ref.&#39; (defaults to &#39;.&#39;)&quot;</span><span class="p">,</span>
+                      <span class="n">metavar</span><span class="o">=</span><span class="s">&quot;suffix&quot;</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">5</span><span class="p">:</span>
+        <span class="n">parser</span><span class="o">.</span><span class="n">print_help</span><span class="p">()</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">connstr</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">output_name</span> \
+        <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">float</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">3</span><span class="p">]),</span> <span class="n">args</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+
+    <span class="n">start_dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcfromtimestamp</span><span class="p">(</span><span class="n">start_time</span><span class="p">)</span>
+    <span class="n">start_yday</span> <span class="o">=</span> <span class="n">start_dt</span><span class="o">.</span><span class="n">year</span> <span class="o">*</span> <span class="mi">1000</span> <span class="o">+</span> <span class="n">start_dt</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()</span><span class="o">.</span><span class="n">tm_yday</span>
+    <span class="n">end_dt</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcfromtimestamp</span><span class="p">(</span><span class="n">end_time</span><span class="p">)</span>
+    <span class="n">end_yday</span> <span class="o">=</span> <span class="n">end_dt</span><span class="o">.</span><span class="n">year</span> <span class="o">*</span> <span class="mi">1000</span> <span class="o">+</span> <span class="n">end_dt</span><span class="o">.</span><span class="n">timetuple</span><span class="p">()</span><span class="o">.</span><span class="n">tm_yday</span>
+    <span class="k">print</span> <span class="s">&quot;Exporting data from&quot;</span><span class="p">,</span> <span class="n">start_dt</span><span class="p">,</span> <span class="s">&quot;to&quot;</span><span class="p">,</span> <span class="n">end_dt</span>
+
+    <span class="c"># connect to the database</span>
+    <span class="n">dbconn</span> <span class="o">=</span> <span class="n">cx_Oracle</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">connstr</span><span class="p">)</span>
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">dbconn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="c"># open the tar file</span>
+    <span class="n">tar</span> <span class="o">=</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">output_name</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s">&quot;w&quot;</span><span class="p">)</span>
+
+    <span class="c"># dataset.csv</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="s">&quot;wb&quot;</span><span class="p">),</span> <span class="n">quoting</span><span class="o">=</span><span class="n">csv</span><span class="o">.</span><span class="n">QUOTE_NONNUMERIC</span><span class="p">)</span>
+    <span class="n">output</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="s">&quot;label&quot;</span><span class="p">,</span> <span class="s">&quot;start_time&quot;</span><span class="p">,</span> <span class="s">&quot;end_time&quot;</span><span class="p">])</span>
+    <span class="n">output</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="n">label</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">])</span>
+    <span class="k">del</span> <span class="n">output</span>
+    <span class="n">tar</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="n">arcname</span><span class="o">=</span><span class="s">&quot;dataset.csv&quot;</span><span class="p">)</span>
+
+    <span class="c"># we want all the sites in the network which were on for the entire</span>
+    <span class="c"># duration of this dataset and they detected some arrival</span>
+    <span class="n">sitedata</span> <span class="o">=</span> <span class="n">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span> <span class="s">&quot;select site.sta, lon, lat, elev, &quot;</span>
+                            <span class="s">&quot;decode(statype, &#39;ar&#39;, 1, 0) isarray from static</span><span class="si">%s</span><span class="s">site site, &quot;</span>
+                            <span class="s">&quot;static</span><span class="si">%s</span><span class="s">affiliation aff where aff.net=&#39;</span><span class="si">%s</span><span class="s">&#39; and &quot;</span>
+                            <span class="s">&quot;aff.sta=site.sta and (site.ondate &lt; </span><span class="si">%d</span><span class="s">) and &quot;</span>
+                            <span class="s">&quot;((site.offdate=-1) or (site.offdate &gt; </span><span class="si">%d</span><span class="s">)) and exists &quot;</span>
+                            <span class="s">&quot;(select 1 from idcx</span><span class="si">%s</span><span class="s">arrival arr where arr.sta=site.sta &quot;</span>
+                            <span class="s">&quot; and arr.time between </span><span class="si">%f</span><span class="s"> and </span><span class="si">%f</span><span class="s">) order by 1&quot;</span>
+                            <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span>
+                               <span class="n">options</span><span class="o">.</span><span class="n">network</span><span class="p">,</span> <span class="n">start_yday</span><span class="p">,</span> <span class="n">end_yday</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span>
+                               <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">),</span> <span class="n">tar</span><span class="p">,</span> <span class="s">&quot;site.csv&quot;</span><span class="p">,</span> <span class="n">returnrows</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">staset</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">sitedata</span><span class="p">)</span>
+
+    <span class="n">output</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="s">&quot;wb&quot;</span><span class="p">),</span> <span class="n">quoting</span><span class="o">=</span><span class="n">csv</span><span class="o">.</span><span class="n">QUOTE_NONNUMERIC</span><span class="p">)</span>
+    <span class="n">output</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="s">&quot;phase&quot;</span><span class="p">,</span> <span class="s">&quot;istimedef&quot;</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">PHASES</span><span class="p">:</span>
+        <span class="n">output</span><span class="o">.</span><span class="n">writerow</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+    <span class="k">del</span> <span class="n">output</span>
+    <span class="n">tar</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="n">arcname</span><span class="o">=</span><span class="s">&quot;phase.csv&quot;</span><span class="p">)</span>
+
+    <span class="n">numlebori</span> <span class="o">=</span> <span class="n">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span>
+                             <span class="s">&quot;select lon, lat, depth, time, mb, orid from &quot;</span>
+                             <span class="s">&quot;leb</span><span class="si">%s</span><span class="s">origin where time between </span><span class="si">%d</span><span class="s"> and </span><span class="si">%d</span><span class="s"> &quot;</span>
+                             <span class="s">&quot;order by time&quot;</span>
+                             <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">),</span>
+                             <span class="n">tar</span><span class="p">,</span> <span class="s">&quot;leb_origin.csv&quot;</span><span class="p">)</span>
+
+    <span class="n">numlebass</span> <span class="o">=</span> <span class="n">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span>
+                             <span class="s">&quot;select orid, arid, phase, sta from leb</span><span class="si">%s</span><span class="s">assoc join &quot;</span>
+                             <span class="s">&quot;leb</span><span class="si">%s</span><span class="s">origin ori using (orid) join leb</span><span class="si">%s</span><span class="s">arrival arr &quot;</span>
+                             <span class="s">&quot;using (arid, sta) where ori.time between &quot;</span>
+                             <span class="s">&quot;</span><span class="si">%d</span><span class="s"> and </span><span class="si">%d</span><span class="s"> order by ori.time, arr.time&quot;</span>
+                             <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span>
+                             <span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">),</span>
+                             <span class="n">tar</span><span class="p">,</span> <span class="s">&quot;leb_assoc.csv&quot;</span><span class="p">,</span>
+                             <span class="p">[(</span><span class="mi">2</span><span class="p">,</span> <span class="n">TIMEDEFPHASESET</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">staset</span><span class="p">)])</span>
+
+    <span class="n">numsel3ori</span> <span class="o">=</span> <span class="n">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span>
+                              <span class="s">&quot;select lon, lat, depth, time, mb, orid from &quot;</span>
+                              <span class="s">&quot;sel3</span><span class="si">%s</span><span class="s">origin where time between </span><span class="si">%d</span><span class="s"> and </span><span class="si">%d</span><span class="s"> &quot;</span>
+                              <span class="s">&quot;order by time&quot;</span>
+                              <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">),</span>
+                              <span class="n">tar</span><span class="p">,</span> <span class="s">&quot;sel3_origin.csv&quot;</span><span class="p">)</span>
+
+    <span class="n">numsel3ass</span> <span class="o">=</span> <span class="n">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span>
+                              <span class="s">&quot;select orid, arid, phase, sta from sel3</span><span class="si">%s</span><span class="s">assoc join &quot;</span>
+                              <span class="s">&quot;sel3</span><span class="si">%s</span><span class="s">origin ori using (orid) join idcx</span><span class="si">%s</span><span class="s">arrival &quot;</span>
+                              <span class="s">&quot; arr using (arid, sta) where ori.time between &quot;</span>
+                              <span class="s">&quot;</span><span class="si">%d</span><span class="s"> and </span><span class="si">%d</span><span class="s"> order by ori.time, arr.time&quot;</span>
+                              <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span>
+                                 <span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">),</span>
+                              <span class="n">tar</span><span class="p">,</span> <span class="s">&quot;sel3_assoc.csv&quot;</span><span class="p">,</span>
+                              <span class="p">[(</span><span class="mi">2</span><span class="p">,</span> <span class="n">TIMEDEFPHASESET</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">staset</span><span class="p">)])</span>
+
+    <span class="c"># NOTE that we query arrivals for an additional 2000 seconds beyond the</span>
+    <span class="c"># end time</span>
+    <span class="n">numidcxarr</span> <span class="o">=</span> <span class="n">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span>
+                              <span class="s">&quot;select sta, arid, time, deltim, azimuth, &quot;</span>
+                              <span class="s">&quot;delaz, slow, delslo, snr, iphase, amp, &quot;</span>
+                              <span class="s">&quot;per from idcx</span><span class="si">%s</span><span class="s">arrival where time between &quot;</span>
+                              <span class="s">&quot;</span><span class="si">%d</span><span class="s"> and </span><span class="si">%d</span><span class="s"> order by time&quot;</span>
+                              <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span>
+                                 <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span> <span class="o">+</span> <span class="mi">2000</span><span class="p">),</span>
+                              <span class="n">tar</span><span class="p">,</span> <span class="s">&quot;idcx_arrival.csv&quot;</span><span class="p">,</span>
+                              <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="n">staset</span><span class="p">),</span> <span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="n">ALLPHASESET</span><span class="p">)])</span>
+
+    <span class="n">numlebarr</span> <span class="o">=</span> <span class="n">export_query</span><span class="p">(</span><span class="n">cursor</span><span class="p">,</span>
+                             <span class="s">&quot;select sta, arid, time, deltim, azimuth, &quot;</span>
+                             <span class="s">&quot;delaz, slow, delslo, snr, iphase, amp, &quot;</span>
+                             <span class="s">&quot;per from leb</span><span class="si">%s</span><span class="s">arrival where time between &quot;</span>
+                             <span class="s">&quot;</span><span class="si">%d</span><span class="s"> and </span><span class="si">%d</span><span class="s"> order by time&quot;</span>
+                             <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span>
+                                <span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span> <span class="o">+</span> <span class="mi">2000</span><span class="p">),</span>
+                             <span class="n">tar</span><span class="p">,</span> <span class="s">&quot;leb_arrival.csv&quot;</span><span class="p">,</span>
+                             <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="n">staset</span><span class="p">),</span> <span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="n">ALLPHASESET</span><span class="p">)])</span>
+
+    <span class="c"># create a readme file</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="s">&quot;wb&quot;</span><span class="p">)</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Data exported on&quot;</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Time range&quot;</span><span class="p">,</span> <span class="n">start_dt</span><span class="p">,</span> <span class="s">&quot;to&quot;</span><span class="p">,</span> <span class="n">end_dt</span><span class="p">,</span> <span class="s">&quot;(+2000 secs of arrivals)&quot;</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;(</span><span class="si">%.2f</span><span class="s"> to </span><span class="si">%.2f</span><span class="s"> and arrivals upto </span><span class="si">%.2f</span><span class="s">)&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">start_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">end_time</span> <span class="o">+</span> <span class="mi">2000</span><span class="p">)</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Network&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">network</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Table static</span><span class="si">%s</span><span class="s">site -- </span><span class="si">%d</span><span class="s"> sites, </span><span class="si">%d</span><span class="s"> arrays&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">sitedata</span><span class="p">),</span>
+           <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">sitedata</span><span class="p">))</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;</span><span class="si">%d</span><span class="s"> phases </span><span class="si">%d</span><span class="s"> timedefining&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">PHASES</span><span class="p">),</span>
+                                                <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">PHASES</span><span class="p">))</span>
+
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Table leb</span><span class="si">%s</span><span class="s">origin -- </span><span class="si">%d</span><span class="s"> rows&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">numlebori</span><span class="p">)</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Table leb</span><span class="si">%s</span><span class="s">assoc -- </span><span class="si">%d</span><span class="s"> rows&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">numlebass</span><span class="p">)</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Table leb</span><span class="si">%s</span><span class="s">arrival -- </span><span class="si">%d</span><span class="s"> rows&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">numlebarr</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Table sel3</span><span class="si">%s</span><span class="s">origin -- </span><span class="si">%d</span><span class="s"> rows&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">numsel3ori</span><span class="p">)</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Table sel3</span><span class="si">%s</span><span class="s">assoc -- </span><span class="si">%d</span><span class="s"> rows&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">numsel3ass</span><span class="p">)</span>
+    <span class="k">print</span> <span class="o">&gt;&gt;</span> <span class="n">fp</span><span class="p">,</span> <span class="s">&quot;Table idcx</span><span class="si">%s</span><span class="s">arrival -- </span><span class="si">%d</span><span class="s"> rows&quot;</span> \
+        <span class="o">%</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">schemasuffix</span><span class="p">,</span> <span class="n">numidcxarr</span><span class="p">)</span>
+
+    <span class="n">fp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">tar</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">TEMPNAME</span><span class="p">,</span> <span class="n">arcname</span><span class="o">=</span><span class="s">&quot;README.txt&quot;</span><span class="p">)</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">TEMPNAME</span><span class="p">)</span>
+    <span class="n">tar</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

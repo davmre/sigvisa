@@ -1,0 +1,208 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.models.wiggles.fourier_features &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../../" />
+    <link rel="up" title="Module code" href="../../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.models.wiggles.fourier_features</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">sigvisa.infer.optimize.optim_utils</span>
+<span class="kn">import</span> <span class="nn">scipy.io</span>
+<span class="kn">import</span> <span class="nn">cStringIO</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.wiggles.featurizer</span> <span class="kn">import</span> <span class="n">Featurizer</span>
+
+
+<div class="viewcode-block" id="FourierFeatures"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.fourier_features.FourierFeatures">[docs]</a><span class="k">class</span> <span class="nc">FourierFeatures</span><span class="p">(</span><span class="n">Featurizer</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fundamental</span><span class="o">=.</span><span class="mi">1</span><span class="p">,</span> <span class="n">min_freq</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">max_freq</span><span class="o">=</span><span class="mf">3.5</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fundamental</span> <span class="o">=</span> <span class="n">fundamental</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_freq</span> <span class="o">=</span> <span class="n">max_freq</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">min_freq</span> <span class="o">=</span> <span class="n">min_freq</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">srate</span> <span class="o">=</span> <span class="n">srate</span>
+
+<div class="viewcode-block" id="FourierFeatures.signal_from_features"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.fourier_features.FourierFeatures.signal_from_features">[docs]</a>    <span class="k">def</span> <span class="nf">signal_from_features</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+        <span class="n">srate</span> <span class="o">=</span> <span class="n">srate</span> <span class="k">if</span> <span class="n">srate</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">srate</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">len_seconds</span><span class="p">,</span> <span class="n">len_seconds</span> <span class="o">*</span> <span class="n">srate</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">len_seconds</span> <span class="o">*</span> <span class="n">srate</span><span class="p">,))</span>
+
+        <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">row</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">features</span><span class="p">):</span>
+            <span class="p">(</span><span class="n">amp</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span> <span class="o">=</span> <span class="n">row</span>
+
+<span class="c">#            (c1, c2) = row</span>
+            <span class="n">freq</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_freq</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">fundamental</span> <span class="o">*</span> <span class="n">i</span>
+<span class="c">#            basis1  =  np.sin(x*2*np.pi*freq)</span>
+<span class="c">#            basis2  =  np.cos(x*2*np.pi*freq)</span>
+
+<span class="c">#            s += c1 * basis1</span>
+<span class="c">#            s += c2 * basis2</span>
+
+            <span class="n">s</span> <span class="o">+=</span> <span class="n">amp</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">freq</span> <span class="o">+</span> <span class="n">phase</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">s</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">s</span>
+</div>
+<div class="viewcode-block" id="FourierFeatures.basis_decomposition"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.fourier_features.FourierFeatures.basis_decomposition">[docs]</a>    <span class="k">def</span> <span class="nf">basis_decomposition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">srate</span> <span class="o">=</span> <span class="n">srate</span> <span class="k">if</span> <span class="n">srate</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">srate</span>
+
+        <span class="n">n_features</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">max_freq</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_freq</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">fundamental</span><span class="p">)</span>
+        <span class="n">len_seconds</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">srate</span><span class="p">)</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">len_seconds</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">signal</span><span class="p">))</span>
+        <span class="k">assert</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">signal</span><span class="p">))</span>
+
+        <span class="n">features</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_features</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">n_features</span><span class="p">):</span>
+            <span class="n">freq</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fundamental</span> <span class="o">*</span> <span class="n">i</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_freq</span>
+
+            <span class="n">periods</span> <span class="o">=</span> <span class="n">freq</span> <span class="o">*</span> <span class="n">len_seconds</span>
+
+            <span class="n">basis1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">freq</span><span class="p">)</span>
+            <span class="n">basis2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">freq</span><span class="p">)</span>
+
+            <span class="n">b1d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">basis1</span><span class="p">,</span> <span class="n">basis1</span><span class="p">)</span>
+            <span class="n">b2d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">basis2</span><span class="p">,</span> <span class="n">basis2</span><span class="p">)</span>
+
+            <span class="n">c1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="n">basis1</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span>
+            <span class="n">c2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="n">basis2</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">c1</span><span class="p">):</span>
+                <span class="n">c1</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">c2</span><span class="p">):</span>
+                <span class="n">c2</span> <span class="o">=</span> <span class="mi">0</span>
+
+<span class="c">#            features[i, :] = [c1, c2]</span>
+
+            <span class="n">c</span> <span class="o">=</span> <span class="nb">complex</span><span class="p">(</span><span class="n">c1</span><span class="p">,</span> <span class="n">c2</span><span class="p">)</span>
+
+            <span class="p">(</span><span class="n">amp</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">c</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">angle</span><span class="p">(</span><span class="n">c</span><span class="p">))</span>
+            <span class="n">features</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="p">(</span><span class="n">amp</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">features</span>
+
+</div></div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.fourier_features.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="n">ff</span> <span class="o">=</span> <span class="n">FourierFeatures</span><span class="p">(</span><span class="n">fundamental</span><span class="o">=</span><span class="mi">1</span> <span class="o">/</span> <span class="mf">20.0</span><span class="p">,</span> <span class="n">min_freq</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">max_freq</span><span class="o">=</span><span class="mf">3.5</span><span class="p">)</span>
+
+<span class="c">#    wave = np.loadtxt(&quot;test.wave&quot;)</span>
+    <span class="n">features</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">35</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+    <span class="n">features</span><span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">wave</span> <span class="o">=</span> <span class="n">ff</span><span class="o">.</span><span class="n">signal_from_features</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+
+    <span class="n">wave</span> <span class="o">=</span> <span class="n">wave</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+
+    <span class="n">f</span> <span class="o">=</span> <span class="n">ff</span><span class="o">.</span><span class="n">basis_decomposition</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">f</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="c">#    plt.plot(features[:, 0])</span>
+
+    <span class="k">print</span> <span class="n">f</span>
+<span class="c">#    print features</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">ff</span><span class="o">.</span><span class="n">signal_from_features</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span> <span class="o">/</span> <span class="mi">40</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">wave</span><span class="p">)</span>
+
+    <span class="n">offby</span> <span class="o">=</span> <span class="n">s</span> <span class="o">/</span> <span class="n">wave</span>
+    <span class="k">print</span> <span class="s">&quot;off by&quot;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">offby</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">offby</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

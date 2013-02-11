@@ -1,0 +1,214 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.source.brune_source &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.source.brune_source</h1><div class="highlight"><pre>
+<span class="c"># Implements a Brune source spectrum model for natural seismic events.</span>
+<span class="c">#</span>
+<span class="c"># these routines refer to:</span>
+<span class="c"># Sipkin, &quot;A Correction to Body-wave Magnitude mb Based on Moment Magnitude MW&quot;. Seismological Research Letters, 2003.</span>
+<span class="c"># Myers et al, &quot;Lithospheric-scale structure across the Bolivian Andes&quot;. Journal of Geophysical Research, 1998.</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+
+
+<span class="kn">from</span> <span class="nn">sigvisa.source.common</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="c"># from sigvisa import Sigvisa</span>
+
+
+<div class="viewcode-block" id="short_band_to_hz"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.brune_source.short_band_to_hz">[docs]</a><span class="k">def</span> <span class="nf">short_band_to_hz</span><span class="p">(</span><span class="n">short_band</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">([</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">short_band</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]])</span>
+
+</div>
+<div class="viewcode-block" id="mb_to_M0"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.brune_source.mb_to_M0">[docs]</a><span class="k">def</span> <span class="nf">mb_to_M0</span><span class="p">(</span><span class="n">mb</span><span class="p">):</span>
+    <span class="c"># eqn (2) in Sipkin</span>
+    <span class="n">MW</span> <span class="o">=</span> <span class="mf">1.48</span> <span class="o">*</span> <span class="n">mb</span> <span class="o">-</span> <span class="mf">2.42</span>
+
+    <span class="c"># eqn (5) in Myers</span>
+    <span class="n">M0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">((</span><span class="mf">1.5</span> <span class="o">*</span> <span class="n">MW</span> <span class="o">+</span> <span class="mf">9.1</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">M0</span>
+
+</div>
+<div class="viewcode-block" id="source_freq_logamp"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.brune_source.source_freq_logamp">[docs]</a><span class="k">def</span> <span class="nf">source_freq_logamp</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">phase</span><span class="p">):</span>
+
+    <span class="c"># notation roughly follows eqn (2) in Fisk, and most constants are from Fisk as well</span>
+
+    <span class="n">P_phases</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;P&#39;</span><span class="p">,</span> <span class="s">&#39;Pn&#39;</span><span class="p">]</span>
+    <span class="n">S_phases</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;S&#39;</span><span class="p">,</span> <span class="s">&#39;Sn&#39;</span><span class="p">,</span> <span class="s">&#39;Lg&#39;</span><span class="p">]</span>
+
+    <span class="n">M0</span> <span class="o">=</span> <span class="n">mb_to_M0</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">mb</span><span class="p">)</span>
+
+    <span class="n">rho_s</span> <span class="o">=</span> <span class="mi">2700</span>  <span class="c"># source density, kg/m^3</span>
+    <span class="n">rho_r</span> <span class="o">=</span> <span class="mi">2500</span>  <span class="c"># receiver density, kg/m^3</span>
+
+    <span class="c"># choose velocities and other coefficients according to P vs S phase</span>
+    <span class="k">if</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">P_phases</span><span class="p">:</span>
+        <span class="n">R</span> <span class="o">=</span> <span class="mf">0.44</span>  <span class="c"># radiation pattern coefficient</span>
+        <span class="n">v_s</span> <span class="o">=</span> <span class="mi">6100</span>  <span class="c"># source velocity, m/s</span>
+        <span class="n">v_r</span> <span class="o">=</span> <span class="mi">5000</span>  <span class="c"># receiver velocity, m/s</span>
+
+        <span class="c"># hard-code the value for this term since the fifth power is</span>
+        <span class="c"># annoying to compute explicitly.</span>
+        <span class="c"># sq = np.sqrt(rho_s * rho_r * v_s**5 * v_r)</span>
+        <span class="n">sq</span> <span class="o">=</span> <span class="mf">533901911953403.5</span>
+        <span class="n">K</span> <span class="o">=</span> <span class="mf">1.5</span>  <span class="c"># corner frequency constant, from Myers</span>
+        <span class="n">cp</span> <span class="o">=</span> <span class="mf">0.41</span>
+
+    <span class="k">elif</span> <span class="n">phase</span> <span class="ow">in</span> <span class="n">S_phases</span><span class="p">:</span>
+        <span class="n">R</span> <span class="o">=</span> <span class="mf">0.60</span>
+        <span class="n">v_s</span> <span class="o">=</span> <span class="mi">3526</span>
+        <span class="n">v_r</span> <span class="o">=</span> <span class="mi">2890</span>
+        <span class="n">sq</span> <span class="o">=</span> <span class="mf">103111374869011.25</span>
+        <span class="n">K</span> <span class="o">=</span> <span class="mf">0.33</span>
+        <span class="n">cp</span> <span class="o">=</span> <span class="mf">0.49</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;don&#39;t know how to compute source amplitude for phase </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">phase</span><span class="p">))</span>
+    <span class="c"># Fisk version of corner frequency calculation:</span>
+<span class="c">#    c = 0.41 if phase in P_phases else 0.49</span>
+<span class="c">#    sigma = 10 # assume stress drop of 10 bars</span>
+<span class="c">#    f_0 = c * v_s * (sigma / M0)**(1.0/3.0)</span>
+
+    <span class="c"># Myers version of coda frequency calculation:</span>
+    <span class="n">dsigma</span> <span class="o">=</span> <span class="mf">10.0</span>  <span class="c"># assume stress drop of 10 bars</span>
+    <span class="c"># beta = 4.5 # S-wave velocity in km/s</span>
+    <span class="c"># f_0 = K * beta * (16 * dsigma / (7 * M0))**(1.0/3.0)</span>
+    <span class="c"># 1 bar = 10**5 N/m**2</span>
+    <span class="n">f_0</span> <span class="o">=</span> <span class="n">cp</span> <span class="o">*</span> <span class="n">v_s</span> <span class="o">*</span> <span class="p">(</span><span class="n">dsigma</span> <span class="o">*</span> <span class="mi">100000</span> <span class="o">/</span> <span class="p">(</span><span class="n">M0</span><span class="p">))</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">/</span> <span class="mf">3.0</span><span class="p">)</span>
+
+    <span class="n">F</span> <span class="o">=</span> <span class="n">R</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">sq</span><span class="p">)</span>
+
+    <span class="n">logS</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">M0</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">F</span><span class="p">))</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+    <span class="n">logShape</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="n">f</span> <span class="o">/</span> <span class="n">f_0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+    <span class="n">logamp</span> <span class="o">=</span> <span class="n">logS</span> <span class="o">-</span> <span class="n">logShape</span>
+
+    <span class="k">return</span> <span class="n">logamp</span><span class="p">,</span> <span class="n">f_0</span><span class="p">,</span> <span class="n">M0</span>
+
+</div>
+<div class="viewcode-block" id="source_logamp"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.brune_source.source_logamp">[docs]</a><span class="k">def</span> <span class="nf">source_logamp</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">phase</span><span class="p">):</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">band_to_hz</span><span class="p">(</span><span class="n">band</span><span class="p">)</span>
+    <span class="n">amp</span><span class="p">,</span> <span class="n">corner</span><span class="p">,</span> <span class="n">M0</span> <span class="o">=</span> <span class="n">source_freq_logamp</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">phase</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">amp</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.source/#sigvisa.source.brune_source.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+
+    <span class="n">plot_source_spectra</span><span class="p">()</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-s&quot;</span><span class="p">,</span> <span class="s">&quot;--siteids&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;siteids&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;siteid of station for which to learn source spectrum model (default: all)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-r&quot;</span><span class="p">,</span> <span class="s">&quot;--runids&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;runids&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;runid of the template fits to use&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-c&quot;</span><span class="p">,</span> <span class="s">&quot;--channels&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;channels&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;channels (all)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-o&quot;</span><span class="p">,</span> <span class="s">&quot;--outfile&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;outfile&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;parameters/source_spectra.txt&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;filename to save output (parameters/source_spectra.txt)&quot;</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="n">runids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">runids</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)]</span>
+    <span class="n">channels</span> <span class="o">=</span> <span class="n">chans</span> <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">channels</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">channels</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)]</span>
+    <span class="n">siteids</span> <span class="o">=</span> <span class="bp">None</span> <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">siteids</span> <span class="ow">is</span> <span class="bp">None</span> <span class="k">else</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">options</span><span class="o">.</span><span class="n">siteids</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;,&#39;</span><span class="p">)]</span>
+    <span class="n">runid_cond</span> <span class="o">=</span> <span class="s">&quot;(&quot;</span> <span class="o">+</span> <span class="s">&quot; or &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;runid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">runids</span><span class="p">])</span> <span class="o">+</span> <span class="s">&quot;)&quot;</span>
+    <span class="k">print</span> <span class="n">runid_cond</span>
+
+    <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">outfile</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+
+    <span class="n">ssm</span> <span class="o">=</span> <span class="n">SourceSpectrumModel</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">siteid</span><span class="p">,</span> <span class="n">channel</span><span class="p">)</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="n">siteids</span><span class="p">,</span> <span class="n">channels</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

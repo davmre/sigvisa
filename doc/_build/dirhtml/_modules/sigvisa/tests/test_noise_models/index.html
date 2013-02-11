@@ -1,0 +1,202 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.tests.test_noise_models &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.tests.test_noise_models</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">unittest</span>
+
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">numpy.ma</span> <span class="kn">as</span> <span class="nn">ma</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="n">get_event</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.common</span> <span class="kn">import</span> <span class="n">Waveform</span><span class="p">,</span> <span class="n">Segment</span><span class="p">,</span> <span class="n">load_waveform_from_file</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.noise_model</span> <span class="kn">import</span> <span class="o">*</span>
+
+
+<div class="viewcode-block" id="TestNoiseModels"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_noise_models.TestNoiseModels">[docs]</a><span class="k">class</span> <span class="nc">TestNoiseModels</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TestNoiseModels.setUp"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_noise_models.TestNoiseModels.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">s</span> <span class="o">=</span> <span class="n">Sigvisa</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ev</span> <span class="o">=</span> <span class="n">get_event</span><span class="p">(</span><span class="n">evid</span><span class="o">=</span><span class="mi">5301405</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sta</span> <span class="o">=</span> <span class="s">&#39;URZ&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">chan</span> <span class="o">=</span> <span class="s">&#39;BHZ&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_str</span> <span class="o">=</span> <span class="s">&#39;freq_2.0_3.0;env&#39;</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">s</span>
+        <span class="n">ev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ev</span>
+        <span class="n">sta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sta</span>
+        <span class="n">chan</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">chan</span>
+        <span class="n">filter_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_str</span>
+
+        <span class="c"># delete existing saved noise models</span>
+        <span class="n">hour</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">ev</span><span class="o">.</span><span class="n">time</span> <span class="o">/</span> <span class="mi">3600</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">hour_dir</span><span class="p">,</span> <span class="n">model_fname</span> <span class="o">=</span> <span class="n">model_path</span><span class="p">(</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="p">,</span> <span class="n">filter_str</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">17</span><span class="p">,</span> <span class="n">hour_time</span><span class="o">=</span><span class="n">hour</span> <span class="o">*</span> <span class="mi">3600</span><span class="p">)</span>
+        <span class="n">overall_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">hour_dir</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">overall_dir</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="TestNoiseModels.test_immediate_noise_model"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_noise_models.TestNoiseModels.test_immediate_noise_model">[docs]</a>    <span class="k">def</span> <span class="nf">test_immediate_noise_model</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">s</span>
+        <span class="n">ev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ev</span>
+        <span class="n">sta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sta</span>
+        <span class="n">chan</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">chan</span>
+        <span class="n">filter_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_str</span>
+
+        <span class="n">model1</span> <span class="o">=</span> <span class="n">get_noise_model</span><span class="p">(</span>
+            <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">filter_str</span><span class="o">=</span><span class="n">filter_str</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="n">ev</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">17</span><span class="p">,</span> <span class="n">noise_mode</span><span class="o">=</span><span class="n">NOISE_MODE_IMMEDIATE</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">model1</span><span class="o">.</span><span class="n">c</span><span class="p">,</span> <span class="mf">0.3324</span><span class="p">,</span> <span class="n">places</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestNoiseModels.test_hourly_noise_model"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_noise_models.TestNoiseModels.test_hourly_noise_model">[docs]</a>    <span class="k">def</span> <span class="nf">test_hourly_noise_model</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">s</span>
+        <span class="n">ev</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ev</span>
+        <span class="n">sta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sta</span>
+        <span class="n">chan</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">chan</span>
+        <span class="n">filter_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_str</span>
+
+        <span class="c"># the first model we request should actually build models for all frequency bands</span>
+        <span class="k">for</span> <span class="n">freq</span> <span class="ow">in</span> <span class="n">s</span><span class="o">.</span><span class="n">bands</span><span class="p">:</span>
+            <span class="c"># test that we can load models, and are not reconstructing them differently each time</span>
+            <span class="n">model1</span> <span class="o">=</span> <span class="n">get_noise_model</span><span class="p">(</span>
+                <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">filter_str</span><span class="o">=</span><span class="n">freq</span> <span class="o">+</span> <span class="s">&#39;;env&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="n">ev</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">17</span><span class="p">,</span> <span class="n">noise_mode</span><span class="o">=</span><span class="n">NOISE_MODE_HOURLY</span><span class="p">)</span>
+            <span class="n">model2</span> <span class="o">=</span> <span class="n">get_noise_model</span><span class="p">(</span>
+                <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">filter_str</span><span class="o">=</span><span class="n">freq</span> <span class="o">+</span> <span class="s">&#39;;env&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="n">ev</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">17</span><span class="p">,</span> <span class="n">noise_mode</span><span class="o">=</span><span class="n">NOISE_MODE_HOURLY</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">model1</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">model2</span><span class="o">.</span><span class="n">params</span><span class="p">)),</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">weird_band</span> <span class="o">=</span> <span class="s">&#39;freq_12_14&#39;</span>
+        <span class="n">old_bands</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">bands</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">bands</span> <span class="o">=</span> <span class="n">old_bands</span> <span class="o">+</span> <span class="p">(</span><span class="n">weird_band</span><span class="p">,)</span>
+        <span class="n">model1</span> <span class="o">=</span> <span class="n">get_noise_model</span><span class="p">(</span>
+            <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">filter_str</span><span class="o">=</span><span class="n">weird_band</span> <span class="o">+</span> <span class="s">&#39;;env&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="n">ev</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">17</span><span class="p">,</span> <span class="n">noise_mode</span><span class="o">=</span><span class="n">NOISE_MODE_HOURLY</span><span class="p">)</span>
+        <span class="n">model2</span> <span class="o">=</span> <span class="n">get_noise_model</span><span class="p">(</span>
+            <span class="n">sta</span><span class="o">=</span><span class="n">sta</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="n">chan</span><span class="p">,</span> <span class="n">filter_str</span><span class="o">=</span><span class="n">weird_band</span> <span class="o">+</span> <span class="s">&#39;;env&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="n">ev</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">17</span><span class="p">,</span> <span class="n">noise_mode</span><span class="o">=</span><span class="n">NOISE_MODE_HOURLY</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">model1</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">model2</span><span class="o">.</span><span class="n">params</span><span class="p">)),</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">bands</span> <span class="o">=</span> <span class="n">old_bands</span>
+</div>
+    <span class="k">def</span> <span class="nf">_test_across_several_hours</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">t_start</span> <span class="o">=</span> <span class="mi">1238917955</span> <span class="o">-</span> <span class="mi">6</span> <span class="o">*</span> <span class="mi">3600</span>
+        <span class="n">t_max</span> <span class="o">=</span> <span class="n">t_start</span> <span class="o">+</span> <span class="mi">14</span> <span class="o">*</span> <span class="mi">24</span> <span class="o">*</span> <span class="mi">3600</span>
+
+        <span class="n">t</span> <span class="o">=</span> <span class="n">t_start</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&#39;means.txt&#39;</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="n">fs</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&#39;stds.txt&#39;</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">14</span><span class="p">):</span>
+    <span class="c">#    for d in range(2,3):</span>
+            <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">24</span><span class="p">):</span>
+    <span class="c">#        for h in range(3, 4):</span>
+                <span class="n">t</span> <span class="o">=</span> <span class="n">t_start</span> <span class="o">+</span> <span class="n">d</span> <span class="o">*</span> <span class="mi">24</span> <span class="o">*</span> <span class="mi">3600</span> <span class="o">+</span> <span class="n">h</span> <span class="o">*</span> <span class="mi">3600</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">nm</span> <span class="o">=</span> <span class="n">get_noise_model</span><span class="p">(</span><span class="n">sta</span><span class="o">=</span><span class="s">&quot;URZ&quot;</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="s">&quot;BHZ&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="n">t</span><span class="p">,</span> <span class="n">filter_str</span><span class="o">=</span><span class="s">&quot;freq_2.0_3.0;env&quot;</span><span class="p">)</span>
+                    <span class="k">print</span> <span class="s">&quot;nm for time&quot;</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="s">&quot; has mean&quot;</span><span class="p">,</span> <span class="n">nm</span><span class="o">.</span><span class="n">c</span>
+                    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%f</span><span class="s">, &quot;</span> <span class="o">%</span> <span class="n">nm</span><span class="o">.</span><span class="n">c</span><span class="p">)</span>
+                    <span class="n">fs</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%f</span><span class="s">, &quot;</span> <span class="o">%</span> <span class="n">nm</span><span class="o">.</span><span class="n">em</span><span class="o">.</span><span class="n">std</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">NoNoiseException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="n">e</span>
+                    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;, &quot;</span><span class="p">)</span>
+                    <span class="n">fs</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;, &quot;</span><span class="p">)</span>
+                    <span class="k">continue</span>
+
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+            <span class="n">fs</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="n">fs</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

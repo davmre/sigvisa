@@ -1,0 +1,314 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.utils.Laplace &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.utils.Laplace</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">scipy.optimize</span> <span class="kn">import</span> <span class="n">fmin_ncg</span><span class="p">,</span> <span class="n">fmin</span>
+
+<span class="c"># Laplace distribution</span>
+<span class="c"># laplacian density</span>
+
+
+<div class="viewcode-block" id="estimate"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.estimate">[docs]</a><span class="k">def</span> <span class="nf">estimate</span><span class="p">(</span><span class="n">vals</span><span class="p">):</span>
+    <span class="n">location</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+    <span class="n">scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">vals</span> <span class="o">-</span> <span class="n">location</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">location</span><span class="p">,</span> <span class="n">scale</span>
+
+</div>
+<div class="viewcode-block" id="estimate_laplace_uniform_dist"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.estimate_laplace_uniform_dist">[docs]</a><span class="k">def</span> <span class="nf">estimate_laplace_uniform_dist</span><span class="p">(</span><span class="n">vals</span><span class="p">,</span> <span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">):</span>
+    <span class="n">laplace_vals</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">vals</span><span class="p">]</span>
+    <span class="n">location</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">estimate</span><span class="p">(</span><span class="n">laplace_vals</span><span class="p">)</span>
+
+    <span class="n">unif_ldens</span> <span class="o">=</span> <span class="n">ldensity_uniform</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">)</span>
+
+    <span class="n">flips</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">laplace_vals</span><span class="p">)</span>
+    <span class="k">while</span> <span class="n">flips</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">flips</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">new_laplace_vals</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c"># is the point better explained by the Laplacian or the uniform distrib?</span>
+        <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">laplace_vals</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">ldensity</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">unif_ldens</span><span class="p">:</span>
+                <span class="n">new_laplace_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">flips</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">laplace_vals</span> <span class="o">=</span> <span class="n">new_laplace_vals</span>
+        <span class="n">location</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">estimate</span><span class="p">(</span><span class="n">laplace_vals</span><span class="p">)</span>
+
+    <span class="n">prob_laplace</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">laplace_vals</span><span class="p">))</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">prob_laplace</span><span class="p">,</span> <span class="n">location</span><span class="p">,</span> <span class="n">scale</span>
+
+</div>
+<div class="viewcode-block" id="ldensity"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.ldensity">[docs]</a><span class="k">def</span> <span class="nf">ldensity</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+    <span class="k">return</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">scale</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">val</span> <span class="o">-</span> <span class="n">location</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span>
+
+</div>
+<div class="viewcode-block" id="ldensity_uniform"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.ldensity_uniform">[docs]</a><span class="k">def</span> <span class="nf">ldensity_uniform</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">):</span>
+    <span class="k">return</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">high</span> <span class="o">-</span> <span class="n">low</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="cdf"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.cdf">[docs]</a><span class="k">def</span> <span class="nf">cdf</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+    <span class="k">return</span> <span class="o">.</span><span class="mi">5</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">val</span> <span class="o">-</span> <span class="n">location</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="nb">abs</span><span class="p">(</span><span class="n">val</span> <span class="o">-</span> <span class="n">location</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span><span class="p">)))</span>
+
+</div>
+<div class="viewcode-block" id="lprob"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.lprob">[docs]</a><span class="k">def</span> <span class="nf">lprob</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val1</span><span class="p">,</span> <span class="n">val2</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">log</span><span class="p">(</span><span class="n">cdf</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val2</span><span class="p">)</span>
+               <span class="o">-</span> <span class="n">cdf</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val1</span><span class="p">))</span>
+
+<span class="c"># alternate version: sample alpha from Unif(0,1)</span>
+<span class="c"># if alpha == .5 return location</span>
+<span class="c">#   alpha &lt; .5 return location + scale * log(2*alpha)</span>
+<span class="c">#   alpha &gt; .5 return location - scale * log(2*(1-alpha))</span>
+
+</div>
+<div class="viewcode-block" id="sample"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.sample">[docs]</a><span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">laplace</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="ldensity_laplace_uniform_dist"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.ldensity_laplace_uniform_dist">[docs]</a><span class="k">def</span> <span class="nf">ldensity_laplace_uniform_dist</span><span class="p">(</span><span class="n">prob_laplace</span><span class="p">,</span> <span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span>
+                                  <span class="n">val</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A mixture of a Laplace and a uniform distribution</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">((</span><span class="n">prob_laplace</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">val</span> <span class="o">-</span> <span class="n">location</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">scale</span><span class="p">))</span>
+                  <span class="o">+</span> <span class="p">((</span><span class="mi">1</span> <span class="o">-</span> <span class="n">prob_laplace</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">high</span> <span class="o">-</span> <span class="n">low</span><span class="p">)))</span>
+
+</div>
+<div class="viewcode-block" id="lprob_laplace_uniform_dist"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.lprob_laplace_uniform_dist">[docs]</a><span class="k">def</span> <span class="nf">lprob_laplace_uniform_dist</span><span class="p">(</span><span class="n">prob_laplace</span><span class="p">,</span> <span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">,</span>
+                               <span class="n">val1</span><span class="p">,</span> <span class="n">val2</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">log</span><span class="p">((</span><span class="n">prob_laplace</span> <span class="o">*</span> <span class="p">(</span><span class="n">cdf</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val2</span><span class="p">)</span>
+                                <span class="o">-</span> <span class="n">cdf</span><span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">val1</span><span class="p">)))</span>
+               <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">prob_laplace</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">val2</span> <span class="o">-</span> <span class="n">val1</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">high</span> <span class="o">-</span> <span class="n">low</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="sample_trunc"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.sample_trunc">[docs]</a><span class="k">def</span> <span class="nf">sample_trunc</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">minval</span><span class="p">,</span> <span class="n">maxval</span><span class="p">):</span>
+    <span class="c"># note the normalization constant is scale * (lower_norm + upper_norm)</span>
+    <span class="c"># below loc the area is scale * lower_norm and above it is scale * upper_norm</span>
+    <span class="n">lower_norm</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span> <span class="p">(</span><span class="n">loc</span> <span class="o">-</span> <span class="n">minval</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="n">upper_norm</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span> <span class="p">(</span><span class="n">maxval</span> <span class="o">-</span> <span class="n">loc</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span><span class="p">)</span>
+
+    <span class="n">tot_norm</span> <span class="o">=</span> <span class="n">lower_norm</span> <span class="o">+</span> <span class="n">upper_norm</span>
+
+    <span class="n">mid_norm</span> <span class="o">=</span> <span class="n">lower_norm</span> <span class="o">/</span> <span class="n">tot_norm</span>
+
+    <span class="n">tgt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">tgt</span> <span class="o">&lt;</span> <span class="n">mid_norm</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">loc</span> <span class="o">+</span> <span class="n">scale</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">lower_norm</span> <span class="o">+</span> <span class="n">tgt</span> <span class="o">*</span> <span class="n">tot_norm</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">tgt</span> <span class="o">&gt;</span> <span class="n">mid_norm</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">loc</span> <span class="o">-</span> <span class="n">scale</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">lower_norm</span> <span class="o">-</span> <span class="n">tgt</span> <span class="o">*</span> <span class="n">tot_norm</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">loc</span>
+
+</div>
+<div class="viewcode-block" id="logprob_trunc"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.logprob_trunc">[docs]</a><span class="k">def</span> <span class="nf">logprob_trunc</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">minval</span><span class="p">,</span> <span class="n">maxval</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">loc</span> <span class="o">&lt;</span> <span class="n">minval</span> <span class="ow">or</span> <span class="n">loc</span> <span class="o">&gt;</span> <span class="n">maxval</span><span class="p">:</span>
+        <span class="k">return</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+
+    <span class="n">normconst</span> <span class="o">=</span> <span class="n">scale</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">loc</span> <span class="o">-</span> <span class="n">minval</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span><span class="p">)</span>
+                         <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">maxval</span> <span class="o">-</span> <span class="n">loc</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">normconst</span><span class="p">)</span> <span class="o">-</span> <span class="nb">abs</span><span class="p">(</span><span class="n">val</span> <span class="o">-</span> <span class="n">loc</span><span class="p">)</span> <span class="o">/</span> <span class="n">scale</span>
+
+</div>
+<div class="viewcode-block" id="estimate_trunc"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.estimate_trunc">[docs]</a><span class="k">def</span> <span class="nf">estimate_trunc</span><span class="p">(</span><span class="n">vals</span><span class="p">):</span>
+    <span class="n">init_location</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+    <span class="n">init_scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">vals</span> <span class="o">-</span> <span class="n">init_location</span><span class="p">))</span>
+    <span class="n">minval</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+    <span class="n">maxval</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">neg_log_lik</span><span class="p">(</span><span class="n">param</span><span class="p">):</span>
+        <span class="n">loc</span><span class="p">,</span> <span class="n">sc</span> <span class="o">=</span> <span class="n">param</span>
+        <span class="k">if</span> <span class="n">loc</span> <span class="o">&lt;=</span> <span class="n">minval</span> <span class="ow">or</span> <span class="n">loc</span> <span class="o">&gt;=</span> <span class="n">maxval</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+        <span class="n">normconst</span> <span class="o">=</span> <span class="n">sc</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">loc</span> <span class="o">-</span> <span class="n">minval</span><span class="p">)</span> <span class="o">/</span> <span class="n">sc</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">maxval</span> <span class="o">-</span> <span class="n">loc</span><span class="p">)</span> <span class="o">/</span> <span class="n">sc</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">normconst</span><span class="p">)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">vals</span><span class="p">)</span> <span class="o">+</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">val</span> <span class="o">-</span> <span class="n">loc</span><span class="p">)</span> <span class="o">/</span> <span class="n">sc</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">vals</span><span class="p">)</span>
+
+    <span class="n">params</span> <span class="o">=</span> <span class="n">fmin</span><span class="p">(</span><span class="n">neg_log_lik</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="n">init_location</span><span class="p">,</span> <span class="n">init_scale</span><span class="p">)),</span>
+                  <span class="n">xtol</span><span class="o">=.</span><span class="mo">01</span><span class="p">,</span> <span class="n">ftol</span><span class="o">=.</span><span class="mo">01</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">location</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">params</span>
+
+    <span class="k">return</span> <span class="n">location</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">minval</span><span class="p">,</span> <span class="n">maxval</span>
+
+
+<span class="c"># site_data is a list of data x_k^i, i=1..n_k for k=1..K sites</span>
+<span class="c">#</span>
+<span class="c"># x_k^i        ~ Laplace(loc_k, scale_k)</span>
+<span class="c"># loc_k        ~ Laplace(loc, scale)</span>
+<span class="c"># loc          ~ Laplace(loc0, scale0)</span>
+<span class="c"># scale^{-1}   ~ Gamma(alpha0, beta0)</span>
+<span class="c"># scale_k^{-1} ~ Gamma(alpha1, beta)</span>
+<span class="c"># beta^{-1}    ~ Gamma(alpha2, beta2)</span>
+<span class="c">#</span>
+<span class="c"># We use the following update rules</span>
+<span class="c"># loc_k = wt-median(x_k^i : scale_k i=1..n_k, loc : scale)</span>
+<span class="c"># loc = wt-median(loc_k : scale k=1..K, loc0 : scale0)</span>
+<span class="c"># scale = \frac{\sum_{k=1..K} |loc_k-loc| + 1/beta0} {K + alpha0 - 1}</span>
+<span class="c"># scale_k = \frac{\sum_{i=1..n_k} |x_k^i - loc_k| + 1/beta} {n_k + alpha1 - 1}</span>
+<span class="c"># beta = \frac{\sum_{k=1..K}1/scale_k + 1/beta2 } {K alpha1 + alpha2 - 1}</span>
+<span class="c">#</span></div>
+<div class="viewcode-block" id="hier_estimate"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.Laplace.hier_estimate">[docs]</a><span class="k">def</span> <span class="nf">hier_estimate</span><span class="p">(</span><span class="n">site_data</span><span class="p">,</span> <span class="n">init_loc</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span> <span class="n">init_scale</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span> <span class="n">init_beta</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                  <span class="n">loc0</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span> <span class="n">scale0</span><span class="o">=</span><span class="mf">100.</span><span class="p">,</span> <span class="n">alpha0</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">,</span> <span class="n">beta0</span><span class="o">=</span><span class="mf">1e2</span><span class="p">,</span>
+                  <span class="n">alpha1</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span> <span class="n">alpha2</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">,</span> <span class="n">beta2</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">,</span> <span class="n">tolerance</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+                  <span class="n">maxiters</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+
+    <span class="n">K</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">site_data</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">K</span> <span class="o">&gt;</span> <span class="mi">1</span>                    <span class="c"># there should be more than one site</span>
+
+    <span class="n">loc</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">beta</span> <span class="o">=</span> <span class="n">init_loc</span><span class="p">,</span> <span class="n">init_scale</span><span class="p">,</span> <span class="n">init_beta</span>
+
+    <span class="n">site_params</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="n">K</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+    <span class="n">site_params</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">init_loc</span>
+    <span class="n">site_params</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">init_beta</span>
+
+    <span class="k">for</span> <span class="n">iternum</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">maxiters</span><span class="p">):</span>
+        <span class="n">prev_loc</span><span class="p">,</span> <span class="n">prev_scale</span><span class="p">,</span> <span class="n">prev_beta</span> <span class="o">=</span> <span class="n">loc</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">beta</span>
+
+        <span class="c"># update the location and scale for each site</span>
+        <span class="k">for</span> <span class="n">siteid</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">site_data</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+                <span class="n">this_loc</span> <span class="o">=</span> <span class="n">loc</span>
+                <span class="k">if</span> <span class="n">alpha1</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">this_scale</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="n">beta</span> <span class="o">*</span> <span class="p">(</span><span class="n">alpha1</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c"># the gamma distribution has a mode at 0 so instead we pick</span>
+                    <span class="c"># the mean in this case</span>
+                    <span class="n">this_scale</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="p">(</span><span class="n">beta</span> <span class="o">*</span> <span class="n">alpha1</span><span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">this_loc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+                <span class="n">this_scale</span> <span class="o">=</span> <span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">this_loc</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">data</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">beta</span><span class="p">))</span> \
+                    <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">+</span> <span class="n">alpha1</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">site_params</span><span class="p">[</span><span class="n">siteid</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">this_loc</span><span class="p">,</span> <span class="n">this_scale</span><span class="p">)</span>
+
+        <span class="c"># update global location, scale, and beta</span>
+        <span class="n">loc</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">site_params</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">])</span>
+        <span class="n">scale</span> <span class="o">=</span> <span class="p">((</span><span class="nb">abs</span><span class="p">(</span><span class="n">site_params</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">loc</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">beta0</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="n">K</span> <span class="o">+</span> <span class="n">alpha0</span> <span class="o">-</span> <span class="mf">1.</span><span class="p">)</span>
+        <span class="n">beta</span> <span class="o">=</span> <span class="p">((</span><span class="mf">1.0</span> <span class="o">/</span> <span class="n">site_params</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">+</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">beta2</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="n">K</span> <span class="o">*</span> <span class="n">alpha1</span> <span class="o">+</span> <span class="n">alpha2</span> <span class="o">-</span> <span class="mf">1.</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">prev_loc</span> <span class="o">-</span> <span class="n">loc</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tolerance</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">prev_scale</span> <span class="o">-</span> <span class="n">scale</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tolerance</span>\
+           <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">prev_beta</span> <span class="o">-</span> <span class="n">beta</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">tolerance</span><span class="p">:</span>
+            <span class="k">break</span>
+
+    <span class="k">return</span> <span class="n">site_params</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="n">beta</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

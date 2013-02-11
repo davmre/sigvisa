@@ -1,0 +1,840 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="next" title="database Package" href="../sigvisa.database/" />
+    <link rel="prev" title="Welcome to SIG-VISA’s documentation!" href="../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.database/" title="database Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../" title="Welcome to SIG-VISA’s documentation!"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="sigvisa-package">
+<h1>sigvisa Package<a class="headerlink" href="#sigvisa-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2><tt class="xref py py-mod docutils literal"><span class="pre">sigvisa</span></tt> Package<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-sigvisa.__init__"></span><dl class="exception">
+<dt id="sigvisa.__init__.BadParamTreeException">
+<em class="property">exception </em><tt class="descclassname">sigvisa.__init__.</tt><tt class="descname">BadParamTreeException</tt><a class="reference internal" href="../_modules/sigvisa/__init__/#BadParamTreeException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.BadParamTreeException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.__init__.NestedDict">
+<em class="property">class </em><tt class="descclassname">sigvisa.__init__.</tt><tt class="descname">NestedDict</tt><a class="reference internal" href="../_modules/sigvisa/__init__/#NestedDict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.NestedDict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">dict</span></tt></p>
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.__init__.Sigvisa">
+<em class="property">class </em><tt class="descclassname">sigvisa.__init__.</tt><tt class="descname">Sigvisa</tt><a class="reference internal" href="../_modules/sigvisa/__init__/#Sigvisa"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.Sigvisa" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="method">
+<dt id="sigvisa.__init__.Sigvisa.arriving_phases">
+<tt class="descname">arriving_phases</tt><big>(</big><em>event</em>, <em>sta</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/__init__/#Sigvisa.arriving_phases"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.Sigvisa.arriving_phases" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.__init__.Sigvisa.band_name">
+<tt class="descname">band_name</tt><big>(</big><em>low_band=None</em>, <em>high_band=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/__init__/#Sigvisa.band_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.Sigvisa.band_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="sigvisa.__init__.Sigvisa.canonical_channel_name">
+<tt class="descname">canonical_channel_name</tt><em class="property"> = {'BH1': 'BHE', 'BH2': 'BHN', 'BHZ': 'BHZ', 'BHE': 'BHE', 'BHN': 'BHN'}</em><a class="headerlink" href="#sigvisa.__init__.Sigvisa.canonical_channel_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.__init__.Sigvisa.equivalent_channels">
+<tt class="descname">equivalent_channels</tt><big>(</big><em>chan</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/__init__/#Sigvisa.equivalent_channels"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.Sigvisa.equivalent_channels" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.__init__.Sigvisa.phasenames">
+<tt class="descname">phasenames</tt><big>(</big><em>phase_id_minus1_list</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/__init__/#Sigvisa.phasenames"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.Sigvisa.phasenames" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.__init__.Sigvisa.set_dummy_wiggles">
+<tt class="descname">set_dummy_wiggles</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/__init__/#Sigvisa.set_dummy_wiggles"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.__init__.Sigvisa.set_dummy_wiggles" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.analyze">
+<span id="analyze-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">analyze</span></tt> Module<a class="headerlink" href="#module-sigvisa.analyze" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.analyze.analyze_by_attr">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">analyze_by_attr</tt><big>(</big><em>attr_name</em>, <em>attr_ranges</em>, <em>leb_attrvals</em>, <em>leb_events</em>, <em>sel3_events</em>, <em>visa_events</em>, <em>verbose</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#analyze_by_attr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.analyze_by_attr" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.assert_time_sorted">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">assert_time_sorted</tt><big>(</big><em>events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#assert_time_sorted"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.assert_time_sorted" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.azimuth_gap">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">azimuth_gap</tt><big>(</big><em>esazlist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#azimuth_gap"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.azimuth_gap" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.compute_orid2num">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">compute_orid2num</tt><big>(</big><em>events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#compute_orid2num"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.compute_orid2num" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.compute_roc_curve">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">compute_roc_curve</tt><big>(</big><em>gold_events</em>, <em>guess_events</em>, <em>guess_ev_scores</em>, <em>freq=30</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#compute_roc_curve"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.compute_roc_curve" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.filter_by_lonlat">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">filter_by_lonlat</tt><big>(</big><em>events</em>, <em>lon_1</em>, <em>lon_2</em>, <em>lat_1</em>, <em>lat_2</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#filter_by_lonlat"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.filter_by_lonlat" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.find_nearest">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">find_nearest</tt><big>(</big><em>leb_events</em>, <em>events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#find_nearest"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.find_nearest" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.gui">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">gui</tt><big>(</big><em>options</em>, <em>leb_events</em>, <em>sel3_events</em>, <em>events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#gui"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.gui" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.kleinermackey_display">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">kleinermackey_display</tt><big>(</big><em>leb_events</em>, <em>sel3_events</em>, <em>visa_events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#kleinermackey_display"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.kleinermackey_display" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.kleinermackey_match">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">kleinermackey_match</tt><big>(</big><em>gold_events</em>, <em>guess_events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#kleinermackey_match"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.kleinermackey_match" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.main">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">main</tt><big>(</big><em>param_dirname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.match_sel3_prec">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">match_sel3_prec</tt><big>(</big><em>visa_events</em>, <em>visa_scores</em>, <em>leb_events</em>, <em>sel3_events</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#match_sel3_prec"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.match_sel3_prec" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.read_sel3_svm_scores">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">read_sel3_svm_scores</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#read_sel3_svm_scores"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.read_sel3_svm_scores" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.split_by_attr">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">split_by_attr</tt><big>(</big><em>attr_ranges</em>, <em>attr_vals</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#split_by_attr"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.split_by_attr" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.analyze.suppress_duplicates">
+<tt class="descclassname">sigvisa.analyze.</tt><tt class="descname">suppress_duplicates</tt><big>(</big><em>events</em>, <em>evscores</em>, <em>verbose=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/analyze/#suppress_duplicates"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.analyze.suppress_duplicates" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.ec2_image">
+<span id="ec2-image-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2_image</span></tt> Module<a class="headerlink" href="#module-sigvisa.ec2_image" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.ec2_image.create_image">
+<tt class="descclassname">sigvisa.ec2_image.</tt><tt class="descname">create_image</tt><big>(</big><em>ec2conn</em>, <em>img_name</em>, <em>instid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_image/#create_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_image.create_image" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_image.delete_image">
+<tt class="descclassname">sigvisa.ec2_image.</tt><tt class="descname">delete_image</tt><big>(</big><em>ec2conn</em>, <em>img_name</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_image/#delete_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_image.delete_image" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_image.list_images">
+<tt class="descclassname">sigvisa.ec2_image.</tt><tt class="descname">list_images</tt><big>(</big><em>ec2conn</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_image/#list_images"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_image.list_images" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_image.main">
+<tt class="descclassname">sigvisa.ec2_image.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_image/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_image.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.ec2_infer">
+<span id="ec2-infer-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2_infer</span></tt> Module<a class="headerlink" href="#module-sigvisa.ec2_infer" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.ec2_infer.Unbuffered">
+<em class="property">class </em><tt class="descclassname">sigvisa.ec2_infer.</tt><tt class="descname">Unbuffered</tt><big>(</big><em>stream</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_infer/#Unbuffered"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_infer.Unbuffered" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="sigvisa.ec2_infer.Unbuffered.write">
+<tt class="descname">write</tt><big>(</big><em>data</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_infer/#Unbuffered.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_infer.Unbuffered.write" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_infer.exec_cmd">
+<tt class="descclassname">sigvisa.ec2_infer.</tt><tt class="descname">exec_cmd</tt><big>(</big><em>cmd</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_infer/#exec_cmd"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_infer.exec_cmd" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_infer.main">
+<tt class="descclassname">sigvisa.ec2_infer.</tt><tt class="descname">main</tt><big>(</big><em>param_dirname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_infer/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_infer.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_infer.parse_remove">
+<tt class="descclassname">sigvisa.ec2_infer.</tt><tt class="descname">parse_remove</tt><big>(</big><em>args</em>, <em>shortname</em>, <em>longname</em>, <em>default</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_infer/#parse_remove"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_infer.parse_remove" title="Permalink to this definition">¶</a></dt>
+<dd><p>parse the argument and return the value</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_infer.ssh_cmd">
+<tt class="descclassname">sigvisa.ec2_infer.</tt><tt class="descname">ssh_cmd</tt><big>(</big><em>host</em>, <em>keyname</em>, <em>cmd</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_infer/#ssh_cmd"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_infer.ssh_cmd" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_infer.ssh_tunnel">
+<tt class="descclassname">sigvisa.ec2_infer.</tt><tt class="descname">ssh_tunnel</tt><big>(</big><em>host</em>, <em>keyname</em>, <em>localport</em>, <em>remoteport</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_infer/#ssh_tunnel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_infer.ssh_tunnel" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.ec2_inst">
+<span id="ec2-inst-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2_inst</span></tt> Module<a class="headerlink" href="#module-sigvisa.ec2_inst" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.ec2_inst.Unbuffered">
+<em class="property">class </em><tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">Unbuffered</tt><big>(</big><em>stream</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#Unbuffered"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.Unbuffered" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="sigvisa.ec2_inst.Unbuffered.write">
+<tt class="descname">write</tt><big>(</big><em>data</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#Unbuffered.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.Unbuffered.write" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.list_insts">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">list_insts</tt><big>(</big><em>ec2conn</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#list_insts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.list_insts" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.main">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.scpfrom_inst">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">scpfrom_inst</tt><big>(</big><em>ec2conn</em>, <em>instid</em>, <em>filelist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#scpfrom_inst"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.scpfrom_inst" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.scpto_inst">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">scpto_inst</tt><big>(</big><em>ec2conn</em>, <em>instid</em>, <em>filelist</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#scpto_inst"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.scpto_inst" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.ssh_inst">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">ssh_inst</tt><big>(</big><em>ec2conn</em>, <em>instid</em>, <em>*cmds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#ssh_inst"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.ssh_inst" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.start_inst">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">start_inst</tt><big>(</big><em>ec2conn</em>, <em>instid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#start_inst"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.start_inst" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.stop_inst">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">stop_inst</tt><big>(</big><em>ec2conn</em>, <em>instid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#stop_inst"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.stop_inst" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_inst.terminate_inst">
+<tt class="descclassname">sigvisa.ec2_inst.</tt><tt class="descname">terminate_inst</tt><big>(</big><em>ec2conn</em>, <em>instid</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_inst/#terminate_inst"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_inst.terminate_inst" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.ec2_kill">
+<span id="ec2-kill-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2_kill</span></tt> Module<a class="headerlink" href="#module-sigvisa.ec2_kill" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.ec2_kill.main">
+<tt class="descclassname">sigvisa.ec2_kill.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_kill/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_kill.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.ec2_run">
+<span id="ec2-run-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2_run</span></tt> Module<a class="headerlink" href="#module-sigvisa.ec2_run" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.ec2_run.main">
+<tt class="descclassname">sigvisa.ec2_run.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_run/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_run.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.ec2_simple">
+<span id="ec2-simple-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2_simple</span></tt> Module<a class="headerlink" href="#module-sigvisa.ec2_simple" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.ec2_simple.exec_cmd">
+<tt class="descclassname">sigvisa.ec2_simple.</tt><tt class="descname">exec_cmd</tt><big>(</big><em>cmds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_simple/#exec_cmd"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_simple.exec_cmd" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_simple.extract_par">
+<tt class="descclassname">sigvisa.ec2_simple.</tt><tt class="descname">extract_par</tt><big>(</big><em>forms</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_simple/#extract_par"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_simple.extract_par" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_simple.get_revision">
+<tt class="descclassname">sigvisa.ec2_simple.</tt><tt class="descname">get_revision</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_simple/#get_revision"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_simple.get_revision" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_simple.main">
+<tt class="descclassname">sigvisa.ec2_simple.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_simple/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_simple.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_simple.package_repository">
+<tt class="descclassname">sigvisa.ec2_simple.</tt><tt class="descname">package_repository</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_simple/#package_repository"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_simple.package_repository" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_simple.ssh_py_infer">
+<tt class="descclassname">sigvisa.ec2_simple.</tt><tt class="descname">ssh_py_infer</tt><big>(</big><em>host</em>, <em>keyname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_simple/#ssh_py_infer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_simple.ssh_py_infer" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_simple.ssh_uptime">
+<tt class="descclassname">sigvisa.ec2_simple.</tt><tt class="descname">ssh_uptime</tt><big>(</big><em>host</em>, <em>keyname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_simple/#ssh_uptime"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_simple.ssh_uptime" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.ec2_start">
+<span id="ec2-start-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">ec2_start</span></tt> Module<a class="headerlink" href="#module-sigvisa.ec2_start" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.ec2_start.Unbuffered">
+<em class="property">class </em><tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">Unbuffered</tt><big>(</big><em>stream</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#Unbuffered"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.Unbuffered" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="method">
+<dt id="sigvisa.ec2_start.Unbuffered.write">
+<tt class="descname">write</tt><big>(</big><em>data</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#Unbuffered.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.Unbuffered.write" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.create_instances">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">create_instances</tt><big>(</big><em>ec2conn</em>, <em>ec2imgname</em>, <em>ec2keyname</em>, <em>numinst</em>, <em>insttype</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#create_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.create_instances" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.destroy_instances">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">destroy_instances</tt><big>(</big><em>ec2conn</em>, <em>ec2keyname</em>, <em>inst_names</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#destroy_instances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.destroy_instances" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.exec_cmd">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">exec_cmd</tt><big>(</big><em>cmd</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#exec_cmd"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.exec_cmd" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.is_ssh_up">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">is_ssh_up</tt><big>(</big><em>host</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#is_ssh_up"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.is_ssh_up" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.locate_keyname">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">locate_keyname</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#locate_keyname"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.locate_keyname" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.main">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">main</tt><big>(</big><em>param_dirname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.scp_from">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">scp_from</tt><big>(</big><em>host</em>, <em>keyname</em>, <em>srcfile</em>, <em>destfile</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#scp_from"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.scp_from" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.scp_from_once">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">scp_from_once</tt><big>(</big><em>host</em>, <em>keyname</em>, <em>srcfile</em>, <em>destfile</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#scp_from_once"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.scp_from_once" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.scp_to">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">scp_to</tt><big>(</big><em>host</em>, <em>keyname</em>, <em>srcfile</em>, <em>destfile</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#scp_to"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.scp_to" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.scp_to_once">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">scp_to_once</tt><big>(</big><em>host</em>, <em>keyname</em>, <em>srcfile</em>, <em>destfile</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#scp_to_once"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.scp_to_once" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.ec2_start.ssh_cmd">
+<tt class="descclassname">sigvisa.ec2_start.</tt><tt class="descname">ssh_cmd</tt><big>(</big><em>host</em>, <em>keyname</em>, <em>cmd</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/ec2_start/#ssh_cmd"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.ec2_start.ssh_cmd" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.idcexport">
+<span id="idcexport-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">idcexport</span></tt> Module<a class="headerlink" href="#module-sigvisa.idcexport" title="Permalink to this headline">¶</a></h2>
+<p>creates a dataset from the IDC database
+Usage: python idcexport.py &lt;connect-string&gt; &lt;label&gt; &lt;start-time&gt; &lt;end-time&gt; &lt;data.tar&gt;</p>
+<p>The various tables in the dataset are
+o. README.txt</p>
+<blockquote>
+<div>A text summary of the dataset.</div></blockquote>
+<ol class="loweralpha simple" start="15">
+<li>dataset.csv</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li>label</li>
+<li>start_time</li>
+<li>end_time</li>
+</ul>
+</div></blockquote>
+<ol class="loweralpha simple" start="15">
+<li>site.csv</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li>sta</li>
+<li>lon</li>
+<li>lat</li>
+<li>elev</li>
+<li>isarray</li>
+</ul>
+</div></blockquote>
+<ol class="loweralpha simple" start="15">
+<li>phase.csv</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li>phase</li>
+<li>istimedef</li>
+</ul>
+</div></blockquote>
+<ol class="loweralpha simple" start="15">
+<li>idcx_arrival.csv &amp; leb_arrival.csv</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li>sta</li>
+<li>arid</li>
+<li>time</li>
+<li>deltime</li>
+<li>azimuth</li>
+<li>delaz</li>
+<li>slo</li>
+<li>delslo</li>
+<li>SNR</li>
+<li>iphase</li>
+<li>amplitude</li>
+<li>period</li>
+</ul>
+</div></blockquote>
+<ol class="loweralpha simple" start="15">
+<li>leb_assoc.csv &amp; sel3_assoc.csv</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li>orid</li>
+<li>arid</li>
+<li>phase</li>
+<li>sta</li>
+</ul>
+</div></blockquote>
+<ol class="loweralpha simple" start="15">
+<li>leb_origin.csv &amp; sel3_origin.csv</li>
+</ol>
+<blockquote>
+<div><ul class="simple">
+<li>lon</li>
+<li>lat</li>
+<li>depth</li>
+<li>time</li>
+<li>mb</li>
+<li>orid</li>
+</ul>
+</div></blockquote>
+<p>Example:</p>
+<p>To extract the Tohoku seismic data from vDEC:</p>
+<p>March 11 to March 13 2012
+&gt; python idcexport.py <a class="reference external" href="mailto:nimar/nimar&#37;&#52;&#48;irdb">nimar/nimar<span>&#64;</span>irdb</a> tohoku-test 1299801600 1299974400 tohoku-test.tar &#8211;schemasuffix &#8220;_ref.&#8221;</p>
+<p>Dec 1 2010 to March 11 2012
+&gt; python idcexport.py <a class="reference external" href="mailto:nimar/nimar&#37;&#52;&#48;irdb">nimar/nimar<span>&#64;</span>irdb</a> tohoku-train 1291161600 1299801600 tohoku-train.tar &#8211;schemasuffix &#8220;_ref.&#8221;</p>
+<dl class="function">
+<dt id="sigvisa.idcexport.export_query">
+<tt class="descclassname">sigvisa.idcexport.</tt><tt class="descname">export_query</tt><big>(</big><em>cursor</em>, <em>query</em>, <em>tar</em>, <em>destfile</em>, <em>filterconds=None</em>, <em>returnrows=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/idcexport/#export_query"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.idcexport.export_query" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.idcexport.main">
+<tt class="descclassname">sigvisa.idcexport.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/idcexport/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.idcexport.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.load_c_components">
+<span id="load-c-components-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">load_c_components</span></tt> Module<a class="headerlink" href="#module-sigvisa.load_c_components" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.load_c_components.load_earth">
+<tt class="descclassname">sigvisa.load_c_components.</tt><tt class="descname">load_earth</tt><big>(</big><em>param_dirname</em>, <em>sites</em>, <em>phasenames</em>, <em>phasetimedef</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/load_c_components/#load_earth"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.load_c_components.load_earth" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.load_c_components.load_sigvisa">
+<tt class="descclassname">sigvisa.load_c_components.</tt><tt class="descname">load_sigvisa</tt><big>(</big><em>param_dirname</em>, <em>start_time</em>, <em>end_time</em>, <em>signal_model_name</em>, <em>site_up</em>, <em>sites</em>, <em>phasenames</em>, <em>phasetimedef</em>, <em>load_signal_params=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/load_c_components/#load_sigvisa"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.load_c_components.load_sigvisa" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.load_c_components.log_trace">
+<tt class="descclassname">sigvisa.load_c_components.</tt><tt class="descname">log_trace</tt><big>(</big><em>trc</em>, <em>filename</em>, <em>format</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/load_c_components/#log_trace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.load_c_components.log_trace" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.prune">
+<span id="prune-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">prune</span></tt> Module<a class="headerlink" href="#module-sigvisa.prune" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.prune.main">
+<tt class="descclassname">sigvisa.prune.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/prune/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.prune.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.sel3roc">
+<span id="sel3roc-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">sel3roc</span></tt> Module<a class="headerlink" href="#module-sigvisa.sel3roc" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.sel3roc.draw_roc">
+<tt class="descclassname">sigvisa.sel3roc.</tt><tt class="descname">draw_roc</tt><big>(</big><em>label</em>, <em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/sel3roc/#draw_roc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.sel3roc.draw_roc" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.sel3roc.main">
+<tt class="descclassname">sigvisa.sel3roc.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/sel3roc/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.sel3roc.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.database/">database Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.az_slow_corr"><tt class="docutils literal"><span class="pre">az_slow_corr</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.dataset"><tt class="docutils literal"><span class="pre">dataset</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.db"><tt class="docutils literal"><span class="pre">db</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.export2csv"><tt class="docutils literal"><span class="pre">export2csv</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.iris2csv"><tt class="docutils literal"><span class="pre">iris2csv</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.isc2csv"><tt class="docutils literal"><span class="pre">isc2csv</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.signal_data"><tt class="docutils literal"><span class="pre">signal_data</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.database/#module-sigvisa.database.wave"><tt class="docutils literal"><span class="pre">wave</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.explore/">explore Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#count-regional-events-by-site-module"><tt class="docutils literal"><span class="pre">count_regional_events_by_site</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#find-example-events-module"><tt class="docutils literal"><span class="pre">find_example_events</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#inverted-detections-of-evid-module"><tt class="docutils literal"><span class="pre">inverted_detections_of_evid</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#list-detections-at-station-module"><tt class="docutils literal"><span class="pre">list_detections_at_station</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#module-sigvisa.explore.match_leb_events"><tt class="docutils literal"><span class="pre">match_leb_events</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#view-waveform-module"><tt class="docutils literal"><span class="pre">view_waveform</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#module-sigvisa.explore.visualize_fitted_envelopes"><tt class="docutils literal"><span class="pre">visualize_fitted_envelopes</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#visualize-learned-envelope-module"><tt class="docutils literal"><span class="pre">visualize_learned_envelope</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.explore/#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sigvisa.explore.doublets/">doublets Package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.explore.doublets/#module-sigvisa.explore.doublets.closest_event_pairs_at_sta"><tt class="docutils literal"><span class="pre">closest_event_pairs_at_sta</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.explore.doublets/#module-sigvisa.explore.doublets.explore_station_waveforms"><tt class="docutils literal"><span class="pre">explore_station_waveforms</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.explore.doublets/#model-select-module"><tt class="docutils literal"><span class="pre">model_select</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.explore.doublets/#predict-doublet-module"><tt class="docutils literal"><span class="pre">predict_doublet</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.explore.doublets/#train-model-module"><tt class="docutils literal"><span class="pre">train_model</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.explore.doublets/#visualize-best-correlations-module"><tt class="docutils literal"><span class="pre">visualize_best_correlations</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.explore.doublets/#module-sigvisa.explore.doublets.xcorr_pairs"><tt class="docutils literal"><span class="pre">xcorr_pairs</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.infer/">infer Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.infer/#module-sigvisa.infer.gridsearch"><tt class="docutils literal"><span class="pre">gridsearch</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.infer/#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sigvisa.infer.optimize/">optimize Package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.infer.optimize/#module-sigvisa.infer.optimize.optim_utils"><tt class="docutils literal"><span class="pre">optim_utils</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.learn/">learn Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.batch_fit_from_evids"><tt class="docutils literal"><span class="pre">batch_fit_from_evids</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.cross_validation"><tt class="docutils literal"><span class="pre">cross_validation</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.cross_validation_aggregate_results"><tt class="docutils literal"><span class="pre">cross_validation_aggregate_results</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.extract_wiggles"><tt class="docutils literal"><span class="pre">extract_wiggles</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.filter_evids_for_run"><tt class="docutils literal"><span class="pre">filter_evids_for_run</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.fit_shape_params"><tt class="docutils literal"><span class="pre">fit_shape_params</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.train_coda_models"><tt class="docutils literal"><span class="pre">train_coda_models</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.learn/#module-sigvisa.learn.train_wiggles"><tt class="docutils literal"><span class="pre">train_wiggles</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.models/">models Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.models/#module-sigvisa.models.envelope_model"><tt class="docutils literal"><span class="pre">envelope_model</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.models/#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sigvisa.models.noise/">noise Package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.noise/#module-sigvisa.models.noise.noise_model"><tt class="docutils literal"><span class="pre">noise_model</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.noise/#subpackages">Subpackages</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="../sigvisa.models.noise.armodel/">armodel Package</a><ul>
+<li class="toctree-l6"><a class="reference internal" href="../sigvisa.models.noise.armodel/#module-sigvisa.models.noise.armodel.learner"><tt class="docutils literal"><span class="pre">learner</span></tt> Module</a></li>
+<li class="toctree-l6"><a class="reference internal" href="../sigvisa.models.noise.armodel/#main-module"><tt class="docutils literal"><span class="pre">main</span></tt> Module</a></li>
+<li class="toctree-l6"><a class="reference internal" href="../sigvisa.models.noise.armodel/#module-sigvisa.models.noise.armodel.model"><tt class="docutils literal"><span class="pre">model</span></tt> Module</a></li>
+<li class="toctree-l6"><a class="reference internal" href="../sigvisa.models.noise.armodel/#module-sigvisa.models.noise.armodel.stat"><tt class="docutils literal"><span class="pre">stat</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../sigvisa.models.spatial_regression/">spatial_regression Package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.spatial_regression/#module-sigvisa.models.spatial_regression.SpatialGP"><tt class="docutils literal"><span class="pre">SpatialGP</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.spatial_regression/#module-sigvisa.models.spatial_regression.baseline_models"><tt class="docutils literal"><span class="pre">baseline_models</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../sigvisa.models.templates/">templates Package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.templates/#module-sigvisa.models.templates.load_by_name"><tt class="docutils literal"><span class="pre">load_by_name</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.templates/#module-sigvisa.models.templates.paired_exp"><tt class="docutils literal"><span class="pre">paired_exp</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.templates/#module-sigvisa.models.templates.template_model"><tt class="docutils literal"><span class="pre">template_model</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../sigvisa.models.wiggles/">wiggles Package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.wiggles/#module-sigvisa.models.wiggles.featurizer"><tt class="docutils literal"><span class="pre">featurizer</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.wiggles/#module-sigvisa.models.wiggles.fourier_features"><tt class="docutils literal"><span class="pre">fourier_features</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.wiggles/#module-sigvisa.models.wiggles.wiggle"><tt class="docutils literal"><span class="pre">wiggle</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.models.wiggles/#module-sigvisa.models.wiggles.wiggle_models"><tt class="docutils literal"><span class="pre">wiggle_models</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.plotting/">plotting Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.plotting/#module-sigvisa.plotting.event_heatmap"><tt class="docutils literal"><span class="pre">event_heatmap</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.plotting/#module-sigvisa.plotting.heatmap"><tt class="docutils literal"><span class="pre">heatmap</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.plotting/#module-sigvisa.plotting.histogram"><tt class="docutils literal"><span class="pre">histogram</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.plotting/#module-sigvisa.plotting.plot"><tt class="docutils literal"><span class="pre">plot</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.plotting/#module-sigvisa.plotting.plot_coda_decays"><tt class="docutils literal"><span class="pre">plot_coda_decays</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.plotting/#plot-multi-station-params-module"><tt class="docutils literal"><span class="pre">plot_multi_station_params</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.priors/">priors Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.ArrivalAmplitudePrior"><tt class="docutils literal"><span class="pre">ArrivalAmplitudePrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.ArrivalAzimuthPrior"><tt class="docutils literal"><span class="pre">ArrivalAzimuthPrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.ArrivalPhasePrior"><tt class="docutils literal"><span class="pre">ArrivalPhasePrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.ArrivalSNR"><tt class="docutils literal"><span class="pre">ArrivalSNR</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.ArrivalSlownessPrior"><tt class="docutils literal"><span class="pre">ArrivalSlownessPrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.ArrivalTimePrior"><tt class="docutils literal"><span class="pre">ArrivalTimePrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#eda-module"><tt class="docutils literal"><span class="pre">EDA</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.EventDetectionPrior"><tt class="docutils literal"><span class="pre">EventDetectionPrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.EventDetectionPriorNew"><tt class="docutils literal"><span class="pre">EventDetectionPriorNew</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.EventLocationPrior"><tt class="docutils literal"><span class="pre">EventLocationPrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.EventMagPrior"><tt class="docutils literal"><span class="pre">EventMagPrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.NumEventPrior"><tt class="docutils literal"><span class="pre">NumEventPrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.NumFalseDetPrior"><tt class="docutils literal"><span class="pre">NumFalseDetPrior</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.priors/#module-sigvisa.priors.SecDetPrior"><tt class="docutils literal"><span class="pre">SecDetPrior</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.results/">results Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.results/#module-sigvisa.results.compare"><tt class="docutils literal"><span class="pre">compare</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.results/#module-sigvisa.results.mwmatching"><tt class="docutils literal"><span class="pre">mwmatching</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.signals/">signals Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals/#module-sigvisa.signals.common"><tt class="docutils literal"><span class="pre">common</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals/#module-sigvisa.signals.io"><tt class="docutils literal"><span class="pre">io</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals/#module-sigvisa.signals.mask_util"><tt class="docutils literal"><span class="pre">mask_util</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals/#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../sigvisa.signals.gpmodel/">gpmodel Package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.signals.gpmodel/#data-module"><tt class="docutils literal"><span class="pre">data</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.signals.gpmodel/#module-sigvisa.signals.gpmodel.gaussian"><tt class="docutils literal"><span class="pre">gaussian</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.signals.gpmodel/#gptest-module"><tt class="docutils literal"><span class="pre">gptest</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.signals.gpmodel/#module-sigvisa.signals.gpmodel.gridutil"><tt class="docutils literal"><span class="pre">gridutil</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.signals.gpmodel/#module-sigvisa.signals.gpmodel.main"><tt class="docutils literal"><span class="pre">main</span></tt> Module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../sigvisa.signals.gpmodel/#wave-module"><tt class="docutils literal"><span class="pre">wave</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.source/">source Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.source/#module-sigvisa.source.brune_source"><tt class="docutils literal"><span class="pre">brune_source</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.source/#module-sigvisa.source.common"><tt class="docutils literal"><span class="pre">common</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.source/#module-sigvisa.source.event"><tt class="docutils literal"><span class="pre">event</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.source/#module-sigvisa.source.main"><tt class="docutils literal"><span class="pre">main</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.source/#module-sigvisa.source.mm_source"><tt class="docutils literal"><span class="pre">mm_source</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.tests/">tests Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.tests/#module-sigvisa.tests.test_armodel"><tt class="docutils literal"><span class="pre">test_armodel</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.tests/#module-sigvisa.tests.test_learn"><tt class="docutils literal"><span class="pre">test_learn</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.tests/#module-sigvisa.tests.test_noise_models"><tt class="docutils literal"><span class="pre">test_noise_models</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.tests/#module-sigvisa.tests.test_optimize"><tt class="docutils literal"><span class="pre">test_optimize</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.tests/#module-sigvisa.tests.test_signal_likelihood"><tt class="docutils literal"><span class="pre">test_signal_likelihood</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.tests/#module-sigvisa.tests.test_signals"><tt class="docutils literal"><span class="pre">test_signals</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.tests/#module-sigvisa.tests.test_spatial_regression"><tt class="docutils literal"><span class="pre">test_spatial_regression</span></tt> Module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.utils/">utils Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.EC2"><tt class="docutils literal"><span class="pre">EC2</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.GMM"><tt class="docutils literal"><span class="pre">GMM</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.Laplace"><tt class="docutils literal"><span class="pre">Laplace</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.LinearModel"><tt class="docutils literal"><span class="pre">LinearModel</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.LogNormal"><tt class="docutils literal"><span class="pre">LogNormal</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.LogisticModel"><tt class="docutils literal"><span class="pre">LogisticModel</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#arrival-overlaps-module"><tt class="docutils literal"><span class="pre">arrival_overlaps</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#closest-stations-module"><tt class="docutils literal"><span class="pre">closest_stations</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.date2time"><tt class="docutils literal"><span class="pre">date2time</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.draw_earth"><tt class="docutils literal"><span class="pre">draw_earth</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.gamma"><tt class="docutils literal"><span class="pre">gamma</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.geog"><tt class="docutils literal"><span class="pre">geog</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.gradient_descent"><tt class="docutils literal"><span class="pre">gradient_descent</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.interaction"><tt class="docutils literal"><span class="pre">interaction</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.kdensity"><tt class="docutils literal"><span class="pre">kdensity</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.kstest"><tt class="docutils literal"><span class="pre">kstest</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.loadrun"><tt class="docutils literal"><span class="pre">loadrun</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.nonparametric_regression"><tt class="docutils literal"><span class="pre">nonparametric_regression</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.saverun"><tt class="docutils literal"><span class="pre">saverun</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.time2date"><tt class="docutils literal"><span class="pre">time2date</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#module-sigvisa.utils.wave_sta"><tt class="docutils literal"><span class="pre">wave_sta</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.utils/#waveform-module"><tt class="docutils literal"><span class="pre">waveform</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">sigvisa Package</a><ul>
+<li><a class="reference internal" href="#id1"><tt class="docutils literal"><span class="pre">sigvisa</span></tt> Package</a></li>
+<li><a class="reference internal" href="#module-sigvisa.analyze"><tt class="docutils literal"><span class="pre">analyze</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.ec2_image"><tt class="docutils literal"><span class="pre">ec2_image</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.ec2_infer"><tt class="docutils literal"><span class="pre">ec2_infer</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.ec2_inst"><tt class="docutils literal"><span class="pre">ec2_inst</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.ec2_kill"><tt class="docutils literal"><span class="pre">ec2_kill</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.ec2_run"><tt class="docutils literal"><span class="pre">ec2_run</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.ec2_simple"><tt class="docutils literal"><span class="pre">ec2_simple</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.ec2_start"><tt class="docutils literal"><span class="pre">ec2_start</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.idcexport"><tt class="docutils literal"><span class="pre">idcexport</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.load_c_components"><tt class="docutils literal"><span class="pre">load_c_components</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.prune"><tt class="docutils literal"><span class="pre">prune</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.sel3roc"><tt class="docutils literal"><span class="pre">sel3roc</span></tt> Module</a></li>
+<li><a class="reference internal" href="#subpackages">Subpackages</a><ul>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../"
+                        title="previous chapter">Welcome to SIG-VISA&#8217;s documentation!</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.database/"
+                        title="next chapter">database Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.database/" title="database Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../" title="Welcome to SIG-VISA’s documentation!"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

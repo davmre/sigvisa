@@ -1,0 +1,356 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.tests.test_signals &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.tests.test_signals</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">unittest</span>
+
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">numpy.ma</span> <span class="kn">as</span> <span class="nn">ma</span>
+<span class="kn">import</span> <span class="nn">matplotlib</span>
+<span class="kn">from</span> <span class="nn">matplotlib.backends.backend_agg</span> <span class="kn">import</span> <span class="n">FigureCanvasAgg</span>
+
+
+<span class="kn">from</span> <span class="nn">sigvisa</span> <span class="kn">import</span> <span class="n">Sigvisa</span>
+<span class="kn">from</span> <span class="nn">sigvisa.source.event</span> <span class="kn">import</span> <span class="n">get_event</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.common</span> <span class="kn">import</span> <span class="n">Waveform</span><span class="p">,</span> <span class="n">Segment</span><span class="p">,</span> <span class="n">load_waveform_from_file</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.mask_util</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.signals.io</span> <span class="kn">import</span> <span class="n">load_event_station</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.templates.paired_exp</span> <span class="kn">import</span> <span class="n">PairedExpTemplateModel</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.armodel.model</span> <span class="kn">import</span> <span class="n">ARModel</span><span class="p">,</span> <span class="n">ErrorModel</span><span class="p">,</span> <span class="n">load_armodel_from_file</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.armodel.learner</span> <span class="kn">import</span> <span class="n">ARLearner</span>
+<span class="kn">from</span> <span class="nn">sigvisa.models.noise.noise_model</span> <span class="kn">import</span> <span class="n">model_path</span><span class="p">,</span> <span class="n">construct_and_save_hourly_noise_models</span><span class="p">,</span> <span class="n">get_noise_model</span>
+<span class="kn">import</span> <span class="nn">sigvisa.plotting.plot</span> <span class="kn">as</span> <span class="nn">plot</span>
+
+
+<div class="viewcode-block" id="savefig"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.savefig">[docs]</a><span class="k">def</span> <span class="nf">savefig</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">fig</span><span class="p">):</span>
+    <span class="n">canvas</span> <span class="o">=</span> <span class="n">FigureCanvasAgg</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
+    <span class="n">canvas</span><span class="o">.</span><span class="n">print_figure</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="TestMasks"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestMasks">[docs]</a><span class="k">class</span> <span class="nc">TestMasks</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TestMasks.setUp"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestMasks.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask1</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">20</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">18</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask1</span><span class="p">[</span><span class="mi">80</span><span class="p">:</span><span class="mi">98</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">18</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask2</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">20</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">20</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask2</span><span class="p">[</span><span class="mi">40</span><span class="p">:</span><span class="mi">60</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">20</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask2</span><span class="p">[</span><span class="mi">80</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">20</span><span class="p">,))</span>
+</div>
+<div class="viewcode-block" id="TestMasks.test_grow_mask"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestMasks.test_grow_mask">[docs]</a>    <span class="k">def</span> <span class="nf">test_grow_mask</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="n">goal_mask1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+        <span class="n">goal_mask1</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">24</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">24</span><span class="p">,))</span>
+        <span class="n">goal_mask1</span><span class="p">[</span><span class="mi">76</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">24</span><span class="p">,))</span>
+
+        <span class="n">mask1</span> <span class="o">=</span> <span class="n">grow_mask</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mask1</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">((</span><span class="n">mask1</span> <span class="o">==</span> <span class="n">goal_mask1</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">())</span>
+
+        <span class="n">goal_mask2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+        <span class="n">goal_mask2</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">24</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">24</span><span class="p">,))</span>
+        <span class="n">goal_mask2</span><span class="p">[</span><span class="mi">36</span><span class="p">:</span><span class="mi">64</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">28</span><span class="p">,))</span>
+        <span class="n">goal_mask2</span><span class="p">[</span><span class="mi">76</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">24</span><span class="p">,))</span>
+
+        <span class="n">mask2</span> <span class="o">=</span> <span class="n">grow_mask</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mask2</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">((</span><span class="n">mask2</span> <span class="o">==</span> <span class="n">goal_mask2</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">())</span>
+</div>
+<div class="viewcode-block" id="TestMasks.test_mask_blocks"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestMasks.test_mask_blocks">[docs]</a>    <span class="k">def</span> <span class="nf">test_mask_blocks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">blocks1</span> <span class="o">=</span> <span class="n">mask_blocks</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mask1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">blocks1</span><span class="p">,</span> <span class="p">[(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">98</span><span class="p">)])</span>
+
+        <span class="n">blocks2</span> <span class="o">=</span> <span class="n">mask_blocks</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mask2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">blocks2</span><span class="p">,</span> <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="p">(</span><span class="mi">40</span><span class="p">,</span> <span class="mi">60</span><span class="p">),</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">100</span><span class="p">)])</span>
+</div>
+<div class="viewcode-block" id="TestMasks.test_mirror"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestMasks.test_mirror">[docs]</a>    <span class="k">def</span> <span class="nf">test_mirror</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="n">signal1</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+        <span class="n">ma1</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked_array</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">signal1</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">mask1</span><span class="p">)</span>
+        <span class="n">ma1</span> <span class="o">=</span> <span class="n">mirror_missing</span><span class="p">(</span><span class="n">ma1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">ma1</span><span class="o">.</span><span class="n">data</span> <span class="o">==</span> <span class="p">[</span>
+                <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">34</span><span class="p">,</span> <span class="mi">33</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">29</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">27</span><span class="p">,</span> <span class="mi">26</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">23</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mi">23</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">26</span><span class="p">,</span> <span class="mi">27</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">29</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">33</span><span class="p">,</span> <span class="mi">34</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">36</span><span class="p">,</span> <span class="mi">37</span><span class="p">,</span> <span class="mi">38</span><span class="p">,</span> <span class="mi">39</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="mi">41</span><span class="p">,</span> <span class="mi">42</span><span class="p">,</span> <span class="mi">43</span><span class="p">,</span> <span class="mi">44</span><span class="p">,</span> <span class="mi">45</span><span class="p">,</span> <span class="mi">46</span><span class="p">,</span> <span class="mi">47</span><span class="p">,</span> <span class="mi">48</span><span class="p">,</span> <span class="mi">49</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">51</span><span class="p">,</span> <span class="mi">52</span><span class="p">,</span> <span class="mi">53</span><span class="p">,</span> <span class="mi">54</span><span class="p">,</span> <span class="mi">55</span><span class="p">,</span> <span class="mi">56</span><span class="p">,</span> <span class="mi">57</span><span class="p">,</span> <span class="mi">58</span><span class="p">,</span> <span class="mi">59</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">61</span><span class="p">,</span> <span class="mi">62</span><span class="p">,</span> <span class="mi">63</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">65</span><span class="p">,</span> <span class="mi">66</span><span class="p">,</span> <span class="mi">67</span><span class="p">,</span> <span class="mi">68</span><span class="p">,</span> <span class="mi">69</span><span class="p">,</span> <span class="mi">70</span><span class="p">,</span> <span class="mi">71</span><span class="p">,</span> <span class="mi">72</span><span class="p">,</span>
+             <span class="mi">73</span><span class="p">,</span> <span class="mi">74</span><span class="p">,</span> <span class="mi">75</span><span class="p">,</span> <span class="mi">76</span><span class="p">,</span> <span class="mi">77</span><span class="p">,</span> <span class="mi">78</span><span class="p">,</span> <span class="mi">79</span><span class="p">,</span> <span class="mi">79</span><span class="p">,</span> <span class="mi">78</span><span class="p">,</span> <span class="mi">77</span><span class="p">,</span> <span class="mi">76</span><span class="p">,</span> <span class="mi">75</span><span class="p">,</span> <span class="mi">74</span><span class="p">,</span> <span class="mi">73</span><span class="p">,</span> <span class="mi">72</span><span class="p">,</span> <span class="mi">71</span><span class="p">,</span> <span class="mi">70</span><span class="p">,</span> <span class="mi">69</span><span class="p">,</span> <span class="mi">68</span><span class="p">,</span> <span class="mi">67</span><span class="p">,</span> <span class="mi">66</span><span class="p">,</span> <span class="mi">65</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">99</span><span class="p">,</span> <span class="mi">98</span><span class="p">,</span> <span class="mi">98</span><span class="p">,</span> <span class="mi">99</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">())</span>
+
+        <span class="n">signal2</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+        <span class="n">ma2</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked_array</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">signal2</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">mask2</span><span class="p">)</span>
+        <span class="n">ma2</span> <span class="o">=</span> <span class="n">mirror_missing</span><span class="p">(</span><span class="n">ma2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">ma2</span><span class="o">.</span><span class="n">data</span> <span class="o">==</span> <span class="p">[</span>
+                <span class="mi">39</span><span class="p">,</span> <span class="mi">38</span><span class="p">,</span> <span class="mi">37</span><span class="p">,</span> <span class="mi">36</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">34</span><span class="p">,</span> <span class="mi">33</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">29</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">27</span><span class="p">,</span> <span class="mi">26</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">23</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mi">23</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">26</span><span class="p">,</span> <span class="mi">27</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">29</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">33</span><span class="p">,</span> <span class="mi">34</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">36</span><span class="p">,</span> <span class="mi">37</span><span class="p">,</span> <span class="mi">38</span><span class="p">,</span> <span class="mi">39</span><span class="p">,</span> <span class="mi">39</span><span class="p">,</span> <span class="mi">38</span><span class="p">,</span> <span class="mi">37</span><span class="p">,</span> <span class="mi">36</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">34</span><span class="p">,</span> <span class="mi">33</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">69</span><span class="p">,</span> <span class="mi">68</span><span class="p">,</span> <span class="mi">67</span><span class="p">,</span> <span class="mi">66</span><span class="p">,</span> <span class="mi">65</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">63</span><span class="p">,</span> <span class="mi">62</span><span class="p">,</span> <span class="mi">61</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">60</span><span class="p">,</span> <span class="mi">61</span><span class="p">,</span> <span class="mi">62</span><span class="p">,</span> <span class="mi">63</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">65</span><span class="p">,</span> <span class="mi">66</span><span class="p">,</span> <span class="mi">67</span><span class="p">,</span> <span class="mi">68</span><span class="p">,</span> <span class="mi">69</span><span class="p">,</span> <span class="mi">70</span><span class="p">,</span> <span class="mi">71</span><span class="p">,</span>
+             <span class="mi">72</span><span class="p">,</span> <span class="mi">73</span><span class="p">,</span> <span class="mi">74</span><span class="p">,</span> <span class="mi">75</span><span class="p">,</span> <span class="mi">76</span><span class="p">,</span> <span class="mi">77</span><span class="p">,</span> <span class="mi">78</span><span class="p">,</span> <span class="mi">79</span><span class="p">,</span> <span class="mi">79</span><span class="p">,</span> <span class="mi">78</span><span class="p">,</span> <span class="mi">77</span><span class="p">,</span> <span class="mi">76</span><span class="p">,</span> <span class="mi">75</span><span class="p">,</span> <span class="mi">74</span><span class="p">,</span> <span class="mi">73</span><span class="p">,</span> <span class="mi">72</span><span class="p">,</span> <span class="mi">71</span><span class="p">,</span> <span class="mi">70</span><span class="p">,</span> <span class="mi">69</span><span class="p">,</span> <span class="mi">68</span><span class="p">,</span> <span class="mi">67</span><span class="p">,</span> <span class="mi">66</span><span class="p">,</span> <span class="mi">65</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">63</span><span class="p">,</span> <span class="mi">62</span><span class="p">,</span> <span class="mi">61</span><span class="p">,</span> <span class="mi">60</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">())</span>
+
+</div></div>
+<div class="viewcode-block" id="TestWaveform"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform">[docs]</a><span class="k">class</span> <span class="nc">TestWaveform</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TestWaveform.setUp"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1000</span><span class="p">,))</span>
+        <span class="n">mask</span><span class="p">[</span><span class="mi">100</span><span class="p">:</span><span class="mi">200</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">data1</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked_array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1000</span><span class="p">),</span> <span class="n">mask</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span> <span class="o">=</span> <span class="n">Waveform</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data1</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">stime</span><span class="o">=</span><span class="mi">11111103</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&quot;CTA&quot;</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="s">&quot;BHZ&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestWaveform.test_segment_stats"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.test_segment_stats">[docs]</a>    <span class="k">def</span> <span class="nf">test_segment_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">],</span> <span class="s">&quot;CTA&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;stime&#39;</span><span class="p">],</span> <span class="mi">11111103</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;etime&#39;</span><span class="p">],</span> <span class="mi">11111203</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestWaveform.test_local_stats"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.test_local_stats">[docs]</a>    <span class="k">def</span> <span class="nf">test_local_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;srate&#39;</span><span class="p">],</span> <span class="mi">10</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;npts&#39;</span><span class="p">],</span> <span class="mi">1000</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;chan&#39;</span><span class="p">],</span> <span class="s">&quot;BHZ&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;filter_str&#39;</span><span class="p">],</span> <span class="s">&quot;&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;freq_low&#39;</span><span class="p">],</span> <span class="mf">0.0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;freq_high&#39;</span><span class="p">],</span> <span class="mf">5.0</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestWaveform.test_filters"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.test_filters">[docs]</a>    <span class="k">def</span> <span class="nf">test_filters</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">bhz_23</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s">&quot;freq_2.0_3.0&quot;</span><span class="p">)</span>
+        <span class="n">bhz_23_env</span> <span class="o">=</span> <span class="n">bhz_23</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s">&quot;env&quot;</span><span class="p">)</span>
+        <span class="n">bhz_23_env_smooth</span> <span class="o">=</span> <span class="n">bhz_23_env</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s">&quot;smooth&quot;</span><span class="p">)</span>
+
+        <span class="n">bhz_alt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s">&quot;freq_2.0_3.0;env;smooth&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">bhz_23_env_smooth</span><span class="p">,</span> <span class="n">bhz_alt</span><span class="p">)</span>
+
+        <span class="n">bhz_decimated</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s">&quot;freq_2.0_3.0;env;smooth;hz_5&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">bhz_decimated</span><span class="p">[</span><span class="s">&#39;srate&#39;</span><span class="p">],</span> <span class="mi">5</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">bhz_decimated</span><span class="p">[</span><span class="s">&#39;npts&#39;</span><span class="p">],</span> <span class="mi">500</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestWaveform.test_timeslice"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.test_timeslice">[docs]</a>    <span class="k">def</span> <span class="nf">test_timeslice</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="TestWaveform.test_mirror_missing"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.test_mirror_missing">[docs]</a>    <span class="k">def</span> <span class="nf">test_mirror_missing</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">mirror_missing</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1000</span><span class="p">,))</span>
+
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_waveform</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;mirror.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestWaveform.test_obspy_trace"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.test_obspy_trace">[docs]</a>    <span class="k">def</span> <span class="nf">test_obspy_trace</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">tr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">as_obspy_trace</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="TestWaveform.test_pickle"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestWaveform.test_pickle">[docs]</a>    <span class="k">def</span> <span class="nf">test_pickle</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">dump_to_file</span><span class="p">(</span><span class="s">&quot;test_bhz.wave&quot;</span><span class="p">)</span>
+        <span class="n">loaded</span> <span class="o">=</span> <span class="n">load_waveform_from_file</span><span class="p">(</span><span class="s">&quot;test_bhz.wave&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">segment_stats</span><span class="p">,</span> <span class="n">loaded</span><span class="o">.</span><span class="n">segment_stats</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">my_stats</span><span class="p">,</span> <span class="n">loaded</span><span class="o">.</span><span class="n">my_stats</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertAlmostEqual</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="o">.</span><span class="n">data</span> <span class="o">-</span> <span class="n">loaded</span><span class="o">.</span><span class="n">data</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="TestSegments"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments">[docs]</a><span class="k">class</span> <span class="nc">TestSegments</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TestSegments.setUp"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.setUp">[docs]</a>    <span class="k">def</span> <span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">mask1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1000</span><span class="p">,))</span>
+        <span class="n">mask1</span><span class="p">[</span><span class="mo">000</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+
+        <span class="n">mask2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1000</span><span class="p">,))</span>
+        <span class="n">mask2</span><span class="p">[</span><span class="mi">600</span><span class="p">:</span><span class="mi">700</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">data1</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked_array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1000</span><span class="p">),</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data1</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mo">000</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span> <span class="o">*</span> <span class="o">-</span><span class="mi">100000000000000</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data2</span> <span class="o">=</span> <span class="n">ma</span><span class="o">.</span><span class="n">masked_array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">1000</span><span class="p">),</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data2</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mi">600</span><span class="p">:</span><span class="mi">700</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span> <span class="o">*</span> <span class="o">-</span><span class="mi">100000000000000</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">data1</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">bhz</span> <span class="o">=</span> <span class="n">Waveform</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data1</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">stime</span><span class="o">=</span><span class="mi">103</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&quot;CTA&quot;</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="s">&quot;BHZ&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bhe</span> <span class="o">=</span> <span class="n">Waveform</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data2</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">stime</span><span class="o">=</span><span class="mi">103</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&quot;CTA&quot;</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="s">&quot;BHE&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bhn</span> <span class="o">=</span> <span class="n">Waveform</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">data3</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">stime</span><span class="o">=</span><span class="mi">103</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&quot;CTA&quot;</span><span class="p">,</span> <span class="n">chan</span><span class="o">=</span><span class="s">&quot;BHN&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">seg</span> <span class="o">=</span> <span class="n">Segment</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">bhz</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhe</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bhn</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="TestSegments.test_segment_stats"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.test_segment_stats">[docs]</a>    <span class="k">def</span> <span class="nf">test_segment_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">],</span> <span class="s">&quot;CTA&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;stime&#39;</span><span class="p">],</span> <span class="mi">103</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;etime&#39;</span><span class="p">],</span> <span class="mi">203</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestSegments.test_segment_filter_caching"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.test_segment_filter_caching">[docs]</a>    <span class="k">def</span> <span class="nf">test_segment_filter_caching</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">filter_str</span> <span class="o">=</span> <span class="s">&quot;freq_2.0_3.0;env;smooth&quot;</span>
+        <span class="n">s1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">filter_str</span><span class="p">)</span>
+        <span class="n">s2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">filter_str</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestSegments.test_segment_filter_order"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.test_segment_filter_order">[docs]</a>    <span class="k">def</span> <span class="nf">test_segment_filter_order</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">filter_str</span> <span class="o">=</span> <span class="s">&quot;freq_2.0_3.0;env;smooth&quot;</span>
+        <span class="n">reorder_str</span> <span class="o">=</span> <span class="s">&quot;env;freq_2.0_3.0;smooth&quot;</span>
+
+        <span class="n">partial_str1</span> <span class="o">=</span> <span class="s">&quot;freq_2.0_3.0&quot;</span>
+        <span class="n">partial_str2</span> <span class="o">=</span> <span class="s">&quot;env;smooth&quot;</span>
+
+        <span class="n">s1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">filter_str</span><span class="p">)</span>
+        <span class="n">s2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">reorder_str</span><span class="p">)</span>
+        <span class="n">s3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">partial_str1</span><span class="p">)</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">partial_str2</span><span class="p">)</span>
+        <span class="n">s4</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">partial_str2</span><span class="p">)</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">partial_str1</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s3</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s4</span><span class="p">)</span>
+
+        <span class="n">s5</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">partial_str2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIsNot</span><span class="p">(</span><span class="n">s1</span><span class="p">,</span> <span class="n">s5</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestSegments.test_waveform_filter_caching_full"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.test_waveform_filter_caching_full">[docs]</a>    <span class="k">def</span> <span class="nf">test_waveform_filter_caching_full</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">filter_str</span> <span class="o">=</span> <span class="s">&quot;freq_2.0_3.0;env;smooth&quot;</span>
+        <span class="n">s1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="n">filter_str</span><span class="p">)</span>
+        <span class="n">bhz_filtered</span> <span class="o">=</span> <span class="n">s1</span><span class="p">[</span><span class="s">&#39;BHZ&#39;</span><span class="p">]</span>
+        <span class="n">bhz_filtered_alt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;BHZ&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">filter_str</span><span class="p">)</span>
+        <span class="n">bhz_filtered_alt1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;BHZ&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">filter_str</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">bhz_filtered</span><span class="p">,</span> <span class="n">bhz_filtered_alt</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">bhz_filtered_alt</span><span class="p">,</span> <span class="n">bhz_filtered_alt1</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestSegments.test_waveform_filter_caching_partial"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.test_waveform_filter_caching_partial">[docs]</a>    <span class="k">def</span> <span class="nf">test_waveform_filter_caching_partial</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">filter_str</span> <span class="o">=</span> <span class="s">&quot;freq_2.0_3.0;env;smooth&quot;</span>
+        <span class="n">bhz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;BHZ&#39;</span><span class="p">]</span>
+
+        <span class="n">bhz_full</span> <span class="o">=</span> <span class="n">bhz</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">filter_str</span><span class="p">,</span> <span class="n">preserve_intermediate</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">bhz_partial</span> <span class="o">=</span> <span class="n">bhz</span>
+        <span class="k">for</span> <span class="n">single_filter</span> <span class="ow">in</span> <span class="n">filter_str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;;&#39;</span><span class="p">):</span>
+            <span class="n">bhz_partial</span> <span class="o">=</span> <span class="n">bhz_partial</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">single_filter</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">bhz_full</span><span class="p">,</span> <span class="n">bhz_partial</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestSegments.test_old_style"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.test_old_style">[docs]</a>    <span class="k">def</span> <span class="nf">test_old_style</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">old_seg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">as_old_style_segment</span><span class="p">()</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&#39;freq_2.0_3.0&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s">&#39;BHN&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">old_seg</span><span class="p">[</span><span class="s">&#39;BHN&#39;</span><span class="p">][</span><span class="s">&#39;freq_2.0_3.0&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TestSegments.test_load_plot"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestSegments.test_load_plot">[docs]</a>    <span class="k">def</span> <span class="nf">test_load_plot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_segment</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;fake.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&#39;center;env&#39;</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_segment</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;fake_env.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&#39;freq_2.0_3.0&#39;</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_segment</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;fake_env_freq23.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="TestIO"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestIO">[docs]</a><span class="k">class</span> <span class="nc">TestIO</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+
+<div class="viewcode-block" id="TestIO.test_load_plot"><a class="viewcode-back" href="../../../../sigvisa.tests/#sigvisa.tests.test_signals.TestIO.test_load_plot">[docs]</a>    <span class="k">def</span> <span class="nf">test_load_plot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">seg</span> <span class="o">=</span> <span class="n">load_event_station</span><span class="p">(</span><span class="n">evid</span><span class="o">=</span><span class="mi">5301405</span><span class="p">,</span> <span class="n">sta</span><span class="o">=</span><span class="s">&quot;URZ&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;sta&#39;</span><span class="p">],</span> <span class="s">&quot;URZ&quot;</span><span class="p">)</span>
+
+        <span class="n">bhn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;BHN&#39;</span><span class="p">]</span>
+        <span class="n">bhz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">[</span><span class="s">&#39;BHZ&#39;</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;event_arrivals&#39;</span><span class="p">],</span> <span class="n">bhn</span><span class="p">[</span><span class="s">&#39;event_arrivals&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIs</span><span class="p">(</span><span class="n">bhz</span><span class="p">[</span><span class="s">&#39;arrivals&#39;</span><span class="p">],</span> <span class="n">bhn</span><span class="p">[</span><span class="s">&#39;arrivals&#39;</span><span class="p">])</span>
+
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_segment</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;URZ_5301405.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">seg</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&#39;center;env&#39;</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_segment</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;URZ_5301405_env.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&#39;freq_2.0_3.0&#39;</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_segment</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;URZ_5301405_env_2_3.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">with_filter</span><span class="p">(</span><span class="s">&#39;smooth&#39;</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">plot_segment</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="n">savefig</span><span class="p">(</span><span class="s">&quot;URZ_5301405_env_2_3_smooth.png&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+</div></div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">unittest</span><span class="o">.</span><span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

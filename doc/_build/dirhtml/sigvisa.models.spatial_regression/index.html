@@ -1,0 +1,373 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>spatial_regression Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="models Package" href="../sigvisa.models/" />
+    <link rel="next" title="templates Package" href="../sigvisa.models.templates/" />
+    <link rel="prev" title="armodel Package" href="../sigvisa.models.noise.armodel/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.templates/" title="templates Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.noise.armodel/" title="armodel Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" accesskey="U">models Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="spatial-regression-package">
+<h1>spatial_regression Package<a class="headerlink" href="#spatial-regression-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.models.spatial_regression.SpatialGP">
+<span id="spatialgp-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">SpatialGP</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.spatial_regression.SpatialGP" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.SpatialGP">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">SpatialGP</tt><big>(</big><em>*args</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#SpatialGP"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.SpatialGP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gpr.gp.GaussianProcess</span></tt>, <a class="reference internal" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel" title="sigvisa.models.spatial_regression.baseline_models.ParamModel"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.models.spatial_regression.baseline_models.ParamModel</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.SpatialGP.load_trained_model">
+<tt class="descname">load_trained_model</tt><big>(</big><em>filename</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#SpatialGP.load_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.load_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.SpatialGP.posterior_log_likelihood">
+<tt class="descname">posterior_log_likelihood</tt><big>(</big><em>X1</em>, <em>y</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#SpatialGP.posterior_log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.posterior_log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.SpatialGP.predict">
+<tt class="descname">predict</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#SpatialGP.predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.SpatialGP.sample">
+<tt class="descname">sample</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#SpatialGP.sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.SpatialGP.save_trained_model">
+<tt class="descname">save_trained_model</tt><big>(</big><em>filename</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#SpatialGP.save_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.save_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serialize the model to a file.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.SpatialGP.variance">
+<tt class="descname">variance</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#SpatialGP.variance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.SpatialGP.variance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.azi_distfn">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">azi_distfn</tt><big>(</big><em>lldda1</em>, <em>lldda2</em>, <em>params=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#azi_distfn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.azi_distfn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.depth_distfn">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">depth_distfn</tt><big>(</big><em>lldda1</em>, <em>lldda2</em>, <em>params=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#depth_distfn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.depth_distfn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_cuberoot">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">dist_azi_depth_distfn_cuberoot</tt><big>(</big><em>dad1</em>, <em>dad2</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#dist_azi_depth_distfn_cuberoot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_cuberoot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_cuberoot">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">dist_azi_depth_distfn_deriv_cuberoot</tt><big>(</big><em>i</em>, <em>dad1</em>, <em>dad2</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#dist_azi_depth_distfn_deriv_cuberoot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_cuberoot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_linear">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">dist_azi_depth_distfn_deriv_linear</tt><big>(</big><em>i</em>, <em>dad1</em>, <em>dad2</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#dist_azi_depth_distfn_deriv_linear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_linear" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_log">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">dist_azi_depth_distfn_deriv_log</tt><big>(</big><em>i</em>, <em>dad1</em>, <em>dad2</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#dist_azi_depth_distfn_deriv_log"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_deriv_log" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_linear">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">dist_azi_depth_distfn_linear</tt><big>(</big><em>dad1</em>, <em>dad2</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#dist_azi_depth_distfn_linear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_linear" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_log">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">dist_azi_depth_distfn_log</tt><big>(</big><em>dad1</em>, <em>dad2</em>, <em>params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#dist_azi_depth_distfn_log"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.dist_azi_depth_distfn_log" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.dist_distfn">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">dist_distfn</tt><big>(</big><em>lldda1</em>, <em>lldda2</em>, <em>params=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#dist_distfn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.dist_distfn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.gp_extract_features">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">gp_extract_features</tt><big>(</big><em>X</em>, <em>distfn</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#gp_extract_features"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.gp_extract_features" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.ll_distfn">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">ll_distfn</tt><big>(</big><em>lldda1</em>, <em>lldda2</em>, <em>params=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#ll_distfn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.ll_distfn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.spatial_regression.SpatialGP.lon_lat_depth_distfn">
+<tt class="descclassname">sigvisa.models.spatial_regression.SpatialGP.</tt><tt class="descname">lon_lat_depth_distfn</tt><big>(</big><em>lld1</em>, <em>lld2</em>, <em>params=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/SpatialGP/#lon_lat_depth_distfn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.SpatialGP.lon_lat_depth_distfn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.models.spatial_regression.baseline_models">
+<span id="baseline-models-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">baseline_models</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.spatial_regression.baseline_models" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.spatial_regression.baseline_models.</tt><tt class="descname">ConstGaussianModel</tt><big>(</big><em>X=None</em>, <em>y=None</em>, <em>sta=None</em>, <em>fname=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ConstGaussianModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel" title="sigvisa.models.spatial_regression.baseline_models.ParamModel"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.models.spatial_regression.baseline_models.ParamModel</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.load_trained_model">
+<tt class="descname">load_trained_model</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ConstGaussianModel.load_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.load_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.log_likelihood">
+<tt class="descname">log_likelihood</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ConstGaussianModel.log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.posterior_log_likelihood">
+<tt class="descname">posterior_log_likelihood</tt><big>(</big><em>X1</em>, <em>y</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ConstGaussianModel.posterior_log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.posterior_log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.predict">
+<tt class="descname">predict</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ConstGaussianModel.predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.sample">
+<tt class="descname">sample</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ConstGaussianModel.sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.save_trained_model">
+<tt class="descname">save_trained_model</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ConstGaussianModel.save_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ConstGaussianModel.save_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.spatial_regression.baseline_models.</tt><tt class="descname">LinearModel</tt><big>(</big><em>sta=None</em>, <em>X=None</em>, <em>y=None</em>, <em>fname=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel" title="sigvisa.models.spatial_regression.baseline_models.ParamModel"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.models.spatial_regression.baseline_models.ParamModel</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.ll_item">
+<tt class="descname">ll_item</tt><big>(</big><em>x1</em>, <em>y1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.ll_item"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.ll_item" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.load_trained_model">
+<tt class="descname">load_trained_model</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.load_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.load_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.log_likelihood">
+<tt class="descname">log_likelihood</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.posterior_log_likelihood">
+<tt class="descname">posterior_log_likelihood</tt><big>(</big><em>X1</em>, <em>y</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.posterior_log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.posterior_log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.predict">
+<tt class="descname">predict</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.predict_dist">
+<tt class="descname">predict_dist</tt><big>(</big><em>d</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.predict_dist"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.predict_dist" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.predict_item">
+<tt class="descname">predict_item</tt><big>(</big><em>x</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.predict_item"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.predict_item" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.sample">
+<tt class="descname">sample</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.sample_item">
+<tt class="descname">sample_item</tt><big>(</big><em>x</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.sample_item"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.sample_item" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.save_trained_model">
+<tt class="descname">save_trained_model</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.save_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.save_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.LinearModel.std">
+<tt class="descname">std</tt><big>(</big><em>x</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#LinearModel.std"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.LinearModel.std" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.spatial_regression.baseline_models.</tt><tt class="descname">ParamModel</tt><big>(</big><em>sta=None</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel.event_to_array">
+<tt class="descname">event_to_array</tt><big>(</big><em>event</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel.event_to_array"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel.event_to_array" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel.load_trained_model">
+<tt class="descname">load_trained_model</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel.load_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel.load_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel.log_likelihood">
+<tt class="descname">log_likelihood</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel.log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel.log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel.posterior_log_likelihood">
+<tt class="descname">posterior_log_likelihood</tt><big>(</big><em>X1</em>, <em>y</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel.posterior_log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel.posterior_log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel.predict">
+<tt class="descname">predict</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel.predict"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel.predict" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel.sample">
+<tt class="descname">sample</tt><big>(</big><em>X1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel.sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.spatial_regression.baseline_models.ParamModel.save_trained_model">
+<tt class="descname">save_trained_model</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/spatial_regression/baseline_models/#ParamModel.save_trained_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.spatial_regression.baseline_models.ParamModel.save_trained_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">spatial_regression Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.models.spatial_regression.SpatialGP"><tt class="docutils literal"><span class="pre">SpatialGP</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.models.spatial_regression.baseline_models"><tt class="docutils literal"><span class="pre">baseline_models</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.models.noise.armodel/"
+                        title="previous chapter">armodel Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.models.templates/"
+                        title="next chapter">templates Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.models.spatial_regression.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.templates/" title="templates Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.noise.armodel/" title="armodel Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" >models Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

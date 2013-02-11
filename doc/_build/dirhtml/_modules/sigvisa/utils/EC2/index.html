@@ -1,0 +1,1152 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.utils.EC2 &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.utils.EC2</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c">#  This software code is made available &quot;AS IS&quot; without warranties of any</span>
+<span class="c">#  kind.  You may copy, display, modify and redistribute the software</span>
+<span class="c">#  code either by itself or as incorporated into your code; provided that</span>
+<span class="c">#  you do not remove any proprietary notices.  Your use of this software</span>
+<span class="c">#  code is at your own risk and you waive any claim against Amazon Web</span>
+<span class="c">#  Services LLC or its affiliates with respect to your use of this software</span>
+<span class="c">#  code. (c) 2006 Amazon Web Services LLC or its affiliates.  All rights</span>
+<span class="c">#  reserved.</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s">&quot;ignore&quot;</span><span class="p">)</span>
+
+<span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">import</span> <span class="nn">hmac</span>
+<span class="kn">import</span> <span class="nn">httplib</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sha</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">urllib</span>
+<span class="c"># ElementTree is in stdlib from Python 2.5, so get it from there if we can:</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">xml.etree</span> <span class="kn">import</span> <span class="n">ElementTree</span> <span class="k">as</span> <span class="n">ET</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">elementtree</span> <span class="kn">import</span> <span class="n">ElementTree</span> <span class="k">as</span> <span class="n">ET</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+
+<span class="n">DEFAULT_HOST</span> <span class="o">=</span> <span class="s">&#39;ec2.amazonaws.com&#39;</span>
+<span class="n">PORTS_BY_SECURITY</span> <span class="o">=</span> <span class="p">{</span><span class="bp">True</span><span class="p">:</span> <span class="mi">443</span><span class="p">,</span> <span class="bp">False</span><span class="p">:</span> <span class="mi">80</span><span class="p">}</span>
+<span class="n">API_VERSION</span> <span class="o">=</span> <span class="s">&#39;2011-12-15&#39;</span>
+<span class="n">RELEASE_VERSION</span> <span class="o">=</span> <span class="s">&quot;1&quot;</span>
+
+
+<div class="viewcode-block" id="InstanceNotFound"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.InstanceNotFound">[docs]</a><span class="k">class</span> <span class="nc">InstanceNotFound</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="AWSAuthConnection"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection">[docs]</a><span class="k">class</span> <span class="nc">AWSAuthConnection</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Creates an authorized connection to EC2 containing wrappers for</span>
+<span class="sd">    Query API calls.</span>
+
+<span class="sd">    Each API call has a matching method on this class to perform the</span>
+<span class="sd">    appropriate E2 action.</span>
+
+<span class="sd">    @ivar verbose: Verbosity flag, defaults to false.  If set to true,</span>
+<span class="sd">    some debug information is printed.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aws_access_key_id</span><span class="p">,</span> <span class="n">aws_secret_access_key</span><span class="p">,</span>
+                 <span class="n">is_secure</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">server</span><span class="o">=</span><span class="n">DEFAULT_HOST</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">port</span><span class="p">:</span>
+            <span class="n">port</span> <span class="o">=</span> <span class="n">PORTS_BY_SECURITY</span><span class="p">[</span><span class="n">is_secure</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aws_access_key_id</span> <span class="o">=</span> <span class="n">aws_access_key_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aws_secret_access_key</span> <span class="o">=</span> <span class="n">aws_secret_access_key</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">is_secure</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">connection</span> <span class="o">=</span> <span class="n">httplib</span><span class="o">.</span><span class="n">HTTPSConnection</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">:</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">server</span><span class="p">,</span> <span class="n">port</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">connection</span> <span class="o">=</span> <span class="n">httplib</span><span class="o">.</span><span class="n">HTTPConnection</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">:</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">server</span><span class="p">,</span> <span class="n">port</span><span class="p">))</span>
+
+<div class="viewcode-block" id="AWSAuthConnection.pathlist"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.pathlist">[docs]</a>    <span class="k">def</span> <span class="nf">pathlist</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Converts a key and an array of values into AWS query param format.&quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">arr</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">.</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">return</span> <span class="n">params</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.allocate_address"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.allocate_address">[docs]</a>    <span class="k">def</span> <span class="nf">allocate_address</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes an C{AllocateAddress} call.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="n">AllocateAddressResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;AllocateAddress&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_addresses"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_addresses">[docs]</a>    <span class="k">def</span> <span class="nf">describe_addresses</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">publicIps</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DescribeAddresses} call.</span>
+
+<span class="sd">        @param publicIps: List of addresses to describe.  If empty or</span>
+<span class="sd">        omitted, all addresses will be described.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">publicIps</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">publicIps</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;PublicIp&quot;</span><span class="p">,</span> <span class="n">publicIps</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">DescribeAddressesResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeAddresses&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.release_address"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.release_address">[docs]</a>    <span class="k">def</span> <span class="nf">release_address</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">publicIp</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{ReleaseAddress} call.</span>
+
+<span class="sd">        @param publicIp: Address to release</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;PublicIp&quot;</span><span class="p">:</span> <span class="n">publicIp</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">ReleaseAddressResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;ReleaseAddress&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.associate_address"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.associate_address">[docs]</a>    <span class="k">def</span> <span class="nf">associate_address</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">publicIp</span><span class="p">,</span> <span class="n">instanceId</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes an C{AssociateAddress} call.</span>
+
+<span class="sd">        @param publicIp: Address to associate</span>
+<span class="sd">        @param instanceId: Instance to associate address with</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;PublicIp&quot;</span><span class="p">:</span> <span class="n">publicIp</span><span class="p">,</span> <span class="s">&quot;InstanceId&quot;</span><span class="p">:</span> <span class="n">instanceId</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">AssociateAddressResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;AssociateAddress&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.disassociate_address"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.disassociate_address">[docs]</a>    <span class="k">def</span> <span class="nf">disassociate_address</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">publicIp</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DisassociateAddress} call.</span>
+
+<span class="sd">        @param publicIp: Address to disassociate</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;PublicIp&quot;</span><span class="p">:</span> <span class="n">publicIp</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">DisassociateAddressResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DisassociateAddress&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_availability_zones"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_availability_zones">[docs]</a>    <span class="k">def</span> <span class="nf">describe_availability_zones</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">zoneNames</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DescribeAvailabilityZones} call.</span>
+
+<span class="sd">        @param zoneNames: List of availability zones to describe.  If</span>
+<span class="sd">        empty or omitted, all availability zones will be described.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">zoneNames</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">zoneNames</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;ZoneName&quot;</span><span class="p">,</span> <span class="n">zoneNames</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">DescribeAvailabilityZonesResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeAvailabilityZones&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.create_image"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.create_image">[docs]</a>    <span class="k">def</span> <span class="nf">create_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">instanceId</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{CreateImage} call.</span>
+
+<span class="sd">        @param name: The name of the new image</span>
+<span class="sd">        @param instanceId: The instance id to make the image from</span>
+<span class="sd">        @param description: The description of the new image</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;Name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span> <span class="s">&quot;InstanceId&quot;</span><span class="p">:</span> <span class="n">instanceId</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">description</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;Description&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">description</span>
+        <span class="k">return</span> <span class="n">CreateImageResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;CreateImage&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.register_image"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.register_image">[docs]</a>    <span class="k">def</span> <span class="nf">register_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imageLocation</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{RegisterImage} call.</span>
+
+<span class="sd">        @param imageLocation: The location of the image manifest to</span>
+<span class="sd">        register in S3.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;ImageLocation&quot;</span><span class="p">:</span> <span class="n">imageLocation</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">RegisterImageResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;RegisterImage&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_images"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_images">[docs]</a>    <span class="k">def</span> <span class="nf">describe_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imageIds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">owners</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">executableBy</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DescribeImages} call.</span>
+
+<span class="sd">        @param imageIds: List of images to describe.  If empty or omitted, all</span>
+<span class="sd">        images visible to the user are returned.</span>
+
+<span class="sd">        @param owners: List of users to filter returned images by</span>
+<span class="sd">        owner.  If empty or omitted, no filtering is done.</span>
+
+<span class="sd">        @param executableBy: List of users (or user groups) to filter</span>
+<span class="sd">        returned images by execution permissions.  If empty or</span>
+<span class="sd">        omitted, no filtering is done.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">imageIds</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">imageIds</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">owners</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">owners</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">executableBy</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">executableBy</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;ImageId&quot;</span><span class="p">,</span> <span class="n">imageIds</span><span class="p">)</span>
+        <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;Owner&quot;</span><span class="p">,</span> <span class="n">owners</span><span class="p">))</span>
+        <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;ExecutableBy&quot;</span><span class="p">,</span> <span class="n">executableBy</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">DescribeImagesResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeImages&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.deregister_image"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.deregister_image">[docs]</a>    <span class="k">def</span> <span class="nf">deregister_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imageId</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DeregisterImage} call.</span>
+
+<span class="sd">        @param imageId: The image id to deregister.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;ImageId&quot;</span><span class="p">:</span> <span class="n">imageId</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">DeregisterImageResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DeregisterImage&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.create_keypair"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.create_keypair">[docs]</a>    <span class="k">def</span> <span class="nf">create_keypair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keyName</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{CreateKeypair} call.</span>
+
+<span class="sd">        @param keyName: Name for the new keypair.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;KeyName&quot;</span><span class="p">:</span> <span class="n">keyName</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">CreateKeyPairResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;CreateKeyPair&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_keypairs"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_keypairs">[docs]</a>    <span class="k">def</span> <span class="nf">describe_keypairs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keyNames</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DescribeKeypairs} call.</span>
+
+<span class="sd">        @param keyNames: List of keypairs to describe.  If empty or</span>
+<span class="sd">        omitted, all keypairs are returned.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">keyNames</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">keyNames</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;KeyName&quot;</span><span class="p">,</span> <span class="n">keyNames</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">DescribeKeyPairsResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeKeyPairs&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.delete_keypair"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.delete_keypair">[docs]</a>    <span class="k">def</span> <span class="nf">delete_keypair</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keyName</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DeleteKeypair} call.</span>
+
+<span class="sd">        @param keyName: Name of keypair to delete.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;KeyName&quot;</span><span class="p">:</span> <span class="n">keyName</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">DeleteKeyPairResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DeleteKeyPair&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.run_instances"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.run_instances">[docs]</a>    <span class="k">def</span> <span class="nf">run_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imageId</span><span class="p">,</span> <span class="n">minCount</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">maxCount</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keyName</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="n">groupIds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">userData</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">base64Encode</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                      <span class="n">addressingType</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">instanceType</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="n">availabilityZone</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">kernelId</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">ramdiskId</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                      <span class="n">blockDeviceMapping</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{RunInstances} call.</span>
+
+<span class="sd">        @param imageId: AMI id to launch instances of.</span>
+
+<span class="sd">        @param minCount: Minimum number of instances to launch.  If</span>
+<span class="sd">        EC2 cannot launch at least this many, the call will fail.</span>
+
+<span class="sd">        @param maxCount: Maximum number of instances to launch.  EC2</span>
+<span class="sd">        will make a best-effort attempt to launch this many instances,</span>
+<span class="sd">        but will not fail unless fewer than C{minCount} are available.</span>
+
+<span class="sd">        @param keyName: Name of keypair to launch instances with.</span>
+
+<span class="sd">        @param groupIds: List of security groups to launch instances</span>
+<span class="sd">        in.</span>
+
+<span class="sd">        @param userData: String containing user data to inject into</span>
+<span class="sd">        launched instances.</span>
+
+<span class="sd">        @param base64Encode: Specifies whether C{userData} string</span>
+<span class="sd">        qshould be base64 encoded.  Defaults to True.</span>
+
+<span class="sd">        @param addressingType: Specifies the address scheme to use for</span>
+<span class="sd">        the instance. The supported (default) type is C{&quot;public&quot;}, or</span>
+<span class="sd">        C{None} for the default. See the &quot;Instance Addressing&quot; section</span>
+<span class="sd">        of the latest developer guide for more information.</span>
+
+<span class="sd">        @param availabilityZone: Specifies the availability zone to</span>
+<span class="sd">        launch in.</span>
+
+<span class="sd">        @param kernelId: Kernel to launch the instances with.</span>
+
+<span class="sd">        @param ramdiskId: Ramdisk to launch the instances with.</span>
+
+<span class="sd">        @param blockDeviceMapping: Specifies the virtual block device</span>
+<span class="sd">        mapping. This parameter is a list of two element lists or</span>
+<span class="sd">        tuples. The first element is the virtual name and the second</span>
+<span class="sd">        is the device name.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">groupIds</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">groupIds</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&quot;ImageId&quot;</span><span class="p">:</span> <span class="n">imageId</span><span class="p">,</span>
+            <span class="s">&quot;MinCount&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">minCount</span><span class="p">),</span>
+            <span class="s">&quot;MaxCount&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">maxCount</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">addressingType</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;AddressingType&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">addressingType</span>
+        <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;SecurityGroup&quot;</span><span class="p">,</span> <span class="n">groupIds</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">userData</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">base64Encode</span><span class="p">:</span>
+                <span class="n">userData</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">encodestring</span><span class="p">(</span><span class="n">userData</span><span class="p">)</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;UserData&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">userData</span>
+        <span class="k">if</span> <span class="n">keyName</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;KeyName&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">keyName</span>
+        <span class="k">if</span> <span class="n">availabilityZone</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;Placement.AvailabilityZone&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">availabilityZone</span>
+        <span class="k">if</span> <span class="n">kernelId</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;KernelId&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernelId</span>
+        <span class="k">if</span> <span class="n">ramdiskId</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;RamdiskId&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ramdiskId</span>
+        <span class="k">if</span> <span class="n">instanceType</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;InstanceType&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">instanceType</span>
+        <span class="k">if</span> <span class="n">blockDeviceMapping</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">virtualNames</span><span class="p">,</span> <span class="n">deviceNames</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">blockDeviceMapping</span><span class="p">)</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">arr</span><span class="p">:</span>
+                <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">params</span><span class="p">[</span><span class="s">&quot;BlockDeviceMapping.</span><span class="si">%s</span><span class="s">.VirtualName&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="n">virtualNames</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="n">params</span><span class="p">[</span><span class="s">&quot;BlockDeviceMapping.</span><span class="si">%s</span><span class="s">.DeviceName&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="n">deviceNames</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">RunInstancesResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;RunInstances&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_instances"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_instances">[docs]</a>    <span class="k">def</span> <span class="nf">describe_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instanceIds</span><span class="o">=</span><span class="p">[]):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DescribeInstances} call.</span>
+
+<span class="sd">        @param instanceIds: List of instances to describe.  If empty</span>
+<span class="sd">        or omitted, all instances will be returned.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;InstanceId&quot;</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">DescribeInstancesResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeInstances&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.create_tags"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.create_tags">[docs]</a>    <span class="k">def</span> <span class="nf">create_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nodeids</span><span class="p">,</span> <span class="n">tags</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tags</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">nodeid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">nodeids</span><span class="p">):</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;ResourceId.</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">nodeid</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tags</span><span class="p">):</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;Tag.</span><span class="si">%d</span><span class="s">.Key&#39;</span> <span class="o">%</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">key</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&#39;Tag.</span><span class="si">%d</span><span class="s">.Value&#39;</span> <span class="o">%</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">tags</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">CreateTagsResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;CreateTags&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_tags"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_tags">[docs]</a>    <span class="k">def</span> <span class="nf">describe_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">resourceId</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">params</span><span class="p">[</span><span class="s">&#39;Filter.1.Name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&#39;resource-id&#39;</span>
+        <span class="n">params</span><span class="p">[</span><span class="s">&#39;Filter.1.Value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">resourceId</span>
+
+        <span class="k">return</span> <span class="n">DescribeTagsResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeTags&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.get_console_output"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.get_console_output">[docs]</a>    <span class="k">def</span> <span class="nf">get_console_output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instanceId</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{GetConsoleOutput} call.</span>
+
+<span class="sd">        @param instanceId: Instance from which to get console output.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;InstanceId&quot;</span><span class="p">:</span> <span class="n">instanceId</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">GetConsoleOutputResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;GetConsoleOutput&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.reboot_instances"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.reboot_instances">[docs]</a>    <span class="k">def</span> <span class="nf">reboot_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{RebootInstances} call.</span>
+
+<span class="sd">        @param instanceIds: List of instances to reboot.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;InstanceId&quot;</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">RebootInstancesResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;RebootInstances&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.terminate_instances"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.terminate_instances">[docs]</a>    <span class="k">def</span> <span class="nf">terminate_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{TerminateInstances} call.</span>
+
+<span class="sd">        @param instanceIds: List of instances to terminate.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;InstanceId&quot;</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">InstancesStatusResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;TerminateInstances&quot;</span><span class="p">,</span>
+                                                         <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.stop_instances"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.stop_instances">[docs]</a>    <span class="k">def</span> <span class="nf">stop_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{StopInstances} call.</span>
+
+<span class="sd">        @param instanceIds: List of instances to terminate.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;InstanceId&quot;</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">InstancesStatusResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;StopInstances&quot;</span><span class="p">,</span>
+                                                         <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.start_instances"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.start_instances">[docs]</a>    <span class="k">def</span> <span class="nf">start_instances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{StartInstances} call.</span>
+
+<span class="sd">        @param instanceIds: List of instances to terminate.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;InstanceId&quot;</span><span class="p">,</span> <span class="n">instanceIds</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">InstancesStatusResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;StartInstances&quot;</span><span class="p">,</span>
+                                                         <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.create_securitygroup"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.create_securitygroup">[docs]</a>    <span class="k">def</span> <span class="nf">create_securitygroup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">groupName</span><span class="p">,</span> <span class="n">groupDescription</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{CreateSecurityGroup} call.</span>
+
+<span class="sd">        @param groupName: Name of group to create.</span>
+
+<span class="sd">        @param groupDescription: Brief description of security group.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&quot;GroupName&quot;</span><span class="p">:</span> <span class="n">groupName</span><span class="p">,</span>
+            <span class="s">&quot;GroupDescription&quot;</span><span class="p">:</span> <span class="n">groupDescription</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">CreateSecurityGroupResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;CreateSecurityGroup&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_securitygroups"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_securitygroups">[docs]</a>    <span class="k">def</span> <span class="nf">describe_securitygroups</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">groupNames</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DescribeSecurityGroups} call.</span>
+
+<span class="sd">        @param groupNames: List of security groups to describe.  If</span>
+<span class="sd">        empty or omitted, all security groups will be described.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">groupNames</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">groupNames</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;GroupName&quot;</span><span class="p">,</span> <span class="n">groupNames</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">DescribeSecurityGroupsResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeSecurityGroups&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.delete_securitygroup"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.delete_securitygroup">[docs]</a>    <span class="k">def</span> <span class="nf">delete_securitygroup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">groupName</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DeleteSecurityGroup} call.</span>
+
+<span class="sd">        @param groupName: Name of security group to delete.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;GroupName&quot;</span><span class="p">:</span> <span class="n">groupName</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">DeleteSecurityGroupResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DeleteSecurityGroup&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.authorize"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.authorize">[docs]</a>    <span class="k">def</span> <span class="nf">authorize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes an C{AuthorizeSecurityGroupIngress} call.</span>
+
+<span class="sd">        L{authorize} and L{revoke} share parameter parsing code.</span>
+<span class="sd">        See L{auth_revoke_impl} for parameters.  Also, see API docs</span>
+<span class="sd">        for details of valid parameter combinations.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">auth_revoke_impl</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">AuthorizeSecurityGroupIngressResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;AuthorizeSecurityGroupIngress&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.revoke"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.revoke">[docs]</a>    <span class="k">def</span> <span class="nf">revoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes an C{RevokeSecurityGroupIngress} call.</span>
+
+<span class="sd">        L{authorize} and L{revoke} share parameter parsing code.</span>
+<span class="sd">        See L{auth_revoke_impl} for parameters.  Also, see API docs</span>
+<span class="sd">        for details of valid parameter combinations.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">auth_revoke_impl</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">RevokeSecurityGroupIngressResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;RevokeSecurityGroupIngress&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.modify_image_attribute"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.modify_image_attribute">[docs]</a>    <span class="k">def</span> <span class="nf">modify_image_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imageId</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">operationType</span><span class="p">,</span>
+                               <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{ModifyImageAttribute} call.</span>
+
+<span class="sd">        @param imageId: AMI to modify attribute of.</span>
+
+<span class="sd">        @param attribute: Name of attribute to modify.</span>
+
+<span class="sd">        @param operationType: Operation to perform on attribute.</span>
+
+<span class="sd">        @param kwargs: Values for the attribute operation, documented below.</span>
+
+<span class="sd">        @kwarg userIds: List of userIds (valid with</span>
+<span class="sd">        C{&#39;launchPermission&#39;} attribute.)</span>
+
+<span class="sd">        @kwarg userGroups: List of userGroups (valid with</span>
+<span class="sd">        C{&#39;launchPermission&#39;} attribute.)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&quot;ImageId&quot;</span><span class="p">:</span> <span class="n">imageId</span><span class="p">,</span>
+            <span class="s">&quot;Attribute&quot;</span><span class="p">:</span> <span class="n">attribute</span><span class="p">,</span>
+            <span class="s">&quot;OperationType&quot;</span><span class="p">:</span> <span class="n">operationType</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">attribute</span> <span class="o">==</span> <span class="s">&quot;launchPermission&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s">&quot;userIds&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;UserId&quot;</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;userIds&quot;</span><span class="p">]))</span>
+            <span class="k">if</span> <span class="s">&quot;userGroups&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;UserGroup&quot;</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;userGroups&quot;</span><span class="p">]))</span>
+        <span class="k">elif</span> <span class="n">attribute</span> <span class="o">==</span> <span class="s">&quot;productCodes&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s">&quot;productCodes&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                <span class="n">params</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pathlist</span><span class="p">(</span><span class="s">&quot;ProductCode&quot;</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&quot;productCodes&quot;</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">ModifyImageAttributeResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;ModifyImageAttribute&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.reset_image_attribute"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.reset_image_attribute">[docs]</a>    <span class="k">def</span> <span class="nf">reset_image_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imageId</span><span class="p">,</span> <span class="n">attribute</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{ResetImageAttribute} call.</span>
+
+<span class="sd">        @param imageId: AMI to reset attribute of.</span>
+
+<span class="sd">        @param attribute: Name of attribute to reset.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;ImageId&quot;</span><span class="p">:</span> <span class="n">imageId</span><span class="p">,</span> <span class="s">&quot;Attribute&quot;</span><span class="p">:</span> <span class="n">attribute</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">ResetImageAttributeResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;ResetImageAttribute&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.describe_image_attribute"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.describe_image_attribute">[docs]</a>    <span class="k">def</span> <span class="nf">describe_image_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imageId</span><span class="p">,</span> <span class="n">attribute</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{DescribeImageAttribute} call.</span>
+
+<span class="sd">        @param imageId: AMI to describe attribute of.</span>
+
+<span class="sd">        @param attribute: Name of attribute to describe.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;ImageId&quot;</span><span class="p">:</span> <span class="n">imageId</span><span class="p">,</span> <span class="s">&quot;Attribute&quot;</span><span class="p">:</span> <span class="n">attribute</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">DescribeImageAttributeResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;DescribeImageAttribute&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.auth_revoke_impl"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.auth_revoke_impl">[docs]</a>    <span class="k">def</span> <span class="nf">auth_revoke_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">groupName</span><span class="p">,</span> <span class="n">ipProtocol</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">fromPort</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                         <span class="n">toPort</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">cidrIp</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                         <span class="n">sourceSecurityGroupName</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                         <span class="n">sourceSecurityGroupOwnerId</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Processes parameters for C{authorize} and C{revoke}.</span>
+
+<span class="sd">        @param groupName: Name of security group to modify.</span>
+
+<span class="sd">        @param ipProtocol: IP protocol in rule.  Valid vlaues are</span>
+<span class="sd">        C{&#39;tcp&#39;}, C{&#39;udp&#39;} and C{&#39;icmp&#39;}.</span>
+
+<span class="sd">        @param fromPort: Bottom of IP port range in rule.</span>
+
+<span class="sd">        @param toPort: Top of IP port range in rule.</span>
+
+<span class="sd">        @param cidrIp: CIDR IP range in rule.</span>
+
+<span class="sd">        @param sourceSecurityGroupName: Security group name in rule.</span>
+
+<span class="sd">        @param sourceSecurityGroupOwnerId: User id of security group</span>
+<span class="sd">        in rule.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;GroupName&quot;</span><span class="p">:</span> <span class="n">groupName</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">ipProtocol</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;IpProtocol&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ipProtocol</span>
+        <span class="k">if</span> <span class="n">fromPort</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;FromPort&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">fromPort</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">toPort</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;ToPort&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">toPort</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cidrIp</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;CidrIp&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">cidrIp</span>
+        <span class="k">if</span> <span class="n">sourceSecurityGroupName</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;SourceSecurityGroupName&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sourceSecurityGroupName</span>
+        <span class="k">if</span> <span class="n">sourceSecurityGroupOwnerId</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s">&quot;SourceSecurityGroupOwnerId&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sourceSecurityGroupOwnerId</span>
+        <span class="k">return</span> <span class="n">params</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.confirm_product_instance"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.confirm_product_instance">[docs]</a>    <span class="k">def</span> <span class="nf">confirm_product_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">productCode</span><span class="p">,</span> <span class="n">instanceId</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Makes a C{ConfirmProdcutInstance} call.</span>
+
+<span class="sd">        @param productCode: The product code to confirm</span>
+
+<span class="sd">        @param instanceId: The instance for which to confirm the product code.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="s">&quot;ProcudtCode&quot;</span><span class="p">:</span> <span class="n">productCode</span><span class="p">,</span> <span class="s">&quot;InstanceId&quot;</span><span class="p">:</span> <span class="n">instanceId</span><span class="p">}</span>
+        <span class="k">return</span> <span class="n">ConfirmProductInstanceResponse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">make_request</span><span class="p">(</span><span class="s">&quot;ConfirmProductInstance&quot;</span><span class="p">,</span> <span class="n">params</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.make_request"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.make_request">[docs]</a>    <span class="k">def</span> <span class="nf">make_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">):</span>
+        <span class="n">params</span><span class="p">[</span><span class="s">&quot;Action&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">action</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">params</span>
+
+        <span class="n">params</span><span class="p">[</span><span class="s">&quot;SignatureVersion&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;1&quot;</span>
+        <span class="n">params</span><span class="p">[</span><span class="s">&quot;AWSAccessKeyId&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_access_key_id</span>
+        <span class="n">params</span><span class="p">[</span><span class="s">&quot;Version&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">API_VERSION</span>
+        <span class="n">params</span><span class="p">[</span><span class="s">&quot;Timestamp&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s">&quot;%Y-%m-</span><span class="si">%d</span><span class="s">T%H:%M:%SZ&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">gmtime</span><span class="p">())</span>
+
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">params</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="n">params</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">str</span><span class="o">.</span><span class="n">lower</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_aws_auth_param</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aws_secret_access_key</span><span class="p">)</span>
+
+        <span class="n">path</span> <span class="o">=</span> <span class="s">&quot;?</span><span class="si">%s</span><span class="s">&amp;Signature=</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="s">&quot;&amp;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;=&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">param</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">urllib</span><span class="o">.</span><span class="n">quote_plus</span><span class="p">(</span><span class="n">param</span><span class="p">[</span><span class="mi">1</span><span class="p">])])</span> <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">]),</span>
+            <span class="n">sig</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">path</span>
+
+        <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;User-Agent&#39;</span><span class="p">:</span> <span class="s">&#39;ec2-python-query 1.2-</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">RELEASE_VERSION</span><span class="p">)</span>
+        <span class="p">}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">request</span><span class="p">(</span><span class="s">&quot;GET&quot;</span><span class="p">,</span> <span class="s">&quot;/</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">path</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">headers</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">connection</span><span class="o">.</span><span class="n">getresponse</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.get_aws_auth_param"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.get_aws_auth_param">[docs]</a>    <span class="k">def</span> <span class="nf">get_aws_auth_param</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">aws_secret_access_key</span><span class="p">):</span>
+        <span class="n">canonical_string</span> <span class="o">=</span> <span class="s">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">param</span><span class="p">)</span> <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">])</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">aws_secret_access_key</span><span class="p">,</span> <span class="n">canonical_string</span><span class="p">)</span>
+
+    <span class="c"># computes the base64&#39;ed hmac-sha hash of the canonical string and</span>
+    <span class="c"># the secret access key, optionally urlencoding the result</span>
+</div>
+<div class="viewcode-block" id="AWSAuthConnection.encode"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AWSAuthConnection.encode">[docs]</a>    <span class="k">def</span> <span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aws_secret_access_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">urlencode</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="n">b64_hmac</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">encodestring</span><span class="p">(</span><span class="n">hmac</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="n">aws_secret_access_key</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sha</span><span class="p">)</span><span class="o">.</span><span class="n">digest</span><span class="p">())</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">urlencode</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">urllib</span><span class="o">.</span><span class="n">quote_plus</span><span class="p">(</span><span class="n">b64_hmac</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">b64_hmac</span>
+
+</div></div>
+<div class="viewcode-block" id="Response"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response">[docs]</a><span class="k">class</span> <span class="nc">Response</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Base class for XML response parsers.</span>
+
+<span class="sd">    This class does everything except the API-call dependent parsing,</span>
+<span class="sd">    which is handled in the child classes below.  Each child class</span>
+<span class="sd">    should override the L{parse} method.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ERROR_XPATH</span> <span class="o">=</span> <span class="s">&quot;Errors/Error&quot;</span>
+    <span class="n">NAMESPACE</span> <span class="o">=</span> <span class="s">&quot;http://ec2.amazonaws.com/doc/</span><span class="si">%s</span><span class="s">/&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">API_VERSION</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">http_response</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">http_response</span> <span class="o">=</span> <span class="n">http_response</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span> <span class="o">=</span> <span class="n">http_response</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_error</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">if</span> <span class="n">http_response</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">structure</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">is_error</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">structure</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_error</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Response.parse_error"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response.parse_error">[docs]</a>    <span class="k">def</span> <span class="nf">parse_error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">element</span> <span class="o">=</span> <span class="n">doc</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ERROR_XPATH</span><span class="p">)</span>
+        <span class="n">errorCode</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="s">&quot;Code&quot;</span><span class="p">)</span>
+        <span class="n">errorMessage</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="s">&quot;Message&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;</span><span class="si">%s</span><span class="s">: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">errorCode</span><span class="p">,</span> <span class="n">errorMessage</span><span class="p">)]]</span>
+</div>
+<div class="viewcode-block" id="Response.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># Placeholder -- this method should be overridden in child classes.</span>
+        <span class="k">return</span> <span class="bp">None</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;</span><span class="se">\t</span><span class="s">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">structure</span><span class="p">])</span>
+
+<div class="viewcode-block" id="Response.fixxpath"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response.fixxpath">[docs]</a>    <span class="k">def</span> <span class="nf">fixxpath</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">xpath</span><span class="p">):</span>
+        <span class="c"># ElementTree wants namespaces in its xpaths, so here we add them.</span>
+        <span class="k">return</span> <span class="s">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s">&quot;{</span><span class="si">%s</span><span class="s">}</span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">NAMESPACE</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">xpath</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;/&quot;</span><span class="p">)])</span>
+</div>
+<div class="viewcode-block" id="Response.findtext"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response.findtext">[docs]</a>    <span class="k">def</span> <span class="nf">findtext</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element</span><span class="p">,</span> <span class="n">xpath</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">element</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fixxpath</span><span class="p">(</span><span class="n">xpath</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Response.findall"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response.findall">[docs]</a>    <span class="k">def</span> <span class="nf">findall</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element</span><span class="p">,</span> <span class="n">xpath</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">element</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fixxpath</span><span class="p">(</span><span class="n">xpath</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Response.find"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response.find">[docs]</a>    <span class="k">def</span> <span class="nf">find</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">element</span><span class="p">,</span> <span class="n">xpath</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">element</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fixxpath</span><span class="p">(</span><span class="n">xpath</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="Response.fixnone"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.Response.fixnone">[docs]</a>    <span class="k">def</span> <span class="nf">fixnone</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">strnone</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">strnone</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">strnone</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeImagesResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeImagesResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeImagesResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeImages} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;imagesSet/item&quot;</span>
+
+<div class="viewcode-block" id="DescribeImagesResponse.translate_isPublic"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeImagesResponse.translate_isPublic">[docs]</a>    <span class="k">def</span> <span class="nf">translate_isPublic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">isPublic</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s">&quot;true&quot;</span><span class="p">:</span> <span class="s">&quot;public&quot;</span><span class="p">,</span>
+                <span class="s">&quot;false&quot;</span><span class="p">:</span> <span class="s">&quot;private&quot;</span><span class="p">}[</span><span class="n">isPublic</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="DescribeImagesResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeImagesResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;IMAGE&quot;</span><span class="p">,</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;imageId&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;imageLocation&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;imageOwnerId&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;imageState&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">translate_isPublic</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;isPublic&quot;</span><span class="p">)),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;architecture&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;imageType&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">fixnone</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;kernelId&quot;</span><span class="p">)),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">fixnone</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;ramdiskId&quot;</span><span class="p">)),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;name&quot;</span><span class="p">),</span>
+                          <span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="CreateImageResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateImageResponse">[docs]</a><span class="k">class</span> <span class="nc">CreateImageResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{CreateImage} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;imageId&quot;</span>
+
+<div class="viewcode-block" id="CreateImageResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateImageResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;IMAGE&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">)]]</span>
+
+</div></div>
+<div class="viewcode-block" id="RegisterImageResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RegisterImageResponse">[docs]</a><span class="k">class</span> <span class="nc">RegisterImageResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{RegisterImage} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;imageId&quot;</span>
+
+<div class="viewcode-block" id="RegisterImageResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RegisterImageResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;IMAGE&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">)]]</span>
+
+</div></div>
+<div class="viewcode-block" id="DeregisterImageResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DeregisterImageResponse">[docs]</a><span class="k">class</span> <span class="nc">DeregisterImageResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DeregisterImage} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="DeregisterImageResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DeregisterImageResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, the deregistration succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Image deregistered.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="CreateKeyPairResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateKeyPairResponse">[docs]</a><span class="k">class</span> <span class="nc">CreateKeyPairResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{CreateKeyPair} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="CreateKeyPairResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateKeyPairResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">keyName</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;keyName&quot;</span><span class="p">)</span>
+        <span class="n">keyFingerprint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;keyFingerprint&quot;</span><span class="p">)</span>
+        <span class="n">keyMaterial</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;keyMaterial&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;KEYPAIR&quot;</span><span class="p">,</span> <span class="n">keyName</span><span class="p">,</span> <span class="n">keyFingerprint</span><span class="p">],</span> <span class="p">[</span><span class="n">keyMaterial</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeKeyPairsResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeKeyPairsResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeKeyPairsResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeKeyPairs} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;keySet/item&quot;</span>
+
+<div class="viewcode-block" id="DescribeKeyPairsResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeKeyPairsResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">keyName</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;keyName&quot;</span><span class="p">)</span>
+            <span class="n">keyFingerprint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;keyFingerprint&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;KEYPAIR&quot;</span><span class="p">,</span> <span class="n">keyName</span><span class="p">,</span> <span class="n">keyFingerprint</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="DeleteKeyPairResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DeleteKeyPairResponse">[docs]</a><span class="k">class</span> <span class="nc">DeleteKeyPairResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DeleteKeyPair} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="DeleteKeyPairResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DeleteKeyPairResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, the deletion succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Keypair deleted.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="InstanceSetResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.InstanceSetResponse">[docs]</a><span class="k">class</span> <span class="nc">InstanceSetResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Response containing instance set items &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="InstanceSetResponse.parseInstanceSet"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.InstanceSetResponse.parseInstanceSet">[docs]</a>    <span class="k">def</span> <span class="nf">parseInstanceSet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">root</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Parse a set of instanceSet/item nodes &quot;&quot;&quot;</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="s">&quot;instancesSet/item&quot;</span><span class="p">):</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;INSTANCE&quot;</span><span class="p">,</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;instanceId&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;imageId&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;dnsName&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;privateDnsName&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;instanceState/name&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">fixnone</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;keyName&quot;</span><span class="p">)),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;amiLaunchIndex&quot;</span><span class="p">),</span>
+                          <span class="s">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">p</span><span class="o">.</span><span class="n">text</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;productCodesSet/item/productCode&quot;</span><span class="p">)]),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;instanceType&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;launchTime&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;placement/availabilityZone&quot;</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">fixnone</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;kernelId&quot;</span><span class="p">)),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">fixnone</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;ramdiskId&quot;</span><span class="p">)),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;instanceState/name&quot;</span><span class="p">),</span>
+                          <span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="RunInstancesResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RunInstancesResponse">[docs]</a><span class="k">class</span> <span class="nc">RunInstancesResponse</span><span class="p">(</span><span class="n">InstanceSetResponse</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{RunInstances} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="RunInstancesResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RunInstancesResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">reservationId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;reservationId&quot;</span><span class="p">)</span>
+        <span class="n">ownerId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;ownerId&quot;</span><span class="p">)</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">text</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;groupSet/item/groupId&quot;</span><span class="p">)]</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;RESERVATION&quot;</span><span class="p">,</span> <span class="n">reservationId</span><span class="p">,</span> <span class="n">ownerId</span><span class="p">,</span> <span class="s">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">groups</span><span class="p">)])</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parseInstanceSet</span><span class="p">(</span><span class="n">doc</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeInstancesResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeInstancesResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeInstancesResponse</span><span class="p">(</span><span class="n">InstanceSetResponse</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeInstances} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;reservationSet/item&quot;</span>
+
+<div class="viewcode-block" id="DescribeInstancesResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeInstancesResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">rootelement</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">reservationId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">rootelement</span><span class="p">,</span> <span class="s">&quot;reservationId&quot;</span><span class="p">)</span>
+            <span class="n">ownerId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">rootelement</span><span class="p">,</span> <span class="s">&quot;ownerId&quot;</span><span class="p">)</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">text</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">rootelement</span><span class="p">,</span> <span class="s">&quot;groupSet/item/groupId&quot;</span><span class="p">)]</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;RESERVATION&quot;</span><span class="p">,</span> <span class="n">reservationId</span><span class="p">,</span> <span class="n">ownerId</span><span class="p">,</span> <span class="s">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">groups</span><span class="p">)])</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parseInstanceSet</span><span class="p">(</span><span class="n">rootelement</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="GetConsoleOutputResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.GetConsoleOutputResponse">[docs]</a><span class="k">class</span> <span class="nc">GetConsoleOutputResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+<div class="viewcode-block" id="GetConsoleOutputResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.GetConsoleOutputResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;instanceId&quot;</span><span class="p">)],</span>
+                <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;timestamp&quot;</span><span class="p">)],</span>
+                <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;output&quot;</span><span class="p">)]]</span>
+
+</div></div>
+<div class="viewcode-block" id="InstancesStatusResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.InstancesStatusResponse">[docs]</a><span class="k">class</span> <span class="nc">InstancesStatusResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{TerminateInstances} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;instancesSet/item&quot;</span>
+
+<div class="viewcode-block" id="InstancesStatusResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.InstancesStatusResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">instanceId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;instanceId&quot;</span><span class="p">)</span>
+            <span class="n">currentState</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;currentState/name&quot;</span><span class="p">)</span>
+            <span class="n">previousState</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;previousState/name&quot;</span><span class="p">)</span>
+            <span class="c"># Only for debug mode, which we don&#39;t support yet:</span>
+            <span class="n">currentStateCode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;currentState/code&quot;</span><span class="p">)</span>
+            <span class="n">previousStateCode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;previousState/code&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;INSTANCE&quot;</span><span class="p">,</span> <span class="n">instanceId</span><span class="p">,</span> <span class="n">previousState</span><span class="p">,</span> <span class="n">currentState</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="RebootInstancesResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RebootInstancesResponse">[docs]</a><span class="k">class</span> <span class="nc">RebootInstancesResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{RebootInstances} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="RebootInstancesResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RebootInstancesResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, the creation succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Instances rebooted.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="CreateSecurityGroupResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateSecurityGroupResponse">[docs]</a><span class="k">class</span> <span class="nc">CreateSecurityGroupResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{CreateSecurityGroup} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="CreateSecurityGroupResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateSecurityGroupResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, the creation succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Security Group created.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeSecurityGroupsResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeSecurityGroupsResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeSecurityGroupsResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeSecurityGroups} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;securityGroupInfo/item&quot;</span>
+
+<div class="viewcode-block" id="DescribeSecurityGroupsResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeSecurityGroupsResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">rootelement</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">groupName</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">rootelement</span><span class="p">,</span> <span class="s">&quot;groupName&quot;</span><span class="p">)</span>
+            <span class="n">ownerId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">rootelement</span><span class="p">,</span> <span class="s">&quot;ownerId&quot;</span><span class="p">)</span>
+            <span class="n">groupDescription</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">rootelement</span><span class="p">,</span> <span class="s">&quot;groupDescription&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;GROUP&quot;</span><span class="p">,</span> <span class="n">ownerId</span><span class="p">,</span> <span class="n">groupName</span><span class="p">,</span> <span class="n">groupDescription</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">rootelement</span><span class="p">,</span> <span class="s">&quot;ipPermissions/item&quot;</span><span class="p">):</span>
+                <span class="n">ipProtocol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;ipProtocol&quot;</span><span class="p">)</span>
+                <span class="n">fromPort</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;fromPort&quot;</span><span class="p">)</span>
+                <span class="n">toPort</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;toPort&quot;</span><span class="p">)</span>
+                <span class="n">permList</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="s">&quot;PERMISSION&quot;</span><span class="p">,</span>
+                    <span class="n">ownerId</span><span class="p">,</span>
+                    <span class="n">groupName</span><span class="p">,</span>
+                    <span class="s">&quot;ALLOWS&quot;</span><span class="p">,</span>
+                    <span class="n">ipProtocol</span><span class="p">,</span>
+                    <span class="n">fromPort</span><span class="p">,</span>
+                    <span class="n">toPort</span><span class="p">,</span>
+                    <span class="s">&quot;FROM&quot;</span>
+                <span class="p">]</span>
+                <span class="k">for</span> <span class="n">subelement</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;groups/item&quot;</span><span class="p">):</span>
+                    <span class="n">userId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">subelement</span><span class="p">,</span> <span class="s">&quot;userId&quot;</span><span class="p">)</span>
+                    <span class="n">targetGroupName</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">subelement</span><span class="p">,</span> <span class="s">&quot;groupName&quot;</span><span class="p">)</span>
+                    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">permList</span> <span class="o">+</span> <span class="p">[</span><span class="s">&quot;USER&quot;</span><span class="p">,</span> <span class="n">userId</span><span class="p">,</span> <span class="s">&quot;GRPNAME&quot;</span><span class="p">,</span> <span class="n">targetGroupName</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">subelement</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;ipRanges/item&quot;</span><span class="p">):</span>
+                    <span class="n">cidrIp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">subelement</span><span class="p">,</span> <span class="s">&quot;cidrIp&quot;</span><span class="p">)</span>
+                    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">permList</span> <span class="o">+</span> <span class="p">[</span><span class="s">&quot;CIDR&quot;</span><span class="p">,</span> <span class="n">cidrIp</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="DeleteSecurityGroupResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DeleteSecurityGroupResponse">[docs]</a><span class="k">class</span> <span class="nc">DeleteSecurityGroupResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DeleteSecurityGroup} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="DeleteSecurityGroupResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DeleteSecurityGroupResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, the deletion succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Security Group deleted.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="AuthorizeSecurityGroupIngressResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AuthorizeSecurityGroupIngressResponse">[docs]</a><span class="k">class</span> <span class="nc">AuthorizeSecurityGroupIngressResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{AuthorizeSecurityGroupIngress} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="AuthorizeSecurityGroupIngressResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AuthorizeSecurityGroupIngressResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, the authorization succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Ingress authorized.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="RevokeSecurityGroupIngressResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RevokeSecurityGroupIngressResponse">[docs]</a><span class="k">class</span> <span class="nc">RevokeSecurityGroupIngressResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{RevokeSecurityGroupIngress} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="RevokeSecurityGroupIngressResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.RevokeSecurityGroupIngressResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, the revocation succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Ingress revoked.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="ModifyImageAttributeResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ModifyImageAttributeResponse">[docs]</a><span class="k">class</span> <span class="nc">ModifyImageAttributeResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{ModifyImageAttribute} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="ModifyImageAttributeResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ModifyImageAttributeResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, modification succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Image attribute modified.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="ResetImageAttributeResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ResetImageAttributeResponse">[docs]</a><span class="k">class</span> <span class="nc">ResetImageAttributeResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{ResetImageAttribute} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="ResetImageAttributeResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ResetImageAttributeResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, reset succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Image attribute reset.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeImageAttributeResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeImageAttributeResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeImageAttributeResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeImageAttribute} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="DescribeImageAttributeResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeImageAttributeResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">imageId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;imageId&quot;</span><span class="p">)</span>
+
+        <span class="c"># Handle launchPermission attributes:</span>
+        <span class="n">element</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;launchPermission/item&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">element</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">subelement</span> <span class="ow">in</span> <span class="n">element</span><span class="o">.</span><span class="n">getchildren</span><span class="p">():</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span>
+                    <span class="s">&quot;launchPermission&quot;</span><span class="p">,</span>
+                    <span class="n">imageId</span><span class="p">,</span>
+                    <span class="n">subelement</span><span class="o">.</span><span class="n">tag</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;}&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">],</span>
+                    <span class="n">subelement</span><span class="o">.</span><span class="n">text</span>
+                <span class="p">])</span>
+
+        <span class="c"># Handle launchPermission attributes:</span>
+        <span class="n">element</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;productCodes/item&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">element</span> <span class="o">!=</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">subelement</span> <span class="ow">in</span> <span class="n">element</span><span class="o">.</span><span class="n">getchildren</span><span class="p">():</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span>
+                    <span class="s">&quot;productCode&quot;</span><span class="p">,</span>
+                    <span class="n">imageId</span><span class="p">,</span>
+                    <span class="n">subelement</span><span class="o">.</span><span class="n">text</span>
+                <span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="AllocateAddressResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AllocateAddressResponse">[docs]</a><span class="k">class</span> <span class="nc">AllocateAddressResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{AllocateAddress} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="AllocateAddressResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AllocateAddressResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">publicIp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;publicIp&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;ADDRESS&quot;</span><span class="p">,</span> <span class="n">publicIp</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeAddressesResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeAddressesResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeAddressesResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeAddresses} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;addressesSet/item&quot;</span>
+
+<div class="viewcode-block" id="DescribeAddressesResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeAddressesResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">publicIp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;publicIp&quot;</span><span class="p">)</span>
+            <span class="n">instanceId</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;instanceId&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;ADDRESS&quot;</span><span class="p">,</span> <span class="n">publicIp</span><span class="p">,</span> <span class="n">instanceId</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="ReleaseAddressResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ReleaseAddressResponse">[docs]</a><span class="k">class</span> <span class="nc">ReleaseAddressResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{ReleaseAddress} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="ReleaseAddressResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ReleaseAddressResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, reset succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Address released.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="AssociateAddressResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AssociateAddressResponse">[docs]</a><span class="k">class</span> <span class="nc">AssociateAddressResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{AssociateAddress} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="AssociateAddressResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.AssociateAddressResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, reset succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Address associated.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="DisassociateAddressResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DisassociateAddressResponse">[docs]</a><span class="k">class</span> <span class="nc">DisassociateAddressResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DisassociateAddress} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="DisassociateAddressResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DisassociateAddressResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c"># If we don&#39;t get an error, reset succeeded.</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="s">&quot;Address disassociated.&quot;</span><span class="p">]]</span>
+
+</div></div>
+<div class="viewcode-block" id="ConfirmProductInstanceResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ConfirmProductInstanceResponse">[docs]</a><span class="k">class</span> <span class="nc">ConfirmProductInstanceResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{ConfirmProductInstance} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="ConfirmProductInstanceResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.ConfirmProductInstanceResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;result&quot;</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[[</span><span class="n">result</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="n">result</span> <span class="o">==</span> <span class="s">&quot;true&quot;</span><span class="p">:</span>
+            <span class="n">lines</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;ownerId&quot;</span><span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeAvailabilityZonesResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeAvailabilityZonesResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeAvailabilityZonesResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeAvailabilityZones} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;availabilityZoneInfo/item&quot;</span>
+
+<div class="viewcode-block" id="DescribeAvailabilityZonesResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeAvailabilityZonesResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">zoneName</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;zoneName&quot;</span><span class="p">)</span>
+            <span class="n">zoneState</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;zoneState&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;AVAILABILITYZONE&quot;</span><span class="p">,</span> <span class="n">zoneName</span><span class="p">,</span> <span class="n">zoneState</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+</div></div>
+<div class="viewcode-block" id="CreateTagsResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateTagsResponse">[docs]</a><span class="k">class</span> <span class="nc">CreateTagsResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{CreateTags} API call.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="CreateTagsResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.CreateTagsResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[[</span><span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&quot;return&quot;</span><span class="p">)]]</span>
+
+</div></div>
+<div class="viewcode-block" id="DescribeTagsResponse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeTagsResponse">[docs]</a><span class="k">class</span> <span class="nc">DescribeTagsResponse</span><span class="p">(</span><span class="n">Response</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Response parser class for C{DescribeTags} API call.&quot;&quot;&quot;</span>
+    <span class="n">ELEMENT_XPATH</span> <span class="o">=</span> <span class="s">&quot;tagSet/item&quot;</span>
+
+<div class="viewcode-block" id="DescribeTagsResponse.parse"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.DescribeTagsResponse.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">ET</span><span class="o">.</span><span class="n">XML</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">http_xml</span><span class="p">)</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ELEMENT_XPATH</span><span class="p">):</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;key&quot;</span><span class="p">)</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">findtext</span><span class="p">(</span><span class="n">element</span><span class="p">,</span> <span class="s">&quot;value&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="s">&quot;tagSet&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">lines</span>
+
+<span class="c"># some utilities</span>
+
+</div></div>
+<div class="viewcode-block" id="connect_with_credfile"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.connect_with_credfile">[docs]</a><span class="k">def</span> <span class="nf">connect_with_credfile</span><span class="p">(</span><span class="n">cred_fname</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    connect with a credentials file</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="nb">file</span><span class="p">(</span><span class="n">cred_fname</span><span class="p">))</span>
+    <span class="n">rows</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+    <span class="n">ec2user</span><span class="p">,</span> <span class="n">ec2accesskey</span><span class="p">,</span> <span class="n">ec2secretkey</span> <span class="o">=</span> <span class="n">rows</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+
+    <span class="c"># connect to EC2</span>
+    <span class="n">ec2conn</span> <span class="o">=</span> <span class="n">AWSAuthConnection</span><span class="p">(</span><span class="n">ec2accesskey</span><span class="p">,</span> <span class="n">ec2secretkey</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ec2conn</span>
+
+</div>
+<div class="viewcode-block" id="find_instid"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.EC2.find_instid">[docs]</a><span class="k">def</span> <span class="nf">find_instid</span><span class="p">(</span><span class="n">ec2conn</span><span class="p">,</span> <span class="n">instid</span><span class="p">):</span>
+    <span class="n">ec2insts</span> <span class="o">=</span> <span class="n">ec2conn</span><span class="o">.</span><span class="n">describe_instances</span><span class="p">([</span><span class="n">instid</span><span class="p">])</span>
+
+    <span class="k">for</span> <span class="n">inst</span> <span class="ow">in</span> <span class="n">ec2insts</span><span class="o">.</span><span class="n">structure</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">inst</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;INSTANCE&#39;</span> <span class="ow">and</span> <span class="n">inst</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">instid</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">inst</span>
+
+    <span class="k">raise</span> <span class="n">InstanceNotFound</span><span class="p">()</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

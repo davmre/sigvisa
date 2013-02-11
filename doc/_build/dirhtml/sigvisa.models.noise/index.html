@@ -1,0 +1,254 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>noise Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="models Package" href="../sigvisa.models/" />
+    <link rel="next" title="armodel Package" href="../sigvisa.models.noise.armodel/" />
+    <link rel="prev" title="models Package" href="../sigvisa.models/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.noise.armodel/" title="armodel Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models/" title="models Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" accesskey="U">models Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="noise-package">
+<h1>noise Package<a class="headerlink" href="#noise-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.models.noise.noise_model">
+<span id="noise-model-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">noise_model</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.noise.noise_model" title="Permalink to this headline">¶</a></h2>
+<dl class="exception">
+<dt id="sigvisa.models.noise.noise_model.NoNoiseException">
+<em class="property">exception </em><tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">NoNoiseException</tt><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#NoNoiseException"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.NoNoiseException" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.arrivals_intersect_block">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">arrivals_intersect_block</tt><big>(</big><em>block_start</em>, <em>block_end</em>, <em>arrival_times</em>, <em>danger_period_seconds=400</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#arrivals_intersect_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.arrivals_intersect_block" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.block_waveform_exists">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">block_waveform_exists</tt><big>(</big><em>sta</em>, <em>chan</em>, <em>stime</em>, <em>etime</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#block_waveform_exists"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.block_waveform_exists" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.classicSTALTAPy">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">classicSTALTAPy</tt><big>(</big><em>a</em>, <em>nsta</em>, <em>nlta</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#classicSTALTAPy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.classicSTALTAPy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the standard STA/LTA from a given input array a. The length of
+the STA is given by nsta in samples, respectively is the length of the
+LTA given by nlta in samples. Written in Python.</p>
+<p>There exists a faster version of this trigger wrapped in C
+called <tt class="xref py py-func docutils literal"><span class="pre">classicSTALTA()</span></tt> in this module!</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>a</strong> (<em>NumPy ndarray</em>) &#8211; Seismic Trace</li>
+<li><strong>nsta</strong> (<em>Int</em>) &#8211; Length of short time average window in samples</li>
+<li><strong>nlta</strong> (<em>Int</em>) &#8211; Length of long time average window in samples</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">NumPy ndarray</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Characteristic function of classic STA/LTA</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.construct_and_save_hourly_noise_models">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">construct_and_save_hourly_noise_models</tt><big>(</big><em>hour</em>, <em>sta</em>, <em>chan</em>, <em>filter_str</em>, <em>srate</em>, <em>order</em>, <em>block_len_seconds=300</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#construct_and_save_hourly_noise_models"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.construct_and_save_hourly_noise_models" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.construct_and_save_immediate_noise_models">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">construct_and_save_immediate_noise_models</tt><big>(</big><em>time</em>, <em>sta</em>, <em>chan</em>, <em>filter_str</em>, <em>srate</em>, <em>order</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#construct_and_save_immediate_noise_models"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.construct_and_save_immediate_noise_models" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.construct_and_save_noise_models">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">construct_and_save_noise_models</tt><big>(</big><em>minute</em>, <em>block_len_seconds</em>, <em>sta</em>, <em>chan</em>, <em>filter_str</em>, <em>srate</em>, <em>order</em>, <em>model_wave=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#construct_and_save_noise_models"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.construct_and_save_noise_models" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.get_median_noise_wave">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">get_median_noise_wave</tt><big>(</big><em>sta</em>, <em>chan</em>, <em>hour_start</em>, <em>hour_end</em>, <em>block_len_seconds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#get_median_noise_wave"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.get_median_noise_wave" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.get_noise_model">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">get_noise_model</tt><big>(</big><em>waveform=None</em>, <em>sta=None</em>, <em>chan=None</em>, <em>filter_str=None</em>, <em>time=None</em>, <em>srate=40</em>, <em>order=17</em>, <em>noise_mode=1</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#get_noise_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.get_noise_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns an ARModel noise model of the specified order for the
+given station/channel/filter, trained from the hour prior to
+the given time. Results are cached, so each noise model is
+learned only once.</p>
+<p>This method takes <em>either</em> a station, channel, filter string,
+and time, <em>or</em> a Waveform object from which these can all be
+read.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.get_recent_safe_block">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">get_recent_safe_block</tt><big>(</big><em>time</em>, <em>sta</em>, <em>chan</em>, <em>margin_seconds=10</em>, <em>preferred_len_seconds=120</em>, <em>min_len_seconds=60</em>, <em>arrival_window_seconds=1200</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#get_recent_safe_block"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.get_recent_safe_block" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a block of time preceding the specified time, and ending at least margin_seconds before that time, for which waveform data exists, and during which there are no recorded arrivals at the station.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.get_sta_lta_picks">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">get_sta_lta_picks</tt><big>(</big><em>wave</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#get_sta_lta_picks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.get_sta_lta_picks" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.load_arrival_times">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">load_arrival_times</tt><big>(</big><em>sta</em>, <em>stime</em>, <em>etime</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#load_arrival_times"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.load_arrival_times" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.main">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.models.noise.noise_model.model_path">
+<tt class="descclassname">sigvisa.models.noise.noise_model.</tt><tt class="descname">model_path</tt><big>(</big><em>sta</em>, <em>chan</em>, <em>filter_str</em>, <em>srate</em>, <em>order</em>, <em>hour_time=None</em>, <em>minute_time=None</em>, <em>anchor_time=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/noise/noise_model/#model_path"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.noise.noise_model.model_path" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.models.noise.armodel/">armodel Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.models.noise.armodel/#module-sigvisa.models.noise.armodel.learner"><tt class="docutils literal"><span class="pre">learner</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.models.noise.armodel/#main-module"><tt class="docutils literal"><span class="pre">main</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.models.noise.armodel/#module-sigvisa.models.noise.armodel.model"><tt class="docutils literal"><span class="pre">model</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.models.noise.armodel/#module-sigvisa.models.noise.armodel.stat"><tt class="docutils literal"><span class="pre">stat</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">noise Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.models.noise.noise_model"><tt class="docutils literal"><span class="pre">noise_model</span></tt> Module</a></li>
+<li><a class="reference internal" href="#subpackages">Subpackages</a><ul>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.models/"
+                        title="previous chapter">models Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.models.noise.armodel/"
+                        title="next chapter">armodel Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.models.noise.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.noise.armodel/" title="armodel Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models/" title="models Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" >models Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

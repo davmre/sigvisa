@@ -1,0 +1,233 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.utils.gradient_descent &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.utils.gradient_descent</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+
+<div class="viewcode-block" id="LineSearchFailed"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.gradient_descent.LineSearchFailed">[docs]</a><span class="k">class</span> <span class="nc">LineSearchFailed</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="project_into_bounds"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.gradient_descent.project_into_bounds">[docs]</a><span class="k">def</span> <span class="nf">project_into_bounds</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">low_bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">low_bounds</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">violations</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">violations</span><span class="p">]</span> <span class="o">=</span> <span class="n">low_bounds</span><span class="p">[</span><span class="n">violations</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">high_bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="n">high_bounds</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">violations</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">violations</span><span class="p">]</span> <span class="o">=</span> <span class="n">high_bounds</span><span class="p">[</span><span class="n">violations</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+</div>
+<div class="viewcode-block" id="backtracking_line_search"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.gradient_descent.backtracking_line_search">[docs]</a><span class="k">def</span> <span class="nf">backtracking_line_search</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">grad_x</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">max_iters</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">low_bounds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">high_bounds</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">fx</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">warnings</span><span class="o">.</span><span class="n">catch_warnings</span><span class="p">():</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s">&quot;error&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="n">f</span><span class="p">(</span><span class="n">project_into_bounds</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">t</span> <span class="o">*</span> <span class="n">step</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">))</span> <span class="o">&gt;</span> <span class="n">fx</span> <span class="o">+</span> <span class="n">t</span> <span class="o">*</span> <span class="n">alpha</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">grad_x</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+                <span class="n">t</span> <span class="o">*=</span> <span class="n">beta</span>
+                <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                <span class="n">nx</span> <span class="o">=</span> <span class="n">project_into_bounds</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">t</span> <span class="o">*</span> <span class="n">step</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">)</span>
+<span class="c">#                print f(nx), nx, t, step</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="n">max_iters</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">LineSearchFailed</span><span class="p">(</span><span class="s">&quot;stopping condition not reached after </span><span class="si">%d</span><span class="s"> iters.&quot;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">RuntimeWarning</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">LineSearchFailed</span><span class="p">(</span><span class="s">&quot;runtime warning during function evaluation: &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">w</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">t</span>
+
+</div>
+<div class="viewcode-block" id="coord_steps"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.gradient_descent.coord_steps">[docs]</a><span class="k">def</span> <span class="nf">coord_steps</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">maxfun</span><span class="o">=</span><span class="s">&quot;this_argument_is_ignored&quot;</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span> <span class="o">=</span> <span class="n">unpack_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span>
+
+    <span class="n">dims</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">grad_x</span> <span class="o">=</span> <span class="n">approx_gradient</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">eps</span><span class="p">)</span>
+    <span class="n">x1</span> <span class="o">=</span> <span class="n">x</span>
+    <span class="k">if</span> <span class="n">disp</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;start w/ f&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="s">&quot;grad&quot;</span><span class="p">,</span> <span class="n">grad_x</span>
+    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dims</span><span class="p">):</span>
+        <span class="n">step</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">dims</span><span class="p">,))</span>
+        <span class="k">if</span> <span class="n">grad_x</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">step</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="o">=</span> <span class="o">-.</span><span class="mi">3</span> <span class="o">*</span> <span class="n">grad_x</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">grad_x</span><span class="p">[</span><span class="n">d</span><span class="p">])</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">backtracking_line_search</span><span class="p">(</span>
+                <span class="n">f</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">grad_x</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">max_iters</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">low_bounds</span><span class="o">=</span><span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="o">=</span><span class="n">high_bounds</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">LineSearchFailed</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">disp</span><span class="p">:</span>
+                <span class="k">print</span> <span class="n">e</span>
+            <span class="k">continue</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">project_into_bounds</span><span class="p">(</span><span class="n">x1</span> <span class="o">+</span> <span class="n">step</span> <span class="o">*</span> <span class="n">t</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">disp</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;end w/ f&quot;</span><span class="p">,</span> <span class="n">f</span><span class="p">(</span><span class="n">x1</span><span class="p">),</span> <span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="n">x1</span>
+    <span class="k">return</span> <span class="n">x1</span>
+
+</div>
+<div class="viewcode-block" id="gradient_descent"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.gradient_descent.gradient_descent">[docs]</a><span class="k">def</span> <span class="nf">gradient_descent</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span> <span class="n">stopping_eps</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">f_grad</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">max_iters</span><span class="o">=</span><span class="mi">999999</span><span class="p">,</span> <span class="n">maxfun</span><span class="o">=</span><span class="s">&quot;this_argment_is_ignored&quot;</span><span class="p">,</span> <span class="n">return_details</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Gradient descent with backtracking line search.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x0</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span> <span class="o">=</span> <span class="n">unpack_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span>
+
+    <span class="n">xvals</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="p">]</span>
+    <span class="n">fvals</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="p">]</span>
+    <span class="n">stop_vals</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">while</span> <span class="bp">True</span> <span class="ow">and</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">max_iters</span><span class="p">:</span>
+
+        <span class="c"># compute gradient</span>
+        <span class="k">with</span> <span class="n">warnings</span><span class="o">.</span><span class="n">catch_warnings</span><span class="p">():</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">simplefilter</span><span class="p">(</span><span class="s">&quot;error&quot;</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">f_grad</span><span class="p">:</span>
+                    <span class="n">grad_x</span> <span class="o">=</span> <span class="n">f_grad</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">grad_x</span> <span class="o">=</span> <span class="n">approx_gradient</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">eps</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">RuntimeWarning</span> <span class="k">as</span> <span class="n">w</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&quot;error computing gradient:&quot;</span><span class="p">,</span> <span class="n">w</span>
+                <span class="k">break</span>
+
+        <span class="n">stopping_criterion</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">grad_x</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">stop_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stopping_criterion</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">disp</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;iter </span><span class="si">%d</span><span class="s"> fval </span><span class="si">%f</span><span class="s"> norm_grad </span><span class="si">%f</span><span class="s">, x = </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">stopping_criterion</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+            <span class="k">print</span> <span class="s">&quot;  grad&quot;</span><span class="p">,</span> <span class="n">grad_x</span>
+        <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="n">stopping_criterion</span> <span class="o">&lt;</span> <span class="n">stopping_eps</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">backtracking_line_search</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="n">grad_x</span><span class="p">,</span> <span class="n">grad_x</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">low_bounds</span><span class="o">=</span><span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="o">=</span><span class="n">high_bounds</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">t</span> <span class="o">&lt;</span> <span class="mf">1e-10</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">LineSearchFailed</span><span class="p">(</span><span class="s">&quot;tiny step size t=</span><span class="si">%f</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">t</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">LineSearchFailed</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;line search failed:&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="k">break</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">project_into_bounds</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">t</span> <span class="o">*</span> <span class="n">grad_x</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">)</span>
+        <span class="n">xvals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">fvals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">return_details</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">xvals</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">fvals</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">stop_vals</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span>
+
+</div>
+<div class="viewcode-block" id="approx_gradient"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.gradient_descent.approx_gradient">[docs]</a><span class="k">def</span> <span class="nf">approx_gradient</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">eps</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+    <span class="n">grad</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,))</span>
+    <span class="n">fx0</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="n">x_new</span> <span class="o">=</span> <span class="n">x0</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">x_new</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="n">eps</span>
+        <span class="n">grad</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="n">x_new</span><span class="p">)</span> <span class="o">-</span> <span class="n">fx0</span><span class="p">)</span> <span class="o">/</span> <span class="n">eps</span>
+    <span class="k">return</span> <span class="n">grad</span>
+
+</div>
+<div class="viewcode-block" id="unpack_bounds"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.gradient_descent.unpack_bounds">[docs]</a><span class="k">def</span> <span class="nf">unpack_bounds</span><span class="p">(</span><span class="n">bounds</span><span class="p">):</span>
+    <span class="n">low_bounds</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">high_bounds</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">bounds</span><span class="p">)</span>
+        <span class="n">low_bounds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">low_bounds</span><span class="p">)</span>
+        <span class="n">high_bounds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">high_bounds</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

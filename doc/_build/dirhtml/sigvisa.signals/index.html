@@ -1,0 +1,340 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>signals Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="sigvisa Package" href="../sigvisa/" />
+    <link rel="next" title="gpmodel Package" href="../sigvisa.signals.gpmodel/" />
+    <link rel="prev" title="results Package" href="../sigvisa.results/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.signals.gpmodel/" title="gpmodel Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.results/" title="results Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" accesskey="U">sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="signals-package">
+<h1>signals Package<a class="headerlink" href="#signals-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.signals.common">
+<span id="common-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">common</span></tt> Module<a class="headerlink" href="#module-sigvisa.signals.common" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.signals.common.Segment">
+<em class="property">class </em><tt class="descclassname">sigvisa.signals.common.</tt><tt class="descname">Segment</tt><big>(</big><em>waveforms=</em><span class="optional">[</span><span class="optional">]</span><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Segment"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Segment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="attribute">
+<dt id="sigvisa.signals.common.Segment.STANDARD_STATS">
+<tt class="descname">STANDARD_STATS</tt><em class="property"> = ['sta', 'stime', 'etime']</em><a class="headerlink" href="#sigvisa.signals.common.Segment.STANDARD_STATS" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Segment.addWaveform">
+<tt class="descname">addWaveform</tt><big>(</big><em>wf</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Segment.addWaveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Segment.addWaveform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Segment.as_old_style_segment">
+<tt class="descname">as_old_style_segment</tt><big>(</big><em>bands=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Segment.as_old_style_segment"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Segment.as_old_style_segment" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Segment.dummy_chan">
+<tt class="descname">dummy_chan</tt><big>(</big><em>chan_str</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Segment.dummy_chan"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Segment.dummy_chan" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="attribute">
+<dt id="sigvisa.signals.common.Segment.filter_order">
+<tt class="descname">filter_order</tt><em class="property"> = ['center', 'freq', 'env', 'log', 'smooth', 'hz']</em><a class="headerlink" href="#sigvisa.signals.common.Segment.filter_order" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Segment.get_chans">
+<tt class="descname">get_chans</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Segment.get_chans"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Segment.get_chans" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Segment.with_filter">
+<tt class="descname">with_filter</tt><big>(</big><em>filter_str</em>, <em>force_duplicate=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Segment.with_filter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Segment.with_filter" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="sigvisa.signals.common.Waveform">
+<em class="property">class </em><tt class="descclassname">sigvisa.signals.common.</tt><tt class="descname">Waveform</tt><big>(</big><em>data=</em><span class="optional">[</span><span class="optional">]</span>, <em>srate=40</em>, <em>stime=0</em>, <em>sta='AAK'</em>, <em>segment_stats=None</em>, <em>my_stats=None</em>, <em>**my_stats_entries</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Waveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Waveform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>A single waveform trace. Contains methods for generating filtered versions of itself.</p>
+<dl class="method">
+<dt id="sigvisa.signals.common.Waveform.as_obspy_trace">
+<tt class="descname">as_obspy_trace</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Waveform.as_obspy_trace"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Waveform.as_obspy_trace" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Waveform.dump_to_file">
+<tt class="descname">dump_to_file</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Waveform.dump_to_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Waveform.dump_to_file" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Waveform.filter">
+<tt class="descname">filter</tt><big>(</big><em>filter_str</em>, <em>preserve_intermediate=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Waveform.filter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Waveform.filter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Recursive method to generate a filtered waveform.</p>
+<p>Accepts filter strings of the form &#8220;freq_2.0_3.0;env;smooth&#8221;
+with filters separated by semicolons. The first filter in the
+chain is applied to generate a new waveform (&#8220;first_filtered&#8221;)
+which is then called recursively to apply the other filters.</p>
+<p>Filtered waveforms are cached in the self.filtered dictionary,
+indexed by the first term in their filter string (thus the
+caching works through the recursive calls for more complex
+filters). Thus only the first call to this method with a given
+filter string actually requires any computation.</p>
+<p>If preserve_intermediate is False, the cache keys are the
+entire filter strings rather than just the first terms.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.signals.common.Waveform.l1_cost">
+<tt class="descname">l1_cost</tt><big>(</big><em>other_wave</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#Waveform.l1_cost"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.Waveform.l1_cost" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.common.bandpass_missing">
+<tt class="descclassname">sigvisa.signals.common.</tt><tt class="descname">bandpass_missing</tt><big>(</big><em>masked_array</em>, <em>low</em>, <em>high</em>, <em>srate</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#bandpass_missing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.bandpass_missing" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.common.filter_str_extract_band">
+<tt class="descclassname">sigvisa.signals.common.</tt><tt class="descname">filter_str_extract_band</tt><big>(</big><em>filter_str</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#filter_str_extract_band"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.filter_str_extract_band" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.common.load_waveform_from_file">
+<tt class="descclassname">sigvisa.signals.common.</tt><tt class="descname">load_waveform_from_file</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#load_waveform_from_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.load_waveform_from_file" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.common.main">
+<tt class="descclassname">sigvisa.signals.common.</tt><tt class="descname">main</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.common.smooth">
+<tt class="descclassname">sigvisa.signals.common.</tt><tt class="descname">smooth</tt><big>(</big><em>x</em>, <em>window_len=121</em>, <em>window='hanning'</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/common/#smooth"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.common.smooth" title="Permalink to this definition">¶</a></dt>
+<dd><p>smooth the data using a window with requested size.</p>
+<p>This method is based on the convolution of a scaled window with the signal.
+The signal is prepared by introducing reflected copies of the signal
+(with the window size) in both ends so that transient parts are minimized
+in the begining and end part of the output signal.</p>
+<dl class="docutils">
+<dt>input:</dt>
+<dd><p class="first">x: the input signal
+window_len: the dimension of the smoothing window; should be an odd integer
+window: the type of window from &#8216;flat&#8217;, &#8216;hanning&#8217;, &#8216;hamming&#8217;, &#8216;bartlett&#8217;, &#8216;blackman&#8217;</p>
+<blockquote class="last">
+<div>flat window will produce a moving average smoothing.</div></blockquote>
+</dd>
+<dt>output:</dt>
+<dd>the smoothed signal</dd>
+</dl>
+<p>example:</p>
+<p>t=linspace(-2,2,0.1)
+x=sin(t)+randn(len(t))*0.1
+y=smooth(x)</p>
+<p>see also:</p>
+<p>numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+scipy.signal.lfilter</p>
+<p>TODO: the window parameter could be the window itself if an array instead of a string</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.signals.io">
+<span id="io-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">io</span></tt> Module<a class="headerlink" href="#module-sigvisa.signals.io" title="Permalink to this headline">¶</a></h2>
+<dl class="exception">
+<dt id="sigvisa.signals.io.MissingWaveform">
+<em class="property">exception </em><tt class="descclassname">sigvisa.signals.io.</tt><tt class="descname">MissingWaveform</tt><a class="reference internal" href="../_modules/sigvisa/signals/io/#MissingWaveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.io.MissingWaveform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.io.fetch_waveform">
+<tt class="descclassname">sigvisa.signals.io.</tt><tt class="descname">fetch_waveform</tt><big>(</big><em>*args</em>, <em>**kwds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/io/#fetch_waveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.io.fetch_waveform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a single Waveform for the given channel at the station in
+the given interval. If there are periods for which data are not
+available, they are marked as missing data.</p>
+<p>Loads data for pad_seconds before and after the true start time, and
+masks the additional data. This is used to absorb filtering
+artifacts.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.io.load_event_station">
+<tt class="descclassname">sigvisa.signals.io.</tt><tt class="descname">load_event_station</tt><big>(</big><em>evid</em>, <em>sta</em>, <em>evtype='leb'</em>, <em>cursor=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/io/#load_event_station"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.io.load_event_station" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.io.load_event_station_chan">
+<tt class="descclassname">sigvisa.signals.io.</tt><tt class="descname">load_event_station_chan</tt><big>(</big><em>evid</em>, <em>sta</em>, <em>chan</em>, <em>evtype='leb'</em>, <em>cursor=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/io/#load_event_station_chan"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.io.load_event_station_chan" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.io.load_segments">
+<tt class="descclassname">sigvisa.signals.io.</tt><tt class="descname">load_segments</tt><big>(</big><em>cursor</em>, <em>stations</em>, <em>start_time</em>, <em>end_time</em>, <em>chans=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/io/#load_segments"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.io.load_segments" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a list of waveform segments corresponding to the given channels
+at the given stations over the given time period.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.signals.mask_util">
+<span id="mask-util-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">mask_util</span></tt> Module<a class="headerlink" href="#module-sigvisa.signals.mask_util" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.signals.mask_util.grow_mask">
+<tt class="descclassname">sigvisa.signals.mask_util.</tt><tt class="descname">grow_mask</tt><big>(</big><em>mask</em>, <em>n</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/mask_util/#grow_mask"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.mask_util.grow_mask" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.mask_util.mask_blocks">
+<tt class="descclassname">sigvisa.signals.mask_util.</tt><tt class="descname">mask_blocks</tt><big>(</big><em>mask</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/mask_util/#mask_blocks"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.mask_util.mask_blocks" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a list of masked blocks (contiguous portions of the signal in which the mask is True).</p>
+<p>Throws an IndexError if the mask is False.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.signals.mask_util.mirror_missing">
+<tt class="descclassname">sigvisa.signals.mask_util.</tt><tt class="descname">mirror_missing</tt><big>(</big><em>m</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/signals/mask_util/#mirror_missing"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.signals.mask_util.mirror_missing" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fills in missing values by mirroring the values to either side.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../sigvisa.signals.gpmodel/">gpmodel Package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals.gpmodel/#data-module"><tt class="docutils literal"><span class="pre">data</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals.gpmodel/#module-sigvisa.signals.gpmodel.gaussian"><tt class="docutils literal"><span class="pre">gaussian</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals.gpmodel/#gptest-module"><tt class="docutils literal"><span class="pre">gptest</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals.gpmodel/#module-sigvisa.signals.gpmodel.gridutil"><tt class="docutils literal"><span class="pre">gridutil</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals.gpmodel/#module-sigvisa.signals.gpmodel.main"><tt class="docutils literal"><span class="pre">main</span></tt> Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sigvisa.signals.gpmodel/#wave-module"><tt class="docutils literal"><span class="pre">wave</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">signals Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.signals.common"><tt class="docutils literal"><span class="pre">common</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.signals.io"><tt class="docutils literal"><span class="pre">io</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.signals.mask_util"><tt class="docutils literal"><span class="pre">mask_util</span></tt> Module</a></li>
+<li><a class="reference internal" href="#subpackages">Subpackages</a><ul>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.results/"
+                        title="previous chapter">results Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.signals.gpmodel/"
+                        title="next chapter">gpmodel Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.signals.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.signals.gpmodel/" title="gpmodel Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.results/" title="results Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

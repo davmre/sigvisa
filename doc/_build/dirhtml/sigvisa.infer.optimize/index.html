@@ -1,0 +1,184 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>optimize Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="infer Package" href="../sigvisa.infer/" />
+    <link rel="next" title="learn Package" href="../sigvisa.learn/" />
+    <link rel="prev" title="infer Package" href="../sigvisa.infer/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.learn/" title="learn Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.infer/" title="infer Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.infer/" accesskey="U">infer Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="optimize-package">
+<h1>optimize Package<a class="headerlink" href="#optimize-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.infer.optimize.optim_utils">
+<span id="optim-utils-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">optim_utils</span></tt> Module<a class="headerlink" href="#module-sigvisa.infer.optimize.optim_utils" title="Permalink to this headline">¶</a></h2>
+<dl class="exception">
+<dt id="sigvisa.infer.optimize.optim_utils.BoundsViolation">
+<em class="property">exception </em><tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">BoundsViolation</tt><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#BoundsViolation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.BoundsViolation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">exceptions.Exception</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.construct_optim_params">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">construct_optim_params</tt><big>(</big><em>optim_param_str=''</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#construct_optim_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.construct_optim_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.coord_descent">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">coord_descent</tt><big>(</big><em>f</em>, <em>x0</em>, <em>converge=0.1</em>, <em>steps=None</em>, <em>maxiters=500</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#coord_descent"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.coord_descent" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use coordinate descent to minimize the function f, starting with a vector x0.</p>
+<p>converge: stop when the function val decreases by less than this amount
+steps: vector of step sizes, one for each dimension
+maxiters: maximum number of iterations</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.minimize">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">minimize</tt><big>(</big><em>f</em>, <em>x0</em>, <em>optim_params</em>, <em>bounds=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#minimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.minimize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.minimize_matrix">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">minimize_matrix</tt><big>(</big><em>f</em>, <em>start</em>, <em>optim_params</em>, <em>low_bounds=None</em>, <em>high_bounds=None</em>, <em>**other_args</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#minimize_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.minimize_matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.optimize">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">optimize</tt><big>(</big><em>f</em>, <em>start_params</em>, <em>bounds</em>, <em>method</em>, <em>phaseids=None</em>, <em>maxfun=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#optimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.optimize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.optimize_by_phase">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">optimize_by_phase</tt><big>(</big><em>f</em>, <em>start_params</em>, <em>bounds</em>, <em>phaseids</em>, <em>method='bfgs'</em>, <em>iters=3</em>, <em>maxfun=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#optimize_by_phase"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.optimize_by_phase" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.scale_normalize">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">scale_normalize</tt><big>(</big><em>x</em>, <em>low_bounds</em>, <em>high_bounds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#scale_normalize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.scale_normalize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="sigvisa.infer.optimize.optim_utils.scale_unnormalize">
+<tt class="descclassname">sigvisa.infer.optimize.optim_utils.</tt><tt class="descname">scale_unnormalize</tt><big>(</big><em>x</em>, <em>low_bounds</em>, <em>high_bounds</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/infer/optimize/optim_utils/#scale_unnormalize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.infer.optimize.optim_utils.scale_unnormalize" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">optimize Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.infer.optimize.optim_utils"><tt class="docutils literal"><span class="pre">optim_utils</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.infer/"
+                        title="previous chapter">infer Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.learn/"
+                        title="next chapter">learn Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.infer.optimize.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.learn/" title="learn Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.infer/" title="infer Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.infer/" >infer Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

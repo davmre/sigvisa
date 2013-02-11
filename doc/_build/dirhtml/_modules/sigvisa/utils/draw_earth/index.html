@@ -1,0 +1,435 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.utils.draw_earth &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../" />
+    <link rel="up" title="Module code" href="../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.utils.draw_earth</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib</span>
+<span class="kn">from</span> <span class="nn">mpl_toolkits.basemap</span> <span class="kn">import</span> <span class="n">Basemap</span>
+<span class="kn">from</span> <span class="nn">matplotlib.figure</span> <span class="kn">import</span> <span class="n">Figure</span>
+<span class="kn">import</span> <span class="nn">matplotlib.cm</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">optparse</span> <span class="kn">import</span> <span class="n">OptionParser</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">geog</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.database.dataset</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">sigvisa.database</span> <span class="kn">import</span> <span class="n">db</span>
+
+
+<div class="viewcode-block" id="draw_earth"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.draw_earth.draw_earth">[docs]</a><span class="k">def</span> <span class="nf">draw_earth</span><span class="p">(</span><span class="n">title</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    default projection=&quot;moll&quot; and resolution=&quot;l&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s">&quot;nofillcontinents&quot;</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">args</span><span class="p">[</span><span class="s">&quot;nofillcontinents&quot;</span><span class="p">]</span>
+        <span class="n">nofillcontinents</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">nofillcontinents</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="k">if</span> <span class="s">&quot;figsize&quot;</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+        <span class="n">figsize</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="s">&quot;figsize&quot;</span><span class="p">]</span>
+        <span class="k">del</span> <span class="n">args</span><span class="p">[</span><span class="s">&quot;figsize&quot;</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mf">4.8</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s">&quot;projection&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+        <span class="n">args</span><span class="p">[</span><span class="s">&quot;projection&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;moll&quot;</span>
+    <span class="k">if</span> <span class="s">&quot;resolution&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+        <span class="n">args</span><span class="p">[</span><span class="s">&quot;resolution&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;l&quot;</span>
+
+    <span class="k">if</span> <span class="s">&quot;draw_grid&quot;</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">args</span><span class="p">[</span><span class="s">&quot;draw_grid&quot;</span><span class="p">]</span>
+        <span class="n">draw_grid</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">draw_grid</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="c"># if no args other than those above then center the map</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">args</span><span class="p">[</span><span class="s">&quot;lat_0&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">args</span><span class="p">[</span><span class="s">&quot;lon_0&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">bmap</span> <span class="o">=</span> <span class="n">Basemap</span><span class="p">(</span><span class="o">**</span><span class="n">args</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">drawmapboundary</span><span class="p">(</span><span class="n">fill_color</span><span class="o">=</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">bmap</span><span class="o">.</span><span class="n">drawmapboundary</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">drawcoastlines</span><span class="p">(</span><span class="n">zorder</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">drawcoastlines</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">nofillcontinents</span><span class="p">:</span>
+        <span class="c"># fill the continents with a greenish color</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">bmap</span><span class="o">.</span><span class="n">fillcontinents</span><span class="p">(</span><span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">lake_color</span><span class="o">=</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+                                <span class="n">zorder</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">bmap</span><span class="o">.</span><span class="n">fillcontinents</span><span class="p">(</span><span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="c"># fill the oceans with a bluish color</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">bmap</span><span class="o">.</span><span class="n">drawmapboundary</span><span class="p">(</span><span class="n">fill_color</span><span class="o">=</span><span class="p">(</span><span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="o">.</span><span class="mi">7</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">bmap</span><span class="o">.</span><span class="n">drawmapboundary</span><span class="p">()</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+    <span class="k">if</span> <span class="n">draw_grid</span><span class="p">:</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">drawmeridians</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="mi">180</span><span class="p">,</span> <span class="mi">180</span><span class="p">,</span> <span class="mi">30</span><span class="p">),</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">drawparallels</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="o">-</span><span class="mi">90</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="mi">30</span><span class="p">),</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">bmap</span>
+
+</div>
+<div class="viewcode-block" id="draw_events"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.draw_earth.draw_events">[docs]</a><span class="k">def</span> <span class="nf">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">events</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The args can be any collection of marker args like ms, mfc mec</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s">&quot;zorder&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+        <span class="n">args</span><span class="p">[</span><span class="s">&quot;zorder&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">10</span>
+
+    <span class="c"># if there are any array args then we need to apply them to each event</span>
+    <span class="c"># separately</span>
+    <span class="n">array_args</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">argname</span><span class="p">,</span> <span class="n">argval</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">issctype</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">argval</span><span class="p">)):</span>
+            <span class="k">assert</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">events</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">argval</span><span class="p">))</span>
+            <span class="n">array_args</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">argname</span><span class="p">,</span> <span class="n">argval</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">enum</span><span class="p">,</span> <span class="n">ev</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">events</span><span class="p">):</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">bmap</span><span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="c"># set each of the array argument for this event</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">argname</span><span class="p">,</span> <span class="n">argval</span><span class="p">)</span> <span class="ow">in</span> <span class="n">array_args</span><span class="p">:</span>
+            <span class="n">args</span><span class="p">[</span><span class="n">argname</span><span class="p">]</span> <span class="o">=</span> <span class="n">argval</span><span class="p">[</span><span class="n">enum</span><span class="p">]</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">x</span><span class="p">],</span> <span class="p">[</span><span class="n">y</span><span class="p">],</span> <span class="o">**</span><span class="n">args</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">labels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">labels</span><span class="p">[</span><span class="n">enum</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">axes</span> <span class="o">=</span> <span class="n">bmap</span><span class="o">.</span><span class="n">ax</span>
+            <span class="n">axes</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span>
+                <span class="n">labels</span><span class="p">[</span><span class="n">enum</span><span class="p">],</span>
+                <span class="n">xy</span><span class="o">=</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">),</span>
+                <span class="n">xytext</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span>
+                <span class="n">textcoords</span><span class="o">=</span><span class="s">&#39;offset points&#39;</span><span class="p">,</span>
+                <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+                <span class="n">color</span> <span class="o">=</span> <span class="s">&#39;white&#39;</span><span class="p">,</span>
+                <span class="n">zorder</span><span class="o">=</span><span class="n">args</span><span class="p">[</span><span class="s">&#39;zorder&#39;</span><span class="p">],</span>
+                <span class="n">arrowprops</span> <span class="o">=</span> <span class="bp">None</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="draw_events_mag"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.draw_earth.draw_events_mag">[docs]</a><span class="k">def</span> <span class="nf">draw_events_mag</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">events</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The args can be any collection of marker args like ms, mfc mec</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s">&quot;zorder&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+        <span class="n">args</span><span class="p">[</span><span class="s">&quot;zorder&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">10</span>
+
+    <span class="n">base_ms</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="s">&quot;ms&quot;</span><span class="p">]</span>
+    <span class="k">del</span> <span class="n">args</span><span class="p">[</span><span class="s">&quot;ms&quot;</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">bmap</span><span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">args</span><span class="p">[</span><span class="s">&quot;ms&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">base_ms</span> <span class="o">*</span> <span class="nb">pow</span><span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span> <span class="mf">2.01</span><span class="p">))</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">x</span><span class="p">],</span> <span class="p">[</span><span class="n">y</span><span class="p">],</span> <span class="o">**</span><span class="n">args</span><span class="p">)</span>
+
+    <span class="n">args</span><span class="p">[</span><span class="s">&quot;ms&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">base_ms</span>                  <span class="c"># restore marker size</span>
+
+</div>
+<div class="viewcode-block" id="draw_vectors"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.draw_earth.draw_vectors">[docs]</a><span class="k">def</span> <span class="nf">draw_vectors</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">vectors</span><span class="p">,</span> <span class="n">scale</span><span class="p">,</span> <span class="o">**</span><span class="n">args</span><span class="p">):</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">lon1</span><span class="p">,</span> <span class="n">lat1</span><span class="p">,</span> <span class="n">lon2</span><span class="p">,</span> <span class="n">lat2</span><span class="p">)</span> <span class="ow">in</span> <span class="n">vectors</span><span class="p">:</span>
+        <span class="n">x1</span><span class="p">,</span> <span class="n">y1</span> <span class="o">=</span> <span class="n">bmap</span><span class="p">(</span><span class="n">lon1</span><span class="p">,</span> <span class="n">lat1</span><span class="p">)</span>
+        <span class="n">x2</span><span class="p">,</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">bmap</span><span class="p">(</span><span class="n">lon2</span><span class="p">,</span> <span class="n">lat2</span><span class="p">)</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">arrow</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">,</span> <span class="n">scale</span> <span class="o">*</span> <span class="p">(</span><span class="n">x2</span> <span class="o">-</span> <span class="n">x1</span><span class="p">),</span> <span class="n">scale</span> <span class="o">*</span> <span class="p">(</span><span class="n">y2</span> <span class="o">-</span> <span class="n">y1</span><span class="p">),</span> <span class="o">**</span><span class="n">args</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="draw_density"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.draw_earth.draw_density">[docs]</a><span class="k">def</span> <span class="nf">draw_density</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">lons</span><span class="p">,</span> <span class="n">lats</span><span class="p">,</span> <span class="n">vals</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">colorbar</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">nolines</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">colorbar_orientation</span><span class="o">=</span><span class="s">&quot;vertical&quot;</span><span class="p">,</span>
+                 <span class="n">colorbar_shrink</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">smooth</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="n">loni</span><span class="p">,</span> <span class="n">lati</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mgrid</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">lons</span><span class="p">),</span> <span class="mi">0</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">lats</span><span class="p">)]</span>
+    <span class="n">lon_arr</span><span class="p">,</span> <span class="n">lat_arr</span> <span class="o">=</span> <span class="n">lons</span><span class="p">[</span><span class="n">loni</span><span class="p">],</span> <span class="n">lats</span><span class="p">[</span><span class="n">lati</span><span class="p">]</span>
+
+    <span class="c"># convert to map coordinates</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">bmap</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">lon_arr</span><span class="o">.</span><span class="n">flat</span><span class="p">),</span> <span class="nb">list</span><span class="p">(</span><span class="n">lat_arr</span><span class="o">.</span><span class="n">flat</span><span class="p">))</span>
+    <span class="n">x_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">lon_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="n">y_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">y</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">lat_arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="n">cm</span> <span class="o">=</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">cm</span><span class="o">.</span><span class="n">get_cmap</span><span class="p">(</span><span class="s">&#39;jet&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">smooth</span><span class="p">:</span>
+        <span class="n">cs1</span> <span class="o">=</span> <span class="n">bmap</span><span class="o">.</span><span class="n">contour</span><span class="p">(</span><span class="n">x_arr</span><span class="p">,</span> <span class="n">y_arr</span><span class="p">,</span> <span class="n">vals</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">linewidths</span><span class="o">=.</span><span class="mi">5</span><span class="p">,</span> <span class="n">colors</span><span class="o">=</span><span class="s">&quot;k&quot;</span><span class="p">,</span>
+                           <span class="n">zorder</span><span class="o">=</span><span class="mi">6</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="n">nolines</span><span class="p">))</span>
+        <span class="n">norm</span> <span class="o">=</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">colors</span><span class="o">.</span><span class="n">BoundaryNorm</span><span class="p">(</span><span class="n">cs1</span><span class="o">.</span><span class="n">levels</span><span class="p">,</span> <span class="n">cm</span><span class="o">.</span><span class="n">N</span><span class="p">)</span>
+        <span class="n">cs2</span> <span class="o">=</span> <span class="n">bmap</span><span class="o">.</span><span class="n">contourf</span><span class="p">(</span><span class="n">x_arr</span><span class="p">,</span> <span class="n">y_arr</span><span class="p">,</span> <span class="n">vals</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cm</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                            <span class="n">extend</span><span class="o">=</span><span class="s">&quot;both&quot;</span><span class="p">,</span>
+                            <span class="n">norm</span><span class="o">=</span><span class="n">norm</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">norm</span> <span class="o">=</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">colors</span><span class="o">.</span><span class="n">Normalize</span><span class="p">()</span>
+        <span class="n">cs2</span> <span class="o">=</span> <span class="n">bmap</span><span class="o">.</span><span class="n">pcolormesh</span><span class="p">(</span><span class="n">x_arr</span><span class="p">,</span> <span class="n">y_arr</span><span class="p">,</span> <span class="n">vals</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cm</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">norm</span><span class="o">=</span><span class="n">norm</span><span class="p">,</span> <span class="n">shading</span><span class="o">=</span><span class="s">&#39;gouraud&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">colorbar</span><span class="p">:</span>
+        <span class="kn">from</span> <span class="nn">mpl_toolkits.axes_grid</span> <span class="kn">import</span> <span class="n">make_axes_locatable</span>
+        <span class="kn">import</span> <span class="nn">matplotlib.axes</span> <span class="kn">as</span> <span class="nn">maxes</span>
+
+        <span class="n">divider</span> <span class="o">=</span> <span class="n">make_axes_locatable</span><span class="p">(</span><span class="n">bmap</span><span class="o">.</span><span class="n">ax</span><span class="p">)</span>
+        <span class="n">cax</span> <span class="o">=</span> <span class="n">divider</span><span class="o">.</span><span class="n">new_horizontal</span><span class="p">(</span><span class="s">&quot;4%&quot;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=.</span><span class="mi">5</span><span class="p">,</span> <span class="n">axes_class</span><span class="o">=</span><span class="n">maxes</span><span class="o">.</span><span class="n">Axes</span><span class="p">)</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">add_axes</span><span class="p">(</span><span class="n">cax</span><span class="p">)</span>
+
+        <span class="n">bmap</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">figure</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">cs2</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=</span><span class="n">colorbar_orientation</span><span class="p">,</span> <span class="n">drawedges</span><span class="o">=</span><span class="ow">not</span> <span class="n">nolines</span><span class="p">,</span>
+                                <span class="n">cax</span><span class="o">=</span><span class="n">cax</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%.1f</span><span class="s">&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="draw_events_arrivals"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.draw_earth.draw_events_arrivals">[docs]</a><span class="k">def</span> <span class="nf">draw_events_arrivals</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">events</span><span class="p">,</span> <span class="n">arrivals</span><span class="p">,</span> <span class="n">sites</span><span class="p">,</span> <span class="n">ttime</span><span class="p">,</span> <span class="n">quant</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    threshold - time in seconds between expected arrival time and the arrival</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">evcolors</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="s">&quot;yellow&quot;</span><span class="p">,</span> <span class="s">&quot;blue&quot;</span><span class="p">,</span> <span class="s">&quot;orange&quot;</span><span class="p">,</span> <span class="s">&quot;purple&quot;</span><span class="p">,</span> <span class="s">&quot;cyan&quot;</span><span class="p">,</span> <span class="s">&quot;magenta&quot;</span><span class="p">]</span>
+    <span class="n">evcolnum</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">ev_lon</span><span class="p">,</span> <span class="n">ev_lat</span><span class="p">,</span> <span class="n">ev_depth</span><span class="p">,</span> <span class="n">ev_time</span><span class="p">,</span> <span class="n">ev_mb</span><span class="p">)</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+        <span class="n">evcolnum</span> <span class="o">=</span> <span class="p">(</span><span class="n">evcolnum</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">evcolors</span><span class="p">)</span>
+        <span class="n">ev_x</span><span class="p">,</span> <span class="n">ev_y</span> <span class="o">=</span> <span class="n">bmap</span><span class="p">(</span><span class="n">ev_lon</span><span class="p">,</span> <span class="n">ev_lat</span><span class="p">)</span>
+        <span class="n">bmap</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">ev_x</span><span class="p">],</span> <span class="p">[</span><span class="n">ev_y</span><span class="p">],</span> <span class="n">marker</span><span class="o">=</span><span class="s">&quot;s&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span>
+                  <span class="n">mec</span><span class="o">=</span><span class="n">evcolors</span><span class="p">[</span><span class="n">evcolnum</span><span class="p">],</span> <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">arr</span> <span class="ow">in</span> <span class="n">arrivals</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+            <span class="n">sta</span> <span class="o">=</span> <span class="n">sites</span><span class="p">[</span><span class="n">arr</span><span class="o">.</span><span class="n">sta</span><span class="p">]</span>
+            <span class="n">dist</span> <span class="o">=</span> <span class="n">geog</span><span class="o">.</span><span class="n">dist_deg</span><span class="p">((</span><span class="n">sta</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="n">sta</span><span class="o">.</span><span class="n">lat</span><span class="p">),</span> <span class="p">(</span><span class="n">ev_lon</span><span class="p">,</span> <span class="n">ev_lat</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">dist</span> <span class="o">&lt;=</span> <span class="mi">100</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">time</span> <span class="o">/</span> <span class="n">quant</span><span class="p">)</span> \
+                        <span class="o">==</span> <span class="nb">int</span><span class="p">((</span><span class="n">ev_time</span> <span class="o">+</span> <span class="n">ttime</span><span class="p">[</span><span class="n">ev_depth</span><span class="p">,</span> <span class="n">dist</span><span class="p">])</span> <span class="o">/</span> <span class="n">quant</span><span class="p">):</span>
+                    <span class="n">bmap</span><span class="o">.</span><span class="n">drawgreatcircle</span><span class="p">(</span><span class="n">ev_lon</span><span class="p">,</span> <span class="n">ev_lat</span><span class="p">,</span> <span class="n">sta</span><span class="o">.</span><span class="n">lon</span><span class="p">,</span> <span class="n">sta</span><span class="o">.</span><span class="n">lat</span><span class="p">,</span>
+                                         <span class="n">color</span><span class="o">=</span><span class="n">evcolors</span><span class="p">[</span><span class="n">evcolnum</span><span class="p">],</span>
+                                         <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+    <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">sites</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s">&quot;^&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;green&quot;</span><span class="p">,</span>
+                <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">zorder</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../../sigvisa.utils/#sigvisa.utils.draw_earth.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">OptionParser</span><span class="p">()</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-s&quot;</span><span class="p">,</span> <span class="s">&quot;--siteid&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;siteid&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;int&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;siteid of station for which to generate plots, or None to just plot all stations (None)&quot;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--min_azi&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_azi&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with azimuth less than this value (0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--max_azi&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_azi&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">360</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with azimuth greater than this value (360)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--min_dist&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_dist&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with distance less than this value (0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--max_dist&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_dist&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">24000</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with distance greater than this value (24000)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--min_depth&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_depth&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with depth less than this value (0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--max_depth&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_depth&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">8000</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with depth greater than this value (8000)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--min_mb&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;min_mb&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with mb less than this value (0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--max_mb&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;max_mb&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with mb greater than this value (10)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span>
+        <span class="s">&quot;--start_time&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;start_time&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with time less than this value (0)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;--end_time&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;end_time&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1237680000</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;float&quot;</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s">&quot;exclude all events with time greater than this value (1237680000)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s">&quot;-o&quot;</span><span class="p">,</span> <span class="s">&quot;--outfile&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s">&quot;outfile&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&quot;geog.pdf&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="s">&quot;str&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&quot;name of output file (geog.pdf)&quot;</span><span class="p">)</span>
+
+    <span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="kn">from</span> <span class="nn">matplotlib.backends.backend_pdf</span> <span class="kn">import</span> <span class="n">PdfPages</span>
+
+<span class="c">#    pp = PdfPages(os.path.join(pdf_dir, &quot;geog.pdf&quot;))</span>
+    <span class="n">pp</span> <span class="o">=</span> <span class="n">PdfPages</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">outfile</span><span class="p">)</span>
+
+    <span class="n">cursor</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+    <span class="n">sites</span> <span class="o">=</span> <span class="n">read_sites</span><span class="p">(</span><span class="n">cursor</span><span class="p">)</span>
+
+    <span class="n">max_lon</span> <span class="o">=</span> <span class="mi">180</span>
+    <span class="n">min_lon</span> <span class="o">=</span> <span class="o">-</span><span class="mi">180</span>
+    <span class="n">max_lat</span> <span class="o">=</span> <span class="mi">90</span>
+    <span class="n">min_lat</span> <span class="o">=</span> <span class="o">-</span><span class="mi">90</span>
+    <span class="n">bmap</span> <span class="o">=</span> <span class="n">draw_earth</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">,</span>
+                      <span class="n">projection</span><span class="o">=</span><span class="s">&quot;cyl&quot;</span><span class="p">,</span>
+                      <span class="n">resolution</span><span class="o">=</span><span class="s">&quot;l&quot;</span><span class="p">,</span>
+                      <span class="n">llcrnrlon</span><span class="o">=</span><span class="n">min_lon</span><span class="p">,</span> <span class="n">urcrnrlon</span><span class="o">=</span><span class="n">max_lon</span><span class="p">,</span>
+                      <span class="n">llcrnrlat</span><span class="o">=</span><span class="n">min_lat</span><span class="p">,</span> <span class="n">urcrnrlat</span><span class="o">=</span><span class="n">max_lat</span><span class="p">,</span>
+                      <span class="n">nofillcontinents</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                      <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">siteid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">siteid</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">siteid</span>
+        <span class="n">site_lonlat</span> <span class="o">=</span> <span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">]</span>
+
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;pn_evids&quot;</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">orid</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;SELECT distinct mb, lon, lat, evid, time, depth FROM leb_origin where evid=</span><span class="si">%d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">orid</span><span class="p">)</span>
+            <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+            <span class="n">ev</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+            <span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ev</span><span class="p">)</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+
+<span class="c">#      sql_query=&quot;SELECT distinct lebo.mb, lebo.lon, lebo.lat, lebo.evid, lebo.time, lebo.depth FROM leb_arrival l , static_siteid sid, static_phaseid pid, leb_origin lebo, leb_assoc leba where l.time between %f and %f and lebo.mb between %f and %f and lebo.depth between %f and %f and leba.arid=l.arid and lebo.orid=leba.orid and sid.sta=l.sta and sid.id=%d and pid.phase=leba.phase&quot; % (options.start_time, options.end_time, options.min_mb, options.max_mb, options.min_depth, options.max_depth, options.siteid)</span>
+<span class="c">#      cursor.execute(sql_query)</span>
+<span class="c">#      events = np.array(cursor.fetchall())</span>
+
+        <span class="n">d</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">ev</span><span class="p">:</span> <span class="n">geog</span><span class="o">.</span><span class="n">dist_km</span><span class="p">((</span><span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">ev</span><span class="p">:</span> <span class="n">geog</span><span class="o">.</span><span class="n">azimuth</span><span class="p">((</span><span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">sites</span><span class="p">[</span><span class="n">siteid</span> <span class="o">-</span> <span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+        <span class="n">distances</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">d</span><span class="p">(</span><span class="n">ev</span><span class="p">)</span> <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">events</span><span class="p">])</span>
+        <span class="n">azimuths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">a</span><span class="p">(</span><span class="n">ev</span><span class="p">)</span> <span class="k">for</span> <span class="n">ev</span> <span class="ow">in</span> <span class="n">events</span><span class="p">])</span>
+        <span class="n">dist_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="p">((</span><span class="n">distances</span> <span class="o">&gt;=</span> <span class="n">options</span><span class="o">.</span><span class="n">min_dist</span><span class="p">),</span> <span class="p">(</span><span class="n">distances</span> <span class="o">&lt;=</span> <span class="n">options</span><span class="o">.</span><span class="n">max_dist</span><span class="p">))</span>
+        <span class="n">azi_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="p">((</span><span class="n">azimuths</span> <span class="o">&gt;=</span> <span class="n">options</span><span class="o">.</span><span class="n">min_azi</span><span class="p">),</span> <span class="p">(</span><span class="n">azimuths</span> <span class="o">&lt;=</span> <span class="n">options</span><span class="o">.</span><span class="n">max_azi</span><span class="p">))</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">dist_i</span><span class="p">,</span> <span class="n">azi_i</span><span class="p">)</span>
+
+        <span class="k">print</span> <span class="n">events</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">print</span> <span class="n">i</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="n">ev_lonlat</span> <span class="o">=</span> <span class="n">events</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ev</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ev_lonlat</span><span class="p">):</span>
+            <span class="k">print</span> <span class="s">&quot;drawing event at (</span><span class="si">%.2f</span><span class="s">, </span><span class="si">%.2f</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ev</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="p">((</span><span class="n">ev</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ev</span><span class="p">[</span><span class="mi">1</span><span class="p">]),),</span> <span class="n">marker</span><span class="o">=</span><span class="s">&quot;.&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;red&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="p">(</span><span class="n">site_lonlat</span><span class="p">,),</span> <span class="n">marker</span><span class="o">=</span><span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;purple&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+        <span class="n">bmap</span><span class="o">.</span><span class="n">ax</span><span class="o">.</span><span class="n">suptitle</span><span class="p">(</span><span class="s">&quot;siteid </span><span class="si">%d</span><span class="s"> azi (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">) dist (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)</span><span class="se">\n</span><span class="s"> mb (</span><span class="si">%.2f</span><span class="s">, </span><span class="si">%.2f</span><span class="s">) depth (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">siteid</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">min_azi</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">max_azi</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">min_dist</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">max_dist</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">min_mb</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">max_mb</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">min_depth</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">max_depth</span><span class="p">))</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">sql_query</span> <span class="o">=</span> <span class="s">&quot;select sta from static_siteid&quot;</span>
+        <span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql_query</span><span class="p">)</span>
+        <span class="n">stas</span> <span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+
+        <span class="n">draw_events</span><span class="p">(</span><span class="n">bmap</span><span class="p">,</span> <span class="n">sites</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">:</span><span class="mi">2</span><span class="p">],</span> <span class="n">labels</span><span class="o">=</span><span class="n">stas</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s">&quot;x&quot;</span><span class="p">,</span> <span class="n">ms</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">mfc</span><span class="o">=</span><span class="s">&quot;none&quot;</span><span class="p">,</span> <span class="n">mec</span><span class="o">=</span><span class="s">&quot;purple&quot;</span><span class="p">,</span> <span class="n">mew</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">pp</span><span class="o">.</span><span class="n">savefig</span><span class="p">()</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

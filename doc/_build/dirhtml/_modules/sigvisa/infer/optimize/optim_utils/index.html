@@ -1,0 +1,328 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.infer.optimize.optim_utils &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../../" />
+    <link rel="up" title="Module code" href="../../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.infer.optimize.optim_utils</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+<span class="kn">import</span> <span class="nn">scipy.optimize</span>
+<span class="kn">from</span> <span class="nn">sigvisa.utils.gradient_descent</span> <span class="kn">import</span> <span class="n">gradient_descent</span><span class="p">,</span> <span class="n">coord_steps</span>
+
+
+<div class="viewcode-block" id="BoundsViolation"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.BoundsViolation">[docs]</a><span class="k">class</span> <span class="nc">BoundsViolation</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+</div>
+<div class="viewcode-block" id="construct_optim_params"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.construct_optim_params">[docs]</a><span class="k">def</span> <span class="nf">construct_optim_params</span><span class="p">(</span><span class="n">optim_param_str</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">copy_dict_entries</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">dest</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">keys</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">dest</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="n">defaults</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&quot;method&quot;</span><span class="p">:</span> <span class="s">&quot;bfgscoord&quot;</span><span class="p">,</span>
+        <span class="s">&quot;fix_first_cols&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s">&quot;normalize&quot;</span><span class="p">:</span> <span class="bp">True</span><span class="p">,</span>
+        <span class="s">&#39;disp&#39;</span><span class="p">:</span> <span class="bp">False</span><span class="p">,</span>
+        <span class="s">&quot;eps&quot;</span><span class="p">:</span> <span class="mf">1e-4</span><span class="p">,</span>  <span class="c"># increment for approximate gradient evaluation</span>
+
+        <span class="s">&quot;bfgscoord_iters&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="s">&quot;bfgs_factr&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>  <span class="c"># used by bfgscoord and bfgs</span>
+        <span class="s">&quot;xtol&quot;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">,</span>  <span class="c"># used by simplex</span>
+        <span class="s">&quot;ftol&quot;</span><span class="p">:</span> <span class="mf">0.01</span><span class="p">,</span>  <span class="c"># used by simplex, tnc</span>
+        <span class="s">&quot;grad_stopping_eps&quot;</span><span class="p">:</span> <span class="mf">1e-4</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="n">overrides</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">&quot;{</span><span class="si">%s</span><span class="s">}&quot;</span> <span class="o">%</span> <span class="n">optim_param_str</span><span class="p">)</span>
+
+    <span class="n">optim_params</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;method&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">overrides</span><span class="p">[</span><span class="s">&#39;method&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="s">&#39;method&#39;</span> <span class="ow">in</span> <span class="n">overrides</span> <span class="k">else</span> <span class="n">defaults</span><span class="p">[</span><span class="s">&#39;method&#39;</span><span class="p">]</span>
+    <span class="n">copy_dict_entries</span><span class="p">([</span><span class="s">&quot;fix_first_cols&quot;</span><span class="p">,</span> <span class="s">&quot;normalize&quot;</span><span class="p">,</span> <span class="s">&quot;disp&quot;</span><span class="p">,</span> <span class="s">&quot;eps&quot;</span><span class="p">],</span> <span class="n">src</span><span class="o">=</span><span class="n">defaults</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+    <span class="n">method</span> <span class="o">=</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;method&#39;</span><span class="p">]</span>
+
+    <span class="c"># load appropriate defaults for each method</span>
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;bfgscoord&quot;</span><span class="p">:</span>
+        <span class="n">copy_dict_entries</span><span class="p">([</span><span class="s">&quot;bfgscoord_iters&quot;</span><span class="p">,</span> <span class="s">&quot;bfgs_factr&quot;</span><span class="p">],</span> <span class="n">src</span><span class="o">=</span><span class="n">defaults</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;bfgs&quot;</span><span class="p">:</span>
+        <span class="n">copy_dict_entries</span><span class="p">([</span><span class="s">&quot;bfgs_factr&quot;</span><span class="p">,</span> <span class="p">],</span> <span class="n">src</span><span class="o">=</span><span class="n">defaults</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;tnc&quot;</span><span class="p">:</span>
+        <span class="n">copy_dict_entries</span><span class="p">([</span><span class="s">&quot;ftol&quot;</span><span class="p">,</span> <span class="p">],</span> <span class="n">src</span><span class="o">=</span><span class="n">defaults</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;simplex&quot;</span><span class="p">:</span>
+        <span class="n">copy_dict_entries</span><span class="p">([</span><span class="s">&quot;ftol&quot;</span><span class="p">,</span> <span class="s">&quot;xtol&quot;</span><span class="p">,</span> <span class="p">],</span> <span class="n">src</span><span class="o">=</span><span class="n">defaults</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;grad&quot;</span><span class="p">:</span>
+        <span class="n">copy_dict_entries</span><span class="p">([</span><span class="s">&quot;grad_stopping_eps&quot;</span><span class="p">,</span> <span class="p">],</span> <span class="n">src</span><span class="o">=</span><span class="n">defaults</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+
+    <span class="n">copy_dict_entries</span><span class="p">([],</span> <span class="n">src</span><span class="o">=</span><span class="n">overrides</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="n">optim_params</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">optim_params</span>
+
+</div>
+<div class="viewcode-block" id="coord_descent"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.coord_descent">[docs]</a><span class="k">def</span> <span class="nf">coord_descent</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">converge</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">maxiters</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Use coordinate descent to minimize the function f, starting with a vector x0.</span>
+
+<span class="sd">    converge: stop when the function val decreases by less than this amount</span>
+<span class="sd">    steps: vector of step sizes, one for each dimension</span>
+<span class="sd">    maxiters: maximum number of iterations</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ncoords</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x0</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">maxiters</span><span class="p">):</span>
+        <span class="n">incr</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">ncoords</span><span class="p">):</span>
+
+            <span class="c"># try taking steps in both directions</span>
+            <span class="n">step</span> <span class="o">=</span> <span class="n">steps</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">+</span> <span class="n">step</span>
+            <span class="n">v1</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">step</span>
+            <span class="n">v2</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">v</span> <span class="o">&lt;=</span> <span class="n">v1</span> <span class="ow">and</span> <span class="n">v</span> <span class="o">&lt;=</span> <span class="n">v2</span><span class="p">:</span>
+                <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">+</span> <span class="n">step</span>
+                <span class="k">continue</span>
+
+            <span class="c"># continue stepping in the best direction, until there&#39;s</span>
+            <span class="c"># no more improvement.</span>
+            <span class="k">if</span> <span class="n">v1</span> <span class="o">&lt;</span> <span class="n">v2</span><span class="p">:</span>
+                <span class="n">vold</span> <span class="o">=</span> <span class="n">v1</span>
+                <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">+</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">step</span>
+                <span class="n">sign</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">vold</span> <span class="o">=</span> <span class="n">v2</span>
+                <span class="n">sign</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+                <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">-</span> <span class="n">step</span>
+            <span class="n">vnew</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="k">while</span> <span class="n">vnew</span> <span class="o">&lt;=</span> <span class="n">vold</span><span class="p">:</span>
+                <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">+</span> <span class="n">sign</span> <span class="o">*</span> <span class="n">step</span>
+                <span class="n">vold</span> <span class="o">=</span> <span class="n">vnew</span>
+                <span class="n">vnew</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+            <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">-</span> <span class="n">sign</span> <span class="o">*</span> <span class="n">step</span>
+            <span class="n">incr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">([</span><span class="n">v</span> <span class="o">-</span> <span class="n">vold</span><span class="p">,</span> <span class="n">incr</span><span class="p">])</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">vold</span>
+        <span class="k">if</span> <span class="n">incr</span> <span class="o">&lt;</span> <span class="n">converge</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&quot;coord iter </span><span class="si">%d</span><span class="s"> incr </span><span class="si">%f</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">incr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+</div>
+<div class="viewcode-block" id="optimize_by_phase"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.optimize_by_phase">[docs]</a><span class="k">def</span> <span class="nf">optimize_by_phase</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">start_params</span><span class="p">,</span> <span class="n">bounds</span><span class="p">,</span> <span class="n">phaseids</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s">&quot;bfgs&quot;</span><span class="p">,</span> <span class="n">iters</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">maxfun</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="n">nphase_params</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">start_params</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">phaseids</span><span class="p">)</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">start_params</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">iters</span><span class="p">):</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">pidx</span><span class="p">,</span> <span class="n">phaseid</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">phaseids</span><span class="p">):</span>
+            <span class="n">sidx</span> <span class="o">=</span> <span class="n">pidx</span> <span class="o">*</span> <span class="n">nphase_params</span>
+            <span class="n">eidx</span> <span class="o">=</span> <span class="p">(</span><span class="n">pidx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">nphase_params</span>
+            <span class="n">phase_params</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="n">sidx</span><span class="p">:</span><span class="n">eidx</span><span class="p">]</span>
+            <span class="n">phase_bounds</span> <span class="o">=</span> <span class="n">bounds</span><span class="p">[</span><span class="n">sidx</span><span class="p">:</span><span class="n">eidx</span><span class="p">]</span>
+            <span class="n">apf</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">pp</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">params</span><span class="p">[:</span><span class="n">sidx</span><span class="p">],</span> <span class="n">pp</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="n">eidx</span><span class="p">:]]))</span>
+            <span class="n">phase_params</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">minimize</span><span class="p">(</span>
+                <span class="n">apf</span><span class="p">,</span> <span class="n">phase_params</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">phase_bounds</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="p">[</span><span class="o">.</span><span class="mi">1</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">,</span> <span class="o">.</span><span class="mo">005</span><span class="p">],</span> <span class="n">maxfun</span><span class="o">=</span><span class="n">maxfun</span><span class="p">)</span>
+            <span class="k">print</span> <span class="s">&quot;params&quot;</span><span class="p">,</span> <span class="n">phase_params</span><span class="p">,</span> <span class="s">&quot;cost&quot;</span><span class="p">,</span> <span class="n">c</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">params</span><span class="p">[:</span><span class="n">sidx</span><span class="p">],</span> <span class="n">phase_params</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="n">eidx</span><span class="p">:]])</span>
+    <span class="k">return</span> <span class="n">params</span><span class="p">,</span> <span class="n">c</span>
+
+</div>
+<div class="viewcode-block" id="optimize"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.optimize">[docs]</a><span class="k">def</span> <span class="nf">optimize</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">start_params</span><span class="p">,</span> <span class="n">bounds</span><span class="p">,</span> <span class="n">method</span><span class="p">,</span> <span class="n">phaseids</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">maxfun</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">phaseids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">optimize_by_phase</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">start_params</span><span class="p">,</span> <span class="n">bounds</span><span class="p">,</span> <span class="n">phaseids</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span> <span class="n">maxfun</span><span class="o">=</span><span class="n">maxfun</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">minimize</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">start_params</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="n">method</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="p">[</span><span class="o">.</span><span class="mi">1</span><span class="p">,</span> <span class="o">.</span><span class="mi">1</span><span class="p">,</span> <span class="o">.</span><span class="mo">005</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">start_params</span><span class="p">)</span> <span class="o">/</span> <span class="mi">3</span><span class="p">),</span> <span class="n">maxfun</span><span class="o">=</span><span class="n">maxfun</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="minimize"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.minimize">[docs]</a><span class="k">def</span> <span class="nf">minimize</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">optim_params</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+
+    <span class="n">method</span> <span class="o">=</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;method&#39;</span><span class="p">]</span>
+    <span class="n">eps</span> <span class="o">=</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;eps&#39;</span><span class="p">]</span>
+    <span class="n">disp</span> <span class="o">=</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;disp&#39;</span><span class="p">]</span>
+    <span class="n">normalize</span> <span class="o">=</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;normalize&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">normalize</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">bounds</span><span class="p">)</span>
+            <span class="n">low_bounds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">low_bounds</span><span class="p">)</span>
+            <span class="n">high_bounds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">high_bounds</span><span class="p">)</span>
+            <span class="n">x0</span> <span class="o">=</span> <span class="n">scale_normalize</span><span class="p">(</span><span class="n">x0</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">)</span>
+            <span class="n">bounds</span> <span class="o">=</span> <span class="p">[(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">x0</span><span class="p">]</span>
+            <span class="n">f1</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">scale_unnormalize</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;the normalize option requires optimization bounds to be specified&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">f1</span> <span class="o">=</span> <span class="n">f</span>
+
+    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;bfgscoord&quot;</span><span class="p">:</span>
+        <span class="n">iters</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">success</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">x0</span>
+        <span class="k">while</span> <span class="n">iters</span> <span class="o">&lt;</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;bfgscoord_iters&#39;</span><span class="p">]:</span>
+            <span class="n">x1</span><span class="p">,</span> <span class="n">best_cost</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">fmin_l_bfgs_b</span><span class="p">(</span>
+                <span class="n">f1</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">approx_grad</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">factr</span><span class="o">=</span><span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;bfgs_factr&#39;</span><span class="p">],</span> <span class="n">epsilon</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="n">disp</span><span class="p">)</span>
+            <span class="n">success</span> <span class="o">=</span> <span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s">&#39;warnflag&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="n">v1</span> <span class="o">=</span> <span class="n">best_cost</span>
+            <span class="n">x2</span> <span class="o">=</span> <span class="n">coord_steps</span><span class="p">(</span><span class="n">f1</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">)</span>
+            <span class="n">v2</span> <span class="o">=</span> <span class="n">f1</span><span class="p">(</span><span class="n">x2</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">success</span> <span class="ow">and</span> <span class="n">v2</span> <span class="o">&gt;</span> <span class="n">v1</span> <span class="o">*</span> <span class="o">.</span><span class="mi">999</span> <span class="ow">or</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">x2</span> <span class="o">-</span> <span class="n">x1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.00001</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">x1</span> <span class="o">=</span> <span class="n">x2</span>
+            <span class="n">iters</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;bfgs&quot;</span><span class="p">:</span>
+        <span class="n">x1</span><span class="p">,</span> <span class="n">best_cost</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">fmin_l_bfgs_b</span><span class="p">(</span>
+            <span class="n">f1</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">approx_grad</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">factr</span><span class="o">=</span><span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;bfgs_factr&#39;</span><span class="p">],</span> <span class="n">epsilon</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="n">disp</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;tnc&quot;</span><span class="p">:</span>
+        <span class="n">x1</span><span class="p">,</span> <span class="n">nfeval</span><span class="p">,</span> <span class="n">rc</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">fmin_tnc</span><span class="p">(</span><span class="n">f1</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">approx_grad</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ftol</span><span class="o">=</span><span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;ftol&#39;</span><span class="p">],</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="n">disp</span><span class="p">)</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">x1</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;simplex&quot;</span><span class="p">:</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">fmin</span><span class="p">(</span><span class="n">f1</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">xtol</span><span class="o">=</span><span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;xtol&#39;</span><span class="p">],</span> <span class="n">ftol</span><span class="o">=</span><span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;ftol&#39;</span><span class="p">],</span> <span class="n">disp</span><span class="o">=</span><span class="n">disp</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;grad&quot;</span><span class="p">:</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">gradient_descent</span><span class="p">(</span>
+            <span class="n">f1</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span> <span class="n">stopping_eps</span><span class="o">=</span><span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;grad_stopping_eps&#39;</span><span class="p">],</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="n">disp</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;coord&quot;</span><span class="p">:</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">coord_descent</span><span class="p">(</span><span class="n">f1</span><span class="p">,</span> <span class="n">x0</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="n">steps</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s">&quot;none&quot;</span><span class="p">:</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">x0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;unknown optimization method </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">method</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">normalize</span><span class="p">:</span>
+        <span class="n">x1</span> <span class="o">=</span> <span class="n">scale_unnormalize</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">x1</span><span class="p">,</span> <span class="n">f</span><span class="p">(</span><span class="n">x1</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="scale_normalize"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.scale_normalize">[docs]</a><span class="k">def</span> <span class="nf">scale_normalize</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">):</span>
+    <span class="n">half_width</span> <span class="o">=</span> <span class="p">(</span><span class="n">high_bounds</span> <span class="o">-</span> <span class="n">low_bounds</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">midpoint</span> <span class="o">=</span> <span class="n">low_bounds</span> <span class="o">+</span> <span class="n">half_width</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">midpoint</span><span class="p">)</span> <span class="o">/</span> <span class="n">half_width</span>
+
+</div>
+<div class="viewcode-block" id="scale_unnormalize"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.scale_unnormalize">[docs]</a><span class="k">def</span> <span class="nf">scale_unnormalize</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">):</span>
+    <span class="n">half_width</span> <span class="o">=</span> <span class="p">(</span><span class="n">high_bounds</span> <span class="o">-</span> <span class="n">low_bounds</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+    <span class="n">midpoint</span> <span class="o">=</span> <span class="n">low_bounds</span> <span class="o">+</span> <span class="n">half_width</span>
+    <span class="n">newx</span> <span class="o">=</span> <span class="n">x</span> <span class="o">*</span> <span class="n">half_width</span> <span class="o">+</span> <span class="n">midpoint</span>
+    <span class="k">return</span> <span class="n">newx</span>
+
+</div>
+<div class="viewcode-block" id="minimize_matrix"><a class="viewcode-back" href="../../../../../sigvisa.infer.optimize/#sigvisa.infer.optimize.optim_utils.minimize_matrix">[docs]</a><span class="k">def</span> <span class="nf">minimize_matrix</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">optim_params</span><span class="p">,</span> <span class="n">low_bounds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">high_bounds</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">other_args</span><span class="p">):</span>
+
+    <span class="n">ffc</span> <span class="o">=</span> <span class="n">optim_params</span><span class="p">[</span><span class="s">&#39;fix_first_cols&#39;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">ffc</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">ffc</span>
+        <span class="n">first_col</span> <span class="o">=</span> <span class="n">start</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">:</span><span class="n">n</span><span class="p">]</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">start</span><span class="p">[:,</span> <span class="n">n</span><span class="p">:]</span>
+
+        <span class="k">if</span> <span class="n">low_bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">high_bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">low_bounds</span> <span class="o">=</span> <span class="n">low_bounds</span><span class="p">[:,</span> <span class="n">n</span><span class="p">:]</span>
+            <span class="n">high_bounds</span> <span class="o">=</span> <span class="n">high_bounds</span><span class="p">[:,</span> <span class="n">n</span><span class="p">:]</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">start</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">restore_matrix_form</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">([</span><span class="n">first_col</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">shape</span><span class="p">)])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">effective_start_params</span> <span class="o">=</span> <span class="n">start</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">start</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">restore_matrix_form</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">low_bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">high_bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">low_bounds</span> <span class="o">=</span> <span class="n">low_bounds</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="n">high_bounds</span> <span class="o">=</span> <span class="n">high_bounds</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">low_bounds</span><span class="p">,</span> <span class="n">high_bounds</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span><span class="p">(</span><span class="n">low_bounds</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">high_bounds</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">)</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="n">start</span> <span class="o">=</span> <span class="n">start</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+    <span class="n">f_to_minimize</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="n">f</span><span class="p">(</span><span class="n">restore_matrix_form</span><span class="p">(</span><span class="n">params</span><span class="p">))</span>
+
+    <span class="n">result_vector</span><span class="p">,</span> <span class="n">cost</span> <span class="o">=</span> <span class="n">minimize</span><span class="p">(</span><span class="n">f_to_minimize</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">optim_params</span><span class="o">=</span><span class="n">optim_params</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">restore_matrix_form</span><span class="p">(</span><span class="n">result_vector</span><span class="p">),</span> <span class="n">cost</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

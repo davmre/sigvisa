@@ -1,0 +1,266 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>templates Package &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../" />
+    <link rel="up" title="models Package" href="../sigvisa.models/" />
+    <link rel="next" title="wiggles Package" href="../sigvisa.models.wiggles/" />
+    <link rel="prev" title="spatial_regression Package" href="../sigvisa.models.spatial_regression/" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.wiggles/" title="wiggles Package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.spatial_regression/" title="spatial_regression Package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" accesskey="U">models Package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="templates-package">
+<h1>templates Package<a class="headerlink" href="#templates-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-sigvisa.models.templates.load_by_name">
+<span id="load-by-name-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">load_by_name</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.templates.load_by_name" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="sigvisa.models.templates.load_by_name.load_template_model">
+<tt class="descclassname">sigvisa.models.templates.load_by_name.</tt><tt class="descname">load_template_model</tt><big>(</big><em>template_shape</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/load_by_name/#load_template_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.load_by_name.load_template_model" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.models.templates.paired_exp">
+<span id="paired-exp-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">paired_exp</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.templates.paired_exp" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.models.templates.paired_exp.PairedExpTemplateModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.templates.paired_exp.</tt><tt class="descname">PairedExpTemplateModel</tt><big>(</big><em>run_name=None</em>, <em>run_iter=None</em>, <em>model_type=None</em>, <em>verbose=True</em>, <em>sites=None</em>, <em>modelids=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/paired_exp/#PairedExpTemplateModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.paired_exp.PairedExpTemplateModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#sigvisa.models.templates.template_model.TemplateModel" title="sigvisa.models.templates.template_model.TemplateModel"><tt class="xref py py-class docutils literal"><span class="pre">sigvisa.models.templates.template_model.TemplateModel</span></tt></a></p>
+<dl class="method">
+<dt id="sigvisa.models.templates.paired_exp.PairedExpTemplateModel.abstract_logenv_raw">
+<tt class="descname">abstract_logenv_raw</tt><big>(</big><em>vals</em>, <em>min_logenv=-7</em>, <em>idx_offset=0</em>, <em>srate=40</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/paired_exp/#PairedExpTemplateModel.abstract_logenv_raw"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.paired_exp.PairedExpTemplateModel.abstract_logenv_raw" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.paired_exp.PairedExpTemplateModel.heuristic_starting_params">
+<tt class="descname">heuristic_starting_params</tt><big>(</big><em>wave</em>, <em>detected_phases_only=True</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/paired_exp/#PairedExpTemplateModel.heuristic_starting_params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.paired_exp.PairedExpTemplateModel.heuristic_starting_params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.paired_exp.PairedExpTemplateModel.high_bounds">
+<tt class="descname">high_bounds</tt><big>(</big><em>phases</em>, <em>default_atimes=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/paired_exp/#PairedExpTemplateModel.high_bounds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.paired_exp.PairedExpTemplateModel.high_bounds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.paired_exp.PairedExpTemplateModel.low_bounds">
+<tt class="descname">low_bounds</tt><big>(</big><em>phases</em>, <em>default_atimes=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/paired_exp/#PairedExpTemplateModel.low_bounds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.paired_exp.PairedExpTemplateModel.low_bounds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.paired_exp.PairedExpTemplateModel.model_name">
+<tt class="descname">model_name</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/paired_exp/#PairedExpTemplateModel.model_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.paired_exp.PairedExpTemplateModel.model_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.paired_exp.PairedExpTemplateModel.params">
+<tt class="descname">params</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/paired_exp/#PairedExpTemplateModel.params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.paired_exp.PairedExpTemplateModel.params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-sigvisa.models.templates.template_model">
+<span id="template-model-module"></span><h2><tt class="xref py py-mod docutils literal"><span class="pre">template_model</span></tt> Module<a class="headerlink" href="#module-sigvisa.models.templates.template_model" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="sigvisa.models.templates.template_model.TemplateModel">
+<em class="property">class </em><tt class="descclassname">sigvisa.models.templates.template_model.</tt><tt class="descname">TemplateModel</tt><big>(</big><em>run_name=None</em>, <em>run_iter=None</em>, <em>model_type=None</em>, <em>verbose=True</em>, <em>sites=None</em>, <em>modelids=None</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>Abstract class defining a signal template model.</p>
+<p>A phase template is defined by some number of parameters
+(e.g. onset period, height, and decay rate for a
+paired-exponential template). A signal consists of a number of
+phase arrivals.</p>
+<p>The methods in the class deal with matrices, each row of which
+gives the parameters for a specific phase arrival. That is, we
+allow modeling the joint distribution of template parameters over
+multiple phases, though it&#8217;s also possible for a particular
+implementation to treat them independently.</p>
+<p>Currently we assume that each channel and frequency band are
+independent. This should probably change.</p>
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.generate_template_waveform">
+<tt class="descname">generate_template_waveform</tt><big>(</big><em>template_params</em>, <em>model_waveform</em>, <em>sample=False</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.generate_template_waveform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.generate_template_waveform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.generate_trace_python">
+<tt class="descname">generate_trace_python</tt><big>(</big><em>model_waveform</em>, <em>template_params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.generate_trace_python"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.generate_trace_python" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.high_bounds">
+<tt class="descname">high_bounds</tt><big>(</big><em>phases</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.high_bounds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.high_bounds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.log_likelihood">
+<tt class="descname">log_likelihood</tt><big>(</big><em>template_params</em>, <em>event</em>, <em>sta</em>, <em>chan</em>, <em>band</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.low_bounds">
+<tt class="descname">low_bounds</tt><big>(</big><em>phases</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.low_bounds"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.low_bounds" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.model_name">
+<tt class="descname">model_name</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.model_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.model_name" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.param_str">
+<tt class="descname">param_str</tt><big>(</big><em>template_params</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.param_str"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.param_str" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.params">
+<tt class="descname">params</tt><big>(</big><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.params"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.params" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.predictTemplate">
+<tt class="descname">predictTemplate</tt><big>(</big><em>event</em>, <em>sta</em>, <em>chan</em>, <em>band</em>, <em>phases</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.predictTemplate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.predictTemplate" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.sample">
+<tt class="descname">sample</tt><big>(</big><em>event</em>, <em>sta</em>, <em>chan</em>, <em>band</em>, <em>phases</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.sample"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.sample" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.sample_travel_time">
+<tt class="descname">sample_travel_time</tt><big>(</big><em>event</em>, <em>sta</em>, <em>phase</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.sample_travel_time"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.sample_travel_time" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.travel_time">
+<tt class="descname">travel_time</tt><big>(</big><em>event</em>, <em>sta</em>, <em>phase</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.travel_time"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.travel_time" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sigvisa.models.templates.template_model.TemplateModel.travel_time_log_likelihood">
+<tt class="descname">travel_time_log_likelihood</tt><big>(</big><em>tt</em>, <em>event</em>, <em>sta</em>, <em>phase</em><big>)</big><a class="reference internal" href="../_modules/sigvisa/models/templates/template_model/#TemplateModel.travel_time_log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#sigvisa.models.templates.template_model.TemplateModel.travel_time_log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">templates Package</a><ul>
+<li><a class="reference internal" href="#module-sigvisa.models.templates.load_by_name"><tt class="docutils literal"><span class="pre">load_by_name</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.models.templates.paired_exp"><tt class="docutils literal"><span class="pre">paired_exp</span></tt> Module</a></li>
+<li><a class="reference internal" href="#module-sigvisa.models.templates.template_model"><tt class="docutils literal"><span class="pre">template_model</span></tt> Module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="../sigvisa.models.spatial_regression/"
+                        title="previous chapter">spatial_regression Package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="../sigvisa.models.wiggles/"
+                        title="next chapter">wiggles Package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/sigvisa.models.templates.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.wiggles/" title="wiggles Package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="../sigvisa.models.spatial_regression/" title="spatial_regression Package"
+             >previous</a> |</li>
+        <li><a href="../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../sigvisa/" >sigvisa Package</a> &raquo;</li>
+          <li><a href="../sigvisa.models/" >models Package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

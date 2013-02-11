@@ -1,0 +1,142 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.models.wiggles.featurizer &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../../../" />
+    <link rel="up" title="Module code" href="../../../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.models.wiggles.featurizer</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">sigvisa.infer.optimize.optim_utils</span>
+<span class="kn">import</span> <span class="nn">scipy.io</span>
+<span class="kn">import</span> <span class="nn">cStringIO</span>
+
+
+<div class="viewcode-block" id="Featurizer"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.featurizer.Featurizer">[docs]</a><span class="k">class</span> <span class="nc">Featurizer</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+<div class="viewcode-block" id="Featurizer.encode_params_from_signal"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.featurizer.Featurizer.encode_params_from_signal">[docs]</a>    <span class="k">def</span> <span class="nf">encode_params_from_signal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">srate</span><span class="p">):</span>
+        <span class="c"># normalize signal and get params</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span>
+        <span class="n">nsignal</span> <span class="o">=</span> <span class="p">(</span><span class="n">signal</span> <span class="o">-</span> <span class="n">m</span><span class="p">)</span> <span class="o">/</span> <span class="n">s</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">basis_decomposition</span><span class="p">(</span><span class="n">signal</span><span class="o">=</span><span class="n">nsignal</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="n">srate</span><span class="p">)</span>
+        <span class="n">norm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">((</span><span class="n">m</span><span class="p">,</span> <span class="n">s</span><span class="p">))</span>
+
+        <span class="c"># save the params to string in Matlab format</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">cStringIO</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
+        <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">savemat</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="p">{</span><span class="s">&quot;params&quot;</span><span class="p">:</span> <span class="n">params</span><span class="p">,</span> <span class="s">&quot;norm&quot;</span><span class="p">:</span> <span class="n">norm</span><span class="p">},</span> <span class="n">oned_as</span><span class="o">=</span><span class="s">&#39;row&#39;</span><span class="p">)</span>
+        <span class="n">ostr</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+        <span class="n">output</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">ostr</span>
+</div>
+<div class="viewcode-block" id="Featurizer.signal_from_encoded_params"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.featurizer.Featurizer.signal_from_encoded_params">[docs]</a>    <span class="k">def</span> <span class="nf">signal_from_encoded_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">encoded</span><span class="p">,</span> <span class="n">srate</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+        <span class="nb">input</span> <span class="o">=</span> <span class="n">cStringIO</span><span class="o">.</span><span class="n">StringIO</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">loadmat</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;params&#39;</span><span class="p">]</span>
+        <span class="n">m</span><span class="p">,</span> <span class="n">s</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s">&#39;norm&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="nb">input</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="n">signal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">signal_from_features</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="n">srate</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="n">len_seconds</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">signal</span> <span class="o">*</span> <span class="n">s</span> <span class="o">+</span> <span class="n">m</span>
+</div>
+<div class="viewcode-block" id="Featurizer.signal_from_features"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.featurizer.Featurizer.signal_from_features">[docs]</a>    <span class="k">def</span> <span class="nf">signal_from_features</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="mi">30</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;not implemented!&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Featurizer.basis_decomposition"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.featurizer.Featurizer.basis_decomposition">[docs]</a>    <span class="k">def</span> <span class="nf">basis_decomposition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;not implemented!&quot;</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Featurizer.project_down"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.featurizer.Featurizer.project_down">[docs]</a>    <span class="k">def</span> <span class="nf">project_down</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">basis_decomposition</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">signal_from_features</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">srate</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Featurizer.cost"><a class="viewcode-back" href="../../../../../sigvisa.models.wiggles/#sigvisa.models.wiggles.featurizer.Featurizer.cost">[docs]</a>    <span class="k">def</span> <span class="nf">cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signal</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">srate</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">signal</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">signal_from_features</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">len_seconds</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">signal</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">srate</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>

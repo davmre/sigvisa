@@ -1,0 +1,332 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>sigvisa.ec2_simple &mdash; SIG-VISA  documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="SIG-VISA  documentation" href="../../../" />
+    <link rel="up" title="Module code" href="../../" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for sigvisa.ec2_simple</h1><div class="highlight"><pre>
+<span class="c"># Copyright (c) 2012, Bayesian Logic, Inc.</span>
+<span class="c"># All rights reserved.</span>
+<span class="c">#</span>
+<span class="c"># Redistribution and use in source and binary forms, with or without</span>
+<span class="c"># modification, are permitted provided that the following conditions are met:</span>
+<span class="c">#     * Redistributions of source code must retain the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer.</span>
+<span class="c">#     * Redistributions in binary form must reproduce the above copyright</span>
+<span class="c">#       notice, this list of conditions and the following disclaimer in the</span>
+<span class="c">#       documentation and/or other materials provided with the distribution.</span>
+<span class="c">#     * Neither the name of Bayesian Logic, Inc. nor the</span>
+<span class="c">#       names of its contributors may be used to endorse or promote products</span>
+<span class="c">#       derived from this software without specific prior written permission.</span>
+<span class="c">#</span>
+<span class="c"># THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</span>
+<span class="c"># &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</span>
+<span class="c"># FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL</span>
+<span class="c"># Bayesian Logic, Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</span>
+<span class="c"># SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</span>
+<span class="c"># LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF</span>
+<span class="c"># USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND</span>
+<span class="c"># ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</span>
+<span class="c"># OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</span>
+<span class="c"># OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</span>
+<span class="c"># SUCH DAMAGE.</span>
+<span class="c">#</span>
+<span class="c"># Launches infer.py on an EC2 instance</span>
+<span class="c"># Expects a visa-credentials.csv file in the current directory</span>
+<span class="c"># Expects a revision-nnn image where nnn is the current SVN revision</span>
+<span class="c"># packages all the modified files and all parameters into a tarball and uploads</span>
+<span class="c"># to the EC2 instance.</span>
+<span class="c"># Compiles all the files.</span>
+<span class="c"># Runs inference.</span>
+<span class="c"># Monitors for progress</span>
+<span class="c"># Downloads the results when done and loads into the local database.</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">StringIO</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">tarfile</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">from</span> <span class="nn">sigvisa.utils</span> <span class="kn">import</span> <span class="n">EC2</span>
+<span class="kn">from</span> <span class="nn">ec2_start</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">ec2_infer</span> <span class="kn">import</span> <span class="n">parse_remove</span>
+
+<span class="n">CRED_FNAME</span> <span class="o">=</span> <span class="s">&quot;visa-credentials.csv&quot;</span>
+
+<span class="n">t</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">localtime</span><span class="p">()</span>
+<span class="n">TIMESTR</span> <span class="o">=</span> <span class="s">&quot;</span><span class="si">%04d%02d%02d%02d%02d</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">tm_year</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">tm_mon</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">tm_mday</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">tm_hour</span><span class="p">,</span>
+                                    <span class="n">t</span><span class="o">.</span><span class="n">tm_min</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_simple.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="n">tarname</span><span class="p">,</span> <span class="n">dellist</span> <span class="o">=</span> <span class="n">package_repository</span><span class="p">()</span>
+    <span class="n">revision</span> <span class="o">=</span> <span class="n">get_revision</span><span class="p">()</span>
+    <span class="n">keyname</span> <span class="o">=</span> <span class="n">TIMESTR</span>
+    <span class="n">ec2conn</span> <span class="o">=</span> <span class="n">EC2</span><span class="o">.</span><span class="n">connect_with_credfile</span><span class="p">(</span><span class="n">CRED_FNAME</span><span class="p">)</span>
+
+    <span class="n">par</span> <span class="o">=</span> <span class="n">extract_par</span><span class="p">([</span><span class="s">&quot;-z&quot;</span><span class="p">,</span> <span class="s">&quot;--threads&quot;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">par</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">par</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">insttype</span> <span class="o">=</span> <span class="s">&quot;m1.large&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">insttype</span> <span class="o">=</span> <span class="s">&quot;c1.xlarge&quot;</span>
+
+    <span class="n">datafile</span> <span class="o">=</span> <span class="n">extract_par</span><span class="p">([</span><span class="s">&quot;--datafile&quot;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">datafile</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">datafilearg</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">datafilearg</span> <span class="o">=</span> <span class="s">&quot;--datafile </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">datafile</span>
+
+    <span class="n">numnodes</span> <span class="o">=</span> <span class="n">parse_remove</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;--nodes&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">imgname</span> <span class="o">=</span> <span class="n">parse_remove</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="s">&quot;--image&quot;</span><span class="p">,</span> <span class="s">&quot;Revision-&quot;</span> <span class="o">+</span> <span class="n">revision</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&quot;Image:&quot;</span><span class="p">,</span> <span class="n">imgname</span>
+    <span class="k">print</span> <span class="s">&quot;Instance Type:&quot;</span><span class="p">,</span> <span class="n">insttype</span>
+    <span class="k">print</span> <span class="s">&quot;Number of Nodes:&quot;</span><span class="p">,</span> <span class="n">numnodes</span>
+
+    <span class="n">inst_names</span><span class="p">,</span> <span class="n">master</span> <span class="o">=</span> <span class="n">create_instances</span><span class="p">(</span><span class="n">ec2conn</span><span class="p">,</span> <span class="n">imgname</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="n">numnodes</span><span class="p">,</span>
+                                          <span class="n">insttype</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dellist</span><span class="p">):</span>
+        <span class="k">print</span> <span class="s">&quot;Deleting old files&quot;</span><span class="p">,</span>
+        <span class="k">for</span> <span class="n">pubname</span> <span class="ow">in</span> <span class="n">inst_names</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+            <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">pubname</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;cd netvisa; rm </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dellist</span><span class="p">))</span>
+        <span class="k">print</span> <span class="s">&quot;done.&quot;</span>
+
+    <span class="k">print</span> <span class="s">&quot;Uploading tar file&quot;</span><span class="p">,</span>
+    <span class="k">for</span> <span class="n">pubname</span> <span class="ow">in</span> <span class="n">inst_names</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+        <span class="n">scp_to</span><span class="p">(</span><span class="n">pubname</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="n">tarname</span><span class="p">,</span> <span class="s">&quot;netvisa/&quot;</span> <span class="o">+</span> <span class="n">tarname</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&quot;.&quot;</span><span class="p">,</span>
+    <span class="k">print</span> <span class="s">&quot;done.&quot;</span>
+
+    <span class="k">print</span> <span class="s">&quot;Untarring and compiling:&quot;</span>
+    <span class="k">for</span> <span class="n">pubname</span> <span class="ow">in</span> <span class="n">inst_names</span><span class="o">.</span><span class="n">itervalues</span><span class="p">():</span>
+        <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">pubname</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;cd netvisa; svn update -r </span><span class="si">%s</span><span class="s">; tar xf </span><span class="si">%s</span><span class="s">;&quot;</span>
+                <span class="s">&quot; rm -fr build; rm -f netvisa.so; &quot;</span>
+                <span class="s">&quot;python setup.py build_ext --inplace&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">revision</span><span class="p">,</span> <span class="n">tarname</span><span class="p">))</span>
+
+    <span class="k">print</span> <span class="s">&quot;Starting run on master&quot;</span>
+    <span class="k">if</span> <span class="n">numnodes</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;cd netvisa; nohup python -u infer.py </span><span class="si">%s</span><span class="s"> &amp;&gt; trace-</span><span class="si">%s</span><span class="s">.out &amp;&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:]),</span> <span class="n">keyname</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;cd netvisa; nohup python -u ec2_infer.py </span><span class="si">%s</span><span class="s"> &amp;&gt; trace-</span><span class="si">%s</span><span class="s">.out &amp;&quot;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="s">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">:]),</span> <span class="n">keyname</span><span class="p">))</span>
+
+    <span class="c"># wait for the run to start before calling analyze</span>
+    <span class="k">print</span> <span class="s">&quot;Sleeping 60 seconds&quot;</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">60</span><span class="p">)</span>
+
+    <span class="n">sleepcnt</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="k">print</span> <span class="n">keyname</span><span class="p">,</span> <span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">master</span>
+            <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;cd netvisa; python analyze.py </span><span class="si">%s</span><span class="s">&quot;</span>
+                    <span class="o">%</span> <span class="n">datafilearg</span><span class="p">)</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">60</span><span class="p">)</span>
+            <span class="n">sleepcnt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">sleepcnt</span> <span class="o">%</span> <span class="mi">10</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">ssh_py_infer</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">):</span>
+                    <span class="k">print</span> <span class="s">&quot;No python *infer.py process on master&quot;</span>
+                    <span class="k">raise</span> <span class="ne">KeyboardInterrupt</span>
+
+    <span class="k">except</span> <span class="ne">KeyboardInterrupt</span><span class="p">:</span>
+        <span class="k">pass</span>
+
+    <span class="k">print</span> <span class="s">&quot;Copying results:&quot;</span>
+
+    <span class="k">if</span> <span class="n">numnodes</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">,</span>
+                <span class="s">&quot;cd netvisa; python -m utils.saverun results-</span><span class="si">%s</span><span class="s">.tar&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">numnodes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">scp_from</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">,</span>
+                 <span class="s">&quot;netvisa/results-</span><span class="si">%s</span><span class="s">-propose.tar&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;.&quot;</span><span class="p">)</span>
+
+    <span class="n">scp_from</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;netvisa/results-</span><span class="si">%s</span><span class="s">.tar&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;.&quot;</span><span class="p">)</span>
+    <span class="n">scp_from</span><span class="p">(</span><span class="n">inst_names</span><span class="p">[</span><span class="n">master</span><span class="p">],</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;netvisa/trace-</span><span class="si">%s</span><span class="s">.out&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;.&quot;</span><span class="p">)</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&quot;python -m utils.loadrun results-</span><span class="si">%s</span><span class="s">.tar&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&quot;python ec2_kill.py </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&quot;python analyze.py </span><span class="si">%s</span><span class="s"> -g&quot;</span> <span class="o">%</span> <span class="n">datafilearg</span><span class="p">)</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s">&quot;less trace-</span><span class="si">%s</span><span class="s">.out&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&quot;trace-</span><span class="si">%s</span><span class="s">.out&quot;</span> <span class="o">%</span> <span class="n">keyname</span>
+
+</div>
+<div class="viewcode-block" id="package_repository"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_simple.package_repository">[docs]</a><span class="k">def</span> <span class="nf">package_repository</span><span class="p">():</span>
+    <span class="n">tarname</span> <span class="o">=</span> <span class="s">&quot;changes-&quot;</span> <span class="o">+</span> <span class="n">TIMESTR</span> <span class="o">+</span> <span class="s">&quot;.tar&quot;</span>
+    <span class="n">tar</span> <span class="o">=</span> <span class="n">tarfile</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">tarname</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s">&quot;w&quot;</span><span class="p">)</span>
+    <span class="n">dellist</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">print</span> <span class="s">&quot;Tarring:&quot;</span><span class="p">,</span> <span class="n">tarname</span>
+
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">exec_cmd</span><span class="p">([</span><span class="s">&quot;svn&quot;</span><span class="p">,</span> <span class="s">&quot;status&quot;</span><span class="p">]):</span>
+        <span class="n">status</span><span class="p">,</span> <span class="n">fname</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="p">(</span><span class="s">&quot;A&quot;</span><span class="p">,</span> <span class="s">&quot;M&quot;</span><span class="p">):</span>
+            <span class="k">print</span> <span class="s">&quot; &quot;</span><span class="p">,</span> <span class="n">fname</span>
+            <span class="n">tar</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">fname</span><span class="p">,</span> <span class="n">arcname</span><span class="o">=</span><span class="n">fname</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">status</span> <span class="o">==</span> <span class="s">&quot;D&quot;</span><span class="p">:</span>
+            <span class="n">dellist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">fname</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s">&quot;Prior.txt&quot;</span><span class="p">):</span>
+            <span class="n">tar</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s">&quot;parameters&quot;</span><span class="p">,</span> <span class="n">fname</span><span class="p">),</span>
+                    <span class="n">arcname</span><span class="o">=</span><span class="s">&quot;parameters/&quot;</span> <span class="o">+</span> <span class="n">fname</span><span class="p">)</span>
+            <span class="c"># print &quot; &quot;, &quot;parameters/&quot; + fname</span>
+
+    <span class="n">tar</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">tarname</span><span class="p">,</span> <span class="n">dellist</span>
+
+</div>
+<div class="viewcode-block" id="get_revision"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_simple.get_revision">[docs]</a><span class="k">def</span> <span class="nf">get_revision</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">exec_cmd</span><span class="p">([</span><span class="s">&quot;svn&quot;</span><span class="p">,</span> <span class="s">&quot;info&quot;</span><span class="p">]):</span>
+        <span class="n">vals</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">vals</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s">&quot;Revision:&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">vals</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;Error: svn info doesn&#39;t contain revision!&quot;</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="exec_cmd"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_simple.exec_cmd">[docs]</a><span class="k">def</span> <span class="nf">exec_cmd</span><span class="p">(</span><span class="n">cmds</span><span class="p">):</span>
+    <span class="n">proc</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">(</span><span class="n">cmds</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">,</span>
+                            <span class="n">stderr</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+    <span class="n">out</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">communicate</span><span class="p">(</span><span class="bp">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">proc</span><span class="o">.</span><span class="n">returncode</span><span class="p">:</span>
+        <span class="k">print</span> <span class="n">err</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">line</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="k">yield</span> <span class="n">line</span>
+
+</div>
+<div class="viewcode-block" id="extract_par"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_simple.extract_par">[docs]</a><span class="k">def</span> <span class="nf">extract_par</span><span class="p">(</span><span class="n">forms</span><span class="p">):</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">par</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">par</span> <span class="ow">in</span> <span class="n">forms</span><span class="p">:</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">val</span>
+
+</div>
+<div class="viewcode-block" id="ssh_uptime"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_simple.ssh_uptime">[docs]</a><span class="k">def</span> <span class="nf">ssh_uptime</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">):</span>
+    <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;uptime &gt; uptime.out&quot;</span><span class="p">)</span>
+    <span class="n">scp_from</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;uptime.out&quot;</span><span class="p">,</span> <span class="s">&quot;uptime-</span><span class="si">%s</span><span class="s">.out&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;uptime-</span><span class="si">%s</span><span class="s">.out&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+    <span class="n">row</span> <span class="o">=</span> <span class="n">fp</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+    <span class="n">fp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">row</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;load average:&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">idx</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">100.</span>
+
+    <span class="n">load</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">13</span><span class="p">:]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&quot;, &quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">load</span>
+
+</div>
+<div class="viewcode-block" id="ssh_py_infer"><a class="viewcode-back" href="../../../sigvisa/#sigvisa.ec2_simple.ssh_py_infer">[docs]</a><span class="k">def</span> <span class="nf">ssh_py_infer</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">):</span>
+    <span class="n">ssh_cmd</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;ps -aef  &gt; py-infer.out&quot;</span><span class="p">)</span>
+    <span class="n">scp_from</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">keyname</span><span class="p">,</span> <span class="s">&quot;py-infer.out&quot;</span><span class="p">,</span> <span class="s">&quot;py-infer-</span><span class="si">%s</span><span class="s">.out&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s">&quot;py-infer-</span><span class="si">%s</span><span class="s">.out&quot;</span> <span class="o">%</span> <span class="n">keyname</span><span class="p">)</span>
+    <span class="n">cnt</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">fp</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;python&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">line</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&quot;infer.py&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">cnt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="c"># print line</span>
+    <span class="k">return</span> <span class="n">cnt</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex/" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../">SIG-VISA  documentation</a> &raquo;</li>
+          <li><a href="../../" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, David Moore.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
