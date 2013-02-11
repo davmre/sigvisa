@@ -1,3 +1,4 @@
+import numpy as np
 from sigvisa.models.noise.noise_model import get_noise_model
 
 
@@ -24,7 +25,9 @@ class WiggleModel(object):
 class StupidL1WiggleModel(WiggleModel):
 
     def template_ncost(self, wave, phases, params):
-        return self.tm.waveform_log_likelihood_iid(wave, (phases, params))
+        generated = self.tm.generate_template_waveform((phases, params), model_waveform=wave)
+        diff = (wave.data - generated.data)
+        return np.sum(np.abs(diff))
 
     def summary_str(self):
         return "stupidiid"

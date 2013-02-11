@@ -14,7 +14,7 @@ from optparse import OptionParser
 
 from sigvisa.source.event import get_event
 import sigvisa.plotting.plot as plot
-import sigvisa.utils.geog
+import sigvisa.utils.geog as geog
 import obspy.signal.util
 
 
@@ -65,8 +65,8 @@ def plot_waveform_with_pred(wave, tm, template_params, title=None, sample=False,
 
         s  =Sigvisa()
         station_location = s.stations[wave['sta']][0:2]
-        dist = utils.geog.dist_km((e.lon, e.lat), station_location)
-        azi = utils.geog.azimuth(station_location, (e.lon, e.lat))
+        dist = geog.dist_km((e.lon, e.lat), station_location)
+        azi = geog.azimuth(station_location, (e.lon, e.lat))
         descr = descr + "\n" + "event-station distance: %.1fkm, azimuth %.1f deg" % (dist, azi)
     except KeyError as e:
         pass

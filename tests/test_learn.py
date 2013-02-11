@@ -19,13 +19,12 @@ from sigvisa.models.wiggles.wiggle_models import StupidL1WiggleModel, PlainWiggl
 from sigvisa.models.envelope_model import EnvelopeModel
 
 import matplotlib
-matplotlib.use('PDF')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 
 from sigvisa.plotting.plot_coda_decays import *
 
-from train_coda_models import learn_model, load_model, get_training_data, get_model_fname
+from sigvisa.learn.train_coda_models import learn_model, load_model, get_training_data, get_model_fname
+
+
 
 class TestFit(unittest.TestCase):
 
@@ -87,7 +86,7 @@ class TestLearnModel(unittest.TestCase):
         run_name = "run4"
         run_iter = 0
 
-        model_type = "gp_dad_log"
+        model_type = "linear_distance"
 
         X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase,], target)
 

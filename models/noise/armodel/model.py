@@ -245,15 +245,15 @@ class ARModel:
         prob = 0
         for d in data:
 #            t1 = time.time()
-            d_prob = self.slow_AR(d, c)
+#            d_prob = self.slow_AR(d, c)
 #            t2 = time.time()
-#            d_prob_fast = self.fast_AR(d, c, self.em.std)
+            d_prob_fast = self.fast_AR(d, c, self.em.std)
 #            t3 = time.time()
 
 #            print (t2-t1), d_prob, (t3-t2), d_prob_fast
 
 
-            prob += d_prob
+            prob += d_prob_fast
 
         return prob
 

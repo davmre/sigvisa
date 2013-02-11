@@ -129,6 +129,7 @@ def minimize(f, x0, optim_params, bounds=None):
     disp = optim_params['disp']
     normalize = optim_params['normalize']
 
+
     if normalize:
         if bounds is not None:
             low_bounds, high_bounds = zip(*bounds)

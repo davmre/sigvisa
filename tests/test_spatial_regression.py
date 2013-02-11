@@ -1,6 +1,8 @@
 import numpy as np
 import unittest
 
+from sigvisa.learn.train_coda_models import learn_model, load_model, gp_extract_features
+
 class TestModels(unittest.TestCase):
 
     def setUp(self):
@@ -82,3 +84,7 @@ class TestModels(unittest.TestCase):
         # necessarily equal in the GP case
 
         s = nmodel.sample(self.X)
+
+
+if __name__ == '__main__':
+    unittest.main()

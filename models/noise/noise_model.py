@@ -2,7 +2,7 @@ import numpy as np
 import numpy.ma as ma
 import time, os
 
-from sigvisa import Sigvisa
+from sigvisa import Sigvisa, BadParamTreeException
 from obspy.signal.trigger import zDetect, recSTALTA
 
 from sigvisa.database import dataset
@@ -240,6 +240,13 @@ def construct_and_save_immediate_noise_models(time, sta, chan, filter_str, srate
     minute_dir = construct_and_save_noise_models(block_start, block_end-block_start, sta, chan, filter_str, srate, order)
 
     immediate_dir, model_fname = model_path(sta, chan, filter_str, srate, order, anchor_time=time)
+
+    if immediate_dir == "/home/moore/python/sigvisa/parameters/noise_models/URZ/2009/4/7/preceding_1239065555":
+        import pdb; pdb.set_trace()
+
+    immediate_parent = os.path.dirname(immediate_dir)
+    ensure_dir_exists(immediate_parent)
+
     try:
         minute_dir_path = os.path.realpath(minute_dir)
         os.symlink(minute_dir_path, immediate_dir)

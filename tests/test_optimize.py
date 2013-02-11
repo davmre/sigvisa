@@ -1,4 +1,7 @@
 import numpy as np
+import unittest
+
+import sigvisa.infer.optimize.optim_utils as optimize
 
 class TestOptimize(unittest.TestCase):
 
@@ -8,8 +11,9 @@ class TestOptimize(unittest.TestCase):
     def test_minimize(self):
         f = lambda x : (x-17)**2 + 4
         x0 = np.array([13])
-        for method in ["bfgs", "tnc", "simplex", "anneal"]:
-            x_min, f_min = optimize.minimize(f, x0, method=method, disp=False)
+        for method in ["bfgscoord", "bfgs", "tnc", "simplex"]:
+            optim_params = optimize.construct_optim_params("'normalize': False, 'method': '%s'" % method)
+            x_min, f_min = optimize.minimize(f, x0, optim_params=optim_params)
             self.assertAlmostEqual(x_min, 17, places=1)
             self.assertAlmostEqual(f_min, 4, places=1)
 
@@ -19,11 +23,16 @@ class TestOptimize(unittest.TestCase):
         x0 = np.array([[1, 2], [3, 4]])
         x_opt = np.array([[0, 0], [0, 0]])
         x_fixedcol_opt = np.array([[1, 0], [3, 0]])
-        for method in ["bfgs", "tnc"]:
-            x_min, f_min = optimize.minimize_matrix(f, start=x0, method=method, maxfun=1000)
-            self.assertAlmostEqual(np.sum((x_min - x_opt).flatten()), 0, places=1)
+        for method in ["bfgscoord", "bfgs", "tnc"]:
+            optim_params = optimize.construct_optim_params("'normalize': False, 'method': '%s', 'fix_first_cols': 0" % method)
+            x_min, f_min = optimize.minimize_matrix(f, start=x0, optim_params=optim_params)
+            self.assertAlmostEqual(np.sum(np.abs((x_min - x_opt)).flatten()), 0, places=1)
             self.assertAlmostEqual(f_min, 0, places=1)
 
-            x_min, f_min = optimize.minimize_matrix(f, start=x0, method=method, fix_first_col=True, maxfun=1000)
-            self.assertAlmostEqual(np.sum((x_min - x_fixedcol_opt).flatten()), 0, places=1)
+            optim_params = optimize.construct_optim_params("'normalize': False, 'method': '%s', 'fix_first_cols': 1" % method)
+            x_min, f_min = optimize.minimize_matrix(f, start=x0, optim_params=optim_params)
+            self.assertAlmostEqual(np.sum(np.abs((x_min - x_fixedcol_opt)).flatten()), 0, places=1)
             self.assertAlmostEqual(f_min, 10, places=1)
+
+if __name__ == '__main__':
+    unittest.main()
