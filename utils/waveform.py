@@ -39,10 +39,10 @@ from obspy.core import Trace, Stream, UTCDateTime
 from obspy.signal import filter as sig_filter
 from obspy.signal.array_analysis import sonic
 
-from database.dataset import *
-import database.db
+from sigvisa.database.dataset import *
+import sigvisa.database.db
 import learn
-from utils.geog import dist_deg, azimuth
+from sigvisa.utils.geog import dist_deg, azimuth
 
 from priors.coda_decay.coda_decay_common import *
 from plot import *
@@ -319,5 +319,3 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     pdb.post_mortem(sys.exc_traceback)
     raise
-
-

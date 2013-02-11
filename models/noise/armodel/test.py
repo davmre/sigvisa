@@ -1,6 +1,6 @@
 import numpy as np
-from models.noise.armodel.model import ARModel, ErrorModel
-from models.noise.armodel.learne import ARLearner
+from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
+from sigvisa.models.noise.armodel.learne import ARLearner
 
 class TestAutoregressiveModels(unittest.TestCase):
 

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,12 +24,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # save the results of a run into a file
 
 import sys, tarfile, os, csv
 
-import database.db
+import sigvisa.database.db
 
 TEMPNAME = "tempsave.csv"
 
@@ -38,9 +38,9 @@ def export(curs, tablename, runid, filename):
   rows = curs.fetchall()
 
   output = csv.writer(open(filename, "wb"))
-  
+
   output.writerow([col[0] for col in curs.description])
-  
+
   for row in rows:
     output.writerow(row)
 
@@ -49,7 +49,7 @@ def export(curs, tablename, runid, filename):
   return len(rows)
 
 def main():
-  
+
   if len(sys.argv) not in (2,3):
     print >> sys.stderr, "Usage: python saverun.py [<runid>] <filename>.tar"
     sys.exit(1)
@@ -64,18 +64,18 @@ def main():
     curs.execute("select max(runid) from visa_run")
     runid, = curs.fetchone()
     tarfname = sys.argv[1]
-    
+
   if not tarfname.endswith(".tar"):
     tarfname += ".tar"
-  
+
   if export(curs, "visa_run", runid, TEMPNAME) != 1:
     print >> sys.stderr, "Runid %d not found" % runid
     sys.exit(1)
 
   tar = tarfile.open(name = tarfname, mode='w')
-  
+
   tar.add(name = TEMPNAME, arcname="visa_run.csv")
-  
+
   export(curs, "visa_origin", runid, "tempsave.csv")
 
   tar.add(name = TEMPNAME, arcname="visa_origin.csv")
@@ -87,9 +87,9 @@ def main():
   tar.close()
 
   os.remove(TEMPNAME)
-  
+
   return
 
-  
+
 if __name__ == "__main__":
   main()

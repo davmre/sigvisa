@@ -8,7 +8,7 @@ from django.core.urlresolvers import reverse
 
 import numpy as np
 import sys
-from signals.io import *
+from sigvisa.signals.io import *
 from sigvisa import *
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -17,7 +17,7 @@ from matplotlib.figure import Figure
 from datetime import datetime
 import django.db
 
-import plotting.plot as plot
+import sigvisa.plotting.plot as plot
 import textwrap
 
 # detail view for a particular fit

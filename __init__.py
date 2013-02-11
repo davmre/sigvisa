@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from database import db, dataset
+from sigvisa.database import db, dataset
 from load_c_components import load_sigvisa, load_earth
 import sigvisa_c
 

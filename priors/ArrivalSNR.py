@@ -27,9 +27,9 @@
 #
 import numpy as np
 
-from utils import LogNormal
+from sigvisa.utils import LogNormal
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 
 SNR_STEP = 1
 SNR_BINS = np.arange(0, 100, SNR_STEP)

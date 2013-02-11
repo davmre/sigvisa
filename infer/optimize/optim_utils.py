@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 import scipy.optimize
-from utils.gradient_descent import gradient_descent, coord_steps
+from sigvisa.utils.gradient_descent import gradient_descent, coord_steps
 
 class BoundsViolation(Exception):
     pass

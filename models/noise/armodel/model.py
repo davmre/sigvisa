@@ -59,6 +59,44 @@ class ARModel:
                 data[t] = s + self.em.sample()
         return data
 
+    def fastAR_missingData(self, d, c, std):
+        n = len(d)
+        m = d.mask
+        d = d.data - c
+        p = np.array(self.params)
+        n_p = len(p)
+
+        A = np.zeros((n_p, n_p))
+        A[0, :] = p
+        A[1:, :-1] = np.eye(n_p-1)
+
+        zeroK = np.zeros((n_p, n_p))
+        zero_u = np.zeros((n_p,))
+
+        code = """
+        int t_since_mask = 0;
+        double s = std;
+
+
+        double d_prob = 0;
+        for (int t=0; t < n; ++t) {
+            if (m(t)) { continue; }
+
+           double expected = 0;
+           for (int i=0; i < n_p; ++i) {
+               if (t > i && !m(t-i-1)) {
+                  double ne = p(i) * d(t-i-1);
+                  expected += ne;
+               }
+           }
+           double err = d(t) - expected;
+           double x = err/std;
+           double ll = (double)t1 + 0.5 * x*x;
+           d_prob -= ll;
+        }
+        return_val = d_prob;
+        """
+
 
     def fast_AR(self, d, c, std):
         #
@@ -188,6 +226,7 @@ class ARModel:
                 K = None
                 u = None
                 std = orig_std
+                t_since_mask += 1
                 t1 = np.log(orig_std) + 0.5 * np.log(2 * np.pi)
 
         print "skipped", skipped

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,13 +24,13 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 import numpy as np
 
-from database.dataset import EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_MB_COL,\
+from sigvisa.database.dataset import EV_LON_COL, EV_LAT_COL, EV_DEPTH_COL, EV_MB_COL,\
      EV_TIME_COL
 
-from utils.geog import dist_deg, dist_km
+from sigvisa.utils.geog import dist_deg, dist_km
 
 import mwmatching
 
@@ -50,14 +50,14 @@ def find_matching(gold_events, guess_events):
           and (dist_deg(gold[:2], guess[:2]) <= DELTA_DIST)):
         edges.append((goldnum, len(gold_events)+guessnum,
                       -dist_deg(gold[:2], guess[:2])))
-  
+
   mat = mwmatching.maxWeightMatching(edges, maxcardinality=True)
   indices = []
   for i in range(len(gold_events)):
     if i < len(mat) and mat[i] >= 0:
       assert(mat[i] >= len(gold_events))
       indices.append((i, mat[i] - len(gold_events)))
-  
+
   return indices
 
 def find_true_false_guess(gold_events, guess_events):

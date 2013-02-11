@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,16 +24,16 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # draw the density around a point
 
 import sys
 from optparse import OptionParser
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 import netvisa, learn
-import database.db
-from utils.geog import degdiff, dist_deg
+import sigvisa.database.db
+from sigvisa.utils.geog import degdiff, dist_deg
 from analyze import suppress_duplicates
 
 # ignore warnings from matplotlib in python 2.4
@@ -43,13 +43,13 @@ import matplotlib.pyplot as plt
 # for type 1 fonts
 #plt.rcParams['ps.useafm'] = True
 #plt.rcParams['pdf.use14corefonts'] = True
-from utils.draw_earth import draw_events, draw_earth, draw_density
+from sigvisa.utils.draw_earth import draw_events, draw_earth, draw_density
 
 def best_score(netmodel, event, event_detlist):
-  
+
   curr_detlist = []
   curr_score = netmodel.score_event(event, curr_detlist)
-  
+
   for item in event_detlist:
     curr_detlist.append(item)
     score = netmodel.score_event(event, curr_detlist)
@@ -58,7 +58,7 @@ def best_score(netmodel, event, event_detlist):
     else:
       curr_detlist.pop(-1)
   return curr_score
-    
+
 def print_events(sitenames, netmodel, earthmodel, detections, leb_events, leb_evlist,
                  label):
   print "=" * 60
@@ -82,7 +82,7 @@ def print_event(sitenames, netmodel, earthmodel, detections, event, event_detlis
             event[ EV_TIME_COL], event[ EV_ORID_COL]))
   if event_detlist is None:
     return
-  
+
   print "Detections:",
   detlist = [x for x in event_detlist]
   detlist.sort()
@@ -110,7 +110,7 @@ def print_event(sitenames, netmodel, earthmodel, detections, event, event_detlis
         asterisk = " *"
       else:
         asterisk = ""
-      
+
     print "(%s %s %.1f%s)" % (earthmodel.PhaseName(phaseid),
                                sitenames[int(detections[detid, DET_SITE_COL])],
                                detsc, asterisk),
@@ -143,25 +143,25 @@ def main(param_dirname):
                     action = "store_true",
                     help = "Type 1 fonts (False)")
   parser.add_option("--datafile", dest="datafile", default=None,
-                    help = "tar file with data (None)", metavar="FILE")  
+                    help = "tar file with data (None)", metavar="FILE")
   parser.add_option("-l", "--label", dest="label", default="validation",
                     help = "training, validation (default), or test")
 
   (options, args) = parser.parse_args()
-  
+
   if len(args) != 3:
     parser.print_help()
     sys.exit(1)
-  
+
   # use Type 1 fonts by invoking latex
   if options.type1:
     plt.rcParams['text.usetex'] = True
-    
+
   runid, orid_type, orid = int(args[0]), args[1], int(args[2])
   if orid_type not in ("visa", "leb"):
     print "invalid orid_type %s" % orid_type
   print "Debugging run %d %s origin %d" % (runid, orid_type, orid)
-  
+
   # find the event time and use that to configure start and end time
   cursor = database.db.connect().cursor()
   if orid_type == "visa":
@@ -192,7 +192,7 @@ def main(param_dirname):
     sitenames = read_sitenames()
 
   leb_orid2num = compute_orid2num(leb_events)
-  
+
   visa_events, visa_orid2num = read_events(cursor, start_time, end_time,"visa",
                                            runid=runid)
 
@@ -201,24 +201,24 @@ def main(param_dirname):
   visa_evscores = dict(cursor.fetchall())
   if options.suppress:
     visa_events, visa_orid2num = suppress_duplicates(visa_events, visa_evscores)
-  
+
   visa_evlist = read_assoc(cursor, start_time, end_time, visa_orid2num,
                            compute_arid2num(detections), "visa", runid=runid)
 
   neic_events = read_isc_events(cursor, start_time, end_time, "NEIC")
 
   all_isc_events = read_isc_events(cursor, start_time, end_time, None)
-  
+
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
                                 phasetimedef)
   netmodel.disable_sec_arr()
-  
+
   #import pdb
   #pdb.set_trace()
-  
+
   # print all the events
   if options.verbose:
     print_events(sitenames, netmodel, earthmodel, detections, leb_events,
@@ -244,10 +244,10 @@ def main(param_dirname):
     neic_events[:,EV_LON_COL] = (neic_events[:, EV_LON_COL] + 360) % 360
   if len(all_isc_events):
     all_isc_events[:,EV_LON_COL] = (all_isc_events[:, EV_LON_COL] + 360) % 360
-  
+
   if options.text_only:
     return
-  
+
   # now draw a window around the event location
   if orid_type == "visa":
     evnum = visa_orid2num[orid]
@@ -288,7 +288,7 @@ def main(param_dirname):
   lon2 = event[EV_LON_COL] + options.window
   lat1 = event[EV_LAT_COL] - options.window
   lat2 = event[EV_LAT_COL] + options.window
-  
+
   bmap = draw_earth("",
                     #"NET-VISA posterior density, NEIC(white), LEB(yellow), "
                     #"SEL3(red), NET-VISA(blue)",
@@ -311,7 +311,7 @@ def main(param_dirname):
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=10, mfc="white", mew=1)
-  
+
   elif len(all_isc_events):
     draw_events(bmap, all_isc_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=10, mfc="none", mec="yellow", mew=1)
@@ -331,7 +331,7 @@ def main(param_dirname):
                     np.sin(np.radians(event[EV_LAT_COL] + options.window)),
                     Z_BUCKET_SIZE)
   lat_arr = np.degrees(np.arcsin(z_arr))
-  
+
   score = np.zeros((len(lon_arr), len(lat_arr)))
   best, worst = -np.inf, np.inf
   for loni, lon in enumerate(lon_arr):
@@ -350,7 +350,7 @@ def main(param_dirname):
         tmp[EV_LON_COL] = lon
         tmp[EV_LAT_COL] = lat
         sc = max(sc, netmodel.score_event(tmp, leb_evlist[evnum]))
-      
+
       score[loni, lati] = sc
 
       if sc > best: best = sc
@@ -364,16 +364,16 @@ def main(param_dirname):
 
   # round the levels so they are easier to display in the legend
   levels = np.round(levels, 1).tolist()
-  
+
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels,
                colorbar_shrink=1.0)
-  
+
   parallels = np.arange(-90, 90, options.window/2.5)
   bmap.drawparallels(parallels,labels=[1,0,0,0], fontsize=10)
   # draw meridians
   meridians = np.arange(0, 360.,options.window/2.5)
   bmap.drawmeridians(meridians,labels=[0,0,0,1], fontsize=10)
-  
+
   plt.savefig("output/debug_run_%d_%s_orid_%d.png" % (runid, orid_type, orid))
 
   bmap = draw_earth("",
@@ -397,7 +397,7 @@ def main(param_dirname):
   if len(leb_events):
     draw_events(bmap, leb_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=10, mfc="none", mec="yellow", mew=2)
-  
+
   if len(neic_events):
     draw_events(bmap, neic_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="*", ms=10, mfc="white", mew=1)
@@ -413,7 +413,7 @@ def main(param_dirname):
                       labelstyle='simple', units='km')
   except:
     pass
-  
+
   plt.savefig("output/debug_area_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
 
@@ -440,7 +440,7 @@ def main(param_dirname):
                 marker="s", ms=10, mfc="none", mec="blue", mew=2)
 
   draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
-  
+
   scale_lon, scale_lat = event[EV_LON_COL], \
                          event[EV_LAT_COL]-options.window * .98
 ##  try:
@@ -449,7 +449,7 @@ def main(param_dirname):
 ##                      labelstyle='simple', units='km')
 ##  except:
 ##    pass
-  
+
   plt.savefig("output/debug_dens_isc_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
 
@@ -481,8 +481,8 @@ def main(param_dirname):
 ##                      labelstyle='simple', units='km')
 ##  except:
 ##    pass
-  
-  
+
+
   plt.savefig("output/debug_isc_run_%d_%s_orid_%d.png"
               % (runid, orid_type, orid))
 

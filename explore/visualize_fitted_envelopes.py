@@ -3,19 +3,19 @@ import numpy as np
 import sys, traceback, pdb
 from optparse import OptionParser
 
-from plotting.plot_coda_decays import plot_waveform_with_pred
+from sigvisa.plotting.plot_coda_decays import plot_waveform_with_pred
 
 
-from database.dataset import *
-from database.signal_data import *
-from signals.io import *
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
+from sigvisa.signals.io import *
 
 import matplotlib
 matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from models.templates.paired_exp import *
+from sigvisa.models.templates.paired_exp import *
 from sigvisa import *
 
 
@@ -67,7 +67,7 @@ def main():
 
     print "loaded", len(evids), "evids"
 
-    from models.templates.load_by_name import load_template_model
+    from sigvisa.models.templates.load_by_name import load_template_model
     tm = load_template_model("paired_exp", run_name=None, run_iter=0, model_type="dummy")
 
     for evid in evids:

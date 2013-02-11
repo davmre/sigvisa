@@ -4,11 +4,11 @@ from sigvisa import *
 
 
 # from
-from database.signal_data import get_fitting_runid
-import models.noise.noise_model as noise_model
-from infer.optimize.optim_utils import BoundsViolation
-from learn.train_coda_models import load_model
-from signals.common import *
+from sigvisa.database.signal_data import get_fitting_runid
+import sigvisa.models.noise.noise_model as noise_model
+from sigvisa.infer.optimize.optim_utils import BoundsViolation
+from sigvisa.learn.train_coda_models import load_model
+from sigvisa.signals.common import *
 
 
 class TemplateModel(object):

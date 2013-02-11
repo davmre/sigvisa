@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # run a command on all the EC2 instances and copy over files
 #
 # Examples:
@@ -42,7 +42,7 @@ warnings.filterwarnings("ignore")
 
 import sys
 
-from utils import EC2
+from sigvisa.utils import EC2
 
 from ec2_start import ssh_cmd, scp_from
 
@@ -58,7 +58,7 @@ def main():
 
   # connect to EC2
   ec2conn = EC2.connect_with_credfile(CRED_FNAME)
-  
+
   # find all the running instances with the keypair ..
   hostnames = []
   instids = []
@@ -67,15 +67,15 @@ def main():
            and desc[14] == "running":
       instids.append(desc[1])
       hostnames.append(desc[3])
-  
+
   if not len(hostnames):
     print "Error: no running host found for key", ec2keyname
-  
+
   for hostidx, hostname in enumerate(hostnames):
     print "%d/%d %s %s" % (hostidx+1, len(hostnames), hostname,
                            instids[hostidx])
     ssh_cmd(hostname, ec2keyname, command)
-  
+
   # check if any files have to be copied
   if len(file_list):
     filenames = file_list.split(",")
@@ -89,7 +89,6 @@ def main():
         print ".",
       print "done"
 
-  
+
 if __name__ == "__main__":
   main()
-

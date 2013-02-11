@@ -3,10 +3,10 @@ import numpy as np
 import sys, traceback, pdb
 from optparse import OptionParser
 
-from learn.train_coda_models import learn_model, load_model, get_model_fname, get_training_data, analyze_model_fname
+from sigvisa.learn.train_coda_models import learn_model, load_model, get_model_fname, get_training_data, analyze_model_fname
 from sigvisa import *
-from models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
-from database.signal_data import *
+from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
+from sigvisa.database.signal_data import *
 
 class RedirectStdStreams(object):
     def __init__(self, stdout=None, stderr=None):

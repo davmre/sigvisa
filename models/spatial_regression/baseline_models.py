@@ -2,8 +2,8 @@ import numpy as np
 import scipy.stats
 
 from sigvisa import Sigvisa
-from source.event import Event
-import utils.geog
+from sigvisa.source.event import Event
+import sigvisa.utils.geog
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
 

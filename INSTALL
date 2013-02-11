@@ -1,8 +1,11 @@
 First install git, python2.7, virtualenvwrapper.
 
 cd ~
+mkdir python
+cd python
 git clone https://github.com/davmre/sigvisa.git
-mkvirtualenv -a $HOME/sigvisa -r $HOME/sigvisa/requirements.txt sigvisa
+git clone https://github.com/davmre/gpr.git
+mkvirtualenv -a $HOME/python/sigvisa -r $HOME/python/sigvisa/requirements.txt sigvisa
 
 This last command creates a virtualenv for sigvisa and installs all
 Python dependencies. Note that this includes both the MYSQL and Oracle
@@ -12,7 +15,6 @@ module because you don't have Oracle installed on your system), feel
 free to comment it out of the requirements file. Next, run
 
 workon sigvisa
-echo "export SIGVISA_HOME=$HOME/sigvisa" >> $VIRTUAL_ENV/bin/postactivate
-echo "export PYTHONPATH=$SIGVISA_HOME:$PYTHONPATH" >> $VIRTUAL_ENV/bin/postactivate
+echo "export SIGVISA_HOME=$HOME/python/sigvisa" >> $VIRTUAL_ENV/bin/postactivate
+echo "export PYTHONPATH=\$HOME/python:\$PYTHONPATH" >> $VIRTUAL_ENV/bin/postactivate
 source $VIRTUAL_ENV/bin/postactivate
-git clone https://github.com/davmre/gpr.git

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,29 +24,29 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # check the events missed by a run
 import sys, os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 import netvisa, learn
 from results.compare import *
-from utils.geog import dist_km, degdiff
-import database.db
+from sigvisa.utils.geog import dist_km, degdiff
+import sigvisa.database.db
 
 def main(param_dirname):
   if len(sys.argv) != 2:
     print "Error: check_miss <run-id>"
     sys.exit(1)
-  
+
   runid = int(sys.argv[1])
-  
+
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
               sel3_evlist, site_up, sites, phasenames, phasetimedef \
               = read_data("validation", hours=None, skip=0)
-  
+
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
@@ -65,7 +65,7 @@ def main(param_dirname):
     for phaseid, detnum in evlist:
       unassoc_detnums.remove(detnum)
   print "done"
-  
+
   print "Computing matching...",
   missed_leb_idcs = find_unmatched(leb_events, visa_events)
   print "done"
@@ -77,12 +77,12 @@ def main(param_dirname):
       if detnum in unassoc_detnums:
         missed_unassoc_cnt += 1
       missed_det_cnt += 1
-      
+
   print "%d LEB events missed out of %d" % (len(missed_leb_idcs),
                                             len(leb_events))
   print "%d detections of missed events unassoc out of %d" \
         % (missed_unassoc_cnt, missed_det_cnt)
-  
+
   print "Max missed mb", max(leb_events[evnum, EV_MB_COL]
                              for evnum in missed_leb_idcs)
   print "Avg. Missed mb", sum(leb_events[evnum, EV_MB_COL]
@@ -100,7 +100,7 @@ def main(param_dirname):
   inv_events.sort(key = lambda e: e[EV_TIME_COL])
   inv_events = np.array(inv_events)
   print "done"
-  
+
   # find the nearest inverted event within 100 seconds of the LEB event time
   # also, find the weight distance = distance deg + time difference / 10
   missed_mindist, found_mindist = [], []
@@ -110,7 +110,7 @@ def main(param_dirname):
   detcnt_minwtdist = np.ndarray((0,2), float)
   unassoc_mindist, unassoc_minwtdist = [], []
   unassoc_detcnt_minwtdist = np.ndarray((0,2), float)
-  
+
   low_invnum = 0
   for evnum in range(len(leb_events)):
     distlist, wtdistlist, unassoc_distlist, unassoc_wtdistlist = [], [], [], []
@@ -120,11 +120,11 @@ def main(param_dirname):
       if inv_events[invnum, EV_TIME_COL] < leb_events[evnum, EV_TIME_COL] - 100:
         low_invnum = invnum + 1
         continue
-      
+
       # we can stop if we have gone 100 seconds past the event
       if inv_events[invnum, EV_TIME_COL] > leb_events[evnum, EV_TIME_COL] + 100:
         break
-      
+
       dist = dist_deg(leb_events[evnum, [EV_LON_COL, EV_LAT_COL]],
                       inv_events[invnum, [EV_LON_COL, EV_LAT_COL]])
       wtdist = dist + abs(inv_events[invnum, EV_TIME_COL]
@@ -136,26 +136,26 @@ def main(param_dirname):
       if inv_events[invnum, EV_MB_COL] in unassoc_detnums:
         unassoc_distlist.append(dist)
         unassoc_wtdistlist.append(wtdist)
-      
+
     if len(distlist):
       mindist = min(distlist)
       minwtdist = min(wtdistlist)
-      
+
       if evnum in missed_leb_idcs_set:
         missed_mindist.append(mindist)
         missed_minwtdist.append(minwtdist)
 
         detcnt_minwtdist = np.vstack((detcnt_minwtdist,
                                       (len(leb_evlist[evnum]), minwtdist)))
-        
+
         unassoc_detcnt_minwtdist = np.vstack((unassoc_detcnt_minwtdist,
                  (sum(1 for phaseid, detnum in leb_evlist[evnum]
                       if detnum in unassoc_detnums), minwtdist)))
-        
+
       else:
         found_mindist.append(mindist)
         found_minwtdist.append(minwtdist)
-    
+
     else:
       hopeless_tot += 1
       if evnum not in missed_leb_idcs_set:
@@ -164,7 +164,7 @@ def main(param_dirname):
     if len(unassoc_distlist) and evnum in missed_leb_idcs_set:
       unassoc_mindist.append(min(unassoc_distlist))
       unassoc_minwtdist.append(min(unassoc_wtdistlist))
-  
+
   print "%d LEB events hopeless (%d hopeless found!)" % (hopeless_tot,
                                                          hopeless_found)
 
@@ -181,7 +181,7 @@ def main(param_dirname):
   plt.ylabel("Count")
   plt.legend(loc="upper right")
   plt.savefig(os.path.join("output", "inv-dist.png"))
-  
+
   # plot a histogram showing weighted distance from nearest inverted location
   maxwtdist = max(max(found_minwtdist), max(missed_minwtdist))
   bins = np.arange(0, maxwtdist+1)
@@ -209,7 +209,7 @@ def main(param_dirname):
             " distance")
   plt.hexbin(detcnt_minwtdist[:,1], detcnt_minwtdist[:,0], gridsize=10)
   cb = plt.colorbar()
-  cb.set_label('counts')  
+  cb.set_label('counts')
   plt.xlabel("Weighted Distance")
   plt.ylabel("Detection Count")
   plt.savefig(os.path.join("output", "inv-det-wtdist-hexbin.png"))
@@ -224,15 +224,15 @@ def main(param_dirname):
   plt.xlabel("Weighted Distance")
   plt.ylabel("Unassoc Detection Count")
   plt.savefig(os.path.join("output", "inv-unassoc-det-wtdist-hexbin.png"))
-  
-  
+
+
   plt.figure()
   plt.title("Distance of missed event to nearest inverted unassoc detection")
   plt.hist(unassoc_mindist, bins, facecolor="red", edgecolor="none", alpha=0.5)
   plt.xlabel("Distance")
   plt.ylabel("Count")
   plt.savefig(os.path.join("output", "inv-dist-missed-unassoc.png"))
-  
+
   plt.figure()
   plt.title("Weighted Distance of missed event to nearest inverted unassoc"
             " detection")
@@ -241,7 +241,7 @@ def main(param_dirname):
   plt.xlabel("Weighted Distance")
   plt.ylabel("Count")
   plt.savefig(os.path.join("output", "inv-wtdist-missed-unassoc.png"))
-  
+
   plt.show()
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
-from database import db
+from sigvisa.database import db
 import numpy as np
-import utils.geog
+import sigvisa.utils.geog
 import csv
 from optparse import OptionParser
 import os
@@ -76,6 +76,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-

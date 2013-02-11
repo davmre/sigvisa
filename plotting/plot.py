@@ -1,15 +1,13 @@
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
 
 from obspy.core import Trace, Stream, UTCDateTime
 
-from database.dataset import *
-import database.db
-import learn
+from sigvisa.database.dataset import *
+import sigvisa.database.db
 from sigvisa import Sigvisa
-from utils.geog import dist_deg, azimuth
-
-from source.event import get_event
+from sigvisa.utils.geog import dist_deg, azimuth
+from sigvisa.source.event import get_event
 
 def plot_det_times(wave, axes=None, logscale=False):
   if wave is None:
@@ -43,8 +41,8 @@ def plot_det_times(wave, axes=None, logscale=False):
 
 # does not save for you - you need to call savefig() yourself!
 def plot_segment(segment, title=None, chans=None, logscale=False):
-  fig = plt.figure(figsize=(10,8), dpi=250)
-  plt.xlabel("Time (s)")
+  fig = Figure(figsize=(10,8), dpi=250)
+
 
   # if no title is given, try to generate a simple one based on the event being plotted
   if title is None:
@@ -56,7 +54,9 @@ def plot_segment(segment, title=None, chans=None, logscale=False):
       pass
 
   if title is not None:
-    plt.suptitle(title, fontsize=20)
+    fig.suptitle(title, fontsize=20)
+
+
 
   # loop over channels to plot each channel
   chans = segment.get_chans() if chans is None else chans
@@ -65,11 +65,12 @@ def plot_segment(segment, title=None, chans=None, logscale=False):
   gs.update(left=0.1, right=0.95, hspace=1)
   axes = None
   for chidx, chan in enumerate(sorted(chans)):
-      axes = plt.subplot(gs[chidx*3:chidx*3+3, 0], sharex=axes)
+      axes = fig.add_subplot(gs[chidx*3:chidx*3+3, 0], sharex=axes)
+      axes.set_xlabel("Time (s)")
       wave = segment[chan]
       subplot_waveform(wave, logscale=logscale, axes=axes)
 
-  axes = plt.subplot(gs[n*3, 0])
+  axes = fig.add_subplot(gs[n*3, 0])
   axes.axis('off')
 #  axes.get_xaxis().set_visible(False)
 #  axes.get_yaxis().set_visible(False)
@@ -86,13 +87,14 @@ def plot_segment(segment, title=None, chans=None, logscale=False):
 
 
 def plot_waveform(wave, title=None, logscale=False):
-  fig = plt.figure()
-  plt.xlabel("Time (s)")
+  fig = Figure()
+
 
   if title is not None:
-    plt.suptitle(title)
+    fig.suptitle(title)
 
-  axes = plt.subplot(1,1,1)
+  axes = fig.add_subplot(1,1,1)
+  axes.set_xlabel("Time (s)")
   subplot_waveform(wave, axes, logscale=logscale)
   return fig
 
@@ -117,18 +119,18 @@ def plot_bands(wave, bands=None, title=None):
   if bands is None:
     bands=Sigvisa().bands
 
-  plt.figure(figsize=(12, 30))
-  plt.xlabel("Time (s)")
+  Figure(figsize=(12, 30))
+  fig.xlabel("Time (s)")
 
   for (bidx, band) in enumerate(sorted(bands)):
     if bidx == 0:
-      axes = plt.subplot(len(bands), 1, 1)
+      axes = fig.subplot(len(bands), 1, 1)
       if title is not None:
-        plt.title(title)
+        fig.title(title)
     else:
-      plt.subplot(len(bands), 1, bidx+1, sharex=axes)
+      fig.subplot(len(bands), 1, bidx+1, sharex=axes)
 
-    plt.ylabel(yl)
+    fig.ylabel(yl)
 
     npts = wave["npts"]
     srate = wave["srate"]
@@ -137,7 +139,7 @@ def plot_bands(wave, bands=None, title=None):
 
     nwave = wave.filter(band)
 
-    plt.plot(timevals, nwave.data, format)
+    fig.plot(timevals, nwave.data, format)
 
     plot_det_times(wave)
 

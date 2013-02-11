@@ -1,17 +1,17 @@
 import os, errno, sys, time, traceback, re, hashlib
 import numpy as np, scipy
 
-from database.dataset import *
-from database.signal_data import *
-from database import db
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
+from sigvisa.database import db
 
-import utils.geog
+import sigvisa.utils.geog
 import obspy.signal.util
 
 from optparse import OptionParser
 
 from sigvisa import *
-from utils.interaction import query_yes_no
+from sigvisa.utils.interaction import query_yes_no
 
 import sys, subprocess, multiprocessing, shlex, os, shutil, re
 

@@ -3,9 +3,9 @@ import numpy as np
 from scipy import stats
 import pdb
 
-from database.dataset import *
-from database import db
-from database.signal_data import *
+from sigvisa.database.dataset import *
+from sigvisa.database import db
+from sigvisa.database.signal_data import *
 
 from optparse import OptionParser, OptionGroup
 
@@ -13,11 +13,11 @@ from sigvisa import Sigvisa
 
 
 
-from source.event import get_event
-from signals.common import Waveform, load_waveform_from_file
-from signals.io import load_event_station_chan
-from models.templates.load_by_name import load_template_model
-from models.wiggles.fourier_features import FourierFeatures
+from sigvisa.source.event import get_event
+from sigvisa.signals.common import Waveform, load_waveform_from_file
+from sigvisa.signals.io import load_event_station_chan
+from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa.models.wiggles.fourier_features import FourierFeatures
 
 
 def wiggles(dbconn, run_name, iteration, skip_type=None):

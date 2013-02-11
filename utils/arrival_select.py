@@ -1,5 +1,5 @@
 from sigvisa import *
-from database.dataset import *
+from sigvisa.database.dataset import *
 
 def register_arrival_options(parser):
     parser.add_option("-s", "--stations", dest="stations", default=None, type="str", help="comma-separated list of station names for which to fit templates")

@@ -2,10 +2,11 @@ import numpy as np
 import numpy.ma as ma
 import unittest
 
-from signals.io import load_event_station
-from source.event import get_event
-from models.templates.paired_exp import PairedExpTemplateModel
-from models.wiggles.wiggle_models import PlainWiggleModel
+from sigvisa.signals.io import load_event_station
+from sigvisa.source.event import get_event
+from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
+from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel
+from sigvisa.plotting import plot
 
 class TestSignalLikelihood(unittest.TestCase):
 
@@ -23,7 +24,7 @@ class TestSignalLikelihood(unittest.TestCase):
 
 #        sampled = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'], sample=True)
 
-        plotting.plot.plot_waveform(template, logscale=True)
+        plot.plot_waveform(template, logscale=True)
         plt.savefig('template.png')
 
 #        plotting.plot.plot_waveform(sampled, logscale=True)

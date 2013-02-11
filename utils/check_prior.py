@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 #checks whether events generated from the prior are good enough
 
 import os, sys
@@ -32,9 +32,9 @@ import numpy as np
 from optparse import OptionParser
 import random
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 import netvisa, learn
-from utils.geog import dist_deg
+from sigvisa.utils.geog import dist_deg
 
 def main(param_dirname):
   parser = OptionParser()
@@ -58,7 +58,7 @@ def main(param_dirname):
 
   netvisa.srand(options.seed)
   random.seed(options.seed)
-  
+
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation", hours=options.hours, skip=options.skip)
@@ -71,7 +71,7 @@ def main(param_dirname):
 
   prior_events = [netmodel.location_sample() for _ in
                   xrange(options.numsamples)]
-  
+
   dists = []
   for leb_evnum, leb_event in enumerate(leb_events):
 
@@ -85,6 +85,6 @@ def main(param_dirname):
   print "%.1f %% matched prior with min dist avg. %.1f s.d. %.1f deg"\
         % (100. * float(len(dists)) / len(leb_events),
            np.average(dists), np.std(dists))
-  
+
 if __name__ == "__main__":
   main("parameters")

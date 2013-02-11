@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,14 +24,14 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # EC2 image manipulation commands
 import warnings
 warnings.filterwarnings("ignore")
 
 import sys
 
-from utils import EC2
+from sigvisa.utils import EC2
 
 CRED_FNAME="visa-credentials.csv"
 
@@ -44,7 +44,7 @@ def main():
     print """\
 Usage: python ec2_image.py command
   where valid commands are:
-  create <image-name> <instance-id> 
+  create <image-name> <instance-id>
   delete <image-name
   list
   """
@@ -84,7 +84,7 @@ def list_images(ec2conn):
 
   for _,imageid, imageloc, imageownerid, imagestate,imageispub,imgarch, imgtype, imgkernel, imageram, imagename in ec2images.structure:
     print imageid, imagestate, imgarch, "'%s'" % imagename
-  
+
 
 if __name__ == "__main__":
   main()

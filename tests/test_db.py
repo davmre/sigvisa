@@ -5,12 +5,12 @@ import numpy.ma as ma
 
 from sigvisa import Sigvisa
 
-from source.event import get_event
-from signals.io import load_event_station
-from models.templates.paired_exp import PairedExpTemplateModel
+from sigvisa.source.event import get_event
+from sigvisa.signals.io import load_event_station
+from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
 
-from database.dataset import *
-from database.signal_data import *
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
 
 
 

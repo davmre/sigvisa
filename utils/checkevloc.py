@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,15 +24,15 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # compares the performance of VonMises location kernel as well as the
 # Arora location kernel
 import csv, gzip, sys, time
 import numpy as np
 from numpy import sin, cos, pi, radians, degrees, log, exp, logaddexp
-from database.dataset import *
-from utils.geog import dist_deg
-from utils.draw_earth import draw_events, draw_earth, draw_density
+from sigvisa.database.dataset import *
+from sigvisa.utils.geog import dist_deg
+from sigvisa.utils.draw_earth import draw_events, draw_earth, draw_density
 import matplotlib.pyplot as plt
 
 UNIFORM_PROB = 0.001
@@ -46,14 +46,14 @@ lat_arr = np.degrees(np.arcsin(np.arange(-1.0, 1.0, Z_INTERVAL)))
 rlat_grid, rlon_grid = np.meshgrid(np.radians(lat_arr), np.radians(lon_arr))
 lat_grid, lon_grid = np.meshgrid(lat_arr, lon_arr)
 
-EARTH_AREA = 4 * pi * AVG_EARTH_RADIUS_KM ** 2  
+EARTH_AREA = 4 * pi * AVG_EARTH_RADIUS_KM ** 2
 PATCH_AREA = EARTH_AREA / (len(lon_arr) * len(lat_arr))
 
 def main():
   if len(sys.argv) != 2:
     print "Usage: python checkevloc.py <origins.csv.gz>"
     sys.exit(1)
-  
+
   t1 = time.time()
 
   orig_fname = sys.argv[1]
@@ -61,51 +61,51 @@ def main():
     orig_fp = gzip.open(orig_fname)
   else:
     orig_fp = open(orig_fname)
-  
+
   data = csv.reader(orig_fp)
   # the first row is the column names (strip leading spaces
   colnames = [x.strip() for x in data.next()]
-  
+
   lonlat_data = []
-  
+
   for row in data:
     event = dict(zip(colnames, row))
     lonlat_data.append((float(event['LON']), float(event['LAT'])))
 
     if len(lonlat_data) >= 2000:
       break
-  
+
   lonlat_data = np.array(lonlat_data)
-  
+
   train = lonlat_data[:int(len(lonlat_data) * .4)] # 40% training
   # 10% validation (for tuning the parameters)
   valid = lonlat_data[len(train):int(len(lonlat_data) * .5)]
   test = lonlat_data[len(valid):]                       # 50% final test
-  
+
   best_kappa, density = vonmises(train, valid)
   print "Von Mises sum", reduce(logaddexp, density.flat, -np.inf)\
         + log(PATCH_AREA)
   print "Von Mises score", eval_density(density, test)
-  
+
   best_bw, density2 = arora(train, valid)
   print "Arora sum", reduce(logaddexp, density2.flat, -np.inf)\
         + log(PATCH_AREA)
   print "Arora score", eval_density(density2, test)
-  
+
   t2 = time.time()
-  
+
   print "Elapsed %.1f secs" % (t2-t1)
-  
+
   bmap = draw_earth("Von Mises Kernel (kappa=%.2f)" % best_kappa)
   draw_density(bmap, lon_arr, lat_arr, density)
   #draw_events(bmap, lonlat_data, marker="s", ms=5, mfc="none", mec="yellow",
   #            mew=2)
-  
+
   bmap = draw_earth("Arora Kernel (b=%.2f)" % best_bw)
   draw_density(bmap, lon_arr, lat_arr, density2)
   #draw_events(bmap, lonlat_data, marker="s", ms=5, mfc="none", mec="yellow",
   #            mew=2)
-  
+
   plt.show()
 
 def dotproduct(rlon1, rlat1, rlon2, rlat2):
@@ -120,18 +120,18 @@ def vonmises_kappa(train, kappa):
     rlon, rlat = np.radians(lon), np.radians(lat)
     weights = logaddexp(weights,
                         kappa * dotproduct(rlon_grid, rlat_grid, rlon, rlat))
-    
+
   # normalize to make it a probability at each of the grid points
   prob = weights - reduce(logaddexp, weights.flat, -np.inf)
 
   # now, the density is obtained by dividing the probability by the area of
   # each rectangle corresponding to a grid point
   density = prob - log(PATCH_AREA)
-  
+
   # account for the uniform probability
   density = logaddexp(log(1 - UNIFORM_PROB) + density,
                       log(UNIFORM_PROB) - log(EARTH_AREA))
-  
+
   return density
 
 
@@ -151,18 +151,18 @@ def arora_bw(train, bw):
   for lon, lat in train:
     weights = logaddexp(weights,
                         - dist_deg((lon_grid, lat_grid), (lon, lat)) / bw)
-  
+
   # normalize to make it a probability at each of the grid points
   prob = weights - reduce(logaddexp, weights.flat, -np.inf)
 
   # now, the density is obtained by dividing the probability by the area of
   # each rectangle corresponding to a grid point
   density = prob - log(PATCH_AREA)
-  
+
   # account for the uniform probability
   density = logaddexp(log(1 - UNIFORM_PROB) + density,
                       log(UNIFORM_PROB) - log(EARTH_AREA))
-  
+
   return density
 
 def eval_density(density, pts):
@@ -185,18 +185,18 @@ def grid_search(func, best_exp=0, max_depth=3):
     if v <= 0:
       return -np.inf
     if v not in cache:
-      print "Trying parameter", v, "...", 
+      print "Trying parameter", v, "...",
       cache[v] = func(v)
       print cache[v]
     return cache[v]
-  
+
   for depth in range(max_depth):
     # find the best value at the current depth
     best_exp = max((grid_search_lookup(pow(10,e)), e)
                    for e in np.linspace(best_exp - pow(10, -depth+1),
                                         best_exp + pow(10, -depth+1), 21))[1]
     print "Depth", depth, "best", pow(10, best_exp)
-  
+
   return pow(10, best_exp)
 
 if __name__ == "__main__":

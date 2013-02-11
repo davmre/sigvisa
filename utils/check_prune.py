@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,19 +24,19 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # prunes events which are within a space-time ball of better events
 import os, sys
 import numpy as np
 import matplotlib.pyplot as plt
 from optparse import OptionParser
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 from analyze import suppress_duplicates, compute_roc_curve
-import database.db
+import sigvisa.database.db
 import learn
 import results.compare
-from utils.geog import degdiff, dist_deg
+from sigvisa.utils.geog import degdiff, dist_deg
 
 def steal_dets(netmodel, detections, visa_events, visa_evscores, visa_assoc):
   low_evnum = 0
@@ -65,8 +65,8 @@ def steal_dets(netmodel, detections, visa_events, visa_evscores, visa_assoc):
                              for phaseid, detnum in visa_assoc[evnum]
                              if netmodel.score_event_det(event2, phaseid,
                                                          detnum) < 0]
-        
-      
+
+
 def drop_detections(visa_events, visa_evscores, visa_assoc, detections):
   # first find the evnum, phase for each detection
   det_evscore = {}
@@ -109,7 +109,7 @@ def main(param_dirname):
                     help = "the run-identifier to prune (last runid)")
   parser.add_option("-l", "--label", dest="label", default="validation",
                     help = "the data label (validation)")
-  
+
   (options, args) = parser.parse_args()
 
   conn = database.db.connect()
@@ -118,16 +118,16 @@ def main(param_dirname):
   if options.runid is None:
     cursor.execute("select max(runid) from visa_run")
     options.runid, = cursor.fetchone()
-  
+
   print "RUNID %d:" % options.runid,
 
   cursor.execute("select run_start, run_end, data_start, data_end, descrip, "
                  "numsamples, window, step from visa_run where runid=%d" %
                  options.runid)
-  
+
   run_start, run_end, data_start, data_end, descrip, numsamples, window, step\
              = cursor.fetchone()
-  
+
   if data_end is None:
     print "NO RESULTS"
     return
@@ -136,9 +136,9 @@ def main(param_dirname):
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data(options.label, skip=data_start, hours=data_end)
-  
+
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
-  
+
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
                                 detections, site_up, sites, phasenames,
@@ -166,7 +166,7 @@ def main(param_dirname):
   x_pts, y_pts = compute_roc_curve(leb_events, visa_events, visa_evscores)
   plt.plot(x_pts, y_pts, label="original", color="blue",
            linestyle="-.", linewidth=3)
-  
+
 
   print "Suppressing VISA duplicate events...",
   unpruned_visa_events, unpruned_visa_orid2num = \
@@ -176,7 +176,7 @@ def main(param_dirname):
                        if int(event[EV_ORID_COL]) not in unpruned_visa_orid2num]
   print "Out of %d VISA events, %d left after suppressing duplicates" \
         % (len(visa_events), len(unpruned_visa_events))
-  
+
   report_pruned_events(pruned_visa_orids, visa_evscores)
   report_pruning_errors(leb_events, visa_events, unpruned_visa_events)
 
@@ -189,7 +189,7 @@ def main(param_dirname):
                              netmodel.score_event(visa_events[evnum],
                                                   visa_assoc[evnum]))
                             for evnum in range(len(visa_events)))
-  
+
   positive_orids = set(int(visa_events[evnum, EV_ORID_COL])
                        for evnum in range(len(visa_events))
                        if netmodel.score_event(visa_events[evnum],
@@ -198,18 +198,18 @@ def main(param_dirname):
                     for evnum in range(len(visa_events))
                     if int(visa_events[evnum, EV_ORID_COL])
                     not in positive_orids]
-  
+
   pos_evnums = [evnum for evnum in range(len(visa_events))
                 if int(visa_events[evnum, EV_ORID_COL]) in positive_orids]
   posvisa_events = visa_events[pos_evnums]
   print "done"
-  
+
   print "Out of %d VISA events, %d left after dropping secondaries"\
         % (len(visa_events), len(posvisa_events))
 
   report_pruned_events(pruned_visa_orids, visa_evscores)
   report_pruning_errors(leb_events, visa_events, posvisa_events)
-  
+
   print "Matching secondary-det VISA with LEB...",
   x_pts, y_pts = compute_roc_curve(leb_events, posvisa_events,
                                    sec_visa_evscores)
@@ -223,7 +223,7 @@ def main(param_dirname):
   plt.plot(x_pts, y_pts, label="pruned", color="blue",
            linestyle="--", linewidth=3)
   print "done"
-  
+
   plt.xlim(.39, 1)
   plt.ylim(.39, 1)
   plt.xlabel("precision")
@@ -257,7 +257,7 @@ def report_pruning_errors(true_events, orig_guess, final_guess):
     # no point analyzing this if we didn't break anything
     if len(final_matches):
       continue
-    
+
     orig_matches = set()
     for evnum in range(orignum_low, len(orig_guess)):
       orig = orig_guess[evnum]
@@ -293,5 +293,3 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     pdb.post_mortem(sys.exc_traceback)
     raise
-
-  

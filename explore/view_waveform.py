@@ -1,5 +1,5 @@
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import time
 import learn
 import sys
@@ -9,7 +9,7 @@ from collections import defaultdict
 
 from optparse import OptionParser
 
-from signals.io import fetch_waveform
+from sigvisa.signals.io import fetch_waveform
 
 def main():
 

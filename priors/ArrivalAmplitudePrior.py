@@ -27,8 +27,8 @@
 #
 import csv
 import numpy as np
-from database.dataset import *
-import utils.GMM, utils.LinearModel
+from sigvisa.database.dataset import *
+import sigvisa.utils.GMM, sigvisa.utils.LinearModel
 import math
 
 NUM_FEATURES = 5
@@ -124,7 +124,7 @@ def learn(param_filename, options, earthmodel, detections, leb_events,
   for phase in xrange(earthmodel.NumTimeDefPhases()):
     print earthmodel.PhaseName(phase)
     site_coeffs, site_sigma, mean, sigma, beta\
-                 = utils.LinearModel.hier_linearreg(phase_site_data[phase])
+                 = sigvisa.utils.LinearModel.hier_linearreg(phase_site_data[phase])
     print zip(mean, sigma), beta
     phase_site_coeffs.append(site_coeffs)
     phase_site_sigma.append(site_sigma)
@@ -262,7 +262,7 @@ def test_model(earthmodel, train, test):
         phase_model.append(None)
         continue
 
-      model = utils.LinearModel.LinearModel("Amp", FEATURE_NAMES[:numfeatures],
+      model = sigvisa.utils.LinearModel.LinearModel("Amp", FEATURE_NAMES[:numfeatures],
                                             predictors[:numfeatures], output,
                                             verbose=False)
 

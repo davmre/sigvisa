@@ -2,16 +2,16 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
 
-from database.signal_data import filter_and_sort_template_params
-from database.dataset import *
-from database import db
+from sigvisa.database.signal_data import filter_and_sort_template_params
+from sigvisa.database.dataset import *
+from sigvisa.database import db
 
-from infer.optimize.optim_utils import minimize_matrix
+from sigvisa.infer.optimize.optim_utils import minimize_matrix
 
 from optparse import OptionParser
 
 from sigvisa import Sigvisa, NestedDict
-import utils.geog
+import sigvisa.utils.geog
 import obspy.signal.util
 
 

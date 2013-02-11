@@ -5,26 +5,25 @@ import numpy.ma as ma
 
 from sigvisa import Sigvisa
 
-from source.event import get_event
+from sigvisa.source.event import get_event
 
-from signals.common import Waveform, Segment
-from signals.io import load_event_station
-from models.templates.paired_exp import PairedExpTemplateModel
+from sigvisa.signals.common import Waveform, Segment
+from sigvisa.signals.io import load_event_station
+from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
 
-from models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
+from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
 
-from infer.optimize.optim_utils import construct_optim_params
+from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
-from models.wiggles.wiggle_models import StupidL1WiggleModel, PlainWiggleModel
-from models.envelope_model import EnvelopeModel
+from sigvisa.models.wiggles.wiggle_models import StupidL1WiggleModel, PlainWiggleModel
+from sigvisa.models.envelope_model import EnvelopeModel
 
 import matplotlib
 matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-import plotting.plot
-from plotting.plot_coda_decays import *
+from sigvisa.plotting.plot_coda_decays import *
 
 from train_coda_models import learn_model, load_model, get_training_data, get_model_fname
 

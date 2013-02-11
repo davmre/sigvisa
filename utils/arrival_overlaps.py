@@ -1,6 +1,6 @@
-import database.db
-from database.dataset import *
-import utils.geog
+import sigvisa.database.db
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog
 
 cursor = database.db.connect().cursor()
 detections, arid2num = read_detections(cursor, 1237680000, 1237680000 + 168*3600, arrival_table="leb_arrival", noarrays=False)
@@ -20,4 +20,3 @@ for det in detections:
     last_det[site] = time
 
 print "total overlaps: ", overlaps, " out of ", len(detections), " detections"
-    

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 #checks whether events generated from the proposer are good enough
 
 import os, sys, time
@@ -32,9 +32,9 @@ import numpy as np
 from optparse import OptionParser
 import random
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 import netvisa, learn
-from utils.geog import dist_deg
+from sigvisa.utils.geog import dist_deg
 
 def print_events_simple(netmodel, earthmodel, detections, events,
                         event_detlists, title, evstart_time, evend_time):
@@ -59,7 +59,7 @@ def print_event_simple(netmodel, earthmodel, detections, event, event_detlist):
                                   phaseid,
                                   int(detections[detid, DET_SITE_COL]))\
                                   - detections[detid, DET_TIME_COL]
-    
+
     print "(%s, %d, %s, tres %.1f, sc %.1f)" \
           % (earthmodel.PhaseName(phaseid), detid,
              earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL])),
@@ -73,7 +73,7 @@ def print_events(netmodel, earthmodel, detections, events, event_detlists,
     print_event(netmodel, earthmodel, detections, event,
                 event_detlists[evnum])
   print "=" * 78
-  
+
 
 def print_event(netmodel, earthmodel, detections, event, event_detlist):
   print ("%d: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f"
@@ -106,14 +106,14 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
                                     phaseid,
                                     int(detections[detid, DET_SITE_COL]))\
                                     - detections[detid, DET_TIME_COL]
-    
+
     print "(%s, %d, %s, detsc %.1f, invsc %.1f, invdist %.1f tres %.1f)" \
           % (earthmodel.PhaseName(phaseid), detid,
              earthmodel.PhaseName(int(detections[detid, DET_PHASE_COL])),
              netmodel.score_event_det(event, phaseid, detid), inv_score,
              inv_dist, tres),
   print "\nEv Score:", netmodel.score_event(event, event_detlist)
-  
+
 def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-d", "--degree_delta", dest="degree_delta", default=2.5,
@@ -144,7 +144,7 @@ def main(param_dirname):
 
   netvisa.srand(options.seed)
   random.seed(options.seed)
-  
+
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data(options.label, hours=options.hours, skip=options.skip)
@@ -152,7 +152,7 @@ def main(param_dirname):
   if (end_time - MAX_TRAVEL_TIME) <= start_time:
     print "Error: too short an interval"
     sys.exit(1)
-    
+
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
@@ -174,19 +174,19 @@ def main(param_dirname):
   print_events_simple(netmodel, earthmodel, detections,
                       prop_events, prop_evlist, "PROP",
                       start_time, (start_time + options.window))
-  
+
   for leb_evnum, leb_event in enumerate(leb_events):
-    
+
     # we can only predict events for which we have all the detections
     if leb_event[EV_TIME_COL] > (start_time + options.window):
       continue
-    
+
     print_event(netmodel, earthmodel, detections, leb_event,
                 leb_evlist[leb_evnum])
 
     best_score, best_prop_event, best_prop_evnum = None, None, None
     for prop_evnum, prop_event in enumerate(prop_events):
-      
+
       if (dist_deg(leb_event[[EV_LON_COL, EV_LAT_COL]],
                    prop_event[[EV_LON_COL, EV_LAT_COL]]) < 5
           and abs(leb_event[EV_TIME_COL] - prop_event[EV_TIME_COL]) < 50):
@@ -203,6 +203,6 @@ def main(param_dirname):
                          prop_evlist[best_prop_evnum])
     else:
       print "--> MISS\n -"
-  
+
 if __name__ == "__main__":
   main("parameters")

@@ -5,15 +5,14 @@ import time, os
 from sigvisa import Sigvisa
 from obspy.signal.trigger import zDetect, recSTALTA
 
-import sigvisa_c
-from database import dataset
-from database.signal_data import ensure_dir_exists
+from sigvisa.database import dataset
+from sigvisa.database.signal_data import ensure_dir_exists
 
-from models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
-from models.noise.armodel.learner import ARLearner
+from sigvisa.models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
+from sigvisa.models.noise.armodel.learner import ARLearner
 
-from signals.io import fetch_waveform, MissingWaveform
-from signals.common import filter_str_extract_band
+from sigvisa.signals.io import fetch_waveform, MissingWaveform
+from sigvisa.signals.common import filter_str_extract_band
 
 import hashlib
 
@@ -382,13 +381,6 @@ def get_recent_safe_block(time, sta, chan, margin_seconds = 10, preferred_len_se
             break
 
     return block_start, block_end
-
-def set_noise_process(wave):
-    s = Sigvisa()
-    arm = get_noise_model(waveform=wave)
-    c = sigvisa_c.canonical_channel_num(wave['chan'])
-    b = sigvisa_c.canonical_band_num(wave['band'])
-    s.sigmodel.set_noise_process(wave['siteid'], b, c, arm.c, arm.em.std**2, np.array(arm.params))
 
 def main():
     print "tests are now in test.py"

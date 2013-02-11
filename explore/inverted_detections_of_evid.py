@@ -1,5 +1,5 @@
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import time
 import learn
 import sys

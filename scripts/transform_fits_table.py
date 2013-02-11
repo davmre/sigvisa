@@ -1,7 +1,7 @@
 
 from sigvisa import Sigvisa
 import numpy as np
-import utils.geog
+import sigvisa.utils.geog
 
 new = """
 create table sigvisa_coda_fits_shadow (

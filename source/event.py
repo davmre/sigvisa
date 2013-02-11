@@ -1,11 +1,11 @@
 import numpy as np
-import source.brune_source as brune
-import source.mm_source as mm
+import sigvisa.source.brune_source as brune
+import sigvisa.source.mm_source as mm
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 from sigvisa import Sigvisa
 
-from utils.geog import lonlatstr
+from sigvisa.utils.geog import lonlatstr
 import functools32
 
 KNOWN_EXPLOSIONS = (5393637,)  # 2009 DPRK event
@@ -56,4 +56,3 @@ class Event(object):
     def __str__(self):
         s = "evid %d, loc %s, depth %.1fkm, time %.1f, mb %.1f, %s source" % (self.evid, lonlatstr(self.lon, self.lat), self.depth, self.time, self.mb, "natural" if self.natural_source else "explosion")
         return s
-

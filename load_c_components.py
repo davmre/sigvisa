@@ -2,10 +2,10 @@ import os, cPickle, sys, tarfile, csv
 import numpy as np
 from optparse import OptionParser
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 
 from datetime import datetime
-from database.az_slow_corr import load_az_slow_corr
+from sigvisa.database.az_slow_corr import load_az_slow_corr
 
 import priors.SecDetPrior
 import priors.NumEventPrior

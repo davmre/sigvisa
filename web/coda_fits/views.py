@@ -12,15 +12,15 @@ from django_easyfilters.filters import NumericRangeFilter
 
 import numpy as np
 import sys
-from database.dataset import *
-from database.signal_data import *
-from signals.io import *
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
+from sigvisa.signals.io import *
 from sigvisa import *
-from models.noise.noise_model import get_noise_model
-from models.templates.load_by_name import load_template_model
-from source.event import get_event, EventNotFound
-from models.noise.armodel.model import ARModel, ErrorModel
-import utils.geog
+from sigvisa.models.noise.noise_model import get_noise_model
+from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa.source.event import get_event, EventNotFound
+from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
+import sigvisa.utils.geog
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -28,8 +28,8 @@ from datetime import datetime
 from pytz import timezone
 import hashlib
 
-import plotting.plot as plot
-import plotting.histogram as histogram
+import sigvisa.plotting.plot as plot
+import sigvisa.plotting.histogram as histogram
 import textwrap
 
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options

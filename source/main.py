@@ -6,12 +6,12 @@ matplotlib.use('PDF')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from source import brune_source, mm_source
-from source.event import get_event
+from sigvisa.source import brune_source, mm_source
+from sigvisa.source.event import get_event
 
 def plot_source_spectra():
 
- 
+
     #fname = os.path.join(base_coda_dir, "spectra_%.1f.pdf" % (mb,))
     fname = os.path.join("logs", "spectra.pdf")
     pp = PdfPages(fname)
@@ -20,7 +20,7 @@ def plot_source_spectra():
     print brune_source.source_freq_logamp(ev, 2.5, 'P')
     print mm_source.source_freq_logamp(ev, 2.5, 'P')
 
-    
+
     for  mb in [4.5,]:
         ev = Event(mb=mb, depth=0.122, lon=0, lat=0, time=0, natural_source=True)
 

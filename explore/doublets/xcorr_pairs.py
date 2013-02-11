@@ -3,11 +3,11 @@ import sys, os, itertools
 
 from optparse import OptionParser
 
-from models.templates.paired_exp import PairedExpTemplateModel
-from source.event import get_event
+from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
+from sigvisa.source.event import get_event
 from sigvisa import *
-from signals.io import fetch_waveform
-from database.signal_data import ensure_dir_exists
+from sigvisa.signals.io import fetch_waveform
+from sigvisa.database.signal_data import ensure_dir_exists
 
 def extracted_wave_fname(sta, chan, phase, window_len, filter_str, evid):
 

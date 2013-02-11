@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,11 +24,11 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 
 import numpy as np
 
-from database.dataset import DET_PHASE_COL
+from sigvisa.database.dataset import DET_PHASE_COL
 
 def learn(filename, options, earthmodel, detections, leb_events, leb_evlist,
           false_dets):
@@ -51,9 +51,9 @@ def learn(filename, options, earthmodel, detections, leb_events, leb_evlist,
     ph2ph[i] /= ph2ph[i].sum()
 
   falseph /= falseph.sum()
-    
+
   fp = open(filename, "w")
-  
+
   print >>fp, numtimedefphases, numphases
 
   for i in range(numtimedefphases):
@@ -66,7 +66,7 @@ def learn(filename, options, earthmodel, detections, leb_events, leb_evlist,
   print >>fp
 
   fp.close()
-  
+
   if options.verbose:
     print "Phase Emission Probabilities"
     for i in range(numtimedefphases):
@@ -78,5 +78,3 @@ def learn(filename, options, earthmodel, detections, leb_events, leb_evlist,
     for j in range(numphases):
       print falseph[j],
     print
-  
-    

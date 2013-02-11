@@ -11,11 +11,11 @@ from django_easyfilters import FilterSet
 
 import numpy as np
 import sys
-from database.dataset import *
-from database.signal_data import *
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
 from sigvisa import *
-from models.templates.load_by_name import load_template_model
-from learn.train_coda_models import load_model, get_training_data
+from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa.learn.train_coda_models import load_model, get_training_data
 
 
 from matplotlib.figure import Figure
@@ -24,8 +24,8 @@ from datetime import datetime
 from pytz import timezone
 import hashlib
 
-import plotting.plot as plot
-import plotting.histogram as histogram
+import sigvisa.plotting.plot as plot
+import sigvisa.plotting.histogram as histogram
 import textwrap
 
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaTemplateParamModel

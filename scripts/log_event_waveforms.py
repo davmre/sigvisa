@@ -1,10 +1,10 @@
 import matplotlib
 matplotlib.use('PDF')
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import learn, netvisa, sigvisa, sigvisa_util
 #from multiprocessing import Process
-import utils.waveform
+import sigvisa.utils.waveform
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import time
@@ -29,7 +29,7 @@ def get_analagous_segment(t, segments):
         sstart_time = s[0].stats['starttime_unix']
         if sstart_time > start_time:
             continue
-        
+
         if "window_size" in s[0].stats:
             srate = 1/ ( s[0].stats.window_size * (1- s[0].stats.overlap) )
             npts = s[0].stats.npts_processed
@@ -87,7 +87,7 @@ earthmodel = learn.load_earth("parameters", sites, phasenames, phasetimedef)
 netmodel = learn.load_netvisa("parameters", start_time, end_time, detections, site_up, sites, phasenames, phasetimedef)
 
 
-sigmodel = learn.load_sigvisa("parameters", start_time, end_time, ar_perturb, 
+sigmodel = learn.load_sigvisa("parameters", start_time, end_time, ar_perturb,
                               site_up, sites, phasenames,
                               phasetimedef)
 
@@ -112,7 +112,7 @@ for real_segment in energies:
     title = "evid " + str(evid) + " station " + str(real_segment[0].stats['siteid']) + " time " + str(real_segment[0].stats['starttime_unix'])
 
 
-    
+
     start_time = real_segment[0].stats["starttime_unix"]
     srate = real_segment[0].stats.sampling_rate
     npts = real_segment[0].stats.npts
@@ -131,4 +131,3 @@ for real_segment in energies:
 
 
 pp.close()
-

@@ -30,8 +30,8 @@ from scipy.stats import gamma
 from scipy.stats import laplace
 import sys
 
-from utils.geog import degdiff
-from database.dataset import *
+from sigvisa.utils.geog import degdiff
+from sigvisa.database.dataset import *
 
 # maximum time that a secondary detection can occur after the primary
 MAX_SECDET_DELAY = 30.0

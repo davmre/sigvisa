@@ -1,6 +1,6 @@
-import database.db
-from database.dataset import *
-import utils.geog
+import sigvisa.database.db
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog
 import sys
 import itertools
 import time, calendar
@@ -12,7 +12,7 @@ except:
 
 from optparse import OptionParser
 
-from source.event import get_event
+from sigvisa.source.event import get_event
 from sigvisa import *
 
 def get_first_arrivals(events, sta):

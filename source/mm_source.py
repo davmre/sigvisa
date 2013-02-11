@@ -1,6 +1,6 @@
 import numpy as np
 
-from source.common import *
+from sigvisa.source.common import *
 
 # from sigvisa import Sigvisa
 
@@ -26,7 +26,7 @@ def source_freq_logamp(event, f, phase):
     # P and S wave source velocities in granite, m/s
     V_sP = 5500.0
     V_sS = 3175.0
-    
+
     # gravitational constant, m/s^2
     g = 9.81
 
@@ -38,7 +38,7 @@ def source_freq_logamp(event, f, phase):
 
     # scaled depth as a function of yield
     # h = 122 * W**(1.3/3.0)
-    # The scaling relationship should be 
+    # The scaling relationship should be
     h = 122*pow(W,1.0/3)
     #h = event.depth * 1000
 
@@ -66,7 +66,7 @@ def source_freq_logamp(event, f, phase):
 
     # compute log-amplitude; eqn (5) in Fisk
     top = gamma * P_p * R_e * np.sqrt(w**2 + (w_1 * P_0/P_p)**2)
-    bottom = ( rho * V_sP * np.sqrt(w**2 + w_1**2) * np.sqrt( (w_0**2 - gamma * w**2)**2 + w_0**2 * w**2  )  )       
+    bottom = ( rho * V_sP * np.sqrt(w**2 + w_1**2) * np.sqrt( (w_0**2 - gamma * w**2)**2 + w_0**2 * w**2  )  )
     logamp = (np.log(top) - np.log(bottom)) / np.log(10)
 
     # other notes from fisk:

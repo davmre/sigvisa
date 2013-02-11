@@ -1,15 +1,15 @@
 import matplotlib
 matplotlib.use('PDF')
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import learn, netvisa, sigvisa
 #from multiprocessing import Process
-import utils.waveform
+import sigvisa.utils.waveform
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from sigvisa_util import *
 import time
-import infer
+import sigvisa.infer
 
 event_list = [5290918, 5288718, 5295646, 5288706, 5295770, 5288789, 5288706, 5295878, 5295625, 5288718, 5289106, 5291164, 5295646, 5290918, 5295559, 5295796, 5297206, 5295543, 5288506, 5289149, 5288896, 5289283, 5297348, 5287879, 5297354, 5290958, 5288911, 5288789, 5289307, 5288031, 5291235, 5289063, 5289234, 5289071, 5297650, 5288827]
 cursor = database.db.connect().cursor()
@@ -65,7 +65,7 @@ for ev in events:
         ssites = utils.geog.stations_by_distance(ev[EV_LON_COL], ev[EV_LAT_COL],sites)[0:5]
         stalist = map(lambda site : site[0] + 1, ssites)
         print stalist, start_time, end_time
-        
+
         stalist = tuple(stalist)
         energies, traces = load_and_process_traces(cursor, start_time, end_time, 1, .5, stalist)
         print "loaded, setting waves"

@@ -1,10 +1,10 @@
 import matplotlib
 matplotlib.use('PDF')
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import learn, netvisa, sigvisa
 import sigvisa_util
-import utils.waveform
+import sigvisa.utils.waveform
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import time
@@ -73,7 +73,7 @@ for siteid in range(0, 100, 1):
         pred_slow = earthmodel.ArrivalSlowness(evlon, evlat, depth, phaseid, siteid)
         if pred_iangle < 0:
             continue
-        
+
         v1 = np.sin(pred_iangle* np.pi/180)/pred_slow
         v2 = 1/(pred_slow*np.sin(pred_iangle* np.pi/180))
 
@@ -90,7 +90,7 @@ for siteid in range(0, 100, 1):
  #       adiff = azi - pred_azi
         print "siteid", siteid, "dist", dist, "depth", depth, "delta", delta, "iangle", pred_iangle, "sin(iangle)", np.sin(pred_iangle* np.pi/180), "slow", pred_slow, "v1", v1, "v2", v2
         v1list.append(v1)
-   
+
 #for (k, l) in idifflists.items():
 #    if len(l) < 1:
 #        continue

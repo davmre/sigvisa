@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # master process for distributed inference
 #
 # This will first farm out the job of birth proposals to be run by each
@@ -37,10 +37,10 @@
 import sys, os, time, subprocess, shlex
 import numpy as np
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 import MySQLdb
 from ec2_start import locate_keyname
-import learn
+import sigvisa.learn
 
 # we will divide the work with the following time granularity
 TIME_QUANT = 900
@@ -80,7 +80,7 @@ def main(param_dirname):
   datafile = parse_remove(args, None, "--datafile", None)
   if datafile is not None:
     args.extend(["--datafile", datafile])
-  
+
   print "key", ec2keyname
   print "descrip", descrip
   print "label", label
@@ -88,7 +88,7 @@ def main(param_dirname):
   print "hours", hours
   print "skip", skip
   print "rest:", " ".join(args)
-  
+
   # read all the instance names
   hostnames = []
   for row in open(os.path.join(os.getenv("HOME"), ec2keyname+".instid")):
@@ -102,12 +102,12 @@ def main(param_dirname):
       phasetimedef, sitenames \
       = learn.read_datafile_and_sitephase(datafile, param_dirname,
                                           hours = hours, skip = skip)
-    
+
   else:
     start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
                 sel3_evlist, site_up, sites, phasenames, phasetimedef \
                 = read_data(label, hours=hours, skip=skip)
-  
+
   # get the current max runid
   localconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", host="127.0.0.1",
                               port=3306)
@@ -142,9 +142,9 @@ def main(param_dirname):
   # complete the host ranges for all the other hosts with dummy values
   for i in range(len(hostnames) - len(host_ranges)):
     host_ranges.append((end_time-50, end_time))
-  
+
   print "Host Ranges:", host_ranges
-  
+
   # now divide the job among all the hosts, we give each host 50 seconds
   # extra to ensure that events on the border between the two hosts are
   # not squeezed
@@ -159,7 +159,7 @@ def main(param_dirname):
     ssh_cmd(hostname, ec2keyname, "cd netvisa; utils/bgjob python -u "
             "infer.py %s -n 0 -l %s -k %f -r %f"
             % (" ".join(args), label, host_start, min(host_end+50, end_time)))
-  
+
   # first wait for the local host to get started with its run to avoid any
   # confusion in the runids
   print "Waiting for local run to start...",
@@ -223,7 +223,7 @@ def main(param_dirname):
           localconn = MySQLdb.connect(user="ctbt", db="ctbt3mos",
                                       host="127.0.0.1", port=3306)
           cursor = localconn.cursor()
-    
+
           # we will pull over all the events (even those in the extra
           # 50 second margin)
           hostcursor.execute("select lon, lat, depth, time, mb from visa_origin"
@@ -235,7 +235,7 @@ def main(param_dirname):
                            "orid, runid) values (%f, %f, %f, %f, %f, %d, %d)"
                            % (row[0], row[1], row[2], row[3], row[4],
                               num_prop_origin, proprunid))
-          
+
           # compute the amount of time spent by this host
           host_cpu = time.time() - propose_start
           print "Host %d used %.1f cpu seconds" % (hostidx, host_cpu)
@@ -257,20 +257,20 @@ def main(param_dirname):
                          " where runid=%d" % (curr_max_time, proprunid))
           localconn.commit()
           localconn.close()
-          
+
           # we don't need a connection to this host anymore
           hostconn.close()
-          
+
           # shutdown the host, but don't shut it down if it's the master!!
           if hostidx > 0:
             print "shutting down hostidx", hostidx
             ssh_cmd(hostnames[hostidx], ec2keyname,
                     "sudo /sbin/shutdown -h now")
-          
+
   # save the results of the propose run
   exec_cmd("python -m utils.saverun %d results-%s-propose.tar"
            % (proprunid, ec2keyname))
-  
+
   # now we will do a run on the local host using the aggregated events as the
   # proposal run
   exec_cmd("python -u infer.py %s -l %s -k %f -r %f -p %d"
@@ -298,7 +298,7 @@ def ssh_tunnel(host, keyname, localport, remoteport):
                      % (keypath, keypath, localport, remoteport, host))
   print "ssh_tunnel took %.1f s" % (time.time() - t1)
   return retcode
-  
+
 def ssh_cmd(host, keyname, cmd):
   keypath = os.path.join(os.getenv("HOME"), keyname)
   t1 = time.time()
@@ -321,27 +321,26 @@ def parse_remove(args, shortname, longname, default):
   remove_indices = []
 
   longname_eq = longname + "="
-  
+
   # scan the arguments
   for idx, val in enumerate(args):
     # skip this index if it has already been read as part of the previous one
     if len(remove_indices) and idx == remove_indices[-1]:
       continue
-    
+
     if val == shortname or val == longname and (idx+1) < len(args):
       retval = args[idx+1]
       remove_indices.append(idx)
       remove_indices.append(idx+1)
-    
+
     elif val.startswith(longname_eq):
       retval = val[len(longname_eq):]
       remove_indices.append(idx)
 
   for idx in remove_indices[::-1]:
     args.pop(idx)
-  
+
   return retval
 
 if __name__ == "__main__":
   main("parameters")
-

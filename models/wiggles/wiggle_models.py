@@ -1,4 +1,4 @@
-from models.noise.noise_model import get_noise_model
+from sigvisa.models.noise.noise_model import get_noise_model
 
 
 def wiggle_model_by_name(name, **kwargs):

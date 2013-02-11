@@ -9,28 +9,28 @@ from django.core.paginator import Paginator
 
 import numpy as np
 import sys
-from database.dataset import *
-from database.signal_data import *
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
 
 from sigvisa import *
 
-from models.templates.load_by_name import load_template_model
-from models.wiggles.wiggle import create_wiggled_phase
-from models.wiggles.fourier_features import FourierFeatures
-from signals.common import Waveform
+from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa.models.wiggles.wiggle import create_wiggled_phase
+from sigvisa.models.wiggles.fourier_features import FourierFeatures
+from sigvisa.signals.common import Waveform
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import calendar
 from pytz import timezone
 
-import plotting.plot as plot
+import sigvisa.plotting.plot as plot
 import textwrap
 
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle
 from coda_fits.views import process_plot_args, error_wave
-from signals.common import load_waveform_from_file
-from signals.io import *
+from sigvisa.signals.common import load_waveform_from_file
+from sigvisa.signals.io import *
 
 def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
 

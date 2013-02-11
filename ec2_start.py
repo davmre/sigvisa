@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # Run a command on one or more EC2 instances.
 #
 # PREREQUISITES:
@@ -61,7 +61,7 @@ warnings.filterwarnings("ignore")
 
 import csv, sys, time, subprocess, os, shlex, socket
 
-from utils import EC2
+from sigvisa.utils import EC2
 
 CRED_FNAME = "visa-credentials.csv"
 
@@ -84,13 +84,13 @@ def main(param_dirname):
           "<file-copy-list> <slave-command> <master-command> "\
           "<monitor-command>"
     sys.exit(1)
-  
+
   ec2keyname, ec2imgname, numinst, insttype, file_list,\
               slave_command, master_command, monitor_command = sys.argv[1:]
 
   # read the credentials file
   ec2conn = EC2.connect_with_credfile(CRED_FNAME)
-  
+
   # create the instances
   inst_names, master = create_instances(ec2conn, ec2imgname, ec2keyname,
                                         numinst, insttype)
@@ -114,7 +114,7 @@ def main(param_dirname):
     for instid, pubname in inst_names.iteritems():
       print pubname, instid, ":"
       ssh_cmd(pubname, ec2keyname, slave_command)
-  
+
   # now send the commands to the master
   if len(master_command):
     print "Sending command to master:"
@@ -133,12 +133,12 @@ def main(param_dirname):
         time.sleep(60)
     except KeyboardInterrupt:
       pass
-    
+
   # reconnect since our original connection has probably timed out
   #ec2conn = EC2.AWSAuthConnection(ec2accesskey, ec2secretkey)
-  
+
   #destroy_instances(ec2conn, ec2keyname, inst_names)
-  
+
 def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
   # download the images
   ec2images = ec2conn.describe_images(owners=["self"])
@@ -151,7 +151,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
   else:
     print "Image not found"
     sys.exit(1)
-  
+
   # now create the key pair for this run
   ec2keys = ec2conn.create_keypair(ec2keyname).structure
   if ec2keys[0][0] == "KEYPAIR":
@@ -159,7 +159,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
   else:
     print "Error:", str(ec2keys)
     sys.exit(1)
-  
+
   # write the key pair to a file and protect it from other users otherwise
   # ssh will complain
   fp = open(ec2keyname+".pem", "w")
@@ -167,12 +167,12 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
   fp.close()
   exec_cmd("chmod 600 %s.pem" % ec2keyname)
   print "Created key file"
-  
+
   # create a file for storing the host keys
   fp = open(ec2keyname + ".hostkey", "w")
   fp.close()
   print "Created host key file"
-  
+
   # create the instances and get the instance-ids
   ec2insts = ec2conn.run_instances(ec2imageid, numinst, numinst, ec2keyname,
                                    instanceType=insttype)
@@ -186,7 +186,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
     print ec2conn.delete_keypair(ec2keyname)
     print ec2insts
     sys.exit(1)
-  
+
   print "Launched Instances:", pending_instids
 
   # wait for the instances to start running
@@ -206,7 +206,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
           master = inst[1]
     print ".",
   print "done"
-  
+
   print "Master's name:", inst_names[master]
 
   # create a file with the master and slave instance ids and names
@@ -217,7 +217,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
     if instid != master:
       print >> fp, instid, inst_names[instid], priv_names[instid]
   fp.close()
-  
+
   # name the instances so that the ec2keyname shows up as the name in the
   # web console
   if ec2conn.create_tags(inst_names.keys(), {"Name": ec2keyname}).structure\
@@ -225,7 +225,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
     print "Can't set tag"
   else:
     print "Changed name of instances to", ec2keyname
-  
+
   # the ssh server is not up right away so we can't really send any
   # requests yet
   print "Waiting for ssh servers ",
@@ -234,7 +234,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
       pass
     print ".",
   print "done"
-  
+
   # upload the key file to all the instances so that they can communicate
   # with each other, this will give warnings as the host keys for all the
   # servers are downloaded and stored in the .hostkey file
@@ -251,7 +251,7 @@ def create_instances(ec2conn, ec2imgname, ec2keyname, numinst, insttype):
   scp_to(inst_names[master], ec2keyname, ec2keyname+".instid",
          "/home/ubuntu/%s.instid" % ec2keyname)
   print "done"
-  
+
   return inst_names, master
 
 def destroy_instances(ec2conn, ec2keyname, inst_names):
@@ -263,11 +263,11 @@ def destroy_instances(ec2conn, ec2keyname, inst_names):
   else:
     print "failure %d instances not shutdown" \
           % (len(inst_names) - len(insts.structure))
-  
+
   # describe the state of all these instances
   print "Final state of instances"
   print ec2conn.describe_instances(inst_names.keys())
-  
+
   # delete the key pair
   ec2keys = ec2conn.delete_keypair(ec2keyname)
   print ec2keys
@@ -303,7 +303,7 @@ def is_ssh_up(host):
   sock.shutdown(socket.SHUT_RDWR)
   sock.close()
   return True
-  
+
 def ssh_cmd(host, keyname, cmd):
   cmd = "ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=%s.hostkey "\
         "-i %s.pem ubuntu@%s '%s'" % (keyname, keyname, host, cmd)
@@ -322,7 +322,7 @@ def locate_keyname():
     name, ext = os.path.splitext(fname)
     if ext == ".pem":
       return name
-  
+
 if __name__ == "__main__":
   try:
     main("parameters")

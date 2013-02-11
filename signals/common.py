@@ -7,9 +7,9 @@ from sigvisa import Sigvisa
 import obspy.signal.filter
 from obspy.core.trace import Trace
 
-from signals.mask_util import *
+from sigvisa.signals.mask_util import *
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 
 def load_waveform_from_file(fname):
     wave = cPickle.load(open(fname, 'rb'))

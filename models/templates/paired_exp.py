@@ -1,25 +1,13 @@
 import numpy as np
 import sys, os
-from sigvisa import *
-import sigvisa_c
-
-import models.noise.noise_model as noise_model
-from source.event import get_event
-from signals.common import *
-from models.templates.template_model import TemplateModel
+from sigvisa import Sigvisa
+import sigvisa.models.noise.noise_model as noise_model
+from sigvisa.source.event import get_event
+from sigvisa.signals.common import *
+from sigvisa.models.templates.template_model import TemplateModel
 
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4+1)
 
-def set_dummy_wiggles(sta):
-    s = Sigvisa()
-    siteid = s.name_to_siteid_minus1[sta]+1
-    for chan in s.chans:
-        c = sigvisa_c.canonical_channel_num(chan)
-        for band in s.bands:
-            b = sigvisa_c.canonical_band_num(band)
-            for p in s.phases:
-                pid = s.phaseids[p]
-                sigmodel.set_wiggle_process(siteid, b, c, pid, 1, 0.05, np.array([.8,-.2]))
 
 
 class PairedExpTemplateModel(TemplateModel):

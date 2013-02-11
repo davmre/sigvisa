@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,15 +24,15 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # prunes events which are within a space-time ball of better events
 import os, sys
 import numpy as np
 from optparse import OptionParser
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 from analyze import suppress_duplicates
-import database.db
+import sigvisa.database.db
 
 def main():
   parser = OptionParser()
@@ -48,13 +48,13 @@ def main():
   if options.runid is None:
     cursor.execute("select max(runid) from visa_run")
     options.runid, = cursor.fetchone()
-  
+
   print "RUNID %d:" % options.runid,
 
   cursor.execute("select run_start, run_end, data_start, data_end, descrip, "
                  "numsamples, window, step from visa_run where runid=%d" %
                  options.runid)
-  
+
   run_start, run_end, data_start, data_end, descrip, numsamples, window, step\
              = cursor.fetchone()
 
@@ -64,10 +64,10 @@ def main():
 
   events, orid2num = read_events(cursor, data_start, data_end,
                                  "visa", options.runid)
-    
+
   cursor.execute("select orid, score from visa_origin where runid=%d" %
                  (options.runid,))
-  
+
   evscores = dict(cursor.fetchall())
 
   new_events, new_orid2num = suppress_duplicates(events, evscores)
@@ -85,4 +85,3 @@ def main():
 
 if __name__ == "__main__":
   main()
-  

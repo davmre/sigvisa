@@ -1,4 +1,4 @@
-from models.templates.paired_exp import *
+from sigvisa.models.templates.paired_exp import *
 
 def load_template_model(template_shape, **kwargs):
 

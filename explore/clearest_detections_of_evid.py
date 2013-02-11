@@ -1,6 +1,6 @@
-import database.db
-from database.dataset import *
-import utils.geog
+import sigvisa.database.db
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog
 import sys
 from optparse import OptionParser
 

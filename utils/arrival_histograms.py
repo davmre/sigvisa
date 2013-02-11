@@ -1,10 +1,10 @@
 import matplotlib
 matplotlib.use('PDF')
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import learn, netvisa, sigvisa
 #from multiprocessing import Process
-import utils.waveform
+import sigvisa.utils.waveform
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import time
@@ -66,7 +66,7 @@ for target_phase in range(0,14):
             pred_time = earthmodel.ArrivalTime(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], ev[EV_TIME_COL], phaseid, siteid)
             if pred_time < 0:
                 continue
-                
+
             pred_azi = earthmodel.ArrivalAzimuth(ev[EV_LON_COL], ev[EV_LAT_COL], siteid)
             pred_slo = earthmodel.ArrivalSlowness(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], phaseid, siteid)
             tdiff = det[DET_TIME_COL] - pred_time
@@ -75,12 +75,12 @@ for target_phase in range(0,14):
             adiff = adiff if adiff > -180 else adiff +180
             sdiff = det[DET_SLO_COL] - pred_slo
             print " pred azi ", pred_azi, " det azi ", det[DET_AZI_COL], " diff ", adiff
-    
+
             dist = AVG_EARTH_RADIUS_KM * (np.pi/180) * earthmodel.Delta(ev[EV_LON_COL], ev[EV_LAT_COL], siteid)
             tdifflists[dist2str(dist)].append(tdiff)
             adifflists[dist2str(dist)].append(adiff)
             sdifflists[dist2str(dist)].append(sdiff)
-   
+
     for (k, l) in tdifflists.items():
         if len(l) < 1:
             continue

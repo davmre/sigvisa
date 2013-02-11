@@ -1,22 +1,22 @@
 
-from database.dataset import *
-from database.signal_data import *
-from database import db
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
+from sigvisa.database import db
 
 import matplotlib.pyplot as plt
 
 
 import sys, os, pickle
 
-import utils.geog
+import sigvisa.utils.geog
 import obspy.signal.util
 from sigvisa import *
 import numpy as np
 import scipy.linalg
 import hashlib
 
-from models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
-import models.spatial_regression.baseline_models as baseline_models
+from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
+import sigvisa.models.spatial_regression.baseline_models as baseline_models
 import gpr.learn
 from gpr.distributions import InvGamma, LogNormal
 from optparse import OptionParser

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,17 +24,17 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # interpret the results of a run
 import os, sys
 import numpy as np
 from optparse import OptionParser
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 from results.compare import *
-from utils.geog import degdiff, dist_deg, dist_km
-import database.db
-import learn
+from sigvisa.utils.geog import degdiff, dist_deg, dist_km
+import sigvisa.database.db
+import sigvisa.learn
 
 # ignore warnings from matplotlib in python 2.4
 import warnings
@@ -45,7 +45,7 @@ import matplotlib.pyplot as plt
 # for type 1 fonts
 #plt.rcParams['ps.useafm'] = True
 #plt.rcParams['pdf.use14corefonts'] = True
-from utils.draw_earth import draw_events, draw_earth
+from sigvisa.utils.draw_earth import draw_events, draw_earth
 
 AZGAP_RANGES = [(0, 90), (90, 180), (180, 270), (270, 360)]
 DETCNT_RANGES = [(-1, 0), (0, 1), (1, 2), (2, 3), (3,4), (4,5), (5,6), (6, 100)]
@@ -79,7 +79,7 @@ def compute_roc_curve(gold_events, guess_events, guess_ev_scores, freq=30):
     freq = 1
   else:
     freq = min(len(guess_events)/10, freq)
-  
+
   true_idx, false_idx, mat = find_true_false_guess(gold_events, guess_events)
   true_set = set(true_idx)
   istrue_and_scores = [(guess_ev_scores[guess_events[i, EV_ORID_COL]],
@@ -91,22 +91,22 @@ def compute_roc_curve(gold_events, guess_events, guess_ev_scores, freq=30):
   # compute the ROC curve
   x_pts, y_pts = [], []
   num_true = 0
-  
+
   for cnt, (score, istrue) in enumerate(istrue_and_scores):
     num_true += istrue
-    
+
     if cnt % freq == 0 or cnt == len(istrue_and_scores)-1:
       y_pts.append(float(num_true) / len(gold_events))
       x_pts.append(float(num_true) / (cnt+1.0))
-  
+
   return x_pts, y_pts
-  
+
 def filter_by_lonlat(events, lon_1, lon_2, lat_1, lat_2):
   return events[(events[:,EV_LON_COL] > lon_1)
                 & (events[:,EV_LON_COL] < lon_2)
                 & (events[:,EV_LAT_COL] > lat_1)
                 & (events[:,EV_LAT_COL] < lat_2), :]
-  
+
 def split_by_attr(attr_ranges, attr_vals):
   ev_buckets = [[] for _ in attr_ranges]
   for evnum, val in enumerate(attr_vals):
@@ -116,7 +116,7 @@ def split_by_attr(attr_ranges, attr_vals):
         break
     else:
       print "WARNING: EVENT NOT IN ANY BUCKET!!"
-      
+
   return ev_buckets
 
 def analyze_by_attr(attr_name, attr_ranges, leb_attrvals, leb_events,
@@ -140,55 +140,55 @@ def analyze_by_attr(attr_name, attr_ranges, leb_attrvals, leb_events,
   print "    < _ <=  |     |  F1     P     R   err  sd |   F1    P     R "\
         "  err  sd"
   print "-" * 74
-  
+
   for i, (vallo, valhi) in enumerate(attr_ranges):
     sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(
       leb_events[leb_buckets[i],:], sel3_events[sel3_buckets[i], :])
 
     visa_f, visa_p, visa_r, visa_err = f1_and_error(
       leb_events[leb_buckets[i],:], visa_events[visa_buckets[i], :])
-    
+
     print (" %3d -- %3d | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
           "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
           % (vallo, valhi, len(leb_buckets[i]), sel3_f, sel3_p, sel3_r,
              sel3_err[0], sel3_err[1],
              visa_f, visa_p, visa_r, visa_err[0], visa_err[1])
-    
+
     if verbose:
       # print unmatched VISA events
       unmat_idx = find_unmatched(
         leb_events[leb_buckets[i], :], visa_events[visa_buckets[i], :])
-      
+
       if len(unmat_idx):
         unmat_orids = [int(leb_events[leb_buckets[i][idx], EV_ORID_COL])
                        for idx in unmat_idx]
         unmat_orids.sort()
         print "Unmatched VISA:", unmat_orids
-        
+
       # repeat for SEL3
       unmat_idx = find_unmatched(
         leb_events[leb_buckets[i], :], sel3_events[sel3_buckets[i], :])
-      
+
       if len(unmat_idx):
         unmat_orids = [int(leb_events[leb_buckets[i][idx], EV_ORID_COL])
                        for idx in unmat_idx]
         unmat_orids.sort()
         print "Unmatched SEL3:", unmat_orids
-      
-    
+
+
 def azimuth_gap(esazlist):
   if len(esazlist) < 2:
     return 360.
-  
+
   azlist = [x for x in esazlist]        # copy the list
   azlist.sort()
 
   gap = max((360 + degdiff(azlist[i], azlist[(i+1) % len(azlist)])) % 360 \
             for i in range(len(azlist)))
-  
+
   if gap == 0:
     gap = 360
-  
+
   return gap
 
 # find the nearest leb event for each event
@@ -227,7 +227,7 @@ def gui(options, leb_events, sel3_events, events):
                 marker="*", ms=8, mfc="yellow")
     if options.write:
       plt.savefig("output/run_%d_leb_sel3.png" % (options.runid))
-  
+
     bmap = draw_earth("LEB(yellow) and NET-VISA(blue)")
     draw_events(bmap, events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="s", ms=8, mfc="none", mec="blue", mew=1)
@@ -235,7 +235,7 @@ def gui(options, leb_events, sel3_events, events):
                 marker="*", ms=8, mfc="yellow")
     if options.write:
       plt.savefig("output/run_%d_leb_visa.png" % (options.runid))
-  
+
     bmap = draw_earth("SEL3(red) and NET-VISA(blue)")
     draw_events(bmap, sel3_events[:,[EV_LON_COL, EV_LAT_COL]],
                 marker="o", ms=8, mfc="none", mec="red", mew=1)
@@ -243,8 +243,8 @@ def gui(options, leb_events, sel3_events, events):
                 marker="s", ms=8, mfc="none", mec="blue", mew=1)
     if options.write:
       plt.savefig("output/run_%d_sel3_visa.png" % (options.runid))
-  
-  
+
+
     bmap = draw_earth("Missed LEB events")
     missed_leb_idx = find_unmatched(leb_events, events)
     draw_events(bmap, leb_events[missed_leb_idx][:,[EV_LON_COL,EV_LAT_COL]],
@@ -263,9 +263,9 @@ def gui(options, leb_events, sel3_events, events):
 
   plt.figure()
   plt.title("Precision-Recall curve with LEB as ground truth")
-  
+
   sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
-  
+
   plt.plot([(sel3_p/100.0)], [(sel3_r/100.0)], label="SEL3",
            marker='o', ms=10, mec="red",
            linestyle="none", mfc="none", linewidth=3)
@@ -273,47 +273,47 @@ def gui(options, leb_events, sel3_events, events):
   if options.svm:
     x_pts, y_pts = compute_roc_curve(leb_events, sel3_events,
                                      read_sel3_svm_scores())
-    
+
     plt.plot(x_pts, y_pts, label="SEL3 extrapolation", color="red",
              linestyle=":", linewidth=3)
-    
+
   x_pts, y_pts = compute_roc_curve(leb_events, events, evscores)
-    
+
   plt.plot(x_pts, y_pts, label=options.run_name, color="blue",
            linestyle="-", linewidth=3)
 
   if options.runid2 is not None:
     events2 = read_events(cursor, options.data_start, options.data_end,
                           "visa", options.runid2)[0]
-    
+
     cursor.execute("select orid, score from visa_origin where runid=%d" %
                    (options.runid2,))
     evscores2 = dict(cursor.fetchall())
 
     if options.suppress:
       events2 = suppress_duplicates(events2, evscores2)[0]
-    
+
     x_pts, y_pts = compute_roc_curve(leb_events, events2, evscores2)
-    
+
     plt.plot(x_pts, y_pts, label=options.run2_name, color="green",
              linestyle="--", linewidth=3)
 
   if options.runid3 is not None:
     events3 = read_events(cursor, options.data_start, options.data_end,
                           "visa", options.runid3)[0]
-    
+
     cursor.execute("select orid, score from visa_origin where runid=%d" %
                    (options.runid3,))
     evscores3 = dict(cursor.fetchall())
 
     if options.suppress:
       events3 = suppress_duplicates(events3, evscores3)[0]
-    
+
     x_pts, y_pts = compute_roc_curve(leb_events, events3, evscores3)
-    
+
     plt.plot(x_pts, y_pts, label=options.run3_name, color="green",
              linestyle=":", linewidth=3)
-    
+
   plt.xlim(.39, 1)
   plt.ylim(.39, 1)
   plt.xlabel("precision")
@@ -325,7 +325,7 @@ def gui(options, leb_events, sel3_events, events):
       plt.savefig("output/run-%d-pr.pdf" % (options.runid))
     else:
       plt.savefig("output/run-%d-pr.png" % (options.runid))
-  
+
   plt.show()
 
 # reduce the number of visa events (using the score) until the precision
@@ -344,7 +344,7 @@ def match_sel3_prec(visa_events, visa_scores, leb_events, sel3_events):
   if visa_prec  > sel3_prec:
     print "Visa precision is higher than SEL3's (no pruning)"
     return visa_events, compute_orid2num(visa_events)
-    
+
   # sort all the visa events by score
   scores = []
   for evnum, event in enumerate(visa_events):
@@ -381,9 +381,9 @@ def match_sel3_prec(visa_events, visa_scores, leb_events, sel3_events):
       keep_event[evnum] = 0
 
   events = visa_events[keep_event]
-  
+
   return events, compute_orid2num(events)
-    
+
 def suppress_duplicates(events, evscores, verbose=False):
   # we'll figure out which events to keep, initially we decide to keep
   # everything
@@ -406,7 +406,7 @@ def suppress_duplicates(events, evscores, verbose=False):
       # the two events collide
       if dist_deg(events[evnum1, [EV_LON_COL, EV_LAT_COL]],
                   events[evnum2, [EV_LON_COL, EV_LAT_COL]]) < 5:
-        
+
         # keep the better of the two events
         if (evscores[int(events[evnum1, EV_ORID_COL])] >
             evscores[int(events[evnum2, EV_ORID_COL])]):
@@ -420,18 +420,18 @@ def suppress_duplicates(events, evscores, verbose=False):
             print "Discarding %d due to %d" % (int(events[evnum1, EV_ORID_COL]),
                                                int(events[evnum2, EV_ORID_COL]))
           break
-  
+
   events = events[keep_event]
-  
+
   return events, compute_orid2num(events)
 
 def compute_orid2num(events):
   # recompute orid2num
   orid2num = {}
-  
+
   for ev in events:
     orid2num[ev[EV_ORID_COL]] = len(orid2num)
-  
+
   return orid2num
 
 def assert_time_sorted(events):
@@ -447,7 +447,7 @@ def kleinermackey_match(gold_events, guess_events):
 
   err_dist = np.array([np.inf for _ in range(len(gold_events))])
   is_true = np.array([0 for _ in range(len(guess_events))])
-  
+
   gold_evnum_start = 0
   for guess_evnum in range(len(guess_events)):
     for gold_evnum in range(gold_evnum_start, len(gold_events)):
@@ -473,13 +473,13 @@ def kleinermackey_display(leb_events, sel3_events, visa_events):
           = kleinermackey_match(leb_events, sel3_events)
   visa_p, visa_r, visa_err, visa_std \
           = kleinermackey_match(leb_events, visa_events)
-  
+
   print "Kleiner & Mackey criteria (any event in 250km, 40s ball):"
   print "SEL3: Precision %.1f, Recall %.1f, Avg Err %.1f, Std Err %.1f" %\
         (sel3_p, sel3_r, sel3_err, sel3_std)
   print "VISA: Precision %.1f, Recall %.1f, Avg Err %.1f, Std Err %.1f" %\
         (visa_p, visa_r, visa_err, visa_std)
-  
+
 def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-i", "--runid", dest="runid", default=None,
@@ -492,14 +492,14 @@ def main(param_dirname):
   parser.add_option("--runid2", dest="runid2", default=None,
                     type="int",
                     help = "the second run-identifier to analyze")
-  
+
   parser.add_option("--run2_name", dest="run2_name", default="NET-VISA2",
                     help = "the name of run2 (NET-VISA2)")
 
   parser.add_option("--runid3", dest="runid3", default=None,
                     type="int",
                     help = "the third run-identifier to analyze")
-  
+
   parser.add_option("--run3_name", dest="run3_name", default="NET-VISA3",
                     help = "the name of run3 (NET-VISA3)")
 
@@ -507,7 +507,7 @@ def main(param_dirname):
   parser.add_option("-m", "--maxtime", dest="maxtime", default=None,
                     type="float",
                     help = "Maximum time to analyze for")
-  
+
   parser.add_option("-v", "--verbose", dest="verbose", default=False,
                     action = "store_true",
                     help = "verbose output (False)")
@@ -533,7 +533,7 @@ def main(param_dirname):
   parser.add_option("--missdet", dest="missdet", default=False,
                     action = "store_true",
                     help = "analyze by number of missed detections (False)")
-  
+
   parser.add_option("-t", "--tphase", dest="tphase", default=False,
                     action = "store_true",
                     help = "analyze by number of T phases (False)")
@@ -541,7 +541,7 @@ def main(param_dirname):
   parser.add_option("-y", "--hphase", dest="hphase", default=False,
                     action = "store_true",
                     help = "analyze by number of H phases (False)")
-  
+
   parser.add_option("-a", "--az", dest="azgap", default=False,
                     action = "store_true",
                     help = "analyze by azimuth gap (False)")
@@ -557,7 +557,7 @@ def main(param_dirname):
   parser.add_option("-r", "--regional", dest="regional", default=False,
                     action = "store_true",
                     help = "compare with regional bulletins (False)")
-  
+
   parser.add_option("--svm", dest="svm", default=False,
                     action = "store_true",
                     help = "use svm scores to improve SEL3 (False)")
@@ -583,16 +583,16 @@ def main(param_dirname):
                     default=False, action = "store_true",
                     help = "Use Kleiner&Mackey 250km, 40s criteria, "
                     "with no matching")
-  
+
   parser.add_option("-x", "--sel3_prec", dest="sel3_prec", default=False,
                     action = "store_true",
                     help = "match sel3 precision by dropping events (False)")
   parser.add_option("--datafile", dest="datafile", default=None,
                     help = "tar file with data (None)", metavar="FILE")
-  
+
   parser.add_option("-l", "--label", dest="label", default="validation",
                     help = "training, validation (default), or test")
-  
+
   (options, args) = parser.parse_args()
 
   cursor = database.db.connect().cursor()
@@ -600,7 +600,7 @@ def main(param_dirname):
   if options.runid is None:
     cursor.execute("select max(runid) from visa_run")
     options.runid, = cursor.fetchone()
-  
+
   print "RUNID %d:" % options.runid,
 
   cursor.execute("select run_start, run_end, data_start, data_end, descrip, "
@@ -617,11 +617,11 @@ def main(param_dirname):
     data_end = options.maxtime
 
   options.data_start, options.data_end = data_start, data_end
-  
+
   print "%.1f - %.1f (%.1f hrs), runtime %s" \
         % (data_start, data_end, (data_end-data_start) / 3600.,
            str(run_end - run_start))
-  
+
   print "D='%s' N=%d W=%s S=%s" % (descrip, numsamples, str(window), str(step))
 
   if options.datafile is not None:
@@ -635,7 +635,7 @@ def main(param_dirname):
        sel3_evlist, site_up, sites, phasenames, phasetimedef \
        = read_data(options.label, hours=data_end,
                    skip=data_start, verbose=False)
-    
+
   visa_events, visa_orid2num = read_events(cursor, data_start, data_end,
                                            "visa", options.runid)
 
@@ -649,7 +649,7 @@ def main(param_dirname):
   if options.sel3_prec:
     visa_events, visa_orid2num = match_sel3_prec(visa_events, visa_scores,
                                                  leb_events, sel3_events)
-    
+
   visa_evlist = read_assoc(cursor, data_start, data_end, visa_orid2num,
                            compute_arid2num(detections), "visa",
                            runid=options.runid)
@@ -657,10 +657,10 @@ def main(param_dirname):
   # use Type 1 fonts by invoking latex
   if options.type1:
     plt.rcParams['text.usetex'] = True
-    
+
   if options.kleinermackey:
     kleinermackey_display(leb_events, sel3_events, visa_events)
-    
+
   if options.phase:
     leb_visa = find_matching(leb_events, visa_events)
     buckets = [[] for b in MAG_RANGES]
@@ -679,7 +679,7 @@ def main(param_dirname):
              np.average(buckets[bnum]), np.std(buckets[bnum]))
     print " all  | %3d | %3d %3d" % (len(all), np.average(all),
                                      np.std(all))
-    
+
   if options.error:
     leb_sel3 = find_matching(leb_events, sel3_events)
     leb_visa = find_matching(leb_events, visa_events)
@@ -690,7 +690,7 @@ def main(param_dirname):
                            in leb_sel3 if leb_evnum in common_leb)
     common_leb_visa = dict((leb_evnum, visa_evnum) for (leb_evnum, visa_evnum)
                            in leb_visa if leb_evnum in common_leb)
-    
+
     buckets = [([], []) for b in MAG_RANGES]
     all = ([], [])
     for evnum in common_leb:
@@ -712,7 +712,7 @@ def main(param_dirname):
       else:
         raise ValueError("Event mag %f not found in any mag range"
                          % leb_events[evnum, EV_MB_COL])
-      
+
     print "%d leb events detected by both sel3 and visa" % len(common_leb)
     print "   mb   | #ev |  SEL3   |  VISA"
     print "        |     | err  sd | err  sd"
@@ -739,7 +739,7 @@ def main(param_dirname):
                      "using (arid) where orid=%d and timedef='d'" %
                      (int(leb_event[EV_ORID_COL]),))
       detcnts.append(cursor.fetchone()[0])
-      
+
     analyze_by_attr("# Det", DETCNT_RANGES, detcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
@@ -755,7 +755,7 @@ def main(param_dirname):
                      "(select arid from idcx_arrival_net)" %
                      (int(leb_event[EV_ORID_COL]),))
       detcnts.append(cursor.fetchone()[0])
-      
+
     analyze_by_attr("# Mis", DETCNT_RANGES, detcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
@@ -766,7 +766,7 @@ def main(param_dirname):
                      "where orid=%d and phase='T'" %
                      (int(leb_event[EV_ORID_COL]),))
       tcnts.append(cursor.fetchone()[0])
-    
+
     analyze_by_attr("T Phases", TPHASE_RANGES, tcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
@@ -777,7 +777,7 @@ def main(param_dirname):
                      "where orid=%d and phase='H'" %
                      (int(leb_event[EV_ORID_COL]),))
       hcnts.append(cursor.fetchone()[0])
-    
+
     analyze_by_attr("H Phases", HPHASE_RANGES, hcnts,
                     leb_events, sel3_events, visa_events, options.verbose)
 
@@ -800,9 +800,9 @@ def main(param_dirname):
 
   # finally, compute the overall scores
   sel3_f, sel3_p, sel3_r, sel3_err = f1_and_error(leb_events, sel3_events)
-  
+
   visa_f, visa_p, visa_r, visa_err = f1_and_error(leb_events, visa_events)
-  
+
   print "=" * 74
   print ("     --     | %3d | %5.1f %5.1f %5.1f %3.0f %3.0f " \
          "| %5.1f %5.1f %5.1f %3.0f %3.0f")\
@@ -818,10 +818,10 @@ def main(param_dirname):
                      (options.runid2,))
       visa_evscores2 = dict(cursor.fetchall())
       visa_events2 = suppress_duplicates(visa_events2, visa_evscores2)[0]
-    
+
     visa2_f, visa2_p, visa2_r, visa2_err \
              = f1_and_error(leb_events, visa_events2)
-  
+
     print ("  NETVISA2                                    |"
            " %5.1f %5.1f %5.1f %3.0f %3.0f")\
            % (visa2_f, visa2_p, visa2_r, visa2_err[0], visa2_err[1])
@@ -834,16 +834,16 @@ def main(param_dirname):
                      (options.runid3,))
       visa_evscores3 = dict(cursor.fetchall())
       visa_events3 = suppress_duplicates(visa_events3, visa_evscores3)[0]
-    
+
     visa3_f, visa3_p, visa3_r, visa3_err \
              = f1_and_error(leb_events, visa_events3)
-  
+
     print ("  NETVISA3                                    |"
            " %5.1f %5.1f %5.1f %3.0f %3.0f")\
            % (visa3_f, visa3_p, visa3_r, visa3_err[0], visa3_err[1])
 
   print "=" * 74
-  
+
   if options.regional:
     for (agency, (minlon, maxlon), (minlat, maxlat)) in REGIONS:
       agency_events = read_isc_events(cursor, data_start, data_end, agency)
@@ -853,13 +853,13 @@ def main(param_dirname):
                                        minlat, maxlat)
       visa_ag_events = filter_by_lonlat(visa_events, minlon, maxlon,
                                         minlat, maxlat)
-      
+
       leb_f, leb_p, leb_r, leb_err = f1_and_error(agency_events,
                                                   leb_ag_events)
-      
+
       visa_f, visa_p, visa_r, visa_err = f1_and_error(agency_events,
                                                       visa_ag_events)
-      
+
       print "%s:              |          LEB              |          VISA"\
             % agency
       print "=" * 74
@@ -872,20 +872,20 @@ def main(param_dirname):
       if options.verbose:
         leb_recalled = find_matching(agency_events, leb_ag_events)
         visa_recalled = find_matching(agency_events, visa_ag_events)
-    
+
         leb_rec_list = [(int(agency_events[i, EV_ORID_COL]),
                               int(leb_ag_events[j, EV_ORID_COL]))
                              for (i,j) in leb_recalled]
         leb_rec_list.sort()
-        print "LEB recall", leb_rec_list 
-    
+        print "LEB recall", leb_rec_list
+
         visa_rec_list = [(int(agency_events[i, EV_ORID_COL]),
                               int(visa_ag_events[j, EV_ORID_COL]))
                              for (i,j) in visa_recalled]
         visa_rec_list.sort()
-        
+
         print "VISA recall", visa_rec_list
-            
+
       print "=" * 74
 
       if options.ml:
@@ -895,11 +895,11 @@ def main(param_dirname):
                          " and eventid=%d" % (agency, event[EV_ORID_COL]))
           ml, = cursor.fetchone()
           agency_ml.append(ml)
-        
+
         analyze_by_attr("ML", ML_RANGES, agency_ml,
                         agency_events, leb_ag_events, visa_ag_events,
                         options.verbose)
-        
+
       if options.gui:
         bmap = draw_earth("%s (orange), LEB (yellow), and NET-VISA (blue)"
                           % agency,
@@ -919,28 +919,28 @@ def main(param_dirname):
         cursor.execute("select orid, score from visa_origin where runid=%d" %
                        (options.runid,))
         evscores = dict(cursor.fetchall())
-      
+
         plt.figure()
         plt.title("Precision-Recall curve with %s as ground truth"
                   % agency)
-      
+
         plt.plot([(leb_p/100.0)], [(leb_r/100.0)], label="LEB",
                  marker='o', ms=10, mec="yellow", mew=3,
                  linestyle="none", mfc="none")
-  
+
         x_pts, y_pts = compute_roc_curve(agency_events, visa_ag_events,
                                          evscores, freq=1)
-        
+
         plt.plot(x_pts, y_pts, label="NET-VISA", color="blue")
-        
+
         plt.xlim(0, 1)
         plt.ylim(0, 1)
         plt.xlabel("precision")
         plt.ylabel("recall")
         plt.legend(loc = "upper right")
         plt.grid(True)
-        
-        
+
+
   if options.gui:
     gui(options, leb_events, sel3_events, visa_events)
 
@@ -954,5 +954,3 @@ if __name__ == "__main__":
     traceback.print_exc(file=sys.stdout)
     pdb.post_mortem(sys.exc_traceback)
     raise
-
-

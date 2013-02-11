@@ -6,15 +6,10 @@ import numpy as np
 import numpy.ma as ma
 
 from sigvisa import Sigvisa
-from source.event import get_event
-from signals.common import Waveform, Segment, load_waveform_from_file
-from models.noise.noise_model import *
+from sigvisa.source.event import get_event
+from sigvisa.signals.common import Waveform, Segment, load_waveform_from_file
+from sigvisa.models.noise.noise_model import *
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-import plotting.plot
 
 class TestNoiseModels(unittest.TestCase):
 

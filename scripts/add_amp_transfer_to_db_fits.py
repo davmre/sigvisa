@@ -1,5 +1,5 @@
 from sigvisa import *
-from source.event import get_event
+from sigvisa.source.event import get_event
 
 s = Sigvisa()
 cursor1 = s.dbconn.cursor()
@@ -17,7 +17,7 @@ for (evid, band, phase, amp, fpid) in cursor1:
     except Exception as e:
         print e
         continue
-    
+
     sql_query = "update sigvisa_coda_fit_phase set amp_transfer=:t where fpid=:fpid"
     cursor2.execute(sql_query, t=transfer, fpid=fpid)
     i += 1

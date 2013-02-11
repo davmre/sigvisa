@@ -1,21 +1,21 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
 
-from database.dataset import *
-from database.signal_data import *
-from database import db
-from models.templates.load_by_name import load_template_model
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
+from sigvisa.database import db
+from sigvisa.models.templates.load_by_name import load_template_model
 
-import utils.geog
+import sigvisa.utils.geog
 import obspy.signal.util
 
 from optparse import OptionParser
 
 from sigvisa import Sigvisa
-from signals.io import *
-from infer.optimize.optim_utils import minimize_matrix
-from models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
-from models.envelope_model import EnvelopeModel
+from sigvisa.signals.io import *
+from sigvisa.infer.optimize.optim_utils import minimize_matrix
+from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
+from sigvisa.models.envelope_model import EnvelopeModel
 
 
 

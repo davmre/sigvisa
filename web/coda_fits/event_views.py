@@ -1,16 +1,16 @@
 import numpy as np
-import utils.geog
+import sigvisa.utils.geog
 from django.shortcuts import render_to_response, get_object_or_404
 from django.template import RequestContext
 import django
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 from coda_fits.models import LebOrigin
 from sigvisa import Sigvisa
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from plotting.event_heatmap import EventHeatmap
+from sigvisa.plotting.event_heatmap import EventHeatmap
 
 def event_view(request, evid):
 

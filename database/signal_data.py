@@ -1,19 +1,18 @@
 import os, errno, sys, time, traceback, hashlib, time
 import numpy as np, scipy, scipy.stats
 
-from database.dataset import *
-from database import db
+from sigvisa.database.dataset import *
+from sigvisa.database import db
 
 
 from sigvisa import Sigvisa
-from source.event import get_event
-import sigvisa_c
-from models.noise.armodel.learner import ARLearner
-from models.noise.armodel.model import ARModel, ErrorModel
-import utils.geog
+from sigvisa.source.event import get_event
+from sigvisa.models.noise.armodel.learner import ARLearner
+from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
+import sigvisa.utils.geog
 import obspy.signal.util
 
-# from models.templates.paired_exp import *
+# from sigvisa.models.templates.paired_exp import *
 
 (FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY, FIT_AMP_TRANSFER, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(15+1)
 
@@ -190,54 +189,6 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
         phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3], transfer)
         cursor.execute(phase_insert_query)
     return fitid
-
-def filter_shape_data(fit_data, chan=None, short_band=None, siteid=None, runid=None, phaseids=None, evids=None, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000):
-
-    new_data = []
-    for row in fit_data:
-        if chan is not None:
-            if row[FIT_CHAN] != chan:
-                continue
-        if short_band is not None:
-            b  = sigvisa_c.canonical_band_num(short_band)
-            if int(row[FIT_BANDID]) != b:
-                continue
-        if siteid is not None:
-            if int(row[FIT_SITEID]) != siteid:
-                continue
-        if runid is not None:
-            if row[FIT_RUNID] != run_name:
-                continue
-        if phaseids is not None:
-            if int(row[FIT_PHASEID]) not in phaseids:
-                continue
-        if evids is not None:
-            if int(row[FIT_EVID]) not in evids:
-                continue
-        if row[FIT_AZIMUTH] > max_azi or row[FIT_AZIMUTH] < min_azi:
-            continue
-        if row[FIT_MB] > max_mb or row[FIT_MB] < min_mb:
-            continue
-        if row[FIT_DISTANCE] > max_dist or row[FIT_DISTANCE] < min_dist:
-            continue
-
-        new_data.append(row)
-    return np.array(new_data)
-
-
-def load_wiggle_models(cursor, sigmodel, filename):
-    f = open(filename, 'r')
-    for line in f:
-        entries = line.split()
-        siteid = sta_to_siteid(entries[0], cursor)
-        phaseid = phasename_to_id(entries[1])
-        c = sigvisa_c.canonical_channel_num(entries[2])
-        b = sigvisa_c.canonical_band_num(entries[3])
-        mean = float(entries[4])
-        std = float(entries[5])
-        order = int(entries[6])
-        params = [float(x) for x in entries[7:7+order]]
-        sigmodel.set_wiggle_process(siteid, b, c, phaseid, mean, std, np.asfarray(params))
 
 
 def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10):

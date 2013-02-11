@@ -1,6 +1,6 @@
-import database.db
-from database.dataset import *
-import utils.geog
+import sigvisa.database.db
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog
 import sys
 import numpy as np
 import wave
@@ -184,4 +184,3 @@ def gpvals(events, index):
     for i in range(len(events)):
         outputs[i] = events[i].gpval[index]
     return outputs
-

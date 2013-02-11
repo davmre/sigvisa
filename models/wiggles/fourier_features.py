@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-import infer.optimize.optim_utils
+import sigvisa.infer.optimize.optim_utils
 import scipy.io
 import cStringIO
-from models.wiggles.featurizer import Featurizer
+from sigvisa.models.wiggles.featurizer import Featurizer
 
 class FourierFeatures(Featurizer):
 

@@ -1,10 +1,10 @@
 import matplotlib
 matplotlib.use('PDF')
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import learn, netvisa, sigvisa
 #from multiprocessing import Process
-import utils.waveform
+import sigvisa.utils.waveform
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import time

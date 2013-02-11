@@ -1,7 +1,7 @@
 import sigvisa_util
-from database import db
+from sigvisa.database import db
 import numpy as np
-import utils.geog
+import sigvisa.utils.geog
 
 dbconn = db.connect()
 cursor = dbconn.cursor()
@@ -18,5 +18,3 @@ for r in rows:
 
 dbconn.commit()
 dbconn.close()
-
-

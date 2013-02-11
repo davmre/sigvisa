@@ -37,8 +37,8 @@ from optparse import OptionParser
 import numpy as np
 import geog
 
-from database.dataset import *
-from database import db
+from sigvisa.database.dataset import *
+from sigvisa.database import db
 
 def draw_earth(title, **args):
   """

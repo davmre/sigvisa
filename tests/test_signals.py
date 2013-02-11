@@ -4,22 +4,25 @@ import shutil, os
 
 import numpy as np
 import numpy.ma as ma
+import matplotlib
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+
 
 from sigvisa import Sigvisa
-from source.event import get_event
-from signals.common import Waveform, Segment, load_waveform_from_file
-from signals.mask_util import *
-from signals.io import load_event_station
-from models.templates.paired_exp import PairedExpTemplateModel
-from models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
-from models.noise.armodel.learner import ARLearner
-from models.noise.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
+from sigvisa.source.event import get_event
+from sigvisa.signals.common import Waveform, Segment, load_waveform_from_file
+from sigvisa.signals.mask_util import *
+from sigvisa.signals.io import load_event_station
+from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
+from sigvisa.models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
+from sigvisa.models.noise.armodel.learner import ARLearner
+from sigvisa.models.noise.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
+import sigvisa.plotting.plot as plot
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
-import plotting.plot
+def test_savefig(fname, fig):
+    canvas = FigureCanvasAgg(fig)
+    canvas.print_figure(fname)
 
 
 class TestMasks(unittest.TestCase):
@@ -117,8 +120,8 @@ class TestWaveform(unittest.TestCase):
         self.bhz.data.mask=np.zeros((1000,))
 
 
-        plotting.plot.plot_waveform(self.bhz)
-        plt.savefig("mirror")
+        f = plot.plot_waveform(self.bhz)
+        test_savefig("mirror.png", f)
 
     def test_obspy_trace(self):
         tr = self.bhz.as_obspy_trace()
@@ -211,16 +214,16 @@ class TestSegments(unittest.TestCase):
         self.assertIs(a['BHN'].data, old_seg['BHN']['freq_2.0_3.0'].data)
 
     def test_load_plot(self):
-        plotting.plot.plot_segment(self.seg)
-        plt.savefig("fake")
+        f = plot.plot_segment(self.seg)
+        test_savefig("fake.png", f)
 
         s = self.seg.with_filter('center;env')
-        plotting.plot.plot_segment(s)
-        plt.savefig("fake_env")
+        f = plot.plot_segment(s)
+        test_savefig("fake_env.png", f)
 
         s = s.with_filter('freq_2.0_3.0')
-        plotting.plot.plot_segment(s)
-        plt.savefig("fake_env_freq23")
+        f = plot.plot_segment(s)
+        test_savefig("fake_env_freq23.png", f)
 
 
 class TestIO(unittest.TestCase):
@@ -236,20 +239,20 @@ class TestIO(unittest.TestCase):
         self.assertIs(bhz['event_arrivals'], bhn['event_arrivals'])
         self.assertIs(bhz['arrivals'], bhn['arrivals'])
 
-        plotting.plot.plot_segment(self.seg)
-        plt.savefig("URZ_5301405")
+        f = plot.plot_segment(self.seg)
+        test_savefig("URZ_5301405.png", f)
 
         s = self.seg.with_filter('center;env')
-        plotting.plot.plot_segment(s)
-        plt.savefig("URZ_5301405_env")
+        f = plot.plot_segment(s)
+        test_savefig("URZ_5301405_env.png", f)
 
         s = s.with_filter('freq_2.0_3.0')
-        plotting.plot.plot_segment(s)
-        plt.savefig("URZ_5301405_env_2_3")
+        f = plot.plot_segment(s)
+        test_savefig("URZ_5301405_env_2_3.png", f)
 
         s = s.with_filter('smooth')
-        plotting.plot.plot_segment(s)
-        plt.savefig("URZ_5301405_env_2_3_smooth")
+        f = plot.plot_segment(s)
+        test_savefig("URZ_5301405_env_2_3_smooth.png", f)
 
 if __name__ == '__main__':
     unittest.main()

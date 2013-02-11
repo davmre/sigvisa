@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 
-from plotting.heatmap import Heatmap
-from utils.geog import dist_km, lonlatstr
-from database.dataset import *
-from database import db
+from sigvisa.plotting.heatmap import Heatmap
+from sigvisa.utils.geog import dist_km, lonlatstr
+from sigvisa.database.dataset import *
+from sigvisa.database import db
 from sigvisa import Sigvisa
 
 class EventHeatmap(Heatmap):

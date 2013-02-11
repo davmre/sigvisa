@@ -1,8 +1,8 @@
 # Given a set of stations, find events whihch are detected at all stations. Also find events which are detected at all but one station.
 
 
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import time
 import learn
 import sys

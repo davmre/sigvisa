@@ -9,11 +9,11 @@ from obspy.core import Trace, Stream, UTCDateTime
 import obspy.signal.filter
 from obspy.signal.trigger import triggerOnset
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 
-from signals.common import *
-from signals.mask_util import *
-# from signals.coda_decay_common import *
+from sigvisa.signals.common import *
+from sigvisa.signals.mask_util import *
+# from sigvisa.signals.coda_decay_common import *
 
 from sigvisa import Sigvisa
 

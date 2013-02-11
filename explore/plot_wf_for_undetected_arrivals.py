@@ -1,10 +1,10 @@
 import matplotlib
 matplotlib.use('PDF')
-import database.db
-from database.dataset import *
+import sigvisa.database.db
+from sigvisa.database.dataset import *
 import learn, netvisa, sigvisa
 #from multiprocessing import Process
-import utils.waveform
+import sigvisa.utils.waveform
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import time
@@ -42,7 +42,7 @@ maxplots = 80
 
 pp = PdfPages('logs/missing_detections.pdf')
 for ev in events:
-    
+
     if maxplots <= 0:
         break
 
@@ -57,9 +57,9 @@ for ev in events:
         ttime = netmodel.mean_travel_time(ev[EV_LON_COL], ev[EV_LAT_COL], ev[EV_DEPTH_COL], siteid, 0)
 
         expected_amp = netmodel.mean_amplitude(ev[EV_MB_COL], ev[EV_DEPTH_COL], expected_time - ev[EV_TIME_COL], siteid, 0)
-    
+
         if expected_amp > AMP_THRESHOLD:
-            
+
             if find_detection(detections, siteid, expected_time):
                 print "matching detection found for site %d at time %f" % (siteid, expected_time)
                 try:
@@ -69,7 +69,7 @@ for ev in events:
                     maxplots = maxplots - 1
                 except:
                     continue
-                
+
             else:
                 missed = (ev[EV_ORID_COL], siteid, expected_time, expected_amp  )
                 print " missed: ", missed
@@ -80,4 +80,3 @@ pp.close();
 
 print "final account of %d missing detections: " % (len(missing))
 print missing
-

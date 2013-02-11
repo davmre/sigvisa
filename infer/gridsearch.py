@@ -2,17 +2,17 @@ import numpy as np
 import scipy.stats as stats
 import pdb
 from sigvisa import *
-from database.dataset import *
-from database.signal_data import *
-from source.event import *
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
+from sigvisa.source.event import *
 import itertools, copy
 
 from optparse import OptionParser
-from models.templates.load_by_name import load_template_model
-from models.envelope_model import EnvelopeModel
-from signals.io import load_segments
-from plotting.event_heatmap import EventHeatmap
-from wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
+from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa.models.envelope_model import EnvelopeModel
+from sigvisa.signals.io import load_segments
+from sigvisa.plotting.event_heatmap import EventHeatmap
+from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
 
 def event_at(ev, lon=None, lat=None, t=None, depth=None):
     ev2 = copy.copy(ev)

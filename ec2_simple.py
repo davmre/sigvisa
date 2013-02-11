@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 # Launches infer.py on an EC2 instance
 # Expects a visa-credentials.csv file in the current directory
 # Expects a revision-nnn image where nnn is the current SVN revision
@@ -37,7 +37,7 @@
 #
 import subprocess, StringIO, sys, time, tarfile, os
 
-from utils import EC2
+from sigvisa.utils import EC2
 from ec2_start import *
 from ec2_infer import parse_remove
 
@@ -64,15 +64,15 @@ def main():
     datafilearg = ""
   else:
     datafilearg = "--datafile %s" % datafile
-  
+
   numnodes = parse_remove(sys.argv, None, "--nodes", 1)
 
   imgname = parse_remove(sys.argv, None, "--image", "Revision-" + revision)
-  
+
   print "Image:", imgname
   print "Instance Type:", insttype
   print "Number of Nodes:", numnodes
-  
+
   inst_names, master = create_instances(ec2conn, imgname, keyname, numnodes,
                                         insttype)
 
@@ -81,7 +81,7 @@ def main():
     for pubname in inst_names.itervalues():
       ssh_cmd(pubname, keyname, "cd netvisa; rm %s" % " ".join(dellist))
     print "done."
-  
+
   print "Uploading tar file",
   for pubname in inst_names.itervalues():
     scp_to(pubname, keyname, tarname, "netvisa/"+tarname)
@@ -116,39 +116,39 @@ def main():
         if not ssh_py_infer(inst_names[master], keyname):
           print "No python *infer.py process on master"
           raise KeyboardInterrupt
-      
+
   except KeyboardInterrupt:
     pass
 
   print "Copying results:"
-  
+
   if numnodes == 1:
     ssh_cmd(inst_names[master], keyname,
             "cd netvisa; python -m utils.saverun results-%s.tar" % keyname)
-  
+
   if numnodes > 1:
     scp_from(inst_names[master], keyname,
              "netvisa/results-%s-propose.tar" % keyname, ".")
-  
+
   scp_from(inst_names[master], keyname, "netvisa/results-%s.tar" % keyname, ".")
   scp_from(inst_names[master], keyname, "netvisa/trace-%s.out" % keyname, ".")
-  
+
   os.system("python -m utils.loadrun results-%s.tar" % keyname)
-  
+
   os.system("python ec2_kill.py %s" % keyname)
-  
+
   os.system("python analyze.py %s -g" % datafilearg)
 
   os.system("less trace-%s.out" % keyname)
   print "trace-%s.out" % keyname
-  
+
 def package_repository():
   tarname = "changes-" + TIMESTR + ".tar"
   tar = tarfile.open(name = tarname, mode="w")
   dellist = []
-  
+
   print "Tarring:", tarname
-  
+
   for line in exec_cmd(["svn", "status"]):
     status, fname = line.split()
     if status in ("A", "M"):
@@ -156,13 +156,13 @@ def package_repository():
       tar.add(name = fname, arcname=fname)
     elif status == "D":
       dellist.append(fname)
-      
+
   for fname in os.listdir("parameters"):
     if fname.endswith("Prior.txt"):
       tar.add(name = os.path.join("parameters", fname),
               arcname = "parameters/" + fname)
       #print " ", "parameters/" + fname
-  
+
   tar.close()
 
   return tarname, dellist
@@ -222,4 +222,3 @@ def ssh_py_infer(host, keyname):
 
 if __name__ == "__main__":
   main()
-  

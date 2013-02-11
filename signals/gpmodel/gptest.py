@@ -5,12 +5,12 @@ import matplotlib.pyplot as plt
 from gaussian import *
 from gridutil import *
 from data import *
-import models.noise.armodel.learner as lnr
+import sigvisa.models.noise.armodel.learner as lnr
 from matplotlib.backends.backend_pdf import PdfPages
-import database.db
-from database.dataset import *
-import utils.geog
-from plotting.event_heatmap import get_eventHeatmap
+import sigvisa.database.db
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog
+from sigvisa.plotting.event_heatmap import get_eventHeatmap
 import sys
 import matplotlib.mlab as mlab
 import wave

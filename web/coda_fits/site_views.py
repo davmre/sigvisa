@@ -1,18 +1,18 @@
 import numpy as np
-import utils.geog
+import sigvisa.utils.geog
 from django.shortcuts import render_to_response, get_object_or_404
 from django.template import RequestContext
 from django.core.cache import cache
 import django
 import hashlib
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 from coda_fits.models import StaticSiteid
 from sigvisa import Sigvisa
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from plotting.event_heatmap import EventHeatmap
+from sigvisa.plotting.event_heatmap import EventHeatmap
 
 def site_view(request, sta):
 

@@ -7,7 +7,7 @@
 import numpy as np
 
 
-from source.common import *
+from sigvisa.source.common import *
 # from sigvisa import Sigvisa
 
 def short_band_to_hz(short_band):
@@ -32,7 +32,7 @@ def source_freq_logamp(event, f, phase):
     S_phases = ['S', 'Sn', 'Lg']
 
     M0 = mb_to_M0(event.mb)
-    
+
     rho_s = 2700 # source density, kg/m^3
     rho_r = 2500 # receiver density, kg/m^3
 

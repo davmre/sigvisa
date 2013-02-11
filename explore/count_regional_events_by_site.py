@@ -1,6 +1,6 @@
-import database.db
-from database.dataset import *
-import utils.geog
+import sigvisa.database.db
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog
 import sys
 
 cursor = database.db.connect().cursor()
@@ -20,4 +20,3 @@ for siteid in range(1, 117):
         if distance <= 600:
             regional = regional+1
     print "siteid %d: %d regional events" % (siteid, regional)
-    

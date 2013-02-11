@@ -2,6 +2,7 @@ numpy
 scipy
 scikit-learn
 matplotlib
+-e git+http://github.com/matplotlib/basemap.git#egg=basemap # note: Basemap requires the GEOS library from http://trac.osgeo.org/geos/
 obspy
 django
 cx_Oracle
@@ -10,4 +11,12 @@ python-dateutil
 functools32
 django-pagination
 django-easyfilters
+django-extensions
+django-debug-toolbar
+pytz
 nose
+
+# not strictly necessary, but useful
+pyzmq
+tornado
+ipython

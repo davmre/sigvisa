@@ -10,33 +10,33 @@ from django.core.paginator import Paginator
 
 import numpy as np
 import sys
-from database.dataset import *
-from database.signal_data import *
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
 
 from sigvisa import *
 
-from models.templates.load_by_name import load_template_model
-from signals.common import Waveform
-from source.event import Event
-from signals.io import fetch_waveform, Segment
+from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa.signals.common import Waveform
+from sigvisa.source.event import Event
+from sigvisa.signals.io import fetch_waveform, Segment
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import calendar
 from pytz import timezone
 
-import plotting.plot as plot
-from plotting.event_heatmap import EventHeatmap
+import sigvisa.plotting.plot as plot
+from sigvisa.plotting.event_heatmap import EventHeatmap
 import textwrap
 import hashlib
 
 from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaTemplateParamModel
 from coda_fits.views import process_plot_args, error_wave
-from signals.common import load_waveform_from_file
-from utils.geog import lonlatstr
-from wiggles.wiggle_models import wiggle_model_by_name
-from infer.gridsearch import propose_origin_times, ev_loc_ll_at_optimal_time
-from models.envelope_model import EnvelopeModel
+from sigvisa.signals.common import load_waveform_from_file
+from sigvisa.utils.geog import lonlatstr
+from sigvisa.models.wiggles.wiggle_models import wiggle_model_by_name
+from sigvisa.infer.gridsearch import propose_origin_times, ev_loc_ll_at_optimal_time
+from sigvisa.models.envelope_model import EnvelopeModel
 
 
 @cache_page(60*60)

@@ -5,11 +5,11 @@ import numpy.ma as ma
 
 
 from sigvisa import Sigvisa
-from models.templates.paired_exp import PairedExpTemplateModel
-from source.event import get_event
+from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
+from sigvisa.source.event import get_event
 
 
-from learn.fit_shape_params import fit_event_segment, fit_template
+from sigvisa.learn.fit_shape_params import fit_event_segment, fit_template
 
 
 def main():

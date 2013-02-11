@@ -1,14 +1,14 @@
 import os
 import numpy as np
 
-import utils.geog
+import sigvisa.utils.geog
 
 
 from gpr import munge, kernels, evaluate, learn, distributions, plot
 from gpr.gp import GaussianProcess
 
-from models.spatial_regression.baseline_models import ParamModel
-from source.event import Event
+from sigvisa.models.spatial_regression.baseline_models import ParamModel
+from sigvisa.source.event import Event
 
 start_params_dad_log = {"coda_decay": [.022, .0187, 1.00, .14, .1], \
                             "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31], \

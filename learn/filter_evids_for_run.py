@@ -1,14 +1,14 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
 
-from database.dataset import *
-from database.signal_data import *
-from database import db
+from sigvisa.database.dataset import *
+from sigvisa.database.signal_data import *
+from sigvisa.database import db
 
 from optparse import OptionParser
 
 from sigvisa import *
-from utils.interaction import query_yes_no
+from sigvisa.utils.interaction import query_yes_no
 
 
 def main():

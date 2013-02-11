@@ -2,8 +2,8 @@ import os, sys, traceback
 import numpy as np, scipy
 
 
-from database.dataset import *
-from database import db
+from sigvisa.database.dataset import *
+from sigvisa.database import db
 
 import matplotlib
 matplotlib.use('PDF')
@@ -13,11 +13,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 import plot
 import learn, sigvisa_util
 import signals.SignalPrior
-from utils.waveform import *
-import utils.geog
+from sigvisa.utils.waveform import *
+import sigvisa.utils.geog
 import obspy.signal.util
 
-from signals.coda_decay_common import *
+from sigvisa.signals.coda_decay_common import *
 
 
 
@@ -139,11 +139,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-

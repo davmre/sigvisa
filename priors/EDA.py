@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,13 +24,13 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 
 import numpy as np
 import math, random
 import rpy2.robjects as robjects
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 
 def learn_site(earthmodel, start_time, end_time, detections, leb_events,
                leb_evlist, site_up, numtimedefphases, siteid):
@@ -50,7 +50,7 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
         det_phase[true_phaseid] = 1
 
     dist = earthmodel.Delta(event[EV_LON_COL], event[EV_LAT_COL], siteid)
-    
+
     # we assume that only time-defining phases are detected
     for pnum in range(numtimedefphases):
       arrtime = earthmodel.ArrivalTime(event[EV_LON_COL], event[EV_LAT_COL],
@@ -59,12 +59,12 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
       # check if the site is in the shadow zone of this phase
       if arrtime < 0:
         continue
-      
+
       # check if the site was up at the expected arrival time
       if arrtime < start_time or arrtime >= end_time \
          or not site_up[siteid, int((arrtime - start_time) / UPTIME_QUANT)]:
         continue
-      
+
       output.append(det_phase[pnum])
       mag_feat.append(event[EV_MB_COL])
       dep_feat.append(event[EV_DEPTH_COL])
@@ -72,9 +72,9 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
       # construct the features, one per phase
       for i in range(numtimedefphases):
         phaseid_feat[i].append(int(i == pnum))
-    
+
   print "%d event-phases detected out of %d" % (sum(output), len(output))
-  
+
   # copy the original dataset
   mag_feat2 = [x for x in mag_feat]
   dep_feat2 = [x for x in dep_feat]
@@ -82,10 +82,10 @@ def learn_site(earthmodel, start_time, end_time, detections, leb_events,
   phaseid_feat2 = [[x for x in y] for y in phaseid_feat]
   output2 = [x for x in output]
 
-  
+
   print "y",len(output2),sum(output2)
-  
- 
+
+
   return mag_feat2,dep_feat2,dist_feat2,phaseid_feat2,output2
 
 def learn(param_dirname,earthmodel, start_time, end_time,
@@ -100,12 +100,12 @@ def learn(param_dirname,earthmodel, start_time, end_time,
 
   # assume that the time-defining phases precede the non-time-defining ones
   numtimedefphases = earthmodel.NumTimeDefPhases()
- 
+
   print >>fp,"site det mag dep dist",
   for item in phasenames[:-4]:
       print >>fp,item,
   print >>fp,"\r"
-  
+
   for siteid in range(len(sites)):
     a,b,c,d,e = learn_site(earthmodel, start_time, end_time,
                        detections, leb_events, leb_evlist, site_up,
@@ -119,15 +119,13 @@ def learn(param_dirname,earthmodel, start_time, end_time,
     print "learnt site id", siteid
 
     del a,b,c,d,e
-    
+
   fp.close()
 
   #use R script to read in file and build phase-site specific logistic regression
  ### R CMD BATCH empBayesLogistic_4py.R param_fname param_fout
-  
+
   robjects.r("source('" + param_rfile + "')")
   robjects.r.FitLogistic(param_fname,outfile=param_fout,
                          pwd = os.path.curdir, ossep=os.path.sep);
   os.system("rm " + param_fname)
-
-

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,18 +24,18 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 #checks whether invert detection works correctly
 
 import os, sys, time
 import numpy as np
 from optparse import OptionParser
 
-from database.dataset import *
-from database.db import connect
+from sigvisa.database.dataset import *
+from sigvisa.database.db import connect
 import netvisa, learn
 from results.compare import *
-from utils.geog import dist_km, dist_deg
+from sigvisa.utils.geog import dist_km, dist_deg
 
 def fixup_event_lon(event):
   if event[EV_LON_COL] < - 180:
@@ -92,7 +92,7 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
                                     event[EV_TIME_COL],
                                     phaseid,
                                     int(detections[detid, DET_SITE_COL]))
-    
+
     azres = detections[detid, DET_AZI_COL]\
             - earthmodel.ArrivalAzimuth(event[EV_LON_COL],
                                         event[EV_LAT_COL],
@@ -105,7 +105,7 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
                                         int(detections[detid, DET_SITE_COL]))
 
     print "%d: tres %.1f azres %.1f sres %.1f" % (detid, tres, azres, sres)
-    
+
     inv = netmodel.invert_det(detid, 0)
     if inv is None:
       print None
@@ -123,7 +123,7 @@ def main(param_dirname):
   parser.add_option("-k", "--skip", dest="skip", default=0,
                     type="float",
                     help = "skip the first HOURS of data (0)")
-  
+
   parser.add_option("-i", "--runid", dest="runid", default=None,
                     type="int",
                     help = "the run-identifier to treat as LEB (None)")
@@ -139,7 +139,7 @@ def main(param_dirname):
   (options, args) = parser.parse_args()
 
   netvisa.srand(options.seed)
-  
+
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation", hours=options.hours, skip=options.skip)
@@ -155,7 +155,7 @@ def main(param_dirname):
                              arid2num, "visa", runid=options.runid)
     leb_events, leb_evlist = visa_events, visa_evlist
     print "done"
-  
+
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
@@ -168,7 +168,7 @@ def main(param_dirname):
   for leb_evnum, leb_event in enumerate(leb_events):
     leb_detlist = leb_evlist[leb_evnum]
     tot_leb += 1
-    
+
     if score_event_best_mag_depth(netmodel, leb_event, leb_detlist) > 0:
       pos_leb += 1
 
@@ -179,7 +179,7 @@ def main(param_dirname):
     event[EV_LAT_COL] = round_to(event[EV_LAT_COL], options.degree_step)
     fixup_event_lat(event)
     event[EV_TIME_COL] = round_to(event[EV_TIME_COL], options.time_step)
-    
+
     if score_event_best_mag_depth(netmodel, event, leb_detlist) > 0:
       pos_rnd_leb += 1
 
@@ -213,7 +213,7 @@ def main(param_dirname):
                    (inv_lon, inv_lat)) < 10 and
           abs(inv_time - event[EV_TIME_COL]) < 100):
         tot_inv_hits += 1
-          
+
   t2 = time.time()
   print "%.1f secs elapsed" % (t2 - t1)
   print "%.1f %% LEB events had +ve score"\
@@ -228,6 +228,6 @@ def main(param_dirname):
         % (tot_2hits * 100. / tot_leb)
   print "Avg. of %.1f inverted detections hit event bucket" % \
         (float(tot_inv_hits) / tot_leb)
-  
+
 if __name__ == "__main__":
   main("parameters")

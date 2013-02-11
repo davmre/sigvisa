@@ -3,8 +3,8 @@ import scipy
 import scipy.stats
 import matplotlib.pyplot as plt
 
-from utils.draw_earth import draw_events, draw_earth, draw_density
-import utils.geog
+from sigvisa.utils.draw_earth import draw_events, draw_earth, draw_density
+import sigvisa.utils.geog
 
 import multiprocessing
 import copy

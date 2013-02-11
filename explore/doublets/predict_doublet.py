@@ -1,9 +1,9 @@
 """
 Reads the correlation files output by xcorrs.py, and plots all event pairs with correlation above some threshold.
 """
-import database.db
-from database.dataset import *
-import utils.geog
+import sigvisa.database.db
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog
 import sys
 import itertools
 import time, calendar
@@ -14,22 +14,22 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.gridspec as gridspec
-from plotting.plot import subplot_waveform
+from sigvisa.plotting.plot import subplot_waveform
 
 from optparse import OptionParser
 
 from sigvisa import *
-from signals.io import fetch_waveform
+from sigvisa.signals.io import fetch_waveform
 from explore.doublets.xcorr_pairs import extracted_wave_fname, xcorr
-from source.event import get_event
-from plotting.event_heatmap import get_eventHeatmap
-from models.wiggles.fourier_features import FourierFeatures
+from sigvisa.source.event import get_event
+from sigvisa.plotting.event_heatmap import get_eventHeatmap
+from sigvisa.models.wiggles.fourier_features import FourierFeatures
 from explore.doublets.closest_event_pairs_at_sta import get_first_arrivals
 from explore.doublets.xcorr_pairs import extract_phase_window
 from train_model import train_and_save_models, read_training_events
 
 from gpr.gp import GaussianProcess
-from models.spatial_regression.SpatialGP import SpatialGP
+from sigvisa.models.spatial_regression.SpatialGP import SpatialGP
 
 
 def normalize(x):

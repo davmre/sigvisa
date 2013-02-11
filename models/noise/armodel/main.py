@@ -1,4 +1,4 @@
-from database import db, wave
+from sigvisa.database import db, wave
 import learner, model
 
 import numpy as np
@@ -24,7 +24,7 @@ class NoiseFetcher:
         self.time_start = 1237680000
         self.time_end = 1237766400
         self.cursor.execute("select time from idcx_arrival where sta='%s' and time > %f and time < %f" %(sta, self.time_start, self.time_end))
-        self.arrival = [x[0] for x in self.cursor.fetchall()] 
+        self.arrival = [x[0] for x in self.cursor.fetchall()]
         self.arrival_cursor = 0
         self.cursor.execute("select time, endtime from idcx_wfdisc where sta='%s' and time > %f and endtime < %f" %(sta, self.time_start, self.time_end))
         startend = self.cursor.fetchall()
@@ -41,7 +41,7 @@ class NoiseFetcher:
                 return None
             if self.arrival_cursor >= len(self.arrival):
                 return None
-            
+
             s = self.raw_start[self.start_cursor]
             e = self.raw_end[self.end_cursor]
             a = self.arrival[self.arrival_cursor]
@@ -58,10 +58,10 @@ class NoiseFetcher:
                 self.end_cursor += 1
             elif a < s and s < e:
                 if a + self.posttime < s:
-                    self.arrival_cursor += 1                    
+                    self.arrival_cursor += 1
                 else:
                     self.start_cursor += 1
-                    
+
             else:
                 if a + self.posttime < e:
                     self.arrival_cursor += 1
@@ -69,14 +69,14 @@ class NoiseFetcher:
                     self.end_cursor += 1
             return helper()
         s, e = helper()
- 
+
         if s == None or e == None:
             return None
-        
+
         data, samprate = wave.fetch_waveform(self.sta, self.chan, int(s+1), int(e))
         d = Data(s, e, data, samprate)
         return d
-    
+
 """
 cursor = db.connect().cursor()
 cursor.execute("select distinct sta from idcx_arrival")
@@ -100,7 +100,7 @@ nf2 = NoiseFetcher('DAV')
 d2 = nf2.nextseg()
 while len(d2.data) < 1000:
     d2 = nf2.nextseg()
-    
+
 shortd1 = d1.data[2000:4000] - np.mean(d1.data)
 shortd2 = d2.data[:1024] - np.mean(d2.data)
 longd1 = d1.data[:10000] - np.mean(d1.data)
@@ -143,7 +143,7 @@ def plotcompare(data, p, loc, l=200, sf=40.0):
 def plotpsd(data, p, loc):
     lnr = learner.ARLearner(data)
     params, std= lnr.yulewalker(p)
-    
+
     em = model.ErrorModel(0,std)
     arm = model.ARModel(params,em)
     x,y = arm.psd(size=len(data))
@@ -196,5 +196,3 @@ def plotaic(data, d, loc):
 #plotcv(shortd1,50,'psd','MBAR')
 
 plotcv(d1list,50,'raw','MBAR')
-
-

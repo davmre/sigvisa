@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,14 +24,14 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 
 import sys, struct, time
 import numpy as np
 import gzip
 
 
-import database.db
+import sigvisa.database.db
 
 class MissingWaveform(Exception):
   pass
@@ -64,7 +64,7 @@ def read_site_ss(cursor, refsta, epoch):
   """
   reads the all the static site records for single station sites
   which have this refsta around the epoch
-  
+
   raises MissingSite
   """
   epochtime = time.gmtime(epoch)
@@ -135,7 +135,7 @@ def _read_waveform_from_file(waveform, skip_samples, read_samples):
   datafile.close()
 
   # now convert the bytes into an array of integers
-  
+
   data = np.ndarray((read_samples,), int)
 
   if waveform['datatype'] == "s4":
@@ -163,20 +163,20 @@ def fetch_waveform(station, chan, stime, etime):
   channel at the station in the given interval.
   """
   cursor = database.db.connect().cursor()
-  
+
   # scan the waveforms for the given interval
   samprate = None
   data = []
-  
+
   while True:
     TIME_COL, CHANID_COL, ENDTIME_COL, NSAMP_COL, SAMPRATE_COL = range(5)
     sql = "select * from idcx_wfdisc where sta = '%s' and chan ='%s' and time <= %f and %f < endtime" % (station, chan, stime, stime)
-    cursor.execute(sql)    
+    cursor.execute(sql)
     waveform_values = cursor.fetchone()
     if waveform_values is None:
       raise MissingWaveform("Can't find data for sta %s chan %s time %d"
                             % (station, chan, stime))
-    
+
     waveform = dict(zip([x[0].lower() for x in cursor.description], waveform_values))
     print cursor.description
     print waveform
@@ -185,7 +185,7 @@ def fetch_waveform(station, chan, stime, etime):
     assert(samprate is None or samprate == waveform['samprate'])
     if samprate is None:
       samprate = waveform['samprate']
-    
+
     # at which offset should we start collecting samples
     first_off = int((stime-waveform['time'])*samprate)
     # how many samples are needed remaining
@@ -196,11 +196,11 @@ def fetch_waveform(station, chan, stime, etime):
     segment = _read_waveform_from_file(waveform, first_off,
                                        min(desired_samples, available_samples))
     data.extend(segment)
-    
+
     # do we have all the data that we need
     if desired_samples <= available_samples:
       break
-    
+
     # otherwise move the start time forward for the next file
     stime = waveform['endtime']
     # and adust the end time to ensure that the correct number of samples

@@ -1,6 +1,6 @@
 # Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
 #     * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 #     * Neither the name of Bayesian Logic, Inc. nor the
 #       names of its contributors may be used to endorse or promote products
 #       derived from this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
 # OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-# 
+#
 
 #checks whether invert detection works correctly
 
@@ -45,12 +45,12 @@ import warnings
 warnings.simplefilter("ignore",DeprecationWarning)
 import matplotlib.pyplot as plt
 
-from database.dataset import *
-from database.db import connect
+from sigvisa.database.dataset import *
+from sigvisa.database.db import connect
 import netvisa, learn
 from results.compare import *
-from utils.geog import dist_km, dist_deg
-from utils.draw_earth import draw_events, draw_earth, draw_density
+from sigvisa.utils.geog import dist_km, dist_deg
+from sigvisa.utils.draw_earth import draw_events, draw_earth, draw_density
 
 def fixup_event(event):
   fixup_event_lon(event)
@@ -84,10 +84,10 @@ def fixup_event_mag(event):
 
 # identify the subset of detections which are good for this event
 def good_detections(netmodel, event, event_detlist):
-  
+
   good_detlist = []
   nodet_score = netmodel.score_event(event, []) # score with no detections
-  
+
   for item in event_detlist:
     score = netmodel.score_event(event, [item])
     if score > nodet_score:
@@ -103,17 +103,17 @@ DELTA = 1e-10
 
 # improve the event using gradient ascent
 def improve_event_grad(netmodel, earthmodel, detections, event, event_detlist):
-  
+
   best_event = event.copy()
   best_score = opt_score_event(netmodel, best_event, event_detlist)
-  
+
   while 1:
     best_detlist = good_detections(netmodel, best_event, event_detlist)
     grad = gradient(netmodel, earthmodel, detections, best_event,
                     best_detlist)
 
     scale = 1.
-    
+
     while scale > DELTA:
       new_event = best_event + grad * scale
       fixup_event(new_event)
@@ -122,9 +122,9 @@ def improve_event_grad(netmodel, earthmodel, detections, event, event_detlist):
       if new_score > best_score:
         best_event, best_score = new_event, new_score
         break
-      
+
       scale /= 10.
-      
+
     else:
       break
 
@@ -150,7 +150,7 @@ def gradient(netmodel, earthmodel, detections, event, event_detlist):
     newevent2[dim] += DELTA
     fixup_event(newevent2)
     newscore2 = netmodel.score_event(newevent2, event_detlist)
-    
+
     grad[dim] = newscore2 - newscore1
 
   # normalize gradient
@@ -209,7 +209,7 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
                                     event[EV_TIME_COL],
                                     phaseid,
                                     int(detections[detid, DET_SITE_COL]))
-    
+
     azres = detections[detid, DET_AZI_COL]\
             - earthmodel.ArrivalAzimuth(event[EV_LON_COL],
                                         event[EV_LAT_COL],
@@ -222,7 +222,7 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
                                         int(detections[detid, DET_SITE_COL]))
 
     print "%d: tres %.1f azres %.1f sres %.1f" % (detid, tres, azres, sres)
-    
+
     inv = netmodel.invert_det(detid, 0)
     if inv is None:
       print None
@@ -232,21 +232,21 @@ def print_event(netmodel, earthmodel, detections, event, event_detlist):
 def visualize_posterior(netmodel, event, event_detlist):
   for WINDOW in [5., 1., 1e-2, 1e-4, 1e-8]:
     LON_BUCKET_SIZE = WINDOW / 100
-      
+
     # Z axis is along the earth's axis
     # Z goes from -1 to 1, with the same number of buckets as longitude
     Z_BUCKET_SIZE = (2.0 / 360.0) * LON_BUCKET_SIZE
-  
+
     lon1 = event[EV_LON_COL] - WINDOW
     lon2 = event[EV_LON_COL] + WINDOW
     lat1 = event[EV_LAT_COL] - WINDOW
     lat2 = event[EV_LAT_COL] + WINDOW
-  
+
     new_event = event.copy()
 
     if new_event[EV_DEPTH_COL] < 0 or new_event[EV_DEPTH_COL] > MAX_DEPTH:
       continue
-    
+
     lon_arr = np.arange(lon1, lon2,
                         LON_BUCKET_SIZE)
     z_arr = np.arange(np.sin(np.radians(lat1)),
@@ -255,20 +255,20 @@ def visualize_posterior(netmodel, event, event_detlist):
     lat_arr = np.degrees(np.arcsin(z_arr))
 
     score = np.zeros((len(lon_arr), len(lat_arr)))
-    
+
     best, worst = -np.inf, np.inf
 
     for loni, lon in enumerate(lon_arr):
       for lati, lat in enumerate(lat_arr):
         if lon<-180: lon+=360
         if lon>180: lon-=360
-        
+
         tmp = new_event.copy()
         tmp[EV_LON_COL] = lon
         tmp[EV_LAT_COL] = lat
-        
+
         sc = netmodel.score_event(tmp, event_detlist)
-        
+
         score[loni, lati] = sc
 
         if sc > best: best = sc
@@ -284,17 +284,17 @@ def visualize_posterior(netmodel, event, event_detlist):
 
     elif WINDOW == 1e-2:
       levels = np.linspace(worst, best, 10)
-      
+
     elif WINDOW == 1e-4:
       levels = np.linspace(worst, best, 10)
 
     elif WINDOW == 1e-8:
       levels = np.linspace(worst, best, 10)
-      
+
     else:
       levels = [best-(2**i)/10. for i in range(10)][::-1]
       levels = np.round(levels, 1).tolist()
-      
+
 
     bmap = draw_earth("Ball of size %g degrees" % WINDOW,
                       projection="mill",
@@ -302,12 +302,12 @@ def visualize_posterior(netmodel, event, event_detlist):
                       llcrnrlon = lon1, urcrnrlon = lon2,
                       llcrnrlat = lat1, urcrnrlat = lat2,
                       nofillcontinents=True, figsize=(4.5,4))
-    
+
     draw_density(bmap, lon_arr, lat_arr, score, levels = levels, colorbar=True)
     draw_events(bmap, [(event[EV_LON_COL], event[EV_LAT_COL])],
                 marker="s", ms=10, mfc="none", mec="blue", mew=2)
-  
-  
+
+
 def main(param_dirname):
   parser = OptionParser()
   parser.add_option("-s", "--seed", dest="seed", default=123456789,
@@ -319,10 +319,10 @@ def main(param_dirname):
   parser.add_option("-k", "--skip", dest="skip", default=0,
                     type="float",
                     help = "skip the first HOURS of data (0)")
-  
+
   parser.add_option("-v", "--verbose", dest="verbose", default=False,
                     action="store_true", help="verbose output")
-  
+
   parser.add_option("-i", "--runid", dest="runid", default=None,
                     type="int",
                     help = "the run-identifier to treat as LEB (None)")
@@ -330,7 +330,7 @@ def main(param_dirname):
   (options, args) = parser.parse_args()
 
   netvisa.srand(options.seed)
-  
+
   start_time, end_time, detections, leb_events, leb_evlist, sel3_events, \
          sel3_evlist, site_up, sites, phasenames, phasetimedef \
          = read_data("validation", hours=options.hours, skip=options.skip)
@@ -344,7 +344,7 @@ def main(param_dirname):
     visa_evlist = read_assoc(cursor, start_time, end_time, visa_orid2num,
                              arid2num, "visa", runid=options.runid)
     leb_events, leb_evlist = visa_events, visa_evlist
-  
+
   earthmodel = learn.load_earth(param_dirname, sites, phasenames, phasetimedef)
   netmodel = learn.load_netvisa(param_dirname,
                                 start_time, end_time,
@@ -357,14 +357,14 @@ def main(param_dirname):
   for leb_evnum, leb_event in enumerate(leb_events):
     leb_detlist = leb_evlist[leb_evnum]
     tot_leb += 1
-    
+
     if netmodel.score_event(leb_event, leb_detlist) > 0:
       has_pos_score = True
     else:
       has_pos_score = False
-      
+
     has_nearby_inv = False
-    
+
     for phaseid, detid in leb_detlist:
       inv_ev = netmodel.invert_det(detid, 0)
       if (inv_ev is None or (inv_ev[EV_TIME_COL] - leb_event[EV_TIME_COL] > 100)
@@ -379,7 +379,7 @@ def main(param_dirname):
           tmp_ev[EV_MB_COL] = 3.0
           imp_ev, imp_det, imp_sc = improve_event(netmodel, earthmodel,
                                                   detections, tmp_ev,
-                                                  leb_detlist)          
+                                                  leb_detlist)
           print ("ImpInv %d: lon %4.2f lat %4.2f depth %3.1f mb %1.1f time %.1f"
                  % (detid, imp_ev[ EV_LON_COL], imp_ev[ EV_LAT_COL],
                     imp_ev[ EV_DEPTH_COL], imp_ev[ EV_MB_COL],
@@ -397,11 +397,11 @@ def main(param_dirname):
             plt.show()
             vis = False
         break
-        
+
     #evimp, event2, ev2score = improve_event_once(netmodel, earthmodel,
     #                                             detections, leb_event,
     #                                             leb_detlist)
-      
+
     if has_nearby_inv:
       nearby_inv += 1
 
@@ -411,7 +411,7 @@ def main(param_dirname):
     if has_pos_score and has_nearby_inv:
       pos_and_nearby_inv += 1
 
-    
+
     if options.verbose:
       print "-" * 78
       print_event(netmodel, earthmodel, detections, leb_event, leb_detlist)
@@ -427,7 +427,7 @@ def main(param_dirname):
       ##         event2[ EV_TIME_COL]))
       ##   print "Score:", ev2score
       print "-" * 78
-    
+
   t2 = time.time()
   print "%.1f secs elapsed" % (t2 - t1)
   if len(leb_events) > 10:

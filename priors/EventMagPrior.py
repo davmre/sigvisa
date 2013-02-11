@@ -27,7 +27,7 @@
 #
 import numpy as np
 
-from database.dataset import *
+from sigvisa.database.dataset import *
 
 def learn(param_fname, options, leb_events):
   # Gutenberg Richter dictates that the there are 10 times as many events

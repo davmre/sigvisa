@@ -1,8 +1,8 @@
 import os, errno, sys, time, traceback
 import numpy as np, scipy
 
-from database.dataset import *
-from database import db
+from sigvisa.database.dataset import *
+from sigvisa.database import db
 
 from sigvisa import Sigvisa
 
@@ -12,9 +12,9 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from optparse import OptionParser
 
-from source.event import get_event
-import plotting.plot as plot
-import utils.geog
+from sigvisa.source.event import get_event
+import sigvisa.plotting.plot as plot
+import sigvisa.utils.geog
 import obspy.signal.util
 
 
@@ -250,7 +250,7 @@ def plot_geog(band_data, pp, azistr):
     max_lat=90
     min_lat=-90
 
-    from utils.draw_earth import draw_earth, draw_events
+    from sigvisa.utils.draw_earth import draw_earth, draw_events
     bmap = draw_earth("",
                   projection="cyl",
                   resolution="l",
@@ -523,5 +523,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
