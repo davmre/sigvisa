@@ -8,7 +8,7 @@ from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
 from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel
 from sigvisa.plotting import plot
 
-from sigvisa.tests.test_signals import test_savefig
+from sigvisa.tests.test_signals import savefig
 
 class TestSignalLikelihood(unittest.TestCase):
 
@@ -27,7 +27,7 @@ class TestSignalLikelihood(unittest.TestCase):
 #        sampled = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform = self.seg['BHZ'], sample=True)
 
         f = plot.plot_waveform(template, logscale=True)
-        test_savefig('template.png', f)
+        savefig('template.png', f)
 
 #        plotting.plot.plot_waveform(sampled, logscale=True)
 #        plt.savefig('sampled.png')

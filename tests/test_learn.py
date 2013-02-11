@@ -56,7 +56,7 @@ class TestFit(unittest.TestCase):
         em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
         ll, fit_params = em.wave_log_likelihood_optimize(wave=wave, event=self.event, use_leb_phases=True, optim_params=construct_optim_params())
 
-        print "fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
+        print "iid fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
         print "got params", fit_params
 
     def test_fit_template_AR(self):
@@ -68,7 +68,7 @@ class TestFit(unittest.TestCase):
         em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
         ll, fit_params = em.wave_log_likelihood_optimize(wave=wave, event=self.event, use_leb_phases=True, optim_params=construct_optim_params())
 
-        print "fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
+        print "AR fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
         print "got params", fit_params
 
 

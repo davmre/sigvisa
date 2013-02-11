@@ -20,7 +20,7 @@ from sigvisa.models.noise.noise_model import model_path, construct_and_save_hour
 import sigvisa.plotting.plot as plot
 
 
-def test_savefig(fname, fig):
+def savefig(fname, fig):
     canvas = FigureCanvasAgg(fig)
     canvas.print_figure(fname)
 
@@ -121,7 +121,7 @@ class TestWaveform(unittest.TestCase):
 
 
         f = plot.plot_waveform(self.bhz)
-        test_savefig("mirror.png", f)
+        savefig("mirror.png", f)
 
     def test_obspy_trace(self):
         tr = self.bhz.as_obspy_trace()
@@ -215,15 +215,15 @@ class TestSegments(unittest.TestCase):
 
     def test_load_plot(self):
         f = plot.plot_segment(self.seg)
-        test_savefig("fake.png", f)
+        savefig("fake.png", f)
 
         s = self.seg.with_filter('center;env')
         f = plot.plot_segment(s)
-        test_savefig("fake_env.png", f)
+        savefig("fake_env.png", f)
 
         s = s.with_filter('freq_2.0_3.0')
         f = plot.plot_segment(s)
-        test_savefig("fake_env_freq23.png", f)
+        savefig("fake_env_freq23.png", f)
 
 
 class TestIO(unittest.TestCase):
@@ -240,19 +240,19 @@ class TestIO(unittest.TestCase):
         self.assertIs(bhz['arrivals'], bhn['arrivals'])
 
         f = plot.plot_segment(self.seg)
-        test_savefig("URZ_5301405.png", f)
+        savefig("URZ_5301405.png", f)
 
         s = self.seg.with_filter('center;env')
         f = plot.plot_segment(s)
-        test_savefig("URZ_5301405_env.png", f)
+        savefig("URZ_5301405_env.png", f)
 
         s = s.with_filter('freq_2.0_3.0')
         f = plot.plot_segment(s)
-        test_savefig("URZ_5301405_env_2_3.png", f)
+        savefig("URZ_5301405_env_2_3.png", f)
 
         s = s.with_filter('smooth')
         f = plot.plot_segment(s)
-        test_savefig("URZ_5301405_env_2_3_smooth.png", f)
+        savefig("URZ_5301405_env_2_3_smooth.png", f)
 
 if __name__ == '__main__':
     unittest.main()
