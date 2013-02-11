@@ -66,36 +66,155 @@ class ARModel:
         p = np.array(self.params)
         n_p = len(p)
 
-        A = np.zeros((n_p, n_p))
-        A[0, :] = p
-        A[1:, :-1] = np.eye(n_p-1)
+        tmp = np.zeros((n_p, n_p))
 
-        zeroK = np.zeros((n_p, n_p))
-        zero_u = np.zeros((n_p,))
+        K = np.zeros((n_p, n_p))
+        u = np.zeros((n_p,))
+
 
         code = """
         int t_since_mask = 0;
         double s = std;
+        double t1 = log(s) + 0.5 * log(2 * 3.141592653589793);
 
+        int converged_to_stationary = 0;
 
         double d_prob = 0;
         for (int t=0; t < n; ++t) {
-            if (m(t)) { continue; }
+            if (m(t)) {
+               if (converged_to_stationary) continue;
 
-           double expected = 0;
-           for (int i=0; i < n_p; ++i) {
-               if (t > i && !m(t-i-1)) {
-                  double ne = p(i) * d(t-i-1);
-                  expected += ne;
+               if (t_since_mask > n_p+1) {
+                  // initialize kalman filtering when we encounter a masked zone
+
+                  for (int i=0; i < n_p; ++i) {
+                      for (int j=0; j < n_p; ++j) {
+                           K(i,j) = 0;
+                      }
+                      u(i) = 0;
+                  }
+                  int len_history = t > n_p ? n_p : t;
+                  for (int i=0; i < len_history; ++i) {
+                      u(i) = d(t-1-i);
+                  }
+                  t_since_mask = 0;
                }
-           }
-           double err = d(t) - expected;
-           double x = err/std;
-           double ll = (double)t1 + 0.5 * x*x;
-           d_prob -= ll;
+
+               double old_s = K(0,0);
+               updateK(K, tmp, p, n_p);
+               K(0,0) += std;
+               update_u(u, p, n_p);
+
+               if (old_s > std && (fabs(old_s - K(0,0)) < 0.00000000000001)) {
+                  converged_to_stationary = 1;
+               }
+
+//               printf ("c t = %d std = %f old_s %f diff %f converged=%d\\n", t, K(0,0), old_s, fabs(old_s - K(0,0)), converged_to_stationary);
+
+               continue;
+          }
+
+
+            double expected = 0;
+            if (t_since_mask <= n_p) {
+                converged_to_stationary = 0;
+
+                t_since_mask++;
+                updateK(K, tmp, p, n_p);
+                K(0,0) += std;
+                update_u(u, p, n_p);
+
+
+                expected = u(0);
+                s = K(0,0);
+//                printf ("c t = %d std = %f\\n", t, K(0,0));
+                t1 = log(s) + 0.5 * log(2 * 3.141592653589793);
+            } else {
+                for (int i=0; i < n_p; ++i) {
+                    if (t > i && !m(t-i-1)) {
+                       double ne = p(i) * d(t-i-1);
+                       expected += ne;
+                    }
+                }
+            }
+
+            double err = d(t) - expected;
+            double x = err/s;
+            double ll = t1 + 0.5 * x*x;
+            d_prob -= ll;
+
+        // printf("cm %d err = %.10f x = %.10f ll = %.10f d_prob=%.10f\\n", t, err, x, ll, d_prob);
+
+            if (t_since_mask <= n_p) {
+                u(0) = d(t);
+                for(int i=0; i < n_p; ++i) {
+                    K(0, i) = 0;
+                    K(i, 0) = 0;
+                }
+            } else if (t_since_mask == n_p + 1) {
+                s = std;
+                t1 = log(s) + 0.5 * log(2 * 3.141592653589793);
+                t_since_mask += 1;
+            }
         }
+
         return_val = d_prob;
         """
+
+        support = """
+        void updateK(blitz::Array<double, 2> &K, blitz::Array<double, 2> &tmp, blitz::Array<double, 1> p, int n_p) {
+
+               // tmp = K * A.T
+               for (int i=0; i < n_p; ++i){  // row of K
+
+                 // first row of A contains the AR params
+                 tmp(i,0) = 0;
+                 for (int j=0; j < n_p; ++j){
+                  tmp(i,0) += K(i,j) * p(j);
+                 }
+
+                 // all the other rows are just the shifted identity matrix
+                 for (int j=1; j < n_p; ++j){
+                    tmp(i,j) = K(i,j-1);
+                 }
+               }
+
+               // K = A * tmp
+               for (int i=0; i < n_p; ++i){  // col of tmp
+
+                 // first row of A contains the AR params
+                 K(0, i) = 0;
+                 for (int j=0; j < n_p; ++j){
+                  K(0, i) += tmp(j,i) * p(j);
+                 }
+
+                 // the other rows are the shifted identity
+                 for (int j=1; j < n_p; ++j){
+                    K(j,i) = tmp(j-1,i);
+                 }
+               }
+             }
+
+
+         void update_u(blitz::Array<double, 1> &u, blitz::Array<double, 1> &p, int n_p) {
+               double newpred = 0;
+               for (int i=0; i < n_p; ++i) {
+                   newpred += u(i) * p(i);
+               }
+               for (int i=n_p-1; i > 0; --i) {
+                   u(i) = u(i-1);
+               }
+               u(0) = newpred;
+          }
+
+"""
+
+        ll = weave.inline(code,
+                           ['n', 'n_p', 'm', 'd', 'std', 'p', 'tmp', 'K', 'u'],
+                           type_converters=converters.blitz,
+                           support_code=support,
+                           compiler = 'gcc')
+        return ll
 
 
     def fast_AR(self, d, c, std):
@@ -123,6 +242,7 @@ class ARModel:
            double x = err/std;
            double ll = (double)t1 + 0.5 * x*x;
            d_prob -= ll;
+        // printf("c %d err = %.10f x = %.10f ll = %.10f d_prob=%.10f\\n", t, err, x, ll, d_prob);
         }
         return_val = d_prob;
         """
@@ -214,6 +334,8 @@ class ARModel:
             ell = -t2-t1
             d_prob += ell
 
+            # print "py t %d error %f s %f t2 %f ell %f d_prob %f" % (t, error, std, t2, ell, d_prob)
+
             # if we have recently left a masked region, continue
             # Kalman updating by adding an observation of the timestep
             # we just saw.
@@ -229,7 +351,6 @@ class ARModel:
                 t_since_mask += 1
                 t1 = np.log(orig_std) + 0.5 * np.log(2 * np.pi)
 
-        print "skipped", skipped
         return d_prob
 
     # likelihood in log scale
@@ -244,16 +365,21 @@ class ARModel:
 
         prob = 0
         for d in data:
-#            t1 = time.time()
-#            d_prob = self.slow_AR(d, c)
-#            t2 = time.time()
+
+            """
+            t1 = time.time()
+            d_prob = self.slow_AR(d, c)
+            t2 = time.time()
+            d_prob_fast_missing = self.fastAR_missingData(d, c, self.em.std)
+            t3 = time.time()
             d_prob_fast = self.fast_AR(d, c, self.em.std)
-#            t3 = time.time()
+            t4 = time.time()
+            print (t2-t1), d_prob, (t3-t2), d_prob_fast_missing, (t4-t3), d_prob_fast
+            """
 
-#            print (t2-t1), d_prob, (t3-t2), d_prob_fast
+            d_prob = self.fastAR_missingData(d, c, self.em.std)
 
-
-            prob += d_prob_fast
+            prob += d_prob
 
         return prob
 
