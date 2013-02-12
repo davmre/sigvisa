@@ -4,8 +4,11 @@
 <html>
 <head>
 <title>{{ run.run_name }} - fits - sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+{% include "svweb/header.html"  %}
+
 <h1>{{ run.run_name }}: iter {{ run.iter }}</h1>
 <p><a href="{% url all_runs %}">back to run list</a></p>
 
@@ -80,5 +83,7 @@
     <h3>My Fits</h3>
     <p>No fits found!!! :(</p>
 {% endif %}
+
+{% include "svweb/footer.html"  %}
 </body>
 </html>

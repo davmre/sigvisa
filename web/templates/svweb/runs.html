@@ -9,8 +9,10 @@ window.location = url;
 }
 </script>
 <title>runs - sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+{% include "svweb/header.html"  %}
 
 {% if run_list %}
     <table id="runs" border=1 cellpadding=3>
@@ -37,5 +39,6 @@ window.location = url;
 {% else %}
     <p>No runs are available.</p>
 {% endif %}
+{% include "svweb/footer.html"  %}
 </body>
 </html>

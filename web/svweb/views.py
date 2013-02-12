@@ -32,7 +32,7 @@ import sigvisa.plotting.plot as plot
 import sigvisa.plotting.histogram as histogram
 import textwrap
 
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
 
 
 def process_plot_args(request, axes):
@@ -97,6 +97,11 @@ def filterset_GET_string(filterset):
     return filter_GET_params, field_vals
 
 
+def main_view(request):
+    return render_to_response("svweb/main.html",
+                              {}, context_instance=RequestContext(request))
+
+
 @cache_page(60 * 60)
 def fit_list_view(request, runid):
     run = SigvisaCodaFittingRun.objects.get(pk=runid)
@@ -110,7 +115,7 @@ def fit_list_view(request, runid):
     filter_GET_params, filter_args = filterset_GET_string(fits_filter)
     filter_args['runid'] = runid
 
-    return render_to_response("coda_fits/fits.html",
+    return render_to_response("svweb/fits.html",
                               {'fit_list': fits_filter.qs,
                                'fits_filter': fits_filter,
                                'filter_args': filter_args,
@@ -200,7 +205,7 @@ def fit_detail(request, fitid):
         loc_str = ""
         ev_time_str = ""
 
-    return render_to_response('coda_fits/detail.html', {
+    return render_to_response('svweb/detail.html', {
         'fit': fit,
         'fit_time_str': fit_time_str,
         'fit_view_options': fit_view_options,
@@ -242,25 +247,21 @@ def FitImageView(request, fitid):
 
     fit_phases = fit.sigvisacodafitphase_set.all()
 
-    try:
-        fit_params = np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
-        phases = tuple([str(p.phase) for p in fit_phases])
-        (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
+    fit_params = np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
+    phases = tuple([str(p.phase) for p in fit_phases])
+    (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=s.phases)
 
-        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
+    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
 
-        fig = Figure(figsize=(5, 3), dpi=144)
-        fig.patch.set_facecolor('white')
-        axes = fig.add_subplot(111)
-        axes.set_xlabel("Time (s)", fontsize=8)
-        synth_wave = tm.generate_template_waveform((phases, vals), wave, sample=sample)
-        plot.subplot_waveform(wave.filter(
-            "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
-        plot.subplot_waveform(synth_wave, axes, color="green", linewidth=3, logscale=logscale, plot_dets=False)
-        process_plot_args(request, axes)
-
-    except Exception as e:
-        return error_wave(e)
+    fig = Figure(figsize=(5, 3), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    axes.set_xlabel("Time (s)", fontsize=8)
+    synth_wave = tm.generate_template_waveform((phases, vals), wave, sample=sample)
+    plot.subplot_waveform(wave.filter(
+        "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
+    plot.subplot_waveform(synth_wave, axes, color="green", linewidth=3, logscale=logscale, plot_dets=False)
+    process_plot_args(request, axes)
 
     canvas = FigureCanvas(fig)
     response = django.http.HttpResponse(content_type='image/png')

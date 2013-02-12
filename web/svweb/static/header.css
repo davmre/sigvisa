@@ -1,0 +1,48 @@
+/* Reset body padding and margins */
+body { margin:0; padding:0; }
+ 
+/* Make Header Sticky */
+#header_container { background:#66a; border:1px solid #333; height:28px; left:0; position:fixed; width:100%; top:0; }
+#header{ line-height:28px; margin:0 auto; text-align:center; }
+ 
+/* CSS for the content of page. I am giving top and bottom padding of 80px to make sure the header and footer do not overlap the content.*/
+#container { margin:0 auto; overflow:auto; padding:32px 0 0 1em; width: 100%; }
+#content{}
+ 
+#header > ul
+{
+list-style-type:none;
+margin:0;
+padding:0;
+overflow:hidden;
+}
+#header > ul > li
+{
+float:left;
+
+}
+#header > ul > li > a:link, #header > ul > li > a:visited
+{
+background-color:#66a;
+color: #eee;
+text-decoration:none;
+display:block;
+font-weight:bold;
+font-size: small;
+background-color:#66a;
+color: #eee;
+text-align:center;
+height: 24px;
+
+font-family: verdana,sans-serif;
+padding-left: 1em;
+padding-right: 1em;
+padding-top: 0;
+padding-bottom: 4px;
+}
+#header > ul > li > a:hover, #header > ul > li > a:active
+{
+background-color:#aaa;
+}
+
+

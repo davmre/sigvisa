@@ -27,8 +27,8 @@ from pytz import timezone
 import sigvisa.plotting.plot as plot
 import textwrap
 
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle
-from coda_fits.views import process_plot_args, error_wave
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle
+from svweb.views import process_plot_args, error_wave
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.signals.io import *
 
@@ -85,7 +85,7 @@ def wiggle_detail_view(request, fpid):
     xmin = wiggle_wave['stime'] - 4
     xmax = xmin + wiggle_len + 8
 
-    return render_to_response('coda_fits/wiggle.html', {
+    return render_to_response('svweb/wiggle.html', {
                               #        'wiggle': wiggle,
                               'phase': phase,
                               'fit': fit,

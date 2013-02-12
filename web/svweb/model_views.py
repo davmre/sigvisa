@@ -28,8 +28,8 @@ import sigvisa.plotting.plot as plot
 import sigvisa.plotting.histogram as histogram
 import textwrap
 
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaTemplateParamModel
-from coda_fits.views import filterset_GET_string, process_plot_args, FitsFilterSet
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaTemplateParamModel
+from svweb.views import filterset_GET_string, process_plot_args, FitsFilterSet
 
 
 class ModelsFilterSet(FilterSet):
@@ -48,7 +48,7 @@ class ModelsFilterSet(FilterSet):
 def model_list_view(request):
     models = SigvisaTemplateParamModel.objects.all()
     model_filter = ModelsFilterSet(models, request.GET)
-    return render_to_response("coda_fits/models.html",
+    return render_to_response("svweb/models.html",
                               {'model_list': model_filter.qs,
                                'model_filter': model_filter,
                                }, context_instance=RequestContext(request))

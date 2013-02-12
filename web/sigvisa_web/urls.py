@@ -9,8 +9,7 @@ urlpatterns = patterns('',
     # url(r'^$', 'sigvisa.views.home', name='home'),
     # url(r'^sigvisa/', include('sigvisa.foo.urls')),
 
-                       url(r'^sigvisa/', include('coda_fits.urls')),
-                       url(r'^sigvisa/', include('waves.urls')),
+                       url(r'^sigvisa/', include('svweb.urls')),
 
 
     # Uncomment the admin/doc line below to enable admin documentation:

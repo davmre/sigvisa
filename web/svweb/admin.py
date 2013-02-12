@@ -1,5 +1,5 @@
 from django.contrib import admin
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun
 
 
 class PhaseInline(admin.TabularInline):

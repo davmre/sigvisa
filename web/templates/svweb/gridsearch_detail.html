@@ -3,8 +3,11 @@
 <html>
 <head>
 <title>gsrun {{ gs.gsid }} -- sigvisa</title>
+
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+{% include "svweb/header.html"  %}
 
 <table>
  <tr>
@@ -107,5 +110,6 @@
 </td>
 </tr>
 </table>
+{% include "svweb/footer.html"  %}
 </body>
 </html>

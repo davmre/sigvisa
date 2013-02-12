@@ -18,8 +18,11 @@ document.getElementById('loading').style.visibility = 'hidden';
 }
 </script>
 <title>{{ fit.evid }} at {{ fit.sta }} -- sigvisa fit</title>
+
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+{% include "svweb/header.html"  %}
 
 <h1>{{fit.runid.run_name}}/{{fit.runid.iter}}: evid {{ fit.evid }} at {{ fit.sta }}</h1>
 <table>
@@ -259,5 +262,6 @@ function showLoading() {
 document.getElementById('loading').style.visibility = 'visible';
 }
 </script>
+{% include "svweb/footer.html"  %}
 </body>
 </html>

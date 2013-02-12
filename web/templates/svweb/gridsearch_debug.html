@@ -1,8 +1,12 @@
 <html>
 <head>
 <title>wave {{ wave.waveid }} -- sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
 </head>
 <body>
+{% include "svweb/header.html"  %}
+
 
   <img src="{% url gs_heatmap gsid=wave.gsid.gsid %}?colorbar=true;smooth=true;lon={{lon}};lat={{lat}};depth={{ depth }};exp=true" width=600 height=600>
 
@@ -75,5 +79,7 @@
 <tr><td valign=top>{{ proposal.0 }}</td><td valign=top>{{ proposal.1 }}</td><td valign=top>{{proposal.3.0}}</td><td valign=top>{{proposal.3.1}}</td><td valign=top>{{proposal.3.2}}</td><td valign=top><table>{% for row in proposal.2 %}<tr><td valign=top>{{row.0}}</td>{% for param in row.1 %}<td valign=top>{{param|floatformat:-3}}</td> {% endfor %}</tr> {% endfor %}</table></td><td valign=top><img src="{% url gs_debug_wave gswid=wave.gswid %}?lon={{lon}};lat={{lat}};depth={{ depth }};mb={{ev_true.mb}};time={{proposal.0}}"></td></tr>
 {% endfor %}
 </table>
+
+{% include "svweb/footer.html"  %}<
 </body>
 </html>

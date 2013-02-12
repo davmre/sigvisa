@@ -45,10 +45,8 @@ def propose_origin_times(ev, segments, template_model, phases, max_proposals=5):
     # estimate to get a representative sample.
     if len(event_time_proposals) > max_proposals:
         np.random.seed(0)
-        kernel = stats.gaussian_kde(event_time_proposals)
-        kernel.covariance_factor = lambda: 0.01
-        kernel._compute_covariance()
-        event_time_proposals = list(kernel.resample(max_proposals).flatten())
+        kernel = stats.gaussian_kde(event_time_proposals, bw_method = lambda x : 0.01)
+        event_time_proposals = list(kernel.resample(np.array((max_proposals,))).flatten())
 
     return event_time_proposals
 

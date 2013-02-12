@@ -30,8 +30,8 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 import textwrap
 import hashlib
 
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaTemplateParamModel
-from coda_fits.views import process_plot_args, error_wave
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaTemplateParamModel
+from svweb.views import process_plot_args, error_wave
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.utils.geog import lonlatstr
 from sigvisa.models.wiggles.wiggle_models import wiggle_model_by_name
@@ -39,11 +39,10 @@ from sigvisa.infer.gridsearch import propose_origin_times, ev_loc_ll_at_optimal_
 from sigvisa.models.envelope_model import EnvelopeModel
 
 
-@cache_page(60 * 60)
 def gridsearch_list_view(request):
     runs = SigvisaGridsearchRun.objects.all()
     # run_filter = ModelsFilterSet(models, request.GET)
-    return render_to_response("coda_fits/gridsearch_runs.html",
+    return render_to_response("svweb/gridsearch_runs.html",
                               {'run_list': runs,
                                #                   'model_filter': model_filter,
                                }, context_instance=RequestContext(request))
@@ -114,7 +113,7 @@ def gridsearch_detail_view(request, gsid):
         overall_ll = ()
         wave_likelihood_tuples = None
 
-    return render_to_response('coda_fits/gridsearch_detail.html', {
+    return render_to_response('svweb/gridsearch_detail.html', {
         'gs': gs,
         'nw_str': nw_str,
         'se_str': se_str,
@@ -223,7 +222,7 @@ def gs_debug_view(request, gswid):
         Event(lon=lon, lat=lat, depth=depth), [wave, ], tm, phases, max_proposals=gs_wave.gsid.max_evtime_proposals)
 
     # get the globally optimal time with regard to all waveforms
-    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases)
+    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases, bands=(band,), chans=(chan,))
     segs = get_all_segments_for_gsrun(gs_wave.gsid)
     maxll, maxt = ev_loc_ll_at_optimal_time(
         Event(lon=lon, lat=lat, time=-1, depth=depth, mb=ev_true.mb, natural_source=ev_true.natural_source),
@@ -253,7 +252,7 @@ def gs_debug_view(request, gswid):
     global_proposal = proposals[-1]
     proposals = proposals[:-1]
 
-    return render_to_response('coda_fits/gridsearch_debug.html', {
+    return render_to_response('svweb/gridsearch_debug.html', {
         'wave': gs_wave,
         'lon': lon,
         'lat': lat,

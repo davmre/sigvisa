@@ -1,8 +1,10 @@
 <html>
 <head>
 <title>wiggles -- phase {{ phase.fpid }} -- sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+{% include "svweb/header.html"  %}
 <strong>wiggles for evid {{fit.evid}} phase {{phase.phase}} at station {{fit.sta}}</strong><br/>
 run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}}
 
@@ -44,5 +46,6 @@ run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}
 {% endfor %}
 </table>
 
+{% include "svweb/footer.html"  %}
 </body>
 </html>
