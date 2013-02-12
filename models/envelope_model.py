@@ -11,7 +11,7 @@ from sigvisa.database.signal_data import filter_and_sort_template_params
 from sigvisa.database.dataset import *
 from sigvisa.database import db
 
-from sigvisa.infer.optimize.optim_utils import minimize_matrix
+from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_params
 
 from optparse import OptionParser
 

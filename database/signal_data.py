@@ -267,7 +267,11 @@ def insert_wiggle(dbconn, p):
         wiggleid = int(wiggleid.getvalue())
 
     elif "MySQLdb" in str(type(dbconn)):
-        raise Exception("blob insertion for mysql not yet implemented")
+        mysql_query = re.sub(r":(\w+)\s*([,)])", r"%(\1)s\2", sql_query)
+        cursor.execute(mysql_query, p)
+        wiggleid = cursor.lastrowid
+
+    cursor.close()
 
     return wiggleid
 

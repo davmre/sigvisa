@@ -58,7 +58,6 @@ class Waveform(object):
             self.my_stats = my_stats
         else:
             self.my_stats = {"srate": float(srate), "npts": npts}
-            self.my_stats.update(my_stats_entries)
 
             try:
                 fraction_valid = 1 - np.sum([int(v) for v in self.data.mask]) / float(len(self.data))
@@ -69,6 +68,8 @@ class Waveform(object):
                                   "freq_low": 0.0,
                                   "freq_high": self.my_stats["srate"] / 2.0,
                                   "fraction_valid": fraction_valid})
+
+            self.my_stats.update(my_stats_entries)
 
         self.filtered = dict()
 

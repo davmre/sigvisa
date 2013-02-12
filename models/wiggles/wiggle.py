@@ -2,7 +2,7 @@ import numpy as np
 
 from sigvisa.signals.common import Waveform
 
-def create_wiggled_phase(template_params, tm, phase, wiggle, wiggle_stime, st, npts, srate, chan, sta):
+def create_wiggled_phase(template_params, tm, phase, wiggle, wiggle_stime, st, npts, srate, chan, sta, band):
 
     (phases, vals) = template_params
 
@@ -10,7 +10,7 @@ def create_wiggled_phase(template_params, tm, phase, wiggle, wiggle_stime, st, n
     other_phases = phases[:phase_idx] + phases[phase_idx + 1:]
     other_vals = np.vstack([vals[:phase_idx, :], vals[phase_idx + 1:, :]])
 
-    wave = Waveform(data=np.zeros((npts,)), srate=srate, stime=st, chan=chan, sta=sta)
+    wave = Waveform(data=np.zeros((npts,)), srate=srate, stime=st, chan=chan, sta=sta, filter_str='%s;env' % band)
     template_with_phase = tm.generate_template_waveform((phases, vals), wave, sample=False)
     template_without_phase = tm.generate_template_waveform((other_phases, other_vals), wave, sample=False)
 
