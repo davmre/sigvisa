@@ -5,6 +5,8 @@
 <head>
 <title>gridsearch runs - sigvisa</title>
 
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
 <script>
 
 function confirm_delete(runid, url) {
@@ -16,6 +18,8 @@ window.location = url;
 
 </head>
 <body>
+{% include "svweb/header.html"  %}
+
 <h1>gridsearch runs</h1>
 
 {% if run_list %}
@@ -62,5 +66,7 @@ window.location = url;
 {% else %}
     <p>No gridsearch found!!! :(</p>
 {% endif %}
+
+{% include "svweb/footer.html"  %}
 </body>
 </html>

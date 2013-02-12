@@ -1,19 +1,21 @@
 from django.conf.urls import patterns, url
-from coda_fits.views import *
-from coda_fits.wiggle_views import *
-from coda_fits.model_views import *
-from coda_fits.gridsearch_views import *
-from coda_fits.event_views import *
-from coda_fits.site_views import *
+from svweb.views import *
+from svweb.wiggle_views import *
+from svweb.model_views import *
+from svweb.gridsearch_views import *
+from svweb.event_views import *
+from svweb.site_views import *
+from svweb.wave_views import *
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
-from coda_fits.models import SigvisaCodaFit, SigvisaCodaFittingRun
+from svweb.models import SigvisaCodaFit, SigvisaCodaFittingRun
 
 urlpatterns = patterns('',
+                       url(r'^/$', main_view, name='main'),
                        url(r'^runs/$', ListView.as_view(queryset=SigvisaCodaFittingRun.objects.order_by('run_name'),
                                                         context_object_name='run_list',
-                                                        template_name='coda_fits/runs.html'), name="all_runs"),
+                                                        template_name='svweb/runs.html'), name="all_runs"),
                        url(r'^runs/(?P<runid>\d+)/$',
                            lambda request, runid: HttpResponseRedirect(reverse('fit_list', args=(runid,))),
                            name='fit_list'),
@@ -51,4 +53,9 @@ urlpatterns = patterns('',
                        url(r'^event/(?P<evid>\d+)/context.png$', event_context_img_view, name='event_context_img'),
                        url(r'^site/(?P<sta>\w+)/$', site_view, name='site'),
                        url(r'^site/(?P<sta>\w+)/context.png$', site_det_img_view, name='site_det_img'),
+                       url(r'^waves/$', WaveSelectView, name='wave_select'),
+                       url(r'^waves/wave.png$',
+                           WaveImageView,
+                           name='wave_image'),
+
                        )

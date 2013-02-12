@@ -2,9 +2,10 @@
 <head>
 
 <title>{{ site.sta }} -- sigvisa</title>
-
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+{% include "svweb/header.html"  %}
 
 <img src="{% url site_det_img sta=site.sta %}" width=700 height=700>
 
@@ -17,5 +18,6 @@
 <tr><td><strong>staname</strong></td><td>{{ site.staname }}</td></tr>
 <tr><td><strong>statype</strong></td><td>{{ site.statype }}</td></tr>
 </table>
+{% include "svweb/footer.html"  %}
 </body>
 </html>

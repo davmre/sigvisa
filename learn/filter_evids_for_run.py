@@ -31,6 +31,8 @@ def main():
         "--min_snr", dest="min_snr", default=5, type="float", help="exclude all events with snr less than this value (0)")
     parser.add_option("--max_snr", dest="max_snr", default=float('inf'), type="float",
                       help="exclude all events with snr greater than this value (inf)")
+    parser.add_option("--dataset", dest="dataset", default="training", type="str",
+                      help="use the start and end time of the given dataset (training)")
     parser.add_option("--start_time", dest="start_time", default=None, type="float",
                       help="exclude all events with time less than this value (0)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float",
@@ -42,8 +44,7 @@ def main():
     cursor = s.dbconn.cursor()
 
     if options.start_time is None or options.end_time is None:
-        cursor.execute("select start_time, end_time from dataset where label='training'")
-        (st, et) = read_timerange(cursor, "training", hours=None, skip=0)
+        (st, et) = read_timerange(cursor, options.dataset, hours=None, skip=0)
 
     st = options.start_time if options.start_time is not None else st
     et = options.end_time if options.end_time is not None else et

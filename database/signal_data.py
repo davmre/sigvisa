@@ -5,6 +5,7 @@ import time
 import traceback
 import hashlib
 import time
+import re
 import numpy as np
 import scipy
 import scipy.stats
@@ -17,7 +18,7 @@ from sigvisa import Sigvisa
 from sigvisa.source.event import get_event
 from sigvisa.models.noise.armodel.learner import ARLearner
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
-import sigvisa.utils.geog
+import sigvisa.utils.geog as geog
 import obspy.signal.util
 
 # from sigvisa.models.templates.paired_exp import *
@@ -167,8 +168,9 @@ def execute_and_return_id(dbconn, query, idname, **kwargs):
         query += " returning %s into :rbfhaj" % (idname,)
         cursor.execute(query, rbfhaj=myseq, **kwargs)
         lrid = int(myseq.getvalue())
-    elif "MySQLdb" in str(type(s.dbconn)):
-        cursor.execute(sql_query)
+    elif "MySQLdb" in str(type(dbconn)):
+        mysql_query = re.sub(r":(\w+)\s*([,)])", r"%(\1)s\2", query)
+        cursor.execute(mysql_query, args=kwargs)
         lrid = cursor.lastrowid
 
     cursor.close()
@@ -190,8 +192,8 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
     et = wave['etime']
     event = get_event(evid=wave['evid'])
 
-    distance = utils.geog.dist_km((event.lon, event.lat), (s.sites[siteid - 1][0], s.sites[siteid - 1][1]))
-    azimuth = utils.geog.azimuth((s.sites[siteid - 1][0], s.sites[siteid - 1][1]), (event.lon, event.lat))
+    distance = geog.dist_km((event.lon, event.lat), (s.sites[siteid - 1][0], s.sites[siteid - 1][1]))
+    azimuth = geog.azimuth((s.sites[siteid - 1][0], s.sites[siteid - 1][1]), (event.lon, event.lat))
 
     optim_param_str = optim_param_str.replace("'", "''")
 
@@ -227,6 +229,7 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
     sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fit.acost<%f and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s" % (
         max_acost, min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond)
 
+    ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
     fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
     try:
         shape_data = np.loadtxt(fname, dtype=float)
@@ -264,7 +267,11 @@ def insert_wiggle(dbconn, p):
         wiggleid = int(wiggleid.getvalue())
 
     elif "MySQLdb" in str(type(dbconn)):
-        raise Exception("blob insertion for mysql not yet implemented")
+        mysql_query = re.sub(r":(\w+)\s*([,)])", r"%(\1)s\2", sql_query)
+        cursor.execute(mysql_query, p)
+        wiggleid = cursor.lastrowid
+
+    cursor.close()
 
     return wiggleid
 

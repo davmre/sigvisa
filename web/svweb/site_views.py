@@ -7,7 +7,7 @@ import django
 import hashlib
 
 from sigvisa.database.dataset import *
-from coda_fits.models import StaticSiteid
+from svweb.models import StaticSiteid
 from sigvisa import Sigvisa
 
 from matplotlib.figure import Figure
@@ -19,7 +19,7 @@ def site_view(request, sta):
 
     site = StaticSiteid.objects.get(sta=sta)
 
-    return render_to_response('coda_fits/site.html', {
+    return render_to_response('svweb/site.html', {
         'site': site,
     }, context_instance=RequestContext(request))
 

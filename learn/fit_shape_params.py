@@ -18,7 +18,7 @@ from optparse import OptionParser
 
 from sigvisa import Sigvisa
 from sigvisa.signals.io import *
-from sigvisa.infer.optimize.optim_utils import minimize_matrix
+from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_params
 from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
 from sigvisa.models.envelope_model import EnvelopeModel
 

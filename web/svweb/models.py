@@ -8,7 +8,7 @@
 # into your database.
 
 from django.db import models
-from coda_fits.fields import UnixTimestampField, BlobField
+from svweb.fields import UnixTimestampField, BlobField
 
 
 class view_options(models.Model):

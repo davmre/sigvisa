@@ -22,10 +22,6 @@ import priors.ArrivalAmplitudePrior
 
 import sigvisa_c, sigvisa
 
-def log_trace(trc, filename, format):
-
-  print "WARNING: ignoring log_trace from c code"
-  return True
 
 def load_earth(param_dirname, sites, phasenames, phasetimedef):
   model = sigvisa_c.EarthModel(sites, phasenames, phasetimedef,
@@ -37,11 +33,11 @@ def load_earth(param_dirname, sites, phasenames, phasetimedef):
   return model
 
 
-def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up,
-                 sites, phasenames, phasetimedef, load_signal_params = True):
+def load_sigvisa(param_dirname, site_up,
+                 sites, phasenames, phasetimedef):
   earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
 
-  sigmodel = sigvisa_c.SigModel(earthmodel, start_time, end_time, signal_model_name,
+  sigmodel = sigvisa_c.SigModel(earthmodel,
                               os.path.join(param_dirname, "NumEventPrior.txt"),
                               os.path.join(param_dirname, "EventLocationPrior.txt"),
                               os.path.join(param_dirname, "EventMagPrior.txt"),
@@ -49,7 +45,7 @@ def load_sigvisa(param_dirname, start_time, end_time, signal_model_name, site_up
                               os.path.join(param_dirname, "ArrivalAzimuthPrior.txt"),
                               os.path.join(param_dirname, "ArrivalSlownessPrior.txt"),
                               os.path.join(param_dirname, "ArrivalAmplitudePrior.txt"),
-                              log_trace)
+                              )
 
 #  if (load_signal_params):
 #    sigmodel.set_all_signal_params(priors.SignalPrior.read_params(os.path.join(param_dirname, "EnvelopeSignalModel.txt")))

@@ -45,10 +45,8 @@ def propose_origin_times(ev, segments, template_model, phases, max_proposals=5):
     # estimate to get a representative sample.
     if len(event_time_proposals) > max_proposals:
         np.random.seed(0)
-        kernel = stats.gaussian_kde(event_time_proposals)
-        kernel.covariance_factor = lambda: 0.01
-        kernel._compute_covariance()
-        event_time_proposals = list(kernel.resample(max_proposals).flatten())
+        kernel = stats.gaussian_kde(event_time_proposals, bw_method = lambda x : 0.01)
+        event_time_proposals = list(kernel.resample(np.array((max_proposals,))).flatten())
 
     return event_time_proposals
 
@@ -64,7 +62,7 @@ def ev_loc_ll_at_optimal_time(ev, segments, log_likelihood, template_model, phas
     maxt = 0
     f = lambda t: np.sum([log_likelihood(s, event_at(ev, t=t))[0] for s in segments])
     for proposed_t in event_time_proposals:
-        ll, params = f(proposed_t)
+        ll = f(proposed_t)
         if ll > maxll:
             maxll = ll
             maxt = proposed_t
@@ -113,6 +111,11 @@ def main():
                       help="maximum number of event times to consider per gridsearch location")
     parser.add_option("--use_true_depth", dest="use_true_depth", default=False, action="store_true",
                       help="use the true depth of the event being searched for (default is to integrate over depth)")
+    parser.add_option("--chans", dest="chans", default="BHZ", type="str",
+                      help="comma-separated list of channel names to use for inference (BHZ)")
+    parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
+                      help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
+
 
     (options, args) = parser.parse_args()
 
@@ -142,9 +145,19 @@ def main():
     else:
         phases = options.phases.split(',')
 
+    if options.bands == "all":
+        bands = s.bands
+    else:
+        bands = options.bands.split(',')
+
+    if options.chans == "all":
+        chans = s.chans
+    else:
+        chans = options.chans.split(',')
+
     wm = PlainWiggleModel(tm)
 #    wm = StupidL1WiggleModel(tm)
-    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases)
+    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=phases, chans=chans, bands=bands)
     ev_true = get_event(evid=evid)
 
     # inference is based on segments from all specified stations,

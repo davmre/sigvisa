@@ -2,7 +2,7 @@ numpy
 scipy
 scikit-learn
 matplotlib
--e git+http://github.com/matplotlib/basemap.git#egg=basemap # note: Basemap requires the GEOS library from http://trac.osgeo.org/geos/
+-e git+http://github.com/matplotlib/basemap.git#egg=basemap 
 obspy
 django
 #cx_Oracle
@@ -16,7 +16,12 @@ django-debug-toolbar
 pytz
 nose
 
-# not strictly necessary, but useful
+# not strictly necessary, but useful:
+
+# ipython notebook
 pyzmq
 tornado
 ipython
+
+# interactive debugger, "python manage.py runserver_plus" to enable
+werkzeug

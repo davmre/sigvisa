@@ -4,8 +4,10 @@
 <html>
 <head>
 <title>models - sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 </head>
 <body>
+{% include "svweb/header.html"  %}
 <h1>models</h1>
 
 
@@ -13,7 +15,7 @@
 
 {% if model_list %}
 
-    <table id="models" border=1 cellpadding=3>
+    <table id="models" border=1 cellpadding=3 width=90%>
       <tr>
 	<td><strong>modelid</strong></td>
         <td><strong>timestamp</strong></td>
@@ -50,7 +52,7 @@
                 <td>{{ model.model_type }}</td>
                 <td>{{ model.training_set_fname|slice:"-14:" }}</td>
                 <td>{{ model.n_evids }}</td>
-                <td>{{ model.training_ll }}</td>
+                <td>{{ model.training_ll|floatformat:1 }}</td>
                 <td>
 		{% if model.model_type|slice:":8" == "constant" %}
 		<a href="{% url model_density modelid=model.modelid %}">density</a>
@@ -70,5 +72,6 @@
 {% else %}
     <p>No models found!!! :(</p>
 {% endif %}
+{% include "svweb/footer.html"  %}
 </body>
 </html>

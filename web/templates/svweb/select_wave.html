@@ -21,11 +21,13 @@ document.getElementById('loading').style.visibility = 'hidden';
    visibility: hidden;
 }
 </style>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
 
 <title>sigvisa waveform viewer</title>
 
 </head>
 <body>
+{% include "svweb/header.html"  %}
 
 <center>
   <div id="wavediv">
@@ -70,5 +72,6 @@ function showLoading() {
 document.getElementById('loading').style.visibility = 'visible';
 }
 </script>
+{% include "svweb/footer.html"  %}
 </body>
 </html>

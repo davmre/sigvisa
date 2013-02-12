@@ -22,7 +22,7 @@ import textwrap
 
 # detail view for a particular fit
 def WaveSelectView(request):
-    return render_to_response('waves/select.html', {}, context_instance=RequestContext(request))
+    return render_to_response('svweb/select_wave.html', {}, context_instance=RequestContext(request))
 
 
 @cache_page(60*60*24*365)

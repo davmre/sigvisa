@@ -1,17 +1,20 @@
 import numpy as np
-import sigvisa.utils.geog
+
 from django.shortcuts import render_to_response, get_object_or_404
 from django.template import RequestContext
 import django
 
-from sigvisa.database.dataset import *
-from coda_fits.models import LebOrigin
-from sigvisa import Sigvisa
+
+from svweb.models import LebOrigin
+
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from sigvisa.plotting.event_heatmap import EventHeatmap
 
+from sigvisa.plotting.event_heatmap import EventHeatmap
+from sigvisa import Sigvisa
+from sigvisa.database.dataset import *
+import sigvisa.utils.geog as geog
 
 def event_view(request, evid):
 
@@ -26,6 +29,7 @@ def event_view(request, evid):
 
     cursor.execute(sql_query)
     rawdets = cursor.fetchall()
+
     dets = []
     for rd in rawdets:
 
@@ -38,8 +42,8 @@ def event_view(request, evid):
                 continue
 
             ev_ll = (ev.lon, ev.lat)
-            dist = utils.geog.dist_km(site_ll, ev_ll)
-            azimuth = utils.geog.azimuth(site_ll, ev_ll)
+            dist = geog.dist_km(site_ll, ev_ll)
+            azimuth = geog.azimuth(site_ll, ev_ll)
             phase = rd[DET_PHASE_COL]
             det = {
                 'sta': sta,
@@ -55,8 +59,11 @@ def event_view(request, evid):
             }
             dets.append(det)
         except:
+            raise
             continue
-    return render_to_response('coda_fits/event.html', {
+
+
+    return render_to_response('svweb/event.html', {
         'ev': ev,
         'dets': dets,
     }, context_instance=RequestContext(request))
