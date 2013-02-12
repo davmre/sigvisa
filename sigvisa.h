@@ -71,35 +71,26 @@
 
 extern PyObject * traceClass_obj;
 
-PyObject * py_srand(PyObject * self, PyObject * args);
-
 int pydict_get_double(PyObject * py_dict, char * key, double *value);
 int pydict_get_int(PyObject * py_dict, char * key, long * value);
 int pydict_get_string(PyObject * py_dict, char * key, char ** value);
 
 
-#include "network.h"
 #include "sigmodel.h"
 
-#include "signal.h"
+#define MIN_AMP 0.001
+#define LOG_MIN_AMP -6.90775527898
+#define LOG10_MIN_AMP -3
+#define MAX_AMP 100000.0
+#define LOG_MAX_AMP 11.512925465
+#define LOG10_MAX_AMP 5.0
 
-#include "signals/envelope_likelihood/SpectralEnvelopeModel.h"
-#include "signals/envelope_likelihood/SignalModelCommon.h"
-#include "signals/envelope_likelihood/python_interface.h"
-
-#include "priors/score_sig.h"
-#include "infer/infer.h"
-#include "infer/propose.h"
-#include "logging.h"
+#define MAX_ENVELOPE_LENGTH 300
 
 
-PyObject * py_set_signals(SigModel_t *p_sigmodel, PyObject *args);
-PyObject * py_get_signals(SigModel_t *p_sigmodel, PyObject *args);
-PyObject * py_synthesize_signals(SigModel_t *p_sigmodel, PyObject *args);
-PyObject * py_gen_logenvelope(SigModel_t *p_sigmodel, PyObject *args);
-PyObject * py_synthesize_signals_det(SigModel_t *p_sigmodel, PyObject *args);
+/* information about phases */
+#define NUM_TD_PHASES 14
 
-int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end_time);
 void convert_tuple_int(PyObject * tuple,
 			      int * p_len, int ** pp_ints);
 #endif // SIGVISA_INCLUDE
