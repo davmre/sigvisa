@@ -63,10 +63,9 @@ class Sigvisa(object):
             "SIGVISA_HOME"), "parameters"), self.sites,
             self.phasenames, self.phasetimedef)
         self.sigmodel = load_sigvisa(os.path.join(os.getenv(
-            "SIGVISA_HOME"), "parameters"), st, et,
-            "spectral_envelope", self.site_up, self.sites,
-            self.phasenames, self.phasetimedef,
-            load_signal_params=False)
+            "SIGVISA_HOME"), "parameters"), 
+            self.site_up, self.sites,
+            self.phasenames, self.phasetimedef )
 
 #        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
         self.bands = ("freq_2.0_3.0",)
@@ -78,8 +77,6 @@ class Sigvisa(object):
         self.S_phases = ('S', 'Sn', 'Lg')
 
         self.events = dict()
-
-        self.set_dummy_wiggles()
 
     def __del__(self):
         self.dbconn.close()
@@ -98,17 +95,6 @@ class Sigvisa(object):
         equiv = self.__equivalent_channels[canonical]
         return equiv
 
-    def set_dummy_wiggles(self):
-        s = self
-        for siteid in range(1, len(self.stations)):
-            for chan in s.chans:
-                c = sigvisa_c.canonical_channel_num(chan)
-                for band in s.bands:
-                    b = sigvisa_c.canonical_band_num(band)
-                    for p in s.phases:
-                        pid = s.phaseids[p]
-                        s.sigmodel.set_wiggle_process(
-                            siteid, b, c, pid, 1, 0.05, np.array([.8, -.2]))
 
     def band_name(self, low_band=None, high_band=None):
         low_match = [band for band in self.bands if np.abs(float(band.split(

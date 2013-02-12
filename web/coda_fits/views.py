@@ -272,6 +272,8 @@ def FitImageView(request, fitid):
 def rate_fit(request, fitid):
     fit = SigvisaCodaFit.objects.get(fitid=int(fitid))
 
+    next_fitid = int(request.GET.get("next_fitid", None))
+
     try:
         rating = int(request.POST['approval'])
     except KeyError:
@@ -279,8 +281,7 @@ def rate_fit(request, fitid):
     else:
         fit.human_approved = rating
         fit.save()
-        filter_args['pageid'] = int(pageid) + 1
-        return HttpResponseRedirect(reverse('fit_run_detail', kwargs=filter_args))
+        return HttpResponseRedirect(reverse('fit_run_detail', args=(next_fitid,)) + "?" + request.GET.urlencode())
     return HttpResponse("Something went wrong.")
 
 

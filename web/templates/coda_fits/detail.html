@@ -145,7 +145,7 @@ document.getElementById('loading').style.visibility = 'hidden';
   <td colspan=1 align="center">
 
 
-    <form action="{% url rate_fit fitid=fit.fitid %}?{{filter_GET_params}}" method="post" id='approval_form'>
+    <form action="{% url rate_fit fitid=fit.fitid %}?next_fitid={{next.fitid}};{{filter_GET_params}}" method="post" id='approval_form'>
       {% csrf_token %}
       <input type="radio" name="approval" id="unknown" value="0" {% if fit.human_approved == '0' or fit.human_approved == 0 or fit.human_approved == None %}checked{% endif %}/>
       <label for="unknown">Unknown</label>

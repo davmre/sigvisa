@@ -1,3 +1,11 @@
+drop table sigvisa_gsrun_tmodel;
+drop table sigvisa_gsrun_wave;
+drop table sigvisa_gridsearch_run;
+drop table sigvisa_template_param_model;
+drop table sigvisa_wiggle;
+drop table sigvisa_coda_fit_phase;
+drop table sigvisa_coda_fit;
+drop table sigvisa_coda_fitting_run;
 
 create table sigvisa_coda_fitting_run (
  runid 	     int,
@@ -7,8 +15,7 @@ create table sigvisa_coda_fitting_run (
 );
 
 create table sigvisa_coda_fit (
- /* fitid    int not null auto_increment, */ /* MYSQL version */
- fitid	  int not null, /* Oracle version */
+ fitid    int not null auto_increment, /* MYSQL version */
  runid    int not null,
  evid     int not null,
  sta      varchar(10) not null,
@@ -29,19 +36,9 @@ create table sigvisa_coda_fit (
  foreign key(runid) REFERENCES sigvisa_coda_fitting_run(runid)
 );
 
-/* hack to implement auto_increment in Oracle */
-create sequence fitid_seq start with 1 increment by 1 nomaxvalue;
-create or replace trigger fitid_trigger
-before insert on sigvisa_coda_fit
-for each row
-begin
-select fitid_seq.nextval into :new.fitid from dual;
-end;
-/
 
 create table sigvisa_coda_fit_phase (
-/* fpid  int not null auto_increment, */ /* MYSQL version */
- fpid  int not null, /* Oracle version */
+ fpid  int not null auto_increment, /* MYSQL version */
  fitid int not null,
  phase	  varchar(20) not null,
  template_model   varchar(20) default 'paired_exp',
@@ -56,19 +53,9 @@ create table sigvisa_coda_fit_phase (
  foreign key (fitid) REFERENCES sigvisa_coda_fit(fitid)
 );
 
-/* hack to implement auto_increment in Oracle */
-create sequence fpid_seq start with 1 increment by 1 nomaxvalue;
-create or replace trigger fpid_trigger
-before insert on sigvisa_coda_fit_phase
-for each row
-begin
-select fpid_seq.nextval into :new.fpid from dual;
-end;
-/
 
 create table sigvisa_wiggle (
-/* wiggleid  int not null auto_increment, */ /* MYSQL version */
- wiggleid  int not null, /* Oracle version */
+ wiggleid  int not null auto_increment, /* MYSQL version */
  fpid int not null,
  stime double precision not null,
  etime double precision not null,
@@ -86,18 +73,9 @@ create table sigvisa_wiggle (
  foreign key (fpid) REFERENCES sigvisa_coda_fit_phase(fpid)
 );
 
-/* hack to implement auto_increment in Oracle */
-create sequence wiggleid_seq start with 1 increment by 1 nomaxvalue;
-create or replace trigger wiggleid_trigger
-before insert on sigvisa_wiggle
-for each row
-begin
-select wiggleid_seq.nextval into :new.wiggleid from dual;
-end;
-/
 
 create table sigvisa_template_param_model (
- modelid int not null, /* Oracle version */
+ modelid int not null auto_increment, 
  fitting_runid int not null,
  template_shape varchar(15) not null,
  param varchar(15) not null,
@@ -118,19 +96,9 @@ create table sigvisa_template_param_model (
  foreign key (fitting_runid) REFERENCES sigvisa_coda_fitting_run(runid)
 );
 
-/* hack to implement auto_increment in Oracle */
-create sequence modelid_seq start with 1 increment by 1 nomaxvalue;
-create or replace trigger modelid_trigger
-before insert on sigvisa_template_param_model
-for each row
-begin
-select modelid_seq.nextval into :new.modelid from dual;
-end;
-/
 
 create table sigvisa_gridsearch_run (
-/* gsid  int not null auto_increment, */ /* MYSQL version */
- gsid  int not null, /* Oracle version */
+ gsid  int not null auto_increment, /* MYSQL version */
  evid int not null,
  timestamp double precision not null,
  elapsed double precision not null,
@@ -149,7 +117,7 @@ create table sigvisa_gridsearch_run (
 );
 
 create table sigvisa_gsrun_wave (
- gswid int not null, /* Oracle version */
+ gswid int not null auto_increment, /* Oracle version */
  gsid int not null,
  sta varchar(10) not null,
  chan varchar(10) not null,
@@ -162,7 +130,7 @@ create table sigvisa_gsrun_wave (
 );
 
 create table sigvisa_gsrun_tmodel (
- gsmid int not null, /* Oracle version */
+ gsmid int not null auto_increment,
  gswid int not null,
  modelid int not null,
  primary key (gsmid),
@@ -170,32 +138,3 @@ create table sigvisa_gsrun_tmodel (
  foreign key (modelid) REFERENCES sigvisa_template_param_model(modelid)
 );
 
-/* hack to implement auto_increment in Oracle */
-create sequence gsid_seq start with 1 increment by 1 nomaxvalue;
-create or replace trigger gsid_trigger
-before insert on sigvisa_gridsearch_run
-for each row
-begin
-select gsid_seq.nextval into :new.gsid from dual;
-end;
-/
-
-/* hack to implement auto_increment in Oracle */
-create sequence gsw_id_seq start with 1 increment by 1 nomaxvalue;
-create or replace trigger gsw_id_trigger
-before insert on sigvisa_gsrun_wave
-for each row
-begin
-select gsw_id_seq.nextval into :new.gswid from dual;
-end;
-/
-
-/* hack to implement auto_increment in Oracle */
-create sequence gsm_id_seq start with 1 increment by 1 nomaxvalue;
-create or replace trigger gsm_id_trigger
-before insert on sigvisa_gsrun_tmodel
-for each row
-begin
-select gsm_id_seq.nextval into :new.gsmid from dual;
-end;
-/

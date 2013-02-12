@@ -54,16 +54,20 @@ def run_fit_and_rename_output(args):
 
     with open(tmp_output_file, 'r') as f:
         lines = f.readlines()
-        last_line = lines[-1].strip()
-        m = re.match(r"fit id (\d+) completed successfully.", last_line)
-        if m is not None:
-            fitid = m.group(1)
-            success_output_dir = os.path.join(base_output, "successful")
-            success_output_file = os.path.join(success_output_dir, "run%d_fit%d.log" % (runid, int(fitid)))
-            ensure_dir_exists(success_output_dir)
-            print "fit succeeded: moving %s to %s" % (tmp_output_file, success_output_file)
-            shutil.move(tmp_output_file, success_output_file)
-        else:
+
+        fitid = None
+        for line in lines[::-1]:
+            m = re.match(r"fit id (\d+) completed successfully.", line.strip())
+            if m is not None:
+                fitid = m.group(1)
+                success_output_dir = os.path.join(base_output, "successful")
+                success_output_file = os.path.join(success_output_dir, "run%d_fit%d.log" % (runid, int(fitid)))
+                ensure_dir_exists(success_output_dir)
+                print "fit succeeded: moving %s to %s" % (tmp_output_file, success_output_file)
+                shutil.move(tmp_output_file, success_output_file)
+                break
+
+        if fitid is None:
             failed_output_dir = os.path.join(base_output, "failed")
             failed_output_file = os.path.join(failed_output_dir, "run%d_%s.log" % (runid, paramhash))
             ensure_dir_exists(failed_output_dir)
@@ -149,7 +153,7 @@ def main():
         for line in f:
             (sta, evid) = [i.strip() for i in line.split(' ')]
 
-            cmd_str = "/vdec/software/site/usr/bin/python2.6 -m learn.fit_shape_params -e %d -s %s %s --template_shape=%s --template_model=%s --run_name=%s --run_iteration=%d %s %s" % (
+            cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s --template_shape=%s --template_model=%s --run_name=%s --run_iteration=%d %s %s" % (
                 int(evid), sta, "-w %s" % options.wiggles if options.wiggles else "", options.template_shape, options.template_model, run_name, iteration, init_str, "--optim_params=\"%s\" " % options.optim_params if options.optim_params is not None else "")
 
 #            run_fit_and_rename_output((cmd_str, runid))

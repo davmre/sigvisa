@@ -257,8 +257,6 @@ class TemplateModel(object):
         srate = model_waveform['srate']
         st = model_waveform['stime']
         et = model_waveform['etime']
-        c = sigvisa_c.canonical_channel_num(model_waveform['chan'])
-        b = sigvisa_c.canonical_band_num(model_waveform['band'])
 
         phases, vals = template_params
         phaseids = [s.phaseids[phase] for phase in phases]
