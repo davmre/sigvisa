@@ -12,7 +12,7 @@ from django.core.urlresolvers import reverse
 from svweb.models import SigvisaCodaFit, SigvisaCodaFittingRun
 
 urlpatterns = patterns('',
-                       url(r'^/$', main_view, name='main'),
+                       url(r'^$', main_view, name='main'),
                        url(r'^runs/$', ListView.as_view(queryset=SigvisaCodaFittingRun.objects.order_by('run_name'),
                                                         context_object_name='run_list',
                                                         template_name='svweb/runs.html'), name="all_runs"),
