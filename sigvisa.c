@@ -9,60 +9,17 @@ PyObject * traceClass_obj;
 static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 
-PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args);
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,PyObject *args);
 
 static PyMethodDef SigModel_methods[] = {
-  {"set_signals", (PyCFunction)py_set_signals, METH_VARARGS,
-   "set_signals(traces) "
-   "-> num_translated\n"},
-  {"synthesize_signals", (PyCFunction)py_synthesize_signals, METH_VARARGS,
-   "synthesize_signals(evlist, stalist, start_time, end_time, hz, samplePerturb, sampleNoise) "
-   "-> success\n"},
-  {"trace_log_likelihood", (PyCFunction) py_trace_log_likelihood, METH_VARARGS,
-   "trace_log_likelihood(trace, phaseids, params) -> ll\n" },
-  {"segment_log_likelihood", (PyCFunction) py_segment_log_likelihood, METH_VARARGS,
-   "segment_log_likelihood(segment, phaseids, params) -> ll\n" },
-  {"generate_segment", (PyCFunction) py_gen_logenvelope_segment, METH_VARARGS,
-   "generate_segment(start_time, end_time, siteid, srate, phaseids, params) -> segment\n" },
-  {"sample_segment", (PyCFunction) py_sample_segment, METH_VARARGS,
-   "sample_segment(start_time, end_time, siteid, srate, phaseids, params) -> segment\n" },
-  {"generate_trace", (PyCFunction) py_gen_logenvelope_trace, METH_VARARGS,
-   "generate_trace(start_time, end_time, siteid, chan, band, srate, phaseids, params) -> nparray\n" },
-  {"sample_trace", (PyCFunction) py_sample_trace, METH_VARARGS,
-   "sample_trace(start_time, end_time, siteid, chan, band, srate, phaseids, params) -> nparray\n" },
-  {"get_signals", (PyCFunction)py_get_signals, METH_VARARGS,
-   "get_signals() "
-   "-> signals\n"},
   {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
    "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1)"
    " -> travel time in seconds"},
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
    "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid-1, phaseid-1)"
    " -> log probability"},
-  {"set_fake_detections", (PyCFunction)py_set_fake_detections, METH_VARARGS,
-   "set_fake_detections(fake_detections) "
-   "-> num_translated\n"},
-  {"set_noise_process", (PyCFunction)py_set_noise_process, METH_VARARGS,
-   "set_noise_process(siteid, band, chan, noise_mean, noise_variance, noise_coeffs)"
-   "-> ??\n"},
-  {"set_wiggle_process", (PyCFunction)py_set_wiggle_process, METH_VARARGS,
-   "set_wiggle_process(siteid, band, chan, phaseid, noise_mean, noise_variance, noise_coeffs)"
-   "-> ??\n"},
-  {"set_signal_params", (PyCFunction)py_set_params, METH_VARARGS,
-   "set_signal_params(siteid, param_dict)"
-   "-> success\n"},
-  {"set_all_signal_params", (PyCFunction)py_set_all_params, METH_VARARGS,
-   "set_all_signal_params(siteid_dict)"
-   "-> success\n"},
-  {"event_likelihood", (PyCFunction)py_event_likelihood, METH_VARARGS,
-   "event_likelihood(time, lon, lat, depth, mb)"
-   "-> log likelihood\n"},
-  {"infer", (PyCFunction)py_infer_sig, METH_VARARGS,
-   "infer(runid, numsamples, birthsteps, window, step, threads, propose_events, verbose,"
-   "write_cb, log_cb)\n -> events, ev_detlist"},
   {"event_location_prior_logprob", (PyCFunction)py_event_location_prior_logprob, METH_VARARGS,
    "event_location_prior_logprob(evlon, evlat, evdepth)"
    " -> log prior probability of event location"},
@@ -239,10 +196,6 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
 {
   EarthModel_t * p_earth;
   //PyObject * siteid;
-  double start_time;
-  double end_time;
-  int ar_perturbation;
-  const char * signal_model_name;
   const char * numevent_fname;
   const char * evloc_fname;
   const char * evmag_fname;
@@ -250,26 +203,14 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   const char * arrazi_fname;
   const char * arrslo_fname;
   const char * arramp_fname;
-  PyObject * log_trace_cb;
 
-  if (!PyArg_ParseTuple(args, "OddssssssssO", &p_earth, &start_time, &end_time, &signal_model_name, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname, &log_trace_cb)) {
-    LogError("can't parse input args");
+  if (!PyArg_ParseTuple(args, "Osssssss", &p_earth, &numevent_fname, &evloc_fname, &evmag_fname, &arrtime_fname, &arrazi_fname, &arrslo_fname, &arramp_fname)) {
+    printf("ERROR: can't parse input args\n");
     CHECK_ERROR;
     return -1;
   }
-  if (end_time <= start_time)
-  {
-    LogError("invalid end time");
-    PyErr_SetString(PyExc_ValueError,
-                    "SigModel: error: end_time <= start_time");
-    return -1;
-  }
 
-  LogTrace("init sigmodel...");
   // TODO: check that siteid array is good
-
-  self->start_time = start_time;
-  self->end_time = end_time;
 
   self->p_earth = p_earth;
   Py_INCREF((PyObject *)self->p_earth);
@@ -282,28 +223,14 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args)
   ArrivalSlownessPrior_Init_Params(&self->arr_slo_prior, arrslo_fname);
   ArrivalAmplitudePrior_Init_Params(&self->arr_amp_prior, arramp_fname);
 
-  int numsites = EarthModel_NumSites(p_earth);
-  init_signal_model(&(self->signal_model), (const char *)signal_model_name, numsites);
-  self->log_trace_cb = log_trace_cb;
-  Py_INCREF(log_trace_cb);
+  //int numsites = EarthModel_NumSites(p_earth);
 
   return 0;
 }
 
-
-
 static PyMethodDef sigvisaMethods[] = {
-  {"canonical_channel_num", (PyCFunction)py_canonical_channel_num, METH_VARARGS,
-   "canonical_channel_num(chan_name) "
-   "-> channel_num\n"},
-  {"canonical_band_num", (PyCFunction)py_canonical_band_num, METH_VARARGS,
-   "canonical_band_num(band_name) "
-   "-> bandl_num\n"},
-  {"srand", py_srand, METH_VARARGS,
-    "srand(seed) : sets the random number generator seed"},
   {NULL, NULL}
 };
-
 
 void initsigvisa_c(void)
 {
@@ -327,76 +254,6 @@ void initsigvisa_c(void)
 
   Py_INCREF(&py_EarthModel);
   PyModule_AddObject(m, "EarthModel", (PyObject *)&py_EarthModel);
-
-  PyObject * pmod = PyImport_ImportModule("obspy.core");
-  if (!pmod) {
-    LogFatal("cannot load module obspy.core!\n");
-    exit(-1);
-  }
-  traceClass_obj = PyObject_GetAttrString(pmod, "Trace");
-  Py_DECREF(pmod);
-
-  InitLogger(LogToConsole, stdout);
-
-}
-
-PyObject * py_srand(PyObject * self, PyObject * args)
-{
-  int seed;
-
-  if (!PyArg_ParseTuple(args, "i", &seed))
-    return NULL;
-
-  printf("set seed %i\n", seed);
-
-  srand(seed);
-
-  Py_INCREF(Py_None);
-
-  return Py_None;
-}
-
-void segment_dealloc(Segment_t * p_segment) {
-  for(int j=0; j < NUM_CHANS; ++j) {
-    Channel_t *channel = p_segment->p_channels[j];
-    if (channel != NULL) {
-      for (int band = 0; band < NUM_BANDS; ++band) {
-	if (channel->p_bands[band] != NULL) {
-	  free_trace(channel->p_bands[band]);
-	}
-      }
-      free(p_segment->p_channels[j]);
-    }
-  }
-}
-
-static void py_sig_model_dealloc(SigModel_t * self)
-{
-  if (self->p_earth)
-  {
-    Py_DECREF((PyObject *)self->p_earth);
-    self->p_earth = NULL;
-  }
-
-  if (self->log_trace_cb)
-  {
-    Py_DECREF((PyObject *)self->log_trace_cb);
-    self->log_trace_cb = NULL;
-  }
-
-
-  if(self->p_segments) {
-    for (int i=0; i < self->numsegments; ++i) {
-      segment_dealloc(self->p_segments + i);
-    }
-    free(self->p_segments);
-  }
-
-
-  EventLocationPrior_UnInit(&self->event_location_prior);
-  ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
-
-  uninit_signal_model(&self->signal_model);
 
 }
 
@@ -422,93 +279,6 @@ void convert_tuple_int(PyObject * tuple,
 }
 
 
-/* return the score of an event, using optimal arrival times */
-PyObject * py_event_score(SigModel_t * p_sigmodel, PyObject * args) {
-
-  LogInfo ("hello!");
-  double time, lon, lat, depth, mb;
-  if (!PyArg_ParseTuple(args, "ddddd", &time, &lon, &lat, &depth, &mb))
-    return NULL;
-
-  Event_t * p_event = ALLOC_EVENT(p_sigmodel);
-
-    p_event->evtime = time;
-    p_event->evlon = lon;
-    p_event->evlat = lat;
-    p_event->evdepth = depth;
-    p_event->evmag = mb;
-
-    LogInfo("optimizing...");
-    optimize_arrivals(p_sigmodel, p_event, 0, NULL);
-    LogInfo("scoring...");
-    score_event_sig(p_sigmodel, p_event, 0, NULL);
-    LogInfo("score %lf",p_event->evscore);
-    double score = p_event->evscore;
-
-    free(p_event);
-
-    return Py_BuildValue("d", score);
-}
-
-
-int pydict_get_double(PyObject * py_dict, char * key, double *value) {
-  int retcode = 0;
-  PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
-  if (py_value != NULL && py_value != Py_None) {
-    *value = PyFloat_AsDouble(py_value);
-    retcode = 1;
-  }
-  return retcode;
-}
-
-int pydict_get_int(PyObject * py_dict, char * key, long * value) {
-  int retcode = 0;
-  PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
-  if (py_value != NULL && py_value != Py_None) {
-    *value = PyInt_AsLong(py_value);
-    retcode = 1;
-  }
-  return retcode;
-}
-
-int pydict_get_string(PyObject * py_dict, char * key, char ** value) {
-  int retcode = 0;
-  PyObject * py_value = PyDict_GetItemString(py_dict, key); CHECK_ERROR;
-  if (py_value != NULL && py_value != Py_None) {
-    *value = PyString_AsString(py_value);
-    retcode = 1;
-  } else {
-    *value = NULL;
-  }
-  return retcode;
-}
-
-PyObject * py_event_likelihood(SigModel_t * p_sigmodel, PyObject * args) {
-
-  LogInfo ("hello!");
-  double time, lon, lat, depth, mb;
-  if (!PyArg_ParseTuple(args, "ddddd", &time, &lon, &lat, &depth, &mb))
-    return NULL;
-
-  Event_t * p_event = ALLOC_EVENT(p_sigmodel);
-
-    p_event->evtime = time;
-    p_event->evlon = lon;
-    p_event->evlat = lat;
-    p_event->evdepth = depth;
-    p_event->evmag = mb;
-
-    LogInfo("optimizing...");
-    optimize_arrivals(p_sigmodel, p_event, 0, NULL);
-    LogInfo("scoring...");
-    score_event_sig(p_sigmodel, p_event, 0, NULL);
-    LogInfo("score %lf",p_event->evscore);
-    double score = p_event->evscore;
-
-    free(p_event);
-
-    return Py_BuildValue("d", score);
-}
 
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
                                       PyObject * args)
@@ -575,21 +345,17 @@ static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,
   return Py_BuildValue("d", logprob);
 }
 
-/* Check to see if our sigmodel has a signal for a particular site at
-   a particular time */
-int have_signal(SigModel_t * p_sigmodel, int site, double start_time, double end_time) {
-
-  for (int i=0; i < p_sigmodel->numsegments; ++i) {
-
-    Segment_t * p_seg = p_sigmodel->p_segments + i;
-
-    double seg_start = p_seg->start_time;
-    double seg_end = Segment_EndTime(p_seg);
-
-    if (p_seg->siteid == site && seg_start <= end_time && seg_end >= start_time) {
-      return 1;
+static void py_sig_model_dealloc(SigModel_t * self)
+{
+  if (self->p_earth)
+    {
+      Py_DECREF((PyObject *)self->p_earth);
+      self->p_earth = NULL;
     }
 
-  }
-  return 0;
+
+  EventLocationPrior_UnInit(&self->event_location_prior);
+  ArrivalTimeJointPrior_UnInit(&self->arr_time_joint_prior);
+
+
 }

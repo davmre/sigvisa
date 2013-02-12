@@ -9,8 +9,6 @@
 #include <assert.h>
 
 #include "priors/EarthModel.h"
-#include "signals/envelope_likelihood/signal_structures.h"
-
 
 #include "priors/NumEventPrior.h"
 #include "priors/EventLocationPrior.h"
@@ -30,19 +28,7 @@ typedef struct SigModel_t
 {
   PyObject_HEAD
 
-  double start_time;
-  double end_time;
-
-  int numsegments;
-  Segment_t * p_segments;
-  Segment_t * p_wave_segments;
-
   EarthModel_t * p_earth;
-
-  long numdetections;
-  Detection_t * p_detections;
-
-  SignalModel_t signal_model;
 
   NumEventPrior_t num_event_prior;
   EventLocationPrior_t event_location_prior;
@@ -52,17 +38,6 @@ typedef struct SigModel_t
   ArrivalAzimuthPrior_t arr_az_prior;
   ArrivalSlownessPrior_t arr_slo_prior;
   ArrivalAmplitudePrior_t arr_amp_prior;
-  /*
-  NumSecDetPrior_t num_secdet_prior;
-  EventDetectionPrior_t event_det_prior;
-  ArrivalTimePrior_t arr_time_prior;
-  NumFalseDetPrior_t num_falsedet_prior;
-
-  ArrivalPhasePrior_t arr_phase_prior;
-  ArrivalSNRPrior_t arr_snr_prior;
-*/
-
-  PyObject * log_trace_cb;
 
 } SigModel_t;
 

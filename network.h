@@ -165,35 +165,8 @@ typedef struct Site_t
 
 #include "sigmodel.h"
 
-Event_t * alloc_event_sig(SigModel_t * p_sigmodel);
-void free_event(Event_t * p_event);
-void free_events(int numevents, Event_t * p_events);
-void copy_event_sig(SigModel_t * p_sigmodel, Event_t * p_tgt_event,
-                const Event_t * p_src_event);
-
 
 //#define ALLOC_EVENT(net, sig) (net != NULL) ? alloc_event_net(net) : alloc_event_sig(sig);
 //#define COPY_EVENT(net,sig, a, b) (net != NULL) ? copy_event_net(net, a, b) : copy_event_sig(sig, a, b);
 
-#define ALLOC_EVENT(sig) alloc_event_sig(sig);
-#define COPY_EVENT(sig, a, b) copy_event_sig(sig, a, b);
-
-void print_event_detections(EarthModel_t * p_earth, const Event_t * p_event);
-
-void convert_events_dets_to_pyobj(const EarthModel_t * p_earth,
-                             const Event_t ** pp_events, int numevents,
-                             PyObject ** pp_eventsobj,
-                             PyObject ** pp_evdetlistobj);
-
-void convert_events_arrs_to_pyobj(SigModel_t * p_sigmodel,
-				  const EarthModel_t * p_earth,
-				  const Event_t ** pp_events, int numevents,
-				  PyObject ** pp_eventsobj,
-				  PyObject ** pp_evarrlistobj);
-
-Event_t ** indirect_event_list(int numevents, Event_t * evlist);
-void convert_eventobj_no_det(PyArrayObject * p_events_arrobj,
-				    int * p_numevents, Event_t ** p_p_events);
-
-PyObject * py_set_fake_detections(SigModel_t *p_sigmodel, PyObject *args);
 #endif // SIGVISA_INCLUDE
