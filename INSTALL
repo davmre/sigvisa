@@ -1,4 +1,4 @@
-First install git, python2.7, virtualenvwrapper.
+First install git, python2.7, and virtualenvwrapper.
 
  cd ~
  mkdir python
@@ -13,21 +13,23 @@ database libraries; if you're only planning on using one of these and
 the other causes problems (e.g. you can't install the cx_Oracle python
 module because you don't have Oracle installed on your system), feel
 free to comment it out of the requirements file. If installation fails
-for some dependency, run
+for some dependency, try to fix the error, then run
 
  workon sigvisa
  pip install -r $HOME/python/sigvisa/requirements.txt
 
-to try again after you've fixed the error in question. Typical issues are:
--- scipy requires BLAS and LAPACK; see http://www.scipy.org/Installing_SciPy/BuildingGeneral for instructions on building these.
--- basemap requires GEOS: run
+to restart the installation. Typical issues are:
+-- scipy requires BLAS and LAPACK; see
+   http://www.scipy.org/Installing_SciPy/BuildingGeneral
+   for instructions on building these.
+-- basemap requires GEOS, and for some reason can't build it automatically.
+   So you have to do it yourself:
            cd $HOME/.virtualenvs/sigvisa/src/basemap/geos-3.3.3/
 	   ./configure
 	   make
 	   export GEOS_DIR=`pwd`
 	   cd ..
 	   python setup.py install
-
 
 When all dependencies are installed, run the following commands to set up the working environment:
 
@@ -45,4 +47,17 @@ and extract the earth model parameters:
 
  tar xvfz parameters.tgz
 
-Finally, set up the database.
+Finally, set up the database: unzip sigvisa_csv.tgz into a directory somewhere, and run
+
+python $SIGVISA_HOME/database/setup_db.py
+
+This script will prompt you for the location of the CSV files, your
+MySQL root password, and the details of the database and user to
+create. When finished, it will print a set of lines which you should
+copy into $VIRTUAL_ENV/bin/postactivate. To complete the DB setup, run
+
+source $VIRTUAL_ENV/bin/postactivate
+cd $SIGVISA_HOME/web
+python manage.py syncdb
+
+which creates the tables used by the Django web interface.

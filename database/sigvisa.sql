@@ -1,4 +1,4 @@
-drop table sigvisa_gsrun_tmodel;
+/*drop table sigvisa_gsrun_tmodel;
 drop table sigvisa_gsrun_wave;
 drop table sigvisa_gridsearch_run;
 drop table sigvisa_template_param_model;
@@ -6,6 +6,7 @@ drop table sigvisa_wiggle;
 drop table sigvisa_coda_fit_phase;
 drop table sigvisa_coda_fit;
 drop table sigvisa_coda_fitting_run;
+*/
 
 create table sigvisa_coda_fitting_run (
  runid 	     int,
@@ -75,7 +76,7 @@ create table sigvisa_wiggle (
 
 
 create table sigvisa_template_param_model (
- modelid int not null auto_increment, 
+ modelid int not null auto_increment,
  fitting_runid int not null,
  template_shape varchar(15) not null,
  param varchar(15) not null,
