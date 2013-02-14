@@ -26,6 +26,8 @@ import obspy.signal.util
 (FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY,
  FIT_AMP_TRANSFER, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(15 + 1)
 
+class RunNotFoundException(Exception):
+    pass
 
 def ensure_dir_exists(dname):
     try:
@@ -62,7 +64,7 @@ def get_fitting_runid(cursor, run_name, iteration, create_if_new=True):
     result = cursor.fetchone()
     if result is None:
         if not create_if_new:
-            raise Exception("no existing runid for iteration %d of run %s!" % (iteration, run_name))
+            raise RunNotFoundException("no existing runid for iteration %d of run %s!" % (iteration, run_name))
         runid = get_next_runid(cursor)
         sql_query = "insert into sigvisa_coda_fitting_run (runid, run_name, iter) values (%d, '%s', %d)" % (
             runid, run_name, iteration)

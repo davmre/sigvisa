@@ -23,13 +23,13 @@ import matplotlib
 from sigvisa.plotting.plot_coda_decays import *
 
 from sigvisa.learn.train_coda_models import learn_model, load_model, get_training_data, get_model_fname
-
+from sigvisa.database.signal_data import RunNotFoundException
 
 class TestFit(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
-        self.event = get_event(evid=2781427)  # Event(evid=5301405)
+        self.event = get_event(evid=5301405)
         self.sta = "FITZ"
         self.s = Sigvisa()
         cursor = self.s.dbconn.cursor()
@@ -87,7 +87,10 @@ class TestLearnModel(unittest.TestCase):
 
         model_type = "linear_distance"
 
-        X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase, ], target)
+        try:
+            X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase, ], target)
+        except RunNotFoundException:
+            return
 
         model_fname = get_model_fname(
             run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name="paired_exp")
