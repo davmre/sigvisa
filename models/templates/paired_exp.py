@@ -29,13 +29,17 @@ class PairedExpTemplateModel(TemplateModel):
         assert(idx_offset >= 0 and idx_offset < 1)
 
         if np.isnan(vals).any() or coda_decay > 0:
-            #                print "WARNING: invalid parameters", vals
             return np.empty((0,))
 
         if coda_decay > -0.001:
             l = 1200 * srate
         else:
-            l = int(max(0, min(1200, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+            # minimum length is 2, so that even very small arrivals
+            # can create a small bump (not doing this confuses the
+            # approx-gradient routine; it tries making the bump
+            # slightly bigger but with no effect since it's too small
+            # to create a nonzero-length envelope).
+            l = int(max(2, min(1200, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
         d = np.empty((l,))
 
         peak_idx = max(0, peak_offset * srate)
@@ -70,6 +74,7 @@ class PairedExpTemplateModel(TemplateModel):
         except Exception as e:
             print e
             raise
+
         return d
 
     def low_bounds(self, phases, default_atimes=None):
@@ -84,7 +89,7 @@ class PairedExpTemplateModel(TemplateModel):
     def high_bounds(self, phases, default_atimes=None):
         bounds = np.ones((len(phases), len(self.params()))) * np.inf
         bounds[:, PEAK_OFFSET_PARAM] = 25
-        bounds[:, CODA_DECAY_PARAM] = 0
+        bounds[:, CODA_DECAY_PARAM] = -0.0001
         bounds[:, CODA_HEIGHT_PARAM] = 10
         if default_atimes is not None:
             bounds[:, ARR_TIME_PARAM] = default_atimes + 15
@@ -103,11 +108,15 @@ class PairedExpTemplateModel(TemplateModel):
 
         start_params = np.zeros((len(all_phases), 4))
         for (i, phase) in enumerate(all_phases):
-            start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(ev.lon, ev.lat, ev.depth,
-                                                                                    wave['siteid'] - 1, s.phaseids[phase] - 1)
+            start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(
+                ev.lon, ev.lat, ev.depth, wave['siteid'] - 1, s.phaseids[phase] - 1)
             start_params[i, PEAK_OFFSET_PARAM] = 1
-#            arrival_idx = int((start_params[i, ARR_TIME_PARAM] - wave['stime']) * wave['srate'])
-            start_params[i, CODA_HEIGHT_PARAM] = np.log(
-                np.max(wave.data)) + .2  # np.log(np.max(wave.data[arrival_idx: arrival_idx + wave['srate']*5]))+.5
+
+            start_params[i, CODA_HEIGHT_PARAM] = np.log(np.max(wave.data)) + .1
+
+            # arrival_idx = int((start_params[i, ARR_TIME_PARAM] - wave['stime']) * wave['srate'])
+            # np.log(np.max(wave.data[arrival_idx: arrival_idx + wave['srate']*5]))+.5
+
             start_params[i, CODA_DECAY_PARAM] = -0.001
+
         return (all_phases, start_params)

@@ -51,6 +51,8 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
     fitid = store_template_params(wave, fit_params, optim_param_str=repr(
         optim_params)[1:-1], iid=False, acost=ll, run_name=output_run_name, iteration=output_iteration, elapsed=et - st, hz=fit_hz)
     s.dbconn.commit()
+
+    cursor.close()
     return fitid
 
 

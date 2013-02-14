@@ -106,6 +106,7 @@ def main():
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default="gp_dad", type="str", help="")
     parser.add_option("--optim_params", dest="optim_params", default=None, type="str", help="fitting parameters to use")
+    parser.add_option("--dummy", dest="dummy", default=False, action="store_true", help="don't actually do any fitting; just print out the commands to run")
 
     (options, args) = parser.parse_args()
 
@@ -145,6 +146,8 @@ def main():
         init_str = ""
 
     runid = get_fitting_runid(cursor, run_name, iteration)
+    cursor.close()
+    s.dbconn.commit()
 
     print "hello", runid
     cmds = []
@@ -161,11 +164,15 @@ def main():
             cmds.append((cmd_str, runid))
 #            print cmd_str
 
-    count = multiprocessing.cpu_count()
-    print "starting thread pool with %d concurrent processes..." % count
-    pool = multiprocessing.Pool(processes=count)
-    r = pool.map_async(run_fit_and_rename_output, cmds)
-    r.wait()
+    if options.dummy:
+        for cmd in cmds:
+            print cmd[0]
+    else:
+        count = multiprocessing.cpu_count()
+        print "starting thread pool with %d concurrent processes..." % count
+        pool = multiprocessing.Pool(processes=count)
+        r = pool.map_async(run_fit_and_rename_output, cmds)
+        r.wait()
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 import scipy.optimize
-from sigvisa.utils.gradient_descent import gradient_descent, coord_steps
+from sigvisa.infer.optimize.gradient_descent import gradient_descent, coord_steps
 
 
 class BoundsViolation(Exception):
@@ -156,6 +156,7 @@ def minimize(f, x0, optim_params, bounds=None):
             x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
                 f1, x1, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp)
             success = (d['warnflag'] == 0)
+            print d
             v1 = best_cost
             x2 = coord_steps(f1, x1, eps=eps, bounds=bounds)
             v2 = f1(x2)

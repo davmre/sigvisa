@@ -6,7 +6,7 @@ body { margin:0; padding:0; }
 #header{ line-height:28px; margin:0 auto; text-align:center; }
  
 /* CSS for the content of page. I am giving top and bottom padding of 80px to make sure the header and footer do not overlap the content.*/
-#container { margin:0 auto; overflow:auto; padding:32px 0 0 1em; width: 100%; }
+#container { margin:0 auto; overflow:auto; padding:32px 0 0 1em; }
 #content{}
  
 #header > ul
