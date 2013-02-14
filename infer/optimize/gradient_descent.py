@@ -126,6 +126,8 @@ def approx_gradient(f, x0, eps):
         x_new = x0.copy()
         x_new[i] += eps
         grad[i] = (f(x_new) - fx0) / eps
+
+    print "grad eval: eps %f grad %s x0 %s" % (eps, grad, x0)
     return grad
 
 

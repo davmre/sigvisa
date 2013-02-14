@@ -102,7 +102,7 @@ def main_view(request):
                               {}, context_instance=RequestContext(request))
 
 
-@cache_page(60 * 60)
+#@cache_page(60 * 60)
 def fit_list_view(request, runid):
     run = SigvisaCodaFittingRun.objects.get(pk=runid)
     fits = SigvisaCodaFit.objects.filter(runid=runid)
@@ -153,7 +153,7 @@ def fit_detail(request, fitid):
 
     next = fits_filter.qs.filter(fitid__gt=fitid)
     next = next[0] if next else False
-    prev = fits_filter.qs.filter(fitid__lt=fitid)
+    prev = fits_filter.qs.filter(fitid__lt=fitid).order_by('-fitid')
     prev = prev[0] if prev else False
 
     time_format = "%b %d %Y, %H:%M:%S"

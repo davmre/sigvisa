@@ -35,7 +35,11 @@ def event_view(request, evid):
 
         try:
             sta = rd[0]
-            site_ll = s.stations[sta][0:2]
+            
+            try:
+                site_ll = s.stations[sta][0:2]
+            except KeyError:
+                continue
 
             site_type = 'ar' if s.stations[sta][3] == 1 else 'ss'
             if ss_only and site_type != 'ss':
