@@ -124,7 +124,6 @@ class EnvelopeModel:
 
         params, nll = minimize_matrix(
             f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, optim_params=optim_params)
-
         return nll, (phases, params)
 
     def log_likelihood_optimize(self, segment, event):

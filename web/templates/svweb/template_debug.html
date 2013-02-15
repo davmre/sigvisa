@@ -1,0 +1,93 @@
+<html>
+<head>
+<style type="text/css">
+.wavediv {
+   position: relative;
+   width: 100%; /* for IE 6 */
+}
+
+</style>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
+
+<title>sigvisa template viewer</title>
+
+</head>
+<body>
+{% include "svweb/header.html"  %}
+
+<center>
+  <div id="wavediv">
+    <img id="wave" src="{% url custom_phase_image fitid=fitid %}?{{ phase_GET_string }}" width=800 height=500 border=1>
+  </div>
+  <br/>
+
+  <form action="{% url template_debug fitid=fitid %}" method="get" id='phase_form'>
+
+   <table><tr><td>
+  <label>  <input name="logscale" type="checkbox" {% if logscale == "on" %}checked{% endif %}/> logscale</label>
+  </td><td>
+	 <center>
+    <span id="slider">0
+      <input id="slide" name="smooth" type="range" min="0" max="20" step="1" value="{{ smoothing }}"
+	     onchange="updateSliderDisplay()" />
+      20</span><br/>
+    smoothing: <span id="chosen">{{ smoothing }}</span>
+</center>
+</td>
+</tr>
+<tr>
+<td>
+<strong>log-likelihood</strong>: {{ ll }}</td><td> ({{ wiggle_model }} wiggle model)</td>
+</tr>
+<tr><td><strong>param ll:</strong> {{ param_ll }}</td><td></td>
+<tr><td><strong>noise</strong> mean: {{nm.c}}</td><td>std = {{nm.em.std }}</td></tr>
+
+</tr>
+</table>
+    <table border=1 width=100%>
+      <tr>
+	<td><strong>Phase</strong></td>
+	<td><strong>atime</strong></td>
+	<td><strong>onset_seconds</strong></td>
+	<td><strong>coda_height</strong></td>
+	<td><strong>decay_rate</strong></td>
+	<td><strong>delete</strong></td>
+      </tr>
+      {% for phase in phases %}
+      <tr>
+	<td><input name="p{{ forloop.counter|add:-1 }}_phase" type="text" width=5 value="{{ phase.phase }}"></td>
+	<td><input name="p{{ forloop.counter|add:-1}}_1" type="text" width=10 value="{{ phase.param1 }}"></td>
+	<td><input name="p{{ forloop.counter|add:-1}}_2" type="text" width=10 value="{{ phase.param2 }}"></td>
+	<td><input name="p{{ forloop.counter|add:-1}}_3" type="text" width=10 value="{{ phase.param3 }}"></td>
+	<td><input name="p{{ forloop.counter|add:-1}}_4" type="text" width=10 value="{{ phase.param4 }}"></td>
+	<td><input type="submit" name="action" value="delete_{{ forloop.counter|add:-1}}"></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <input type="submit" name="action" value="newrow"/>
+    <input type="submit" name="action" value="update"/>
+    <p><a href="{% url template_debug fitid=fitid %}">reset</a> :::::: <a href="{% url fit_run_detail fitid=fitid %}">back to fit detail</a></p>
+</center>
+
+
+<script>
+
+function updateSliderDisplay() {
+
+var slide = document.getElementById("slide");
+slideAmount = slide.value;
+
+var display = document.getElementById("chosen");
+display.innerHTML=slide.value;
+
+}
+
+</script>
+
+{% include "svweb/footer.html"  %}
+
+
+
+</body>
+</html>

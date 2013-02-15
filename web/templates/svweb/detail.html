@@ -60,7 +60,7 @@ document.getElementById('loading').style.visibility = 'hidden';
     </table>
   </td>
   <td valign=top rowspan=1>
-    <b>Fit</b>
+    <b>Fit</b> (<a href="{% url template_debug fitid=fit.fitid %}">debug fit</a>)
     <table>
       <tr><td>fitid</td><td>{{ fit.fitid }}</td></tr>
       <tr><td>time</td><td>{{ fit_time_str }}</td></tr>
@@ -94,7 +94,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 		<input id="slide" type="range" min="0" max="20" step="1" value="{{ fit_view_options.smoothing }}"
 		       onchange="updateSliderDisplay()" onMouseUp="updateFitImage()" />
 		20</span><br/>
-	      smoothing: <span id="chosen"></div>
+	      smoothing: <span id="chosen"></span>
 	    </center>
 	  </td>
 	  <td valign='top'>

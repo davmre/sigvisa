@@ -45,6 +45,7 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
 
+
     ll, fit_params = em.wave_log_likelihood_optimize(wave, event, use_leb_phases=True, optim_params=optim_params)
 
     et = time.time()

@@ -33,7 +33,7 @@ class SamplingWiggleModel(WiggleModel):
         self.featurizer = featurizer
 
     def template_ncost(self, wave, phases, params):
-        
+        pass
 
     def summary_str(self):
         return "sampling_" + self.featurizer.summary_str()

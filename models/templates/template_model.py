@@ -158,7 +158,7 @@ class TemplateModel(object):
     def log_likelihood(self, template_params, event, sta, chan, band):
 
         if self.dummy:
-            return 1.0
+            return 0.0
 
         phases = template_params[0]
         param_vals = template_params[1]
