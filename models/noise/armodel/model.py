@@ -252,7 +252,7 @@ class ARModel:
                           compiler='gcc')
         return ll
 
-    def slow_AR(self, d, c):
+    def slow_AR(self, d, c, return_debug=False):
         d_prob = 0
         skipped = 0
         masked = ma.getmaskarray(d)
@@ -291,6 +291,9 @@ class ARModel:
         # THEN we observe the real 101 and can zero out the 0th row and column of K,
         # and we can also update the 0th row of u.
 
+        lls = []
+        expecteds = []
+        errors = []
         for t in range(len(d)):
 
             if masked[t]:
@@ -332,6 +335,11 @@ class ARModel:
             error = actual - expected
             t2 = 0.5 * np.square((error - self.em.mean) / std)
             ell = -t2 - t1
+
+            if return_debug:
+                lls.append(ell)
+                expecteds.append(expected)
+                errors.append(error)
             d_prob += ell
 
             # print "py t %d error %f s %f t2 %f ell %f d_prob %f" % (t, error, std, t2, ell, d_prob)
@@ -351,7 +359,10 @@ class ARModel:
                 t_since_mask += 1
                 t1 = np.log(orig_std) + 0.5 * np.log(2 * np.pi)
 
-        return d_prob
+        if return_debug:
+            return d_prob, lls, expecteds, errors
+        else:
+            return d_prob
 
     # likelihood in log scale
     def lklhood(self, data, zero_mean=False):

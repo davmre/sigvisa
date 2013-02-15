@@ -139,3 +139,21 @@ create table sigvisa_gsrun_tmodel (
  foreign key (modelid) REFERENCES sigvisa_template_param_model(modelid)
 );
 
+create table sigvisa_noise_model (
+ nmid int not null auto_increment,
+ sta varchar(10) not null,
+ chan varchar(10) not null,
+ band varchar(15) not null,
+ hz float(24) not null,
+ window_stime double precision not null,
+ window_len double precision not null,
+ model_type varchar(15) not null,
+ nparams int not null,
+ mean double precision not null,
+ std double precision not null,
+ fname varchar(255) not null,
+ created_for_hour int not null,
+ primary key (nmid)
+);
+CREATE INDEX noise_hour_idx ON sigvisa_noise_model (created_for_hour);
+

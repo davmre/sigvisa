@@ -345,7 +345,16 @@ def template_debug_view(request, fitid):
     tm = load_template_model('paired_exp', run_name=None, run_iter=0, model_type="dummy")
     wm = wiggle_model_by_name(name='plain', tm=tm)
     ll = wm.template_ncost(wave, phases, vals)
-    nm = get_noise_model(waveform=wave)
+    nm, nm_fname = get_noise_model(waveform=wave, return_fname=True)
+
+    data_path = os.path.join(os.getenv("SIGVISA_HOME"), 'logs', 'web_debug')
+    ensure_dir_exists(data_path)
+    data_hash = hashlib.sha1(repr(vals) + repr(phases) + repr(fitid)).hexdigest()[:8]
+    env_fname = os.path.join(data_path, 'template_debug_%s_env.txt' % data_hash)
+    np.savetxt(env_fname, wave.data)
+    generated = tm.generate_template_waveform((phases, vals), model_waveform=wave)
+    generated_fname = os.path.join(data_path, 'template_debug_%s_generated.txt' % data_hash)
+    np.savetxt(generated_fname, generated.data)
 
     param_ll = tm.log_likelihood((phases, vals), get_event(fit.evid), str(fit.sta), str(fit.chan), str(fit.band))
 
@@ -372,6 +381,9 @@ def template_debug_view(request, fitid):
         'param_ll': param_ll,
         'nm': nm,
         'wiggle_model': wm.summary_str(),
+        'env_fname': env_fname,
+        'generated_fname': generated_fname,
+        'nm_fname': nm_fname,
     }, context_instance=RequestContext(request))
 
 def rate_fit(request, fitid):

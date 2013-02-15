@@ -7,7 +7,7 @@ from sigvisa import Sigvisa, BadParamTreeException
 from obspy.signal.trigger import zDetect, recSTALTA
 
 from sigvisa.database import dataset
-from sigvisa.database.signal_data import ensure_dir_exists
+from sigvisa.database.signal_data import ensure_dir_exists, lookup_noise_model, save_noise_model
 
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
 from sigvisa.models.noise.armodel.learner import ARLearner
@@ -21,70 +21,9 @@ import hashlib
 NOISE_PAD_SECONDS = 20
 
 
-# two modes:
-# NOISE_HOURLY computes a single noise model for each hour at each station, and uses this for the entirety of the next hour
-# NOISE_IMMEDIATE computes a new noise model for each requested starting
-# time, based on the signal immediately prior to that time. This is more
-# accurate but also more work.
-NOISE_MODE_HOURLY, NOISE_MODE_IMMEDIATE = range(2)
-NOISE_MODE = NOISE_MODE_IMMEDIATE
-
 
 class NoNoiseException(Exception):
     pass
-
-
-def classicSTALTAPy(a, nsta, nlta):
-    """
-Computes the standard STA/LTA from a given input array a. The length of
-the STA is given by nsta in samples, respectively is the length of the
-LTA given by nlta in samples. Written in Python.
-
-.. note::
-
-There exists a faster version of this trigger wrapped in C
-called :func:`~obspy.signal.trigger.classicSTALTA` in this module!
-
-:type a: NumPy ndarray
-:param a: Seismic Trace
-:type nsta: Int
-:param nsta: Length of short time average window in samples
-:type nlta: Int
-:param nlta: Length of long time average window in samples
-:rtype: NumPy ndarray
-:return: Characteristic function of classic STA/LTA
-"""
-    # XXX From numpy 1.3 use numpy.lib.stride_tricks.as_strided
-    # This should be faster then the for loops in this fct
-    # Currently debian lenny ships 1.1.1
-    m = len(a)
-    # indexes start at 0, length must be subtracted by one
-    nsta_1 = nsta - 1
-    nlta_1 = nlta - 1
-    # compute the short time average (STA)
-    sta = np.zeros(len(a), dtype='float64')
-    pad_sta = np.zeros(nsta_1)
-
-#    import pdb; pdb.set_trace()
-
-    # Tricky: Construct a big window of length len(a)-nsta. Now move this
-    # window nsta points, i.e. the window "sees" every point in a at least
-    # once.
-    for i in xrange(nsta):  # window size to smooth over
-        sta = sta + np.concatenate((pad_sta, a[i:m - nsta_1 + i] ** 2))
-    sta = sta / nsta
-    #
-    # compute the long time average (LTA)
-    lta = np.zeros(len(a), dtype='float64')
-    pad_lta = np.ones(nlta_1)  # avoid for 0 division 0/1=0
-    for i in xrange(nlta):  # window size to smooth over
-        lta = lta + np.concatenate((pad_lta, a[i:m - nlta_1 + i] ** 2))
-    lta = lta / nlta
-    #
-    # pad zeros of length nlta to avoid overfit and
-    # return STA/LTA ratio
-    sta[0:nlta_1] = 0
-    return sta / lta
 
 
 def get_sta_lta_picks(wave):
@@ -114,26 +53,15 @@ def get_sta_lta_picks(wave):
         return False
 
 
-def model_path(sta, chan, filter_str, srate, order, hour_time=None, minute_time=None, anchor_time=None):
-
-    if hour_time is not None:
-        t = time.gmtime(hour_time)
-        model_dir = "hour_%02d" % t.tm_hour
-    elif anchor_time is not None:
-        t = time.gmtime(anchor_time)
-        model_dir = "preceding_%d" % int(anchor_time)
-    elif minute_time is not None:
-        t = time.gmtime(minute_time)
-        model_dir = "%d" % int(minute_time)
-    else:
-        raise Exception("noise model path must specify either an hour or a specific minute")
-
+def model_path(sta, chan, filter_str, srate, order, window_stime):
+    t = time.gmtime(window_stime)
+    model_dir = "%d" % int(window_stime)
     base_dir = os.path.join(
-        os.getenv('SIGVISA_HOME'), "parameters", "noise_models", sta, str(t.tm_year), str(t.tm_mon), str(t.tm_mday))
+        "parameters", "noise_models", sta, str(t.tm_year), str(t.tm_mon), str(t.tm_mday))
     sanitized_filter_str = '_'.join([s for s in filter_str.split(';') if s != ""])
     model_fname = '.'.join([chan, sanitized_filter_str, "%.0f" % (srate) + "hz", str(order), 'armodel'])
 
-    return os.path.join(base_dir, model_dir), model_fname
+    return os.path.join(base_dir, model_dir, model_fname)
 
 
 # load times of all arrivals at a station within a given period
@@ -159,150 +87,51 @@ def arrivals_intersect_block(block_start, block_end, arrival_times, danger_perio
             return True
     return False
 
-
-def get_median_noise_wave(sta, chan, hour_start, hour_end, block_len_seconds):
-
-    # load waveforms for two minutes within the hour
-    waves = []
-    blocks = []
-    num_blocks = 3
-
-    arrival_times = load_arrival_times(sta, hour_start, hour_end)
-
-    for block_start in np.linspace(hour_start, hour_end - block_len_seconds, (3600.0 / block_len_seconds)):
-        # stop the search once we find enough good blocks
-        if len(waves) >= num_blocks:
-            break
-
-        block_end = block_start + block_len_seconds
-
-        # skip any block that includes a detected arrival, or is within ARRIVAL_BUFFER seconds after one
-        if arrivals_intersect_block(block_start, block_end, arrival_times):
-            continue
-        try:
-            wave = fetch_waveform(sta, chan, block_start, block_end, pad_seconds=NOISE_PAD_SECONDS)
-        except Exception as e:
-#            print "failed loading signal (%s, %s, %d, %d)." % (sta, chan, block_start, block_end)
-            continue
-
-        # also skip any minute for which we don't have much data
-        if wave['fraction_valid'] < 0.5:
-#            print (sta, chan, block_start, block_end, wave['fraction_valid'])
-# print "not enough datapoints for signal (%s, %s, %d, %d) (%.1f%%
-# valid)." % (sta, chan, block_start, block_end,
-# 100*wave['fraction_valid'])
-            continue
-
-        # finally, skip any block which seems to contain large spikes (even if not detected by IDC)
-        if get_sta_lta_picks(wave):
-#            fname = hashlib.sha1(wave.data).hexdigest()[0:6] + ".wave"
-#            np.savetxt(fname, wave.data)
-# print "undetected spikes in signal (%s, %s, %d, %d)! skipping... wave
-# dumped to %s" % (sta, chan, block_start, block_end, fname)
-            continue
-
-        waves.append(wave)
-        blocks.append(block_start)
-
-    if len(blocks) == 0:
-        raise NoNoiseException("failed to load noise model for (%s, %s, %d)" % (sta, chan, hour_start))
-
-    # choose the smallest block as our model
-    waves.sort(key=lambda w: np.dot(w.data, w.data))
-    idx = int(np.floor(len(waves) / 2.0))  # median
-#    idx = 0 # smallest
-    model_wave = waves[idx]
-    block_start = blocks[idx]
-
-    print block_start - hour_start
-    return model_wave, block_start
-
-
-def construct_and_save_hourly_noise_models(hour, sta, chan, filter_str, srate, order, block_len_seconds=300):
-    hour_start = hour * 3600
-    hour_end = (hour + 1) * 3600
-    hour_dir, model_fname = model_path(sta, chan, filter_str, srate, order, hour_time=hour_start)
-
-    # if we know which block to use for this hour, load that block
-    if os.path.exists(hour_dir):
-        minute_dir = os.path.realpath(hour_dir)
-        minute = int(os.path.split(minute_dir)[-1])
-        model_wave = fetch_waveform(sta, chan, minute, minute + block_len_seconds, pad_seconds=NOISE_PAD_SECONDS)
-    # otherwise, find a block which is "safe" (no arrivals) and representative
-    else:
-        print "hour dir", hour_dir, "doesn't exist, computing new median minute"
-        model_wave, minute = get_median_noise_wave(sta, chan, hour_start, hour_end, block_len_seconds=block_len_seconds)
-
-    minute_dir = construct_and_save_noise_models(minute, block_len_seconds, sta, chan, filter_str, srate, order, model_wave)
-    try:
-        minute_dir_path = os.path.realpath(minute_dir)
-        os.symlink(minute_dir_path, hour_dir)
-        print "successfully created symlink"
-    except OSError:
-        # if symlink already exists, check to make sure it's the right thing
-        current_link_target = os.path.realpath(hour_dir)
-
-        if not current_link_target == minute_dir_path:
-            raise BadParamTreeException("tried to symlink %s to %s, but symlink already exists and points to %s!" % (hour_dir,
-                                        minute_dir_path, current_link_target))
-
-
-def construct_and_save_immediate_noise_models(time, sta, chan, filter_str, srate, order):
-    block_start, block_end = get_recent_safe_block(time, sta, chan)
-    minute_dir = construct_and_save_noise_models(block_start, block_end - block_start, sta, chan, filter_str, srate, order)
-
-    immediate_dir, model_fname = model_path(sta, chan, filter_str, srate, order, anchor_time=time)
-
-    if immediate_dir == "/home/moore/python/sigvisa/parameters/noise_models/URZ/2009/4/7/preceding_1239065555":
-        import pdb
-        pdb.set_trace()
-
-    immediate_parent = os.path.dirname(immediate_dir)
-    ensure_dir_exists(immediate_parent)
-
-    try:
-        minute_dir_path = os.path.realpath(minute_dir)
-        os.symlink(minute_dir_path, immediate_dir)
-        print "successfully created symlink"
-    except OSError:
-        # if symlink already exists, check to make sure it's the right thing
-        current_link_target = os.path.realpath(immediate_dir)
-        if not current_link_target == minute_dir_path:
-            raise BadParamTreeException("tried to symlink %s to %s, but symlink already exists and points to %s!" % (
-                immediate_dir, minute_dir_path, current_link_target))
-
-
-def construct_and_save_noise_models(minute, block_len_seconds, sta, chan, filter_str, srate, order, model_wave=None):
-
+def construct_and_save_noise_models(hour, cursor, window_stime, window_len, sta, chan, filter_str, srate, order, model_wave=None, model_type="ar", save_models=True):
     s = Sigvisa()
 
-    minute_dir, model_fname = model_path(sta, chan, filter_str, srate, order, minute_time=minute)
     if model_wave is None:
-        model_wave = fetch_waveform(sta, chan, minute, minute + block_len_seconds, pad_seconds=NOISE_PAD_SECONDS)
+        model_wave = fetch_waveform(sta, chan, window_stime, window_stime + window_len, pad_seconds=NOISE_PAD_SECONDS)
 
-    old_band = filter_str_extract_band(filter_str)
-    for band in s.bands:
-        tmp_filter_str = filter_str.replace(old_band, band)
+    requested_band = filter_str_extract_band(filter_str)
+    bandlist = set((requested_band,))
+    if save_models:
+        bandlist = bandlist.union(s.bands)
+
+    for band in bandlist:
+        tmp_filter_str = filter_str.replace(requested_band, band)
         filtered_wave = model_wave.filter(tmp_filter_str)
 
         # train AR noise model
-        ar_learner = ARLearner(filtered_wave.data.compressed(), filtered_wave['srate'])
-        params, std = ar_learner.yulewalker(order)
-        em = ErrorModel(0, std)
-        armodel = ARModel(params, em, c=ar_learner.c)
+        if model_type == "ar":
+            ar_learner = ARLearner(filtered_wave.data.compressed(), filtered_wave['srate'])
+            params, std = ar_learner.yulewalker(order)
+            em = ErrorModel(0, std)
+            model = ARModel(params, em, c=ar_learner.c)
+            mean = model.c
+            std = model.em.std
+        elif model_type == "iid":
+            raise Exception("iid noise model not implemented!")
+        else:
+            raise Exception('unrecognized noise model type %s!' % model_type)
 
-        minute_dir, model_fname = model_path(sta, chan, tmp_filter_str, srate, order, minute_time=minute)
-        ensure_dir_exists(minute_dir)
-        print "saved model", model_fname
-        armodel.dump_to_file(os.path.join(minute_dir, model_fname))
+        if save_models:
+            nm_fname = model_path(sta, chan, tmp_filter_str, srate, order, window_stime=window_stime)
+            full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
+            ensure_dir_exists(os.path.dirname(full_fname))
+            model.dump_to_file(full_fname)
 
-        wave_fname = model_fname.replace("armodel", "wave")
-        np.savetxt(os.path.join(minute_dir, wave_fname), filtered_wave.data.filled(np.float('nan')))
+            save_noise_model(cursor=cursor, sta=sta, chan=chan, band=band, hz=srate,
+                             window_stime=window_stime, window_len=window_len,
+                             model_type=model_type, nparams=order, mean=mean, std=std,
+                             fname=nm_fname, hour=hour)
 
-    return minute_dir
+        if band == requested_band:
+            requested_model = model
 
+    return requested_model
 
-def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17, noise_mode=NOISE_MODE):
+def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17, return_fname=False, model_type="ar", force_train=False):
     """
     Returns an ARModel noise model of the specified order for the
     given station/channel/filter, trained from the hour prior to
@@ -325,27 +154,40 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
         if sta is None or chan is None or filter_str is None or time is None:
             raise Exception("missing argument to get_noise_model!")
 
-    if noise_mode == NOISE_MODE_HOURLY:
-        signal_hour = int(time / 3600)
-        noise_hour = signal_hour - 1
-        model_dir, model_fname = model_path(sta, chan, filter_str, srate, order, hour_time=noise_hour * 3600)
-    elif noise_mode == NOISE_MODE_IMMEDIATE:
-        model_dir, model_fname = model_path(sta, chan, filter_str, srate, order, anchor_time=time)
+    band = filter_str_extract_band(filter_str)
+
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    hour = int(time) / 3600
+
+    # first see if we already have an applicable noise model
+    nm_info = None
+    if not force_train:
+        nm_info = lookup_noise_model(cursor=cursor, sta=sta, chan=chan, band=band, hz=srate, order=order, model_type=model_type, hour=hour)
+        if nm_info is not None:
+            nmid, window_stime, window_len, mean, std, nm_fname = nm_info
+
+    if nm_info is not None:
+        # if so, then load it directly
+
+        if model_type.lower() == "ar":
+            model = load_armodel_from_file(os.path.join(os.getenv('SIGVISA_HOME'), nm_fname))
+
     else:
-        raise Exception("unknown noise_mode (neither HOURLY nor IMMEDIATE)")
+        # otherwise, train a new model
+        window_stime, window_etime = get_recent_safe_block(time, sta, chan)
+        window_len = window_etime - window_stime
+        model = construct_and_save_noise_models(window_stime=window_stime, window_len=window_len, sta=sta, chan=chan, filter_str=filter_str, srate=srate, order=order, model_type=model_type, hour=hour, cursor=cursor, save_models=not force_train)
 
-    try:
-        armodel = load_armodel_from_file(os.path.join(model_dir, model_fname))
-    except IOError:
+        # and store a record of it in the DB
+        s.dbconn.commit()
 
-        if noise_mode == NOISE_MODE_HOURLY:
-            print "building noise models for hour %d at %s" % (noise_hour, sta)
-            construct_and_save_hourly_noise_models(noise_hour, sta, chan, filter_str, srate, order)
-        elif noise_mode == NOISE_MODE_IMMEDIATE:
-            construct_and_save_immediate_noise_models(time, sta, chan, filter_str, srate, order)
-
-    armodel = load_armodel_from_file(os.path.join(model_dir, model_fname))
-    return armodel
+    cursor.close()
+    if return_fname:
+        return model, nm_fname
+    else:
+        return model
 
 
 def block_waveform_exists(sta, chan, stime, etime):
@@ -355,7 +197,6 @@ def block_waveform_exists(sta, chan, stime, etime):
         return False
 
     return model_wave['fraction_valid'] > 0.4
-
 
 def get_recent_safe_block(time, sta, chan, margin_seconds=10, preferred_len_seconds=120, min_len_seconds=60, arrival_window_seconds=1200):
     """ Get a block of time preceding the specified time, and ending at least margin_seconds before that time, for which waveform data exists, and during which there are no recorded arrivals at the station."""

@@ -67,6 +67,10 @@
     </table>
     <input type="submit" name="action" value="newrow"/>
     <input type="submit" name="action" value="update"/>
+
+<p>raw waveform saved to {{env_fname}}</p>
+<p>template saved to {{generated_fname}}</p>
+<p>using noise model from {{nm_fname}}.</p>
     <p><a href="{% url template_debug fitid=fitid %}">reset</a> :::::: <a href="{% url fit_run_detail fitid=fitid %}">back to fit detail</a></p>
 </center>
 

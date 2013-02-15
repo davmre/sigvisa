@@ -15,9 +15,6 @@ from sigvisa.signals.common import Waveform, Segment, load_waveform_from_file
 from sigvisa.signals.mask_util import *
 from sigvisa.signals.io import load_event_station
 from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
-from sigvisa.models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
-from sigvisa.models.noise.armodel.learner import ARLearner
-from sigvisa.models.noise.noise_model import model_path, construct_and_save_hourly_noise_models, get_noise_model
 import sigvisa.plotting.plot as plot
 
 
@@ -100,8 +97,6 @@ class TestWaveform(unittest.TestCase):
         self.assertEqual(self.bhz['npts'], 1000)
         self.assertEqual(self.bhz['chan'], "BHZ")
         self.assertEqual(self.bhz['filter_str'], "")
-        self.assertEqual(self.bhz['freq_low'], 0.0)
-        self.assertEqual(self.bhz['freq_high'], 5.0)
 
     def test_filters(self):
         bhz_23 = self.bhz.filter("freq_2.0_3.0")
