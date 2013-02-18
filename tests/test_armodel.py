@@ -17,7 +17,6 @@ class TestAutoregressiveModels(unittest.TestCase):
         true_std = .11
         errormodel = ErrorModel(mean=0, std=true_std)
         true_model = ARModel(true_params, errormodel)
-        np.random.seed(0)
         sampled_data = ma.masked_array(true_model.sample(1000), mask=[False, ] * 1000)
 
         origll = true_model.fastAR_missingData(sampled_data, 0, true_std)
@@ -31,7 +30,7 @@ class TestAutoregressiveModels(unittest.TestCase):
         fastll = true_model.fastAR_missingData(sampled_data, 0, true_std)
         slowll = true_model.slow_AR(sampled_data, 0)
         print fastll, slowll
-        self.assertAlmostEqual(fastll, slowll)
+        self.assertAlmostEqual(fastll, slowll, places=6)
 
     def test_AR_learning(self):
         true_params = np.array([.8, .1])
