@@ -146,7 +146,7 @@ def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta,
     else:
         return requested_model
 
-def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17, return_details=False, model_type="ar", force_train=False):
+def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order="auto", return_details=False, model_type="ar", force_train=False):
     """
     Returns an ARModel noise model of the specified order for the
     given station/channel/filter, trained from the hour prior to
@@ -162,6 +162,8 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     # without loading/saving to the DB, there are no details to return
     assert(not (return_details and force_train))
 
+
+
     if waveform is not None:
         sta = waveform['sta']
         chan = waveform['chan']
@@ -171,6 +173,10 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     else:
         if sta is None or chan is None or filter_str is None or time is None:
             raise Exception("missing argument to get_noise_model!")
+
+    if order=="auto":
+        order=int(np.ceil(srate/2))
+
 
     band = filter_str_extract_band(filter_str)
 

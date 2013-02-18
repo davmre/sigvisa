@@ -72,15 +72,14 @@ document.getElementById('loading').style.visibility = 'hidden';
     </table><br/>
   </td>
   <td valign=top rowspan=1>
-    <b>Noise</b>
+    <b>Noise</b> (<a href="{% url nm_detail nmid=fit.nmid.nmid %}">detail</a>)
     <table>
       <tr><td>mean</td><td>{{noise_model.c }}</td></tr>
       <tr><td>log(mean)</td><td>{{noise_model.c|log }}</td></tr>
       <tr><td>std</td><td>{{noise_model.em.std }}</td></tr>
       <tr><td>order</td><td>{{noise_model.p }}</td></tr>
-      {% for coeff in noise_model.params|slice:":5" %}
-      <tr><td>coeff {{ forloop.counter }}</td><td>{{ coeff }}</td></tr>
-      {% endfor %}
+      <tr><td>params</td><td><a href="{% url nm_detail nmid=fit.nmid.nmid %}"><img src="{% url nm_param_plot nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>
+      <tr><td>sample</td><td><a href="{% url nm_detail nmid=fit.nmid.nmid %}"><img src="{% url nm_sample nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>
     </table>
     </td>
 </tr>

@@ -180,7 +180,7 @@ def execute_and_return_id(dbconn, query, idname, **kwargs):
     return lrid
 
 
-def store_template_params(wave, template_params, optim_param_str, iid, hz, acost, run_name, iteration, elapsed):
+def store_template_params(wave, template_params, optim_param_str, iid, hz, acost, run_name, iteration, elapsed, nmid):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
@@ -199,8 +199,8 @@ def store_template_params(wave, template_params, optim_param_str, iid, hz, acost
 
     optim_param_str = optim_param_str.replace("'", "''")
 
-    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f)" % (
-        runid, event.evid, sta, chan, band, optim_param_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed)
+    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (
+        runid, event.evid, sta, chan, band, optim_param_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed, nmid)
 
     fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 
@@ -296,9 +296,17 @@ def save_gsrun_to_db(d, segments, em, tm):
     for seg in segments:
         for chan in em.chans:
             for band in em.bands:
+
+                sta = seg['sta']
+                filter_str = seg.with_filter(band).filter_str
+                srate = seg.dummy_chan(chan)['srate']
+                stime = seg['stime']
+                etime = seg['etime']
+
+                arm, nmid, nm_fname = get_noise_model(sta=sta, chan=chan, filter_str = filter_str, time=stime, return_details=True)
                 gswid = execute_and_return_id(
-                    s.dbconn, "insert into sigvisa_gsrun_wave (gsid, sta, chan, band, stime, etime, hz) values (%d, '%s', '%s', '%s', %f, %f, %f)" % (gsid, seg['sta'], chan, band,
-                                                                                                                                                      seg['stime'], seg['etime'], seg.dummy_chan(chan)['srate']), 'gswid')
+                    s.dbconn, "insert into sigvisa_gsrun_wave (gsid, sta, chan, band, stime, etime, hz, nmid) values (%d, '%s', '%s', '%s', %f, %f, %f, %d)" % (gsid, sta, chan, band,
+                                            stime, etime, srate, nmid), 'gswid')
                 for phase in em.phases:
                     for param in tm.models.keys():
                         modelid = tm.models[param][seg['sta']][phase][chan][band].modelid

@@ -144,11 +144,13 @@ def fit_detail(request, fitid):
 
     # load the waveform so that we can display data about it
     try:
-        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env")
+        wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env;hz_%.2f" % fit.hz)
 
         wave_stime_str = datetime.fromtimestamp(wave['stime'], timezone('UTC')).strftime(time_format)
         wave_etime_str = datetime.fromtimestamp(wave['etime'], timezone('UTC')).strftime(time_format)
-        nm = get_noise_model(waveform=wave)
+        #nm = get_noise_model(waveform=wave)
+
+        nm = fit.nmid.load()
 
     except Exception as e:
         wave = Waveform()

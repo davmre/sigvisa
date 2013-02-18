@@ -168,6 +168,10 @@ def nm_crossval(request, nmid):
     axes.set_xlabel('degree of model', fontsize=8)
     axes.set_ylabel('lklhood (sum of log prob)', fontsize=8)
 
+    maxi = np.argmax(y)
+    axes.text(.95, .05, "max: p=%d, ll=%.1f" % (x[maxi], y[maxi]), horizontalalignment='right', verticalalignment='bottom', transform=axes.transAxes, fontsize=8)
+
+
     process_plot_args(request, axes)
 
     canvas = FigureCanvas(fig)

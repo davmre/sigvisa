@@ -33,8 +33,10 @@ create table sigvisa_coda_fit (
  timestamp float(24),
  elapsed   float(24),
  human_approved varchar(1) default 0,
+ nmid int not null,
  primary key(fitid),
- foreign key(runid) REFERENCES sigvisa_coda_fitting_run(runid)
+ foreign key(runid) REFERENCES sigvisa_coda_fitting_run(runid),
+ foreign key(nmid) REFERENCES sigvisa_noise_model(nmid))
 );
 
 
@@ -120,6 +122,7 @@ create table sigvisa_gridsearch_run (
 create table sigvisa_gsrun_wave (
  gswid int not null auto_increment, /* Oracle version */
  gsid int not null,
+ nmid int not null,
  sta varchar(10) not null,
  chan varchar(10) not null,
  band varchar(15) not null,
@@ -127,7 +130,8 @@ create table sigvisa_gsrun_wave (
  stime double precision not null,
  etime double precision not null,
  primary key (gswid),
- foreign key (gsid) REFERENCES sigvisa_gridsearch_run(gsid)
+ foreign key (gsid) REFERENCES sigvisa_gridsearch_run(gsid),
+ foreign key(nmid) REFERENCES sigvisa_noise_model(nmid))
 );
 
 create table sigvisa_gsrun_tmodel (

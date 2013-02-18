@@ -30,7 +30,6 @@
 	<td><strong>mean</strong></td>
 	<td><strong>std</strong></td>
 	<td><strong>hour</strong></td>
-	<td><strong>cv_ll</strong></td>
 	<td><strong>details</strong></td>
       </tr>
         {% for nm in nm_list %}
@@ -48,7 +47,6 @@
 	      <td>{{ nm.mean }}</td>
 	      <td>{{ nm.std }}</td>
 	      <td>{{ nm.created_for_hour }}</td>
-	      <td>{{ nm.cv_ll }}</td>
 	      <td><a href="{% url nm_detail nmid=nm.nmid %}">details</a></td>
             </tr>
         {% endfor %}

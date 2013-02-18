@@ -56,6 +56,34 @@ mean: {{nm.mean}}, std: {{nm.std}}</p>
 
 </table>
 
+<strong>Template fits using this model:</strong>
+    <table id="fits" border=1 cellpadding=3>
+      <tr>
+	<td><strong>evid</strong></td>
+	<td><strong>sta</strong></td>
+	<td><strong>chan</strong></td>
+	<td><strong>band</strong></td>
+	<td><strong>start time</strong></td>
+	<td><strong>fit timestamp</strong></td>
+	<td><strong>running time</strong></td>
+	<td><strong>acost</strong></td>
+	<td><strong>detail</strong></td>
+      </tr>
+        {% for fit in nm.sigvisacodafit_set.all %}
+            <tr>
+                <td><a href="{% url event evid=fit.evid %}">{{ fit.evid }}</a></td>
+                <td><a href="{% url site sta=fit.sta %}">{{ fit.sta }}</a></td>
+                <td>{{ fit.chan }}</td>
+                <td>{{ fit.band }}</td>
+                <td>{{ fit.stime }}</td>
+                <td>{{ fit.timestamp }}</td>
+                <td>{{ fit.elapsed }}</td>
+                <td>{{ fit.acost }}</td>
+                <td><a href="{% url fit_run_detail fitid=fit.fitid %}?{{ filter_GET_params }}" class="see_detail">detail:<br/><img src="{% url visual fitid=fit.fitid %}?smooth=8;logscale=true;saveprefs=false" width=150 height=100></a></td>
+            </tr>
+        {% endfor %}
+    </table>
+
 {% include "svweb/footer.html"  %}
 </body>
 </html>

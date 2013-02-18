@@ -21,7 +21,7 @@ from sigvisa.signals.io import *
 from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_params
 from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
 from sigvisa.models.envelope_model import EnvelopeModel
-
+from sigvisa.models.noise.noise_model import get_noise_model
 
 def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, optim_params=None, fit_hz=5):
     """
@@ -45,12 +45,12 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
 
-
+    arm, nmid, nm_fname = get_noise_model(wave, return_details=True)
     ll, fit_params = em.wave_log_likelihood_optimize(wave, event, use_leb_phases=True, optim_params=optim_params)
 
     et = time.time()
     fitid = store_template_params(wave, fit_params, optim_param_str=repr(
-        optim_params)[1:-1], iid=False, acost=ll, run_name=output_run_name, iteration=output_iteration, elapsed=et - st, hz=fit_hz)
+        optim_params)[1:-1], iid=False, acost=ll, run_name=output_run_name, iteration=output_iteration, elapsed=et - st, hz=fit_hz, nmid=nmid)
     s.dbconn.commit()
 
     cursor.close()
@@ -76,6 +76,7 @@ def main():
     parser.add_option("--template_model", dest="template_model", default="gp_dad", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="BHZ", type="str", help="")
+    parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
 
     (options, args) = parser.parse_args()
 
@@ -112,7 +113,7 @@ def main():
     try:
         fitid = fit_event_wave(
             event=ev, sta=options.sta, band=options.band, chan=options.chan, tm=tm, output_run_name=options.run_name, output_iteration=options.run_iteration,
-            init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, optim_params=construct_optim_params(options.optim_params))
+            init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, optim_params=construct_optim_params(options.optim_params), fit_hz=options.hz)
     except KeyboardInterrupt:
         s.dbconn.commit()
         raise
