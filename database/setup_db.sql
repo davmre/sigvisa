@@ -1,7 +1,7 @@
-/* Run this file from a directory which contains the $VISA_MYSQL_USER data in .csv format
+/*
  *
- * Note: the waveform data is assumed to be located in /var/$VISA_MYSQL_USER_data/seismic,
- * /var/$VISA_MYSQL_USER_data/hydro/ etc.
+ *
+ *
  */
 
 create database $VISA_MYSQL_DB;
@@ -59,43 +59,6 @@ create table leb_arrival (
 load data local infile 'leb_arrival.csv' into table leb_arrival fields
 terminated by ', ' optionally enclosed by '"' ignore 1 lines;
 
-/* reb_arrival */
-
-create table reb_arrival (
- sta         varchar(6) not null,
- time        double not null,
- arid        int,
- jdate       int,
- stassid     int,
- chanid      int,
- chan        varchar(8),
- iphase      varchar(8),
- stype       varchar(1),
- deltim      double,
- azimuth     double,
- delaz       double,
- slow        double,
- delslo      double,
- ema         double,
- rect        double,
- amp         double,
- per         double,
- logat       double,
- clip        varchar(1),
- fm          varchar(2),
- snr         double,
- qual        varchar(1),
- auth        varchar(15),
- commid      int,
- lddate      datetime,
-
- primary key (arid),
- index (time)
-) engine = myisam;
-
-load data local infile 'reb_arrival.csv' into table reb_arrival fields
-terminated by ', ' optionally enclosed by '"' ignore 1 lines;
-
 /* idcx_arrival */
 
 create table idcx_arrival (
@@ -130,35 +93,8 @@ create table idcx_arrival (
  index (arid)
 ) engine = myisam;
 
-/* load data local infile 'idcx_arrival.csv' into table idcx_arrival fields
-terminated by ', ' optionally enclosed by '"' ignore 1 lines; */
-
-create table idcx_amplitude (
- ampid       int not null,
- arid        int not null,
- parid       int,
- chan        varchar(8),
- amp         double,
- per         double,
- snr         double,
- amptime     double,
- start_time  double,
- duration    double,
- bandw       double,
- amptype     varchar(8),
- units       varchar(15),
- clip        varchar(1),
- inarrival   varchar(1),
- auth        varchar(15),
- lddate      datetime,
-
- primary key (ampid),
- index (arid)
-) engine = myisam;
-
-/* load data local infile 'idcx_amplitude.csv' into table idcx_amplitude fields
-terminated by ', ' optionally enclosed by '"' ignore 1 lines; */
-
+load data local infile 'idcx_arrival.csv' into table idcx_arrival fields
+terminated by ', ' optionally enclosed by '"' ignore 1 lines;
 
 /* leb_assoc */
 
@@ -189,102 +125,6 @@ create table leb_assoc (
 
 load data local infile 'leb_assoc.csv' into table leb_assoc fields terminated
 by ', ' optionally enclosed by '"' ignore 1 lines;
-
-/* reb_assoc */
-
-create table reb_assoc (
- arid        int,
- orid        int,
- sta         varchar(6),
- phase       varchar(8),
- belief      double,
- delta       double,
- seaz        double,
- esaz        double,
- timeres     double,
- timedef     varchar(1),
- azres       double,
- azdef       varchar(1),
- slores      double,
- slodef      varchar(1),
- emares      double,
- wgt         double,
- vmodel      varchar(15),
- commid      int,
- lddate      datetime,
-
- primary key (arid, orid),
- index (orid)
-) engine = myisam ;
-
-load data local infile 'reb_assoc.csv' into table reb_assoc fields terminated
-by ', ' optionally enclosed by '"' ignore 1 lines;
-
-/* sel3_assoc */
-
-create table sel3_assoc (
- arid        int,
- orid        int,
- sta         varchar(6),
- phase       varchar(8),
- belief      double,
- delta       double,
- seaz        double,
- esaz        double,
- timeres     double,
- timedef     varchar(1),
- azres       double,
- azdef       varchar(1),
- slores      double,
- slodef      varchar(1),
- emares      double,
- wgt         double,
- vmodel      varchar(15),
- commid      int,
- lddate      datetime,
-
- primary key (arid, orid),
- index (orid)
-) engine = myisam ;
-
-load data local infile 'sel3_assoc.csv' into table sel3_assoc fields terminated
-by ', ' optionally enclosed by '"' ignore 1 lines;
-
-/* sel3_origin */
-
-create table sel3_origin (
- lat         double not null,
- lon         double not null,
- depth       double not null,
- time        double not null,
- orid        int,
- evid        int,
- jdate       int,
- nass        int,
- ndef        int,
- ndp         int,
- grn         int,
- srn         int,
- etype       varchar(7),
- depdp       double,
- dtype       varchar(1),
- mb          double,
- mbid        int,
- ms          double,
- msid        int,
- ml          double,
- mlid        int,
- algorithm   varchar(15),
- auth        varchar(15),
- commid      int,
- lddate      datetime,
-
- primary key (orid),
- index (time)
-) engine = myisam;
-
-load data local infile 'sel3_origin.csv' into table sel3_origin
-fields terminated by ', ' optionally enclosed by '"' ignore 1 lines;
 
 /* leb_origin */
 
@@ -321,44 +161,6 @@ create table leb_origin (
 
 load data local infile 'leb_origin.csv' into table leb_origin fields terminated
 by ', ' optionally enclosed by '"' ignore 1 lines;
-
-/* reb_origin */
-
-create table reb_origin (
- lat         double not null,
- lon         double not null,
- depth       double not null,
- time        double not null,
- orid        int,
- evid        int,
- jdate       int,
- nass        int,
- ndef        int,
- ndp         int,
- grn         int,
- srn         int,
- etype       varchar(7),
- depdp       double,
- dtype       varchar(1),
- mb          double,
- mbid        int,
- ms          double,
- msid        int,
- ml          double,
- mlid        int,
- algorithm   varchar(15),
- auth        varchar(15),
- commid      int,
- lddate      datetime,
-
- primary key (orid),
- index (time)
-) engine = myisam;
-
-load data local infile 'reb_origin.csv' into table reb_origin fields terminated
-by ', ' optionally enclosed by '"' ignore 1 lines;
-
-
 /* static_site */
 
 create table static_site (
@@ -435,14 +237,11 @@ create table idcx_wfdisc (
 
 ) engine = myisam;
 
-/* load data local infile 'idcx_wfdisc.csv' into table idcx_wfdisc
-fields terminated by ', ' optionally enclosed by '"' ignore 1 lines; */
+load data local infile 'idcx_wfdisc.csv' into table idcx_wfdisc
+fields terminated by ', ' optionally enclosed by '"' ignore 1 lines;
 
-/* change the location of the data from /archive/ops/ to /var/$VISA_MYSQL_USER_data/ */
-update idcx_wfdisc set dir = concat('/var/$VISA_MYSQL_USER_data/', substr(dir,14));
-
--- update idcx_wfdisc set dir = replace(dir, '/','\\');
--- update idcx_wfdisc set dir = concat('C:\\Users\\Nimar\\Data', dir);
+/* change the location of the waveform data */
+update idcx_wfdisc set dir = concat('$VISA_SIGNAL_BASEDIR', substr(dir,14));
 
 create table static_siteid (
   id          int,
@@ -471,10 +270,51 @@ engine = myisam;
 load data local infile 'static_phaseid.csv' into table static_phaseid fields
 terminated by ',' optionally enclosed by '"' ignore 1 lines;
 
-/* NetVISA uses only the arrivals which have a valid azimuth, slowness, snr */
-create or replace view idcx_arrival_net as
-select * from idcx_arrival idcx where delaz > 0 and delslo > 0 and snr > 0;
+delimiter |
+create function trunc(num double, digits integer)
+returns double deterministic
+begin
+return truncate(num, digits);
+end|
+
+create function dist_deg(lon1 double, lat1 double, lon2 double, lat2 double)
+returns double deterministic
+begin
+declare dist double;
+set dist = degrees(acos(sin(radians(lat1)) * sin(radians(lat2))
+                   + cos(radians(lat1)) * cos(radians(lat2))
+                     * cos(radians(lon2 - lon1))));
+return dist;
+end|
+
+create function dist_km(lon1 double, lat1 double, lon2 double, lat2 double)
+returns double deterministic
+begin
+declare dist double;
+set dist = 6371.0 * (acos(sin(radians(lat1)) * sin(radians(lat2))
+                     + cos(radians(lat1)) * cos(radians(lat2))
+                     * cos(radians(lon2 - lon1))));
+return dist;
+end|
+
+create function degdiff(from_angle double, to_angle double)
+returns double deterministic
+begin
+  declare angle double;
+  set angle = ((to_angle - from_angle) + 360) % 360;
+  if angle > 180 then set angle = angle - 360;
+  end if;
+  return angle;
+end|
+delimiter ;
+
 
 /* create a user for querying the data and give him privileges */
-create user $VISA_MYSQL_USER@localhost;
+create user $VISA_MYSQL_USER@localhost identified by '$VISA_MYSQL_PASS';
 grant select on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
+grant create on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
+grant update on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
+grant insert on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
+grant alter on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
+grant index on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
+grant execute on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;

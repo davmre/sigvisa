@@ -34,13 +34,18 @@ def connect(unix_socket=None):
         dbconn = cx_Oracle.connect(user=os.getenv("VISA_ORA_USER"), password=os.getenv("VISA_ORA_PASS"), threaded=True)
     else:
         import MySQLdb
+
+        user = "ctbt" if os.getenv("VISA_MYSQL_USER") is None else os.getenv("VISA_MYSQL_USER")
+        db = "ctbt3mos" if os.getenv("VISA_MYSQL_DB") is None else os.getenv("VISA_MYSQL_DB")
+        pw = os.getenv("VISA_MYSQL_PASS")
+
         if os.name in ['posix']:
             # on linux we don't use named pipes
             if unix_socket is not None:
-                dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket=unix_socket)
+                dbconn = MySQLdb.connect(user=user, db=db, passwd=pw, unix_socket=unix_socket)
             elif "VISA_SOCKET" in os.environ:
-                dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos", unix_socket=os.environ["VISA_SOCKET"])
+                dbconn = MySQLdb.connect(user=user, db=db, passwd=pw, unix_socket=os.environ["VISA_SOCKET"])
             else:
-                dbconn = MySQLdb.connect(user="ctbt", db="ctbt3mos")
+                dbconn = MySQLdb.connect(user=user, db=db, passwd=pw)
 
     return dbconn

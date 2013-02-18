@@ -12,21 +12,20 @@ MANAGERS = ADMINS
 
 patmos_db = {
         'ENGINE': 'django.db.backends.mysql', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': 'ctbt3mos',                      # Or path to database file if using sqlite3.
-        'USER': 'django_sigvisa',                      # Not used with sqlite3.
-        'PASSWORD': 'FbTBcqc5',                  # Not used with sqlite3.
+        'NAME': os.getenv('VISA_MYSQL_DB'),      # Or path to database file if using sqlite3.
+        'USER': os.getenv('VISA_MYSQL_USER'),       # Not used with sqlite3.
+        'PASSWORD': os.getenv('VISA_MYSQL_PASS'),     # Not used with sqlite3.
         'HOST': '127.0.0.1',                      # Set to empty string for localhost. Not used with sqlite3.
         'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
     }
 vdec_db = {
         'ENGINE': 'django.db.backends.oracle', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
         'NAME': '',                      # Or path to database file if using sqlite3.
-        'USER': 'moore',                      # Not used with sqlite3.
-        'PASSWORD': 'D109Moore',                  # Not used with sqlite3.
+        'USER': os.getenv('VISA_ORA_USER'),     # Not used with sqlite3.
+        'PASSWORD': os.getenv('VISA_ORA_PASS'),  # Not used with sqlite3.
         'HOST': '127.0.0.1',                      # Set to empty string for localhost. Not used with sqlite3.
         'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
     }
-
 
 
 a =  os.getenv('VISA_ORA_USER')

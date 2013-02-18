@@ -9,7 +9,10 @@ def wiggle_model_by_name(name, **kwargs):
         return StupidL1WiggleModel(**kwargs)
     elif name == "plain":
         return PlainWiggleModel(**kwargs)
-
+    elif name.startswith("sampling_"):
+        featurizer_name = name.split("_")[1:]
+        featurizer = featurizer_by_name(featurizer_name)
+        return SamplingWiggleModel(featurizer=featurizer, **kwargs)
 
 class WiggleModel(object):
 
@@ -21,6 +24,19 @@ class WiggleModel(object):
 
     def summary_str(self):
         return "base"
+
+
+class SamplingWiggleModel(WiggleModel):
+
+    def __init__(self, tm, featurizer):
+        super(SamplingWiggleModel, self).__init__(self, tm)
+        self.featurizer = featurizer
+
+    def template_ncost(self, wave, phases, params):
+        
+
+    def summary_str(self):
+        return "sampling_" + self.featurizer.summary_str()
 
 
 class StupidL1WiggleModel(WiggleModel):
