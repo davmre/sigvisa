@@ -319,5 +319,5 @@ def lookup_noise_model(cursor, sta, chan, band, hz, order, model_type, hour):
     return models[0]
 
 def save_noise_model(dbconn, sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, hour):
-    sql_query = "insert into sigvisa_noise_model (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour) values ('%s', '%s', '%s', %f, %f, %f, '%s', %d, %f, %f, '%s', %d)" % (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, hour)
+    sql_query = "insert into sigvisa_noise_model (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp) values ('%s', '%s', '%s', %f, %f, %f, '%s', %d, %f, %f, '%s', %d, %f)" % (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time())
     return execute_and_return_id(dbconn, sql_query, "nmid")

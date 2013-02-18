@@ -34,40 +34,7 @@ import sigvisa.plotting.histogram as histogram
 import textwrap
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
-
-
-def process_plot_args(request, axes):
-    xmin = request.GET.get("xmin", "auto")
-    xmax = request.GET.get("xmax", "auto")
-    ymin = request.GET.get("ymin", "auto")
-    ymax = request.GET.get("ymax", "auto")
-
-    if xmin != "auto" and xmax != "auto":
-        axes.set_xlim(float(xmin), float(xmax))
-    if ymin != "auto" and ymax != "auto":
-        axes.set_ylim(float(ymin), float(ymax))
-
-    if xmin == "auto" and xmax == "auto":
-        xmin, xmax = axes.get_xlim()
-        xlen = float(request.GET.get('len', "-1"))
-        if xlen > 0:
-            axes.set_xlim(xmin, xmin + xlen)
-
-
-def error_wave(exception):
-    error_text = 'Error plotting waveform: \"%s\"' % str(exception)
-    fig = Figure(figsize=(5, 3), dpi=144)
-    fig.patch.set_facecolor('white')
-    axes = fig.add_subplot(111)
-    axes.set_xlabel("Time (s)", fontsize=8)
-    axes.text(.5, .5, "\n".join(textwrap.wrap(
-        error_text, 60)), horizontalalignment='center', verticalalignment='center', transform=axes.transAxes, fontsize=8)
-    canvas = FigureCanvas(fig)
-    response = django.http.HttpResponse(content_type='image/png')
-    fig.tight_layout()
-    canvas.print_png(response)
-    return response
-
+from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
 
 def filterset_GET_string(filterset):
     """

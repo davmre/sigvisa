@@ -21,7 +21,7 @@ def load_armodel_from_file(fname):
         for line in f:
             params.append(float(line))
         em = ErrorModel(mean, std)
-        arm = ARModel(params, em, c=c, sf=0)
+        arm = ARModel(params, em, c=c, sf=srate)
     except Exception as e:
         raise Exception("error reading AR model from file %s: %s" % (fname, str(e)))
     finally:
@@ -43,23 +43,20 @@ class ARModel:
         self.sf = sf
 
     # samples based on the defined AR Model
-    # if init data is not given, then the first p points are
-    # sampled from error model (i.e. normally distributed)
     def sample(self, num, initdata=[]):
-        data = np.zeros(num)
-        for t in range(num):
-            if t < self.p:
-                if len(initdata) == 0:
-                    data[t] = self.em.sample()
-                else:
-                    assert len(initdata) == self.p
-                    data[t] = initdata[t]
-            else:
-                s = self.c
-                for i in range(self.p):
-                    s += self.params[i] * data[t - i - 1]
-                data[t] = s + self.em.sample()
-        return data
+        data = np.zeros(num + self.p)
+
+        # initialize with iid samples
+        for t in range(self.p):
+            data[t] = self.c + self.em.sample()
+
+        for t in range(self.p, num+self.p):
+            s = self.c
+            for i in range(self.p):
+                s += self.params[i] * (data[t - i - 1] - self.c)
+            data[t] = s + self.em.sample()
+
+        return data[self.p:]
 
     def fastAR_missingData(self, d, c, std):
         n = len(d)
@@ -376,6 +373,8 @@ class ARModel:
 
         prob = 0
         for d in data:
+            if not isinstance(d, ma.masked_array):
+                d = ma.masked_array(d, mask=[False,] * len(d))
 
             """
             t1 = time.time()

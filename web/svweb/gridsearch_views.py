@@ -31,7 +31,8 @@ import textwrap
 import hashlib
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaTemplateParamModel
-from svweb.views import process_plot_args, error_wave
+
+from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.utils.geog import lonlatstr
 from sigvisa.models.wiggles.wiggle_models import wiggle_model_by_name

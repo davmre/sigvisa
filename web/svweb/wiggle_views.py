@@ -28,31 +28,11 @@ import sigvisa.plotting.plot as plot
 import textwrap
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle
-from svweb.views import process_plot_args, error_wave
+from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.signals.io import *
 
 
-def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
-    """
-    
-    Given a 1D array, find the min and the max excluding extreme
-    outliers. Intended to be used as min/max values in plotting, to
-    ensure that most of the data is visible on the plot.
-
-    """
-
-    # if data is a masked array, ignore the masked entries
-    try:
-        data = data.compressed()
-    except:
-        pass
-
-    min_bound = scipy.stats.scoreatpercentile(data, per=(100 - coverage) / 2.0)
-    max_bound = scipy.stats.scoreatpercentile(data, per=100 - (100 - coverage) / 2.0)
-    padding = (max_bound - min_bound) * epsilon
-
-    return min_bound - padding, max_bound + padding
 
 # detail view for a particular fit
 
@@ -99,26 +79,6 @@ def wiggle_detail_view(request, fpid):
                               }, context_instance=RequestContext(request))
 
 
-def view_wave(request, wave, **kwargs):
-    """
-
-    Given a Waveform object, return a django HttpResponse visualizing
-    that object, with plot parameters optionally set by the GET
-    request string.
-
-    """
-
-    fig = Figure(figsize=(5, 3), dpi=144)
-    fig.patch.set_facecolor('white')
-    axes = fig.add_subplot(111)
-    axes.set_xlabel("Time (s)", fontsize=8)
-    plot.subplot_waveform(wave, axes, **kwargs)
-    process_plot_args(request, axes)
-    canvas = FigureCanvas(fig)
-    response = django.http.HttpResponse(content_type='image/png')
-    fig.tight_layout()
-    canvas.print_png(response)
-    return response
 
 
 def raw_wiggle_view(request, fpid):
@@ -190,13 +150,10 @@ def reconstructed_wiggle_view(request, wiggleid):
     tm = load_template_model(phase.template_model, run_name=None, run_iter=0, model_type="dummy")
     wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
 
-    #    try:
     reconstructed_wiggle = reconstruct_wiggle_data(wiggle)
     wiggle_wave = Waveform(data=reconstructed_wiggle, srate=wiggle.srate, stime=wiggle.stime, sta=str(fit.sta),
                            evid=fit.evid, filter_str="wiggle", chan=str(fit.chan))
     return view_wave(request, wiggle_wave, color='black', linewidth=1.5, logscale=False)
-#    except Exception as e:
-#        return error_wave(e)
 
 
 def reconstructed_template_wiggle_view(request, wiggleid):
@@ -219,8 +176,8 @@ def reconstructed_template_wiggle_view(request, wiggleid):
 
     st = calendar.timegm(fit.stime.timetuple())
     et = calendar.timegm(fit.etime.timetuple())
-    wave = create_wiggled_phase((phases, vals), tm, phase.phase, wiggle=reconstructed_wiggle_data, 
-                                wiggle_stime=phase.wiggle_stime, st=st, npts=((et - st) * wiggle.srate), 
-                                srate = wiggle.srate, chan=str(fit.chan), sta=str(fit.sta), 
+    wave = create_wiggled_phase((phases, vals), tm, phase.phase, wiggle=reconstructed_wiggle_data,
+                                wiggle_stime=phase.wiggle_stime, st=st, npts=((et - st) * wiggle.srate),
+                                srate = wiggle.srate, chan=str(fit.chan), sta=str(fit.sta),
                                 band=str(fit.band))
     return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)

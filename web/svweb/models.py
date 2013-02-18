@@ -10,6 +10,8 @@
 from django.db import models
 from svweb.fields import UnixTimestampField, BlobField
 
+from sigvisa.models.noise.noise_model import load_nm_from_file
+from sigvisa.signals.io import fetch_waveform
 
 class view_options(models.Model):
     id = models.IntegerField(primary_key=True)
@@ -314,6 +316,30 @@ class SigvisaGsrunTModel(models.Model):
     class Meta:
         db_table = u'sigvisa_gsrun_tmodel'
 
+class SigvisaNoiseModel(models.Model):
+    nmid = models.IntegerField(primary_key=True)
+    timestamp = models.FloatField()
+    sta = models.CharField(max_length=10)
+    chan = models.CharField(max_length=10)
+    band = models.CharField(max_length=15)
+    hz = models.FloatField()
+    window_stime = models.FloatField()
+    window_len = models.FloatField()
+    model_type = models.CharField(max_length=15)
+    nparams = models.IntegerField()
+    mean = models.FloatField()
+    std = models.FloatField()
+    fname = models.CharField(max_length=255)
+    created_for_hour = models.IntegerField()
+
+    class Meta:
+        db_table = u'sigvisa_noise_model'
+
+    def load(self):
+        return load_nm_from_file(self.fname, self.model_type)
+
+    def get_data(self):
+        return fetch_waveform(str(self.sta), str(self.chan), self.window_stime, self.window_stime + self.window_len).filter('%s;env;hz_%.2f' % (self.band, self.hz))
 
 class StaticPhaseid(models.Model):
     id = models.IntegerField(primary_key=True)

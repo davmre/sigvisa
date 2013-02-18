@@ -6,6 +6,7 @@ from svweb.gridsearch_views import *
 from svweb.event_views import *
 from svweb.site_views import *
 from svweb.wave_views import *
+from svweb.nm_views import *
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
@@ -55,5 +56,10 @@ urlpatterns = patterns('',
                        url(r'^waves/wave.png$',
                            WaveImageView,
                            name='wave_image'),
-
+                       url(r'^nm/$', nm_list_view, name='nm_list'),
+                       url(r'^nm/(?P<nmid>\d+)/detail$', nm_detail_view, name='nm_detail'),
+                       url(r'^nm/(?P<nmid>\d+)/params.png$', nm_param_plot, name='nm_param_plot'),
+                       url(r'^nm/(?P<nmid>\d+)/sample.png$', nm_sample, name='nm_sample'),
+                       url(r'^nm/(?P<nmid>\d+)/spectrum.png$', nm_spectrum, name='nm_spectrum'),
+                       url(r'^nm/(?P<nmid>\d+)/crossval.png$', nm_crossval, name='nm_crossval'),
                        )

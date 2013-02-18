@@ -15,6 +15,8 @@ from sigvisa.models.noise.armodel.learner import ARLearner
 from sigvisa.signals.io import fetch_waveform, MissingWaveform
 from sigvisa.signals.common import filter_str_extract_band
 
+
+
 import hashlib
 
 
@@ -25,6 +27,12 @@ NOISE_PAD_SECONDS = 20
 class NoNoiseException(Exception):
     pass
 
+def load_nm_from_file(nm_fname, model_type):
+    if model_type.lower() == "ar":
+        model = load_armodel_from_file(os.path.join(os.getenv('SIGVISA_HOME'), nm_fname))
+    else:
+        raise Exception("unrecognized model type %s" % (model_type))
+    return model
 
 def get_sta_lta_picks(wave):
     df = wave['srate']
@@ -87,7 +95,7 @@ def arrivals_intersect_block(block_start, block_end, arrival_times, danger_perio
             return True
     return False
 
-def construct_and_save_noise_models(hour, cursor, window_stime, window_len, sta, chan, filter_str, srate, order, model_wave=None, model_type="ar", save_models=True):
+def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta, chan, filter_str, srate, order, model_wave=None, model_type="ar", save_models=True):
     s = Sigvisa()
 
     if model_wave is None:
@@ -104,10 +112,10 @@ def construct_and_save_noise_models(hour, cursor, window_stime, window_len, sta,
 
         # train AR noise model
         if model_type == "ar":
-            ar_learner = ARLearner(filtered_wave.data.compressed(), filtered_wave['srate'])
+            ar_learner = ARLearner(filtered_wave.data.compressed(), sf=srate)
             params, std = ar_learner.yulewalker(order)
             em = ErrorModel(0, std)
-            model = ARModel(params, em, c=ar_learner.c)
+            model = ARModel(params, em, c=ar_learner.c, sf=srate)
             mean = model.c
             std = model.em.std
         elif model_type == "iid":
@@ -121,7 +129,7 @@ def construct_and_save_noise_models(hour, cursor, window_stime, window_len, sta,
             ensure_dir_exists(os.path.dirname(full_fname))
             model.dump_to_file(full_fname)
 
-            save_noise_model(cursor=cursor, sta=sta, chan=chan, band=band, hz=srate,
+            nmid = save_noise_model(dbconn=dbconn, sta=sta, chan=chan, band=band, hz=srate,
                              window_stime=window_stime, window_len=window_len,
                              model_type=model_type, nparams=order, mean=mean, std=std,
                              fname=nm_fname, hour=hour)
@@ -129,9 +137,16 @@ def construct_and_save_noise_models(hour, cursor, window_stime, window_len, sta,
         if band == requested_band:
             requested_model = model
 
-    return requested_model
+            if save_models:
+                requested_nmid = nmid
+                requested_fname = nm_fname
 
-def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17, return_fname=False, model_type="ar", force_train=False):
+    if save_models:
+        return requested_model, requested_nmid, requested_fname
+    else:
+        return requested_model
+
+def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order=17, return_details=False, model_type="ar", force_train=False):
     """
     Returns an ARModel noise model of the specified order for the
     given station/channel/filter, trained from the hour prior to
@@ -143,6 +158,9 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     read.
 
     """
+
+    # without loading/saving to the DB, there are no details to return
+    assert(not (return_details and force_train))
 
     if waveform is not None:
         sta = waveform['sta']
@@ -157,35 +175,41 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     band = filter_str_extract_band(filter_str)
 
     s = Sigvisa()
-    cursor = s.dbconn.cursor()
 
     hour = int(time) / 3600
 
     # first see if we already have an applicable noise model
     nm_info = None
     if not force_train:
+        cursor = s.dbconn.cursor()
         nm_info = lookup_noise_model(cursor=cursor, sta=sta, chan=chan, band=band, hz=srate, order=order, model_type=model_type, hour=hour)
+        cursor.close()
+
         if nm_info is not None:
             nmid, window_stime, window_len, mean, std, nm_fname = nm_info
 
     if nm_info is not None:
         # if so, then load it directly
 
-        if model_type.lower() == "ar":
-            model = load_armodel_from_file(os.path.join(os.getenv('SIGVISA_HOME'), nm_fname))
+        model = load_nm_from_file(model_type, nm_fname)
 
     else:
         # otherwise, train a new model
         window_stime, window_etime = get_recent_safe_block(time, sta, chan)
         window_len = window_etime - window_stime
-        model = construct_and_save_noise_models(window_stime=window_stime, window_len=window_len, sta=sta, chan=chan, filter_str=filter_str, srate=srate, order=order, model_type=model_type, hour=hour, cursor=cursor, save_models=not force_train)
+        results = construct_and_save_noise_models(window_stime=window_stime, window_len=window_len, sta=sta, chan=chan, filter_str=filter_str, srate=srate, order=order, model_type=model_type, hour=hour, dbconn=s.dbconn, save_models=not force_train)
+        if not force_train:
+            model, nmid, nm_fname = results
+        else:
+            model = results
+            nmid = None
+            nm_fname = None
 
         # and store a record of it in the DB
         s.dbconn.commit()
 
-    cursor.close()
-    if return_fname:
-        return model, nm_fname
+    if return_details:
+        return model, nmid, nm_fname
     else:
         return model
 

@@ -141,6 +141,7 @@ create table sigvisa_gsrun_tmodel (
 
 create table sigvisa_noise_model (
  nmid int not null auto_increment,
+ timestamp double precision not null,
  sta varchar(10) not null,
  chan varchar(10) not null,
  band varchar(15) not null,
