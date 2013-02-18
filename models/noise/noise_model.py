@@ -191,7 +191,7 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     if nm_info is not None:
         # if so, then load it directly
 
-        model = load_nm_from_file(model_type, nm_fname)
+        model = load_nm_from_file(nm_fname, model_type)
 
     else:
         # otherwise, train a new model
