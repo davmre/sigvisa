@@ -74,11 +74,12 @@ document.getElementById('loading').style.visibility = 'hidden';
   <td valign=top rowspan=1>
     <b>Noise</b> (<a href="{% url nm_detail nmid=fit.nmid.nmid %}">detail</a>)
     <table>
-      <tr><td>mean</td><td>{{noise_model.c }}</td></tr>
-      <tr><td>log(mean)</td><td>{{noise_model.c|log }}</td></tr>
-      <tr><td>std</td><td>{{noise_model.em.std }}</td></tr>
-      <tr><td>order</td><td>{{noise_model.p }}</td></tr>
-      <tr><td>params</td><td><a href="{% url nm_detail nmid=fit.nmid.nmid %}"><img src="{% url nm_param_plot nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>
+      <tr><td>type</td><td>{{fit.nmid.model_type }}</td></tr>
+      <tr><td>mean</td><td>{{fit.nmid.mean }}</td></tr>
+      <tr><td>log(mean)</td><td>{{fit.nmid.mean|log }}</td></tr>
+      <tr><td>std</td><td>{{fit.nmid.std }}</td></tr>
+      <tr><td>order</td><td>{{fit.nmid.nparams }}</td></tr>
+      {% if fit.nmid.model_type == "ar" %}<tr><td>params</td><td><a href="{% url nm_detail nmid=fit.nmid.nmid %}"><img src="{% url nm_param_plot nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>{% endif %}
       <tr><td>sample</td><td><a href="{% url nm_detail nmid=fit.nmid.nmid %}"><img src="{% url nm_sample nmid=fit.nmid.nmid %}" width=100 height=60></a></td></tr>
     </table>
     </td>

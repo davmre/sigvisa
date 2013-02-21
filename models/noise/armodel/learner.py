@@ -102,7 +102,7 @@ class ARLearner:
             ar, std = lnr.yulewalker(p)
             em = model.ErrorModel(0, std)
             arm = model.ARModel(ar, em)
-            sum_L += arm.lklhood(test_list)
+            sum_L += arm.log_p(test_list)
 
         """
         d = self.norm_data[0]
@@ -114,7 +114,7 @@ class ARLearner:
         ar, std = lnr.yulewalker(p)
         em = model.ErrorModel(0, std)
         arm = model.ARModel(ar, em)
-        sum_L = arm.lklhood(test)"""
+        sum_L = arm.log_p(test)"""
 
         return sum_L
 
@@ -129,7 +129,7 @@ class ARLearner:
         params, std = lnr.yulewalker(p)
         em = model.ErrorModel(0, std)
         arm = model.ARModel(params, em)
-        return 2 * (len(self.norm_data) / const) * p - 2 * arm.lklhood(self.norm_data)
+        return 2 * (len(self.norm_data) / const) * p - 2 * arm.log_p(self.norm_data)
 
     def psdcrossval(self, p, n=5):
         sum_L = 0.0

@@ -37,6 +37,8 @@ class EnvelopeModel:
         self.template_model = template_model
         self.wiggle_model = wiggle_model
 
+
+
         if bands is None:
             self.bands = self.sigvisa.bands
         else:

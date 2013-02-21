@@ -29,7 +29,7 @@ class TestNoiseModels(unittest.TestCase):
         chan = self.chan
         filter_str = self.filter_str
 
-    def test_immediate_noise_model(self):
+    def test_AR_noise_model(self):
         s = self.s
         ev = self.ev
         sta = self.sta
@@ -38,10 +38,17 @@ class TestNoiseModels(unittest.TestCase):
 
         model1 = get_noise_model(
             sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, force_train=True)
-        self.assertAlmostEqual(model1.c, 0.3324, places=2)
+        self.assertAlmostEqual(model1.param_mean(), 0.3324, places=2)
 
-        model1 = get_noise_model(sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, force_train=True, model_type='iid')
+    def test_L1_noise_model(self):
+        s = self.s
+        ev = self.ev
+        sta = self.sta
+        chan = self.chan
+        filter_str = self.filter_str
 
+        model1 = get_noise_model(sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, force_train=True, model_type='l1')
+        self.assertAlmostEqual(model1.param_mean(), 0.296377193948, places=5)
 
 
     """"

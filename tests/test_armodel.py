@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.ma as ma
 
-from sigvisa.models.noise.armodel.model import ARModel, ErrorModel, load_armodel_from_file
+from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 from sigvisa.models.noise.armodel.learner import ARLearner
 
 import unittest
@@ -52,7 +52,7 @@ class TestAutoregressiveModels(unittest.TestCase):
         true_model = ARModel(true_params, errormodel)
         true_model.dump_to_file("test.armodel")
 
-        loaded_model = load_armodel_from_file("test.armodel")
+        loaded_model = ARModel.load_from_file("test.armodel")
         self.assertAlmostEqual(np.sum(true_model.params - loaded_model.params), 0)
         self.assertAlmostEqual(true_model.em.std, loaded_model.em.std)
 

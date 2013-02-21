@@ -8,11 +8,9 @@ import time
 
 
 from sigvisa.models import TimeSeriesDist
+from sigvisa.models.noise.noise_model import NoiseModel
 
-#    return cPickle.load(open(fname, 'rb'))
-
-
-class ARModel(TimeSeriesDist):
+class ARModel(NoiseModel):
 
     # params: array of parameters
     # p: number of parametesr
@@ -30,13 +28,13 @@ class ARModel(TimeSeriesDist):
 
     # samples based on the defined AR Model
     def sample(self, n):
-        data = np.zeros(num + self.p)
+        data = np.zeros(n + self.p)
 
         # initialize with iid samples
         for t in range(self.p):
             data[t] = self.c + self.em.sample()
 
-        for t in range(self.p, num+self.p):
+        for t in range(self.p, n+self.p):
             s = self.c
             for i in range(self.p):
                 s += self.params[i] * (data[t - i - 1] - self.c)

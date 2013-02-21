@@ -6,7 +6,7 @@ from sigvisa import *
 
 # from
 from sigvisa.database.signal_data import get_fitting_runid
-import sigvisa.models.noise.noise_model as noise_model
+from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.infer.optimize.optim_utils import BoundsViolation
 from sigvisa.learn.train_coda_models import load_model
 from sigvisa.signals.common import *
@@ -214,7 +214,7 @@ class TemplateModel(object):
         return ll
 
     def generate_trace_python(self, model_waveform, template_params):
-        nm = noise_model.get_noise_model(model_waveform)
+        nm = get_noise_model(model_waveform)
 
         srate = model_waveform['srate']
         st = model_waveform['stime']

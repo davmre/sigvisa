@@ -38,14 +38,14 @@ class Distribution(object):
     def flatten(self, x):
         return x
 
-
-
 class TimeSeriesDist(Distribution):
     def mean(self, n):
         raise NotImplementedError('abstract base class')
 
     def sample(self, n):
         raise NotImplementedError('abstract base class')
+
+
 
 class ConditionalDist(Distribution):
     def mean(self, cond=None):

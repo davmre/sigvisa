@@ -21,9 +21,9 @@ from sigvisa.signals.io import *
 from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_params
 from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
 from sigvisa.models.envelope_model import EnvelopeModel
-from sigvisa.models.noise.noise_model import get_noise_model
+from sigvisa.models.noise.noise_util import get_noise_model
 
-def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, optim_params=None, fit_hz=5):
+def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, optim_params=None, fit_hz=5, nm_type="ar"):
     """
     Find the best-fitting template parameters for each band/channel of
     a particular event at a particular station. Store the template
@@ -35,7 +35,7 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
 
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
 
-    wm = PlainWiggleModel(tm)
+    wm = PlainWiggleModel(tm, nm_type=nm_type)
     em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
 
     # DO THE FITTING
@@ -45,7 +45,7 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
 
-    arm, nmid, nm_fname = get_noise_model(wave, return_details=True)
+    arm, nmid, nm_fname = get_noise_model(wave, model_type=nm_type, return_details=True)
     ll, fit_params = em.wave_log_likelihood_optimize(wave, event, use_leb_phases=True, optim_params=optim_params)
 
     et = time.time()
@@ -77,6 +77,9 @@ def main():
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="BHZ", type="str", help="")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
+    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
+                      help="type of noise model to use (ar)")
+
 
     (options, args) = parser.parse_args()
 
@@ -113,7 +116,7 @@ def main():
     try:
         fitid = fit_event_wave(
             event=ev, sta=options.sta, band=options.band, chan=options.chan, tm=tm, output_run_name=options.run_name, output_iteration=options.run_iteration,
-            init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, optim_params=construct_optim_params(options.optim_params), fit_hz=options.hz)
+            init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, optim_params=construct_optim_params(options.optim_params), fit_hz=options.hz, nm_type=options.nm_type)
     except KeyboardInterrupt:
         s.dbconn.commit()
         raise

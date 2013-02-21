@@ -17,6 +17,7 @@ from sigvisa.database.signal_data import *
 from sigvisa import *
 from sigvisa.models.noise.armodel.learner import ARLearner
 
+import matplotlib
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from datetime import datetime
@@ -119,7 +120,15 @@ def nm_sample(request, nmid):
     canvas.print_png(response)
     return response
 
+
+
 def nm_spectrum(request, nmid):
+
+
+    def empirical_psd(x, hz):
+        y, x = matplotlib.mlab.psd(x, NFFT=len(x), Fs=1)
+        return (x * hz, np.log(y))
+
 
     nm = SigvisaNoiseModel.objects.get(nmid=nmid)
     model = nm.load()
@@ -129,16 +138,24 @@ def nm_spectrum(request, nmid):
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
 
-    lnr = ARLearner(wave.data.compressed(), sf=wave['srate'])
-    params, std = lnr.yulewalker(nm.nparams)
 
-    x, y = model.psd(size=len(wave.data))
-    l1 = axes.plot(x, y, label='ideal AR PSD', linewidth=2, zorder=100)
-    x2, y2 = lnr.psd()
-    l2 = axes.plot(x2, y2, label='actual PSD')
+    if nm.model_type == "ar":
+        x, y = model.psd(size=len(wave.data))
+        l1 = axes.plot(x, y, linewidth=2, zorder=100)
+        psd_label = "ideal AR PSD"
+    else:
+        n=60 * nm.hz
+        s = model.sample(n=n)
+        s -= model.mean(n=n)
+        x, y = empirical_psd(s, hz=nm.hz)
+        l1 = axes.plot(x, y, linewidth=1, zorder=100)
+        psd_label='model PSD (empirical)'
+
+    x2, y2 = empirical_psd(wave.data.compressed(), hz=nm.hz)
+    l2 = axes.plot(x2, y2)
     axes.set_xlabel('Frequency (Hz)', fontsize=8)
     axes.set_ylabel('Power (natural log scale)', fontsize=8)
-    fig.legend(l1+l2, ('ideal AR PSD', 'actual PSD'), loc=1, fontsize=8)
+    fig.legend(l1+l2, (psd_label, 'training data PSD'), loc=1, fontsize=8)
 
     process_plot_args(request, axes)
 
@@ -150,6 +167,10 @@ def nm_spectrum(request, nmid):
 
 def nm_crossval(request, nmid):
     nm = SigvisaNoiseModel.objects.get(nmid=nmid)
+
+    if nm.model_type != "ar":
+        raise NotImplementedError("cross-validation is only implemented for AR models")
+
     model = nm.load()
     model.sf = nm.hz
     wave = nm.get_data()

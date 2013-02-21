@@ -16,8 +16,6 @@ from sigvisa.database import db
 
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event
-from sigvisa.models.noise.armodel.learner import ARLearner
-from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 import sigvisa.utils.geog as geog
 import obspy.signal.util
 

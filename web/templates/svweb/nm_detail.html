@@ -10,7 +10,7 @@
 
 <p>time: {{timestr}}<br/>len: {{nm.window_len}}s<br/>
 chan: {{nm.chan}}, band: {{nm.band}}, srate: {{nm.hz}}hz<br/>
-model_type: {{nm.model_type}}, n: {{nm.nparams}}. <a href="{% url nm_crossval nmid=nm.nmid %}?max_order=50">cross-validate</a><br/>
+model_type: {{nm.model_type}}, n: {{nm.nparams}}. {% if nm.model_type == "ar" %}<a href="{% url nm_crossval nmid=nm.nmid %}?max_order=50">cross-validate</a>{% endif %}<br/>
 mean: {{nm.mean}}, std: {{nm.std}}</p>
 
 
@@ -21,7 +21,7 @@ mean: {{nm.mean}}, std: {{nm.std}}</p>
 <tr>
   <td>
     <strong>Params (order {{nm.nparams}}):</strong><br>
-    <img src="{% url nm_param_plot nmid=nm.nmid %}" width=500 height=300>
+    <img src="{% if nm.model_type == "ar" %}{% url nm_param_plot nmid=nm.nmid %}{%endif %}" width=500 height=300>
   </td>
 
   <td>

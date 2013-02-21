@@ -10,7 +10,7 @@
 from django.db import models
 from svweb.fields import UnixTimestampField, BlobField
 
-from sigvisa.models.noise.noise_model import load_nm_from_file
+from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.signals.io import fetch_waveform
 
 class view_options(models.Model):
@@ -194,7 +194,7 @@ class SigvisaNoiseModel(models.Model):
         db_table = u'sigvisa_noise_model'
 
     def load(self):
-        return load_nm_from_file(self.fname, self.model_type)
+        return NoiseModel.load_from_file(self.fname, self.model_type)
 
     def get_data(self):
         return fetch_waveform(str(self.sta), str(self.chan), self.window_stime, self.window_stime + self.window_len).filter('%s;env;hz_%.2f' % (self.band, self.hz))

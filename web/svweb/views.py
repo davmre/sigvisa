@@ -16,7 +16,7 @@ from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.signals.io import *
 from sigvisa import *
-from sigvisa.models.noise.noise_model import get_noise_model
+from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.source.event import get_event, EventNotFound
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
@@ -149,9 +149,6 @@ def fit_detail(request, fitid):
 
         wave_stime_str = datetime.fromtimestamp(wave['stime'], timezone('UTC')).strftime(time_format)
         wave_etime_str = datetime.fromtimestamp(wave['etime'], timezone('UTC')).strftime(time_format)
-        #nm = get_noise_model(waveform=wave)
-
-        nm = fit.nmid.load()
 
     except Exception as e:
         wave = Waveform()
@@ -193,7 +190,6 @@ def fit_detail(request, fitid):
         'loc_str': loc_str,
         'dist': dist,
         'azi': azi,
-        'noise_model': nm,
         'fits_filter': fits_filter,
     }, context_instance=RequestContext(request))
 

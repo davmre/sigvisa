@@ -1,7 +1,10 @@
+import time
+import os
 import numpy as np
 
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models import TimeSeriesDist
+
 
 class NoiseModel(TimeSeriesDist):
     def param_mean(self):
@@ -28,7 +31,7 @@ class NoiseModel(TimeSeriesDist):
         return execute_and_return_id(dbconn, sql_query, "nmid")
 
     @staticmethod
-    def load_from_db(self, dbconn, sta, chan, band, hz, order, model_type, hour, return_extra=False):
+    def load_from_db(dbconn, sta, chan, band, hz, order, model_type, hour, return_extra=False):
 
         cursor = dbconn.cursor()
         sql_query = "select nmid, window_stime, window_len, mean, std, fname from sigvisa_noise_model where sta='%s' and chan='%s' and band='%s' and hz=%d and nparams=%d and model_type='%s' and created_for_hour=%d" % (sta, chan, band, hz, order, model_type, hour)
@@ -53,8 +56,10 @@ class NoiseModel(TimeSeriesDist):
     def load_from_file(nm_fname, model_type):
         full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
         if model_type.lower() == "ar":
+            from sigvisa.models.noise.armodel.model import ARModel
             model = ARModel.load_from_file(full_fname)
         elif model_type.lower() == "l1":
+            from sigvisa.models.noise.iid import L1IIDModel
             model = L1IIDModel.load_from_file(full_fname)
         else:
             raise Exception("unrecognized model type %s" % (model_type))

@@ -1,5 +1,5 @@
 import numpy as np
-from sigvisa.models.noise.noise_model import get_noise_model
+from sigvisa.models.noise.noise_util import get_noise_model
 
 
 def wiggle_model_by_name(name, **kwargs):
@@ -16,8 +16,9 @@ def wiggle_model_by_name(name, **kwargs):
 
 class WiggleModel(object):
 
-    def __init__(self, tm):
+    def __init__(self, tm, nm_type="ar"):
         self.tm = tm
+        self.nm_type = nm_type
 
     def template_ncost(wave, phases, params):
         raise Exception("not implemented")
@@ -60,8 +61,8 @@ class PlainWiggleModel(WiggleModel):
 
     def template_ncost(self, wave, phases, params):
         generated = self.tm.generate_template_waveform((phases, params), model_waveform=wave)
-        nm = get_noise_model(wave)
-        ll = nm.lklhood(data=(wave.data - generated.data), zero_mean=True)
+        nm = get_noise_model(wave, model_type=self.nm_type)
+        ll = nm.log_p(x=(wave.data - generated.data), zero_mean=True)
         return ll
 
     def summary_str(self):
