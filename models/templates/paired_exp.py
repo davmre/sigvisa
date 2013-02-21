@@ -80,7 +80,7 @@ class PairedExpTemplateModel(TemplateModel):
     def low_bounds(self, phases, default_atimes=None):
         bounds = np.ones((len(phases), len(self.params()))) * -np.inf
         bounds[:, CODA_HEIGHT_PARAM] = -7
-        bounds[:, PEAK_OFFSET_PARAM] = 0
+        bounds[:, PEAK_OFFSET_PARAM] = 0.5
         bounds[:, CODA_DECAY_PARAM] = -.2
         if default_atimes is not None:
             bounds[:, ARR_TIME_PARAM] = default_atimes - 15

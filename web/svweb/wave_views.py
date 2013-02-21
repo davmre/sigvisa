@@ -46,7 +46,7 @@ def WaveImageView(request):
 
     wave = fetch_waveform(sta, chan, stime, etime).filter(filter_str)
 
-    Figure(figsize=(5 * ratio,5), dpi=dpi)
 
 
-    return view_wave(request, wave, color='black', linewidth=1.5, logscale=logscale)
+
+    return view_wave(request, wave, ratio=ratio, dpi=dpi, color='black', linewidth=1.5, logscale=logscale)

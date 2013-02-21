@@ -179,3 +179,4 @@ def nm_crossval(request, nmid):
     fig.tight_layout()
     canvas.print_png(response)
     return response
+

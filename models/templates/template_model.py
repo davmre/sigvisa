@@ -50,9 +50,6 @@ class TemplateModel(object):
             pstr += "\n"
         return pstr
 
-    def generate_template_waveform(self, template_params, model_waveform=None, sample=False):
-        raise Exception("abstract class: method not implemented")
-
     def low_bounds(self, phases):
         raise Exception("abstract class: method not implemented")
 

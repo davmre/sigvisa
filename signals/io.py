@@ -20,33 +20,55 @@ from sigvisa.signals.mask_util import *
 from sigvisa import Sigvisa
 
 
+try:
+    from MySQLdb import ProgrammingError
+except:
+    class ProgrammingError(exception):
+        pass
+
+
 class MissingWaveform(Exception):
     pass
 
 
 def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None):
+    close_cursor = False
     if cursor is None:
         cursor = Sigvisa().dbconn.cursor()
+        close_cursor = True
 
-    arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
-    arrival_times = arrivals[:, DET_TIME_COL]
+    try:
+        arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
+        arrival_times = arrivals[:, DET_TIME_COL]
 
-    wave = fetch_waveform(sta, chan, np.min(arrival_times) - 10, np.max(arrival_times) + 200)
-    wave.segment_stats['evid'] = evid
-    wave.segment_stats['event_arrivals'] = arrivals
+        wave = fetch_waveform(sta, chan, np.min(arrival_times) - 10, np.max(arrival_times) + 200)
+        wave.segment_stats['evid'] = evid
+        wave.segment_stats['event_arrivals'] = arrivals
+    except:
+        raise
+
+
+
+    if close_cursor:
+        cursor.close()
 
     return wave
 
 
 def load_event_station(evid, sta, evtype="leb", cursor=None):
+    close_cursor = False
     if cursor is None:
         cursor = Sigvisa().dbconn.cursor()
+        close_cursor = True
 
     arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
     arrival_times = arrivals[:, DET_TIME_COL]
     seg = load_segments(cursor, (sta,), np.min(arrival_times) - 10, np.max(arrival_times) + 200)[0]
     seg.stats['evid'] = evid
     seg.stats['event_arrivals'] = arrivals
+
+    if close_cursor:
+        cursor.close()
 
     return seg
 
@@ -103,8 +125,6 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
     artifacts.
     """
     s = Sigvisa()
-    if cursor is None:
-        cursor = s.dbconn.cursor()
 
     # scan the waveforms for the given interval
     samprate = None
@@ -129,6 +149,11 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
     # explicitly do BETWEEN queries (with generous bounds) rather than just
     # checking time < etime and endtime > stime, because the latter creates a
     # monstrous slow database join
+    close_cursor = False
+    if cursor is None:
+        cursor = s.dbconn.cursor()
+        close_cursor = True
+
     MAX_SIGNAL_LEN = 3600 * 8
     sql = "select * from idcx_wfdisc where sta = '%s' and %s and time between %f and %f and endtime between %f and %f" % (
         selection, sql_multi_str("chan", chan_list), stime - MAX_SIGNAL_LEN, etime, stime, etime + MAX_SIGNAL_LEN)
@@ -138,6 +163,10 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
         raise MissingWaveform("Can't find data for sta %s chan %s time %d"
                               % (station, chan, stime))
     table_description = cursor.description
+
+    if close_cursor:
+        cursor.close()
+
 
     for waveform_values in waveforms:
 
@@ -191,6 +220,8 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
         pad_samples = pad_seconds * samprate
         masked_data[0:pad_samples] = ma.masked
         masked_data[-pad_samples:] = ma.masked
+
+
 
     return Waveform(data=masked_data, sta=station, stime=global_stime, srate=samprate, chan=chan)
 

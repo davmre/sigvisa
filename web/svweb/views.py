@@ -145,6 +145,7 @@ def fit_detail(request, fitid):
     # load the waveform so that we can display data about it
     try:
         wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env;hz_%.2f" % fit.hz)
+        cursor.close()
 
         wave_stime_str = datetime.fromtimestamp(wave['stime'], timezone('UTC')).strftime(time_format)
         wave_etime_str = datetime.fromtimestamp(wave['etime'], timezone('UTC')).strftime(time_format)
@@ -175,6 +176,8 @@ def fit_detail(request, fitid):
         loc_str = ""
         ev_time_str = ""
 
+
+
     return render_to_response('svweb/detail.html', {
         'fit': fit,
         'fit_time_str': fit_time_str,
@@ -194,14 +197,14 @@ def fit_detail(request, fitid):
         'fits_filter': fits_filter,
     }, context_instance=RequestContext(request))
 
-def wave_plus_template_view(evid, sta, chan, band, phases, vals, param_type, logscale=True, smoothing=8, sample=False, request=None):
+def wave_plus_template_view(evid, sta, chan, band, phases, vals, param_type, logscale=True, smoothing=8, sample=False, request=None, ratio=1.6, dpi=144):
     cursor = Sigvisa().dbconn.cursor()
     wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor).filter(str(band) + ";env")
     cursor.close()
 
     tm = load_template_model(param_type, run_name=None, run_iter=0, model_type="dummy")
 
-    fig = Figure(figsize=(5, 3), dpi=144)
+    fig = Figure(figsize=(ratio*5, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     axes.set_xlabel("Time (s)", fontsize=8)
@@ -314,7 +317,7 @@ def template_debug_view(request, fitid):
     tm = load_template_model('paired_exp', run_name=None, run_iter=0, model_type="dummy")
     wm = wiggle_model_by_name(name='plain', tm=tm)
     ll = wm.template_ncost(wave, phases, vals)
-    nm, nm_fname = get_noise_model(waveform=wave, return_fname=True)
+    nm = fit.nmid.load()
 
     data_path = os.path.join(os.getenv("SIGVISA_HOME"), 'logs', 'web_debug')
     ensure_dir_exists(data_path)
@@ -342,6 +345,7 @@ def template_debug_view(request, fitid):
 
     return render_to_response('svweb/template_debug.html', {
         'fitid': fitid,
+        'fit': fit,
         'phases': phase_objs,
         'logscale': logscale,
         'smoothing': smoothing,
@@ -352,8 +356,27 @@ def template_debug_view(request, fitid):
         'wiggle_model': wm.summary_str(),
         'env_fname': env_fname,
         'generated_fname': generated_fname,
-        'nm_fname': nm_fname,
     }, context_instance=RequestContext(request))
+
+
+def template_residual_view(request, fitid):
+    fit = get_object_or_404(SigvisaCodaFit, pk=fitid)
+
+    (phases, vals) = phases_from_request(request)
+    if len(phases) == 0:
+        phases, vals = phases_from_fit(fit)
+
+    cursor = Sigvisa().dbconn.cursor()
+    wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env" + ';hz_%.2f' % fit.hz)
+    cursor.close()
+
+    tm = load_template_model('paired_exp', run_name=None, run_iter=0, model_type="dummy")
+    generated = tm.generate_template_waveform((phases, vals), model_waveform=wave)
+
+    diff = Waveform(data =wave.data - generated.data, segment_stats = wave.segment_stats, my_stats=wave.my_stats)
+
+    return view_wave(request, diff)
+
 
 def rate_fit(request, fitid):
     fit = SigvisaCodaFit.objects.get(fitid=int(fitid))
@@ -428,3 +451,4 @@ def fit_cost_quality(request, runid):
     fig.tight_layout()
     canvas.print_png(response)
     return response
+
