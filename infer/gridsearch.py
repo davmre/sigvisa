@@ -115,6 +115,8 @@ def main():
                       help="comma-separated list of channel names to use for inference (BHZ)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
                       help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
+    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
+                      help="type of noise model to use (ar)")
 
 
     (options, args) = parser.parse_args()

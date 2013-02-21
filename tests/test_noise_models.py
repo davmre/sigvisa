@@ -9,7 +9,7 @@ import numpy.ma as ma
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event
 from sigvisa.signals.common import Waveform, Segment, load_waveform_from_file
-from sigvisa.models.noise.noise_model import *
+from sigvisa.models.noise.noise_util import get_noise_model
 
 
 class TestNoiseModels(unittest.TestCase):
@@ -39,6 +39,10 @@ class TestNoiseModels(unittest.TestCase):
         model1 = get_noise_model(
             sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, force_train=True)
         self.assertAlmostEqual(model1.c, 0.3324, places=2)
+
+        model1 = get_noise_model(sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, force_train=True, model_type='iid')
+
+
 
     """"
     def _test_across_several_hours(self):

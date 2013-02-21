@@ -315,17 +315,3 @@ def save_gsrun_to_db(d, segments, em, tm):
 
     s.dbconn.commit()
 
-def lookup_noise_model(cursor, sta, chan, band, hz, order, model_type, hour):
-    sql_query = "select nmid, window_stime, window_len, mean, std, fname from sigvisa_noise_model where sta='%s' and chan='%s' and band='%s' and hz=%d and nparams=%d and model_type='%s' and created_for_hour=%d" % (sta, chan, band, hz, order, model_type, hour)
-    cursor.execute(sql_query)
-    models = cursor.fetchall()
-
-    assert(len(models) <= 1) # otherwise we're confused which model to load
-    if len(models) == 0:
-        return None
-
-    return models[0]
-
-def save_noise_model(dbconn, sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, hour):
-    sql_query = "insert into sigvisa_noise_model (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp) values ('%s', '%s', '%s', %f, %f, %f, '%s', %d, %f, %f, '%s', %d, %f)" % (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time())
-    return execute_and_return_id(dbconn, sql_query, "nmid")

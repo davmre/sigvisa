@@ -7,30 +7,13 @@ from scipy.weave import converters
 import time
 
 
-def load_armodel_from_file(fname):
-    f = open(fname, 'r')
-    try:
-        srate = int(f.readline().split(" ")[1])
-        c = float(f.readline().split(" ")[1])
-        _ = f.readline()
-        mean = float(f.readline().split(" ")[1])
-        std = float(f.readline().split(" ")[1])
-        _ = f.readline()
-        _ = f.readline()
-        params = []
-        for line in f:
-            params.append(float(line))
-        em = ErrorModel(mean, std)
-        arm = ARModel(params, em, c=c, sf=srate)
-    except Exception as e:
-        raise Exception("error reading AR model from file %s: %s" % (fname, str(e)))
-    finally:
-        f.close()
-    return arm
+from sigvisa.models import TimeSeriesDist
+
 #    return cPickle.load(open(fname, 'rb'))
 
 
-class ARModel:
+class ARModel(TimeSeriesDist):
+
     # params: array of parameters
     # p: number of parametesr
     # em: error model
@@ -42,8 +25,11 @@ class ARModel:
         self.c = c
         self.sf = sf
 
+
+
+
     # samples based on the defined AR Model
-    def sample(self, num, initdata=[]):
+    def sample(self, n):
         data = np.zeros(num + self.p)
 
         # initialize with iid samples
@@ -362,7 +348,8 @@ class ARModel:
             return d_prob
 
     # likelihood in log scale
-    def lklhood(self, data, zero_mean=False):
+    def log_p(self, x, zero_mean=False):
+        data = x
         if not isinstance(data, (list, tuple)):
             data = [data, ]
 
@@ -392,6 +379,13 @@ class ARModel:
             prob += d_prob
 
         return prob
+
+
+    def param_mean(self):
+        return self.c
+
+    def param_std(self):
+        return self.em.std
 
     # given data as argument,
     def errors(self, data):
@@ -430,6 +424,29 @@ class ARModel:
             rss += np.square(psd[i] - S[i])
         return rss
 
+    @staticmethod
+    def load_from_file(fname):
+        f = open(fname, 'r')
+        try:
+            srate = int(f.readline().split(" ")[1])
+            c = float(f.readline().split(" ")[1])
+            _ = f.readline()
+            mean = float(f.readline().split(" ")[1])
+            std = float(f.readline().split(" ")[1])
+            _ = f.readline()
+            _ = f.readline()
+            params = []
+            for line in f:
+                params.append(float(line))
+            em = ErrorModel(mean, std)
+            arm = ARModel(params, em, c=c, sf=srate)
+        except Exception as e:
+            raise Exception("error reading AR model from file %s: %s" % (fname, str(e)))
+        finally:
+            f.close()
+        return arm
+
+
     def dump_to_file(self, fname):
         f = open(fname, 'w')
         f.write("srate %d\n" % self.sf)
@@ -443,7 +460,11 @@ class ARModel:
             f.write("%.8f\n" % p)
         f.close()
 
-        # cPickle.dump(self, open(fname, 'wb'), protocol=0)
+    def noise_model_type(self):
+        return "ar"
+
+    def nparams(self):
+        return len(self.params)
 
 
 # error model obeys normal distribution
