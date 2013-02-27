@@ -33,8 +33,10 @@ class NoiseModel(TimeSeriesDist):
     @staticmethod
     def load_from_db(dbconn, sta, chan, band, hz, order, model_type, hour, return_extra=False):
 
+        order_cond = "and nparams=%d" % order if (model_type=='ar' and order != "auto") else ""
+
         cursor = dbconn.cursor()
-        sql_query = "select nmid, window_stime, window_len, mean, std, fname from sigvisa_noise_model where sta='%s' and chan='%s' and band='%s' and hz=%d and nparams=%d and model_type='%s' and created_for_hour=%d" % (sta, chan, band, hz, order, model_type, hour)
+        sql_query = "select nmid, window_stime, window_len, mean, std, fname from sigvisa_noise_model where sta='%s' and chan='%s' and band='%s' and hz=%.2f and model_type='%s' and created_for_hour=%d %s" % (sta, chan, band, hz, model_type, hour, order_cond)
         cursor.execute(sql_query)
         models = cursor.fetchall()
         cursor.close()

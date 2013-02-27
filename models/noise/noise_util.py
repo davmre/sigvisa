@@ -188,7 +188,6 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     model = None
     if not force_train:
         model, details = NoiseModel.load_from_db(dbconn=s.dbconn, sta=sta, chan=chan, band=band, hz=srate, order=order, model_type=model_type, hour=hour, return_extra=True)
-        nmid, window_stime, window_len, mean, std, nm_fname = details
 
     if model is None:
         # otherwise, train a new model
@@ -204,6 +203,8 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
 
         # and store a record of it in the DB
         s.dbconn.commit()
+    else:
+        nmid, window_stime, window_len, mean, std, nm_fname = details
 
     if return_details:
         return model, nmid, nm_fname

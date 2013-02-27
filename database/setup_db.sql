@@ -318,3 +318,4 @@ grant insert on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
 grant alter on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
 grant index on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
 grant execute on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
+grant delete on $VISA_MYSQL_DB.* to $VISA_MYSQL_USER@localhost;
