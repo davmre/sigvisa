@@ -1,26 +1,33 @@
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import sigvisa.infer.optimize.optim_utils
-import scipy.io
-import cStringIO
 from sigvisa.models.wiggles.featurizer import Featurizer
 
 
 class FourierFeatures(Featurizer):
 
-    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, srate=None):
+    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, **kwargs):
+        super(Featurizer, self).__init__(**kwargs)
+
         self.fundamental = fundamental
         self.max_freq = max_freq
         self.min_freq = min_freq
-        self.srate = srate
+        self.nparams = int((self.max_freq - self.min_freq) / self.fundamental) + 1 # one extra feature for std
 
-    def signal_from_features(self, features, srate=None, len_seconds=30):
+    def signal_from_features(self, features, srate=None, len_seconds=None, npts=None):
         srate = srate if srate is not None else self.srate
 
-        x = np.linspace(0, len_seconds, len_seconds * srate)
+        std = features[0]
+        features = np.reshape(features[1:], (-1, 2))
 
-        s = np.zeros((len_seconds * srate,))
+        if npts is not None:
+            len_seconds = npts/srate
+        elif len_seconds is not None:
+            npts = int(len_seconds * srate)
+        else:
+            raise ValueError("call to signal_from_features must specify either len_seconds or npts")
+
+        x = np.linspace(0, len_seconds, npts)
+
+        s = np.zeros((npts,))
 
         for (i, row) in enumerate(features):
             (amp, phase) = row
@@ -35,11 +42,26 @@ class FourierFeatures(Featurizer):
 
             s += amp * np.sin(x * 2 * np.pi * freq + phase)
 
-        s = s / np.std(s) - np.mean(s)
+        m = np.mean(s)
+        s = (s - m) * std + m
+        if self.logscale:
+            s = np.exp(s)
+        else:
+            s += 1
+
         return s
 
     def basis_decomposition(self, signal, srate=None):
         srate = srate if srate is not None else self.srate
+
+        if self.logscale:
+            signal = np.log(signal)
+        else:
+            signal = signal - 1 # we want zero-mean for the Fourier projection
+
+        std = np.std(signal)
+        m = np.mean(signal)
+        signal = (signal - m) / std + m
 
         n_features = int((self.max_freq - self.min_freq) / self.fundamental)
         len_seconds = len(signal) / float(srate)
@@ -74,41 +96,16 @@ class FourierFeatures(Featurizer):
             (amp, phase) = (np.abs(c), np.angle(c))
             features[i, :] = (amp, phase)
 
-        return features
+        return np.concatenate(( (std,), features.flatten()))
+
+    def basis_type(self):
+        return "fourier"
+
+    def dimension(self):
+        return self.nparams
+
+    def save_to_db(self, dbconn):
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, basis_type, dimension, fundamental, min_freq, max_freq) values (%f, '%s', '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.basis_type(), self.dimension(), self.fundamental, self.min_freq, self.max_freq)
+        return execute_and_return_id(dbconn, sql_query, "basisid")
 
 
-def main():
-    ff = FourierFeatures(fundamental=1 / 20.0, min_freq=0.8, max_freq=3.5)
-
-#    wave = np.loadtxt("test.wave")
-    features = np.zeros((35, 2))
-    features[5, :] = [1, 1]
-    wave = ff.signal_from_features(features, len_seconds=30)
-
-    wave = wave / np.std(wave) - np.mean(wave)
-    plt.figure()
-    plt.plot(wave)
-
-    f = ff.basis_decomposition(wave)
-    plt.figure()
-    plt.plot(f[:, 0])
-#    plt.plot(features[:, 0])
-
-    print f
-#    print features
-
-    plt.figure()
-    s = ff.signal_from_features(f, len_seconds=len(wave) / 40)
-    plt.plot(s)
-
-    plt.figure()
-    plt.plot(s)
-    plt.plot(wave)
-
-    offby = s / wave
-    print "off by", np.mean(offby), np.median(offby)
-
-    plt.show()
-
-if __name__ == "__main__":
-    main()

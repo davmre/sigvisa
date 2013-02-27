@@ -379,11 +379,14 @@ class ARModel(NoiseModel):
         return prob
 
 
-    def param_mean(self):
+    def location(self):
         return self.c
 
-    def param_std(self):
+    def scale(self):
         return self.em.std
+
+    def predict(self, n):
+        return np.ones((n,)) * self.c
 
     # given data as argument,
     def errors(self, data):
@@ -461,7 +464,7 @@ class ARModel(NoiseModel):
     def noise_model_type(self):
         return "ar"
 
-    def nparams(self):
+    def order(self):
         return len(self.params)
 
 

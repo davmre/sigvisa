@@ -7,25 +7,25 @@ from sigvisa.models import TimeSeriesDist
 
 
 class NoiseModel(TimeSeriesDist):
-    def param_mean(self):
+    def location(self):
         raise NotImplementedError('abstract base class')
 
-    def param_std(self):
+    def scale(self):
         raise NotImplementedError('abstract base class')
 
     def noise_model_type(self):
         raise NotImplementedError('abstract base class')
 
-    def nparams(self):
+    def order(self):
         raise NotImplementedError('abstract base class')
 
     def save_to_db(self, dbconn, sta, chan, band, hz, window_stime, window_len, fname, hour):
 
         model_type = self.noise_model_type()
-        nparams = self.nparams()
+        nparams = self.order()
 
-        mean = self.param_mean()
-        std = self.param_std()
+        mean = self.location()
+        std = self.scale()
 
         sql_query = "insert into sigvisa_noise_model (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, created_for_hour, timestamp) values ('%s', '%s', '%s', %f, %f, %f, '%s', %d, %f, %f, '%s', %d, %f)" % (sta, chan, band, hz, window_stime, window_len, model_type, nparams, mean, std, fname, hour, time.time())
         return execute_and_return_id(dbconn, sql_query, "nmid")

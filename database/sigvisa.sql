@@ -57,26 +57,6 @@ create table sigvisa_coda_fit_phase (
 );
 
 
-create table sigvisa_wiggle (
- wiggleid  int not null auto_increment, /* MYSQL version */
- fpid int not null,
- stime double precision not null,
- etime double precision not null,
- srate double precision not null,
- timestamp double precision not null,
- type varchar(31) not null,
- log varchar(1) not null,
- meta0 double precision,
- meta1 double precision,
- meta2 double precision,
- meta3 double precision,
- meta_str varchar(255),
- params blob not null,
- primary key(wiggleid),
- foreign key (fpid) REFERENCES sigvisa_coda_fit_phase(fpid)
-);
-
-
 create table sigvisa_template_param_model (
  modelid int not null auto_increment,
  fitting_runid int not null,
@@ -161,4 +141,57 @@ create table sigvisa_noise_model (
  primary key (nmid)
 );
 CREATE INDEX noise_hour_idx ON sigvisa_noise_model (created_for_hour);
+
+
+create table sigvisa_wiggle_basis (
+ basisid int not null auto_increment,
+ srate double precision not null,
+ logscale varchar(1) not null,
+ basis_type varchar(31) not null,
+ dimension int not null,
+ fundamental double precision,
+ min_freq double precision,
+ max_freq double precision,
+ training_set_fname varchar(255),
+ training_sta varchar(10),
+ training_chan varchar(10),
+ training_band varchar(15),
+ training_phase varchar(10),
+ basis_fname varchar(255),
+ primary key (basisid)
+);
+
+create table sigvisa_wiggle_param_model (
+ wpmid int not null auto_increment,
+ fitting_runid int not null,
+ template_shape varchar(15) not null,
+ param varchar(15) not null,
+ site varchar(10) not null,
+ chan varchar(10) not null,
+ band varchar(15) not null,
+ phase varchar(10) not null,
+ model_type varchar(31) not null,
+ model_fname varchar(255) not null,
+ training_set_fname varchar(255) not null,
+ n_evids int not null,
+ training_ll double precision not null,
+ timestamp double precision not null,
+ primary key (wpmid),
+ foreign key (basisid) REFERENCES sigvisa_wiggle_basis (basisid)
+};
+
+create table sigvisa_wiggle (
+ wiggleid  int not null auto_increment, /* MYSQL version */
+ int basisid not null,
+ fpid int not null,
+ stime double precision not null,
+ etime double precision not null,
+ timestamp double precision not null,
+ params blob not null,
+ primary key(wiggleid),
+ foreign key (basisid) REFERENCES sigvisa_wiggle_basis(basisid)
+ foreign key (fpid) REFERENCES sigvisa_coda_fit_phase(fpid)
+);
+
+
 

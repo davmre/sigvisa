@@ -23,6 +23,7 @@ def get_event(*args, **kwargs):
 class Event(object):
 
     __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source']
+    __id_counter__ = 0
 
     def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None):
 
@@ -45,6 +46,12 @@ class Event(object):
             self.orid = None
             self.evid = evid
             self.natural_source = natural_source
+
+        if self.evid is not None:
+            self.id = self.evid
+        else:
+            self.id = Event.__id_counter__
+            Event.__id_counter__ += 1
 
     def as_tuple(self):
         return (self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid)

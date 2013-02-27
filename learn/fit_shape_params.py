@@ -33,6 +33,8 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
+    sg = SigvisaGraph(template_model_type = tm_type, wiggle_model_type=wm_type, wiggle_model_basis=wm_basis)
+
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
 
     wm = PlainWiggleModel(tm, nm_type=nm_type)
@@ -74,6 +76,8 @@ def main():
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default="gp_dad", type="str", help="")
+    parser.add_option("--wiggle_basis_type", dest="wiggle_basis", default="fourier", type="str", help="")
+    parser.add_option("--wiggle_model", dest="wiggle_model", default="gp_dad", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="BHZ", type="str", help="")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
@@ -116,7 +120,7 @@ def main():
     try:
         fitid = fit_event_wave(
             event=ev, sta=options.sta, band=options.band, chan=options.chan, tm=tm, output_run_name=options.run_name, output_iteration=options.run_iteration,
-            init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, optim_params=construct_optim_params(options.optim_params), fit_hz=options.hz, nm_type=options.nm_type)
+            init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, optim_params=construct_optim_params(options.optim_params), fit_hz=options.hz, nm_type=options.nm_type, wm_basis = options.wiggle_basis_type, wm_type=options.wiggle_model)
     except KeyboardInterrupt:
         s.dbconn.commit()
         raise

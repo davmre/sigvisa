@@ -7,7 +7,7 @@ class Distribution(object):
     def dim(self):
         raise NotImplementedError('abstract base class')
 
-    def mean(self, cond=None):
+    def predict(self, cond=None):
         raise NotImplementedError('abstract base class')
 
     def sample(self):
@@ -39,7 +39,7 @@ class Distribution(object):
         return x
 
 class TimeSeriesDist(Distribution):
-    def mean(self, n):
+    def predict(self, n):
         raise NotImplementedError('abstract base class')
 
     def sample(self, n):
@@ -48,7 +48,7 @@ class TimeSeriesDist(Distribution):
 
 
 class ConditionalDist(Distribution):
-    def mean(self, cond=None):
+    def predict(self, cond=None):
         raise NotImplementedError('abstract base class')
 
     def sample(self, cond=None):

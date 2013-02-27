@@ -5,26 +5,22 @@ from sigvisa import Sigvisa
 import sigvisa.models.noise.noise_model as noise_model
 from sigvisa.source.event import get_event
 from sigvisa.signals.common import *
-from sigvisa.models.templates.template_model import TemplateModel
+from sigvisa.models.templates.template_model import TemplateModelNode
 
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4 + 1)
 
+class PairedExpTemplateModel(TemplateModelNode):
 
-class PairedExpTemplateModel(TemplateModel):
-
-# target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r :
-# r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB],
-# "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] -
-# SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]),
-# bandid=int(r[FIT_BANDID]))}
-
-    def params(self):
+    @staticmethod
+    def params():
         return ("arrival_time", "peak_offset", "coda_height", "coda_decay")
 
-    def model_name(self):
+    @staticmethod
+    def model_name():
         return "paired_exp"
 
-    def abstract_logenv_raw(self, vals, min_logenv=-7, idx_offset=0, srate=40):
+    @staticmethod
+    def abstract_logenv_raw(vals, min_logenv=-7, idx_offset=0, srate=40):
         arr_time, peak_offset, coda_height, coda_decay = vals
         assert(idx_offset >= 0 and idx_offset < 1)
 
@@ -77,7 +73,8 @@ class PairedExpTemplateModel(TemplateModel):
 
         return d
 
-    def low_bounds(self, phases, default_atimes=None):
+    @staticmethod
+    def low_bounds(phases, default_atimes=None):
         bounds = np.ones((len(phases), len(self.params()))) * -np.inf
         bounds[:, CODA_HEIGHT_PARAM] = -7
         bounds[:, PEAK_OFFSET_PARAM] = 0.5
@@ -86,6 +83,7 @@ class PairedExpTemplateModel(TemplateModel):
             bounds[:, ARR_TIME_PARAM] = default_atimes - 15
         return bounds
 
+    @staticmethod
     def high_bounds(self, phases, default_atimes=None):
         bounds = np.ones((len(phases), len(self.params()))) * np.inf
         bounds[:, PEAK_OFFSET_PARAM] = 25
@@ -95,7 +93,8 @@ class PairedExpTemplateModel(TemplateModel):
             bounds[:, ARR_TIME_PARAM] = default_atimes + 15
         return bounds
 
-    def heuristic_starting_params(self, wave, detected_phases_only=True):
+    @staticmethod
+    def heuristic_starting_params(wave, detected_phases_only=True):
         s = Sigvisa()
 
         ev = get_event(wave['evid'])

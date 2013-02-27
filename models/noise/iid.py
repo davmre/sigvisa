@@ -18,7 +18,7 @@ class L1IIDModel(NoiseModel):
 
         self.normalizer = np.log(.5 * self.b)
 
-    def mean(self, n):
+    def predict(self, n):
         return np.ones((n,)) * self.median
 
     def sample(self, n):
@@ -41,14 +41,14 @@ class L1IIDModel(NoiseModel):
             b = float(f.readline().split(" ")[1])
         return L1IIDModel(median=median, b=b)
 
-    def param_mean(self):
+    def location(self):
         return self.median
 
-    def param_std(self):
+    def scale(self):
         return self.b
 
     def noise_model_type(self):
         return "l1"
 
-    def nparams(self):
+    def order(self):
         return 0
