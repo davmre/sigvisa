@@ -1,11 +1,12 @@
 import numpy as np
 
-from sigvisa.models import Distribution
+from sigvisa.models import ConditionalDist
+
+from sigvisa import Sigvisa
 
 
 
-
-class TravelTimeModel(ConditionalDistribution):
+class TravelTimeModel(ConditionalDist):
 
     def __init__(self, sta, phase, arrival_time=False):
         self.s = Sigvisa()
@@ -18,7 +19,7 @@ class TravelTimeModel(ConditionalDistribution):
         # peak of a laplace distribution is 1/2b, where b is the
         # scale param, so (HACK ALERT) we can recover b by
         # evaluating the density at the peak
-        self.ttscale = 2.0 / np.exp(self.s.sigmodel.arrtime_logprob(0, 0, 0, siteid - 1, phaseid - 1))
+        self.ttscale = 2.0 / np.exp(self.s.sigmodel.arrtime_logprob(0, 0, 0, self.siteid - 1, self.phaseid - 1))
 
         self.atime = arrival_time
 
@@ -57,6 +58,7 @@ def tt_predict(event, sta, phase):
     phaseid = s.phaseids[phase]
 
     meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid - 1, phaseid - 1)
+    return meantt
 
 def tt_log_p(x, event, sta, phase):
     s = Sigvisa()

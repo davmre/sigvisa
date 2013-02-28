@@ -17,8 +17,8 @@ from optparse import OptionParser
 
 from sigvisa import Sigvisa, NestedDict
 
-from sigvisa.models import TimeSeriesDist, ConditionalDist
 from sigvisa.models.noise.noise_util import get_noise_model
+from sigvisa.models.graph import Node
 
 class EnvelopeNode(Node):
 
@@ -33,13 +33,15 @@ class EnvelopeNode(Node):
 
     def __init__(self, model_waveform, nm_type="ar", observed=True, **kwargs):
 
-        super(Node, self).__init__(model=None, initial_value=model_waveform.data, fixed_value=observed, **kwargs)
+        super(EnvelopeNode, self).__init__(model=None, initial_value=model_waveform.data, fixed_value=observed, **kwargs)
 
         self.sigvisa = Sigvisa()
         self.nm_type = nm_type
 
         self.nm, self.nmid, _ = get_noise_model(waveform=model_waveform, model_type=self.nm_type, return_details=True)
 
+        self.mw = model_waveform
+        self.sta = model_waveform['sta']
         self.srate = model_waveform['srate']
         self.st = model_waveform['stime']
         self.et = model_waveform['etime']

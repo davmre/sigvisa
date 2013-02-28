@@ -1,4 +1,7 @@
 import numpy as np
+
+from sigvisa import Sigvisa
+from sigvisa.models.graph import ClusterNode
 from sigvisa.models.noise.noise_util import get_noise_model
 
 def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisid):
@@ -10,11 +13,11 @@ def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisi
     wpmids = cursor.fetchall()
     return wpmids
 
-def WiggleModelNode(ClusterNode):
+class WiggleModelNode(ClusterNode):
 
     def __init__(self, label="", parents={}, children=[], wiggle_param_model_ids=[], atime_offset_seconds=0.5):
 
-        super(self, ClusterNode).__init__(label=label, nodes=[], parents=parents, children=children)
+        super(WiggleModelNode, self).__init__(label=label, nodes=[], parents=parents, children=children)
 
         s = Sigvisa()
         cursor = s.dbconn.cursor()

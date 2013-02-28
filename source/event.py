@@ -22,7 +22,7 @@ def get_event(*args, **kwargs):
 
 class Event(object):
 
-    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source']
+    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'id']
     __id_counter__ = 0
 
     def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None):

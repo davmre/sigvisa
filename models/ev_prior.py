@@ -1,6 +1,7 @@
 
 
 from sigvisa import Sigvisa
+from sigvisa.models import Distribution
 
 class EventPriorModel(Distribution):
 

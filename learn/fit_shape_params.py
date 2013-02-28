@@ -18,78 +18,17 @@ from optparse import OptionParser
 
 from sigvisa import Sigvisa
 from sigvisa.signals.io import *
-from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_params
-from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
-from sigvisa.models.envelope_model import EnvelopeModel
-from sigvisa.models.noise.noise_util import get_noise_model
 
-def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration, init_run_name=None, init_iteration=None, optim_params=None, fit_hz=5, nm_type="ar"):
-    """
-    Find the best-fitting template parameters for each band/channel of
-    a particular event at a particular station. Store the template
-    parameters in the database.
-    """
-
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-
-    sg = SigvisaGraph(template_model_type = tm_type, wiggle_model_type=wm_type, wiggle_model_basis=wm_basis)
-
-    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
-
-    wm = PlainWiggleModel(tm, nm_type=nm_type)
-    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
-
-    # DO THE FITTING
-    method = optim_params['method']
-    st = time.time()
-
-    if fit_hz != wave['srate']:
-        wave = wave.filter('hz_%.2f' % fit_hz)
-
-    arm, nmid, nm_fname = get_noise_model(wave, model_type=nm_type, return_details=True)
-    ll, fit_params = em.wave_log_likelihood_optimize(wave, event, use_leb_phases=True, optim_params=optim_params)
-
-    et = time.time()
-    fitid = store_template_params(wave, fit_params, optim_param_str=repr(
-        optim_params)[1:-1], iid=False, acost=ll, run_name=output_run_name, iteration=output_iteration, elapsed=et - st, hz=fit_hz, nmid=nmid)
-    s.dbconn.commit()
-
-    cursor.close()
-    return fitid
-
-
-def fit_event_wave():
-    """
-    Find the best-fitting template parameters for each band/channel of
-    a particular event at a particular station. Store the template
-    parameters in the database.
-    """
-
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-
-    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
-
-    wm = PlainWiggleModel(tm, nm_type=nm_type)
-    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
-
-    # DO THE FITTING
-    method = optim_params['method']
-    st = time.time()
-
-    if fit_hz != wave['srate']:
-        wave = wave.filter('hz_%.2f' % fit_hz)
-
-
-    cursor.close()
-    return fitid
+from sigvisa.models.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_basis, wm_type, phases,
-                fit_hz=5, nm_type="ar",
+                output_run_name, output_iteration, fit_hz=5, nm_type="ar",
                 init_run_name=None, init_iteration=None):
-    sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape, wiggle_model_basis=wm_basis, phases=phases, nm_type = nm_type)
+    sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape,
+                      wiggle_model_type=wm_type, wiggle_model_basis=wm_basis,
+                      phases=phases, nm_type = nm_type,
+                      run_name = output_run_name, iteration = output_iteration)
     sg.add_event(ev=event)
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -101,7 +40,7 @@ def setup_graph(event, sta, chan, band,
     return sg
 
 
-def e_step(sigvisa_graph, output_run_name, output_iteration,  optim_params=None):
+def e_step(sigvisa_graph,  optim_params=None):
 
     s = Sigvisa()
 
@@ -110,7 +49,6 @@ def e_step(sigvisa_graph, output_run_name, output_iteration,  optim_params=None)
     et = time.time()
 
     fitids = sigvisa_graph.save_template_params(optim_param_str=repr(optim_params)[1:-1],
-                                                run_name=output_run_name, iteration=output_iteration,
                                                 elapsed=et - st, hz=fit_hz)
     s.dbconn.commit()
     return fitids[0]
@@ -133,7 +71,7 @@ def main():
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default="gp_dad", type="str", help="")
-    parser.add_option("--wiggle_basis_type", dest="wiggle_basis", default="fourier", type="str", help="")
+    parser.add_option("--wiggle_basis_type", dest="wiggle_basis_type", default="fourier", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="gp_dad", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="BHZ", type="str", help="")
@@ -158,9 +96,10 @@ def main():
     setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                 tm_shape=options.template_shape, tm_type=options.template_model,
                 wm_basis=options.wiggle_basis_type, wm_type=options.wiggle_model, phases="leb",
-                fit_hz=options.hz, nm_type=options.nm_type)
+                fit_hz=options.hz, nm_type=options.nm_type,
+                output_run_name = options.run_name, output_iteration = options.run_iteration)
 
-    fitid = e_step(sigvisa_graph, options.run_name, options.run_iteration,  optim_params=construct_option_params(options.optim_params))
+    fitid = e_step(sigvisa_graph,  optim_params=construct_option_params(options.optim_params))
 
     print "fit id %d completed successfully." % fitid
 

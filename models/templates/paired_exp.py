@@ -9,7 +9,7 @@ from sigvisa.models.templates.template_model import TemplateModelNode
 
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4 + 1)
 
-class PairedExpTemplateModel(TemplateModelNode):
+class PairedExpTemplateNode(TemplateModelNode):
 
     @staticmethod
     def params():

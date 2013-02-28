@@ -65,13 +65,13 @@ class Node(object):
         return self.children
 
 
-    def set_mark(m=1):
+    def set_mark(self, m=1):
         self.mark = v
 
-    def clear_mark():
+    def clear_mark(self):
         self.mark = 0
 
-    def get_mark():
+    def get_mark(self):
         return self.mark
 
 class ClusterNode(Node):
@@ -114,36 +114,34 @@ class ClusterNode(Node):
             lp += node.log_p(value = value[i])
         return lp
 
-    def
-
     def prior_sample(self, parent_values=None):
         if parent_values is None:
-            parent_values = dict([k, p.get_value()) for (k, p) in self.parents])
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
 
         for node in self.nodes:
             node.prior_sample(parent_values = parent_values)
 
     def prior_predict(self, parent_values=None):
         if parent_values is None:
-            parent_values = dict([k, p.get_value()) for (k, p) in self.parents])
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
 
         for node in self.nodes:
             node.prior_predict(parent_values = parent_values)
 
 
-def DAG(object):
+class DAG(object):
 
     """
     Represents a directed acyclic graph.
 
     """
 
-    def __init__(self, toplevel_nodes[], leaf_nodes=[]):
+    def __init__(self, toplevel_nodes=[], leaf_nodes=[]):
         self.toplevel_nodes = []
         self.leaf_nodes = []
 
-        # invariant: self.__topo_sorted_list should always be a topologically sorted list of nodes
-        self.__topo_sort()
+        # invariant: self._topo_sorted_list should always be a topologically sorted list of nodes
+        self._topo_sort()
 
     def __ts_visit(self, node):
         m = node.get_mark()
@@ -154,22 +152,22 @@ def DAG(object):
             for pn in node.parents.values():
                 self.__ts_visit(pn)
             node.set_mark(1)
-            self.__topo_sorted_list.append(node)
-    def __topo_sort(self):
-        self.__topo_sorted_list = []
+            self._topo_sorted_list.append(node)
+    def _topo_sort(self):
+        self._topo_sorted_list = []
         for leaf in self.leaf_nodes:
             self.__ts_visit(self, leaf)
         self.clear_visited()
 
     def topo_sorted_nodes(self):
-        return self.__topo_sorted_list
+        return self._topo_sorted_list
 
     def clear_visited(self):
         q = deque(self.toplevel_nodes)
         while len(q) > 0:
             node = q.pop()
-            node.clear_visited()
-            q.extendLeft(node.children)
+            node.clear_mark()
+            q.extendleft(node.children)
 
 
 class DirectedGraphModel(DAG):

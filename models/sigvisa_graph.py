@@ -1,6 +1,16 @@
-from sigvisa.models.graph import DirectedGraphModel
-from sigviasa.models.ttime import tt_predict, tt_log_p
+import numpy as np
 
+from sigvisa import Sigvisa
+
+from sigvisa.database.dataset import read_event_detections, DET_PHASE_COL
+from sigvisa.database.signal_data import get_fitting_runid
+
+from sigvisa.models.ev_prior import EventPriorModel
+from sigvisa.models.ttime import tt_predict, tt_log_p
+from sigvisa.models.graph import Node, DirectedGraphModel
+from sigvisa.models.envelope_model import EnvelopeNode
+from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa.models.wiggles.wiggle_models import get_wiggle_param_model_ids
 
 class SigvisaGraph(DirectedGraphModel):
 
@@ -10,8 +20,9 @@ class SigvisaGraph(DirectedGraphModel):
 
     """
 
-    def __init__(self, template_model_type, template_shape, wiggle_model_type, wiggle_model_basis, phases, nm_type):
-        super(DirectedGraphModel, self).__init__()
+    def __init__(self, template_model_type, template_shape,
+                 wiggle_model_type, wiggle_model_basis,
+                 phases, nm_type, run_name, iteration):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -20,9 +31,9 @@ class SigvisaGraph(DirectedGraphModel):
                 [list of phase names]: model a fixed set of phases
         """
 
+        super(DirectedGraphModel, self).__init__()
 
         self.ev_prior_model = EventPriorModel()
-        self.ttmodel = TravelTimeModel()
 
         self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -31,24 +42,39 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_model_basis = wiggle_model_basis
 
         self.nm_type = nm_type
-
         self.phases = phases
 
-
+        cursor = Sigvisa().dbconn.cursor()
+        self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = True)
+        cursor.close()
 
         self.template_nodes = []
         self.wiggle_nodes = []
 
+    def predict_phases(self, ev, sta):
+        s = Sigvisa()
+        if self.phases == "leb":
+            cursor = s.dbconn.cursor()
+            phases = [s.phasenames[id_minus1] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
+            cursor.close()
+        elif self.phases == "auto":
+            phases = s.arriving_phases(event=ev, sta=sta)
+        else:
+            phases = self.phases
+        return phases
 
-    def wave_captures_event(self, ev, wave, phase):
+    def wave_captures_event(self, ev, sta, stime, etime):
+        for phase in self.predict_phases(ev, sta):
+            if self.wave_captures_event_phase(ev, sta, stime, etime, phase):
+                return True
+        return False
+
+    def wave_captures_event_phase(self, ev, sta, stime, etime, phase):
         """
 
         Check whether a particular waveform might be expected to contain a signal from a particular event.
 
         """
-        stime = wave['stime']
-        sta = wave['sta']
-        etime = wave['etime']
 
         TT_PROB_THRESHOLD = 1e-5
         MAX_DECAY_LEN_S = 400
@@ -73,17 +99,11 @@ class SigvisaGraph(DirectedGraphModel):
 
     def connect_ev_wave(self, event_node, wave_node):
         ev = event_node.get_value()
-        wave = wave_node.get_value()
+        wave = wave_node.mw
 
         s = Sigvisa()
-        if self.phases == "leb":
-            cursor = s.dbconn.cursor()
-            phases = [self.phasenames[id_minus1] for id_minus1 in read_event_detections(cursor=cursor, evid=.evid, stations=[wave['sta'], ], evtype="leb")[:,DET_PHASE_COL]]
-            cursor.close()
-        elif self.phases == "auto":
-            phases = s.arriving_phases(event=ev, wave['sta'])
-        else:
-            phases = self.phases
+
+        phases =  self.predict_phases(ev, wave['sta'])
 
         for phase in phases:
 
@@ -106,26 +126,27 @@ class SigvisaGraph(DirectedGraphModel):
         self.toplevel_nodes.append(event_node)
 
         for wave_node in self.leaf_nodes:
-            wave = w.get_value()
-            if not self.wave_captures_event(ev=ev, wave=wave):
+            wave = wave_node.mw
+            if not self.wave_captures_event(ev=ev, sta=wave['sta'], stime=wave['stime'], etime=wave['etime']):
                 continue
 
-            self.connect_ev_wave(ev_node=event_node, wave_node=wave_node)
+            self.connect_ev_wave(event_node=event_node, wave_node=wave_node)
 
-        self.__topo_sort()
+        self._topo_sort()
 
     def add_wave(self, wave):
         wave_node = EnvelopeNode(model_waveform=wave, nm_type=self.nm_type, observed=True)
         self.leaf_nodes.append(wave_node)
 
         for event_node in self.toplevel_nodes:
-            wave = w.get_value()
-            if not self.wave_captures_event(ev=ev, wave=wave):
+            wave = wave_node.mw
+            if not self.wave_captures_event(ev=event_node.get_value(), sta=wave['sta'],
+                                            stime=wave['stime'], etime=wave['etime']):
                 continue
             # TODO: need a smarter way of specifying per-event phases
-            self.connect_ev_wave(ev_node=event_node, wave_node=wave_node)
+            self.connect_ev_wave(event_node=event_node, wave_node=wave_node)
 
-        self.__topo_sort()
+        self._topo_sort()
 
 
     def save_template_params(self, optim_param_str, hz, run_name, iteration, elapsed):

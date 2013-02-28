@@ -14,11 +14,11 @@ from sigvisa.models.ttime import TravelTimeModel
 
 
 
-def TemplateModelNode(ClusterNode):
+class TemplateModelNode(ClusterNode):
 
     def __init__(self, label="", parents = {}, children=[], runid=None, model_type=None, sta=None, chan=None, band=None, phase=None, modelids=None):
 
-        super(self, ClusterNode).__init__(label=label, nodes=[], parents=parents, children=children)
+        super(TemplateModelNode, self).__init__(label=label, nodes=[], parents=parents, children=children)
 
         s = Sigvisa()
         cursor = s.dbconn.cursor()
@@ -40,7 +40,7 @@ def TemplateModelNode(ClusterNode):
             else:
                 raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
 
-                sql_query = "select param, model_type, model_fname, modelid from sigvisa_template_param_model where %s and sta='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d" % (
+            sql_query = "select param, model_type, model_fname, modelid from sigvisa_template_param_model where %s and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d" % (
                 model_type_cond, sta, chan, band, phase, runid)
             cursor.execute(sql_query)
             models = cursor.fetchall()
@@ -93,7 +93,6 @@ def TemplateModelNode(ClusterNode):
         return lp
 
 
-    return vals
 
 
     # return the name of the template model as a string
@@ -114,54 +113,4 @@ def TemplateModelNode(ClusterNode):
     def high_bounds():
         raise Exception("abstract class: method not implemented")
 
-    @classmethod
-    def generate_trace(cls, model_waveform, template_params, return_wave=False):
-        """
-
-        Inputs:
-        model_waveform: a Waveform object. The actual waveform data is ignored, but the start/end times and sampling rate are used to constrain the template generation.
-
-        """
-
-        nm = get_noise_model(model_waveform)
-
-        srate = model_waveform['srate']
-        st = model_waveform['stime']
-        et = model_waveform['etime']
-        npts = model_waveform['npts']
-
-        data = np.ones((npts,)) * nm.c
-
-            v = vals[i, :]
-            arr_time = v[0]
-            start = (arr_time - st) * srate
-            start_idx = int(np.floor(start))
-            if start_idx >= npts:
-                continue
-
-            offset = start - start_idx
-            phase_env = cls.abstract_logenv_raw(v, idx_offset=offset, srate=srate)
-            end_idx = start_idx + len(phase_env)
-            if end_idx <= 0:
-                continue
-
-            try:
-                early = max(0, -start_idx)
-                overshoot = max(0, end_idx - len(data))
-                data[start_idx + early:end_idx - overshoot] += np.exp(phase_env[early:len(phase_env) - overshoot])
-            except Exception as e:
-                print e
-                raise
-
-        if return_wave:
-            wave = Waveform(data=data, segment_stats=model_waveform.segment_stats.copy(), my_stats=model_waveform.my_stats.copy())
-            try:
-                del wave.segment_stats['evid']
-                del wave.segment_stats['event_arrivals']
-            except KeyError:
-                pass
-
-            return wave
-        else:
-            return data
 
