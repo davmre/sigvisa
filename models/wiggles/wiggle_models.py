@@ -45,12 +45,6 @@ def WiggleModelNode(ClusterNode):
 
         self.atime_offset_seconds=atime_offset_seconds
 
-    def get_value(self):
-        vals = np.zeros(len(self.nodes))
-        for node in self.nodes:
-            vals[i] = node.get_value()
-        return value
-
     def get_wiggle(self, npts):
         wiggle = self.featurizer.signal_from_features(features = self.get_value(), npts=npts)
         return wiggle
@@ -65,5 +59,4 @@ class DummyWiggleModelNode(WiggleModelNode):
 
     def get_wiggle(self, npts):
         return np.ones((npts,))
-
 

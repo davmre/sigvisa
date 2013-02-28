@@ -65,15 +65,36 @@ def TemplateModelNode(ClusterNode):
         atimeNode = Node(model=TravelTimeModel(sta=sta, phase=phase, arrival_time=True), parents=parents, label = 'arrival_time')
         self.nodeDict['arrival_time'] = atimeNode
 
+    def dimension(self):
+        return len(self.params())+1
+
     def get_value(self):
-        vals = np.zeros((len(self.params())+1, ))
+        values = np.zeros((self.dimension(), ))
 
         for (i, param) in enumerate(('arrival_time',) + self.params()):
             node = self.nodeDict[param]
             assert( isinstance(node, graph.Node) )
-            vals[i] = node.get_value()
+            values[i] = node.get_value()
 
-        return vals
+        return values
+
+    def set_value(self, value):
+        for (i, param) in enumerate(('arrival_time',) + self.params()):
+            node = self.nodeDict[param]
+            assert( isinstance(node, graph.Node) )
+            node.set_value(value = value[i])
+
+    def log_p(self, value = None):
+        lp = 0
+        for (i, param) in enumerate(('arrival_time',) + self.params()):
+            node = self.nodeDict[param]
+            lp += node.log_p(value = value[i])
+
+        return lp
+
+
+    return vals
+
 
     # return the name of the template model as a string
     @staticmethod
@@ -86,11 +107,11 @@ def TemplateModelNode(ClusterNode):
         raise Exception("abstract class: method not implemented")
 
     @staticmethod
-    def low_bounds(phases):
+    def low_bounds():
         raise Exception("abstract class: method not implemented")
 
     @staticmethod
-    def high_bounds(phases):
+    def high_bounds():
         raise Exception("abstract class: method not implemented")
 
     @classmethod

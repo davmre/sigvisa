@@ -59,6 +59,63 @@ def fit_event_wave(event, sta, chan, band, tm, output_run_name, output_iteration
     return fitid
 
 
+def fit_event_wave():
+    """
+    Find the best-fitting template parameters for each band/channel of
+    a particular event at a particular station. Store the template
+    parameters in the database.
+    """
+
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
+
+    wm = PlainWiggleModel(tm, nm_type=nm_type)
+    em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
+
+    # DO THE FITTING
+    method = optim_params['method']
+    st = time.time()
+
+    if fit_hz != wave['srate']:
+        wave = wave.filter('hz_%.2f' % fit_hz)
+
+
+    cursor.close()
+    return fitid
+
+def setup_graph(event, sta, chan, band,
+                tm_shape, tm_type, wm_basis, wm_type, phases,
+                fit_hz=5, nm_type="ar",
+                init_run_name=None, init_iteration=None):
+    sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape, wiggle_model_basis=wm_basis, phases=phases, nm_type = nm_type)
+    sg.add_event(ev=event)
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+    wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
+    cursor.close()
+    if fit_hz != wave['srate']:
+        wave = wave.filter('hz_%.2f' % fit_hz)
+    sg.add_wave(wave=wave)
+    return sg
+
+
+def e_step(sigvisa_graph, output_run_name, output_iteration,  optim_params=None):
+
+    s = Sigvisa()
+
+    st = time.time()
+    sigvisa_graph.joint_optimize_nodes(sigvisa_graph.template_nodes)
+    et = time.time()
+
+    fitids = sigvisa_graph.save_template_params(optim_param_str=repr(optim_params)[1:-1],
+                                                run_name=output_run_name, iteration=output_iteration,
+                                                elapsed=et - st, hz=fit_hz)
+    s.dbconn.commit()
+    return fitids[0]
+
+
 def main():
     parser = OptionParser()
 
@@ -91,43 +148,20 @@ def main():
     cursor = s.dbconn.cursor()
 
     if options.run_name is None or options.run_iteration is None:
-        raise Exception("must specify run name and iteration!")
-
-    if options.run_iteration == 1:
-        iid = True
-        fix_first_cols = 2
-    elif options.run_iteration == 2:
-        iid = False
-        fix_first_cols = 1
-    else:
-        iid = False
-        fix_first_cols = 0
-    if not iid:
-        raise Exception("non-iid fits not currently implemented!")
-#        raise Exception("need to specify wiggle model for non-iid fits!")
-
-    if options.init_run_name is None:
-        tm = load_template_model(template_shape=options.template_shape, model_type="dummy")
-    else:
-        tm = load_template_model(template_shape=options.template_shape, run_name=options.init_run_name,
-                                 run_iter=options.init_run_iteration, model_type=options.template_model)
+        raise ValueError("must specify run name and iteration!")
 
     if not (options.evid is None and options.orid is None):
         ev = get_event(evid=options.evid, orid=options.orid)
     else:
-        raise Exception("Must specify event id (evid) or origin id (orid) to fit.")
+        raise ValueError("Must specify event id (evid) or origin id (orid) to fit.")
 
-    try:
-        fitid = fit_event_wave(
-            event=ev, sta=options.sta, band=options.band, chan=options.chan, tm=tm, output_run_name=options.run_name, output_iteration=options.run_iteration,
-            init_run_name=options.init_run_name, init_iteration=options.init_run_iteration, optim_params=construct_optim_params(options.optim_params), fit_hz=options.hz, nm_type=options.nm_type, wm_basis = options.wiggle_basis_type, wm_type=options.wiggle_model)
-    except KeyboardInterrupt:
-        s.dbconn.commit()
-        raise
-    except:
-        s.dbconn.commit()
-        print traceback.format_exc()
-        raise
+    setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
+                tm_shape=options.template_shape, tm_type=options.template_model,
+                wm_basis=options.wiggle_basis_type, wm_type=options.wiggle_model, phases="leb",
+                fit_hz=options.hz, nm_type=options.nm_type)
+
+    fitid = e_step(sigvisa_graph, options.run_name, options.run_iteration,  optim_params=construct_option_params(options.optim_params))
+
     print "fit id %d completed successfully." % fitid
 
 if __name__ == "__main__":

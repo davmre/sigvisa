@@ -31,22 +31,24 @@ class EnvelopeNode(Node):
 
     """
 
-    def __init__(self, model_wave, nm_type="ar", observed=True, **kwargs):
+    def __init__(self, model_waveform, nm_type="ar", observed=True, **kwargs):
 
-        super(Node, self).__init__(model=None, initial_value=model_wave.data, fixed_value=observed, **kwargs)
+        super(Node, self).__init__(model=None, initial_value=model_waveform.data, fixed_value=observed, **kwargs)
 
         self.sigvisa = Sigvisa()
         self.nm_type = nm_type
 
-        self.nm = get_noise_model(waveform=model_wave, model_type=self.nm_type)
+        self.nm, self.nmid, _ = get_noise_model(waveform=model_waveform, model_type=self.nm_type, return_details=True)
 
-        self.srate = model_wave['srate']
-        self.st = model_wave['stime']
-        self.et = model_wave['etime']
-        self.npts = model_wave['npts']
+        self.srate = model_waveform['srate']
+        self.st = model_waveform['stime']
+        self.et = model_waveform['etime']
+        self.npts = model_waveform['npts']
 
     def assem_signal(self):
         signal = np.zeros((self.npts,))
+
+        parent_templates = [tm for tm in self.parents.values() if tm.label.startswith("template_")]
 
         for tm in parent_templates:
             key = tm.label[10:]
@@ -86,11 +88,11 @@ class EnvelopeNode(Node):
         noise = self.nm.sample(n=len(signal))
         self.value = signal + noise
 
-    def log_p(self, val=None):
-        if val is None:
-            val = self.value
+    def log_p(self, value=None):
+        if value is None:
+            value = self.value
 
         pred_signal = self.assem_signal()
-        diff = val - pred_signal
-        return= self.nm.log_p(diff)
+        diff = value - pred_signal
+        return self.nm.log_p(diff)
 

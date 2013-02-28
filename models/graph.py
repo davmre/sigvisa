@@ -2,6 +2,8 @@ import numpy as np
 
 from collections import deque
 
+import sigvisa.infer.optimize.optim_utils as optim_utils
+
 class Node(object):
 
     def __init__(self, model, label="", initial_value = None, fixed_value=False, children=[], parents = {}):
@@ -20,38 +22,48 @@ class Node(object):
     def addParent(self, parent):
         self.parents[parent.label] = parent
 
+    def dimension(self):
+        return len(self.value)
+
     def get_value(self):
         return self.value
 
-    def log_p(self, val=None, parent_vals=None):
-        if parent_vals is None:
-            parent_vals = dict([(k, p.get_value()) for (k, p) in self.parents])
-        if val is None:
-            val = self.value
+    def set_value(self, value):
+        self.value = value
 
-        return self.model.log_p(x = val, cond=parent_vals)
+    @staticmethod
+    def low_bounds(self):
+        return [np.float('-inf'),] * self.dimension()
 
-    def prior_sample(self, parent_vals=None):
+    @staticmethod
+    def high_bounds(self):
+        return [np.float('inf'),] * self.dimension()
+
+    def log_p(self, value=None, parent_values=None):
+        if parent_values is None:
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+        if value is None:
+            value = self.value
+
+        return self.model.log_p(x = val, cond=parent_values)
+
+    def prior_sample(self, parent_values=None):
         if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
-        if parent_vals is None:
-            parent_vals = dict([(k, p.get_value()) for (k, p) in self.parents])
-        new_val = self.model.sample(cond=parent_vals)
+        if parent_values is None:
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+        new_value = self.model.sample(cond=parent_values)
         self.value = new_val
 
-    def prior_predict(self, parent_vals=None):
+    def prior_predict(self, parent_values=None):
         if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
-        if parent_vals is None:
-            parent_vals = dict([(k, p.get_value()) for (k, p) in self.parents])
-        new_val = self.model.predict(cond=parent_vals)
+        if parent_values is None:
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+        new_value = self.model.predict(cond=parent_values)
         self.value = new_val
 
     def get_children(self):
         return self.children
 
-    def markov_blanket_logp(self, val=None):
-        logp = self.log_p(val=val)
-        for child in self.children:
-            logp += child.log_p(val=val)
 
     def set_mark(m=1):
         self.mark = v
@@ -83,32 +95,41 @@ class ClusterNode(Node):
             node.parents = self.parents
             node.children = self.children
 
+    def dimension(self):
+        return len(self.nodes)
+
     def get_value(self):
-        raise NotImplementedError("abstract base class")
+        values = np.zeros(len(self.nodes))
+        for (i, node) in enumerate(self.nodes):
+            values[i] = node.get_value()
+        return values
 
-    def prior_sample(self, parent_vals=None):
-        if parent_vals is None:
-            parent_vals = dict([k, p.get_value()) for (k, p) in self.parents])
+    def set_value(self, value):
+        for (i, node) in enumerate(self.nodes):
+            node.set_value(value[i])
 
-        for node in self.nodes:
-            node.prior_sample(parent_vals = parent_vals)
-
-    def prior_predict(self, parent_vals=None):
-        if parent_vals is None:
-            parent_vals = dict([k, p.get_value()) for (k, p) in self.parents])
-
-        for node in self.nodes:
-            node.prior_predict(parent_vals = parent_vals)
-
-    def log_p(self, parent_vals = None):
-        if parent_vals is None:
-            parent_vals = dict([k, p.get_value()) for (k, p) in self.parents])
-
+    def log_p(self, value = None):
         lp = 0
-        for node in self.nodes:
-            lp += node.log_p(parent_vals = parent_vals)
-
+        for (i, node) in enumerate(self.nodes):
+            lp += node.log_p(value = value[i])
         return lp
+
+    def
+
+    def prior_sample(self, parent_values=None):
+        if parent_values is None:
+            parent_values = dict([k, p.get_value()) for (k, p) in self.parents])
+
+        for node in self.nodes:
+            node.prior_sample(parent_values = parent_values)
+
+    def prior_predict(self, parent_values=None):
+        if parent_values is None:
+            parent_values = dict([k, p.get_value()) for (k, p) in self.parents])
+
+        for node in self.nodes:
+            node.prior_predict(parent_values = parent_values)
+
 
 def DAG(object):
 
@@ -151,7 +172,6 @@ def DAG(object):
             q.extendLeft(node.children)
 
 
-
 class DirectedGraphModel(DAG):
 
     """
@@ -177,12 +197,43 @@ class DirectedGraphModel(DAG):
         for node in self.topo_sorted_nodes():
             node.prior_predict()
 
+    def joint_optimize_nodes(self, node_list, optim_params):
+        """
+        Assume that the value at each node is a 1D array.
+        """
+
+        all_children = [child for node in node_list for child in node.children]
+        relevant_nodes = set(node_list + all_children)
+
+        def set_all(values):
+            i = 0
+            for node in node_list:
+                n = node.dimension()
+                node.set_value(values[i:i+n])
+                i += n
+
+        def get_all():
+            return np.concatenate([node.get_value() for node in node_list])
+
+        def joint_prob(values):
+            set_all(values)
+            ll = np.sum([node.log_p() for node in relevant_nodes])
+            return ll
+
+        start_values = get_all()
+        low_bounds = np.concatenate([node.low_bounds() for node in node_list])
+        high_bounds = np.concatenate([node.high_bounds() for node in node_list])
+        bounds = zip(low_bounds, high_bounds)
+
+        result_vector, cost = optim_utils.minimize(joint_prob, start_values, optim_params=optim_params, bounds=bounds)
+        set_all(result_vector)
+
     def optimize_bottom_up(self):
         for node in self.topo_sorted_nodes()[-1]:
             if node.fixed_value: continue
 
             v = node.get_value()
-            f = lambda x : -1 * node.markov_blanket_logp(val=x)
+            f = lambda x : -1 * node.markov_blanket_logp(value=x)
 
             if instanceof(n, np.ndarray):
                 v = minimize_matrix(f=f, start=v, optim_params=optim_params, low_bounds=node.low_bound(), high_bounds=node.high_bound())
