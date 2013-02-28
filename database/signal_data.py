@@ -14,6 +14,7 @@ from sigvisa.database.dataset import *
 from sigvisa.database import db
 
 
+
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event
 import sigvisa.utils.geog as geog
@@ -287,6 +288,7 @@ def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band,
 
 
 def save_gsrun_to_db(d, segments, em, tm):
+    from sigvisa.models.noise.noise_util import get_noise_model
     s = Sigvisa()
     sql_query = "insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, phases, wiggle_model_type, heatmap_fname, max_evtime_proposals, true_depth) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :phases, :wiggle_model_type, :heatmap_fname, :max_evtime_proposals, :true_depth)"
     gsid = execute_and_return_id(s.dbconn, sql_query, "gsid", **d)
