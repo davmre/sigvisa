@@ -1,3 +1,4 @@
+import time
 import numpy as np
 
 from sigvisa import Sigvisa
@@ -5,12 +6,15 @@ from sigvisa import Sigvisa
 from sigvisa.database.dataset import read_event_detections, DET_PHASE_COL
 from sigvisa.database.signal_data import get_fitting_runid
 
+from sigvisa.source.event import get_event
+import sigvisa.utils.geog as geog
 from sigvisa.models.ev_prior import EventPriorModel
 from sigvisa.models.ttime import tt_predict, tt_log_p
 from sigvisa.models.graph import Node, DirectedGraphModel
 from sigvisa.models.envelope_model import EnvelopeNode
 from sigvisa.models.templates.load_by_name import load_template_model
-from sigvisa.models.wiggles.wiggle_models import get_wiggle_param_model_ids
+from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
+from sigvisa.database.signal_data import execute_and_return_id
 
 class SigvisaGraph(DirectedGraphModel):
 
@@ -21,7 +25,7 @@ class SigvisaGraph(DirectedGraphModel):
     """
 
     def __init__(self, template_model_type, template_shape,
-                 wiggle_model_type, wiggle_model_basis,
+                 wiggle_model_type, wiggle_family,
                  phases, nm_type, run_name, iteration):
         """
 
@@ -39,7 +43,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.template_shape = template_shape
 
         self.wiggle_model_type = wiggle_model_type
-        self.wiggle_model_basis = wiggle_model_basis
+        self.wiggle_family = wiggle_family
 
         self.nm_type = nm_type
         self.phases = phases
@@ -107,22 +111,21 @@ class SigvisaGraph(DirectedGraphModel):
 
         for phase in phases:
 
-            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s_%s" % (ev.id, phase), template_shape = self.template_shape)
+            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%d_%s" % (ev.id, phase), template_shape = self.template_shape)
             tm_node.addParent(event_node)
-            event_node.addChild(tm_node)
-            wave_node.addParent(tm_node)
             tm_node.addChild(wave_node)
             self.template_nodes.append(tm_node)
+            tm_node.prior_predict()
+            print tm_node.get_value()
 
-            wpmids = get_wiggle_param_model_ids(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.wiggle_model_type, basisid = self.wiggle_model_basis)
-            wm_node = WiggleModelNode(label="wiggle_%s_%s" % (ev.id, phase), wiggle_param_model_ids=wpmids)
+            wm_node = WiggleModelNode(label="wiggle_%d_%s" % (ev.id, phase), basis_family=self.wiggle_family, wiggle_model_type = self.wiggle_model_type, model_waveform=wave, phase=phase, runid=self.runid)
             wm_node.addParent(event_node)
-            event_node.addChild(wm_node)
-            wave_node.addParent(wm_node)
+            wm_node.addChild(wave_node)
             self.wiggle_nodes.append(wm_node)
+            wm_node.prior_predict()
 
     def add_event(self, ev):
-        event_node = Node(model = self.ev_prior_model, fixed_value=True, initial_value=ev)
+        event_node = Node(model = self.ev_prior_model, fixed_value=True, initial_value=ev, label='ev_%d' % ev.id)
         self.toplevel_nodes.append(event_node)
 
         for wave_node in self.leaf_nodes:
@@ -156,7 +159,7 @@ class SigvisaGraph(DirectedGraphModel):
         fitids = []
 
         for wave_node in self.leaf_nodes:
-            wave = wave_node.get_value()
+            wave = wave_node.mw
 
             sta = wave['sta']
             siteid = wave['siteid']
@@ -184,7 +187,7 @@ class SigvisaGraph(DirectedGraphModel):
                 transfer = fit_params[2] - event.source_logamp(band, tm.phase)
 
                 phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (
-                    fitid, phase, fit_params[0], fit_params[1], fit_params[2], fit_params[3], transfer)
+                    fitid, tm.phase, fit_params[0], fit_params[1], fit_params[2], fit_params[3], transfer)
                 cursor.execute(phase_insert_query)
 
 

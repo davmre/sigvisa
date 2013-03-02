@@ -145,24 +145,29 @@ CREATE INDEX noise_hour_idx ON sigvisa_noise_model (created_for_hour);
 
 create table sigvisa_wiggle_basis (
  basisid int not null auto_increment,
+ family_name varchar(63) not null,
  srate double precision not null,
  logscale varchar(1) not null,
+ lead_time float not null,
  basis_type varchar(31) not null,
  dimension int not null,
  fundamental double precision,
  min_freq double precision,
  max_freq double precision,
+ training_runid int,
  training_set_fname varchar(255),
  training_sta varchar(10),
  training_chan varchar(10),
  training_band varchar(15),
  training_phase varchar(10),
  basis_fname varchar(255),
- primary key (basisid)
+ primary key (basisid),
+ foreign key (training_runid) references sigvisa_coda_fitting_run(runid)
 );
 
 create table sigvisa_wiggle_param_model (
  wpmid int not null auto_increment,
+ basisid int not null,
  fitting_runid int not null,
  template_shape varchar(15) not null,
  param varchar(15) not null,
@@ -178,7 +183,7 @@ create table sigvisa_wiggle_param_model (
  timestamp double precision not null,
  primary key (wpmid),
  foreign key (basisid) REFERENCES sigvisa_wiggle_basis (basisid)
-};
+);
 
 create table sigvisa_wiggle (
  wiggleid  int not null auto_increment, /* MYSQL version */

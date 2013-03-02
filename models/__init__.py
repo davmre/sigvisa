@@ -57,3 +57,14 @@ class ConditionalDist(Distribution):
     def log_p(self, cond=None):
         raise NotImplementedError('abstract base class')
 
+
+class DummyModel(Distribution):
+
+    def log_p(self, x, **kwargs):
+        return 0
+
+    def sample(self, **kwargs):
+        return 0
+
+    def predict(self, **kwargs):
+        return 0

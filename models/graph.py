@@ -4,12 +4,15 @@ from collections import deque
 
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
+class CyclicGraphError(Exception):
+    pass
+
 class Node(object):
 
-    def __init__(self, model, label="", initial_value = None, fixed_value=False, children=[], parents = {}):
+    def __init__(self, model, label="", initial_value = None, fixed_value=False, children=None, parents = None):
 
-        self.children=children
-        self.parents = parents
+        self.children = set(children) if children is not None else set()
+        self.parents = parents if parents is not None else dict()
         self.model = model
         self.value = initial_value
         self.fixed_value = fixed_value
@@ -17,9 +20,11 @@ class Node(object):
         self.mark = 0
 
     def addChild(self, child):
-        self.children.append(child)
+        self.children.add(child)
+        child.parents[self.label] = self
 
     def addParent(self, parent):
+        parent.children.add(self)
         self.parents[parent.label] = parent
 
     def dimension(self):
@@ -41,31 +46,31 @@ class Node(object):
 
     def log_p(self, value=None, parent_values=None):
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
         if value is None:
             value = self.value
 
-        return self.model.log_p(x = val, cond=parent_values)
+        return self.model.log_p(x = value, cond=parent_values)
 
     def prior_sample(self, parent_values=None):
         if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
         new_value = self.model.sample(cond=parent_values)
-        self.value = new_val
+        self.value = new_value
 
     def prior_predict(self, parent_values=None):
         if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
         new_value = self.model.predict(cond=parent_values)
-        self.value = new_val
+        self.value = new_value
 
     def get_children(self):
         return self.children
 
 
-    def set_mark(self, m=1):
+    def set_mark(self, v=1):
         self.mark = v
 
     def clear_mark(self):
@@ -85,11 +90,10 @@ class ClusterNode(Node):
 
     """
 
-    def __init__(self, label="", nodes = [], parents = {}, children=[]):
+    def __init__(self, label="", nodes = [], parents = None, children=None):
+        super(ClusterNode, self).__init__(model=None, label=label, parents=parents, children=children)
+
         self.nodes = nodes
-        self.label = label
-        self.parents = parents
-        self.children = children
 
         for node in self.nodes:
             node.parents = self.parents
@@ -116,14 +120,14 @@ class ClusterNode(Node):
 
     def prior_sample(self, parent_values=None):
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
 
         for node in self.nodes:
             node.prior_sample(parent_values = parent_values)
 
     def prior_predict(self, parent_values=None):
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents])
+            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
 
         for node in self.nodes:
             node.prior_predict(parent_values = parent_values)
@@ -137,8 +141,8 @@ class DAG(object):
     """
 
     def __init__(self, toplevel_nodes=[], leaf_nodes=[]):
-        self.toplevel_nodes = []
-        self.leaf_nodes = []
+        self.toplevel_nodes = toplevel_nodes
+        self.leaf_nodes = leaf_nodes
 
         # invariant: self._topo_sorted_list should always be a topologically sorted list of nodes
         self._topo_sort()
@@ -146,7 +150,8 @@ class DAG(object):
     def __ts_visit(self, node):
         m = node.get_mark()
         if m == 2:
-            raise Exception("graph contains a cycle!")
+            import pdb; pdb.set_trace()
+            raise CyclicGraphError("graph contains a cycle!")
         elif m == 0:
             node.set_mark(2) # visit node "temporarily"
             for pn in node.parents.values():
@@ -154,9 +159,16 @@ class DAG(object):
             node.set_mark(1)
             self._topo_sorted_list.append(node)
     def _topo_sort(self):
+
+        # check graph invariants
+        for tn in self.toplevel_nodes:
+            assert(len(tn.parents) == 0)
+        for ln in self.leaf_nodes:
+            assert(len(ln.children) == 0)
+
         self._topo_sorted_list = []
         for leaf in self.leaf_nodes:
-            self.__ts_visit(self, leaf)
+            self.__ts_visit(leaf)
         self.clear_visited()
 
     def topo_sorted_nodes(self):
@@ -177,8 +189,8 @@ class DirectedGraphModel(DAG):
 
     """
 
-    def __init__(self):
-        super(DAG, self).__init__()
+    def __init__(self, **kwargs):
+        super(DirectedGraphModel, self).__init__(**kwargs)
 
     def current_log_p(self):
         logp = 0
@@ -225,19 +237,4 @@ class DirectedGraphModel(DAG):
 
         result_vector, cost = optim_utils.minimize(joint_prob, start_values, optim_params=optim_params, bounds=bounds)
         set_all(result_vector)
-
-    def optimize_bottom_up(self):
-        for node in self.topo_sorted_nodes()[-1]:
-            if node.fixed_value: continue
-
-            v = node.get_value()
-            f = lambda x : -1 * node.markov_blanket_logp(value=x)
-
-            if instanceof(n, np.ndarray):
-                v = minimize_matrix(f=f, start=v, optim_params=optim_params, low_bounds=node.low_bound(), high_bounds=node.high_bound())
-            else:
-                raise NotImplementedError("optimizing non-array params is not tested / guaranteed to work")
-                v = minimize(f=f, x0=v, optim_params=optim_params, bounds=(node.low_bound(), node.high_bound()))
-
-
 

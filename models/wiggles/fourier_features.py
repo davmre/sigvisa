@@ -1,11 +1,13 @@
 import numpy as np
 from sigvisa.models.wiggles.featurizer import Featurizer
-
+from sigvisa.database.signal_data import execute_and_return_id
 
 class FourierFeatures(Featurizer):
 
     def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, **kwargs):
-        super(Featurizer, self).__init__(**kwargs)
+        super(FourierFeatures, self).__init__(**kwargs)
+
+        assert(min_freq < max_freq)
 
         self.fundamental = fundamental
         self.max_freq = max_freq
@@ -105,7 +107,7 @@ class FourierFeatures(Featurizer):
         return self.nparams
 
     def save_to_db(self, dbconn):
-        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, basis_type, dimension, fundamental, min_freq, max_freq) values (%f, '%s', '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.basis_type(), self.dimension(), self.fundamental, self.min_freq, self.max_freq)
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, lead_time, basis_type, dimension, fundamental, min_freq, max_freq) values (%f, '%s', %f, '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.lead_time, self.basis_type(), self.dimension(), self.fundamental, self.min_freq, self.max_freq)
         return execute_and_return_id(dbconn, sql_query, "basisid")
 
 

@@ -10,21 +10,25 @@ from sigvisa.signals.common import *
 
 from sigvisa.models.graph import Node, ClusterNode
 from sigvisa.models.ttime import TravelTimeModel
-
+from sigvisa.models import DummyModel
 
 
 
 class TemplateModelNode(ClusterNode):
 
-    def __init__(self, label="", parents = {}, children=[], runid=None, model_type=None, sta=None, chan=None, band=None, phase=None, modelids=None):
+    def __init__(self, label="", parents = None, children=None, runid=None, model_type=None, sta=None, chan=None, band=None, phase=None, modelids=None):
 
         super(TemplateModelNode, self).__init__(label=label, nodes=[], parents=parents, children=children)
+
+        self.phase = phase
 
         s = Sigvisa()
         cursor = s.dbconn.cursor()
 
         # get information about the param models to be loaded
-        if modelids is not None:
+        if model_type == "dummy":
+            pass
+        elif modelids is not None:
             models = []
             for modelid in modelids:
                 sql_query = "select param, model_type, model_fname, modelid from sigvisa_template_param_model where modelid=%d" % (modelid)
@@ -49,21 +53,30 @@ class TemplateModelNode(ClusterNode):
 
         # load all relevant models as new graph nodes
         self.nodes = []
-        self.nodeDict = NestedDict()
-        basedir = os.getenv("SIGVISA_HOME")
-        for (param, db_model_type, fname, modelid) in models:
-            if param == "amp_transfer":
-                param = "coda_height"
+        self.nodeDict = dict()
 
-            model = load_model(os.path.join(basedir, fname), db_model_type)
-            mNode = Node(model=model, parents=parents, children=children, label=param)
+        if model_type == "dummy":
+            for (i, param) in enumerate(self.params()):
+                mNode = Node(model=DummyModel(), parents=self.parents, children=self.children, label=param)
+                self.nodes.append(mNode)
+                self.nodeDict[param] = mNode
+        else:
+            basedir = os.getenv("SIGVISA_HOME")
+            for (param, db_model_type, fname, modelid) in models:
+                if param == "amp_transfer":
+                    param = "coda_height"
 
-            self.nodes.append(mNode)
-            self.nodeDict[param] = mNode
+                model = load_model(os.path.join(basedir, fname), db_model_type)
+                mNode = Node(model=model, parents=self.parents, children=self.children, label=param)
+
+                self.nodes.append(mNode)
+                self.nodeDict[param] = mNode
 
         # also load arrival time models for each phase
-        atimeNode = Node(model=TravelTimeModel(sta=sta, phase=phase, arrival_time=True), parents=parents, label = 'arrival_time')
+        atimeNode = Node(model=TravelTimeModel(sta=sta, phase=phase, arrival_time=True), parents=self.parents, children=self.children, label = 'arrival_time')
+        self.nodes.append(atimeNode)
         self.nodeDict['arrival_time'] = atimeNode
+
 
     def dimension(self):
         return len(self.params())+1
@@ -73,7 +86,6 @@ class TemplateModelNode(ClusterNode):
 
         for (i, param) in enumerate(('arrival_time',) + self.params()):
             node = self.nodeDict[param]
-            assert( isinstance(node, graph.Node) )
             values[i] = node.get_value()
 
         return values
@@ -81,14 +93,14 @@ class TemplateModelNode(ClusterNode):
     def set_value(self, value):
         for (i, param) in enumerate(('arrival_time',) + self.params()):
             node = self.nodeDict[param]
-            assert( isinstance(node, graph.Node) )
             node.set_value(value = value[i])
 
     def log_p(self, value = None):
         lp = 0
+
         for (i, param) in enumerate(('arrival_time',) + self.params()):
             node = self.nodeDict[param]
-            lp += node.log_p(value = value[i])
+            lp += node.log_p(value = value[i] if value is not None else None)
 
         return lp
 

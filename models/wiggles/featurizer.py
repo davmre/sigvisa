@@ -6,24 +6,13 @@ import scipy.io
 import cStringIO
 
 
-def load_basis(basisid):
-    sql_query = "select srate, logscale, basis_type, dimension, fundamental, min_freq, max_freq, training_set_fname, training_sta, training_chan, training_band, training_phase, basis_fname from sigvisa_wiggle_basis where basisid=%d" % (basisid,)
-    cursor.execute(sql_query)
-    basis_info = cursor.fetchone()
-    logscale = (basis_info[1].lower().startswith('t'))
-
-    if basis_info[2] == "fourier":
-        featurizer = FourierFeatures(fundamental = basis_info[4], min_freq=basis_info[5], max_freq=basis_info[6], srate = basis_info[0], logscale=logscale)
-    else:
-        raise NotImplementedError('wiggle basis %s not yet implemented' % basis_info[2])
-
-    return featurizer
 
 class Featurizer(object):
 
-    def __init__(self, srate=None, logscale=False):
+    def __init__(self, srate=None, logscale=False, lead_time=0.5):
         self.srate = srate
         self.logscale = logscale
+        self.lead_time = lead_time
 
     def encode_params_from_signal(self, signal, srate):
         # normalize signal and get params
@@ -60,4 +49,7 @@ class Featurizer(object):
         return np.linalg.norm(signal - self.signal_from_features(features, len_seconds=len(signal) / self.srate), 1)
 
     def save_to_db(self):
+        raise NotImplementedError("abstract base class!")
+
+    def dimension(self):
         raise NotImplementedError("abstract base class!")

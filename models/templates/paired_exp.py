@@ -13,7 +13,7 @@ class PairedExpTemplateNode(TemplateModelNode):
 
     @staticmethod
     def params():
-        return ("arrival_time", "peak_offset", "coda_height", "coda_decay")
+        return ("peak_offset", "coda_height", "coda_decay")
 
     @staticmethod
     def model_name():
@@ -73,22 +73,22 @@ class PairedExpTemplateNode(TemplateModelNode):
 
         return d
 
-    @staticmethod
-    def low_bounds(phases, default_atimes=None):
-        bounds = np.ones((len(phases), len(self.params()))) * -np.inf
-        bounds[:, CODA_HEIGHT_PARAM] = -7
-        bounds[:, PEAK_OFFSET_PARAM] = 0.5
-        bounds[:, CODA_DECAY_PARAM] = -.2
+    @classmethod
+    def low_bounds(cls, default_atimes=None):
+        bounds = np.ones((len(cls.params())+1,)) * -np.inf
+        bounds[CODA_HEIGHT_PARAM] = -7
+        bounds[PEAK_OFFSET_PARAM] = 0.5
+        bounds[CODA_DECAY_PARAM] = -.2
         if default_atimes is not None:
             bounds[:, ARR_TIME_PARAM] = default_atimes - 15
         return bounds
 
-    @staticmethod
-    def high_bounds(self, phases, default_atimes=None):
-        bounds = np.ones((len(phases), len(self.params()))) * np.inf
-        bounds[:, PEAK_OFFSET_PARAM] = 25
-        bounds[:, CODA_DECAY_PARAM] = -0.0001
-        bounds[:, CODA_HEIGHT_PARAM] = 10
+    @classmethod
+    def high_bounds(cls, default_atimes=None):
+        bounds = np.ones((len(cls.params())+1,)) * np.inf
+        bounds[PEAK_OFFSET_PARAM] = 25
+        bounds[CODA_DECAY_PARAM] = -0.0001
+        bounds[CODA_HEIGHT_PARAM] = 10
         if default_atimes is not None:
             bounds[:, ARR_TIME_PARAM] = default_atimes + 15
         return bounds

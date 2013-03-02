@@ -3,7 +3,7 @@ import numpy as np
 from sigvisa.models import ConditionalDist
 
 from sigvisa import Sigvisa
-
+from sigvisa.source.event import Event
 
 
 class TravelTimeModel(ConditionalDist):
@@ -24,16 +24,24 @@ class TravelTimeModel(ConditionalDist):
         self.atime = arrival_time
 
     def predict(self, cond):
-        event = cond
+        if isinstance(cond, Event):
+            event = cond
+        else:
+            assert(len(cond) == 1)
+            event = cond.values()[0]
 
         meantt = self.s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, self.siteid - 1, self.phaseid - 1)
-        if self.arrival_time:
+        if self.atime:
             return meantt + event.time
         else:
             return meantt
 
     def sample(self, cond):
-        event = cond
+        if isinstance(cond, Event):
+            event = cond
+        else:
+            assert(len(cond) == 1)
+            event = cond.values()[0]
 
         meantt = self.predict(event)
 
@@ -43,7 +51,11 @@ class TravelTimeModel(ConditionalDist):
         return tt
 
     def log_p(self, x, cond):
-        event = cond
+        if isinstance(cond, Event):
+            event = cond
+        else:
+            assert(len(cond) == 1)
+            event = cond.values()[0]
 
         meantt = self.predict(event)
         ll = self.s.sigmodel.arrtime_logprob(x, meantt, 0, self.siteid - 1, self.phaseid - 1)

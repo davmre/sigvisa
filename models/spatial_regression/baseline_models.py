@@ -253,3 +253,4 @@ class LinearModel(ParamModel):
             X1 = self.event_to_array(X1)
         assert(len(X1.shape) == 2)
         return np.array([self.sample_item(x1) for x1 in X1])
+

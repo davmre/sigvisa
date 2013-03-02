@@ -20,6 +20,8 @@ python explore/clearest_detections_of_evid.py --evid=5270227 --ss_only
 Create a fitting run evid list with stations you choose:
 python learn/filter_evids_for_run.py -s FITZ,KAPI,STKA,NWAO,CTA -o evid_list --min_mb=4.5 --start_time=1072936800
 
+Create a wiggle basis:
+
 Do the fitting run:
 utils/bgjob python learn/batch_fit_from_evids.py -e evid_list --run_name pipeline --run_iter=1
 

@@ -53,7 +53,7 @@ class EnvelopeNode(Node):
         parent_templates = [tm for tm in self.parents.values() if tm.label.startswith("template_")]
 
         for tm in parent_templates:
-            key = tm.label[10:]
+            key = tm.label[9:]
             v = tm.get_value()
 
             arr_time = v[0]
@@ -63,7 +63,7 @@ class EnvelopeNode(Node):
                 continue
 
             offset = start - start_idx
-            phase_env = tm.abstract_logenv_raw(v, idx_offset=offset, srate=srate)
+            phase_env = tm.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
             end_idx = start_idx + len(phase_env)
             if end_idx <= 0:
                 continue
