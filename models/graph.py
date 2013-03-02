@@ -44,9 +44,12 @@ class Node(object):
     def high_bounds(self):
         return [np.float('inf'),] * self.dimension()
 
+    def _parent_values(self):
+        return dict([(k, p.get_value()) for (k, p) in self.parents.items()])
+
     def log_p(self, value=None, parent_values=None):
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
+            parent_values = self._parent_values()
         if value is None:
             value = self.value
 
@@ -55,20 +58,19 @@ class Node(object):
     def prior_sample(self, parent_values=None):
         if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
+            parent_values = self._parent_values()
         new_value = self.model.sample(cond=parent_values)
         self.value = new_value
 
     def prior_predict(self, parent_values=None):
         if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
+            parent_values = self._parent_values()
         new_value = self.model.predict(cond=parent_values)
         self.value = new_value
 
     def get_children(self):
         return self.children
-
 
     def set_mark(self, v=1):
         self.mark = v
@@ -120,14 +122,14 @@ class ClusterNode(Node):
 
     def prior_sample(self, parent_values=None):
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
+            parent_values = self._parent_values()
 
         for node in self.nodes:
             node.prior_sample(parent_values = parent_values)
 
     def prior_predict(self, parent_values=None):
         if parent_values is None:
-            parent_values = dict([(k, p.get_value()) for (k, p) in self.parents.items()])
+            parent_values = self._parent_values()
 
         for node in self.nodes:
             node.prior_predict(parent_values = parent_values)

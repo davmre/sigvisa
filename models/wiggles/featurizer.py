@@ -9,10 +9,11 @@ import cStringIO
 
 class Featurizer(object):
 
-    def __init__(self, srate=None, logscale=False, lead_time=0.5):
+    def __init__(self, srate=None, logscale=False, lead_time=0.5, family_name=""):
         self.srate = srate
         self.logscale = logscale
         self.lead_time = lead_time
+        self.family_name = family_name
 
     def encode_params_from_signal(self, signal, srate):
         # normalize signal and get params

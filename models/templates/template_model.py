@@ -56,8 +56,9 @@ class TemplateModelNode(ClusterNode):
         self.nodeDict = dict()
 
         if model_type == "dummy":
+            defaults = self.default_param_vals()
             for (i, param) in enumerate(self.params()):
-                mNode = Node(model=DummyModel(), parents=self.parents, children=self.children, label=param)
+                mNode = Node(model=DummyModel(default_value = defaults[param]), parents=self.parents, children=self.children, label=param)
                 self.nodes.append(mNode)
                 self.nodeDict[param] = mNode
         else:

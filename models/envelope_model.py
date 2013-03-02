@@ -68,7 +68,7 @@ class EnvelopeNode(Node):
             if end_idx <= 0:
                 continue
             early = max(0, - start_idx)
-            overshoot = max(0, end_idx - len(data))
+            overshoot = max(0, end_idx - len(signal))
             final_template = np.exp(phase_env[early:len(phase_env) - overshoot])
 
             wm = self.parents['wiggle_%s' % key]

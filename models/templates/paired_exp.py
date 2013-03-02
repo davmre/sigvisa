@@ -16,6 +16,14 @@ class PairedExpTemplateNode(TemplateModelNode):
         return ("peak_offset", "coda_height", "coda_decay")
 
     @staticmethod
+    def default_param_vals():
+        d = dict()
+        d['peak_offset'] = 1
+        d['coda_height'] = 1
+        d['coda_decay'] = -0.001
+        return d
+
+    @staticmethod
     def model_name():
         return "paired_exp"
 
@@ -73,27 +81,27 @@ class PairedExpTemplateNode(TemplateModelNode):
 
         return d
 
-    @classmethod
-    def low_bounds(cls, default_atimes=None):
-        bounds = np.ones((len(cls.params())+1,)) * -np.inf
+    def low_bounds(self):
+        bounds = np.ones((len(self.params())+1,)) * -np.inf
         bounds[CODA_HEIGHT_PARAM] = -7
         bounds[PEAK_OFFSET_PARAM] = 0.5
         bounds[CODA_DECAY_PARAM] = -.2
-        if default_atimes is not None:
-            bounds[:, ARR_TIME_PARAM] = default_atimes - 15
+
+        default_atime = self.nodeDict['arrival_time'].model.predict(cond = self._parent_values())
+        bounds[ARR_TIME_PARAM] = default_atime - 15
         return bounds
 
-    @classmethod
-    def high_bounds(cls, default_atimes=None):
-        bounds = np.ones((len(cls.params())+1,)) * np.inf
+    def high_bounds(self):
+        bounds = np.ones((len(self.params())+1,)) * np.inf
         bounds[PEAK_OFFSET_PARAM] = 25
         bounds[CODA_DECAY_PARAM] = -0.0001
         bounds[CODA_HEIGHT_PARAM] = 10
-        if default_atimes is not None:
-            bounds[:, ARR_TIME_PARAM] = default_atimes + 15
+
+        default_atime = self.nodeDict['arrival_time'].model.predict(cond = self._parent_values())
+        bounds[ARR_TIME_PARAM] = default_atime + 15
         return bounds
 
-    @staticmethod
+
     def heuristic_starting_params(wave, detected_phases_only=True):
         s = Sigvisa()
 

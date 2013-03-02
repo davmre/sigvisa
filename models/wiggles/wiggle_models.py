@@ -59,7 +59,7 @@ class WiggleModelNode(ClusterNode):
                 self.nodes.append(mNode)
 
         assert(len(self.nodes) == featurizer.dimension())
-
+        self.featurizer = featurizer
 
     def get_wiggle(self, npts):
         wiggle = self.featurizer.signal_from_features(features = self.get_value(), npts=npts)

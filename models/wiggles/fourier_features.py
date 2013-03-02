@@ -107,7 +107,7 @@ class FourierFeatures(Featurizer):
         return self.nparams
 
     def save_to_db(self, dbconn):
-        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, lead_time, basis_type, dimension, fundamental, min_freq, max_freq) values (%f, '%s', %f, '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.lead_time, self.basis_type(), self.dimension(), self.fundamental, self.min_freq, self.max_freq)
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, lead_time, family_name, basis_type, dimension, fundamental, min_freq, max_freq) values (%f, '%s', %f, '%s', '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.lead_time, self.family_name, self.basis_type(), self.dimension(), self.fundamental, self.min_freq, self.max_freq)
         return execute_and_return_id(dbconn, sql_query, "basisid")
 
 

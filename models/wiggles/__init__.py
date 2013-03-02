@@ -20,7 +20,7 @@ def load_basis_by_family(family_name, srate, runid=None, sta=None, chan=None, ba
             max_freq = float(band.split('_')[2])
             logscale = "logscale" in family_name
 
-            featurizer = FourierFeatures(fundamental = fundamental, min_freq=min_freq, max_freq=max_freq, srate = srate, logscale=logscale, lead_time=0.5)
+            featurizer = FourierFeatures(fundamental = fundamental, min_freq=min_freq, max_freq=max_freq, srate = srate, logscale=logscale, lead_time=0.5, family_name = family_name)
             basisid = featurizer.save_to_db(s.dbconn)
         elif len(basisids) == 1:
             basisid = basisids[0][0]
@@ -34,14 +34,14 @@ def load_basis_by_family(family_name, srate, runid=None, sta=None, chan=None, ba
     return featurizer, basisid
 
 def load_basis(basisid):
-    sql_query = "select srate, logscale, lead_time, basis_type, dimension, fundamental, min_freq, max_freq, training_set_fname, training_sta, training_chan, training_band, training_phase, basis_fname from sigvisa_wiggle_basis where basisid=%d" % (basisid,)
+    sql_query = "select srate, logscale, lead_time, family_name, basis_type, dimension, fundamental, min_freq, max_freq, training_set_fname, training_sta, training_chan, training_band, training_phase, basis_fname from sigvisa_wiggle_basis where basisid=%d" % (basisid,)
     cursor.execute(sql_query)
     basis_info = cursor.fetchone()
     logscale = (basis_info[1].lower().startswith('t'))
 
-    if basis_info[3] == "fourier":
+    if basis_info[4] == "fourier":
         from sigvisa.models.wiggles.fourier_features import FourierFeatures
-        featurizer = FourierFeatures(fundamental = basis_info[5], min_freq=basis_info[6], max_freq=basis_info[7], srate = basis_info[0], logscale=logscale, lead_time=basis_info[2])
+        featurizer = FourierFeatures(fundamental = basis_info[6], min_freq=basis_info[7], max_freq=basis_info[8], srate = basis_info[0], logscale=logscale, lead_time=basis_info[2], family_name=basis_info[3])
     else:
         raise NotImplementedError('wiggle basis %s not yet implemented' % basis_info[2])
 

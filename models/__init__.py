@@ -60,11 +60,16 @@ class ConditionalDist(Distribution):
 
 class DummyModel(Distribution):
 
+    def __init__(self, default_value = 0, **kwargs):
+        super(DummyModel, self).__init__(**kwargs)
+        self.default_value = default_value
+
+
     def log_p(self, x, **kwargs):
         return 0
 
     def sample(self, **kwargs):
-        return 0
+        return self.default_value
 
     def predict(self, **kwargs):
-        return 0
+        return self.default_value
