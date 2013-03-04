@@ -24,9 +24,9 @@ class SigvisaGraph(DirectedGraphModel):
 
     """
 
-    def __init__(self, template_model_type, template_shape,
-                 wiggle_model_type, wiggle_family,
-                 phases, nm_type, run_name, iteration):
+    def __init__(self, template_model_type="dummy", template_shape="paired_exp",
+                 wiggle_model_type="dummy", wiggle_family="fourier_0.01",
+                 nm_type="ar", run_name=None, iteration=None, phases="auto"):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -48,12 +48,15 @@ class SigvisaGraph(DirectedGraphModel):
         self.nm_type = nm_type
         self.phases = phases
 
-        cursor = Sigvisa().dbconn.cursor()
-        self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = True)
-        cursor.close()
+        self.runid = None
+        if run_name is not None and iteration is not None:
+            cursor = Sigvisa().dbconn.cursor()
+            self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = True)
+            cursor.close()
 
-        self.template_nodes = []
-        self.wiggle_nodes = []
+        self.all_nodes = {}
+        self.template_nodes = set()
+        self.wiggle_nodes = set()
 
     def predict_phases(self, ev, sta):
         s = Sigvisa()
@@ -101,6 +104,16 @@ class SigvisaGraph(DirectedGraphModel):
 
         return captures
 
+    def _get_interior_node_label(self, ev, phase, wave=None, sta=None, chan=None, band=None):
+        if wave is not None:
+            sta = wave['sta']
+            chan = wave['chan']
+            band = wave['band']
+        return "%d_%s_%s_%s_%s" % (ev.id, phase, sta, chan, band)
+
+    def _get_wave_label(self, wave):
+        return 'wave_%s_%s_%s_%.1f' % (wave['sta'], wave['chan'], wave['band'], wave['stime'])
+
     def connect_ev_wave(self, event_node, wave_node):
         ev = event_node.get_value()
         wave = wave_node.mw
@@ -111,22 +124,27 @@ class SigvisaGraph(DirectedGraphModel):
 
         for phase in phases:
 
-            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%d_%s" % (ev.id, phase), template_shape = self.template_shape)
+            lbl = self._get_interior_node_label(ev=ev, phase=phase, wave=wave)
+
+            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s" % (lbl,), template_shape = self.template_shape)
             tm_node.addParent(event_node)
             tm_node.addChild(wave_node)
-            self.template_nodes.append(tm_node)
+            self.all_nodes[tm_node.label] = tm_node
+            self.template_nodes.add(tm_node)
             tm_node.prior_predict()
             print tm_node.get_value()
 
-            wm_node = WiggleModelNode(label="wiggle_%d_%s" % (ev.id, phase), basis_family=self.wiggle_family, wiggle_model_type = self.wiggle_model_type, model_waveform=wave, phase=phase, runid=self.runid)
+            wm_node = WiggleModelNode(label="wiggle_%s" % (lbl,), basis_family=self.wiggle_family, wiggle_model_type = self.wiggle_model_type, model_waveform=wave, phase=phase, runid=self.runid)
             wm_node.addParent(event_node)
             wm_node.addChild(wave_node)
-            self.wiggle_nodes.append(wm_node)
+            self.all_nodes[wm_node.label] = wm_node
+            self.wiggle_nodes.add(wm_node)
             wm_node.prior_predict()
 
     def add_event(self, ev):
         event_node = Node(model = self.ev_prior_model, fixed_value=True, initial_value=ev, label='ev_%d' % ev.id)
         self.toplevel_nodes.append(event_node)
+        self.all_nodes[event_node.label] = event_node
 
         for wave_node in self.leaf_nodes:
             wave = wave_node.mw
@@ -138,8 +156,9 @@ class SigvisaGraph(DirectedGraphModel):
         self._topo_sort()
 
     def add_wave(self, wave):
-        wave_node = EnvelopeNode(model_waveform=wave, nm_type=self.nm_type, observed=True)
+        wave_node = EnvelopeNode(model_waveform=wave, nm_type=self.nm_type, observed=True, label=self._get_wave_label(wave=wave))
         self.leaf_nodes.append(wave_node)
+        self.all_nodes[wave_node.label] = wave_node
 
         for event_node in self.toplevel_nodes:
             wave = wave_node.mw
@@ -151,6 +170,16 @@ class SigvisaGraph(DirectedGraphModel):
 
         self._topo_sort()
 
+    def get_template_node(self, **kwargs):
+        lbl = self._get_interior_node_label(**kwargs)
+        return self.all_nodes["template_%s" % lbl]
+
+    def get_wiggle_node(self, **kwargs):
+        lbl = self._get_interior_node_label(**kwargs)
+        return self.all_nodes["wiggle_%s" % lbl]
+
+    def get_wave_node(self, wave):
+        return self.all_nodes[self._get_wave_label(wave=wave)]
 
     def save_template_params(self, optim_param_str, hz, run_name, iteration, elapsed):
         s = Sigvisa()

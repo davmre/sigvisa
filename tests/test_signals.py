@@ -14,7 +14,6 @@ from sigvisa.source.event import get_event
 from sigvisa.signals.common import Waveform, Segment, load_waveform_from_file
 from sigvisa.signals.mask_util import *
 from sigvisa.signals.io import load_event_station
-from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
 import sigvisa.plotting.plot as plot
 
 

@@ -214,6 +214,7 @@ class DirectedGraphModel(DAG):
         Assume that the value at each node is a 1D array.
         """
 
+        node_list = list(node_list) # it's important that the nodes have a consistent order
         all_children = [child for node in node_list for child in node.children]
         relevant_nodes = set(node_list + all_children)
 

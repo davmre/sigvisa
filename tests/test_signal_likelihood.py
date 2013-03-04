@@ -4,8 +4,7 @@ import unittest
 
 from sigvisa.signals.io import load_event_station
 from sigvisa.source.event import get_event
-from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
-from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel
+from sigvisa.models.sigvisa_graph import SigvisaGraph
 from sigvisa.plotting import plot
 
 from sigvisa.tests.test_signals import savefig
@@ -15,36 +14,42 @@ class TestSignalLikelihood(unittest.TestCase):
 
     def setUp(self):
         self.seg = load_event_station(evid=5301405, sta="URZ").with_filter('freq_2.0_3.0;env')
+        self.wave = self.seg['BHZ']
         self.event = get_event(evid=5301405)
-        self.tm = PairedExpTemplateModel(run_name="", model_type="dummy")
-        self.wm = PlainWiggleModel(self.tm)
+
+        self.sg = SigvisaGraph(phases = ['P', 'S'])
+        self.sg.add_event(self.event)
+        self.sg.add_wave(self.wave)
+
+        st = self.seg['stime']
+
+        tm_P_node = self.sg.get_template_node(ev=self.event, wave=self.wave, phase='P')
+        tm_P_node.set_value(np.array((st + 10.0, 15.0, 10.0, -.01)))
+        tm_S_node = self.sg.get_template_node(ev=self.event, wave=self.wave, phase='S')
+        tm_S_node.set_value(np.array((st + 50.0, 15.0, 15.0, -.04)))
+
 
     def test_generate(self):
-        st = self.seg['stime']
-        param_vals = np.array(((st + 10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04)))
-        bhz_23_template = (('P', 'S'), param_vals)
-        template = self.tm.generate_template_waveform(template_params=bhz_23_template, model_waveform=self.seg['BHZ'])
 
-# sampled =
-# self.tm.generate_template_waveform(template_params=bhz_23_template,
-# model_waveform = self.seg['BHZ'], sample=True)
+        wave_node = self.sg.get_wave_node(wave=self.wave)
+        wave_node.prior_predict()
 
-        f = plot.plot_waveform(template, logscale=True)
-        savefig('template.png', f)
+        template_wave = wave_node.get_wave()
 
-#        plotting.plot.plot_waveform(sampled, logscale=True)
-#        plt.savefig('sampled.png')
+        f = plot.plot_waveform(template_wave, logscale=True)
+        savefig('template_new.png', f)
+
 
     def test_likelihood(self):
-        st = self.seg['stime']
-        param_vals = np.array(((st + 10.0, 15.0, 10.0, -.01), (st + 50.0, 15.0, 15.0, -.04)))
 
-        ll = self.wm.template_ncost(wave=self.seg['BHZ'], phases=('P', 'S'), params=param_vals)
+        wave_node = self.sg.get_wave_node(wave=self.wave)
+        ll = wave_node.log_p()
         print ll
 
-        missing_bhz = self.seg['BHZ']
-        missing_bhz.data[50:5000] = ma.masked
-        ll_missing = self.wm.template_ncost(missing_bhz, phases=('P', 'S'), params=param_vals)
+        wave_data = wave_node.get_value()
+        wave_data[50:5000] = ma.masked
+        wave_node.set_value(wave_data)
+        ll_missing = wave_node.log_p()
         print "missing ll", ll_missing
 
         self.assertGreater(ll_missing, ll)

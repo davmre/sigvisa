@@ -8,6 +8,7 @@ def load_basis_by_family(family_name, srate, runid=None, sta=None, chan=None, ba
     if family_name.startswith("fourier"):
 
         s = Sigvisa()
+
         cursor = s.dbconn.cursor()
         cursor.execute("select basisid from sigvisa_wiggle_basis where family_name='%s' and training_band='%s' and srate=%.2f" % (family_name, band, srate))
         basisids = cursor.fetchall()

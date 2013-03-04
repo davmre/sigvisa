@@ -30,7 +30,7 @@ create table sigvisa_coda_fit (
  acost      float(24),
  dist       float(24),
  azi        float(24),
- timestamp float(24),
+ timestamp double precision,
  elapsed   float(24),
  human_approved varchar(1) default 0,
  nmid int not null,

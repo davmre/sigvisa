@@ -16,7 +16,7 @@ from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_
 from optparse import OptionParser
 
 from sigvisa import Sigvisa, NestedDict
-
+from sigvisa.signals.common import Waveform
 from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.graph import Node
 
@@ -37,7 +37,6 @@ class EnvelopeNode(Node):
 
         self.sigvisa = Sigvisa()
         self.nm_type = nm_type
-
         self.nm, self.nmid, _ = get_noise_model(waveform=model_waveform, model_type=self.nm_type, return_details=True)
 
         self.mw = model_waveform
@@ -46,6 +45,13 @@ class EnvelopeNode(Node):
         self.st = model_waveform['stime']
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
+
+    def get_wave(self):
+        return Waveform(data=self.value, segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
+
+    def set_nm_type(self, nm_type):
+        self.nm_type = nm_type
+        self.nm, self.nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
 
     def assem_signal(self):
         signal = np.zeros((self.npts,))
@@ -82,7 +88,7 @@ class EnvelopeNode(Node):
 
     def prior_predict(self):
         signal = self.assem_signal()
-        noise = self.nm.mean(n=len(signal))
+        noise = self.nm.predict(n=len(signal))
         self.value = signal + noise
 
     def prior_sample(self):
