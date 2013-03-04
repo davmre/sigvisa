@@ -5,7 +5,7 @@ from sigvisa.models import Distribution
 
 class EventPriorModel(Distribution):
 
-    def log_p(self, x):
+    def log_p(self, x, cond=None):
         s = Sigvisa()
         loc_lp = s.sigmodel.event_location_prior_logprob(x.lon, x.lat, x.depth)
         mb_lp = s.sigmodel.event_mag_prior_logprob(x.mb)

@@ -58,6 +58,11 @@ class SigvisaGraph(DirectedGraphModel):
         self.template_nodes = set()
         self.wiggle_nodes = set()
 
+    def topo_sorted_nodes(self):
+        assert(len(self._topo_sorted_list) == len(self.all_nodes))
+        return self._topo_sorted_list
+
+
     def predict_phases(self, ev, sta):
         s = Sigvisa()
         if self.phases == "leb":
@@ -132,7 +137,6 @@ class SigvisaGraph(DirectedGraphModel):
             self.all_nodes[tm_node.label] = tm_node
             self.template_nodes.add(tm_node)
             tm_node.prior_predict()
-            print tm_node.get_value()
 
             wm_node = WiggleModelNode(label="wiggle_%s" % (lbl,), basis_family=self.wiggle_family, wiggle_model_type = self.wiggle_model_type, model_waveform=wave, phase=phase, runid=self.runid)
             wm_node.addParent(event_node)
@@ -180,6 +184,10 @@ class SigvisaGraph(DirectedGraphModel):
 
     def get_wave_node(self, wave):
         return self.all_nodes[self._get_wave_label(wave=wave)]
+
+    def fix_arrival_times(self, fixed=True):
+        for tm_node in self.template_nodes:
+            tm_node.fix_arrival_time(fixed=fixed)
 
     def save_template_params(self, optim_param_str, hz, run_name, iteration, elapsed):
         s = Sigvisa()

@@ -47,7 +47,7 @@ class EnvelopeNode(Node):
         self.npts = model_waveform['npts']
 
     def get_wave(self):
-        return Waveform(data=self.value, segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
+        return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
 
     def set_nm_type(self, nm_type):
         self.nm_type = nm_type
@@ -89,16 +89,16 @@ class EnvelopeNode(Node):
     def prior_predict(self):
         signal = self.assem_signal()
         noise = self.nm.predict(n=len(signal))
-        self.value = signal + noise
+        self.set_value(signal + noise)
 
     def prior_sample(self):
         signal = self.assem_signal()
         noise = self.nm.sample(n=len(signal))
-        self.value = signal + noise
+        self.set_value(signal + noise)
 
     def log_p(self, value=None):
         if value is None:
-            value = self.value
+            value = self.get_value()
 
         pred_signal = self.assem_signal()
         diff = value - pred_signal

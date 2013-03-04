@@ -193,19 +193,15 @@ def fit_detail(request, fitid):
         'fits_filter': fits_filter,
     }, context_instance=RequestContext(request))
 
+
 def wave_plus_template_view(evid, sta, chan, band, phases, vals, param_type, logscale=True, smoothing=8, sample=False, request=None, ratio=1.6, dpi=144):
     cursor = Sigvisa().dbconn.cursor()
     wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor).filter(str(band) + ";env")
     cursor.close()
 
-    event = get_event(evid=evid)
-    sg = SigvisaGraph(phases = phases)
-    sg.add_event(event)
-    sg.add_wave(wave)
-    for (phase, vals) in zip(phases, vals):
-        tm_node = sg.get_template_node(ev=event, wave=wave, phase=phase)
-        tm_node.set_value(vals)
+    sg = setup_sigvisa_graph(evid=evid, wave=wave, phases=phases, vals=vals)
     wave_node = sg.get_wave_node(wave=wave)
+    wave_node.fixed_value = False
     wave_node.prior_predict()
     synth_wave = wave_node.get_wave()
 
@@ -298,6 +294,20 @@ def custom_template_view(request, fitid):
                                    logscale=logscale, smoothing=smoothing, sample=False,
                                    request=request)
 
+def setup_sigvisa_graph(evid, wave, phases, vals):
+    event = get_event(evid=evid)
+    sg = SigvisaGraph(phases = phases)
+    assert(len(sg.toplevel_nodes) == 0)
+    assert(len(sg.leaf_nodes) == 0)
+    sg.add_event(event)
+    sg.add_wave(wave)
+    for (phase, val) in zip(phases, vals):
+        tm_node = sg.get_template_node(ev=event, wave=wave, phase=phase)
+        tm_node.set_value(val)
+    for wm in sg.wiggle_nodes:
+        wm.prior_predict()
+    return sg
+
 def template_debug_view(request, fitid):
     fit = get_object_or_404(SigvisaCodaFit, pk=fitid)
     logscale = request.GET.get("logscale", "off")
@@ -313,27 +323,26 @@ def template_debug_view(request, fitid):
     if len(phases) == 0:
         phases, vals = phases_from_fit(fit)
 
-
     cursor = Sigvisa().dbconn.cursor()
     wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env" + ';hz_%.2f' % fit.hz)
     cursor.close()
 
-    tm = load_template_model('paired_exp', run_name=None, run_iter=0, model_type="dummy")
-    wm = wiggle_model_by_name(name='plain', tm=tm)
-    ll = wm.template_ncost(wave, phases, vals)
-    nm = fit.nmid.load()
+    sg = setup_sigvisa_graph(evid=fit.evid, wave=wave, phases=phases, vals=vals)
+    wave_node = sg.get_wave_node(wave=wave)
+
+    ll = wave_node.log_p()
+    param_ll = sg.current_log_p()
+    wave_node.fixed_value = False
+    wave_node.prior_predict()
+    nm = wave_node.nm
 
     data_path = os.path.join(os.getenv("SIGVISA_HOME"), 'logs', 'web_debug')
     ensure_dir_exists(data_path)
     data_hash = hashlib.sha1(repr(vals) + repr(phases) + repr(fitid)).hexdigest()[:8]
     env_fname = os.path.join(data_path, 'template_debug_%s_env.txt' % data_hash)
     np.savetxt(env_fname, wave.data)
-    generated = tm.generate_template_waveform((phases, vals), model_waveform=wave)
     generated_fname = os.path.join(data_path, 'template_debug_%s_generated.txt' % data_hash)
-    np.savetxt(generated_fname, generated.data)
-
-    param_ll = tm.log_likelihood((phases, vals), get_event(fit.evid), str(fit.sta), str(fit.chan), str(fit.band))
-
+    np.savetxt(generated_fname, wave_node.get_value())
 
     if request.GET.get("action", "") == "newrow":
         phases.append("P")
@@ -357,7 +366,6 @@ def template_debug_view(request, fitid):
         'll': ll,
         'param_ll': param_ll,
         'nm': nm,
-        'wiggle_model': wm.summary_str(),
         'env_fname': env_fname,
         'generated_fname': generated_fname,
     }, context_instance=RequestContext(request))
@@ -374,10 +382,12 @@ def template_residual_view(request, fitid):
     wave = load_event_station_chan(fit.evid, str(fit.sta), str(fit.chan), cursor=cursor).filter(str(fit.band) + ";env" + ';hz_%.2f' % fit.hz)
     cursor.close()
 
-    tm = load_template_model('paired_exp', run_name=None, run_iter=0, model_type="dummy")
-    generated = tm.generate_template_waveform((phases, vals), model_waveform=wave)
+    sg = setup_sigvisa_graph(evid=fit.evid, wave=wave, phases=phases, vals=vals)
+    wave_node = sg.get_wave_node(wave=wave)
+    wave_node.fixed_value = False
+    wave_node.prior_predict()
 
-    diff = Waveform(data =wave.data - generated.data, segment_stats = wave.segment_stats, my_stats=wave.my_stats)
+    diff = Waveform(data =wave.data - wave_node.get_value(), segment_stats = wave.segment_stats, my_stats=wave.my_stats)
 
     return view_wave(request, diff)
 

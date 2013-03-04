@@ -1,7 +1,6 @@
 import numpy as np
 
 from collections import deque
-
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
 class CyclicGraphError(Exception):
@@ -14,7 +13,7 @@ class Node(object):
         self.children = set(children) if children is not None else set()
         self.parents = parents if parents is not None else dict()
         self.model = model
-        self.value = initial_value
+        self._value = initial_value
         self.fixed_value = fixed_value
         self.label = label
         self.mark = 0
@@ -28,13 +27,30 @@ class Node(object):
         self.parents[parent.label] = parent
 
     def dimension(self):
-        return len(self.value)
+        return len(self._value)
+
+    def mutable_dimension(self):
+        if self.fixed_value:
+            return 0
+        else:
+            return len(self._value)
+
+    def get_mutable_values(self):
+        if self.fixed_value:
+            return []
+        else:
+            return self.get_value()
+
+    def set_mutable_values(self, values):
+        if not self.fixed_value:
+            self.set_value(values)
 
     def get_value(self):
-        return self.value
+        return self._value
 
     def set_value(self, value):
-        self.value = value
+        if not self.fixed_value:
+            self._value = value
 
     @staticmethod
     def low_bounds(self):
@@ -51,23 +67,23 @@ class Node(object):
         if parent_values is None:
             parent_values = self._parent_values()
         if value is None:
-            value = self.value
+            value = self.get_value()
 
         return self.model.log_p(x = value, cond=parent_values)
 
     def prior_sample(self, parent_values=None):
-        if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
+        if self.fixed_value: return
         if parent_values is None:
             parent_values = self._parent_values()
         new_value = self.model.sample(cond=parent_values)
-        self.value = new_value
+        self.set_value(new_value)
 
     def prior_predict(self, parent_values=None):
-        if self.fixed_value: raise Exception("trying to change the value of a fixed-value node!")
+        if self.fixed_value: return
         if parent_values is None:
             parent_values = self._parent_values()
         new_value = self.model.predict(cond=parent_values)
-        self.value = new_value
+        self.set_value(new_value)
 
     def get_children(self):
         return self.children
@@ -92,10 +108,10 @@ class ClusterNode(Node):
 
     """
 
-    def __init__(self, label="", nodes = [], parents = None, children=None):
+    def __init__(self, label="", nodes = None, parents = None, children=None):
         super(ClusterNode, self).__init__(model=None, label=label, parents=parents, children=children)
 
-        self.nodes = nodes
+        self.nodes = nodes if nodes is not None else []
 
         for node in self.nodes:
             node.parents = self.parents
@@ -103,6 +119,33 @@ class ClusterNode(Node):
 
     def dimension(self):
         return len(self.nodes)
+
+    def mutable_dimension(self):
+        return len([n for n in self.nodes if not n.fixed_value])
+
+
+    def get_mutable_values(self):
+        """
+
+        Get the values of all of the subnodes that are not fixed. (used for optimization, etc.)
+
+        """
+
+        values = []
+        for (i, node) in enumerate([n for n in self.nodes if not n.fixed_value]):
+            values.append(node.get_value())
+        return np.array(values)
+
+    def set_mutable_values(self, value = None):
+        """
+
+        Set the values of all of the subnodes that are not fixed. (used for optimization, etc.)
+
+        """
+
+        for (i, node) in enumerate([n for n in self.nodes if not n.fixed_value]):
+            node.set_value(value[i])
+
 
     def get_value(self):
         values = np.zeros(len(self.nodes))
@@ -115,6 +158,9 @@ class ClusterNode(Node):
             node.set_value(value[i])
 
     def log_p(self, value = None):
+        if value is None:
+            value = self.get_value()
+
         lp = 0
         for (i, node) in enumerate(self.nodes):
             lp += node.log_p(value = value[i])
@@ -142,9 +188,9 @@ class DAG(object):
 
     """
 
-    def __init__(self, toplevel_nodes=[], leaf_nodes=[]):
-        self.toplevel_nodes = toplevel_nodes
-        self.leaf_nodes = leaf_nodes
+    def __init__(self, toplevel_nodes=None, leaf_nodes=None):
+        self.toplevel_nodes = toplevel_nodes if toplevel_nodes is not None else []
+        self.leaf_nodes = leaf_nodes if leaf_nodes is not None else []
 
         # invariant: self._topo_sorted_list should always be a topologically sorted list of nodes
         self._topo_sort()
@@ -176,6 +222,7 @@ class DAG(object):
     def topo_sorted_nodes(self):
         return self._topo_sorted_list
 
+
     def clear_visited(self):
         q = deque(self.toplevel_nodes)
         while len(q) > 0:
@@ -196,8 +243,11 @@ class DirectedGraphModel(DAG):
 
     def current_log_p(self):
         logp = 0
+        print "CLP INVOCATION"
         for node in self.topo_sorted_nodes():
-            logp += node.log_p()
+            lp = node.log_p()
+            print "dprob %f from node %s" % (lp, node.label)
+            logp += lp
         return logp
 
     def prior_predict_all(self):
@@ -221,12 +271,12 @@ class DirectedGraphModel(DAG):
         def set_all(values):
             i = 0
             for node in node_list:
-                n = node.dimension()
-                node.set_value(values[i:i+n])
+                n = node.mutable_dimension()
+                node.set_mutable_values(values[i:i+n])
                 i += n
 
         def get_all():
-            return np.concatenate([node.get_value() for node in node_list])
+            return np.concatenate([node.get_mutable_values() for node in node_list])
 
         def joint_prob(values):
             set_all(values)

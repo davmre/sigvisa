@@ -82,6 +82,23 @@ class TemplateModelNode(ClusterNode):
     def dimension(self):
         return len(self.params())+1
 
+
+    def get_mutable_values(self):
+        values = []
+        for (i, param) in enumerate(('arrival_time',) + self.params()):
+            node = self.nodeDict[param]
+            if not node.fixed_value:
+                values.append(node.get_value())
+        return np.array(values)
+
+    def set_mutable_values(self, value):
+        i = 0
+        for param in ('arrival_time',) + self.params():
+            node = self.nodeDict[param]
+            if not node.fixed_value:
+                node.set_value(value = value[i])
+                i += 1
+
     def get_value(self):
         values = np.zeros((self.dimension(), ))
 
@@ -96,12 +113,17 @@ class TemplateModelNode(ClusterNode):
             node = self.nodeDict[param]
             node.set_value(value = value[i])
 
+    def fix_arrival_time(self, fixed=True):
+        self.nodeDict['arrival_time'].fixed_value = True
+
     def log_p(self, value = None):
         lp = 0
 
         for (i, param) in enumerate(('arrival_time',) + self.params()):
             node = self.nodeDict[param]
-            lp += node.log_p(value = value[i] if value is not None else None)
+            nlp = node.log_p(value = value[i] if value is not None else None)
+            print "logp %f from node %s" % (nlp, param)
+            lp += nlp
 
         return lp
 

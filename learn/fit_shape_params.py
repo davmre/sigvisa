@@ -38,6 +38,9 @@ def setup_graph(event, sta, chan, band,
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
     sg.add_wave(wave=wave)
+
+    sg.fix_arrival_times()
+
     return sg
 
 
