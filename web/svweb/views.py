@@ -194,13 +194,14 @@ def fit_detail(request, fitid):
     }, context_instance=RequestContext(request))
 
 
-def wave_plus_template_view(evid, sta, chan, band, phases, vals, param_type, logscale=True, smoothing=8, sample=False, request=None, ratio=1.6, dpi=144):
+def wave_plus_template_view(evid, sta, chan, band, phases, vals, nmid, param_type, logscale=True, smoothing=8, sample=False, request=None, ratio=1.6, dpi=144):
     cursor = Sigvisa().dbconn.cursor()
     wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor).filter(str(band) + ";env")
     cursor.close()
 
     sg = setup_sigvisa_graph(evid=evid, wave=wave, phases=phases, vals=vals)
     wave_node = sg.get_wave_node(wave=wave)
+    wave_node.set_noise_model(nmid=nmid)
     wave_node.fixed_value = False
     wave_node.prior_predict()
     synth_wave = wave_node.get_wave()
@@ -248,7 +249,7 @@ def FitImageView(request, fitid):
     (phases, vals) = phases_from_fit(fit)
 
     return wave_plus_template_view(sta=fit.sta, evid=fit.evid, chan=fit.chan, band=fit.band,
-                                   phases=phases, vals=vals, param_type="paired_exp",
+                                   nmid=fit.nmid.nmid, phases=phases, vals=vals, param_type="paired_exp",
                                    logscale=logscale, smoothing=smoothing, sample=sample,
                                    request=request)
 
@@ -290,7 +291,7 @@ def custom_template_view(request, fitid):
     (phases, vals) = filter_and_sort_template_params(phases, vals, filter_list=Sigvisa().phases)
 
     return wave_plus_template_view(sta=fit.sta, evid=fit.evid, chan=fit.chan, band=fit.band,
-                                   phases=phases, vals=vals, param_type="paired_exp",
+                                   nmid=fit.nmid.nmid, phases=phases, vals=vals, param_type="paired_exp",
                                    logscale=logscale, smoothing=smoothing, sample=False,
                                    request=request)
 
@@ -329,6 +330,7 @@ def template_debug_view(request, fitid):
 
     sg = setup_sigvisa_graph(evid=fit.evid, wave=wave, phases=phases, vals=vals)
     wave_node = sg.get_wave_node(wave=wave)
+    wave_node.set_noise_model(nmid=fit.nmid.nmid)
 
     ll = wave_node.log_p()
     param_ll = sg.current_log_p()
@@ -384,6 +386,7 @@ def template_residual_view(request, fitid):
 
     sg = setup_sigvisa_graph(evid=fit.evid, wave=wave, phases=phases, vals=vals)
     wave_node = sg.get_wave_node(wave=wave)
+    wave_node.set_noise_model(nmid=fit.nmid.nmid)
     wave_node.fixed_value = False
     wave_node.prior_predict()
 

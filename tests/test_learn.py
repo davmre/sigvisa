@@ -44,7 +44,7 @@ class TestFit(unittest.TestCase):
     def test_fit_template_iid(self):
 
         wave_node = self.sg.get_wave_node(wave=self.wave)
-        wave_node.set_nm_type(nm_type='l1')
+        wave_node.set_noise_model(nm_type='l1')
 
         t = time.time()
 
@@ -57,7 +57,7 @@ class TestFit(unittest.TestCase):
         t = time.time()
 
         wave_node = self.sg.get_wave_node(wave=self.wave)
-        wave_node.set_nm_type(nm_type='ar')
+        wave_node.set_noise_model(nm_type='ar')
 
 
         self.sg.joint_optimize_nodes(node_list = self.sg.template_nodes, optim_params=self.optim_params)

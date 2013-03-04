@@ -55,6 +55,15 @@ class NoiseModel(TimeSeriesDist):
             return nm
 
     @staticmethod
+    def load_by_nmid(dbconn, nmid):
+        cursor = dbconn.cursor()
+        sql_query = "select model_type, fname from sigvisa_noise_model where nmid=%d" % nmid
+        cursor.execute(sql_query)
+        n = cursor.fetchone()
+        nm = NoiseModel.load_from_file(nm_fname = n[1], model_type=n[0])
+        return nm
+
+    @staticmethod
     def load_from_file(nm_fname, model_type):
         full_fname = os.path.join(os.getenv('SIGVISA_HOME'), nm_fname)
         if model_type.lower() == "ar":

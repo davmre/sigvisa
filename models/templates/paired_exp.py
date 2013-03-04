@@ -20,7 +20,7 @@ class PairedExpTemplateNode(TemplateModelNode):
         d = dict()
         d['peak_offset'] = 1
         d['coda_height'] = 1
-        d['coda_decay'] = -0.001
+        d['coda_decay'] = -0.03
         return d
 
     @staticmethod

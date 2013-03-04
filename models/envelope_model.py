@@ -18,6 +18,7 @@ from optparse import OptionParser
 from sigvisa import Sigvisa, NestedDict
 from sigvisa.signals.common import Waveform
 from sigvisa.models.noise.noise_util import get_noise_model
+from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.models.graph import Node
 
 class EnvelopeNode(Node):
@@ -31,13 +32,12 @@ class EnvelopeNode(Node):
 
     """
 
-    def __init__(self, model_waveform, nm_type="ar", observed=True, **kwargs):
+    def __init__(self, model_waveform, nm_type="ar", nmid=None, observed=True, **kwargs):
 
         super(EnvelopeNode, self).__init__(model=None, initial_value=model_waveform.data, fixed_value=observed, **kwargs)
 
         self.sigvisa = Sigvisa()
-        self.nm_type = nm_type
-        self.nm, self.nmid, _ = get_noise_model(waveform=model_waveform, model_type=self.nm_type, return_details=True)
+
 
         self.mw = model_waveform
         self.sta = model_waveform['sta']
@@ -46,12 +46,21 @@ class EnvelopeNode(Node):
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
 
+        self.set_noise_model(nm_type=nm_type, nmid=nmid)
+
+
     def get_wave(self):
         return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
 
-    def set_nm_type(self, nm_type):
-        self.nm_type = nm_type
-        self.nm, self.nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
+    def set_noise_model(self, nm_type="ar", nmid=None):
+        if nmid is None:
+            self.nm_type = nm_type
+            self.nm, self.nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
+        else:
+            self.nmid = nmid
+            self.nm = NoiseModel.load_by_nmid(self.sigvisa.dbconn, self.nmid)
+            self.nm_type = self.nm.noise_model_type()
+
 
     def assem_signal(self):
         signal = np.zeros((self.npts,))
@@ -102,5 +111,10 @@ class EnvelopeNode(Node):
 
         pred_signal = self.assem_signal()
         diff = value - pred_signal
-        return self.nm.log_p(diff)
+        lp = self.nm.log_p(diff)
+        import hashlib
+        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
+        np.savetxt(fname, diff)
+        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
+        return lp
 

@@ -179,41 +179,6 @@ def execute_and_return_id(dbconn, query, idname, **kwargs):
     return lrid
 
 
-def store_template_params(wave, template_params, optim_param_str, iid, hz, acost, run_name, iteration, elapsed, nmid):
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-
-    runid = get_fitting_runid(cursor, run_name, iteration)
-
-    sta = wave['sta']
-    siteid = wave['siteid']
-    chan = wave['chan']
-    band = wave['band']
-    st = wave['stime']
-    et = wave['etime']
-    event = get_event(evid=wave['evid'])
-
-    distance = geog.dist_km((event.lon, event.lat), (s.sites[siteid - 1][0], s.sites[siteid - 1][1]))
-    azimuth = geog.azimuth((s.sites[siteid - 1][0], s.sites[siteid - 1][1]), (event.lon, event.lat))
-
-    optim_param_str = optim_param_str.replace("'", "''")
-
-    sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (
-        runid, event.evid, sta, chan, band, optim_param_str, 1 if iid else 0, st, et, hz, acost, distance, azimuth, time.time(), elapsed, nmid)
-
-    fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
-
-    (phases, fit_params) = template_params
-
-    for (i, phase) in enumerate(phases):
-
-        transfer = fit_params[i, 2] - event.source_logamp(band, phase)
-
-        phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (
-            fitid, phase, fit_params[i, 0], fit_params[i, 1], fit_params[i, 2], fit_params[i, 3], transfer)
-        cursor.execute(phase_insert_query)
-    return fitid
-
 
 def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10):
 
