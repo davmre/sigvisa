@@ -122,7 +122,7 @@ class TemplateModelNode(ClusterNode):
         for (i, param) in enumerate(('arrival_time',) + self.params()):
             node = self.nodeDict[param]
             nlp = node.log_p(value = value[i] if value is not None else None)
-            print "logp %f from node %s" % (nlp, param)
+            # print "logp %f from node %s" % (nlp, param)
             lp += nlp
 
         return lp

@@ -130,6 +130,8 @@ def optimize(f, start_params, bounds, method, phaseids=None, maxfun=None):
 
 def minimize(f, x0, optim_params, bounds=None):
 
+    np.seterr(all="raise", under="ignore")
+
     method = optim_params['method']
     eps = optim_params['eps']
     disp = optim_params['disp']

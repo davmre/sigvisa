@@ -112,9 +112,9 @@ class EnvelopeNode(Node):
         pred_signal = self.assem_signal()
         diff = value - pred_signal
         lp = self.nm.log_p(diff)
-        import hashlib
-        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
-        np.savetxt(fname, diff)
-        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
+#        import hashlib
+#        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
+#        np.savetxt(fname, diff)
+#        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
         return lp
 

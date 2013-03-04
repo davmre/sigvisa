@@ -27,7 +27,10 @@ class L1IIDModel(NoiseModel):
     def log_p(self, x, zero_mean=False):
         n = len(x)
         c = 0 if zero_mean else self.median
-        return self.normalizer * n - np.sum(np.abs(  (x - c) / self.b ) )
+        normed = (x - c) / self.b
+        normedp = np.sum(np.abs( normed  ) )
+        n1 = self.normalizer * n
+        return n1 - normedp
 
     def dump_to_file(self, fname):
         with open(fname, 'w') as f:

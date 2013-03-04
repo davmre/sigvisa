@@ -278,10 +278,10 @@ class DirectedGraphModel(DAG):
         def get_all():
             return np.concatenate([node.get_mutable_values() for node in node_list])
 
-        def joint_prob(values):
+        def joint_prob(values, c=-1):
             set_all(values)
             ll = np.sum([node.log_p() for node in relevant_nodes])
-            return ll
+            return c * ll
 
         start_values = get_all()
         low_bounds = np.concatenate([node.low_bounds() for node in node_list])

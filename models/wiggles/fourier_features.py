@@ -27,6 +27,9 @@ class FourierFeatures(Featurizer):
         else:
             raise ValueError("call to signal_from_features must specify either len_seconds or npts")
 
+        if npts == 0:
+            return np.array([])
+
         x = np.linspace(0, len_seconds, npts)
 
         s = np.zeros((npts,))
