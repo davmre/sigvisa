@@ -39,13 +39,16 @@ class TestFit(unittest.TestCase):
         self.sg.add_event(self.event)
         self.sg.add_wave(self.wave)
 
+        self.optim_params = construct_optim_params("'method': 'none'")
+
     def test_fit_template_iid(self):
 
         wave_node = self.sg.get_wave_node(wave=self.wave)
         wave_node.set_nm_type(nm_type='l1')
 
         t = time.time()
-        self.sg.joint_optimize_nodes(node_list = self.sg.template_nodes, optim_params=optim_params)
+
+        self.sg.joint_optimize_nodes(node_list = self.sg.template_nodes, optim_params=self.optim_params)
 
 #        print "iid fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
 #        print "got params", fit_params
@@ -56,7 +59,8 @@ class TestFit(unittest.TestCase):
         wave_node = self.sg.get_wave_node(wave=self.wave)
         wave_node.set_nm_type(nm_type='ar')
 
-        self.sg.joint_optimize_nodes(node_list = self.sg.template_nodes, optim_params=optim_params)
+
+        self.sg.joint_optimize_nodes(node_list = self.sg.template_nodes, optim_params=self.optim_params)
 
 
 class TestLearnModel(unittest.TestCase):
