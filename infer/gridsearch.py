@@ -10,10 +10,8 @@ import copy
 
 from optparse import OptionParser
 from sigvisa.models.templates.load_by_name import load_template_model
-from sigvisa.models.envelope_model import EnvelopeModel
 from sigvisa.signals.io import load_segments
 from sigvisa.plotting.event_heatmap import EventHeatmap
-from sigvisa.models.wiggles.wiggle_models import PlainWiggleModel, StupidL1WiggleModel
 
 
 def event_at(ev, lon=None, lat=None, t=None, depth=None):

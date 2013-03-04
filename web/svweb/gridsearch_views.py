@@ -35,9 +35,7 @@ from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFitting
 from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.utils.geog import lonlatstr
-from sigvisa.models.wiggles.wiggle_models import wiggle_model_by_name
 from sigvisa.infer.gridsearch import propose_origin_times, ev_loc_ll_at_optimal_time
-from sigvisa.models.envelope_model import EnvelopeModel
 
 
 def gridsearch_list_view(request):

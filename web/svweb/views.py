@@ -20,7 +20,7 @@ from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.source.event import get_event, EventNotFound
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
-from sigvisa.models.wiggles.wiggle_models import wiggle_model_by_name
+from sigvisa.models.sigvisa_graph import SigvisaGraph
 import sigvisa.utils.geog
 
 from matplotlib.figure import Figure
@@ -198,13 +198,21 @@ def wave_plus_template_view(evid, sta, chan, band, phases, vals, param_type, log
     wave = load_event_station_chan(int(evid), str(sta), str(chan), cursor=cursor).filter(str(band) + ";env")
     cursor.close()
 
-    tm = load_template_model(param_type, run_name=None, run_iter=0, model_type="dummy")
+    event = get_event(evid=evid)
+    sg = SigvisaGraph(phases = phases)
+    sg.add_event(event)
+    sg.add_wave(wave)
+    for (phase, vals) in zip(phases, vals):
+        tm_node = sg.get_template_node(ev=event, wave=wave, phase=phase)
+        tm_node.set_value(vals)
+    wave_node = sg.get_wave_node(wave=wave)
+    wave_node.prior_predict()
+    synth_wave = wave_node.get_wave()
 
     fig = Figure(figsize=(ratio*5, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     axes.set_xlabel("Time (s)", fontsize=8)
-    synth_wave = tm.generate_template_waveform((phases, vals), wave, sample=sample)
     plot.subplot_waveform(wave.filter(
         "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
     plot.subplot_waveform(synth_wave, axes, color="green", linewidth=3, logscale=logscale, plot_dets=False)
