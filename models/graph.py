@@ -243,10 +243,8 @@ class DirectedGraphModel(DAG):
 
     def current_log_p(self):
         logp = 0
-        print "CLP INVOCATION"
         for node in self.topo_sorted_nodes():
             lp = node.log_p()
-            print "dprob %f from node %s" % (lp, node.label)
             logp += lp
         return logp
 

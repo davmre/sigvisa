@@ -26,7 +26,8 @@ class SigvisaGraph(DirectedGraphModel):
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.01",
-                 nm_type="ar", run_name=None, iteration=None, phases="auto"):
+                 nm_type="ar", run_name=None, iteration=None,
+                 runid = None, phases="auto"):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -48,7 +49,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.nm_type = nm_type
         self.phases = phases
 
-        self.runid = None
+        self.runid = runid
         if run_name is not None and iteration is not None:
             cursor = Sigvisa().dbconn.cursor()
             self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = True)
@@ -158,6 +159,7 @@ class SigvisaGraph(DirectedGraphModel):
             self.connect_ev_wave(event_node=event_node, wave_node=wave_node)
 
         self._topo_sort()
+        return event_node
 
     def add_wave(self, wave):
         wave_node = EnvelopeNode(model_waveform=wave, nm_type=self.nm_type, observed=True, label=self._get_wave_label(wave=wave))
@@ -173,6 +175,7 @@ class SigvisaGraph(DirectedGraphModel):
             self.connect_ev_wave(event_node=event_node, wave_node=wave_node)
 
         self._topo_sort()
+        return wave_node
 
     def get_template_node(self, **kwargs):
         lbl = self._get_interior_node_label(**kwargs)
@@ -205,6 +208,19 @@ class SigvisaGraph(DirectedGraphModel):
             st = wave['stime']
             et = wave['etime']
             event = get_event(evid=wave['evid'])
+
+            parent_templates = [tm for tm in wave_node.parents.values() if tm.label.startswith("template_")]
+
+            # make sure we can calculate source amplitude for all
+            # relevant phases, so we don't get empty DB entries from
+            # failing later on.
+            for tm in parent_templates:
+                try:
+                    event.source_logamp(band, tm.phase)
+                except:
+                    raise
+
+
 
             distance = geog.dist_km((event.lon, event.lat), (s.sites[siteid - 1][0], s.sites[siteid - 1][1]))
             azimuth = geog.azimuth((s.sites[siteid - 1][0], s.sites[siteid - 1][1]), (event.lon, event.lat))

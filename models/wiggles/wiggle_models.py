@@ -61,7 +61,13 @@ class WiggleModelNode(ClusterNode):
         assert(len(self.nodes) == featurizer.dimension())
         self.featurizer = featurizer
 
+
+    from functools32 import lru_cache
+    @lru_cache(maxsize=32)
+    def _wiggle_cache(self, feature_tuple, npts):
+        return self.featurizer.signal_from_features(features = np.array(feature_tuple), npts=npts)
+
     def get_wiggle(self, npts):
-        wiggle = self.featurizer.signal_from_features(features = self.get_value(), npts=npts)
+        wiggle = self._wiggle_cache(feature_tuple = tuple(self.get_value()), npts=npts)
         return wiggle
 

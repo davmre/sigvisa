@@ -75,9 +75,9 @@ def main():
                       help="initialize template fitting with results from this run iteration (default: most recent)")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
                       help="template model type to fit parameters under (paired_exp)")
-    parser.add_option("--template_model", dest="template_model", default="gp_dad", type="str", help="")
+    parser.add_option("--template_model", dest="template_model", default="dummy", type="str", help="")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.01", type="str", help="")
-    parser.add_option("--wiggle_model", dest="wiggle_model", default="gp_dad", type="str", help="")
+    parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="BHZ", type="str", help="")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")

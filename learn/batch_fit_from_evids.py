@@ -102,9 +102,9 @@ def main():
                       help="filename of wiggle-model params to load (default is to ignore wiggle model and do iid fits)")
     parser.add_option("--init_runid", dest="init_runid", default=None, type="int",
                       help="initialize template fitting with results from this runid")
-    parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
+    parser.add_option("--template_shape", dest="template_shape", default=None, type="str",
                       help="template model type to fit parameters under (paired_exp)")
-    parser.add_option("--template_model", dest="template_model", default="gp_dad", type="str", help="")
+    parser.add_option("--template_model", dest="template_model", default=None, type="str", help="")
     parser.add_option("--optim_params", dest="optim_params", default=None, type="str", help="fitting parameters to use")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
@@ -158,8 +158,13 @@ def main():
         for line in f:
             (sta, evid) = [i.strip() for i in line.split(' ')]
 
-            cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s --template_shape=%s --template_model=%s --run_name=%s --run_iteration=%d %s %s --nm_type=%s" % (
-                int(evid), sta, "-w %s" % options.wiggles if options.wiggles else "", options.template_shape, options.template_model, run_name, iteration, init_str, "--optim_params=\"%s\" " % options.optim_params if options.optim_params is not None else "", options.nm_type)
+            cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s --nm_type=%s" % (
+                int(evid), sta, "-w %s" % options.wiggles if options.wiggles else "",
+                "--template_shape=%s" % options.template_shape if options.template_shape else "",
+                "--template_model=%s" % options.template_model if options.template_model else "",
+                run_name, iteration, init_str,
+                "--optim_params=\"%s\" " % options.optim_params if options.optim_params is not None else "",
+                options.nm_type)
 
 #            run_fit_and_rename_output((cmd_str, runid))
 #            sys.exit(1)

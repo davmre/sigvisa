@@ -54,7 +54,7 @@ class ConditionalDist(Distribution):
     def sample(self, cond=None):
         raise NotImplementedError('abstract base class')
 
-    def log_p(self, cond=None):
+    def log_p(self, x, cond=None):
         raise NotImplementedError('abstract base class')
 
 

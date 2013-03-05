@@ -40,7 +40,10 @@ class EnvelopeNode(Node):
 
 
         self.mw = model_waveform
+        self.filter_str = model_waveform['filter_str']
         self.sta = model_waveform['sta']
+        self.chan = model_waveform['chan']
+        self.band = model_waveform['band']
         self.srate = model_waveform['srate']
         self.st = model_waveform['stime']
         self.et = model_waveform['etime']

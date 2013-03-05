@@ -59,6 +59,7 @@ class TemplateModelNode(ClusterNode):
             defaults = self.default_param_vals()
             for (i, param) in enumerate(self.params()):
                 mNode = Node(model=DummyModel(default_value = defaults[param]), parents=self.parents, children=self.children, label=param)
+                mNode.modelid = None
                 self.nodes.append(mNode)
                 self.nodeDict[param] = mNode
         else:
@@ -69,15 +70,18 @@ class TemplateModelNode(ClusterNode):
 
                 model = load_model(os.path.join(basedir, fname), db_model_type)
                 mNode = Node(model=model, parents=self.parents, children=self.children, label=param)
+                mNode.modelid = modelid
 
                 self.nodes.append(mNode)
                 self.nodeDict[param] = mNode
 
         # also load arrival time models for each phase
         atimeNode = Node(model=TravelTimeModel(sta=sta, phase=phase, arrival_time=True), parents=self.parents, children=self.children, label = 'arrival_time')
+        atimeNode.modelid = None
         self.nodes.append(atimeNode)
         self.nodeDict['arrival_time'] = atimeNode
 
+        assert(len(self.nodes) == self.dimension())
 
     def dimension(self):
         return len(self.params())+1
@@ -98,6 +102,15 @@ class TemplateModelNode(ClusterNode):
             if not node.fixed_value:
                 node.set_value(value = value[i])
                 i += 1
+
+    def get_modelids(self):
+        modelids = []
+        for (i, param) in enumerate(('arrival_time',) + self.params()):
+            node = self.nodeDict[param]
+            if node.modelid is not None:
+                modelids.append(node.modelid)
+
+        return modelids
 
     def get_value(self):
         values = np.zeros((self.dimension(), ))

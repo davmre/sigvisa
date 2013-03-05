@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 
 import numpy as np
 import sys
+import os
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 
@@ -137,7 +138,6 @@ def delete_gsrun(request, gsid):
         return HttpResponse("<html><head></head><body>Error deleting gsrun %d: %s %s</body></html>" % (int(gsid), type(e), str(e)))
 
 
-@cache_page(60 * 60)
 def gs_heatmap_view(request, gsid):
     gs = get_object_or_404(SigvisaGridsearchRun, pk=gsid)
 
@@ -151,6 +151,8 @@ def gs_heatmap_view(request, gsid):
 
     s = Sigvisa()
     fullname = os.path.join(os.getenv('SIGVISA_HOME'), gs.heatmap_fname)
+    if not os.path.exists(fullname):
+        raise IOError("heatmap file %s does not exist" % fullname)
     hm = EventHeatmap(f=None, calc=False, n=gs.pts_per_side, lonbounds=[gs.lon_nw, gs.lon_se], latbounds=[gs.lat_nw,
                       gs.lat_se], fname=fullname)
     ev = Event(gs.evid)

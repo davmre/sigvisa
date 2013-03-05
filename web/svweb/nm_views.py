@@ -146,7 +146,7 @@ def nm_spectrum(request, nmid):
     else:
         n=60 * nm.hz
         s = model.sample(n=n)
-        s -= model.mean(n=n)
+        s -= model.predict(n=n)
         x, y = empirical_psd(s, hz=nm.hz)
         l1 = axes.plot(x, y, linewidth=1, zorder=100)
         psd_label='model PSD (empirical)'
