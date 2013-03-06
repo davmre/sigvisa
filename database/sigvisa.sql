@@ -148,8 +148,6 @@ create table sigvisa_wiggle_basis (
  family_name varchar(63) not null,
  srate double precision not null,
  logscale varchar(1) not null,
- lead_time float not null,
- basis_type varchar(31) not null,
  dimension int not null,
  fundamental double precision,
  min_freq double precision,
@@ -187,14 +185,12 @@ create table sigvisa_wiggle_param_model (
 
 create table sigvisa_wiggle (
  wiggleid  int not null auto_increment, /* MYSQL version */
- int basisid not null,
+ basisid int not null,
  fpid int not null,
- stime double precision not null,
- etime double precision not null,
  timestamp double precision not null,
  params blob not null,
  primary key(wiggleid),
- foreign key (basisid) REFERENCES sigvisa_wiggle_basis(basisid)
+ foreign key (basisid) REFERENCES sigvisa_wiggle_basis(basisid),
  foreign key (fpid) REFERENCES sigvisa_coda_fit_phase(fpid)
 );
 

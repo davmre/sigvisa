@@ -52,6 +52,10 @@ class EnvelopeNode(Node):
         self.set_noise_model(nm_type=nm_type, nmid=nmid)
 
 
+    def set_value(self, value):
+        assert(len(value) == len(self._value))
+        super(EnvelopeNode, self).set_value(value)
+
     def get_wave(self):
         return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
 
@@ -65,10 +69,14 @@ class EnvelopeNode(Node):
             self.nm_type = self.nm.noise_model_type()
 
 
-    def assem_signal(self):
+    def assem_signal(self, include_wiggles=True, parent_templates=None):
         signal = np.zeros((self.npts,))
 
-        parent_templates = [tm for tm in self.parents.values() if tm.label.startswith("template_")]
+        # we allow specifying the list of parents in order to generate
+        # signals with a subset of arriving phases (used e.g. in
+        # wiggle extraction)
+        if parent_templates is None:
+            parent_templates = [tm for tm in self.parents.values() if tm.label.startswith("template_")]
 
         for tm in parent_templates:
             key = tm.label[9:]
@@ -89,12 +97,15 @@ class EnvelopeNode(Node):
             overshoot = max(0, end_idx - len(signal))
             final_template = np.exp(phase_env[early:len(phase_env) - overshoot])
 
-            wm = self.parents['wiggle_%s' % key]
-            wiggle_offset_idx = int(wm.atime_offset_seconds * self.srate)
-            wiggle_npts = len(final_template) - wiggle_offset_idx
-            wiggle = wm.get_wiggle(npts=wiggle_npts)
-            final_template[wiggle_offset_idx:] *= wiggle
+            if include_wiggles:
+                wm = self.parents['wiggle_%s' % key]
+                wiggle = wm.get_wiggle(npts=len(final_template))
+                final_template *= wiggle
+
             signal[start_idx + early:end_idx - overshoot] += final_template
+
+            if not np.isfinite(signal).all():
+                raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
 
         return signal
 

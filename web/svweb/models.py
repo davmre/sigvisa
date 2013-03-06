@@ -253,23 +253,33 @@ class SigvisaCodaFitPhase(models.Model):
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'
 
+class SigvisaWiggleBasis(models.Model):
+    basisid = models.IntegerField(primary_key=True)
+    family_name = models.CharField(max_length=63)
+    srate = models.FloatField()
+    logscale = models.CharField(max_length=1)
+    dimension = models.IntegerField()
+    fundamental = models.FloatField(null=True, blank=True)
+    min_freq = models.FloatField(null=True, blank=True)
+    max_freq = models.FloatField(null=True, blank=True)
+    training_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column="training_runid", blank=True)
+    training_set_fname = models.CharField(max_length=255, blank=True)
+    training_sta = models.CharField(max_length=10, blank=True)
+    training_chan = models.CharField(max_length=10, blank=True)
+    training_band = models.CharField(max_length=15, blank=True)
+    training_phase = models.CharField(max_length=10, blank=True)
+    basis_fname = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = u'sigvisa_wiggle_basis'
+
 
 class SigvisaWiggle(models.Model):
     wiggleid = models.IntegerField(primary_key=True)
     fpid = models.ForeignKey(SigvisaCodaFitPhase, db_column='fpid')
-    stime = models.FloatField()
-    etime = models.FloatField()
-    srate = models.FloatField()
+    basisid = models.ForeignKey(SigvisaWiggleBasis, db_column='basisid')
     timestamp = UnixTimestampField()
-    type = models.CharField(max_length=31)
-    log = models.IntegerField()
-    meta0 = models.FloatField(null=True, blank=True)
-    meta1 = models.FloatField(null=True, blank=True)
-    meta2 = models.FloatField(null=True, blank=True)
-    meta3 = models.FloatField(null=True, blank=True)
-    meta_str = models.CharField(max_length=255, blank=True)
     params = BlobField()  # This field type is a guess.
-
     class Meta:
         db_table = u'sigvisa_wiggle'
 

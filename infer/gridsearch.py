@@ -29,7 +29,7 @@ def event_prob_predict(ev, event_node, sg):
     sg.prior_predict_all()
     return sg.current_log_p()
 
-def propose_origin_times(ev, segments, phases, max_proposals=5):
+def propose_origin_times(ev, segments, sg, max_proposals=5):
     s = Sigvisa()
 
     # propose origin times based on phase arrival times
@@ -40,7 +40,7 @@ def propose_origin_times(ev, segments, phases, max_proposals=5):
         if len(arr) == 0:
             continue
 
-        for phase in phases:
+        for phase in sg.predict_phases(ev=ev, sta=segment['sta']):
             for arrtime in arr[:, DET_TIME_COL]:
                 projection = arrtime - tt_predict(ev, segment['sta'], phase)
                 event_time_proposals.append(projection)
@@ -58,8 +58,8 @@ def propose_origin_times(ev, segments, phases, max_proposals=5):
 # "likelihood" is a function of a segment and an event object (e.g. envelope_model.log_likelihood_optimize wrapped in a lambda)
 
 
-def ev_loc_ll_at_optimal_time(ev, log_likelihood, segments, phases, return_time=False, **kwargs):
-    event_time_proposals = propose_origin_times(ev=ev, phases=phases, segments=segments, **kwargs)
+def ev_loc_ll_at_optimal_time(ev, log_likelihood, segments, sg, return_time=False, **kwargs):
+    event_time_proposals = propose_origin_times(ev=ev, sg=sg, segments=segments, **kwargs)
 
     # find the origin time that maximizes the likelihood
     maxll = np.float("-inf")
@@ -177,10 +177,11 @@ def main():
     else:
         tm_types = options.tm_types
 
-    if ',' in options.phases:
-        phases = options.phases.split(',')
-    else:
+    if options.phases in ("auto", "leb"):
         phases = options.phases
+    else:
+        phases = options.phases.split(',')
+
 
     if options.bands == "all":
         bands = s.bands
@@ -206,7 +207,7 @@ def main():
 
     sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
                       wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
-                      nm_type = options.nm_type, runid=runid)
+                      nm_type = options.nm_type, runid=runid, phases=phases)
     ev_node = sg.add_event(ev_true)
     for seg in segments:
         for band in bands:
@@ -219,12 +220,12 @@ def main():
 
     if options.use_true_depth:
         f = lambda lon, lat: ev_loc_ll_at_optimal_time(event_at(ev_true, lon=lon, lat=lat),
-                                                       log_likelihood=f_ll, phases=phases,
+                                                       log_likelihood=f_ll, sg=sg,
                                                        segments = segments,
                                                        max_proposals=options.max_evtime_proposals)
     else:
         f = lambda lon, lat: integrate_ll_over_depth(event_at(ev_true, lon=lon, lat=lat), log_likelihood=f_ll,
-                                                     phases=phases, segments=segments,
+                                                     sg=sg, segments=segments,
                                                      max_proposals=options.max_evtime_proposals)
 
     sta_string = ":".join(sites)

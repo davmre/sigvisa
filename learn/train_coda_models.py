@@ -30,6 +30,10 @@ class NoDataException(Exception):
     pass
 
 
+def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp):
+    return execute_and_return_id(dbconn, "insert into sigvisa_template_param_model (fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp) values (:fr,:ts,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp)", "modelid", fr=fitting_runid, ts=template_shape, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp)
+
+
 def learn_model(X, y, model_type, sta, target=None):
     if model_type.startswith("gp"):
         distfn = model_type[3:]
@@ -127,10 +131,13 @@ def get_training_data(run_name, run_iter, sta, chan, band, phases, target, requi
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
-    print "loading %s fit data... " % (phases),
-    fit_data = load_shape_data(cursor, chan=chan, band=band, sta=sta, runids=[runid, ], phases=phases,
-                               require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
-    print str(fit_data.shape[0]) + " entries loaded"
+    try:
+        print "loading %s fit data... " % (phases),
+        fit_data = load_shape_data(cursor, chan=chan, band=band, sta=sta, runids=[runid, ], phases=phases,
+                                   require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
+        print str(fit_data.shape[0]) + " entries loaded"
+    except:
+        raise NoDataException()
 
     try:
         if target == "coda_decay":
@@ -176,7 +183,7 @@ def main():
     parser.add_option("--require_human_approved", dest="require_human_approved", default=False, action="store_true",
                       help="only train on human-approved good fits")
     parser.add_option(
-        "--max_acost", dest="max_acost", default=200, type=float, help="maximum fitting cost of fits in training set (200)")
+        "--max_acost", dest="max_acost", default=np.float('inf'), type=float, help="maximum fitting cost of fits in training set (inf)")
     parser.add_option("--min_amp", dest="min_amp", default=1, type=float,
                       help="only consider fits above the given amplitude (does not apply to amp_transfer fits)")
     parser.add_option("--min_amp_for_at", dest="min_amp_for_at", default=-5, type=float,
@@ -209,6 +216,18 @@ def main():
                 min_amp = options.min_amp
 
             for phase in phases:
+
+
+                # check for duplicate model
+                sql_query = "select modelid from sigvisa_template_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' " % (
+                    model_type, site, chan, band, phase, runid, target)
+                cursor.execute(sql_query)
+                dups = cursor.fetchall()
+                if len(dups) > 0:
+                    print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dups[0][0])
+                    continue
+
+
 
                 try:
                     X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase, ], target,

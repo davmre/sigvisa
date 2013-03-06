@@ -52,11 +52,9 @@ class Node(object):
         if not self.fixed_value:
             self._value = value
 
-    @staticmethod
     def low_bounds(self):
         return [np.float('-inf'),] * self.dimension()
 
-    @staticmethod
     def high_bounds(self):
         return [np.float('inf'),] * self.dimension()
 

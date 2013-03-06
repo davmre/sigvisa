@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import collections
 
 import sigvisa.utils.geog as geog
 
@@ -188,7 +189,7 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         GaussianProcess.__init__(self, *args, **kwargs)
 
-    def variance(self, X1):
+    def variance(self, cond):
         X1 = self.standardize_input_array(cond)
 
         result = GaussianProcess.variance(self, X1)
@@ -206,12 +207,11 @@ class SpatialGP(GaussianProcess, ParamModel):
 
     def log_p(self, x, cond):
         X1 = self.standardize_input_array(cond)
-        x = np.array((x,))
-
+        x = x if isinstance(x, collections.Iterable) else (x,)
         result = GaussianProcess.posterior_log_likelihood(self, X1, x)
         return result
 
-    def predict(self, X1):
+    def predict(self, cond):
         X1 = self.standardize_input_array(cond)
 
         result = GaussianProcess.predict(self, X1)
@@ -223,6 +223,7 @@ class SpatialGP(GaussianProcess, ParamModel):
         X1 = super(SpatialGP, self).standardize_input_array(c)
         if X1.shape[1] == 5:
             X1 = gp_extract_features(X1, self.distfn_str)
+        return X1
 
     def save_trained_model(self, filename):
         """

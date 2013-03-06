@@ -191,9 +191,10 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
     evid_cond = "and (" + " or ".join(
         ["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
     approval_cond = "and human_approved==2" if require_human_approved else ""
+    cost_cond = "and fit.acost<%f" % max_acost if np.isfinite(max_acost) else ""
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fit.acost<%f and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s" % (
-        max_acost, min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond)
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s" % (
+        min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond)
 
     ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
     fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
@@ -218,7 +219,7 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
 
 def insert_wiggle(dbconn, p):
     cursor = dbconn.cursor()
-    sql_query = "insert into sigvisa_wiggle (fpid, stime, etime, srate, timestamp, type, log, meta0, meta1, meta2, params) values (:fpid, :stime, :etime, :srate, :timestamp, :type, :log, :meta0, :meta1, :meta2, :params)"
+    sql_query = "insert into sigvisa_wiggle (fpid, basisid, timestamp, params) values (:fpid, :basisid, :timestamp, :params)"
 
     if "cx_Oracle" in str(type(dbconn)):
         import cx_Oracle
@@ -248,35 +249,5 @@ def read_wiggle(cursor, wiggleid):
     return cursor.fetchone()
 
 
-def insert_model(dbconn, fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp):
-    return execute_and_return_id(dbconn, "insert into sigvisa_template_param_model (fitting_runid, template_shape, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp) values (:fr,:ts,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp)", "modelid", fr=fitting_runid, ts=template_shape, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost, ne=n_evids, min_amp=min_amp)
 
-
-def save_gsrun_to_db(d, segments, em, tm):
-    from sigvisa.models.noise.noise_util import get_noise_model
-    s = Sigvisa()
-    sql_query = "insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, phases, wiggle_model_type, heatmap_fname, max_evtime_proposals, true_depth) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :phases, :wiggle_model_type, :heatmap_fname, :max_evtime_proposals, :true_depth)"
-    gsid = execute_and_return_id(s.dbconn, sql_query, "gsid", **d)
-
-    for seg in segments:
-        for chan in em.chans:
-            for band in em.bands:
-
-                sta = seg['sta']
-                filter_str = seg.with_filter(band).filter_str
-                srate = seg.dummy_chan(chan)['srate']
-                stime = seg['stime']
-                etime = seg['etime']
-
-                arm, nmid, nm_fname = get_noise_model(sta=sta, chan=chan, filter_str = filter_str, time=stime, return_details=True)
-                gswid = execute_and_return_id(
-                    s.dbconn, "insert into sigvisa_gsrun_wave (gsid, sta, chan, band, stime, etime, hz, nmid) values (%d, '%s', '%s', '%s', %f, %f, %f, %d)" % (gsid, sta, chan, band,
-                                            stime, etime, srate, nmid), 'gswid')
-                for phase in em.phases:
-                    for param in tm.models.keys():
-                        modelid = tm.models[param][seg['sta']][phase][chan][band].modelid
-                        gsmid = execute_and_return_id(
-                            s.dbconn, "insert into sigvisa_gsrun_tmodel (gswid, modelid) values (%d, %d)" % (gswid, modelid), 'gsmid')
-
-    s.dbconn.commit()
 

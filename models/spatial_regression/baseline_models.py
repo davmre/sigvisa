@@ -5,6 +5,7 @@ from sigvisa import Sigvisa
 from sigvisa.source.event import Event
 from sigvisa.models import ConditionalDist
 import sigvisa.utils.geog as geog
+import collections
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
@@ -58,11 +59,11 @@ class ParamModel(ConditionalDist):
         if isinstance(c, np.ndarray):
             X1 = c
         elif isinstance(c, Event):
-            X1 = self.event_to_array(X1)
+            X1 = self.event_to_array(c)
         elif isinstance(c, dict):
             assert(len(c) == 1)
             event = c.values()[0]
-            X1 = self.event_to_array(X1)
+            X1 = self.event_to_array(event)
         else:
             raise ValueError("unknown event object type %s input to spatial regression model!" % type(c))
         assert(len(X1.shape) == 2)
@@ -116,7 +117,8 @@ class ConstGaussianModel(ParamModel):
 
     def log_p(self, x, cond):
         X1 = self.standardize_input_array(cond)
-        x = np.array((x,))
+        x = x if isinstance(x, collections.Iterable) else (x,)
+
         return np.sum([scipy.stats.norm.logpdf((z - self.mean) / self.std) for z in x])
 
 
@@ -160,8 +162,9 @@ class LinearModel(ParamModel):
             regional_residuals = regional_y - np.array([self.predict_dist(d) for d in regional_dist])
             self.regional_std = np.std(regional_residuals) if len(regional_residuals) > 1 else std
 
-            regional_ll = np.sum([scipy.stats.norm.logpdf(
-                (y1 - self.predict_dist(z)) / self.regional_std) for (z, y1) in zip(regional_dist, regional_y)])
+            regional_items = [scipy.stats.norm.logpdf(
+                (y1 - self.predict_dist(z)) / self.regional_std) for (z, y1) in zip(regional_dist, regional_y)]
+            regional_ll = np.sum(regional_items)
 
         except ValueError:
             self.regional_coeffs = np.array([0, mean])
@@ -175,8 +178,8 @@ class LinearModel(ParamModel):
             tele_residuals = tele_y - np.array([self.predict_dist(d) for d in tele_dist])
             self.tele_std = np.std(tele_residuals) if len(tele_residuals) > 1 else std
 
-            tele_ll = np.sum(
-                [scipy.stats.norm.logpdf((y1 - self.predict_dist(z)) / self.tele_std) for (z, y1) in zip(tele_dist, tele_y)])
+            tele_items = [scipy.stats.norm.logpdf((y1 - self.predict_dist(z)) / self.tele_std) for (z, y1) in zip(tele_dist, tele_y)]
+            tele_ll = np.sum(tele_items)
 
         except ValueError:
             self.tele_coeffs = np.array([0, mean])
@@ -232,6 +235,7 @@ class LinearModel(ParamModel):
         return self.ll
 
     def ll_item(self, x1, y1):
+
         d = x1[X_DIST]
         if d > self.tele_cutoff:
             ll = scipy.stats.norm.logpdf((y1 - self.predict_item(x1)) / self.tele_std)
@@ -241,9 +245,9 @@ class LinearModel(ParamModel):
 
     def log_p(self, x, cond):
         X1 = self.standardize_input_array(cond)
-        x = np.array((x,))
-
-        return np.sum([self.ll_item(x1, y1) for (x1, y1) in zip(X1, x)])
+        x = x if isinstance(x, collections.Iterable) else (x,)
+        items = [self.ll_item(x1, y1) for (x1, y1) in zip(X1, x)]
+        return np.sum(items)
 
     def std(self, x):
         std = self.tele_std if x[X_DIST] > self.tele_cutoff else self.regional_std
@@ -254,7 +258,7 @@ class LinearModel(ParamModel):
         s = mean + scipy.stats.norm.rvs(scale=self.std(x))
         return s
 
-    def sample(self, X1):
+    def sample(self, cond):
         X1 = self.standardize_input_array(cond)
         return np.array([self.sample_item(x1) for x1 in X1])
 

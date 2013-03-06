@@ -44,18 +44,24 @@ def setup_graph(event, sta, chan, band,
     return sg
 
 
-def e_step(sigvisa_graph,  fit_hz, optim_params, run_name, iteration):
+def e_step(sigvisa_graph,  fit_hz, optim_params, fit_wiggles):
 
     s = Sigvisa()
+
+    ops=repr(optim_params)[1:-1]
 
     st = time.time()
     sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.template_nodes, optim_params=optim_params)
     et = time.time()
 
-    fitids = sigvisa_graph.save_template_params(optim_param_str=repr(optim_params)[1:-1],
-                                                elapsed=et - st, hz=fit_hz,
-                                                run_name=run_name, iteration=iteration)
-    s.dbconn.commit()
+    fitids = sigvisa_graph.save_template_params(optim_param_str = ops,
+                                                elapsed=et - st, hz=fit_hz)
+
+    if fit_wiggles:
+        sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.wiggle_nodes, optim_params=optim_params)
+        wiggle_et = time.time()
+        sigvisa_graph.save_wiggle_params(optim_param_str=ops)
+
     return fitids[0]
 
 
@@ -76,6 +82,7 @@ def main():
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default="dummy", type="str", help="")
+    parser.add_option("--fit_wiggles", dest="fit_wiggles", default=False, action="store_true", help="")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.01", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
@@ -104,8 +111,9 @@ def main():
                                 fit_hz=options.hz, nm_type=options.nm_type,
                                 output_run_name = options.run_name, output_iteration = options.run_iteration)
 
-    fitid = e_step(sigvisa_graph,  fit_hz = options.hz, optim_params=construct_optim_params(options.optim_params),
-                   run_name = options.run_name, iteration = options.run_iteration)
+    fitid = e_step(sigvisa_graph,  fit_hz = options.hz,
+                   optim_params=construct_optim_params(options.optim_params),
+                   fit_wiggles = options.fit_wiggles)
 
     print "fit id %d completed successfully." % fitid
 

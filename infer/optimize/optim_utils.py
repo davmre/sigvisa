@@ -193,20 +193,26 @@ def minimize(f, x0, optim_params, bounds=None):
 
 def scale_normalize(x, low_bounds, high_bounds):
     half_width = (high_bounds - low_bounds) / 2
-    midpoint = low_bounds + half_width
-    normalized = (x - midpoint) / half_width
+    bounded = np.isfinite(half_width)
+    if not bounded.any(): return x
 
-    no_bounds = np.isinf(half_width)
-    normalized[no_bounds] = x[no_bounds]
-    return normalized
+    midpoint = low_bounds[bounded] + half_width[bounded]
+    normalized = (x[bounded] - midpoint) / half_width[bounded]
+
+    newx = x.copy()
+    newx[bounded] = normalized
+    return newx
 
 def scale_unnormalize(x, low_bounds, high_bounds):
     half_width = (high_bounds - low_bounds) / 2
-    midpoint = low_bounds + half_width
-    newx = x * half_width + midpoint
+    bounded = np.isfinite(half_width)
+    if not bounded.any(): return x
 
-    no_bounds = np.isinf(half_width)
-    newx[no_bounds] = x[no_bounds]
+    midpoint = low_bounds[bounded] + half_width[bounded]
+    unnormalized = x[bounded] * half_width[bounded] + midpoint
+
+    newx = x.copy()
+    newx[bounded] = unnormalized
     return newx
 
 

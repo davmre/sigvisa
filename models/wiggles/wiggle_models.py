@@ -1,6 +1,10 @@
 import os
 import numpy as np
 
+import scipy.io
+import cStringIO
+
+
 from sigvisa import Sigvisa
 from sigvisa.models import DummyModel
 from sigvisa.models.graph import Node, ClusterNode
@@ -30,7 +34,7 @@ class WiggleModelNode(ClusterNode):
         band = model_waveform['band']
 
         featurizer, basisid = load_basis_by_family(family_name = basis_family, runid = runid, sta=sta, chan=chan, band=band, phase=phase, srate=srate)
-        self.atime_offset_seconds = featurizer.lead_time
+        self.basisid = basisid
 
         self.nodes = []
         if wiggle_model_type=="dummy":
@@ -63,11 +67,25 @@ class WiggleModelNode(ClusterNode):
 
 
     from functools32 import lru_cache
-    @lru_cache(maxsize=32)
+    @lru_cache(maxsize=1024)
     def _wiggle_cache(self, feature_tuple, npts):
         return self.featurizer.signal_from_features(features = np.array(feature_tuple), npts=npts)
 
     def get_wiggle(self, npts):
         wiggle = self._wiggle_cache(feature_tuple = tuple(self.get_value()), npts=npts)
         return wiggle
+
+    def get_encoded_params(self):
+        f_string = cStringIO.StringIO()
+        scipy.io.savemat(f_string, {"params": self.get_value()}, oned_as='row')
+        ostr = f_string.getvalue()
+        f_string.close()
+        return ostr
+
+    def set_encoded_params(self, encoded):
+        f_string = cStringIO.StringIO(encoded)
+        d = scipy.io.loadmat(f_string)
+        params = d['params']
+        f_string.close()
+        self.set_value(params.flatten())
 
