@@ -9,8 +9,9 @@ def load_basis_by_family(family_name, srate, runid=None, sta=None, chan=None, ba
 
         s = Sigvisa()
 
-        min_freq = float(band.split('_')[1])
-        max_freq = float(band.split('_')[2])
+        fundamental = float(family_name.split('_')[1])
+        min_freq = fundamental #float(band.split('_')[1])
+        max_freq = 1.0 # min(srate/2.0, float(band.split('_')[2]))
 
         cursor = s.dbconn.cursor()
         cursor.execute("select basisid from sigvisa_wiggle_basis where family_name='%s' and min_freq=%.2f and max_freq=%.2f and srate=%.2f" % (family_name, min_freq, max_freq, srate))
@@ -19,7 +20,7 @@ def load_basis_by_family(family_name, srate, runid=None, sta=None, chan=None, ba
 
         if len(basisids) == 0:
 
-            fundamental = float(family_name.split('_')[1])
+
             logscale = "logscale" in family_name
 
             featurizer = FourierFeatures(fundamental = fundamental, min_freq=min_freq, max_freq=max_freq, srate = srate, logscale=logscale, family_name = family_name)

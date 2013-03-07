@@ -10,7 +10,7 @@ run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}
 
 <table>
 <tr>
-<td colspan=3 align=center>
+<td colspan=4 align=center>
 <strong>Real signal with template fit</strong><br/>
 <img src="{% url visual fitid=fit.fitid  %}?ymax={{env_ymax}};ymin={{env_ymin}}" width=500 height=300></td>
 </tr>
@@ -18,6 +18,7 @@ run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}
 <td>(true wiggle, extracted from fit template)</td>
 <td><strong><center>raw extracted wiggle:</center></strong><br/><img src="{% url raw_wiggle fpid=phase.fpid  %}?ymax={{wiggle_ymax}};ymin={{wiggle_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
 <td><strong><center>template * wiggle:</center></strong><br/><img src="{% url template_wiggle fpid=phase.fpid  %}?ymax={{env_ymax}};ymin={{env_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
+<td><strong><center>wiggle spectrum:</center></strong><br/><img src="{% url wiggle_spectrum fpid=phase.fpid  %}" width=500 height=300></td>
 </tr>
 
 {% for wiggle in phase.sigvisawiggle_set.all %}
@@ -41,6 +42,7 @@ run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}
 </td>
 <td><strong><center>fit parameterized wiggle:</center></strong><br/><img src="{% url reconstructed_wiggle wiggleid=wiggle.wiggleid  %}?ymax={{wiggle_ymax}};ymin={{wiggle_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
 <td><strong><center>template * parameterized wiggle:</center></strong><br/><img src="{% url reconstructed_template_wiggle wiggleid=wiggle.wiggleid  %}?ymax={{env_ymax}};ymin={{env_ymin}};xmin={{xmin}};xmax={{xmax}}" width=500 height=300></td>
+<td><strong><center>wiggle spectrum:</center></strong><br/><img src="{% url reconstructed_wiggle_spectrum wiggleid=wiggle.wiggleid  %}" width=500 height=300></td>
 </tr>
 {% endfor %}
 </table>

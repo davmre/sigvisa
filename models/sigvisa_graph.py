@@ -114,7 +114,7 @@ class SigvisaGraph(DirectedGraphModel):
         return captures
 
 
-    def connect_ev_wave(self, event_node, wave_node):
+    def connect_ev_wave(self, event_node, wave_node, basisids=None, tmshapes=None):
         ev = event_node.get_value()
         wave = wave_node.mw
 
@@ -126,21 +126,34 @@ class SigvisaGraph(DirectedGraphModel):
 
             lbl = self._get_interior_node_label(ev=ev, phase=phase, wave=wave)
 
-            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s" % (lbl,), template_shape = self.template_shape)
+            tm_shape = tmshapes[phase] if phase in tmshapes else self.template_shape
+            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s" % (lbl,), template_shape = tm_shape)
             tm_node.addParent(event_node)
             tm_node.addChild(wave_node)
             self.all_nodes[tm_node.label] = tm_node
             self.template_nodes.add(tm_node)
             tm_node.prior_predict()
 
-            wm_node = WiggleModelNode(label="wiggle_%s" % (lbl,), basis_family=self.wiggle_family, wiggle_model_type = self.wiggle_model_type, model_waveform=wave, phase=phase, runid=self.runid)
+            wm_basisid = basisids[phase] if phase in basisids else None
+            wm_wigglefamily = self.wiggle_family if wm_basisid is None else None
+            wm_node = WiggleModelNode(label="wiggle_%s" % (lbl,), wiggle_model_type = self.wiggle_model_type, model_waveform=wave, phase=phase, runid=self.runid, basisid=wm_basisid, basis_family=wm_wigglefamily)
             wm_node.addParent(event_node)
             wm_node.addChild(wave_node)
             self.all_nodes[wm_node.label] = wm_node
             self.wiggle_nodes.add(wm_node)
             wm_node.prior_predict()
 
-    def add_event(self, ev):
+    def add_event(self, ev, basisids=None, tmshapes=None):
+        """
+
+        Add an event node to the graph and connect it to all waves
+        during which its signals might arrive.
+
+        basisids: optional dictionary of wiggle basis ids (integers), keyed on phase name.
+        tmshapes: optional dictionary of template shapes (strings), keyed on phase name.
+
+        """
+
         event_node = Node(model = self.ev_prior_model, fixed_value=True, initial_value=ev, label='ev_%d' % ev.id)
         self.toplevel_nodes.append(event_node)
         self.all_nodes[event_node.label] = event_node
@@ -150,12 +163,22 @@ class SigvisaGraph(DirectedGraphModel):
             if not self.wave_captures_event(ev=ev, sta=wave['sta'], stime=wave['stime'], etime=wave['etime']):
                 continue
 
-            self.connect_ev_wave(event_node=event_node, wave_node=wave_node)
+            self.connect_ev_wave(event_node=event_node, wave_node=wave_node, basisids=basisids, tmshapes=tmshapes)
 
         self._topo_sort()
         return event_node
 
-    def add_wave(self, wave):
+    def add_wave(self, wave, basisids=None, tmshapes=None):
+        """
+
+        Add a wave node to the graph and connect it to all events
+        whose signals might arrive during that time period.
+
+        basisids: optional dictionary of wiggle basis ids (integers), keyed on phase name.
+        tmshapes: optional dictionary of template shapes (strings), keyed on phase name.
+
+        """
+
         wave_node = EnvelopeNode(model_waveform=wave, nm_type=self.nm_type, observed=True, label=self._get_wave_label(wave=wave))
         self.leaf_nodes.append(wave_node)
         self.all_nodes[wave_node.label] = wave_node
@@ -166,7 +189,7 @@ class SigvisaGraph(DirectedGraphModel):
                                             stime=wave['stime'], etime=wave['etime']):
                 continue
             # TODO: need a smarter way of specifying per-event phases
-            self.connect_ev_wave(event_node=event_node, wave_node=wave_node)
+            self.connect_ev_wave(event_node=event_node, wave_node=wave_node, basisids=basisids, tmshapes=tmshapes)
 
         self._topo_sort()
         return wave_node
@@ -191,6 +214,16 @@ class SigvisaGraph(DirectedGraphModel):
 
     def get_wave_node(self, wave):
         return self.all_nodes[self._get_wave_label(wave=wave)]
+
+    def get_partner_node(self, n):
+        if n.label.startswith("template_"):
+            lbl = n.label[9:]
+            return self.all_nodes["wiggle_%s" % lbl]
+        elif n.label.startswith("wiggle_"):
+            lbl = n.label[7:]
+            return self.all_nodes["template_%s" % lbl]
+        else:
+            raise ValueError("node %s has no partner!" % n.label)
 
     def fix_arrival_times(self, fixed=True):
         for tm_node in self.template_nodes:
@@ -318,37 +351,31 @@ def load_sg_from_db_fit(fitid):
     phase_details = cursor.fetchall()
     phases = [p[1] for p in phase_details]
     templates = {}
+    tmshapes = {}
     for (phase, p) in zip(phases, phase_details):
         templates[phase] = p[3:7]
-
-    # ensure all phases use the same template shape. it's possible to
-    # build a graph with multiple template shapes, but not currently
-    # implemented.
-    for (i, phase_detail) in enumerate(phase_details[:-1]):
-        assert(phase_detail[2] == phase_details[i+1][2])
-    template_shape = phase_details[0][2]
+        tmshapes[phase] = p[2]
 
 
     wiggles = {}
+    basisids = {}
     wiggle_family = None
     for (phase, phase_detail) in zip(phases, phase_details):
-        wiggle_sql_query = "select w.wiggleid, w.params, basis.family_name from sigvisa_wiggle w, sigvisa_wiggle_basis basis where w.fpid=%d and w.basisid=basis.basisid" % (phase_detail[0])
+        wiggle_sql_query = "select w.wiggleid, w.params, w.basisid from sigvisa_wiggle w where w.fpid=%d " % (phase_detail[0])
         cursor.execute(wiggle_sql_query)
         w = cursor.fetchall()
         assert(len(w) == 1) # if there's more than one wiggle
                             # parameterization of a phase, we'd need
                             # some way to disambiguate.
 
-        # again, currently no way to specify multiple wiggle families
-        assert(wiggle_family is None or w[0][2] == wiggle_family)
-        wiggle_family = w[0][2]
+        basisids[phase] = w[0][2]
         wiggles[phase] = w[0][1]
 
     sg = SigvisaGraph(template_model_type="dummy", wiggle_model_type="dummy",
-                      template_shape=template_shape, wiggle_family=wiggle_family,
+                      template_shape=None, wiggle_family=None,
                       nm_type = nm_type, runid=runid, phases=phases)
     sg.add_event(ev)
-    wave_node = sg.add_wave(wave)
+    wave_node = sg.add_wave(wave, basisids=basisids, tmshapes=tmshapes)
 
     for phase in phases:
         tm_node = sg.get_template_node(ev=ev, phase=phase, wave=wave)

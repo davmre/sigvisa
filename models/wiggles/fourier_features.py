@@ -12,13 +12,12 @@ class FourierFeatures(Featurizer):
         self.fundamental = fundamental
         self.max_freq = max_freq
         self.min_freq = min_freq
-        self.nparams = int((self.max_freq - self.min_freq) / self.fundamental) + 1 # one extra feature for std
+        self.nparams = 2 * int((self.max_freq - self.min_freq) / self.fundamental)
 
     def signal_from_features(self, features, srate=None, len_seconds=None, npts=None):
         srate = srate if srate is not None else self.srate
 
-        std = features[0]
-        features = np.reshape(features[1:], (-1, 2))
+        features = np.reshape(features, (-1, 2))
 
         if npts is not None:
             len_seconds = npts/srate
@@ -45,10 +44,10 @@ class FourierFeatures(Featurizer):
 #            s += c1 * basis1
 #            s += c2 * basis2
 
-            s += amp * np.sin(x * 2 * np.pi * freq + phase)
+            if amp != 0:
+                print "freq %.2f amp %.2f phase %.2f" % (freq, amp, phase)
+            s += amp * np.sin(2 * np.pi * (x * freq + phase))
 
-        m = np.mean(s)
-        s = (s - m) * std + m
         if self.logscale:
             s = np.exp(s)
         else:
@@ -63,10 +62,6 @@ class FourierFeatures(Featurizer):
             signal = np.log(signal)
         else:
             signal = signal - 1 # we want zero-mean for the Fourier projection
-
-        std = np.std(signal)
-        m = np.mean(signal)
-        signal = (signal - m) / std + m
 
         n_features = int((self.max_freq - self.min_freq) / self.fundamental)
         len_seconds = len(signal) / float(srate)
@@ -99,9 +94,11 @@ class FourierFeatures(Featurizer):
             c = complex(c1, c2)
 
             (amp, phase) = (np.abs(c), np.angle(c))
+            phase /= (2 * np.pi)
             features[i, :] = (amp, phase)
 
-        return np.concatenate(( (std,), features.flatten()))
+        np.savetxt('features_orig.txt', features)
+        return features.flatten()
 
     def basis_type(self):
         return "fourier"
@@ -110,7 +107,7 @@ class FourierFeatures(Featurizer):
         return self.nparams
 
     def save_to_db(self, dbconn):
-        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, lead_time, family_name, dimension, fundamental, min_freq, max_freq) values (%f, '%s', %f, '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.lead_time, self.family_name, self.dimension(), self.fundamental, self.min_freq, self.max_freq)
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, dimension, fundamental, min_freq, max_freq) values (%f, '%s', '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.dimension(), self.fundamental, self.min_freq, self.max_freq)
         return execute_and_return_id(dbconn, sql_query, "basisid")
 
 

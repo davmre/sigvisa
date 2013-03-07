@@ -4,6 +4,7 @@ import sys
 import time
 import traceback
 import numpy as np
+import numpy.ma as ma
 import scipy
 
 from sigvisa.database.dataset import *
@@ -11,6 +12,7 @@ from sigvisa.database.signal_data import *
 from sigvisa.database import db
 from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
+from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 
 import sigvisa.utils.geog
 import obspy.signal.util
@@ -44,6 +46,28 @@ def setup_graph(event, sta, chan, band,
     return sg
 
 
+def init_wiggles_from_template(sigvisa_graph, wiggle_start_s = 1, wiggle_end_s = 100):
+    wave_node = sigvisa_graph.leaf_nodes[0]
+    for wm_node in sigvisa_graph.wiggle_nodes:
+        tm_node = sigvisa_graph.get_partner_node(wm_node)
+        atime = tm_node.get_value()[0]
+
+        wiggle, st, et = extract_phase_wiggle(tm_node=tm_node, wave_node=wave_node, skip_initial_s=wiggle_start_s)
+        if st is None:
+            continue
+
+        # add masked padding to the beginning of the extracted wiggle so that it lines up with the template
+        wiggle_start_idx = int(np.floor((st - atime) * wave_node.srate))
+
+        # crop the wiggle so that we're only extracting params from the prominent portion
+        wiggle_len_idx = min(len(wiggle), int(wiggle_end_s * wave_node.srate))
+
+
+        wiggle = np.concatenate([np.ones((wiggle_start_idx,)) * ma.masked, wiggle[:wiggle_len_idx]])
+        np.savetxt('wiggle2.txt', wiggle)
+        wm_node.set_params_from_wiggle(wiggle)
+        np.savetxt('wiggle3.txt', wm_node.get_wiggle(npts=len(wiggle)))
+
 def e_step(sigvisa_graph,  fit_hz, optim_params, fit_wiggles):
 
     s = Sigvisa()
@@ -58,7 +82,8 @@ def e_step(sigvisa_graph,  fit_hz, optim_params, fit_wiggles):
                                                 elapsed=et - st, hz=fit_hz)
 
     if fit_wiggles:
-        sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.wiggle_nodes, optim_params=optim_params)
+        init_wiggles_from_template(sigvisa_graph)
+        #sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.wiggle_nodes, optim_params=optim_params)
         wiggle_et = time.time()
         sigvisa_graph.save_wiggle_params(optim_param_str=ops)
 
@@ -114,6 +139,7 @@ def main():
     fitid = e_step(sigvisa_graph,  fit_hz = options.hz,
                    optim_params=construct_optim_params(options.optim_params),
                    fit_wiggles = options.fit_wiggles)
+
 
     print "fit id %d completed successfully." % fitid
 

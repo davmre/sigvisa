@@ -24,7 +24,7 @@ def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisi
 
 class WiggleModelNode(ClusterNode):
 
-    def __init__(self, basis_family, wiggle_model_type, model_waveform, phase, runid, label="", parents={}, children=[]):
+    def __init__(self, basisid, basis_family, wiggle_model_type, model_waveform, phase, runid, label="", parents={}, children=[]):
 
         super(WiggleModelNode, self).__init__(label=label, nodes=[], parents=parents, children=children)
 
@@ -33,7 +33,10 @@ class WiggleModelNode(ClusterNode):
         chan = model_waveform['chan']
         band = model_waveform['band']
 
-        featurizer, basisid = load_basis_by_family(family_name = basis_family, runid = runid, sta=sta, chan=chan, band=band, phase=phase, srate=srate)
+        if basisid is not None:
+            featurizer = load_basis(basisid)
+        else:
+            featurizer, basisid = load_basis_by_family(family_name = basis_family, runid = runid, sta=sta, chan=chan, band=band, phase=phase, srate=srate)
         self.basisid = basisid
 
         self.nodes = []
@@ -74,6 +77,10 @@ class WiggleModelNode(ClusterNode):
     def get_wiggle(self, npts):
         wiggle = self._wiggle_cache(feature_tuple = tuple(self.get_value()), npts=npts)
         return wiggle
+
+    def set_params_from_wiggle(self, wiggle):
+        params = self.featurizer.basis_decomposition(wiggle)
+        self.set_value(params)
 
     def get_encoded_params(self):
         f_string = cStringIO.StringIO()

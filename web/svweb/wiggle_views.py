@@ -19,6 +19,7 @@ from sigvisa.models.wiggles.wiggle import create_wiggled_phase
 from sigvisa.models.wiggles.fourier_features import FourierFeatures
 from sigvisa.signals.common import Waveform
 
+import matplotlib
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import calendar
@@ -90,6 +91,39 @@ def raw_wiggle_view(request, fpid):
     return view_wave(request, wave, color='black', linewidth=1.5, logscale=False)
 
 
+def psd_of_wave(request, wave):
+
+    def empirical_psd(x, hz):
+        y, x = matplotlib.mlab.psd(x, NFFT=len(x), Fs=1)
+        return (x * hz, np.log(y))
+
+    fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+
+    x, y = empirical_psd(wave.data.compressed(), hz=wave['srate'])
+    axes.plot(x, y)
+    axes.set_xlabel('Frequency (Hz)', fontsize=8)
+    axes.set_ylabel('Power (natural log scale)', fontsize=8)
+
+    process_plot_args(request, axes)
+
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
+    fig.tight_layout()
+    canvas.print_png(response)
+    return response
+
+
+def wiggle_spectrum_view(request, fpid):
+    phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
+    fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
+
+    wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")
+    wave = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
+    return psd_of_wave(request, wave)
+
+
 def template_wiggle_view(request, fpid):
 
     phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
@@ -113,25 +147,7 @@ def template_wiggle_view(request, fpid):
     return view_wave(request, wiggled_wave, color='black', linewidth=1.5, logscale=False)
 
 
-def reconstruct_wiggle_data(wiggle):
-    if wiggle.type == "fourier":
-        min_freq = wiggle.meta1
-        max_freq = wiggle.meta2
-        fundamental = wiggle.meta0
-        srate = wiggle.srate
-
-        f = FourierFeatures(fundamental=fundamental, min_freq=min_freq, max_freq=max_freq, srate=srate)
-        reconstructed_wiggle = f.signal_from_encoded_params(
-            wiggle.params, srate=wiggle.srate, len_seconds=wiggle.etime - wiggle.stime)
-    else:
-        raise Exception("unrecognized wiggle type %s" % wiggle.type)
-    if wiggle.log == '1':
-        reconstructed_wiggle = np.exp(reconstructed_wiggle)
-
-    return reconstructed_wiggle
-
-
-def reconstructed_wiggle_view(request, wiggleid):
+def reconstruct_wiggle_wave(request, wiggleid):
 
     wiggle = get_object_or_404(SigvisaWiggle, pk=wiggleid)
     phase = get_object_or_404(SigvisaCodaFitPhase, pk=wiggle.fpid.fpid)
@@ -147,7 +163,15 @@ def reconstructed_wiggle_view(request, wiggleid):
     wave_node = sg.leaf_nodes[0]
     wm_node = sg.get_wiggle_node(ev=ev, wave=wave_node.mw, phase=phase.phase)
     wiggle_wave = Waveform(my_stats = extracted_wave.my_stats.copy(), segment_stats = extracted_wave.segment_stats.copy(), data = wm_node.get_wiggle(npts=extracted_wave['npts']))
+    print "generating wiggle with %d points" % extracted_wave['npts']
+    return wiggle_wave
 
+def reconstructed_wiggle_spectrum_view(request, wiggleid):
+    wiggle_wave = reconstruct_wiggle_wave(request, wiggleid)
+    return psd_of_wave(request, wiggle_wave)
+
+def reconstructed_wiggle_view(request, wiggleid):
+    wiggle_wave = reconstruct_wiggle_wave(request, wiggleid)
     return view_wave(request, wiggle_wave, color='black', linewidth=1.5, logscale=False)
 
 

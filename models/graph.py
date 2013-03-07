@@ -152,6 +152,7 @@ class ClusterNode(Node):
         return values
 
     def set_value(self, value):
+        assert(len(value) == len(self.nodes))
         for (i, node) in enumerate(self.nodes):
             node.set_value(value[i])
 

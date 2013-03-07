@@ -89,18 +89,18 @@ class EnvelopeNode(Node):
                 continue
 
             offset = start - start_idx
-            phase_env = tm.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
+            phase_env = np.exp(tm.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
+            if include_wiggles:
+                wm = self.parents['wiggle_%s' % key]
+                wiggle = wm.get_wiggle(npts=len(phase_env))
+                phase_env *= wiggle
+
             end_idx = start_idx + len(phase_env)
             if end_idx <= 0:
                 continue
             early = max(0, - start_idx)
             overshoot = max(0, end_idx - len(signal))
-            final_template = np.exp(phase_env[early:len(phase_env) - overshoot])
-
-            if include_wiggles:
-                wm = self.parents['wiggle_%s' % key]
-                wiggle = wm.get_wiggle(npts=len(final_template))
-                final_template *= wiggle
+            final_template = phase_env[early:len(phase_env) - overshoot]
 
             signal[start_idx + early:end_idx - overshoot] += final_template
 
