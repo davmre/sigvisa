@@ -83,7 +83,7 @@ def e_step(sigvisa_graph,  fit_hz, optim_params, fit_wiggles):
 
     if fit_wiggles:
         init_wiggles_from_template(sigvisa_graph)
-        #sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.wiggle_nodes, optim_params=optim_params)
+        sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.wiggle_nodes, optim_params=optim_params)
         wiggle_et = time.time()
         sigvisa_graph.save_wiggle_params(optim_param_str=ops)
 

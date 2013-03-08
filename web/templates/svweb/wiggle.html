@@ -1,3 +1,5 @@
+{% load math_filters %}
+
 <html>
 <head>
 <title>wiggles -- phase {{ phase.fpid }} -- sigvisa</title>
@@ -29,7 +31,13 @@ run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}
 <tr><td><strong>wiggleid:</strong></td><td>{{wiggle.wiggleid}}</td></tr>
 <tr><td><strong>timestamp:</strong></td><td>{{wiggle.timestamp}}</td></tr>
 
-<tr><td><strong>family_name</strong></td><td>{{wiggle.basisid.family_name}}</td></tr>
+<tr><td><strong>srate</strong></td><td>{{wiggle.basisid.srate}}</td></tr>
+<tr><td><strong>npts</strong></td><td>{{wiggle.basisid.npts}}</td></tr>
+<tr><td><strong>len</strong></td><td>{{wiggle.basisid.npts|add:"-1"|div:wiggle.basisid.srate}}s</td></tr>
+<tr><td><strong>logscale</strong></td><td>{{wiggle.basisid.logscale}}</td></tr>
+<tr><td><strong>dimension</strong></td><td>{{wiggle.basisid.dimension}}</td></tr>
+<tr><td><strong>basis_type</strong></td><td>{{wiggle.basisid.basis_type}}</td></tr>
+
 
 {% if wiggle.basisid.family_name|slice:":8" == "fourier_" %}
    <tr><td><strong>fundamental:</strong></td><td>{{wiggle.basisid.fundamental}}</td></tr>

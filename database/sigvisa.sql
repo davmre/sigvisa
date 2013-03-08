@@ -149,7 +149,7 @@ create table sigvisa_wiggle_basis (
  basis_type varchar(31) not null,
  srate double precision not null,
  logscale varchar(1) not null,
- npts float(24) not null,
+ npts int not null,
  dimension int not null,
  fundamental double precision,
  min_freq double precision,
