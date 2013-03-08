@@ -1,52 +1,43 @@
 import numpy as np
-from sigvisa.models.wiggles.featurizer import Featurizer
+from sigvisa import Sigvisa
 from sigvisa.database.signal_data import execute_and_return_id
+from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
 
-class FourierFeatures(Featurizer):
+class FourierFeatureNode(WiggleModelNode):
 
-    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, **kwargs):
-        super(FourierFeatures, self).__init__(**kwargs)
+    def __init__(self, fundamental, min_freq, max_freq, npts, srate, logscale=False, basisid=None, family_name=None, **kwargs):
 
         assert(min_freq < max_freq)
+
+        self.srate = srate
+        self.npts = npts
+        self.len_s = float(npts-1) / srate
+        self.x = np.linspace(0, self.len_s, self.npts)
+
+        self.logscale = logscale
 
         self.fundamental = fundamental
         self.max_freq = max_freq
         self.min_freq = min_freq
         self.nparams = 2 * int((self.max_freq - self.min_freq) / self.fundamental)
 
-    def signal_from_features(self, features, srate=None, len_seconds=None, npts=None):
-        srate = srate if srate is not None else self.srate
+        self.family_name = family_name
+        self.basisid = basisid
+        if basisid is None:
+            s = Sigvisa()
+            self.save_to_db(s.dbconn)
 
+        # load template params and initialize Node stuff
+        super(FourierFeatureNode, self).__init__(**kwargs)
+
+    def signal_from_features(self, features):
         features = np.reshape(features, (-1, 2))
-
-        if npts is not None:
-            len_seconds = npts/srate
-        elif len_seconds is not None:
-            npts = int(len_seconds * srate)
-        else:
-            raise ValueError("call to signal_from_features must specify either len_seconds or npts")
-
-        if npts == 0:
-            return np.array([])
-
-        x = np.linspace(0, len_seconds, npts)
-
-        s = np.zeros((npts,))
+        s = np.zeros((self.npts,))
 
         for (i, row) in enumerate(features):
             (amp, phase) = row
-
-#            (c1, c2) = row
             freq = self.min_freq + self.fundamental * i
-#            basis1  =  np.sin(x*2*np.pi*freq)
-#            basis2  =  np.cos(x*2*np.pi*freq)
-
-#            s += c1 * basis1
-#            s += c2 * basis2
-
-            if amp != 0:
-                print "freq %.2f amp %.2f phase %.2f" % (freq, amp, phase)
-            s += amp * np.sin(2 * np.pi * (x * freq + phase))
+            s += amp * np.sin(2 * np.pi * (self.x * freq + phase))
 
         if self.logscale:
             s = np.exp(s)
@@ -55,49 +46,36 @@ class FourierFeatures(Featurizer):
 
         return s
 
-    def basis_decomposition(self, signal, srate=None):
-        srate = srate if srate is not None else self.srate
+    def basis_decomposition(self, signal):
+        assert(len(signal) == self.npts)
 
         if self.logscale:
             signal = np.log(signal)
         else:
             signal = signal - 1 # we want zero-mean for the Fourier projection
 
-        n_features = int((self.max_freq - self.min_freq) / self.fundamental)
-        len_seconds = len(signal) / float(srate)
-
-        x = np.linspace(0, len_seconds, len(signal))
-        assert(len(x) == len(signal))
-
-        features = np.zeros((n_features, 2))
-        for i in np.arange(n_features):
+        features = np.zeros((self.nparams/2, 2))
+        for i in np.arange(self.nparams/2):
             freq = self.fundamental * i + self.min_freq
 
-            periods = freq * len_seconds
+            basis1 = np.sin(self.x * 2 * np.pi * freq)
+            basis2 = np.cos(self.x * 2 * np.pi * freq)
 
-            basis1 = np.sin(x * 2 * np.pi * freq)
-            basis2 = np.cos(x * 2 * np.pi * freq)
-
-            b1d = np.dot(basis1, basis1)
-            b2d = np.dot(basis2, basis2)
-
-            c1 = np.dot(signal, basis1) / len(signal)
-            c2 = np.dot(signal, basis2) / len(signal)
+            c1 = np.dot(signal, basis1) / ((len(signal) - 1) / 2.0)
+            c2 = np.dot(signal, basis2) / ((len(signal) - 1) / 2.0)
 
             if np.isnan(c1):
                 c1 = 0
             if np.isnan(c2):
                 c2 = 0
 
-#            features[i, :] = [c1, c2]
-
             c = complex(c1, c2)
 
             (amp, phase) = (np.abs(c), np.angle(c))
             phase /= (2 * np.pi)
+            # print "freq = ", freq, "c = ", c, "amp/phase = ", amp, phase
             features[i, :] = (amp, phase)
 
-        np.savetxt('features_orig.txt', features)
         return features.flatten()
 
     def basis_type(self):
@@ -107,7 +85,9 @@ class FourierFeatures(Featurizer):
         return self.nparams
 
     def save_to_db(self, dbconn):
-        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, dimension, fundamental, min_freq, max_freq) values (%f, '%s', '%s', %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.dimension(), self.fundamental, self.min_freq, self.max_freq)
-        return execute_and_return_id(dbconn, sql_query, "basisid")
+        assert(self.basisid is None)
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, fundamental, min_freq, max_freq) values (%f, '%s', '%s', '%s', %d, %d, %f, %f, %f)" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.fundamental, self.min_freq, self.max_freq)
+        self.basisid = execute_and_return_id(dbconn, sql_query, "basisid")
+        return self.basisid
 
 

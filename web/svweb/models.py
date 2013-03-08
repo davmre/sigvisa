@@ -256,9 +256,11 @@ class SigvisaCodaFitPhase(models.Model):
 class SigvisaWiggleBasis(models.Model):
     basisid = models.IntegerField(primary_key=True)
     family_name = models.CharField(max_length=63)
+    basis_type = models.CharField(max_length=31)
     srate = models.FloatField()
     logscale = models.CharField(max_length=1)
     dimension = models.IntegerField()
+    npts = models.IntegerField()
     fundamental = models.FloatField(null=True, blank=True)
     min_freq = models.FloatField(null=True, blank=True)
     max_freq = models.FloatField(null=True, blank=True)

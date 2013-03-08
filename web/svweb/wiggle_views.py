@@ -16,7 +16,7 @@ from sigvisa import *
 
 from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.models.wiggles.wiggle import create_wiggled_phase
-from sigvisa.models.wiggles.fourier_features import FourierFeatures
+from sigvisa.models.wiggles import load_wiggle_node, load_wiggle_node_by_family
 from sigvisa.signals.common import Waveform
 
 import matplotlib
@@ -162,8 +162,7 @@ def reconstruct_wiggle_wave(request, wiggleid):
 
     wave_node = sg.leaf_nodes[0]
     wm_node = sg.get_wiggle_node(ev=ev, wave=wave_node.mw, phase=phase.phase)
-    wiggle_wave = Waveform(my_stats = extracted_wave.my_stats.copy(), segment_stats = extracted_wave.segment_stats.copy(), data = wm_node.get_wiggle(npts=extracted_wave['npts']))
-    print "generating wiggle with %d points" % extracted_wave['npts']
+    wiggle_wave = Waveform(data = wm_node.get_wiggle(), stime=extracted_wave['stime'], srate=wm_node.srate, sta=fit.sta, chan=fit.chan, filter_str='%s;env;hz_%.2f' % (fit.band, wm_node.srate))
     return wiggle_wave
 
 def reconstructed_wiggle_spectrum_view(request, wiggleid):

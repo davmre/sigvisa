@@ -46,7 +46,7 @@ def setup_graph(event, sta, chan, band,
     return sg
 
 
-def init_wiggles_from_template(sigvisa_graph, wiggle_start_s = 1, wiggle_end_s = 100):
+def init_wiggles_from_template(sigvisa_graph, wiggle_start_s = 1):
     wave_node = sigvisa_graph.leaf_nodes[0]
     for wm_node in sigvisa_graph.wiggle_nodes:
         tm_node = sigvisa_graph.get_partner_node(wm_node)
@@ -60,13 +60,13 @@ def init_wiggles_from_template(sigvisa_graph, wiggle_start_s = 1, wiggle_end_s =
         wiggle_start_idx = int(np.floor((st - atime) * wave_node.srate))
 
         # crop the wiggle so that we're only extracting params from the prominent portion
-        wiggle_len_idx = min(len(wiggle), int(wiggle_end_s * wave_node.srate))
-
+        wiggle_len_idx = min(len(wiggle), int(sigvisa_graph.wiggle_len_s * wave_node.srate)) - wiggle_start_idx + 1
 
         wiggle = np.concatenate([np.ones((wiggle_start_idx,)) * ma.masked, wiggle[:wiggle_len_idx]])
+        print "wiggle len", len(wiggle)
         np.savetxt('wiggle2.txt', wiggle)
         wm_node.set_params_from_wiggle(wiggle)
-        np.savetxt('wiggle3.txt', wm_node.get_wiggle(npts=len(wiggle)))
+        np.savetxt('wiggle3.txt', wm_node.get_wiggle())
 
 def e_step(sigvisa_graph,  fit_hz, optim_params, fit_wiggles):
 
@@ -108,7 +108,7 @@ def main():
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default="dummy", type="str", help="")
     parser.add_option("--fit_wiggles", dest="fit_wiggles", default=False, action="store_true", help="")
-    parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.01", type="str", help="")
+    parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="BHZ", type="str", help="")

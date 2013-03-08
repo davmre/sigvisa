@@ -146,8 +146,10 @@ CREATE INDEX noise_hour_idx ON sigvisa_noise_model (created_for_hour);
 create table sigvisa_wiggle_basis (
  basisid int not null auto_increment,
  family_name varchar(63) not null,
+ basis_type varchar(31) not null,
  srate double precision not null,
  logscale varchar(1) not null,
+ npts float(24) not null,
  dimension int not null,
  fundamental double precision,
  min_freq double precision,

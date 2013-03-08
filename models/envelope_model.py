@@ -92,8 +92,9 @@ class EnvelopeNode(Node):
             phase_env = np.exp(tm.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
             if include_wiggles:
                 wm = self.parents['wiggle_%s' % key]
-                wiggle = wm.get_wiggle(npts=len(phase_env))
-                phase_env *= wiggle
+                wiggle = wm.get_wiggle()
+                wiggle_len = min(len(wiggle), len(phase_env))
+                phase_env[:wiggle_len] *= wiggle[:wiggle_len]
 
             end_idx = start_idx + len(phase_env)
             if end_idx <= 0:

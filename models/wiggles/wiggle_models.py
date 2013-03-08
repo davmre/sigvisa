@@ -8,9 +8,7 @@ import cStringIO
 from sigvisa import Sigvisa
 from sigvisa.models import DummyModel
 from sigvisa.models.graph import Node, ClusterNode
-from sigvisa.models.wiggles import load_basis
 from sigvisa.models.noise.noise_util import get_noise_model
-from sigvisa.models.wiggles import load_basis_by_family
 
 
 def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisid):
@@ -24,35 +22,27 @@ def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisi
 
 class WiggleModelNode(ClusterNode):
 
-    def __init__(self, basisid, basis_family, wiggle_model_type, model_waveform, phase, runid, label="", parents={}, children=[]):
+    def __init__(self, wiggle_model_type, phase, runid, logscale =False, model_waveform=None, sta=None, chan=None, band=None, label="", parents={}, children=[]):
 
         super(WiggleModelNode, self).__init__(label=label, nodes=[], parents=parents, children=children)
 
-        srate = model_waveform['srate']
-        sta = model_waveform['sta']
-        chan = model_waveform['chan']
-        band = model_waveform['band']
-
-        if basisid is not None:
-            featurizer = load_basis(basisid)
-        else:
-            featurizer, basisid = load_basis_by_family(family_name = basis_family, runid = runid, sta=sta, chan=chan, band=band, phase=phase, srate=srate)
-        self.basisid = basisid
+        # child classes should set these before calling super()
+        assert(self.srate is not None and self.npts is not None and self.logscale is not None and self.basisid is not None)
 
         self.nodes = []
         if wiggle_model_type=="dummy":
-            for param in range(featurizer.dimension()):
+            for param in range(self.dimension()):
                 param_str = "%03d" % param
                 mNode = Node(model=DummyModel(), parents=parents, children=children, label=param_str)
                 self.nodes.append(mNode)
         else:
-            wpmids = get_wiggle_param_model_ids(runid = runid, sta=sta, band=band, chan=chan, phase=phase, model_type = wiggle_model_type, basisid = basisid)
+            wpmids = get_wiggle_param_model_ids(runid = runid, sta=sta, band=band, chan=chan, phase=phase, model_type = wiggle_model_type, basisid = self.basisid)
 
             s = Sigvisa()
             cursor = s.dbconn.cursor()
             models = []
             for wpmid in wpmids:
-                sql_query = "select param, model_type, model_fname, wpmid, basisid from sigvisa_wiggle_param_model where wpmid=%d" % (wpmid)
+                sql_query = "select param, model_type, model_fname, wpmid from sigvisa_wiggle_param_model where wpmid=%d" % (wpmid)
                 cursor.execute(sql_query)
                 models.append(cursor.fetchone())
             cursor.close()
@@ -60,26 +50,25 @@ class WiggleModelNode(ClusterNode):
             # load all relevant models as new graph nodes
 
             basedir = os.getenv("SIGVISA_HOME")
-            for (param, db_model_type, fname, wpmid, wpm_basisid) in sorted(models):
+            for (param, db_model_type, fname, wpmid) in sorted(models):
                 model = load_model(os.path.join(basedir, fname), db_model_type)
                 mNode = Node(model=model, parents=parents, children=children, label='%s' % (param))
                 self.nodes.append(mNode)
 
-        assert(len(self.nodes) == featurizer.dimension())
-        self.featurizer = featurizer
+        assert(len(self.nodes) == self.dimension())
 
 
     from functools32 import lru_cache
     @lru_cache(maxsize=1024)
-    def _wiggle_cache(self, feature_tuple, npts):
-        return self.featurizer.signal_from_features(features = np.array(feature_tuple), npts=npts)
+    def _wiggle_cache(self, feature_tuple):
+        return self.signal_from_features(features = np.array(feature_tuple))
 
-    def get_wiggle(self, npts):
-        wiggle = self._wiggle_cache(feature_tuple = tuple(self.get_value()), npts=npts)
+    def get_wiggle(self):
+        wiggle = self._wiggle_cache(feature_tuple = tuple(self.get_value()))
         return wiggle
 
     def set_params_from_wiggle(self, wiggle):
-        params = self.featurizer.basis_decomposition(wiggle)
+        params = self.basis_decomposition(wiggle)
         self.set_value(params)
 
     def get_encoded_params(self):

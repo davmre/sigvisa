@@ -14,7 +14,7 @@ from sigvisa.models.ttime import tt_predict, tt_log_p
 from sigvisa.models.graph import Node, DirectedGraphModel
 from sigvisa.models.envelope_model import EnvelopeNode
 from sigvisa.models.templates.load_by_name import load_template_model
-from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
+from sigvisa.models.wiggles import load_wiggle_node, load_wiggle_node_by_family
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 from sigvisa.signals.common import Waveform
@@ -28,7 +28,8 @@ class SigvisaGraph(DirectedGraphModel):
     """
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
-                 wiggle_model_type="dummy", wiggle_family="fourier_0.01",
+                 wiggle_model_type="dummy", wiggle_family="fourier_0.8",
+                 wiggle_logscale = False, wiggle_len_s = 30.0,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto"):
         """
@@ -48,6 +49,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.wiggle_model_type = wiggle_model_type
         self.wiggle_family = wiggle_family
+        self.wiggle_logscale = wiggle_logscale
+        self.wiggle_len_s = wiggle_len_s
 
         self.nm_type = nm_type
         self.phases = phases
@@ -126,7 +129,7 @@ class SigvisaGraph(DirectedGraphModel):
 
             lbl = self._get_interior_node_label(ev=ev, phase=phase, wave=wave)
 
-            tm_shape = tmshapes[phase] if phase in tmshapes else self.template_shape
+            tm_shape = tmshapes[phase] if tmshapes is not None else self.template_shape
             tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s" % (lbl,), template_shape = tm_shape)
             tm_node.addParent(event_node)
             tm_node.addChild(wave_node)
@@ -134,9 +137,24 @@ class SigvisaGraph(DirectedGraphModel):
             self.template_nodes.add(tm_node)
             tm_node.prior_predict()
 
-            wm_basisid = basisids[phase] if phase in basisids else None
-            wm_wigglefamily = self.wiggle_family if wm_basisid is None else None
-            wm_node = WiggleModelNode(label="wiggle_%s" % (lbl,), wiggle_model_type = self.wiggle_model_type, model_waveform=wave, phase=phase, runid=self.runid, basisid=wm_basisid, basis_family=wm_wigglefamily)
+            if basisids is not None:
+                wm_basisid = basisids[phase]
+                wm_node = load_wiggle_node(basisid = wm_basisid,
+                                           wiggle_model_type = self.wiggle_model_type,
+                                           model_waveform=wave,
+                                           phase=phase,
+                                           runid=self.runid,
+                                           label="wiggle_%s" % (lbl,))
+            else:
+                wm_node = load_wiggle_node_by_family(family_name = self.wiggle_family,
+                                                     wiggle_model_type = self.wiggle_model_type,
+                                                     len_s = self.wiggle_len_s,
+                                                     logscale = self.wiggle_logscale,
+                                                     model_waveform = wave,
+                                                     phase=phase,
+                                                     runid=self.runid,
+                                                     label="wiggle_%s" % (lbl,))
+
             wm_node.addParent(event_node)
             wm_node.addChild(wave_node)
             self.all_nodes[wm_node.label] = wm_node
