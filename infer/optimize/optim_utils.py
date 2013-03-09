@@ -18,7 +18,7 @@ def construct_optim_params(optim_param_str=''):
 
     defaults = {
         "method": "bfgscoord",
-        "fix_first_cols": 1,
+        "fix_first_cols": 0,
         "normalize": True,
         'disp': False,
         "eps": 1e-4,  # increment for approximate gradient evaluation

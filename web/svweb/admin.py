@@ -8,7 +8,7 @@ class PhaseInline(admin.TabularInline):
 
 
 class FitAdmin(admin.ModelAdmin):
-    fields = ['runid', 'evid', 'sta', 'chan', 'band', 'optim_method', 'iid', 'stime', 'etime', 'acost', 'dist', 'azi',
+    fields = ['runid', 'evid', 'sta', 'chan', 'band', 'tmpl_optim_method', 'iid', 'stime', 'etime', 'acost', 'dist', 'azi',
               'human_approved']
     list_display = ('runid', 'evid', 'sta', 'chan', 'band', 'stime', 'human_approved')
     list_filter = ('runid', 'sta', 'chan', 'band', 'stime', 'human_approved')

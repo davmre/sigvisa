@@ -46,46 +46,35 @@ def setup_graph(event, sta, chan, band,
     return sg
 
 
-def init_wiggles_from_template(sigvisa_graph, wiggle_start_s = 1):
-    wave_node = sigvisa_graph.leaf_nodes[0]
-    for wm_node in sigvisa_graph.wiggle_nodes:
-        tm_node = sigvisa_graph.get_partner_node(wm_node)
-        atime = tm_node.get_value()[0]
 
-        wiggle, st, et = extract_phase_wiggle(tm_node=tm_node, wave_node=wave_node, skip_initial_s=wiggle_start_s)
-        if st is None:
-            continue
-
-        # add masked padding to the beginning of the extracted wiggle so that it lines up with the template
-        wiggle_start_idx = int(np.floor((st - atime) * wave_node.srate))
-
-        # crop the wiggle so that we're only extracting params from the prominent portion
-        wiggle_len_idx = min(len(wiggle), int(sigvisa_graph.wiggle_len_s * wave_node.srate)) - wiggle_start_idx + 1
-
-        wiggle = np.concatenate([np.ones((wiggle_start_idx,)) * ma.masked, wiggle[:wiggle_len_idx]])
-        print "wiggle len", len(wiggle)
-        np.savetxt('wiggle2.txt', wiggle)
-        wm_node.set_params_from_wiggle(wiggle)
-        np.savetxt('wiggle3.txt', wm_node.get_wiggle())
-
-def e_step(sigvisa_graph,  fit_hz, optim_params, fit_wiggles):
+def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_wiggles):
 
     s = Sigvisa()
 
-    ops=repr(optim_params)[1:-1]
 
     st = time.time()
-    sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.template_nodes, optim_params=optim_params)
-    et = time.time()
-
-    fitids = sigvisa_graph.save_template_params(optim_param_str = ops,
-                                                elapsed=et - st, hz=fit_hz)
+    sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
 
     if fit_wiggles:
-        init_wiggles_from_template(sigvisa_graph)
-        sigvisa_graph.joint_optimize_nodes(node_list = sigvisa_graph.wiggle_nodes, optim_params=optim_params)
-        wiggle_et = time.time()
-        sigvisa_graph.save_wiggle_params(optim_param_str=ops)
+        sigvisa_graph.init_wiggles_from_template()
+
+        for i in range(4):
+            sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
+            sigvisa_graph.init_wiggles_from_template()
+
+        sigvisa_graph.optimize_wiggles(optim_params=wiggle_optim_params)
+        sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
+        sigvisa_graph.optimize_wiggles(optim_params=wiggle_optim_params)
+
+    et = time.time()
+
+    tops=repr(tmpl_optim_params)[1:-1]
+    wops=repr(wiggle_optim_params)[1:-1] if fit_wiggles else ""
+    fitids = sigvisa_graph.save_template_params(tmpl_optim_param_str = tops,
+                                                wiggle_optim_param_str = wops,
+                                                elapsed=et - st, hz=fit_hz)
+    if fit_wiggles:
+        sigvisa_graph.save_wiggle_params()
 
     return fitids[0]
 
@@ -94,7 +83,8 @@ def main():
     parser = OptionParser()
 
     parser.add_option("-s", "--sta", dest="sta", default=None, type="str", help="name of station for which to fit templates")
-    parser.add_option("--optim_params", dest="optim_params", default="", type="str", help="fitting param string")
+    parser.add_option("--tmpl_optim_params", dest="tmpl_optim_params", default="", type="str", help="fitting param string")
+    parser.add_option("--wiggle_optim_params", dest="wiggle_optim_params", default="'normalize': False, 'bfgs_factr': 1000, 'disp': True", type="str", help="fitting param string")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run name")
     parser.add_option("-i", "--run_iteration", dest="run_iteration", default=None, type="int",
                       help="run iteration (default is to use the next iteration)")
@@ -137,7 +127,8 @@ def main():
                                 output_run_name = options.run_name, output_iteration = options.run_iteration)
 
     fitid = e_step(sigvisa_graph,  fit_hz = options.hz,
-                   optim_params=construct_optim_params(options.optim_params),
+                   tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),
+                   wiggle_optim_params=construct_optim_params(options.wiggle_optim_params),
                    fit_wiggles = options.fit_wiggles)
 
 

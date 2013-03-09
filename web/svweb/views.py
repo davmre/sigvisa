@@ -103,7 +103,7 @@ class FitsFilterSet(FilterSet):
         'chan',
         'band',
         'human_approved',
-        'optim_method',
+        'tmpl_optim_method',
         'dist',
         'azi',
     ]
@@ -173,6 +173,8 @@ def fit_detail(request, fitid):
         loc_str = ""
         ev_time_str = ""
 
+    # get other fits of this same arrival
+    other_fits = SigvisaCodaFit.objects.filter(sta=fit.sta, evid=fit.evid, chan=fit.chan, band=fit.band)
 
 
     return render_to_response('svweb/detail.html', {
@@ -191,6 +193,7 @@ def fit_detail(request, fitid):
         'dist': dist,
         'azi': azi,
         'fits_filter': fits_filter,
+        'other_fits': other_fits,
     }, context_instance=RequestContext(request))
 
 

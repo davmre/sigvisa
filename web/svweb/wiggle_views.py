@@ -129,7 +129,6 @@ def template_wiggle_view(request, fpid):
     phase = get_object_or_404(SigvisaCodaFitPhase, pk=fpid)
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
     ev = get_event(evid=fit.evid)
-    skip_initial_s = phase.wiggle_stime - phase.param1
 
     s = Sigvisa()
 
@@ -140,9 +139,14 @@ def template_wiggle_view(request, fpid):
     wave_node = sg.leaf_nodes[0]
     tm_node = sg.get_template_node(ev=ev, wave=wave_node.mw, phase=phase.phase)
     wiggled = create_wiggled_phase(tm_node=tm_node, wave_node=wave_node,
-                                   wiggle_data=wiggle.data, skip_initial_s=skip_initial_s)
+                                   wiggle_data=wiggle.data)
     wave_node.set_value(wiggled)
     wiggled_wave = wave_node.get_wave()
+
+    np.savetxt('extract_envelope_%d.txt' % int(fpid), wave_node.get_wave().data)
+
+    actual_wave = fetch_waveform(station=wiggle['sta'], chan=wiggle['chan'], stime=wiggle['stime'], etime=wiggle['etime']).filter('%s;env;hz_%.2f' % (fit.band, fit.hz))
+    np.savetxt('actual_envelope.txt', actual_wave.data)
 
     return view_wave(request, wiggled_wave, color='black', linewidth=1.5, logscale=False)
 
@@ -185,4 +189,5 @@ def reconstructed_template_wiggle_view(request, wiggleid):
     wave_node.fixed_value = False
     wave_node.prior_predict()
 
+    np.savetxt('param_envelope_%d.txt' % phase.fpid, wave_node.get_wave().data)
     return view_wave(request, wave_node.get_wave(), color='black', linewidth=1.5, logscale=False)

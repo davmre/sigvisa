@@ -24,6 +24,7 @@ document.getElementById('loading').style.visibility = 'hidden';
 <body>
 {% include "svweb/header.html"  %}
 
+
 <h1>{{fit.runid.run_name}}/{{fit.runid.iter}}: evid {{ fit.evid }} at {{ fit.sta }}</h1>
 <table>
 <tr>
@@ -68,7 +69,6 @@ document.getElementById('loading').style.visibility = 'hidden';
       <tr><td>iid</td><td>{{ fit.iid }}</td></tr>
       <tr><td>sampling</td><td>{{ fit.hz }}hz</td></tr>
       <tr><td>acost</td><td>{{ fit.acost }}</td></tr>
-      <tr><td>optim_method</td><td>{{ fit.optim_method }}</td></tr>
     </table><br/>
   </td>
   <td valign=top rowspan=1>
@@ -162,6 +162,7 @@ document.getElementById('loading').style.visibility = 'hidden';
   </td>
 </tr>
 </table>
+
 <center>
 <p>{% if prev %}
 <a href="{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}">previous</a>
@@ -170,13 +171,30 @@ document.getElementById('loading').style.visibility = 'hidden';
 <a href="{% url fit_run_detail fitid=next.fitid %}?{{filter_GET_params}}">next</a>
 {% endif %}</p>
 </center>
+
+
 <hr/>
-<div><strong>Filters: </strong>
+<table>
+<tr><td valign=top align=left width="33%">
+<strong>Filters: </strong>
 
 (<a href="{% url fit_list runid=fit.runid.runid %}?{{filter_GET_params}}">back to list</a>)
+  <br/>{{ fits_filter }}</td>
 
-  <br/>{{ fits_filter }}</div>
+<td valign=top align=left width=33%><strong>optimization log:</strong>
+<br/><pre>{{ fit.optim_log }}</pre>
+<br/><strong>tmpl_optim_method</strong>: {{ fit.tmpl_optim_method }}
+<br/><strong>wiggle_optim_method</strong>: {{ fit.wiggle_optim_method }}
+</td>
 
+<td valign=top align=left width=33%><strong>other fits for this arrival:</strong>
+<ul>
+{% for other_fit in other_fits %}
+<li><a href="{% url fit_run_detail fitid=other_fit.fitid%}">{{ other_fit.runid.run_name }}/{{ other_fit.runid.iter }}</a></li>
+{% endfor %}
+</td>
+
+</tr></table>
 
 
 <script>

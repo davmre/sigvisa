@@ -65,10 +65,11 @@ class SigvisaGraph(DirectedGraphModel):
         self.template_nodes = set()
         self.wiggle_nodes = set()
 
+        self.optim_log = ""
+
     def topo_sorted_nodes(self):
         assert(len(self._topo_sorted_list) == len(self.all_nodes))
         return self._topo_sorted_list
-
 
     def predict_phases(self, ev, sta):
         s = Sigvisa()
@@ -248,7 +249,39 @@ class SigvisaGraph(DirectedGraphModel):
             tm_node.fix_arrival_time(fixed=fixed)
 
 
-    def save_wiggle_params(self, optim_param_str):
+    def init_wiggles_from_template(self):
+        wave_node = self.leaf_nodes[0]
+        for wm_node in self.wiggle_nodes:
+            tm_node = self.get_partner_node(wm_node)
+            atime = tm_node.get_value()[0]
+
+            wiggle, st, et = extract_phase_wiggle(tm_node=tm_node, wave_node=wave_node)
+            if st is None or len(wiggle) < wm_node.npts:
+                continue
+
+            wiggle = wiggle[:wm_node.npts].filled(1)
+            wm_node.set_params_from_wiggle(wiggle)
+
+        ll = self.current_log_p()
+        self.optim_log += ("init_wiggles: ll=%.1f\n" % ll)
+
+    def optimize_wiggles(self, optim_params):
+        st = time.time()
+        self.joint_optimize_nodes(node_list=self.wiggle_nodes, optim_params=optim_params)
+        et = time.time()
+        ll = self.current_log_p()
+        self.optim_log += ("optimize_wiggles: t=%.1fs ll=%.1f\n" % (et-st, ll))
+        return ll
+
+    def optimize_templates(self, optim_params):
+        st = time.time()
+        self.joint_optimize_nodes(node_list=self.template_nodes, optim_params=optim_params)
+        et = time.time()
+        ll = self.current_log_p()
+        self.optim_log += ("optimize_templates: t=%.1fs ll=%.1f\n" % (et-st, ll))
+        return ll
+
+    def save_wiggle_params(self):
         """
         Saves the current values of the wiggle model parameters for
         all waves in the graph. Assumes template parameters have
@@ -276,7 +309,9 @@ class SigvisaGraph(DirectedGraphModel):
 
             s.dbconn.commit()
 
-    def save_template_params(self, optim_param_str, hz, elapsed):
+    def save_template_params(self, tmpl_optim_param_str,
+                             wiggle_optim_param_str,
+                             hz, elapsed):
         s = Sigvisa()
         cursor = s.dbconn.cursor()
         runid = self.runid
@@ -313,9 +348,11 @@ class SigvisaGraph(DirectedGraphModel):
             distance = geog.dist_km((event.lon, event.lat), (s.sites[siteid - 1][0], s.sites[siteid - 1][1]))
             azimuth = geog.azimuth((s.sites[siteid - 1][0], s.sites[siteid - 1][1]), (event.lon, event.lat))
 
-            optim_param_str = optim_param_str.replace("'", "''")
+            tmpl_optim_param_str = tmpl_optim_param_str.replace("'", "''")
+            wiggle_optim_param_str = wiggle_optim_param_str.replace("'", "''")
+            optim_log = wiggle_optim_param_str.replace("\n", "\\\\n")
 
-            sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, optim_method, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, optim_param_str, 1 if wave_node.nm_type != 'ar' else 0, st, et, hz, wave_node.log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
+            sql_query = "INSERT INTO sigvisa_coda_fit (runid, evid, sta, chan, band, tmpl_optim_method, wiggle_optim_method, optim_log, iid, stime, etime, hz, acost, dist, azi, timestamp, elapsed, nmid) values (%d, %d, '%s', '%s', '%s', '%s', '%s', '%s', %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)" % (runid, event.evid, sta, chan, band, tmpl_optim_param_str, wiggle_optim_param_str, self.optim_log, 1 if wave_node.nm_type != 'ar' else 0, st, et, hz, wave_node.log_p(), distance, azimuth, time.time(), elapsed, wave_node.nmid)
 
             fitid = execute_and_return_id(s.dbconn, sql_query, "fitid")
 
@@ -329,7 +366,6 @@ class SigvisaGraph(DirectedGraphModel):
                     fitid, tm.phase, fit_params[0], fit_params[1], fit_params[2], fit_params[3], transfer)
                 fpid = execute_and_return_id(s.dbconn, phase_insert_query, "fpid")
                 tm.fpid = fpid
-
 
                 # extract the empirical wiggle for this template fit
                 wiggle, wiggle_st, wiggle_et = extract_phase_wiggle(tm_node=tm, wave_node=wave_node)

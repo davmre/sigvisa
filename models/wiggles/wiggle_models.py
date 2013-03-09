@@ -69,6 +69,11 @@ class WiggleModelNode(ClusterNode):
 
     def set_params_from_wiggle(self, wiggle):
         params = self.basis_decomposition(wiggle)
+        recr_wiggle = self.signal_from_features(params)
+
+        np.savetxt('set_wiggle.txt', wiggle)
+        np.savetxt('recr_wiggle.txt', recr_wiggle)
+
         self.set_value(params)
 
     def get_encoded_params(self):
