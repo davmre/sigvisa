@@ -7,7 +7,7 @@
 </head>
 <body>
 {% include "svweb/header.html"  %}
-<strong>wiggles for evid {{fit.evid}} phase {{phase.phase}} at station {{fit.sta}}</strong><br/>
+<strong>wiggles for evid {{fit.evid}} phase {{phase.phase}} at station {{fit.sta}}</strong> (<a href="{% url fit_run_detail fitid=fit.fitid %}">back to fit {{fit.fitid}} detail</a>)<br/>
 run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}}
 
 <table>
@@ -38,10 +38,7 @@ run: {{run.run_name}}, iter: {{run.iter}}, chan: {{fit.chan}}, band: {{fit.band}
 <tr><td><strong>dimension</strong></td><td>{{wiggle.basisid.dimension}}</td></tr>
 <tr><td><strong>basis_type</strong></td><td>{{wiggle.basisid.basis_type}}</td></tr>
 
-
 {% if wiggle.basisid.family_name|slice:":8" == "fourier_" %}
-   <tr><td><strong>fundamental:</strong></td><td>{{wiggle.basisid.fundamental}}</td></tr>
-   <tr><td><strong>min_freq:</strong></td><td>{{wiggle.basisid.min_freq}}</td></tr>
    <tr><td><strong>max_freq:</strong></td><td>{{wiggle.basisid.max_freq}}</td></tr>
 {% endif %}
 

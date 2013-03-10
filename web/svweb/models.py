@@ -17,7 +17,7 @@ class view_options(models.Model):
     id = models.IntegerField(primary_key=True)
     smoothing = models.IntegerField()
     logscale = models.BooleanField()
-    sample = models.BooleanField()
+    wiggle = models.BooleanField()
 
 
 class Dataset(models.Model):
@@ -263,8 +263,6 @@ class SigvisaWiggleBasis(models.Model):
     logscale = models.CharField(max_length=1)
     dimension = models.IntegerField()
     npts = models.IntegerField()
-    fundamental = models.FloatField(null=True, blank=True)
-    min_freq = models.FloatField(null=True, blank=True)
     max_freq = models.FloatField(null=True, blank=True)
     training_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column="training_runid", blank=True)
     training_set_fname = models.CharField(max_length=255, blank=True)

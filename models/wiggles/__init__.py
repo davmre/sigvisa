@@ -6,7 +6,7 @@ def load_wiggle_node_by_family(family_name, len_s, logscale, model_waveform, **k
 
     logscale_str = 't' if logscale else 'f'
     srate = model_waveform['srate']
-    npts = len_s * srate + 1
+    npts = len_s * srate
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -18,11 +18,9 @@ def load_wiggle_node_by_family(family_name, len_s, logscale, model_waveform, **k
 
         if family_name.startswith("fourier_"):
 
-            fundamental = 1.0 / len_s
-            min_freq = fundamental
             max_freq = float(family_name.split('_')[1])
 
-            wm_node = FourierFeatureNode(fundamental = fundamental, min_freq=min_freq, max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, model_waveform=model_waveform, family_name=family_name, **kwargs)
+            wm_node = FourierFeatureNode(max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, model_waveform=model_waveform, family_name=family_name, **kwargs)
 
         else:
             raise Exception("unsupported wiggle family name %s" % family_name)
@@ -38,15 +36,15 @@ def load_wiggle_node_by_family(family_name, len_s, logscale, model_waveform, **k
 
 def load_wiggle_node(basisid, **kwargs):
     cursor = Sigvisa().dbconn.cursor()
-    sql_query = "select family_name, basis_type, srate, npts, logscale, dimension, fundamental, min_freq, max_freq, training_set_fname, training_sta, training_chan, training_band, training_phase, basis_fname from sigvisa_wiggle_basis where basisid=%d" % (basisid,)
+    sql_query = "select family_name, basis_type, srate, npts, logscale, dimension, max_freq, training_set_fname, training_sta, training_chan, training_band, training_phase, basis_fname from sigvisa_wiggle_basis where basisid=%d" % (basisid,)
     cursor.execute(sql_query)
     basis_info = cursor.fetchone()
     cursor.close()
-    family_name, basis_type, srate, npts, logscale, dimension, fundamental, min_freq, max_freq, training_set_fname, training_sta, training_chan, training_band, training_phase, basis_fname = basis_info
+    family_name, basis_type, srate, npts, logscale, dimension, max_freq, training_set_fname, training_sta, training_chan, training_band, training_phase, basis_fname = basis_info
     logscale = (logscale.lower().startswith('t'))
 
     if basis_type == "fourier":
-        wm_node = FourierFeatureNode(basisid = basisid, fundamental = fundamental, min_freq=min_freq, max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, family_name=family_name, **kwargs)
+        wm_node = FourierFeatureNode(basisid = basisid, max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, family_name=family_name, **kwargs)
         assert(wm_node.dimension() == dimension)
     else:
         raise NotImplementedError('wiggle basis %s not yet implemented' % basis_type)

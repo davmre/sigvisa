@@ -102,8 +102,8 @@ document.getElementById('loading').style.visibility = 'hidden';
 	    <label for="fitlog">logscale</label>
 	  </td>
 	  <td valign='top'>
-	    <input id="fitsample" type="checkbox" onchange="updateFitImage()" {% if fit_view_options.sample %}checked{% endif %}>
-	    <label for="fitsample">sample</label>
+	    <input id="fitwiggle" type="checkbox" onchange="updateFitImage()" {% if fit_view_options.wiggle %}checked{% endif %}>
+	    <label for="fitwiggle">wiggle</label>
 	  </td>
 	  <td valign='top'>
 	    <div id="loading" style="color: red">loading...</div>
@@ -257,10 +257,10 @@ var slide = document.getElementById("slide");
 slideAmount = slide.value;
 
 fitlog = document.getElementById("fitlog").checked;
-fitsample = document.getElementById("fitsample").checked;
+fitwiggle = document.getElementById("fitwiggle").checked;
 
 var fit_img = document.getElementById("fit");
-new_src = "{% url visual fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";sample=" + fitsample + ";saveprefs=true";
+new_src = "{% url visual fitid=fit.fitid  %}" + "?smooth=" + slideAmount + ";logscale=" + fitlog + ";wiggle=" + fitwiggle + ";saveprefs=true";
 
 // only show the loading message if the image has actually changed
 if ('/' + fit_img.src.split("/").slice(3).join("/") != new_src) {

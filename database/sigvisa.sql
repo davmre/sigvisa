@@ -153,8 +153,6 @@ create table sigvisa_wiggle_basis (
  logscale varchar(1) not null,
  npts int not null,
  dimension int not null,
- fundamental double precision,
- min_freq double precision,
  max_freq double precision,
  training_runid int,
  training_set_fname varchar(255),

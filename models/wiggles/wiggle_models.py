@@ -22,7 +22,7 @@ def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisi
 
 class WiggleModelNode(ClusterNode):
 
-    def __init__(self, wiggle_model_type, phase, runid, logscale =False, model_waveform=None, sta=None, chan=None, band=None, label="", parents={}, children=[]):
+    def __init__(self, wiggle_model_type="dummy", runid=None, phase=None, logscale =False, model_waveform=None, sta=None, chan=None, band=None, label="", parents={}, children=[]):
 
         super(WiggleModelNode, self).__init__(label=label, nodes=[], parents=parents, children=children)
 
