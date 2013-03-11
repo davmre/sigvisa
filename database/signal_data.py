@@ -13,20 +13,27 @@ import scipy.stats
 from sigvisa.database.dataset import *
 from sigvisa.database import db
 
-
-
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event
 import sigvisa.utils.geog as geog
 import obspy.signal.util
 
+
+
 # from sigvisa.models.templates.paired_exp import *
 
-(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT, FIT_CODA_DECAY,
- FIT_AMP_TRANSFER, FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH, FIT_LOWBAND, FIT_NUM_COLS) = range(15 + 1)
+(FIT_EVID, FIT_MB, FIT_LON, FIT_LAT, FIT_DEPTH, FIT_PHASEID,
+ FIT_SITEID, FIT_DISTANCE, FIT_AZIMUTH,
+ FIT_LOWBAND, FIT_ATIME, FIT_PEAK_DELAY, FIT_CODA_HEIGHT,
+ FIT_CODA_DECAY, FIT_AMP_TRANSFER, FIT_NUM_COLS) = range(15 + 1)
+WIGGLE_PARAM0 = FIT_ATIME
 
 class RunNotFoundException(Exception):
     pass
+
+class NoDataException(Exception):
+    pass
+
 
 def ensure_dir_exists(dname):
     try:
@@ -179,12 +186,16 @@ def execute_and_return_id(dbconn, query, idname, **kwargs):
     return lrid
 
 
+def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10):
+    """
 
-def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=None, evids=None, exclude_evids=None, max_acost=200, min_azi=0, max_azi=360, min_mb=0, max_mb=100, min_dist=0, max_dist=20000, require_human_approved=False, min_amp=-10):
+    assumes "from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit"
+
+    """
 
     chan_cond = "and fit.chan='%s'" % (chan) if chan is not None else ""
     band_cond = "and fit.band='%s'" % (band) if band is not None else ""
-    site_cond = "and fit.sta='%s'" % (sta) if sta is not None else ""
+    site_cond = "and fit.sta='%s'" % (site) if site is not None else ""
     run_cond = "and (" + " or ".join(["fit.runid = %d" % int(runid) for runid in runids]) + ")" if runids is not None else ""
     phase_cond = "and (" + " or ".join(["fp.phase = '%s'" % phase for phase in phases]) + ")" if phases is not None else ""
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
@@ -193,8 +204,47 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
     approval_cond = "and human_approved==2" if require_human_approved else ""
     cost_cond = "and fit.acost<%f" % max_acost if np.isfinite(max_acost) else ""
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer, fit.sta, fit.dist, fit.azi, fit.band from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where fp.fitid = fit.fitid and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s" % (
-        min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond)
+    cond = "fp.fitid = fit.fitid and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond)
+
+    return cond
+
+
+def load_wiggle_data(cursor, basisid, **kwargs):
+
+    from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
+
+    cond = sql_param_condition(**kwargs)
+
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, wiggle.params from leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit, sigvisa_wiggle wiggle  where wiggle.fpid=fp.fpid and wiggle.basisid=%d and %s" % (basisid, cond)
+
+    ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
+    fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
+    try:
+        wiggle_data = np.loadtxt(fname, dtype=float)
+    except:
+        cursor.execute(sql_query)
+        wiggle_data = np.array(cursor.fetchall(), dtype=object)
+        print wiggle_data.size
+
+        if wiggle_data.shape[0] > 0:
+            s = Sigvisa()
+            wiggle_data[:, FIT_SITEID] = np.asarray([s.name_to_siteid_minus1[sta] + 1 for sta in wiggle_data[:, FIT_SITEID]])
+            wiggle_data[:, FIT_PHASEID] = np.asarray([s.phaseids[phase] for phase in wiggle_data[:, FIT_PHASEID]])
+            wiggle_data[:, FIT_LOWBAND] = [b.split('_')[1] for b in wiggle_data[:, FIT_LOWBAND]]
+
+            wiggle_params = np.array([WiggleModelNode.decode_params(encoded = p) for p in wiggle_data[:, -1] ])
+            wiggle_data = np.array(wiggle_data[:, :-1], dtype=float)
+            wiggle_data = np.hstack([wiggle_data, wiggle_params])
+            np.savetxt(fname, wiggle_data)
+        else:
+            raise NoDataException("found no wiggle data matching query %s" % sql_query)
+    return wiggle_data
+
+def load_shape_data(cursor, **kwargs):
+
+    cond = sql_param_condition(**kwargs)
+
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer from  leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
 
     ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
     fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
@@ -213,7 +263,7 @@ def load_shape_data(cursor, chan=None, band=None, sta=None, runids=None, phases=
             shape_data = np.array(shape_data, dtype=float)
             np.savetxt(fname, shape_data)
         else:
-            raise Exception("found no shape data matching query %s" % sql_query)
+            raise NoDataException("found no shape data matching query %s" % sql_query)
     return shape_data
 
 

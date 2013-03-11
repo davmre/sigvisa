@@ -15,7 +15,10 @@ from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa import *
 from sigvisa.models.templates.load_by_name import load_template_model
-from sigvisa.learn.train_coda_models import load_model, get_training_data
+from sigvisa.models.wiggles import load_wiggle_node
+from sigvisa.learn.train_param_common import load_model
+from sigvisa.learn.train_coda_models import  get_shape_training_data
+from sigvisa.learn.train_wiggle_models import  get_wiggle_training_data
 
 
 from matplotlib.figure import Figure
@@ -28,7 +31,7 @@ import sigvisa.plotting.plot as plot
 import sigvisa.plotting.histogram as histogram
 import textwrap
 
-from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaTemplateParamModel
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaParamModel
 from svweb.views import filterset_GET_string, process_plot_args, FitsFilterSet
 
 
@@ -46,7 +49,7 @@ class ModelsFilterSet(FilterSet):
 
 
 def model_list_view(request):
-    models = SigvisaTemplateParamModel.objects.all()
+    models = SigvisaParamModel.objects.all()
     model_filter = ModelsFilterSet(models, request.GET)
     return render_to_response("svweb/models.html",
                               {'model_list': model_filter.qs,
@@ -120,7 +123,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     d = {}
 
     if modelid is not None:
-        model = SigvisaTemplateParamModel.objects.get(modelid=modelid)
+        model = SigvisaParamModel.objects.get(modelid=modelid)
         runid = model.fitting_runid.runid
         sta = model.site
         chan = model.chan
@@ -130,6 +133,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         template_shape = model.template_shape
         min_amp = model.min_amp
         max_acost = model.max_acost
+        basisid = model.wiggle_basisid.basisid if model.wiggle_basisid else None
         require_human_approved = (model.require_human_approved == 't')
 
         if plot_type == "histogram":
@@ -161,8 +165,18 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
 
         xy_by_phase = {}
         for phase in phases:
-            X, y, evids = get_training_data(run.run_name, run.iter, sta, chan, band, phases, param,
-                                            require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **d)
+            if basisid:
+                wm_node = load_wiggle_node(basisid=basisid)
+                X, y, evids = get_wiggle_training_data(run_name=run.run_name, run_iter=run.iter,
+                                                site=sta, chan=chan, band=band, phases=phases,
+                                                target=param,require_human_approved=require_human_approved,
+                                                max_acost=max_acost, min_amp=min_amp,
+                                                      wm_node = wm_node, **d)
+            else:
+                X, y, evids = get_shape_training_data(run_name=run.run_name, run_iter=run.iter,
+                                                site=sta, chan=chan, band=band, phases=phases,
+                                                target=param,require_human_approved=require_human_approved,
+                                                max_acost=max_acost, min_amp=min_amp, **d)
             xy_by_phase[phase] = (X, y)
 
         if plot_type == "histogram":

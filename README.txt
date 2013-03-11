@@ -21,7 +21,7 @@ Create a fitting run evid list with stations you choose:
 python learn/filter_evids_for_run.py -s FITZ,KAPI,STKA,NWAO,CTA -o evid_list --min_mb=4.5 --start_time=1072936800
 
 Do the fitting run:
-utils/bgjob python learn/batch_fit_from_evids.py -e evid_list --run_name pipeline --run_iter=1
+utils/bgjob python learn/batch_fit_from_evids.py -e evid_list --run_name pipeline --run_iter=1 --fit_wiggles
 
 Train GP coda models:
 python learn/train_coda_models.py -s FITZ,KAPI,STKA,NWAO,CTA -r pipeline -p P -t coda_decay,amp_transfer,peak_offset

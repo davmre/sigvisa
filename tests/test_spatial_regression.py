@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 
-from sigvisa.learn.train_coda_models import learn_model, load_model, gp_extract_features
+from sigvisa.learn.train_param_common import learn_model, load_model, gp_extract_features
 
 
 class TestModels(unittest.TestCase):

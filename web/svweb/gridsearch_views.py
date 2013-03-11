@@ -31,7 +31,7 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 import textwrap
 import hashlib
 
-from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaTemplateParamModel
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaParamModel
 
 from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
 from sigvisa.signals.common import load_waveform_from_file
@@ -271,7 +271,7 @@ def get_run_stuff(gs):
         wave_modelids = [tpm.modelid.modelid for tpm in wave.sigvisagsruntmodel_set.all()]
         all_modelids += wave_modelids
 
-    shape = SigvisaTemplateParamModel.objects.get(modelid=all_modelids[0]).template_shape
+    shape = SigvisaParamModel.objects.get(modelid=all_modelids[0]).template_shape
     tm = load_template_model(shape, modelids=all_modelids)
     wm = wiggle_model_by_name(name=gs.wiggle_model_type, tm=tm)
     phases = gs.phases.split(',')

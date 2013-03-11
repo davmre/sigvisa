@@ -3,7 +3,7 @@ import sys
 import os
 
 from sigvisa import *
-from train_coda_models import analyze_model_fname
+from train_param_common import analyze_model_fname
 
 
 def main():

@@ -285,11 +285,11 @@ class SigvisaWiggle(models.Model):
     class Meta:
         db_table = u'sigvisa_wiggle'
 
-
-class SigvisaTemplateParamModel(models.Model):
+class SigvisaParamModel(models.Model):
     modelid = models.IntegerField(primary_key=True)
     fitting_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='fitting_runid')
-    template_shape = models.CharField(max_length=15)
+    wiggle_basisid = models.ForeignKey(SigvisaWiggleBasis, db_column='wiggle_basisid', blank=True)
+    template_shape = models.CharField(max_length=15, blank=True)
     param = models.CharField(max_length=15)
     site = models.CharField(max_length=10)
     chan = models.CharField(max_length=10)
@@ -306,7 +306,8 @@ class SigvisaTemplateParamModel(models.Model):
     timestamp = UnixTimestampField()
 
     class Meta:
-        db_table = u'sigvisa_template_param_model'
+        db_table = u'sigvisa_param_model'
+
 
 
 class SigvisaGridsearchRun(models.Model):
@@ -350,7 +351,7 @@ class SigvisaGsrunWave(models.Model):
 class SigvisaGsrunTModel(models.Model):
     gsmid = models.IntegerField(primary_key=True)
     gswid = models.ForeignKey(SigvisaGsrunWave, db_column='gswid')
-    modelid = models.ForeignKey(SigvisaTemplateParamModel, db_column='modelid')
+    modelid = models.ForeignKey(SigvisaParamModel, db_column='modelid')
 
     class Meta:
         db_table = u'sigvisa_gsrun_tmodel'

@@ -2,23 +2,22 @@ from sigvisa import Sigvisa
 
 from sigvisa.models.wiggles.fourier_features import FourierFeatureNode
 
-def load_wiggle_node_by_family(family_name, len_s, logscale, model_waveform, **kwargs):
+def load_wiggle_node_by_family(family_name, len_s,  model_waveform, **kwargs):
 
-    logscale_str = 't' if logscale else 'f'
     srate = model_waveform['srate']
     npts = len_s * srate
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-    cursor.execute("select basisid from sigvisa_wiggle_basis where family_name='%s' and npts=%d and srate=%.2f and logscale='%s'" % (family_name, npts, srate, logscale_str))
+    cursor.execute("select basisid from sigvisa_wiggle_basis where family_name='%s' and npts=%d and srate=%.2f " % (family_name, npts, srate))
     basisids = cursor.fetchall()
     cursor.close()
 
     if len(basisids) == 0:
 
         if family_name.startswith("fourier_"):
-
             max_freq = float(family_name.split('_')[1])
+            logscale = "logscale" in family_name
 
             wm_node = FourierFeatureNode(max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, model_waveform=model_waveform, family_name=family_name, **kwargs)
 

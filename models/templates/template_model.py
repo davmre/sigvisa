@@ -5,7 +5,7 @@ from sigvisa import Sigvisa, NestedDict
 
 
 from sigvisa.models.noise.noise_util import get_noise_model
-from sigvisa.learn.train_coda_models import load_model
+from sigvisa.learn.train_param_common import load_model
 from sigvisa.signals.common import *
 
 from sigvisa.models.graph import Node, ClusterNode
@@ -31,7 +31,7 @@ class TemplateModelNode(ClusterNode):
         elif modelids is not None:
             models = []
             for modelid in modelids:
-                sql_query = "select param, model_type, model_fname, modelid from sigvisa_template_param_model where modelid=%d" % (modelid)
+                sql_query = "select param, model_type, model_fname, modelid from sigvisa_param_model where modelid=%d" % (modelid)
                 cursor.execute(sql_query)
                 models.append(cursor.fetchone())
 
@@ -44,7 +44,7 @@ class TemplateModelNode(ClusterNode):
             else:
                 raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
 
-            sql_query = "select param, model_type, model_fname, modelid from sigvisa_template_param_model where %s and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d" % (
+            sql_query = "select param, model_type, model_fname, modelid from sigvisa_param_model where %s and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d" % (
                 model_type_cond, sta, chan, band, phase, runid)
             cursor.execute(sql_query)
             models = cursor.fetchall()

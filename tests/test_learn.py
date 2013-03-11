@@ -19,7 +19,9 @@ import matplotlib
 
 from sigvisa.plotting.plot_coda_decays import *
 
-from sigvisa.learn.train_coda_models import learn_model, load_model, get_training_data, get_model_fname
+from sigvisa.learn.train_param_common import learn_model, load_model, get_model_fname
+from sigvisa.learn.train_coda_models import get_shape_training_data
+from sigvisa.learn.train_wiggle_models import get_wiggle_training_data
 from sigvisa.database.signal_data import RunNotFoundException
 
 class TestFit(unittest.TestCase):
@@ -65,7 +67,7 @@ class TestFit(unittest.TestCase):
 
 class TestLearnModel(unittest.TestCase):
 
-    def test_learn_model(self):
+    def test_learn_shape_model(self):
         site = "CTA"
         chan = "BHZ"
         band = "freq_2.0_3.0"
@@ -78,7 +80,7 @@ class TestLearnModel(unittest.TestCase):
         model_type = "linear_distance"
 
         try:
-            X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase, ], target)
+            X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target)
         except RunNotFoundException:
             return
 

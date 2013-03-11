@@ -59,10 +59,10 @@ create table sigvisa_coda_fit_phase (
 );
 
 
-create table sigvisa_template_param_model (
+create table sigvisa_param_model (
  modelid int not null auto_increment,
  fitting_runid int not null,
- template_shape varchar(15) not null,
+ template_shape varchar(15),
  param varchar(15) not null,
  site varchar(10) not null,
  chan varchar(10) not null,
@@ -75,10 +75,12 @@ create table sigvisa_template_param_model (
  model_fname varchar(255) not null,
  training_set_fname varchar(255) not null,
  n_evids int not null,
+ wiggle_basisid int,
  training_ll double precision not null,
  timestamp double precision not null,
  primary key (modelid),
- foreign key (fitting_runid) REFERENCES sigvisa_coda_fitting_run(runid)
+ foreign key (fitting_runid) REFERENCES sigvisa_coda_fitting_run(runid),
+ foreign key (wiggle_basisid) REFERENCES sigvisa_wiggle_basis (basisid)
 );
 
 
@@ -163,26 +165,6 @@ create table sigvisa_wiggle_basis (
  basis_fname varchar(255),
  primary key (basisid),
  foreign key (training_runid) references sigvisa_coda_fitting_run(runid)
-);
-
-create table sigvisa_wiggle_param_model (
- wpmid int not null auto_increment,
- basisid int not null,
- fitting_runid int not null,
- template_shape varchar(15) not null,
- param varchar(15) not null,
- site varchar(10) not null,
- chan varchar(10) not null,
- band varchar(15) not null,
- phase varchar(10) not null,
- model_type varchar(31) not null,
- model_fname varchar(255) not null,
- training_set_fname varchar(255) not null,
- n_evids int not null,
- training_ll double precision not null,
- timestamp double precision not null,
- primary key (wpmid),
- foreign key (basisid) REFERENCES sigvisa_wiggle_basis (basisid)
 );
 
 create table sigvisa_wiggle (

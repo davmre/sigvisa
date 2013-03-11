@@ -6,6 +6,8 @@ from sigvisa.database import db
 import sys
 import os
 import pickle
+import pdb
+import traceback
 
 from sigvisa import *
 import numpy as np
@@ -14,38 +16,26 @@ from optparse import OptionParser
 
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname
 
+from sigvisa.models.wiggles import load_wiggle_node
 
-def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, **kwargs):
+def get_wiggle_training_data(run_name, run_iter, wm_node, target, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
-    try:
-        print "loading %s fit data... " % (phases),
-        fit_data = load_shape_data(cursor, chan=chan, band=band, site=site, runids=[runid, ], phases=phases,
-                                   require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
-        print str(fit_data.shape[0]) + " entries loaded"
-    except:
-        raise NoDataException()
+    wiggle_data = load_wiggle_data(cursor, runids=[runid, ], basisid=wm_node.basisid, **kwargs)
+    print str(wiggle_data.shape[0]) + " entries loaded"
 
     try:
-        if target == "coda_decay":
-            y = fit_data[:, FIT_CODA_DECAY]
-        elif target == "amp_transfer":
-            y = fit_data[:, FIT_AMP_TRANSFER]
-        elif target == "coda_height":
-            y = fit_data[:, FIT_CODA_HEIGHT]
-        elif target == "peak_offset":
-            y = fit_data[:, FIT_PEAK_DELAY]
-        else:
-            raise KeyError("invalid target param %s" % (target))
+        param_num = wm_node.param_name_to_num(target)
+        y = wiggle_data[:, WIGGLE_PARAM0 + param_num]
     except IndexError as e:
+        print "nd2"
         raise NoDataException()
 
-    X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
-
-    evids = fit_data[:, FIT_EVID]
+    X = wiggle_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
+    evids = wiggle_data[:, FIT_EVID]
 
     return X, y, evids
 
@@ -65,9 +55,7 @@ def main():
         "-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
     parser.add_option("-p", "--phases", dest="phases", default=",".join(s.phases), type="str",
                       help="comma-separated list of phases for which to train models)")
-    parser.add_option("-t", "--targets", dest="targets", default="coda_decay,amp_transfer,peak_offset", type="str",
-                      help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
-    parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
+    parser.add_option("-b", "--basisid", dest="basisid", default=None, type="int", help="basisid (from the sigvisa_wiggle_basis DB table) for which to train wiggle param models")
     parser.add_option(
         "-m", "--model_type", dest="model_type", default="gp_dad_log", type="str", help="type of model to train (gp_dad_log)")
     parser.add_option("--require_human_approved", dest="require_human_approved", default=False, action="store_true",
@@ -84,7 +72,6 @@ def main():
     sites = options.sites.split(',')
     chan = options.chan
     phases = options.phases.split(',')
-    targets = options.targets.split(',')
     model_type = options.model_type
     band = options.band
 
@@ -97,39 +84,31 @@ def main():
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
+    wm_node = load_wiggle_node(basisid=options.basisid)
+
     for site in sites:
-        for target in targets:
-
-            if target == "amp_transfer":
-                min_amp = options.min_amp_for_at
-            else:
-                min_amp = options.min_amp
-
-            for phase in phases:
-
+        for phase in phases:
+            for param_num in range(wm_node.dimension()):
+                target = wm_node.param_num_to_name(param_num)
 
                 # check for duplicate model
-                sql_query = "select modelid from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' " % (
-                    model_type, site, chan, band, phase, runid, target)
+                sql_query = "select modelid from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' and wiggle_basisid=%d " % (
+                    model_type, site, chan, band, phase, runid, target, options.basisid)
                 cursor.execute(sql_query)
                 dups = cursor.fetchall()
                 if len(dups) > 0:
                     print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dups[0][0])
                     continue
 
-
-
                 try:
-                    X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site,
-                                                    chan=chan, band=band, phases=[phase, ], target=target,
-                                                    require_human_approved=options.require_human_approved,
-                                                    max_acost=options.max_acost, min_amp=min_amp)
+                    X, y, evids = get_wiggle_training_data(run_name=run_name, run_iter=run_iter, wm_node=wm_node, site=site, chan=chan, band=band, phases=[phase, ], target=target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=options.min_amp)
                 except NoDataException:
+                    raise
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
 
-                model_fname = get_model_fname(
-                    run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape)
+
+                model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=options.basisid)
                 evid_fname = os.path.splitext(model_fname)[0] + '.evids'
                 np.savetxt(evid_fname, evids, fmt='%d')
 
@@ -141,17 +120,23 @@ def main():
                     continue
 
                 model.save_trained_model(model_fname)
-                modelid = insert_model(
-                    s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(
-                    ),
-                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp)
+                modelid = insert_model(s.dbconn, fitting_runid=runid, wiggle_basisid=options.basisid,
+                                       param=target, site=site, chan=chan, band=band, phase=phase,
+                                       model_type=model_type, model_fname=model_fname,
+                                       training_set_fname=evid_fname, training_ll=model.log_likelihood(),
+                                       require_human_approved=options.require_human_approved,
+                                       max_acost=options.max_acost, n_evids=len(evids),
+                                       min_amp=options.min_amp)
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
 if __name__ == "__main__":
+    from bdb import BdbQuit
 
     try:
         main()
     except KeyboardInterrupt:
+        raise
+    except BdbQuit:
         raise
     except Exception as e:
         print e

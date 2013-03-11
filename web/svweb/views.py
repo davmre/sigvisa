@@ -230,6 +230,7 @@ def custom_wave_plus_template_view(evid, sta, chan, band, phases, vals, nmid, pa
     wave_node.fixed_value = False
     wave_node.prior_predict()
     synth_wave = wave_node.get_wave()
+    synth_wave.data.mask = wave.data.mask
 
     return wave_plus_template_view(wave=wave, template=synth_wave, **kwargs)
 
@@ -263,6 +264,7 @@ def FitImageView(request, fitid):
     wave_node.fixed_value = False
     wave_node.prior_predict()
     pred_wave = wave_node.get_wave()
+    pred_wave.data.mask = obs_wave.data.mask
 
     return wave_plus_template_view(wave=obs_wave, template=pred_wave,
                                    logscale=logscale, smoothing=smoothing, request=request,

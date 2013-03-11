@@ -29,7 +29,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                 wiggle_logscale = False, wiggle_len_s = 30.0,
+                 wiggle_len_s = 30.0,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto"):
         """
@@ -49,7 +49,6 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.wiggle_model_type = wiggle_model_type
         self.wiggle_family = wiggle_family
-        self.wiggle_logscale = wiggle_logscale
         self.wiggle_len_s = wiggle_len_s
 
         self.nm_type = nm_type
@@ -150,7 +149,6 @@ class SigvisaGraph(DirectedGraphModel):
                 wm_node = load_wiggle_node_by_family(family_name = self.wiggle_family,
                                                      wiggle_model_type = self.wiggle_model_type,
                                                      len_s = self.wiggle_len_s,
-                                                     logscale = self.wiggle_logscale,
                                                      model_waveform = wave,
                                                      phase=phase,
                                                      runid=self.runid,

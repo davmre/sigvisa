@@ -16,8 +16,8 @@ class FourierFeatureNode(WiggleModelNode):
         else:
             self.max_freq = srate / 2.0
 
-        fundamental = float(srate) / npts
-        self.nparams = int(self.max_freq / fundamental) * 2
+        self.fundamental = float(self.srate) / self.npts
+        self.nparams = int(self.max_freq / self.fundamental) * 2
 
         self.len_s = float(npts-1) / srate
         self.x = np.linspace(0, self.len_s, self.npts)
@@ -40,9 +40,8 @@ class FourierFeatureNode(WiggleModelNode):
 
         s = np.zeros((self.npts,))
 
-        fundamental = float(self.srate) / self.npts
         for (i, (amp, phase)) in enumerate(zip(amps, phases)):
-            freq = fundamental * (i+1)
+            freq = self.fundamental * (i+1)
             s += amp * np.cos(2 * np.pi * self.x * freq + phase)
 
         if self.logscale:
@@ -93,9 +92,8 @@ class FourierFeatureNode(WiggleModelNode):
 
         amps = []
         phases = []
-        fundamental = float(self.srate) / self.npts
         for i in np.arange(self.nparams/2):
-            freq = fundamental * (i+1)
+            freq = self.fundamental * (i+1)
 
             basis1 = np.cos(self.x * 2 * np.pi * freq)
             basis2 = -1 * np.sin(self.x * 2 * np.pi * freq)
@@ -121,6 +119,24 @@ class FourierFeatureNode(WiggleModelNode):
 
     def dimension(self):
         return self.nparams
+
+
+    def param_num_to_name(self, param_num):
+        ptype = "amp" if param_num < self.nparams/2 else "phase"
+        freq = ((param_num % (self.nparams/2)) + 1) * self.fundamental
+        return "%s_%.3f" % (ptype, freq)
+
+    def param_name_to_num(self, param_name):
+        freq = float(param_name.split('_')[1])
+        nfreq = np.round(freq / self.fundamental) - 1
+        if param_name.startswith("amp_"):
+            param_num = nfreq
+        elif param_name.startswith("phase_"):
+            param_num = self.nparams/2 + nfreq
+        else:
+            raise ValueError("invalid param name %s" % param_name)
+
+        return int(param_num)
 
     def save_to_db(self, dbconn):
         assert(self.basisid is None)

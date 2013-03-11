@@ -5,7 +5,7 @@ import traceback
 import pdb
 from optparse import OptionParser
 
-from sigvisa.learn.train_coda_models import learn_model, load_model, get_model_fname, get_training_data, analyze_model_fname
+from sigvisa.learn.train_param_common import learn_model, load_model, get_model_fname, get_training_data, analyze_model_fname
 from sigvisa import *
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
 from sigvisa.database.signal_data import *

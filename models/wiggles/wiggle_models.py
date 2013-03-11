@@ -84,9 +84,13 @@ class WiggleModelNode(ClusterNode):
         return ostr
 
     def set_encoded_params(self, encoded):
+        params = self.decode_params(encoded=encoded)
+        self.set_value(params)
+
+    @staticmethod
+    def decode_params(encoded):
         f_string = cStringIO.StringIO(encoded)
         d = scipy.io.loadmat(f_string)
-        params = d['params']
+        params = d['params'].flatten()
         f_string.close()
-        self.set_value(params.flatten())
-
+        return params
