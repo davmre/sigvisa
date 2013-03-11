@@ -2,6 +2,8 @@
 <html>
 <head>
 
+<script src="{{ STATIC_URL }}html5slider.js"></script>
+
 {% if prev %}
 <link rel='prev'  href="{% url fit_run_detail fitid=prev.fitid %}?{{filter_GET_params}}" />
 {% endif %}
