@@ -9,7 +9,7 @@ from sigvisa.source.event import get_event
 
 from sigvisa.signals.common import Waveform, Segment
 from sigvisa.signals.io import load_event_station
-from sigvisa.models.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
 
 from sigvisa.infer.optimize.optim_utils import construct_optim_params

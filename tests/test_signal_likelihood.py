@@ -4,7 +4,7 @@ import unittest
 
 from sigvisa.signals.io import load_event_station
 from sigvisa.source.event import get_event
-from sigvisa.models.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.plotting import plot
 
 from sigvisa.tests.test_signals import savefig

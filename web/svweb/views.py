@@ -20,7 +20,8 @@ from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.source.event import get_event, EventNotFound
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
-from sigvisa.models.sigvisa_graph import SigvisaGraph, load_sg_from_db_fit
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.load_sigvisa_graph import load_sg_from_db_fit
 import sigvisa.utils.geog
 
 from matplotlib.figure import Figure
@@ -227,7 +228,7 @@ def custom_wave_plus_template_view(evid, sta, chan, band, phases, vals, nmid, pa
     sg = setup_sigvisa_graph(evid=evid, wave=wave, phases=phases, vals=vals)
     wave_node = sg.get_wave_node(wave=wave)
     wave_node.set_noise_model(nmid=nmid)
-    wave_node.fixed_value = False
+    wave_node.unfix_value()
     wave_node.prior_predict()
     synth_wave = wave_node.get_wave()
     synth_wave.data.mask = wave.data.mask
@@ -261,7 +262,7 @@ def FitImageView(request, fitid):
     sg = load_sg_from_db_fit(fit.fitid, load_wiggles=wiggle)
     wave_node = sg.leaf_nodes[0]
     obs_wave = wave_node.get_wave()
-    wave_node.fixed_value = False
+    wave_node.unfix_value()
     wave_node.prior_predict()
     pred_wave = wave_node.get_wave()
     pred_wave.data.mask = obs_wave.data.mask
@@ -351,7 +352,7 @@ def template_debug_view(request, fitid):
 
     ll = wave_node.log_p()
     param_ll = sg.current_log_p()
-    wave_node.fixed_value = False
+    wave_node.unfix_value()
     wave_node.prior_predict()
     nm = wave_node.nm
 

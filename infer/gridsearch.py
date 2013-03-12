@@ -14,7 +14,7 @@ from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.signals.io import load_segments
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.models.ttime import tt_predict
-from sigvisa.models.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def event_at(ev, lon=None, lat=None, t=None, depth=None):
     ev2 = copy.copy(ev)
@@ -25,7 +25,7 @@ def event_at(ev, lon=None, lat=None, t=None, depth=None):
     return ev2
 
 def event_prob_predict(ev, event_node, sg):
-    event_node.set_value(ev)
+    event_node.set_value(ev, override_fixed=True)
     sg.prior_predict_all()
     return sg.current_log_p()
 
@@ -139,8 +139,8 @@ def main():
     parser.add_option(
         "--template_model_types", dest="tm_types", default="peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian",
         help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)")
-    parser.add_option("--wiggle_model_type", dest="wm_type", default="constant_gaussian", help = "")
-    parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.01", help = "")
+    parser.add_option("--wiggle_model_type", dest="wm_type", default="dummy", help = "")
+    parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", help = "")
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
     parser.add_option("--max_evtime_proposals", dest="max_evtime_proposals", default=5, type="int",
                       help="maximum number of event times to consider per gridsearch location")
@@ -216,7 +216,12 @@ def main():
                 wave = filtered_seg[chan]
                 sg.add_wave(wave)
 
-    f_ll = lambda ev : event_prob_predict(ev, ev_node, sg)
+    if options.method == "mode":
+        if options.wm_type != "dummy":
+            raise Exception("WARNING: do you really want to do mode inference with a non-dummy wiggle model?")
+        f_ll = lambda ev : event_prob_predict(ev, ev_node, sg)
+    else:
+        raise ValueError("unrecognized inference method '%s'" % options.method)
 
     if options.use_true_depth:
         f = lambda lon, lat: ev_loc_ll_at_optimal_time(event_at(ev_true, lon=lon, lat=lat),

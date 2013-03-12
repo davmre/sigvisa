@@ -19,7 +19,7 @@ from sigvisa import Sigvisa, NestedDict
 from sigvisa.signals.common import Waveform
 from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.noise.noise_model import NoiseModel
-from sigvisa.models.graph import Node
+from sigvisa.graph.nodes import Node
 
 class EnvelopeNode(Node):
 
@@ -124,6 +124,8 @@ class EnvelopeNode(Node):
         if value is None:
             value = self.get_value()
 
+
+
         pred_signal = self.assem_signal()
         diff = value - pred_signal
         lp = self.nm.log_p(diff)
@@ -131,5 +133,7 @@ class EnvelopeNode(Node):
 #        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
 #        np.savetxt(fname, diff)
 #        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
+
+
         return lp
 

@@ -33,7 +33,7 @@ from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_ou
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.signals.io import *
 from sigvisa.source.event import get_event
-from sigvisa.models.sigvisa_graph import load_sg_from_db_fit
+from sigvisa.graph.load_sigvisa_graph import load_sg_from_db_fit
 
 # detail view for a particular fit
 
@@ -186,7 +186,7 @@ def reconstructed_template_wiggle_view(request, wiggleid):
 
     sg = load_sg_from_db_fit(fit.fitid)
     wave_node = sg.leaf_nodes[0]
-    wave_node.fixed_value = False
+    wave_node.unfix_value()
     wave_node.prior_predict()
 
     np.savetxt('param_envelope_%d.txt' % phase.fpid, wave_node.get_wave().data)

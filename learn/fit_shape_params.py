@@ -22,7 +22,7 @@ from optparse import OptionParser
 from sigvisa import Sigvisa
 from sigvisa.signals.io import *
 
-from sigvisa.models.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,

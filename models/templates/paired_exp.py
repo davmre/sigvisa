@@ -94,7 +94,7 @@ class PairedExpTemplateNode(TemplateModelNode):
         bounds[ARR_TIME_PARAM] = default_atime - 15
 
         # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([b for (i,(param, b)) in enumerate(zip(p, bounds)) if not self.nodeDict[param].fixed_value])
+        bounds = np.array([b for (i,(param, b)) in enumerate(zip(p, bounds)) if not self.nodeDict[param]._fixed_value])
 
         return bounds
 
@@ -112,33 +112,7 @@ class PairedExpTemplateNode(TemplateModelNode):
         bounds[ARR_TIME_PARAM] = default_atime + 15
 
         # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([b for (i,(param, b)) in enumerate(zip(p, bounds)) if not self.nodeDict[param].fixed_value])
+        bounds = np.array([b for (i,(param, b)) in enumerate(zip(p, bounds)) if not self.nodeDict[param]._fixed_value])
 
         return bounds
 
-
-    def heuristic_starting_params(wave, detected_phases_only=True):
-        s = Sigvisa()
-
-        ev = get_event(wave['evid'])
-        if detected_phases_only:
-            arrivals = wave['event_arrivals']
-            arrival_phases = [s.phasenames[pid_m1] for pid_m1 in arrivals[:, DET_PHASE_COL]]
-            all_phases = arrival_phases
-        else:
-            all_phases = s.arriving_phases(ev, wave['sta'])
-
-        start_params = np.zeros((len(all_phases), 4))
-        for (i, phase) in enumerate(all_phases):
-            start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(
-                ev.lon, ev.lat, ev.depth, wave['siteid'] - 1, s.phaseids[phase] - 1)
-            start_params[i, PEAK_OFFSET_PARAM] = 1
-
-            start_params[i, CODA_HEIGHT_PARAM] = np.log(np.max(wave.data)) + .1
-
-            # arrival_idx = int((start_params[i, ARR_TIME_PARAM] - wave['stime']) * wave['srate'])
-            # np.log(np.max(wave.data[arrival_idx: arrival_idx + wave['srate']*5]))+.5
-
-            start_params[i, CODA_DECAY_PARAM] = -0.001
-
-        return (all_phases, start_params)
