@@ -4,6 +4,7 @@ import scipy.stats
 from sigvisa import Sigvisa
 from sigvisa.source.event import Event
 from sigvisa.models import ConditionalDist
+from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB, EV_NATURAL_SOURCE, EV_FLAG, EV_VECTOR_LEN, EV_FLAG_VAL
 import sigvisa.utils.geog as geog
 import collections
 
@@ -45,6 +46,16 @@ class ParamModel(ConditionalDist):
     def log_p(self, x, cond):
         raise Exception("not implemented")
 
+    def event_vector_to_array(self, ev_vec):
+        if ev_vec in self.ev_cache:
+            a = self.ev_cache[ev_vec]
+        else:
+            distance = geog.dist_km((ev_vec[EV_LON], ev_vec[EV_LAT]), (self.site_lon, self.site_lat))
+            azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_vec[EV_LON], ev_vec[EV_LAT]))
+            a = np.array(((ev_vec[EV_LON], ev_vec[EV_LAT], ev_vec[EV_DEPTH], distance, azimuth),))
+            self.ev_cache[ev_vec] = a
+        return a
+
     def event_to_array(self, event):
         if event in self.ev_cache:
             a = self.ev_cache[event]
@@ -57,7 +68,10 @@ class ParamModel(ConditionalDist):
 
     def standardize_input_array(self, c):
         if isinstance(c, np.ndarray):
-            X1 = c
+            if len(c) == EV_VECTOR_LEN and c[EV_FLAG] == EV_FLAG_VAL:
+                X1 = self.event_vector_to_array(self, c)
+            else:
+                X1 = c
         elif isinstance(c, Event):
             X1 = self.event_to_array(c)
         elif isinstance(c, dict):

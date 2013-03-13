@@ -4,6 +4,8 @@ from sigvisa.models import ConditionalDist
 
 from sigvisa import Sigvisa
 from sigvisa.source.event import Event
+from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME
+
 
 
 class TravelTimeModel(ConditionalDist):
@@ -23,27 +25,30 @@ class TravelTimeModel(ConditionalDist):
 
         self.atime = arrival_time
 
-    def predict(self, cond):
-        if isinstance(cond, Event):
-            event = cond
-        else:
-            assert(len(cond) == 1)
-            event = cond.values()[0]
+    @staticmethod
+    def _get_lldt(cond):
+        if isinstance(cond, dict):
+            assert( len(cond) == 1 )
+            cond = cond.values()[0]
 
-        meantt = self.s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, self.siteid - 1, self.phaseid - 1)
+        if isinstance(cond, Event):
+            lon, lat, depth, t = cond.lon, cond.lat, cond.depth, cond.time
+        elif isinstance(cond, np.ndarray):
+            lon, lat, depth, t = cond[EV_LON], cond[EV_LAT], cond[EV_DEPTH], cond[EV_TIME]
+        else:
+            raise ValueError("don't know how to extract lon, lat, depth from %s" % cond)
+        return lon, lat, depth, t
+
+    def predict(self, cond):
+        lon, lat, depth, t = self._get_lldt(cond)
+        meantt = self.s.sigmodel.mean_travel_time(lon, lat, depth, self.siteid - 1, self.phaseid - 1)
         if self.atime:
-            return meantt + event.time
+            return meantt + t
         else:
             return meantt
 
     def sample(self, cond):
-        if isinstance(cond, Event):
-            event = cond
-        else:
-            assert(len(cond) == 1)
-            event = cond.values()[0]
-
-        meantt = self.predict(event)
+        meantt = self.predict(cond)
 
         # sample from a Laplace distribution:
         U = np.random.random() - .5
@@ -51,13 +56,7 @@ class TravelTimeModel(ConditionalDist):
         return tt
 
     def log_p(self, x, cond):
-        if isinstance(cond, Event):
-            event = cond
-        else:
-            assert(len(cond) == 1)
-            event = cond.values()[0]
-
-        meantt = self.predict(event)
+        meantt = self.predict(cond)
         ll = self.s.sigmodel.arrtime_logprob(x, meantt, 0, self.siteid - 1, self.phaseid - 1)
         return ll
 

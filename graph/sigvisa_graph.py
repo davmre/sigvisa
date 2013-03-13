@@ -9,7 +9,7 @@ from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensur
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import load_event_station_chan
 import sigvisa.utils.geog as geog
-from sigvisa.models.ev_prior import EventPriorModel
+from sigvisa.models.ev_prior import EventNode
 from sigvisa.models.ttime import tt_predict, tt_log_p
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
@@ -42,8 +42,6 @@ class SigvisaGraph(DirectedGraphModel):
         """
 
         super(DirectedGraphModel, self).__init__()
-
-        self.ev_prior_model = EventPriorModel()
 
         self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -119,7 +117,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
     def connect_ev_wave(self, event_node, wave_node, basisids=None, tmshapes=None):
-        ev = event_node.get_value()
+        ev = event_node.get_event()
         wave = wave_node.mw
 
         s = Sigvisa()
@@ -172,7 +170,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         """
 
-        event_node = Node(model = self.ev_prior_model, fixed_value=True, initial_value=ev, label='ev_%d' % ev.id)
+        event_node = EventNode(event=ev, label='ev_%d' % ev.id, fixed_values=True)
         self.toplevel_nodes.append(event_node)
         self.all_nodes[event_node.label] = event_node
 
@@ -203,7 +201,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         for event_node in self.toplevel_nodes:
             wave = wave_node.mw
-            if not self.wave_captures_event(ev=event_node.get_value(), sta=wave['sta'],
+            if not self.wave_captures_event(ev=event_node.get_event(), sta=wave['sta'],
                                             stime=wave['stime'], etime=wave['etime']):
                 continue
             # TODO: need a smarter way of specifying per-event phases

@@ -25,7 +25,7 @@ class Event(object):
     __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'id']
     __id_counter__ = 0
 
-    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None):
+    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, internal_id=None):
 
         if (evid is not None or orid is not None) and evtype is not None:
 
@@ -47,14 +47,13 @@ class Event(object):
             self.evid = evid
             self.natural_source = natural_source
 
-        if self.evid is not None:
+        if internal_id is not None:
+            self.id = internal_id
+        elif self.evid is not None:
             self.id = self.evid
         else:
             self.id = Event.__id_counter__
             Event.__id_counter__ += 1
-
-    def as_tuple(self):
-        return (self.lon, self.lat, self.depth, self.time, self.mb, self.orid, self.evid)
 
     def source_logamp(self, band, phase):
         if self.natural_source:

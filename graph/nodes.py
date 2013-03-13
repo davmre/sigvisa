@@ -93,7 +93,7 @@ class VectorNode(Node):
             fixed_values = [fixed_values,] * dimension
         elif isinstance(fixed_values, Iterable):
             assert(len(fixed_values) == dimension)
-        elif fixed_value is None:
+        elif fixed_values is None:
             fixed_values = [False,] * dimension
         else:
             raise ValueError("passed invalid fixed-values setting %s" % fixed_values)
