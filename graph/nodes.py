@@ -158,6 +158,9 @@ class VectorNode(Node):
         else:
             self._value[self._unfixed_values] = value[self._unfixed_values]
 
+    def set_index(self, value, i):
+        if self._unfixed_values[i]:
+            self._value[i] = value
 
 class ClusterNode(VectorNode):
 
@@ -224,6 +227,10 @@ class ClusterNode(VectorNode):
         assert(len(value) == self.dimension())
         for (i, node) in enumerate(self._nodes):
             node.set_value(value[i], override_fixed=override_fixed)
+
+    def set_index(self, value, i):
+        if self._unfixed_value[i]:
+            self.nodes[i].set_value(value = value)
 
     def log_p(self, value = None):
         if value is None:

@@ -36,8 +36,6 @@ class EnvelopeNode(Node):
 
         super(EnvelopeNode, self).__init__(model=None, initial_value=model_waveform.data, fixed_value=observed, **kwargs)
 
-        self.sigvisa = Sigvisa()
-
 
         self.mw = model_waveform
         self.filter_str = model_waveform['filter_str']
@@ -65,7 +63,7 @@ class EnvelopeNode(Node):
             self.nm, self.nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
         else:
             self.nmid = nmid
-            self.nm = NoiseModel.load_by_nmid(self.sigvisa.dbconn, self.nmid)
+            self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
 

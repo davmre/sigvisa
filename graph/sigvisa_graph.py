@@ -9,7 +9,7 @@ from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensur
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import load_event_station_chan
 import sigvisa.utils.geog as geog
-from sigvisa.models.ev_prior import EventNode
+from sigvisa.models.ev_prior import EventNode, EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB, EV_NATURAL_SOURCE
 from sigvisa.models.ttime import tt_predict, tt_log_p
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
@@ -279,6 +279,23 @@ class SigvisaGraph(DirectedGraphModel):
         ll = self.current_log_p()
         self.optim_log += ("optimize_templates: t=%.1fs ll=%.1f\n" % (et-st, ll))
         return ll
+
+    def optimize_with_seed_time_and_depth(lon, lat, t, depth):
+        assert(len(self.toplevel_nodes) == 1)
+        ev_node = self.toplevel_nodes[0]
+        ev_node.set_index(i=EV_LON, value=lon)
+        ev_node.set_index(i=EV_LAT, value=lat)
+        ev_node.set_index(i=EV_TIME, value=t)
+        ev_node.set_index(i=EV_DEPTH, value=depth)
+        ev_node.fix_value(i=EV_LON)
+        ev_node.fix_value(i=EV_LAT)
+        self.fix_arrival_times(fixed=False)
+
+        # initialize
+        for n in self.template_nodes + self.wiggle_nodes:
+            n.prior_predict()
+
+        # TODO: optimize
 
     def save_wiggle_params(self):
         """

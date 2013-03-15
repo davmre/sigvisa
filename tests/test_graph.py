@@ -3,7 +3,35 @@ import numpy as np
 from sigvisa.graph.nodes import Node, VectorNode, ClusterNode
 from sigvisa.graph.dag import DAG, DirectedGraphModel, CyclicGraphError
 
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from sigvisa.source.event import get_event
+from sigvisa.signals.io import load_event_station
+
+import pickle
+import os
 import unittest
+
+class TestSigvisaGraph(unittest.TestCase):
+
+    def setUp(self):
+        self.seg = load_event_station(evid=5301405, sta="URZ").with_filter('freq_2.0_3.0;env')
+        self.wave = self.seg['BHZ']
+        self.event = get_event(evid=5301405)
+
+        self.sg = SigvisaGraph(phases = ['P', 'S'])
+        self.sg.add_event(self.event)
+        self.sg.add_wave(self.wave)
+
+    def testPickle(self):
+        f = open('pickle_test', 'wb')
+        pickle.dump(self.sg, f)
+        f.close()
+        f = open('pickle_test', 'rb')
+        sg = pickle.load(f)
+        f.close()
+        os.remove('pickle_test')
+
+
 
 
 class TestGraph(unittest.TestCase):
