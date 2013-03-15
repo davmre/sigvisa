@@ -4,6 +4,7 @@ import pdb
 import itertools
 import copy
 import hashlib
+import pickle
 from optparse import OptionParser
 
 from sigvisa import *
@@ -14,7 +15,8 @@ from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.signals.io import load_segments
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.models.ttime import tt_predict
-from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB
+from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
 
 def event_at(ev, lon=None, lat=None, t=None, depth=None):
     ev2 = copy.copy(ev)
@@ -24,12 +26,7 @@ def event_at(ev, lon=None, lat=None, t=None, depth=None):
     ev2.time = t if t is not None else ev.time
     return ev2
 
-def event_prob_predict(ev, event_node, sg):
-    event_node.set_value(ev, override_fixed=True)
-    sg.prior_predict_all()
-    return sg.current_log_p()
-
-def propose_origin_times(ev, segments, sg, max_proposals=5):
+def propose_origin_times(ev, segments, phases, max_proposals=5):
     s = Sigvisa()
 
     # propose origin times based on phase arrival times
@@ -40,7 +37,7 @@ def propose_origin_times(ev, segments, sg, max_proposals=5):
         if len(arr) == 0:
             continue
 
-        for phase in sg.predict_phases(ev=ev, sta=segment['sta']):
+        for phase in predict_phases(ev=ev, sta=segment['sta'], phases=phases):
             for arrtime in arr[:, DET_TIME_COL]:
                 projection = arrtime - tt_predict(ev, segment['sta'], phase)
                 event_time_proposals.append(projection)
@@ -53,38 +50,6 @@ def propose_origin_times(ev, segments, sg, max_proposals=5):
         event_time_proposals = list(kernel.resample(np.array((max_proposals,))).flatten())
 
     return event_time_proposals
-
-# get the likelihood of an event location, if we don't know the event time.
-# "likelihood" is a function of a segment and an event object (e.g. envelope_model.log_likelihood_optimize wrapped in a lambda)
-
-
-def ev_loc_ll_at_optimal_time(ev, log_likelihood, segments, sg, return_time=False, **kwargs):
-    event_time_proposals = propose_origin_times(ev=ev, sg=sg, segments=segments, **kwargs)
-
-    # find the origin time that maximizes the likelihood
-    maxll = np.float("-inf")
-    maxt = 0
-    f = lambda t: log_likelihood(event_at(ev, t=t))
-    for proposed_t in event_time_proposals:
-        ll = f(proposed_t)
-        if ll > maxll:
-            maxll = ll
-            maxt = proposed_t
-
-    if return_time:
-        return maxll, maxt
-    else:
-        return maxll
-
-
-def integrate_ll_over_depth(ev, **kwargs):
-    depths = (0, 5, 15, 25, 50, 100, 200, 300, 400, 500, 600, 700)
-    ll = np.float("-inf")
-    for d in depths:
-        new_ev = event_at(ev, depth=d)
-        depth_ll = ev_loc_ll_at_optimal_time(ev, **kwargs) - np.log(len(depths))
-        ll = np.logaddexp(ll, depth_ll)
-    return ll
 
 def save_gsrun_to_db(d, ev, sg):
     from sigvisa.models.noise.noise_util import get_noise_model
@@ -205,43 +170,101 @@ def main():
     segments = load_segments(cursor, sites, stime, etime, chans = chans)
     segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
 
-    sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
-                      wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
-                      nm_type = options.nm_type, runid=runid, phases=phases)
-    ev_node = sg.add_event(ev_true)
-    for seg in segments:
-        for band in bands:
-            filtered_seg = seg.with_filter(band)
-            for chan in filtered_seg.get_chans():
-                wave = filtered_seg[chan]
-                sg.add_wave(wave)
+    def build_gridsearch_graph():
+        sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
+                          wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
+                          nm_type = options.nm_type, runid=runid, phases=phases)
+        ev_node = sg.add_event(ev_true)
+        for seg in segments:
+            for band in bands:
+                filtered_seg = seg.with_filter(band)
+                for chan in filtered_seg.get_chans():
+                    wave = filtered_seg[chan]
+                    sg.add_wave(wave)
+        return sg
+
+    def create_graph_predict(lon, lat, f_propose, ev_depths=[0, 100]):
+        sg = build_gridsearch_graph()
+
+        event_node = sg.toplevel_nodes[0]
+        event_node.unfix_value()
+        event_node.set_index(i=EV_LON, value=lon)
+        event_node.set_index(i=EV_LAT, value=lat)
+        event_node.fix_value(i=EV_LON)
+        event_node.fix_value(i=EV_LAT)
+
+        best_ll = np.float("-inf")
+        best_time = 0
+        best_depth = 0
+        for depth in ev_depths:
+            ev_times = f_propose(ev=event_at(ev=event_node.get_event(),lon=lon,lat=lat,depth=depth))
+            for t in ev_times:
+
+                event_node.set_index(i=EV_TIME, value=t)
+                event_node.set_index(i=EV_DEPTH, value=depth)
+                sg.prior_predict_all()
+                ll = sg.current_log_p()
+                if ll > best_ll:
+                    best_ll = ll
+                    best_time = t
+                    best_depth = depth
+
+        event_node.set_index(i=EV_TIME, value=best_time)
+        event_node.set_index(i=EV_DEPTH, value=best_depth)
+        sg.prior_predict_all()
+
+        return sg
 
     if options.method == "mode":
         if options.wm_type != "dummy":
             raise Exception("WARNING: do you really want to do mode inference with a non-dummy wiggle model?")
-        f_ll = lambda ev : event_prob_predict(ev, ev_node, sg)
+
+        f_propose = lambda ev: propose_origin_times(ev=ev,
+                                                    segments=segments,
+                                                    phases=options.phases,
+                                                    max_proposals = options.max_evtime_proposals)
+        if options.use_true_depth:
+            f_sg = lambda lon, lat: create_graph_predict(lon, lat, f_propose,
+                                                         (ev_true.depth,))
+        else:
+            f_sg = lambda lon, lat: create_graph_predict(lon, lat, f_propose, (0,100))
     else:
         raise ValueError("unrecognized inference method '%s'" % options.method)
 
-    if options.use_true_depth:
-        f = lambda lon, lat: ev_loc_ll_at_optimal_time(event_at(ev_true, lon=lon, lat=lat),
-                                                       log_likelihood=f_ll, sg=sg,
-                                                       segments = segments,
-                                                       max_proposals=options.max_evtime_proposals)
-    else:
-        f = lambda lon, lat: integrate_ll_over_depth(event_at(ev_true, lon=lon, lat=lat), log_likelihood=f_ll,
-                                                     sg=sg, segments=segments,
-                                                     max_proposals=options.max_evtime_proposals)
-
     sta_string = ":".join(sites)
     run_label = hashlib.sha1(repr(options.__dict__)).hexdigest()
-    fname = None if run_label is None else "logs/heatmap_%s_values.txt" % run_label
-    print "writing heat map to", fname
+    heatmap_dir = None if run_label is None else "logs/heatmaps/%s/" % run_label
+    ensure_dir_exists(heatmap_dir)
+    print "writing heat map files to", heatmap_dir
     stime = time.time()
-    hm = EventHeatmap(f=f, n=options.n, center=(ev_true.lon, ev_true.lat), width=map_width, fname=fname)
-    hm.save(fname)
+
+    hm = EventHeatmap(f=None, n=options.n,
+                      center=(ev_true.lon, ev_true.lat),
+                      width=map_width, fname="%s/overall.txt" % heatmap_dir, calc=False)
+    coord_list = hm.coord_list()
+    coord_graphs = [f_sg(lon=lon, lat=lat) for (lon, lat) in coord_list]
+    overall_lls = [sg.current_log_p() for sg in coord_graphs]
+    hm.set_coord_fvals(overall_lls)
+    hm.save()
     etime = time.time()
     print "finished heatmap; saving metadata to database..."
+
+    sg0 = coord_graphs[0]
+    for wn in sg.leaf_nodes:
+        wave = wn.mw
+        lls = [sg.get_wave_node_log_p(sg.get_wave_node(wave)) for sg in coord_graphs]
+        wave_label = "%s_%s_%s" % (wave['sta'], wave['chan'], wave['band'])
+        hm = EventHeatmap(f=None, n=options.n,
+                          center=(ev_true.lon, ev_true.lat),
+                          width=map_width, fname=os.path.join(heatmap_dir,
+                                                              "wave_%s.txt" % ( wave_label)), calc=False)
+        hm.set_coord_fvals(lls)
+        hm.save()
+
+    for (sg, (lon, lat)) in zip(coord_graphs, coord_list):
+        f = open(os.path.join(heatmap_dir, "graph_%.3f_%.3f.pickle" % (lon, lat)), 'wb')
+        pickle.dump(sg, f)
+        f.close()
 
     d = {'evid': ev_true.evid,
          'timestamp': stime,
@@ -254,7 +277,7 @@ def main():
          'phases': ','.join(phases),
          'likelihood_method': options.method,
          'wiggle_model_type': options.wm_type,
-         'heatmap_fname': fname,
+         'heatmap_fname': heatmap_dir,
          'max_evtime_proposals': options.max_evtime_proposals,
          'true_depth': 't' if options.use_true_depth else 'f',
          }

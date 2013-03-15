@@ -44,3 +44,6 @@ class EventNode(VectorNode):
 
     def get_event(self):
         return self.vector_to_ev(self.get_value())
+
+    def prior_predict(self, parent_values=None):
+        pass

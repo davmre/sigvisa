@@ -135,6 +135,26 @@ class Heatmap(object):
                         self.save(checkpoint)
                     print "computed (%.2f, %.2f) = %.6f" % (lon, lat, self.fvals[loni, lati])
 
+    def coord_list(self):
+        cl = []
+        for loni, lon in enumerate(self.lon_arr):
+            for lati, lat in enumerate(self.lat_arr):
+                cl.append((lon, lat))
+        return cl
+
+    def set_coord_fvals(self, fvals):
+        """
+
+        Set fvals, given a list of values representing the function
+        being evaluated at each point in self.coord_list().
+
+        """
+        i = 0
+        for loni, lon in enumerate(self.lon_arr):
+            for lati, lat in enumerate(self.lat_arr):
+                self.fvals[loni, lati] = fvals[i]
+                i += 1
+
     def init_bmap(self, axes=None):
         self.bmap = draw_earth("",
                                projection="cyl",

@@ -7,7 +7,7 @@ from sigvisa.models import ConditionalDist
 from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB, EV_NATURAL_SOURCE, EV_FLAG, EV_VECTOR_LEN, EV_FLAG_VAL
 import sigvisa.utils.geog as geog
 import collections
-
+import hashlib
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
 
@@ -47,13 +47,12 @@ class ParamModel(ConditionalDist):
         raise Exception("not implemented")
 
     def event_vector_to_array(self, ev_vec):
-        if ev_vec in self.ev_cache:
-            a = self.ev_cache[ev_vec]
-        else:
-            distance = geog.dist_km((ev_vec[EV_LON], ev_vec[EV_LAT]), (self.site_lon, self.site_lat))
-            azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_vec[EV_LON], ev_vec[EV_LAT]))
-            a = np.array(((ev_vec[EV_LON], ev_vec[EV_LAT], ev_vec[EV_DEPTH], distance, azimuth),))
-            self.ev_cache[ev_vec] = a
+#        if ev_vec in self.ev_cache:
+#            a = self.ev_cache[ev_vec]
+#        else:
+        distance = geog.dist_km((ev_vec[EV_LON], ev_vec[EV_LAT]), (self.site_lon, self.site_lat))
+        azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_vec[EV_LON], ev_vec[EV_LAT]))
+        a = np.array(((ev_vec[EV_LON], ev_vec[EV_LAT], ev_vec[EV_DEPTH], distance, azimuth),))
         return a
 
     def event_to_array(self, event):
@@ -69,15 +68,14 @@ class ParamModel(ConditionalDist):
     def standardize_input_array(self, c):
         if isinstance(c, np.ndarray):
             if len(c) == EV_VECTOR_LEN and c[EV_FLAG] == EV_FLAG_VAL:
-                X1 = self.event_vector_to_array(self, c)
+                X1 = self.event_vector_to_array(c)
             else:
                 X1 = c
         elif isinstance(c, Event):
             X1 = self.event_to_array(c)
         elif isinstance(c, dict):
             assert(len(c) == 1)
-            event = c.values()[0]
-            X1 = self.event_to_array(event)
+            X1 = self.standardize_input_array(c=c.values()[0])
         else:
             raise ValueError("unknown event object type %s input to spatial regression model!" % type(c))
         assert(len(X1.shape) == 2)

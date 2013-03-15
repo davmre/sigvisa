@@ -20,6 +20,19 @@ from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 from sigvisa.signals.common import Waveform
 
+def predict_phases(ev, sta, phases):
+    s = Sigvisa()
+    if phases == "leb":
+        cursor = s.dbconn.cursor()
+        predicted_phases = [s.phasenames[id_minus1] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
+        cursor.close()
+    elif phases == "auto":
+        predicted_phases = s.arriving_phases(event=ev, sta=sta)
+    else:
+        predicted_phases = phases
+    return predicted_phases
+
+
 class SigvisaGraph(DirectedGraphModel):
 
 
@@ -69,20 +82,8 @@ class SigvisaGraph(DirectedGraphModel):
         assert(len(self._topo_sorted_list) == len(self.all_nodes))
         return self._topo_sorted_list
 
-    def predict_phases(self, ev, sta):
-        s = Sigvisa()
-        if self.phases == "leb":
-            cursor = s.dbconn.cursor()
-            phases = [s.phasenames[id_minus1] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
-            cursor.close()
-        elif self.phases == "auto":
-            phases = s.arriving_phases(event=ev, sta=sta)
-        else:
-            phases = self.phases
-        return phases
-
     def wave_captures_event(self, ev, sta, stime, etime):
-        for phase in self.predict_phases(ev, sta):
+        for phase in predict_phases(ev=ev, sta=sta, phases=self.phases):
             if self.wave_captures_event_phase(ev, sta, stime, etime, phase):
                 return True
         return False
@@ -122,7 +123,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         s = Sigvisa()
 
-        phases =  self.predict_phases(ev, wave['sta'])
+        phases =  predict_phases(ev=ev, sta=wave['sta'], phases=self.phases)
 
         for phase in phases:
 
@@ -230,6 +231,14 @@ class SigvisaGraph(DirectedGraphModel):
 
     def get_wave_node(self, wave):
         return self.all_nodes[self._get_wave_label(wave=wave)]
+
+    def get_wave_node_log_p(self, wave_node):
+        log_p = 0
+        parents = wave_node.parents.values()
+        for p in parents:
+            log_p += p.log_p()
+        log_p += wave_node.log_p()
+        return log_p
 
     def get_partner_node(self, n):
         if n.label.startswith("template_"):
