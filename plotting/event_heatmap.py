@@ -37,7 +37,6 @@ class EventHeatmap(Heatmap):
 
     def set_true_event(self, lon, lat):
         self.true_event = (lon, lat)
-        return dist_km((lon, lat), self.max()[0:2])
 
     def savefig(self, fname, title=None, **args):
         plt.figure()

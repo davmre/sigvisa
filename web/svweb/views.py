@@ -198,7 +198,7 @@ def fit_detail(request, fitid):
     }, context_instance=RequestContext(request))
 
 
-def wave_plus_template_view(wave, template, logscale=True, smoothing=8, request=None,
+def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=None,
                             ratio=1.6, dpi=144, tmpl_alpha=1, tmpl_width=3):
 
     fig = Figure(figsize=(ratio*5, 5), dpi=144)

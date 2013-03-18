@@ -96,7 +96,7 @@ def main():
         "-m", "--model", dest="model", default=None, type="str", help="name of training run specifying the set of models to use")
     parser.add_option(
         "-w", "--map_width", dest="map_width", default=2, type="float", help="width in degrees of the plotted heat map (2)")
-    parser.add_option("-n", dest="n", default=20, type="int", help="detail level of the heatmap, in number of points per side")
+    parser.add_option("-n", dest="n", default=10, type="int", help="detail level of the heatmap, in number of points on each side of the true event")
     parser.add_option(
         "--method", dest="method", default="monte_carlo", help="method for signal likelihood computation (monte_carlo)")
     parser.add_option(
@@ -111,6 +111,8 @@ def main():
                       help="maximum number of event times to consider per gridsearch location")
     parser.add_option("--use_true_depth", dest="use_true_depth", default=False, action="store_true",
                       help="use the true depth of the event being searched for (default is to integrate over depth)")
+    parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true",
+                      help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
     parser.add_option("--chans", dest="chans", default="BHZ", type="str",
                       help="comma-separated list of channel names to use for inference (BHZ)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
@@ -173,7 +175,8 @@ def main():
     def build_gridsearch_graph():
         sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
                           wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
-                          nm_type = options.nm_type, runid=runid, phases=phases)
+                          dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
+                          runid=runid, phases=phases)
         ev_node = sg.add_event(ev_true)
         for seg in segments:
             for band in bands:
@@ -213,6 +216,10 @@ def main():
         event_node.set_index(i=EV_DEPTH, value=best_depth)
         sg.prior_predict_all()
 
+        print "built graph for (%.2f, %.2f), ll = %.2f" % (lon, lat, sg.current_log_p())
+
+        assert(abs(sg.toplevel_nodes[0].get_event().lon - lon) < 0.001)
+
         return sg
 
     if options.method == "mode":
@@ -221,7 +228,7 @@ def main():
 
         f_propose = lambda ev: propose_origin_times(ev=ev,
                                                     segments=segments,
-                                                    phases=options.phases,
+                                                    phases=phases,
                                                     max_proposals = options.max_evtime_proposals)
         if options.use_true_depth:
             f_sg = lambda lon, lat: create_graph_predict(lon, lat, f_propose,
@@ -238,7 +245,7 @@ def main():
     print "writing heat map files to", heatmap_dir
     stime = time.time()
 
-    hm = EventHeatmap(f=None, n=options.n,
+    hm = EventHeatmap(f=None, n=options.n * 2 + 1,
                       center=(ev_true.lon, ev_true.lat),
                       width=map_width, fname="%s/overall.txt" % heatmap_dir, calc=False)
     coord_list = hm.coord_list()
@@ -247,25 +254,28 @@ def main():
     hm.set_coord_fvals(overall_lls)
     hm.save()
     etime = time.time()
-    print "finished heatmap; saving metadata to database..."
+    print "finished heatmap; saving results..."
 
     sg0 = coord_graphs[0]
     for wn in sg.leaf_nodes:
         wave = wn.mw
         lls = [sg.get_wave_node_log_p(sg.get_wave_node(wave)) for sg in coord_graphs]
         wave_label = "%s_%s_%s" % (wave['sta'], wave['chan'], wave['band'])
-        hm = EventHeatmap(f=None, n=options.n,
+        hm = EventHeatmap(f=None, n=options.n * 2 + 1,
                           center=(ev_true.lon, ev_true.lat),
                           width=map_width, fname=os.path.join(heatmap_dir,
                                                               "wave_%s.txt" % ( wave_label)), calc=False)
         hm.set_coord_fvals(lls)
         hm.save()
 
+    print "done saving heatmaps, now pickling graphs..."
     for (sg, (lon, lat)) in zip(coord_graphs, coord_list):
         f = open(os.path.join(heatmap_dir, "graph_%.3f_%.3f.pickle" % (lon, lat)), 'wb')
+        assert(np.abs(sg.toplevel_nodes[0].get_event().lon - lon) < 0.001)
         pickle.dump(sg, f)
         f.close()
 
+    print "done pickling graphs, now writing DB entries..."
     d = {'evid': ev_true.evid,
          'timestamp': stime,
          'elapsed': etime - stime,
@@ -283,11 +293,7 @@ def main():
          }
 
     save_gsrun_to_db(d=d, ev=ev_true, sg=sg)
-
-        # hm.add_stations([s['sta'] for s in segments])
-        # hm.set_true_event(evlon, evlat)
-        # hm.savefig(themap_fname, title="location of event %d" % evid)
-
+    print "all done!"
 
 
 

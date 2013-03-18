@@ -39,7 +39,9 @@ class EventNode(VectorNode):
 
     def vector_to_ev(self, v):
         lon, lat, depth, time, mb, source, flag = v
-        ev = Event(lon=lon, lat=lat, depth=depth, time=time, mb=mb, natural_source=bool(source), internal_id = self._id, evid=self.evid)
+        ev = Event(lon=lon, lat=lat, depth=depth, time=time, mb=mb, natural_source=bool(source), internal_id = self._id)
+        # assign this separately so we don't auto-overwrite the event details with DB values
+        ev.evid = self.evid
         return ev
 
     def get_event(self):

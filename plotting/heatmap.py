@@ -4,7 +4,7 @@ import scipy.stats
 import matplotlib.pyplot as plt
 
 from sigvisa.utils.draw_earth import draw_events, draw_earth, draw_density
-import sigvisa.utils.geog
+import sigvisa.utils.geog as geog
 
 import multiprocessing
 import copy
@@ -249,8 +249,8 @@ class Heatmap(object):
             return (lon_center, lat_center)
 
         center = find_center(X)
-        lon_distances = sorted(np.abs([utils.geog.degdiff(pt[0], center[0]) for pt in X]))
-        lat_distances = sorted(np.abs([utils.geog.degdiff(pt[1], center[1]) for pt in X]))
+        lon_distances = sorted(np.abs([geog.degdiff(pt[0], center[0]) for pt in X]))
+        lat_distances = sorted(np.abs([geog.degdiff(pt[1], center[1]) for pt in X]))
         lon_width = lon_distances[int(np.ceil(len(lon_distances) * float(quantile)))]
         lat_width = lat_distances[int(np.ceil(len(lat_distances) * float(quantile)))]
 
@@ -285,6 +285,19 @@ class Heatmap(object):
                     minlat = lat
 
         return (minlon, minlat, minval)
+
+    def round_point_to_grid(self, lon, lat):
+        best_lon = 0
+        best_lat = 0
+        best_dist = np.float('inf')
+        for loni, glon in enumerate(self.lon_arr):
+            for lati, glat in enumerate(self.lat_arr):
+                dist = geog.dist_km((glon, glat), (lon, lat))
+                if dist < best_dist:
+                    best_dist = dist
+                    best_lon = glon
+                    best_lat = glat
+        return best_lon, best_lat
 
     def __mul__(self, other):
         if other is None:

@@ -43,7 +43,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                 wiggle_len_s = 30.0,
+                 wiggle_len_s = 30.0, dummy_fallback=False,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto"):
         """
@@ -62,6 +62,8 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_model_type = wiggle_model_type
         self.wiggle_family = wiggle_family
         self.wiggle_len_s = wiggle_len_s
+
+        self.dummy_fallback = dummy_fallback
 
         self.nm_type = nm_type
         self.phases = phases
@@ -130,7 +132,7 @@ class SigvisaGraph(DirectedGraphModel):
             lbl = self._get_interior_node_label(ev=ev, phase=phase, wave=wave)
 
             tm_shape = tmshapes[phase] if tmshapes is not None else self.template_shape
-            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s" % (lbl,), template_shape = tm_shape)
+            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s" % (lbl,), template_shape = tm_shape, dummy_fallback = self.dummy_fallback)
             tm_node.addParent(event_node)
             tm_node.addChild(wave_node)
             self.all_nodes[tm_node.label] = tm_node

@@ -37,7 +37,7 @@ def get_template_param_model_ids(runid, sta, chan, band, phase, model_type):
 
 class TemplateModelNode(ClusterNode):
 
-    def __init__(self, label="", parents = None, children=None, runid=None, model_type=None, sta=None, chan=None, band=None, phase=None, modelids=None):
+    def __init__(self, label="", parents = None, children=None, runid=None, model_type=None, sta=None, chan=None, band=None, phase=None, modelids=None, dummy_fallback=False):
 
 
         s = Sigvisa()
@@ -61,8 +61,8 @@ class TemplateModelNode(ClusterNode):
         atimeNode.modelid = None
         self.nodeDict['arrival_time'] = atimeNode
 
+        defaults = self.default_param_vals()
         if model_type == "dummy":
-            defaults = self.default_param_vals()
             for (i, param) in enumerate(self.params()):
                 mNode = Node(model=DummyModel(default_value = defaults[param]),
                              label=param)
@@ -86,8 +86,19 @@ class TemplateModelNode(ClusterNode):
         # ensure that the node list ordering matches the parameter list
         nodes = []
         for (i, param) in enumerate(('arrival_time',) + self.params()):
-            nodes.append( self.nodeDict[param] )
+            try:
+                nodes.append( self.nodeDict[param] )
+            except KeyError:
 
+                if dummy_fallback:
+                    mNode = Node(model=DummyModel(default_value = defaults[param]),
+                                 label=param)
+                    mNode.modelid = None
+                    self.nodeDict[param] = mNode
+                    nodes.append( mNode )
+                    print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (sta, chan, band, phase, param)
+                else:
+                    raise KeyError('no template model found for %s, %s, %s phase %s param %s' % (sta, chan, band, phase, param))
         self.phase = phase
 
         super(TemplateModelNode, self).__init__(label=label, nodes=nodes, parents=parents, children=children)
