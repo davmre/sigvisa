@@ -42,6 +42,26 @@ def plot_det_times(wave, axes=None, logscale=False):
 
 # does not save for you - you need to call savefig() yourself!
 
+def plot_pred_atimes(predictions, wave, axes=None, logscale=False):
+    if predictions is None or wave is None:
+        return
+
+    if axes is None:
+        axes = plt.subplot(1, 1, 1)
+
+    pred_labels, pred_times = zip(*predictions.items())
+
+    maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
+    if logscale:
+        (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
+
+    axes.bar(left=pred_times, height=[maxwave - minwave for _ in pred_times],
+             width=.25, bottom=minwave, edgecolor="green", color="green", linewidth=1, alpha=.5)
+    for (lbl, t) in predictions.items():
+        axes.text(t + 3, maxwave - (maxwave - minwave) * 0.1, lbl, color="green", fontsize=10)
+
+# does not save for you - you need to call savefig() yourself!
+
 
 def plot_segment(segment, title=None, chans=None, logscale=False):
     fig = Figure(figsize=(10, 8), dpi=250)
@@ -98,7 +118,7 @@ def plot_waveform(wave, title=None, logscale=False):
     return fig
 
 
-def subplot_waveform(wave, axes, logscale=False, plot_dets=True, **kwargs):
+def subplot_waveform(wave, axes, logscale=False, plot_dets=True, plot_predictions=None, **kwargs):
     srate = wave['srate']
     npts = wave['npts']
     stime = wave['stime']
@@ -111,6 +131,8 @@ def subplot_waveform(wave, axes, logscale=False, plot_dets=True, **kwargs):
     if plot_dets:
         plot_det_times(wave, axes=axes, logscale=logscale)
 
+    if plot_predictions:
+        plot_pred_atimes(predictions=plot_predictions, wave=wave, axes=axes, logscale=logscale)
 
 # does not save for you - you need to call savefig() yourself!
 def plot_bands(wave, bands=None, title=None):

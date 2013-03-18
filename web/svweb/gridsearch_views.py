@@ -227,6 +227,7 @@ def gs_pickled_env_view(request, gswid):
     lon = float(request.GET.get("lon", "-999"))
     lat = float(request.GET.get("lat", "-999"))
     assert( lon > -999 and lat > -999 )
+    logscale = str(request.GET.get("logscale", "f")).lower().startswith('t')
 
     with open(os.path.join(os.getenv('SIGVISA_HOME'),
                            gs_wave.gsid.heatmap_fname,
@@ -241,7 +242,7 @@ def gs_pickled_env_view(request, gswid):
     template_env = wave_node.get_wave()
     template_env.data.mask = obs_env.data.mask
 
-    return wave_plus_template_view(wave=obs_env, template=template_env, request=request, logscale=False)
+    return wave_plus_template_view(wave=obs_env, template=template_env, request=request, logscale=logscale)
 
 def gs_wave_phase_frame_view(request, gswid):
     gs_wave = get_object_or_404(SigvisaGsrunWave, pk=gswid)

@@ -49,3 +49,31 @@ class EventNode(VectorNode):
 
     def prior_predict(self, parent_values=None):
         pass
+
+    def low_bounds(self):
+        bounds = np.zeros(self.dimension())
+        bounds[EV_LON] = -185
+        bounds[EV_LAT] = -95
+        bounds[EV_TIME] = self.get_value()[EV_TIME] - 100
+        bounds[EV_DEPTH] = 0
+        bounds[EV_MB] = 0
+        bounds[EV_NATURAL_SOURCE] = 0
+
+        # only return bounds for the mutable params, since these are what we're optimizing over
+        bounds = np.array([b for (i,b) in enumerate(bounds) if self._unfixed_values[i]])
+
+        return bounds
+
+    def high_bounds(self):
+        bounds = np.zeros(self.dimension())
+        bounds[EV_LON] = 185
+        bounds[EV_LAT] = 95
+        bounds[EV_TIME] = self.get_value()[EV_TIME] + 100
+        bounds[EV_DEPTH] = 400
+        bounds[EV_MB] = 10
+        bounds[EV_NATURAL_SOURCE] = 1
+
+        # only return bounds for the mutable params, since these are what we're optimizing over
+        bounds = np.array([b for (i,b) in enumerate(bounds) if self._unfixed_values[i]])
+
+        return bounds

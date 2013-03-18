@@ -15,8 +15,9 @@ from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.signals.io import load_segments
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.models.ttime import tt_predict
-from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB
+from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB, EV_NATURAL_SOURCE
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
+from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 def event_at(ev, lon=None, lat=None, t=None, depth=None):
     ev2 = copy.copy(ev)
@@ -99,6 +100,8 @@ def main():
     parser.add_option("-n", dest="n", default=10, type="int", help="detail level of the heatmap, in number of points on each side of the true event")
     parser.add_option(
         "--method", dest="method", default="monte_carlo", help="method for signal likelihood computation (monte_carlo)")
+    parser.add_option(
+        "--optim_params", dest="optim_params", default="", help="optimization parameters in the dict-repr format used by construct_optim_params. used only if the 'optimize_templates' or 'optimize_all' methods are chosen.")
     parser.add_option(
         "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
     parser.add_option(
@@ -186,7 +189,19 @@ def main():
                     sg.add_wave(wave)
         return sg
 
-    def create_graph_predict(lon, lat, f_propose, ev_depths=[0, 100]):
+    def f_optimize_templates(sg):
+        nodes = list(sg.template_nodes) + list(sg.toplevel_nodes)
+        sg.joint_optimize_nodes(node_list = nodes, optim_params = construct_optim_params(options.optim_params))
+
+    def f_optimize_all(sg):
+        nodes = list(sg.template_nodes) + list(sg.toplevel_nodes) + list(sg.wiggle_nodes)
+        sg.joint_optimize_nodes(node_list = nodes, optim_params = construct_optim_params(options.optim_params))
+
+
+    def f_predict(sg):
+        sg.prior_predict_all()
+
+    def create_graph(lon, lat, f_propose, ev_depths=[0, 100], f_update_graph=None):
         sg = build_gridsearch_graph()
 
         event_node = sg.toplevel_nodes[0]
@@ -195,6 +210,8 @@ def main():
         event_node.set_index(i=EV_LAT, value=lat)
         event_node.fix_value(i=EV_LON)
         event_node.fix_value(i=EV_LAT)
+        event_node.fix_value(i=EV_NATURAL_SOURCE)
+        event_node.fix_value(i=EV_MB)
 
         best_ll = np.float("-inf")
         best_time = 0
@@ -202,10 +219,9 @@ def main():
         for depth in ev_depths:
             ev_times = f_propose(ev=event_at(ev=event_node.get_event(),lon=lon,lat=lat,depth=depth))
             for t in ev_times:
-
                 event_node.set_index(i=EV_TIME, value=t)
                 event_node.set_index(i=EV_DEPTH, value=depth)
-                sg.prior_predict_all()
+                f_update_graph(sg)
                 ll = sg.current_log_p()
                 if ll > best_ll:
                     best_ll = ll
@@ -214,7 +230,7 @@ def main():
 
         event_node.set_index(i=EV_TIME, value=best_time)
         event_node.set_index(i=EV_DEPTH, value=best_depth)
-        sg.prior_predict_all()
+        f_update_graph(sg)
 
         print "built graph for (%.2f, %.2f), ll = %.2f" % (lon, lat, sg.current_log_p())
 
@@ -225,18 +241,24 @@ def main():
     if options.method == "mode":
         if options.wm_type != "dummy":
             raise Exception("WARNING: do you really want to do mode inference with a non-dummy wiggle model?")
-
-        f_propose = lambda ev: propose_origin_times(ev=ev,
-                                                    segments=segments,
-                                                    phases=phases,
-                                                    max_proposals = options.max_evtime_proposals)
-        if options.use_true_depth:
-            f_sg = lambda lon, lat: create_graph_predict(lon, lat, f_propose,
-                                                         (ev_true.depth,))
-        else:
-            f_sg = lambda lon, lat: create_graph_predict(lon, lat, f_propose, (0,100))
+        f_update_graph = f_predict
+    elif options.method == "optimize_templates":
+        f_update_graph = f_optimize_templates
+    elif options.method == "optimize_all":
+        f_update_graph = f_optimize_all
     else:
         raise ValueError("unrecognized inference method '%s'" % options.method)
+
+    f_propose = lambda ev: propose_origin_times(ev=ev,
+                                                segments=segments,
+                                                phases=phases,
+                                                max_proposals = options.max_evtime_proposals)
+    if options.use_true_depth:
+        f_sg = lambda lon, lat: create_graph(lon, lat, f_propose,
+                                                     (ev_true.depth,),
+                                                     f_update_graph=f_update_graph)
+    else:
+        f_sg = lambda lon, lat: create_graph(lon, lat, f_propose, (0,100), f_update_graph=f_update_graph)
 
     sta_string = ":".join(sites)
     run_label = hashlib.sha1(repr(options.__dict__)).hexdigest()

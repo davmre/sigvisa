@@ -288,7 +288,7 @@ class SigvisaWiggle(models.Model):
 class SigvisaParamModel(models.Model):
     modelid = models.IntegerField(primary_key=True)
     fitting_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='fitting_runid')
-    wiggle_basisid = models.ForeignKey(SigvisaWiggleBasis, db_column='wiggle_basisid', blank=True)
+    wiggle_basisid = models.ForeignKey(SigvisaWiggleBasis, db_column='wiggle_basisid', null=True, blank=True)
     template_shape = models.CharField(max_length=15, blank=True)
     param = models.CharField(max_length=15)
     site = models.CharField(max_length=10)
