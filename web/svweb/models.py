@@ -321,6 +321,7 @@ class SigvisaGridsearchRun(models.Model):
     lat_se = models.FloatField()
     pts_per_side = models.IntegerField()
     likelihood_method = models.CharField(max_length=63)
+    optim_method = models.CharField(max_length=1024, blank=True, null=True)
     max_evtime_proposals = models.IntegerField()
     true_depth = models.CharField(max_length=1)
     phases = models.CharField(max_length=127)

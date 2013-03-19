@@ -63,8 +63,6 @@ class TravelTimeModel(ConditionalDist):
         return ll
 
 
-
-
 def tt_predict(event, sta, phase):
     s = Sigvisa()
     siteid = s.name_to_siteid_minus1[sta] + 1

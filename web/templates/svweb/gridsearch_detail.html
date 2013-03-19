@@ -53,10 +53,20 @@ ifr.src = src;
        <li>{{ t }}</li>
        {% endfor %}
      </ul>
+
+     <strong>Depths</strong>:
+     <ul>
+       <li><strong>true:</strong>: {{ true_ev.depth }} km</li>
+       <li><strong>query-optimal:</strong>: {{ query_ev.depth }} km</li>
+     </ul>
+
+     {% if gs.optim_method %}
+     <strong>Optimization method</strong>: {{ gs.optim_method }}
+     {% endif %}
    </td>
  </tr>
 <tr>
- <td valign=center><strong>True event</strong>: {{ true_ev_str }} <br>
+<td valign=center><strong>True event</strong>: {{ true_ev_str }} <br>
 <strong>Query event</strong>: {{ query_ev_str }} (ll {{query_ll}})<br>
 <strong>distance</strong>: {{ dist }}km<br>
 <strong>True event ll</strong>: {{true_ll}}<br>

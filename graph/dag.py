@@ -111,6 +111,15 @@ class DirectedGraphModel(DAG):
         high_bounds = np.concatenate([node.high_bounds() for node in node_list])
         bounds = zip(low_bounds, high_bounds)
 
+        # this is included for profiling / debugging -- not real code
+        def time_joint_prob():
+            import time
+            st = time.time()
+            for i in range(500):
+                joint_prob(start_values)
+            et = time.time()
+            print "joint prob took %.3fs on average" % ((et-st)/500.0)
+
         result_vector, cost = optim_utils.minimize(joint_prob, start_values, optim_params=optim_params, bounds=bounds)
         set_all(result_vector)
 

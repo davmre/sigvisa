@@ -2,6 +2,8 @@ import numpy as np
 from scipy.stats import laplace
 
 from sigvisa.models.noise.noise_model import NoiseModel
+import scipy.weave as weave
+from scipy.weave import converters
 
 
 def train_l1_model(x):
@@ -27,10 +29,38 @@ class L1IIDModel(NoiseModel):
     def log_p(self, x, zero_mean=False):
         n = len(x)
         c = 0 if zero_mean else self.median
+
+        m = x.mask
+        d = x.data - c
+
+        b = self.b
+
+        code = """
+double ll = 0;
+for (int t=0; t < n; ++t) {
+  if (m(t)) {
+    continue;
+  }
+  ll = ll - fabs(d(t) / b);
+}
+
+return_val = ll;
+"""
+        ll = weave.inline(code,
+                          ['n', 'b', 'd', 'm',],
+                          type_converters=converters.blitz,
+                          compiler='gcc')
+        ll += self.normalizer * n
+        return ll
+
+    def slow_log_p(self, x, zero_mean=False):
+        n = len(x)
+        c = 0 if zero_mean else self.median
         normed = (x - c) / self.b
         normedp = np.sum(np.abs( normed  ) )
         n1 = self.normalizer * n
-        return n1 - normedp
+        ll = n1 - normedp
+        return ll
 
     def dump_to_file(self, fname):
         with open(fname, 'w') as f:

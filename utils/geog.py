@@ -29,6 +29,7 @@ import numpy as np
 
 from sigvisa.database.dataset import *
 import sigvisa.database.db
+import functools32
 
 AVG_EARTH_RADIUS_KM = 6371.0
 
@@ -74,6 +75,7 @@ def dist_deg(loc1, loc2):
                                 * np.cos(np.radians(lon2 - lon1))))
 
 
+@functools32.lru_cache(maxsize=2048)
 def dist_km(loc1, loc2):
     """
     Returns the distance in km between two locations specified in degrees
@@ -116,7 +118,7 @@ def degdiff(angle1, angle2):
     # 200 is -160 etc.
     return delta - (delta > 180) * 360
 
-
+@functools32.lru_cache(maxsize=2048)
 def azimuth(loc1, loc2):
     """
     Angle in degrees measured clockwise from north starting at

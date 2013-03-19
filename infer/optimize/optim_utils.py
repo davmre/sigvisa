@@ -20,6 +20,7 @@ def construct_optim_params(optim_param_str=''):
         "method": "bfgscoord",
         "fix_first_cols": 0,
         "normalize": True,
+        "maxfun": 15000,
         'disp': False,
         "eps": 1e-4,  # increment for approximate gradient evaluation
 
@@ -33,7 +34,7 @@ def construct_optim_params(optim_param_str=''):
 
     optim_params = {}
     optim_params['method'] = overrides['method'] if 'method' in overrides else defaults['method']
-    copy_dict_entries(["fix_first_cols", "normalize", "disp", "eps"], src=defaults, dest=optim_params)
+    copy_dict_entries(["fix_first_cols", "normalize", "disp", "eps", "maxfun"], src=defaults, dest=optim_params)
     method = optim_params['method']
 
     # load appropriate defaults for each method
@@ -131,20 +132,22 @@ def optimize(f, start_params, bounds, method, phaseids=None, maxfun=None):
 def minimize(f, x0, optim_params, bounds=None):
 
     np.seterr(all="raise", under="ignore")
-
     method = optim_params['method']
     eps = optim_params['eps']
     disp = optim_params['disp']
     normalize = optim_params['normalize']
+    maxfun = optim_params['maxfun']
 
     if normalize:
         if bounds is not None:
             low_bounds, high_bounds = zip(*bounds)
             low_bounds = np.asarray(low_bounds)
             high_bounds = np.asarray(high_bounds)
-            x0 = scale_normalize(x0, low_bounds, high_bounds)
-            bounds = [(-1, 1) for s in x0]
+            x0n = scale_normalize(x0, low_bounds, high_bounds)
+            bounds = [(-1 if np.isfinite(low_bounds[i]) else np.float('-inf'), 1 if np.isfinite(high_bounds[i]) else np.float('inf')) for (i, s) in enumerate(x0)]
             f1 = lambda params: f(scale_unnormalize(params, low_bounds, high_bounds))
+            assert(    (np.abs(x0 - scale_unnormalize(x0n, low_bounds, high_bounds) ) < 0.001 ).all() )
+            x0 = x0n
         else:
             raise Exception("the normalize option requires optimization bounds to be specified")
     else:
@@ -156,7 +159,7 @@ def minimize(f, x0, optim_params, bounds=None):
         x1 = x0
         while iters < optim_params['bfgscoord_iters']:
             x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
-                f1, x1, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp)
+                f1, x1, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
             success = (d['warnflag'] == 0)
             print d
             v1 = best_cost
@@ -170,9 +173,9 @@ def minimize(f, x0, optim_params, bounds=None):
 
     elif method == "bfgs":
         x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
-            f1, x0, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp)
+            f1, x0, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
     elif method == "tnc":
-        x1, nfeval, rc = scipy.optimize.fmin_tnc(f1, x0, approx_grad=1, ftol=optim_params['ftol'], bounds=bounds, disp=disp)
+        x1, nfeval, rc = scipy.optimize.fmin_tnc(f1, x0, approx_grad=1, ftol=optim_params['ftol'], bounds=bounds, disp=disp, maxfun=maxfun)
         x1 = np.array(x1)
     elif method == "simplex":
         x1 = scipy.optimize.fmin(f1, x0, xtol=optim_params['xtol'], ftol=optim_params['ftol'], disp=disp)
@@ -195,7 +198,6 @@ def scale_normalize(x, low_bounds, high_bounds):
     half_width = (high_bounds - low_bounds) / 2
     bounded = np.isfinite(half_width)
     if not bounded.any(): return x
-
     midpoint = low_bounds[bounded] + half_width[bounded]
     normalized = (x[bounded] - midpoint) / half_width[bounded]
 

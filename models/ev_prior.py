@@ -51,10 +51,10 @@ class EventNode(VectorNode):
         pass
 
     def low_bounds(self):
-        bounds = np.zeros(self.dimension())
+        bounds = np.ones((self.dimension(),)) * -np.inf
         bounds[EV_LON] = -185
         bounds[EV_LAT] = -95
-        bounds[EV_TIME] = self.get_value()[EV_TIME] - 100
+        #bounds[EV_TIME] = np.float('-inf')
         bounds[EV_DEPTH] = 0
         bounds[EV_MB] = 0
         bounds[EV_NATURAL_SOURCE] = 0
@@ -65,10 +65,10 @@ class EventNode(VectorNode):
         return bounds
 
     def high_bounds(self):
-        bounds = np.zeros(self.dimension())
+        bounds = np.ones((self.dimension(),)) * np.inf
         bounds[EV_LON] = 185
         bounds[EV_LAT] = 95
-        bounds[EV_TIME] = self.get_value()[EV_TIME] + 100
+        #bounds[EV_TIME] = np.float('inf')
         bounds[EV_DEPTH] = 400
         bounds[EV_MB] = 10
         bounds[EV_NATURAL_SOURCE] = 1

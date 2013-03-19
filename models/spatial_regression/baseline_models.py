@@ -97,7 +97,9 @@ class ConstGaussianModel(ParamModel):
         self.mean = np.mean(y)
         self.std = np.std(y)
 
-        self.ll = np.sum([scipy.stats.norm.logpdf((z - self.mean) / self.std) for z in y])
+        self.ll = np.sum([scipy.stats.norm.logpdf(z,  loc= self.mean, scale= self.std) for z in y])
+
+        self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
 
     def save_trained_model(self, fname):
         with open(fname, 'w') as f:
@@ -111,6 +113,7 @@ class ConstGaussianModel(ParamModel):
             self.mean = p_dict['mean']
             self.std = p_dict['std']
             self.ll = p_dict['ll']
+            self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
             super(ConstGaussianModel, self).__unrepr_base_params__(l[1])
 
     def predict(self, cond):
@@ -131,7 +134,11 @@ class ConstGaussianModel(ParamModel):
         X1 = self.standardize_input_array(cond)
         x = x if isinstance(x, collections.Iterable) else (x,)
 
-        return np.sum([scipy.stats.norm.logpdf((z - self.mean) / self.std) for z in x])
+        r1 = np.sum([self.l1 -.5 * ( (z - self.mean) / self.std )**2 for z in x])
+        # r2 = np.sum([scipy.stats.norm.logpdf(z, loc=self.mean, scale=self.std) for z in x])
+        # assert( np.abs(r1 - r2) < 0.0001)
+
+        return r1
 
 
 class LinearModel(ParamModel):
@@ -175,7 +182,7 @@ class LinearModel(ParamModel):
             self.regional_std = np.std(regional_residuals) if len(regional_residuals) > 1 else std
 
             regional_items = [scipy.stats.norm.logpdf(
-                (y1 - self.predict_dist(z)) / self.regional_std) for (z, y1) in zip(regional_dist, regional_y)]
+                y1, loc= self.predict_dist(z), scale= self.regional_std) for (z, y1) in zip(regional_dist, regional_y)]
             regional_ll = np.sum(regional_items)
 
         except ValueError:
@@ -190,7 +197,7 @@ class LinearModel(ParamModel):
             tele_residuals = tele_y - np.array([self.predict_dist(d) for d in tele_dist])
             self.tele_std = np.std(tele_residuals) if len(tele_residuals) > 1 else std
 
-            tele_items = [scipy.stats.norm.logpdf((y1 - self.predict_dist(z)) / self.tele_std) for (z, y1) in zip(tele_dist, tele_y)]
+            tele_items = [scipy.stats.norm.logpdf(y1, loc= self.predict_dist(z), scale= self.tele_std) for (z, y1) in zip(tele_dist, tele_y)]
             tele_ll = np.sum(tele_items)
 
         except ValueError:
@@ -250,9 +257,9 @@ class LinearModel(ParamModel):
 
         d = x1[X_DIST]
         if d > self.tele_cutoff:
-            ll = scipy.stats.norm.logpdf((y1 - self.predict_item(x1)) / self.tele_std)
+            ll = scipy.stats.norm.logpdf(y1, loc= self.predict_item(x1), scale=self.tele_std)
         else:
-            ll = scipy.stats.norm.logpdf((y1 - self.predict_item(x1)) / self.regional_std)
+            ll = scipy.stats.norm.logpdf(y1, loc= self.predict_item(x1), scale=self.regional_std)
         return ll
 
     def log_p(self, x, cond):

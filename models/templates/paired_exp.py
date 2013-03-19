@@ -101,7 +101,7 @@ class PairedExpTemplateNode(TemplateModelNode):
     def high_bounds(self):
 
         p = ('arrival_time',) + self.params()
-        bounds = np.ones((len(p),)) * -np.inf
+        bounds = np.ones((len(p),)) * np.inf
 
         bounds = np.ones((len(self.params())+1,)) * np.inf
         bounds[PEAK_OFFSET_PARAM] = 25
