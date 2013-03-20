@@ -41,7 +41,7 @@ def event_view(request, evid):
             sta = rd[0]
 
             try:
-                site_ll = s.stations[sta][0:2]
+                site_ll = tuple(s.stations[sta][0:2])
             except KeyError:
                 continue
 

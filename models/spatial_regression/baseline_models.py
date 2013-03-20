@@ -134,6 +134,11 @@ class ConstGaussianModel(ParamModel):
         X1 = self.standardize_input_array(cond)
         x = x if isinstance(x, collections.Iterable) else (x,)
 
+
+        # HERE FOR BACKWARDS COMPATIBILITY WITH OLD PICKLED OBJECTS: REMOVE EVENTUALLY
+        self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
+
+
         r1 = np.sum([self.l1 -.5 * ( (z - self.mean) / self.std )**2 for z in x])
         # r2 = np.sum([scipy.stats.norm.logpdf(z, loc=self.mean, scale=self.std) for z in x])
         # assert( np.abs(r1 - r2) < 0.0001)

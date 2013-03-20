@@ -4,7 +4,7 @@ import pdb
 import itertools
 import copy
 import hashlib
-import pickle
+import cPickle as pickle
 from optparse import OptionParser
 
 from sigvisa import *
@@ -198,6 +198,14 @@ def main():
         nodes = list(sg.template_nodes) + list(sg.toplevel_nodes)
         sg.joint_optimize_nodes(node_list = nodes, optim_params = construct_optim_params(options.optim_params))
 
+    def f_optimize_templates_split(sg):
+        sg.prior_predict_all()
+        for wave in sg.leaf_nodes:
+            template_parents = list([n for l,n in wave.parents.items() if l.startswith('template')])
+            sg.joint_optimize_nodes(node_list = template_parents, optim_params = construct_optim_params(options.optim_params))
+        nodes = list(sg.template_nodes) + list(sg.toplevel_nodes)
+        sg.joint_optimize_nodes(node_list = nodes, optim_params = construct_optim_params(options.optim_params))
+
     def f_optimize_all(sg):
         sg.prior_predict_all()
         nodes = list(sg.template_nodes) + list(sg.toplevel_nodes) + list(sg.wiggle_nodes)
@@ -245,6 +253,8 @@ def main():
         f_update_graph = f_predict
     elif options.method == "optimize_templates":
         f_update_graph = f_optimize_templates
+    elif options.method == "optimize_templates_split":
+        f_update_graph = f_optimize_templates_split
     elif options.method == "optimize_all":
         f_update_graph = f_optimize_all
     else:
@@ -302,10 +312,10 @@ def main():
     d = {'evid': ev_true.evid,
          'timestamp': stime,
          'elapsed': etime - stime,
-         'lon_nw': hm.min_lon,
-         'lat_nw': hm.max_lat,
-         'lon_se': hm.max_lon,
-         'lat_se': hm.min_lat,
+         'lon_nw': hm.left_lon,
+         'lat_nw': hm.top_lat,
+         'lon_se': hm.right_lon,
+         'lat_se': hm.bottom_lat,
          'pts_per_side': hm.n,
          'phases': ','.join(phases),
          'likelihood_method': options.method,

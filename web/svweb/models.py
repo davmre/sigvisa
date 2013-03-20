@@ -340,8 +340,8 @@ class SigvisaGsrunWave(models.Model):
     sta = models.CharField(max_length=10)
     chan = models.CharField(max_length=10)
     band = models.CharField(max_length=15)
-    stime = UnixTimestampField()
-    etime = UnixTimestampField()
+    stime = models.FloatField()
+    etime = models.FloatField()
     hz = models.FloatField()
 
     class Meta:

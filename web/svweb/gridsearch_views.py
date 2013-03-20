@@ -11,7 +11,7 @@ from django.core.paginator import Paginator
 import numpy as np
 import sys
 import os
-import pickle
+import cPickle as pickle
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 
@@ -88,8 +88,8 @@ def gridsearch_detail_view(request, gsid):
     se_str = lonlatstr(gs.lon_se, gs.lat_se)
 
     fullname = os.path.join(os.getenv('SIGVISA_HOME'), gs.heatmap_fname, 'overall.txt')
-    hm = EventHeatmap(f=None, calc=False, n=gs.pts_per_side, lonbounds=[gs.lon_nw, gs.lon_se], latbounds=[gs.lat_nw,
-                      gs.lat_se], fname=fullname)
+    hm = EventHeatmap(f=None, calc=False, n=gs.pts_per_side, left_lon=gs.lon_nw, right_lon=gs.lon_se,
+                      top_lat=gs.lat_nw, bottom_lat=gs.lat_se, fname=fullname)
 
     ev = Event(gs.evid)
     with open(os.path.join(os.getenv('SIGVISA_HOME'),
@@ -118,7 +118,7 @@ def gridsearch_detail_view(request, gsid):
 
     ws = [w for w in gs.sigvisagsrunwave_set.all()]
     wave_dict = dict([("wave_%s_%s_%s_%.1f" % \
-                       (w.sta, w.chan, w.band, calendar.timegm(w.stime.timetuple())), w) \
+                       (w.sta, w.chan, w.band, w.stime), w) \
                       for w in ws])
     true_wave_lls = dict([(key, true_sg.get_wave_node_log_p(true_sg.all_nodes[key])) for key in wave_dict.keys()])
     query_wave_lls = dict([(key, query_sg.get_wave_node_log_p(query_sg.all_nodes[key])) for key in wave_dict.keys()])
@@ -185,8 +185,8 @@ def gs_heatmap_view(request, gsid):
     fullname = os.path.join(os.getenv('SIGVISA_HOME'), gs.heatmap_fname, fname)
     if not os.path.exists(fullname):
         raise IOError("heatmap file %s does not exist" % fullname)
-    hm = EventHeatmap(f=None, calc=False, n=gs.pts_per_side, lonbounds=[gs.lon_nw, gs.lon_se], latbounds=[gs.lat_nw,
-                      gs.lat_se], fname=fullname)
+    hm = EventHeatmap(f=None, calc=False, n=gs.pts_per_side, left_lon = gs.lon_nw, right_lon=gs.lon_se,
+                      top_lat=gs.lat_nw, bottom_lat = gs.lat_se, fname=fullname)
     ev = Event(gs.evid)
 
     sites = [w.sta for w in gs.sigvisagsrunwave_set.all()]
@@ -234,7 +234,7 @@ def gs_pickled_env_view(request, gswid):
                            'graph_%.3f_%.3f.pickle' % (lon, lat)),
               'rb') as f:
         sg = pickle.load(f)
-    wave_key = "wave_%s_%s_%s_%.1f" % (gs_wave.sta, gs_wave.chan, gs_wave.band, calendar.timegm(gs_wave.stime.timetuple()))
+    wave_key = "wave_%s_%s_%s_%.1f" % (gs_wave.sta, gs_wave.chan, gs_wave.band, gs_wave.stime)
     wave_node = sg.all_nodes[wave_key]
     obs_env = wave_node.get_wave()
     wave_node.unfix_value()

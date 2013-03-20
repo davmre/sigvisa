@@ -66,7 +66,7 @@ class EventHeatmap(Heatmap):
                                 marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
 
         sta_locations = [self.sitenames[n][0:2] for n in self.stations]
-        self.plot_locations(sta_locations, labels=self.stations,
+        self.plot_locations(sta_locations, labels=self.stations, offmap_arrows=True,
                             marker="x", ms=7, mfc="none", mec="white", mew=2, alpha=1)
 
     def title(self):
