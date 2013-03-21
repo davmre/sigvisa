@@ -59,7 +59,7 @@ def propose_origin_times(ev, segments, phases, max_proposals=5):
 def save_gsrun_to_db(d, ev, sg):
     from sigvisa.models.noise.noise_util import get_noise_model
     s = Sigvisa()
-    sql_query = "insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, optim_method, phases, wiggle_model_type, heatmap_fname, max_evtime_proposals, true_depth) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :optim_method, :phases, :wiggle_model_type, :heatmap_fname, :max_evtime_proposals, :true_depth)"
+    sql_query = "insert into sigvisa_gridsearch_run (evid, timestamp, elapsed, lon_nw, lat_nw, lon_se, lat_se, pts_per_side, likelihood_method, optim_method, phases, wiggle_model_type, heatmap_fname, max_evtime_proposals, true_depth, true_time, true_mb) values (:evid, :timestamp, :elapsed, :lon_nw, :lat_nw, :lon_se, :lat_se, :pts_per_side, :likelihood_method, :optim_method, :phases, :wiggle_model_type, :heatmap_fname, :max_evtime_proposals, :true_depth, :true_time, :true_mb)"
     gsid = execute_and_return_id(s.dbconn, sql_query, "gsid", **d)
 
     for wave_node in sg.leaf_nodes:
@@ -105,7 +105,7 @@ def main():
     parser.add_option(
         "--method", dest="method", default="monte_carlo", help="method for signal likelihood computation (monte_carlo)")
     parser.add_option(
-        "--optim_params", dest="optim_params", default="'bfgs_factr': 1000000.0", help="optimization parameters in the dict-repr format used by construct_optim_params. used only if the 'optimize_templates' or 'optimize_all' methods are chosen.")
+        "--optim_params", dest="optim_params", default="'method': 'bfgs', 'disp': True, 'bfgs_factr': 1e8, 'maxfun': 200, 'normalize': False", help="optimization parameters in the dict-repr format used by construct_optim_params. used only if the 'optimize_templates' or 'optimize_all' methods are chosen.")
     parser.add_option(
         "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
     parser.add_option(
@@ -117,7 +117,11 @@ def main():
     parser.add_option("--max_evtime_proposals", dest="max_evtime_proposals", default=5, type="int",
                       help="maximum number of event times to consider per gridsearch location")
     parser.add_option("--use_true_depth", dest="use_true_depth", default=False, action="store_true",
-                      help="use the true depth of the event being searched for (default is to integrate over depth)")
+                      help="use the true depth of the event being searched for (False)")
+    parser.add_option("--use_true_time", dest="use_true_time", default=False, action="store_true",
+                      help="use the true time of the event being searched for (False)")
+    parser.add_option("--use_true_mb", dest="use_true_mb", default=True, action="store_false",
+                      help="use the true magnitude of the event being searched for (True)")
     parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true",
                       help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
     parser.add_option("--chans", dest="chans", default="BHZ", type="str",
@@ -214,7 +218,7 @@ def main():
     def f_predict(sg):
         sg.prior_predict_all()
 
-    def create_graph(lon, lat, f_propose, ev_depths=[1,], f_update_graph=None):
+    def create_graph(lon, lat, f_propose, true_depth=False, true_mb=False, true_time=False, f_update_graph=None):
         sg = build_gridsearch_graph()
 
         event_node = sg.toplevel_nodes[0]
@@ -224,20 +228,38 @@ def main():
         event_node.fix_value(i=EV_LON)
         event_node.fix_value(i=EV_LAT)
         event_node.fix_value(i=EV_NATURAL_SOURCE)
-        event_node.fix_value(i=EV_MB)
+
+        if true_mb:
+            event_node.fix_value(i=EV_MB)
+        if true_time:
+            event_node.fix_value(i=EV_TIME)
+        if true_depth:
+            event_node.fix_value(i=EV_DEPTH)
 
         best_ll = np.float("-inf")
         best_graph = None
+        ev_depths = (event_node.get_event().depth,) if true_depth else (0, 50, 300, 700)
+        ev_mags = (-1,) if true_mb else (3.5, 4, 4.5, 5, 5.5, 6)
         for depth in ev_depths:
-            ev_times = f_propose(ev=event_at(ev=event_node.get_event(),lon=lon,lat=lat,depth=depth))
+            if true_time:
+                ev_times = (-1,)
+            else:
+                ev_times = f_propose(ev=event_at(ev=event_node.get_event(),lon=lon,lat=lat,depth=depth))
             for t in ev_times:
-                event_node.set_index(i=EV_TIME, value=t)
-                event_node.set_index(i=EV_DEPTH, value=depth)
-                f_update_graph(sg)
-                ll = sg.current_log_p()
-                if ll > best_ll:
-                    best_ll = ll
-                    best_graph = pickle.dumps(sg)
+                for mb in ev_mags:
+
+                    if not true_mb:
+                        event_node.set_index(i=EV_MB, value=mb)
+                    if not true_time:
+                        event_node.set_index(i=EV_TIME, value=t)
+                    if not true_depth:
+                        event_node.set_index(i=EV_DEPTH, value=depth)
+
+                    f_update_graph(sg)
+                    ll = sg.current_log_p()
+                    if ll > best_ll:
+                        best_ll = ll
+                        best_graph = pickle.dumps(sg)
 
         sg = pickle.loads(best_graph)
 
@@ -260,16 +282,17 @@ def main():
     else:
         raise ValueError("unrecognized inference method '%s'" % options.method)
 
+    max_evtime_proposals = 0 if options.use_true_time else options.max_evtime_proposals
+
     f_propose = lambda ev: propose_origin_times(ev=ev,
                                                 segments=segments,
                                                 phases=phases,
-                                                max_proposals = options.max_evtime_proposals)
-    if options.use_true_depth:
-        f_sg = lambda lon, lat: create_graph(lon, lat, f_propose,
-                                                     (ev_true.depth,),
-                                                     f_update_graph=f_update_graph)
-    else:
-        f_sg = lambda lon, lat: create_graph(lon, lat, f_propose, (1,), f_update_graph=f_update_graph)
+                                                max_proposals = max_evtime_proposals)
+    f_sg = lambda lon, lat: create_graph(lon, lat, f_propose,
+                                         true_depth = options.use_true_depth,
+                                         true_mb = options.use_true_mb,
+                                         true_time = options.use_true_time,
+                                         f_update_graph=f_update_graph)
 
     sta_string = ":".join(sites)
     run_label = hashlib.sha1(repr(options.__dict__)).hexdigest()
@@ -319,11 +342,13 @@ def main():
          'pts_per_side': hm.n,
          'phases': ','.join(phases),
          'likelihood_method': options.method,
-         'optim_method': repr(construct_optim_params(options.optim_params)),
+         'optim_method': repr(construct_optim_params(options.optim_params)) if options.method.startswith('optimize') else '' ,
          'wiggle_model_type': options.wm_type,
          'heatmap_fname': heatmap_dir,
-         'max_evtime_proposals': options.max_evtime_proposals,
+         'max_evtime_proposals': max_evtime_proposals,
          'true_depth': 't' if options.use_true_depth else 'f',
+         'true_time': 't' if options.use_true_time else 'f',
+         'true_mb': 't' if options.use_true_mb else 'f',
          }
 
     save_gsrun_to_db(d=d, ev=ev_true, sg=sg)

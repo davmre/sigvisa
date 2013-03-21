@@ -96,6 +96,8 @@ create table sigvisa_gridsearch_run (
  pts_per_side int not null,
  max_evtime_proposals int not null,
  true_depth varchar(1) not null,
+ true_time varchar(1) not null,
+ true_mb varchar(1) not null,
  phases varchar(127) not null,
  likelihood_method varchar(63) not null,
  optim_method varchar(1024),

@@ -47,18 +47,28 @@ ifr.src = src;
    <td valign=top>
      <strong>Origin times</strong>:
      <ul>
-       <li><strong>true</strong>: {{ true_ev.time }}</li>
+       <li><strong>true</strong>: {{ true_ev.time }} {% if gs.true_time == 't' %} (fixed) {% else %}</li>
        <li><strong>query-optimal</strong>: {{ query_ev.time }}</li>
+       <li><strong>proposed</strong>:
+       <ul>
        {% for t in query_origin_time_proposals %}
        <li>{{ t }}</li>
        {% endfor %}
+       </ul>{% endif %}</li>
      </ul>
 
      <strong>Depths</strong>:
      <ul>
-       <li><strong>true:</strong>: {{ true_ev.depth }} km</li>
-       <li><strong>query-optimal:</strong>: {{ query_ev.depth }} km</li>
+       <li><strong>true</strong>: {{ true_ev.depth }} km {% if gs.true_depth == 't' %} (fixed) {% else %}</li>
+       <li><strong>query-optimal</strong>: {{ query_ev.depth }} km {% endif %}</li>
      </ul>
+
+     <strong>Magnitude</strong>:
+     <ul>
+       <li><strong>true</strong>: {{ true_ev.mb }} {% if gs.true_mb == 't' %} (fixed) {% else %}</li>
+       <li><strong>query-optimal</strong>: {{ query_ev.mb }} {% endif %}</li>
+     </ul>
+
 
      {% if gs.optim_method %}
      <strong>Optimization method</strong>: {{ gs.optim_method }}
@@ -96,7 +106,9 @@ ifr.src = src;
 	   <strong>sta:</strong>: <a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a><br>
 	   <strong>band:</strong>: {{ wave.band }}<br>
 	   <strong>chan:</strong>: {{ wave.chan }}<br>
-	   <strong>hz:</strong>: {{ wave.hz }}
+	   <strong>hz:</strong>: {{ wave.hz }}<br>
+	   <br>
+	   <strong>dist:</strong> {{ query_distances|get_item:k|floatformat:1 }}km
 	 </td>
 	 <td valign=top><a href="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}"><img src="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}" width=200 height=125></a>
 <a href="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}"><img src="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}" width=200 height=125></a></td></td>

@@ -232,6 +232,7 @@ class Heatmap(object):
             x, y = bmap(ev[0], ev[1])
             bmap.plot([x], [y], zorder=zorder, **plotargs)
 
+
             if offmap_arrows:
                 edge_pt, edge_arrow = self.project_to_bounds(ev[0], ev[1])
                 x, y = edge_pt
@@ -244,11 +245,12 @@ class Heatmap(object):
                                    head_starts_at_zero=False, width=0.01,
                                    head_width= 3 * base_scale, head_length = 3 * base_scale, zorder=zorder)
 
+
             if labels is not None and labels[enum] is not None:
                 axes = bmap.ax
                 xbounds = bmap(self.right_lon, self.top_lat)
-                x_off = 6 if x < self.right_lon else -30
-                y_off = 6 if y < self.top_lat else -30
+                x_off = 6 if x < self.right_lon else -20
+                y_off = 6 if y < self.top_lat else -20
                 axes.annotate(
                     labels[enum],
                     xy=(x, y),
@@ -418,14 +420,24 @@ class Heatmap(object):
                     best_lat = glat
         return best_lon, best_lat
 
-    def project_to_bounds(self, lon, lat):
+    def project_to_bounds(self, lon, lat, great_circle=True):
+
+        dest_pt = np.array(self.bmap(lon, lat))
+        center_pt = np.array(self.bmap(self.center[0], self.center[1]))
 
         # if the point is already within bounds, nothing to do
         if lon > self.left_lon and lon < self.right_lon and lat > self.bottom_lat and lat < self.top_lat:
-            return np.array(self.bmap(lon, lat)), None
+            return dest_pt, None
 
-        # compute the great circle path to the point, and figure out where it leaves the bounds
-        x_arr, y_arr = self.bmap.gcpoints(lon, lat, self.center[0], self.center[1], 100)
+        # otherwise, get a path to the point
+        if great_circle:
+            x_arr, y_arr = self.bmap.gcpoints(self.center[0], self.center[1], lon, lat, 100)
+        else:
+            # path in the map projection space
+            x_arr = np.linspace(center_pt[0], dest_pt[0], 100)
+            y_arr = np.linspace(center_pt[1], dest_pt[1], 100)
+
+        # figure out where the path leaves the bounds
         left_border_x, top_border_y = self.bmap(self.left_lon, self.top_lat)
         right_border_x, bottom_border_y = self.bmap(self.right_lon, self.bottom_lat)
         pt = np.array(self.center)
@@ -441,7 +453,7 @@ class Heatmap(object):
                 x_interp = (right_border_x - last_pt[0]) / (x - last_pt[0] )
             if y < bottom_border_y:
                 y_interp = (bottom_border_y - last_pt[1]) / (y - last_pt[1] )
-            elif y < top_border_y:
+            elif y > top_border_y:
                 y_interp = (top_border_y - last_pt[1]) / ( y - last_pt[1] )
 
             if x_interp and y_interp:
@@ -454,6 +466,8 @@ class Heatmap(object):
                 interp = y_interp
                 break
 
+        # finally construct the border_pt along with v, the direction of travel
+        assert(interp >= 0)
         border_pt = last_pt + interp * v
         print "center", self.center, "border", border_pt, "v", v
         return border_pt, v / np.linalg.norm(v, 2)

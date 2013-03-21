@@ -7,6 +7,7 @@ from django.template import RequestContext
 from django.http import HttpResponse, HttpResponseRedirect
 from django.core.urlresolvers import reverse
 from django.core.paginator import Paginator
+from django_easyfilters import FilterSet
 
 import numpy as np
 import sys
@@ -42,12 +43,24 @@ from sigvisa.utils.geog import lonlatstr, dist_km
 from sigvisa.infer.gridsearch import propose_origin_times
 
 
+class GSFilterSet(FilterSet):
+    fields = [
+        'evid',
+        'pts_per_side',
+        'phases',
+        'likelihood_method',
+        'true_depth',
+        'true_time',
+        'true_mb',
+    ]
+
+
 def gridsearch_list_view(request):
     runs = SigvisaGridsearchRun.objects.all()
-    # run_filter = ModelsFilterSet(models, request.GET)
+    run_filter = GSFilterSet(runs, request.GET)
     return render_to_response("svweb/gridsearch_runs.html",
-                              {'run_list': runs,
-                               #                   'model_filter': model_filter,
+                              {'run_list': run_filter.qs,
+                               'run_filter': run_filter,
                                }, context_instance=RequestContext(request))
 
 
@@ -127,6 +140,8 @@ def gridsearch_detail_view(request, gsid):
     query_ll = query_sg.current_log_p()
     wave_phases = dict([(key, predict_phases(ev=true_sg.toplevel_nodes[0].get_event(), sta=w.sta, phases=true_sg.phases)) for (key,w) in wave_dict.items()])
 
+    query_distances = dict([(key, geog.dist_km((query_ev.lon, query_ev.lat), tuple(s.stations[wave_dict[key].sta][0:2])) ) for key in wave_dict.keys()])
+
     query_origin_time_proposals = sorted(propose_origin_times(ev=query_sg.toplevel_nodes[0].get_event(),
                                                        segments=[wn.get_wave() for wn in query_sg.leaf_nodes],
                                                        phases=query_sg.phases,
@@ -149,7 +164,8 @@ def gridsearch_detail_view(request, gsid):
         'query_ll': query_ll,
         'll_diff': true_ll - query_ll,
         'wave_phases': wave_phases,
-        'query_origin_time_proposals': query_origin_time_proposals
+        'query_origin_time_proposals': query_origin_time_proposals,
+        'query_distances': query_distances,
     }, context_instance=RequestContext(request))
 
 

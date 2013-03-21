@@ -22,6 +22,8 @@ window.location = url;
 
 <h1>gridsearch runs</h1>
 
+{{ run_filter }}<br>
+
 {% if run_list %}
 
     <table id="runs" border=1 cellpadding=3>
@@ -38,6 +40,8 @@ window.location = url;
 	<td><strong>likelihood_method</strong></td>
 	<td><strong>proposals</strong></td>
 	<td><strong>assumed true depth?</strong></td>
+	<td><strong>assumed true time?</strong></td>
+	<td><strong>assumed true mb?</strong></td>
 	<td><strong>wiggle_model_type</strong></td>
 	<td><strong>details</strong></td>
 	<td><strong>delete</strong></td>
@@ -56,6 +60,8 @@ window.location = url;
                 <td>{{ run.likelihood_method }}</td>
                 <td>{{ run.max_evtime_proposals }}</td>
                 <td>{{ run.true_depth }}</td>
+                <td>{{ run.true_time }}</td>
+                <td>{{ run.true_mb }}</td>
                 <td>{{ run.wiggle_model_type }}</td>
                 <td><a href="{% url gsrun_detail gsid=run.gsid %}">details</a></td>
                 <td><input type="button" onclick="confirm_delete({{ run.gsid }}, '{% url gsrun_delete gsid=run.gsid %}')" value="delete"/></td>

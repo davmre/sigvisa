@@ -324,6 +324,8 @@ class SigvisaGridsearchRun(models.Model):
     optim_method = models.CharField(max_length=1024, blank=True, null=True)
     max_evtime_proposals = models.IntegerField()
     true_depth = models.CharField(max_length=1)
+    true_time = models.CharField(max_length=1)
+    true_mb = models.CharField(max_length=1)
     phases = models.CharField(max_length=127)
     wiggle_model_type = models.CharField(max_length=31)
     heatmap_fname = models.CharField(max_length=255)
