@@ -82,7 +82,47 @@ class DirectedGraphModel(DAG):
         for node in self.topo_sorted_nodes():
             node.prior_predict()
 
-    def joint_optimize_nodes(self, node_list, optim_params):
+    def get_all(self, node_list):
+        return np.concatenate([node.get_mutable_values() for node in node_list])
+
+    def set_all(self, values, node_list):
+        i = 0
+        for node in node_list:
+            n = node.mutable_dimension()
+            node.set_mutable_values(values[i:i+n])
+            i += n
+
+    def joint_prob(self, values, node_list, relevant_nodes, c=1):
+        v = self.get_all(node_list = node_list)
+        self.set_all(values=values, node_list=node_list)
+        ll = np.sum([node.log_p() for node in relevant_nodes])
+        self.set_all(values=v, node_list=node_list)
+        return c * ll
+
+    def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1):
+        try:
+            eps0 = eps[0]
+        except:
+            eps = (eps,) * len(values)
+
+        v = self.get_all(node_list = node_list)
+        self.set_all(values=values, node_list=node_list)
+        initial_lp = dict([(node.label, node.log_p()) for node in relevant_nodes])
+        grad = np.zeros((len(values),))
+        i = 0
+        for node in node_list:
+            n = node.mutable_dimension()
+            lp0 = node.log_p()
+            for ni in range(n):
+                deriv = node.deriv_log_p(i=ni, lp0 = initial_lp[node.label], eps=eps[i + ni])
+                for child in node.children:
+                    deriv += child.deriv_log_p(parent=node.label, parent_i = ni, lp0 = initial_lp[child.label], eps=eps[i + ni])
+                grad[i + ni] = deriv
+            i += n
+        self.set_all(values=v, node_list=node_list)
+        return grad * c
+
+    def joint_optimize_nodes(self, node_list, optim_params, use_grad=False):
         """
         Assume that the value at each node is a 1D array.
         """
@@ -91,35 +131,30 @@ class DirectedGraphModel(DAG):
         all_children = [child for node in node_list for child in node.children]
         relevant_nodes = set(node_list + all_children)
 
-        def set_all(values):
-            i = 0
-            for node in node_list:
-                n = node.mutable_dimension()
-                node.set_mutable_values(values[i:i+n])
-                i += n
 
-        def get_all():
-            return np.concatenate([node.get_mutable_values() for node in node_list])
 
-        def joint_prob(values, c=-1):
-            set_all(values)
-            ll = np.sum([node.log_p() for node in relevant_nodes])
-            return c * ll
 
-        start_values = get_all()
+        start_values = self.get_all(node_list=node_list)
         low_bounds = np.concatenate([node.low_bounds() for node in node_list])
         high_bounds = np.concatenate([node.high_bounds() for node in node_list])
         bounds = zip(low_bounds, high_bounds)
+
+        jp = lambda v: self.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list, c=-1)
 
         # this is included for profiling / debugging -- not real code
         def time_joint_prob():
             import time
             st = time.time()
             for i in range(500):
-                joint_prob(start_values)
+                joint_prob(start_values, relevant_nodes=relevant_nodes)
             et = time.time()
             print "joint prob took %.3fs on average" % ((et-st)/500.0)
 
-        result_vector, cost = optim_utils.minimize(joint_prob, start_values, optim_params=optim_params, bounds=bounds)
-        set_all(result_vector)
+        if use_grad:
+            g = lambda v, eps=1e-4: self.log_p_grad(values=v, node_list=node_list, relevant_nodes=relevant_nodes, c=-1, eps=eps)
+        else:
+            g = None
 
+        result_vector, cost = optim_utils.minimize(f=jp, x0=start_values, fprime=g, optim_params=optim_params, bounds=bounds)
+        self.set_all(values=result_vector, node_list=node_list)
+        print "got optimized x", result_vector

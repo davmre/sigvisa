@@ -120,8 +120,8 @@ def main():
                       help="use the true depth of the event being searched for (False)")
     parser.add_option("--use_true_time", dest="use_true_time", default=False, action="store_true",
                       help="use the true time of the event being searched for (False)")
-    parser.add_option("--use_true_mb", dest="use_true_mb", default=True, action="store_false",
-                      help="use the true magnitude of the event being searched for (True)")
+    parser.add_option("--unfix_mb", dest="use_true_mb", default=True, action="store_false",
+                      help="don't use the true magnitude of the event being searched for (True)")
     parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true",
                       help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
     parser.add_option("--chans", dest="chans", default="BHZ", type="str",

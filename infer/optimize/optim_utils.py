@@ -129,7 +129,7 @@ def optimize(f, start_params, bounds, method, phaseids=None, maxfun=None):
         return minimize(f, start_params, bounds=bounds, method=method, steps=[.1, .1, .005] * (len(start_params) / 3), maxfun=maxfun)
 
 
-def minimize(f, x0, optim_params, bounds=None):
+def minimize(f, x0, optim_params, fprime=None, bounds=None):
 
     np.seterr(all="raise", under="ignore")
     method = optim_params['method']
@@ -139,19 +139,35 @@ def minimize(f, x0, optim_params, bounds=None):
     maxfun = optim_params['maxfun']
 
     if normalize:
-        if bounds is not None:
+        if bounds is None:
+            raise Exception("the normalize option requires optimization bounds to be specified")
+        else:
             low_bounds, high_bounds = zip(*bounds)
             low_bounds = np.asarray(low_bounds)
             high_bounds = np.asarray(high_bounds)
+
             x0n = scale_normalize(x0, low_bounds, high_bounds)
             bounds = [(-1 if np.isfinite(low_bounds[i]) else np.float('-inf'), 1 if np.isfinite(high_bounds[i]) else np.float('inf')) for (i, s) in enumerate(x0)]
             f1 = lambda params: f(scale_unnormalize(params, low_bounds, high_bounds))
             assert(    (np.abs(x0 - scale_unnormalize(x0n, low_bounds, high_bounds) ) < 0.001 ).all() )
             x0 = x0n
-        else:
-            raise Exception("the normalize option requires optimization bounds to be specified")
+
+            if fprime is not None:
+                # we want to take approximate gradients in the normalized scale
+                half_width = (high_bounds - low_bounds) / 2
+                bounded = np.isfinite(half_width)
+                normalized_eps = eps * np.ones(len(x0))
+                if bounded.any():
+                    normalized_eps[bounded] = eps * half_width[bounded]
+                fp1 = lambda params: fprime(scale_unnormalize(params, low_bounds, high_bounds),
+                                            eps=normalized_eps)  \
+                                            * normalized_eps/eps
+            else:
+                print "fp1 is None, not normalizing gradient..."
+                fp1 = None
     else:
         f1 = f
+        fp1 = fprime
 
     if method == "bfgscoord":
         iters = 0
@@ -159,7 +175,7 @@ def minimize(f, x0, optim_params, bounds=None):
         x1 = x0
         while iters < optim_params['bfgscoord_iters']:
             x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
-                f1, x1, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
+                f1, x1, fprime=fp1, approx_grad=0 if fp1 else 1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
             success = (d['warnflag'] == 0)
             print d
             v1 = best_cost
@@ -173,15 +189,15 @@ def minimize(f, x0, optim_params, bounds=None):
 
     elif method == "bfgs":
         x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
-            f1, x0, approx_grad=1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
+            f1, x0, fprime=fp1, approx_grad=0 if fp1 else 1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
     elif method == "tnc":
-        x1, nfeval, rc = scipy.optimize.fmin_tnc(f1, x0, approx_grad=1, ftol=optim_params['ftol'], bounds=bounds, disp=disp, maxfun=maxfun)
+        x1, nfeval, rc = scipy.optimize.fmin_tnc(f1, x0, fprime=fp1, approx_grad=0 if fp1 else 1, ftol=optim_params['ftol'], bounds=bounds, disp=disp, maxfun=maxfun)
         x1 = np.array(x1)
     elif method == "simplex":
         x1 = scipy.optimize.fmin(f1, x0, xtol=optim_params['xtol'], ftol=optim_params['ftol'], disp=disp)
     elif method == "grad":
         x1 = gradient_descent(
-            f1, x0, eps=eps, stopping_eps=optim_params['grad_stopping_eps'], alpha=0.3, beta=0.9, bounds=bounds, disp=disp)
+            f1, x0, f_grad=fp1, eps=eps, stopping_eps=optim_params['grad_stopping_eps'], alpha=0.3, beta=0.9, bounds=bounds, disp=disp)
     elif method == "coord":
         x1 = coord_descent(f1, x0, steps=steps)
     elif method == "none":

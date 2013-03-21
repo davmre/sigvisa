@@ -70,8 +70,10 @@ class WiggleModelNode(ClusterNode):
     def _wiggle_cache(self, feature_tuple):
         return self.signal_from_features(features = np.array(feature_tuple))
 
-    def get_wiggle(self):
-        wiggle = self._wiggle_cache(feature_tuple = tuple(self.get_value()))
+    def get_wiggle(self, value=None):
+        if not value:
+            value = self.get_value()
+        wiggle = self._wiggle_cache(feature_tuple = tuple(value))
         return wiggle
 
     def set_params_from_wiggle(self, wiggle):

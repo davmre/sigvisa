@@ -67,7 +67,7 @@ class EnvelopeNode(Node):
             self.nm_type = self.nm.noise_model_type()
 
 
-    def assem_signal(self, include_wiggles=True, parent_templates=None):
+    def assem_signal(self, include_wiggles=True, parent_templates=None, parent_values = None):
         signal = np.zeros((self.npts,))
 
         # we allow specifying the list of parents in order to generate
@@ -78,7 +78,7 @@ class EnvelopeNode(Node):
 
         for tm in parent_templates:
             key = tm.label[9:]
-            v = tm.get_value()
+            v = parent_values[tm.label] if parent_values else tm.get_value()
 
             arr_time = v[0]
             start = (arr_time - self.st) * self.srate
@@ -90,7 +90,7 @@ class EnvelopeNode(Node):
             phase_env = np.exp(tm.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
             if include_wiggles:
                 wm = self.parents['wiggle_%s' % key]
-                wiggle = wm.get_wiggle()
+                wiggle = wm.get_wiggle(value = parent_values[wm.label] if parent_values else None)
                 wiggle_len = min(len(wiggle), len(phase_env))
                 phase_env[:wiggle_len] *= wiggle[:wiggle_len]
 
@@ -118,13 +118,13 @@ class EnvelopeNode(Node):
         noise = self.nm.sample(n=len(signal))
         self.set_value(signal + noise)
 
-    def log_p(self, value=None):
+    def log_p(self, value=None, parent_values=None):
         if value is None:
             value = self.get_value()
 
 
 
-        pred_signal = self.assem_signal()
+        pred_signal = self.assem_signal(parent_values=parent_values)
         diff = value - pred_signal
         lp = self.nm.log_p(diff)
 #        import hashlib

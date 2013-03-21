@@ -85,7 +85,7 @@ def gradient_descent(f, x0, eps=1e-4, stopping_eps=1e-2, alpha=0.3, beta=0.9, f_
             warnings.simplefilter("error")
             try:
                 if f_grad:
-                    grad_x = f_grad(f, x)
+                    grad_x = f_grad(x)
                 else:
                     grad_x = approx_gradient(f, x, eps)
             except RuntimeWarning as w:
@@ -126,8 +126,6 @@ def approx_gradient(f, x0, eps):
         x_new = x0.copy()
         x_new[i] += eps
         grad[i] = (f(x_new) - fx0) / eps
-
-    print "grad eval: eps %f grad %s x0 %s" % (eps, grad, x0)
     return grad
 
 

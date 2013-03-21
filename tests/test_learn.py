@@ -13,6 +13,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
 
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
+from sigvisa.infer.optimize.gradient_descent import approx_gradient
 
 
 import matplotlib
@@ -43,8 +44,24 @@ class TestFit(unittest.TestCase):
 
         self.optim_params = construct_optim_params("'method': 'none'")
 
-    def test_fit_template_iid(self):
+    def test_deriv(self):
+        wave_node = self.sg.get_wave_node(wave=self.wave)
+        wave_node.set_noise_model(nm_type='l1')
 
+        node_list = list(self.sg.template_nodes)
+        all_children = [child for node in node_list for child in node.children]
+        relevant_nodes = set(node_list + all_children)
+
+        vals = np.concatenate([node.get_mutable_values() for node in node_list])
+        jp = lambda v: self.sg.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)
+
+        grad1 = approx_gradient(jp, vals, eps=1e-4)
+        grad2 = self.sg.log_p_grad(values=vals, node_list = list(self.sg.template_nodes), relevant_nodes=relevant_nodes)
+
+        self.assertTrue( (np.abs(grad1-grad2) < 0.001 ).all()  )
+
+
+    def test_fit_template_iid(self):
         wave_node = self.sg.get_wave_node(wave=self.wave)
         wave_node.set_noise_model(nm_type='l1')
 

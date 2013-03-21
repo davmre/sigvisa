@@ -48,6 +48,23 @@ class Node(object):
 
         return self.model.log_p(x = value, cond=parent_values)
 
+    def deriv_log_p(self, value=None, parent=None, parent_i=None, eps=1e-4, lp0=None):
+        if parent is not None and parent_i is not None:
+            deriv = self.parent_deriv(parent=parent, parent_i=parent_i, eps=eps, lp0=lp0)
+        else:
+            raise NotImplementedError("derivative not implemented for non-vector node %s" % self.label)
+        return deriv
+
+    def parent_deriv(self, parent, parent_i, eps=1e-4, lp0=None):
+        lp0 = lp0 if lp0 else self.log_p()
+        pvals = self._parent_values()
+        pv = np.array(pvals[parent]).copy()
+        mi = self.parents[parent].mutable_i_to_i(mutable_i=parent_i)
+        pv[mi] += eps
+        pvals[parent] = pv
+        deriv = ( self.log_p(parent_values=pvals) - lp0 ) / eps
+        return deriv
+
     def prior_sample(self, parent_values=None):
         if self._fixed_value: return
         if parent_values is None:
@@ -161,6 +178,24 @@ class VectorNode(Node):
     def set_index(self, value, i):
         if self._unfixed_values[i]:
             self._value[i] = value
+
+    def mutable_i_to_i(self, mutable_i):
+        return np.arange(self.dimension())[self._unfixed_values][mutable_i]
+
+    def deriv_log_p(self, i=None, parent=None, parent_i=None, eps=1e-4, lp0=None):
+        lp0 = lp0 if lp0 else self.log_p()
+        if i is not None:
+            v_new = np.array(self.get_value()).copy()
+            mi = self.mutable_i_to_i(mutable_i = i)
+            v_new[i] += eps
+            deriv = ( self.log_p(value=v_new) - lp0 ) / eps
+        elif parent is not None and parent_i is not None:
+            deriv = self.parent_deriv(parent=parent, parent_i=parent_i, lp0=lp0, eps=eps)
+        return deriv
+
+
+
+
 
 class ClusterNode(VectorNode):
 
