@@ -6,9 +6,6 @@ from sigvisa.models import Distribution
 from sigvisa.source.event import Event
 
 
-EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB, EV_NATURAL_SOURCE, EV_FLAG, EV_VECTOR_LEN = range(6+1+1)
-EV_FLAG_VAL = -999
-
 class EventPriorModel(Distribution):
 
     def log_p(self, x, cond=None):
@@ -24,56 +21,44 @@ class EventPriorModel(Distribution):
         return loc_lp + mb_lp + source_lp
 
 
-class EventNode(VectorNode):
+class EventNode(DictNode):
 
-    def __init__(self, event, fixed_values = True, **kwargs):
+    def __init__(self, event, fixed = True, **kwargs):
 
-        dimension = 6
-        self._id = event.id
-        self.evid = event.evid
-        super(EventNode, self).__init__(model = EventPriorModel(), dimension = dimension, initial_value=self.ev_to_vector(event), fixed_values=fixed_values, **kwargs)
+        self._event = event
 
-    def ev_to_vector(self, ev):
-        v = np.array((ev.lon, ev.lat, ev.depth, ev.time, ev.mb, 1 if ev.natural_source else 0, EV_FLAG_VAL))
-        return v
-
-    def vector_to_ev(self, v):
-        lon, lat, depth, time, mb, source, flag = v
-        ev = Event(lon=lon, lat=lat, depth=depth, time=time, mb=mb, natural_source=bool(source), internal_id = self._id)
-        # assign this separately so we don't auto-overwrite the event details with DB values
-        ev.evid = self.evid
-        return ev
+        super(EventNode, self).__init__(model = EventPriorModel(), dimension = dimension, initial_value=event.__dict__, fixed=fixed, **kwargs)
 
     def get_event(self):
-        return self.vector_to_ev(self.get_value())
+        return self._event
 
     def prior_predict(self, parent_values=None):
         pass
 
     def low_bounds(self):
-        bounds = np.ones((self.dimension(),)) * -np.inf
-        bounds[EV_LON] = -185
-        bounds[EV_LAT] = -95
-        #bounds[EV_TIME] = np.float('-inf')
-        bounds[EV_DEPTH] = 0
-        bounds[EV_MB] = 0
-        bounds[EV_NATURAL_SOURCE] = 0
+        bounds = { k: -np.inf for k in self.keys() }
+        bounds['lon'] = -185
+        bounds['lat'] = -95
+        #bounds['time'] = np.float('-inf')
+        bounds['depth'] = 0
+        bounds['mb'] = 0
+        bounds['natural_source'] = None
 
         # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([b for (i,b) in enumerate(bounds) if self._unfixed_values[i]])
+        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
 
         return bounds
 
     def high_bounds(self):
-        bounds = np.ones((self.dimension(),)) * np.inf
-        bounds[EV_LON] = 185
-        bounds[EV_LAT] = 95
-        #bounds[EV_TIME] = np.float('inf')
-        bounds[EV_DEPTH] = 400
-        bounds[EV_MB] = 10
-        bounds[EV_NATURAL_SOURCE] = 1
+        bounds = { k: np.inf for k in self.keys() }
+        bounds['lon'] = 185
+        bounds['lat'] = 95
+        #bounds['time'] = np.float('-inf')
+        bounds['depth'] = 400
+        bounds['mb'] = 10
+        bounds['natural_source'] = None
 
         # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([b for (i,b) in enumerate(bounds) if self._unfixed_values[i]])
+        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
 
         return bounds

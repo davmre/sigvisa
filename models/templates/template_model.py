@@ -53,13 +53,13 @@ class TemplateModelNode(ClusterNode):
             modelids = get_template_param_model_ids(runid = runid, sta=sta, band=band, chan=chan, phase=phase, model_type = model_type)
 
         # load all relevant models as new graph nodes
-        self.nodeDict = dict()
+        nodes = dict()
 
         # construct arrival time model
         atimeNode = Node(model=TravelTimeModel(sta=sta, phase=phase, arrival_time=True),
                          label = 'arrival_time')
         atimeNode.modelid = None
-        self.nodeDict['arrival_time'] = atimeNode
+        nodes['arrival_time'] = atimeNode
 
         defaults = self.default_param_vals()
         if model_type == "dummy":
@@ -67,7 +67,7 @@ class TemplateModelNode(ClusterNode):
                 mNode = Node(model=DummyModel(default_value = defaults[param]),
                              label=param)
                 mNode.modelid = None
-                self.nodeDict[param] = mNode
+                nodes[param] = mNode
         else:
             for modelid in modelids:
                 sql_query = "select param, model_type, model_fname from sigvisa_param_model where modelid=%d" % (modelid)
@@ -81,21 +81,17 @@ class TemplateModelNode(ClusterNode):
                 mNode = Node(model=model, label=param)
                 mNode.modelid = modelid
 
-                self.nodeDict[param] = mNode
+                nodes[param] = mNode
 
         # ensure that the node list ordering matches the parameter list
         nodes = []
-        for (i, param) in enumerate(('arrival_time',) + self.params()):
-            try:
-                nodes.append( self.nodeDict[param] )
-            except KeyError:
-
+        for param in ('arrival_time',) + self.params():
+            if not param in nodes:
                 if dummy_fallback:
                     mNode = Node(model=DummyModel(default_value = defaults[param]),
                                  label=param)
                     mNode.modelid = None
-                    self.nodeDict[param] = mNode
-                    nodes.append( mNode )
+                    nodes[param] = mNode
                     print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (sta, chan, band, phase, param)
                 else:
                     raise KeyError('no template model found for %s, %s, %s phase %s param %s' % (sta, chan, band, phase, param))
@@ -104,12 +100,7 @@ class TemplateModelNode(ClusterNode):
         super(TemplateModelNode, self).__init__(label=label, nodes=nodes, parents=parents, children=children)
 
     def get_modelids(self):
-        modelids = []
-        for (i, param) in enumerate(('arrival_time',) + self.params()):
-            node = self.nodeDict[param]
-            if node.modelid is not None:
-                modelids.append(node.modelid)
-
+        modelids = {k : self._nodes[k].modelid for k in self.keys() if self._nodes[k].modelid is not None}
         return modelids
 
     # return the name of the template model as a string

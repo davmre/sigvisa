@@ -83,36 +83,27 @@ class PairedExpTemplateNode(TemplateModelNode):
 
     def low_bounds(self):
 
-        p = ('arrival_time',) + self.params()
+        bounds = { k: -np.inf for k in self.keys() }
 
-        bounds = np.ones((len(p),)) * -np.inf
-        bounds[CODA_HEIGHT_PARAM] = -7
-        bounds[PEAK_OFFSET_PARAM] = 0.5
-        bounds[CODA_DECAY_PARAM] = -.2
-
-        default_atime = self.nodeDict['arrival_time'].model.predict(cond = self._parent_values())
-        bounds[ARR_TIME_PARAM] = default_atime - 15
+        bounds['coda_height'] = -7
+        bounds['peak_offset'] = 0.5
+        bounds['coda_decay'] = -.2
 
         # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([b for (i,(param, b)) in enumerate(zip(p, bounds)) if not self.nodeDict[param]._fixed_value])
+        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
 
         return bounds
 
     def high_bounds(self):
 
-        p = ('arrival_time',) + self.params()
-        bounds = np.ones((len(p),)) * np.inf
+        bounds = { k: np.inf for k in self.keys() }
 
-        bounds = np.ones((len(self.params())+1,)) * np.inf
-        bounds[PEAK_OFFSET_PARAM] = 25
-        bounds[CODA_DECAY_PARAM] = -0.0001
-        bounds[CODA_HEIGHT_PARAM] = 10
-
-        default_atime = self.nodeDict['arrival_time'].model.predict(cond = self._parent_values())
-        bounds[ARR_TIME_PARAM] = default_atime + 15
+        bounds['coda_height'] = 10
+        bounds['peak_offset'] = 25
+        bounds['coda_decay'] = -.0001
 
         # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([b for (i,(param, b)) in enumerate(zip(p, bounds)) if not self.nodeDict[param]._fixed_value])
+        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
 
         return bounds
 

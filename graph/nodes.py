@@ -6,13 +6,13 @@ import sigvisa.infer.optimize.optim_utils as optim_utils
 class Node(object):
 
 
-    def __init__(self, model=None, label="", initial_value = None, fixed_value=False, children=None, parents = None):
+    def __init__(self, model=None, label="", initial_value = None, fixed=False, children=None, parents = None):
 
         self.children = set(children) if children is not None else set()
         self.parents = parents if parents is not None else dict()
         self.model = model
         self._value = initial_value
-        self._fixed_value = fixed_value
+        self._fixed = fixed
         self.label = label
         self.mark = 0
 
@@ -28,17 +28,17 @@ class Node(object):
         return self._value
 
     def set_value(self, value, override_fixed=False):
-        if not self._fixed_value or override_fixed:
+        if not self._fixed or override_fixed:
             self._value = value
 
     def fix_value(self):
-        self._fixed_value = True
+        self._fixed = True
 
     def unfix_value(self):
-        self._fixed_value = False
+        self._fixed = False
 
     def _parent_values(self):
-        return dict([(k, p.get_value()) for (k, p) in self.parents.items()])
+        return dict([(k, p.get_value()) for (k, p) in self.parents.iteritems()])
 
     def log_p(self, value=None, parent_values=None):
         if parent_values is None:
@@ -66,14 +66,14 @@ class Node(object):
         return deriv
 
     def prior_sample(self, parent_values=None):
-        if self._fixed_value: return
+        if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
         new_value = self.model.sample(cond=parent_values)
         self.set_value(new_value)
 
     def prior_predict(self, parent_values=None):
-        if self._fixed_value: return
+        if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
         new_value = self.model.predict(cond=parent_values)
@@ -91,7 +91,7 @@ class Node(object):
     def get_mark(self):
         return self.mark
 
-class VectorNode(Node):
+class DictNode(Node):
 
     """
 
@@ -101,65 +101,58 @@ class VectorNode(Node):
 
     """
 
-    def __init__(self, dimension, fixed_values=None, initial_value=None, **kwargs):
-        super(VectorNode, self).__init__(**kwargs)
+    def __init__(self, initial_value=None, fixed=None, **kwargs):
+        super(DictNode, self).__init__(**kwargs)
 
-        self._dimension = dimension
-
-        if isinstance(fixed_values, bool):
-            fixed_values = [fixed_values,] * dimension
-        elif isinstance(fixed_values, Iterable):
-            assert(len(fixed_values) == dimension)
-        elif fixed_values is None:
-            fixed_values = [False,] * dimension
+        if isinstance(fixed, bool):
+            self._mutable = { k : not fixed for k in initial_value.iterkeys() }
+        elif isinstance(fixed, dict):
+            assert(initial_value is None or (set(fixed.iterkeys()) == set(initial_value.iterkeys())) )
+            self._mutable = { k : not fixed[k] for k in initial_value.iterkeys() }
+        elif fixed is None:
+            self._mutable = { k : True for k in initial_value.iterkeys() }
         else:
-            raise ValueError("passed invalid fixed-values setting %s" % fixed_values)
-        fixed_values = np.array(fixed_values, dtype=bool)
-        self._unfixed_values = ~fixed_values
-        self._fixed_value = fixed_values.all()
+            raise ValueError("passed invalid fixed-values setting %s" % fixed)
+        self._fixed = not any(self._mutable.itervalues())
 
-        if initial_value is None:
-            self._value = np.zeros((dimension,))
+        self._value = initial_value
+
+    def keys(self):
+        return sorted(self._mutable.keys())
+
+    def fix_value(self, key=None):
+        if key is None:
+            self._mutable = {k : False for k in self._mutable.iterkeys() }
         else:
-            self._value = initial_value
+            self._mutable[key] = False
+        self._fixed = not any(self._mutable.itervalues())
 
-    def fix_value(self, i=None):
-        if i is None:
-            self._unfixed_values = np.array([False,] * self.dimension(), dtype=bool)
+    def unfix_value(self, key=None):
+        if key is None:
+            self._mutable = {k : True for k in self._mutable.iterkeys() }
         else:
-            self._unfixed_values[i] = False
-        self._fixed_value = ~self._unfixed_values.any()
-
-    def unfix_value(self, i=None):
-        if i is None:
-            self._unfixed_values = np.array([True,] * self.dimension(), dtype=bool)
-        else:
-            self._unfixed_values[i] = True
-        self._fixed_value = False
-
-    def dimension(self):
-        return self._dimension
+            self._mutable[key] = True
+        self._fixed = False
 
     def mutable_dimension(self):
-        return np.sum(self._unfixed_values)
+        return sum(self._mutable.itervalues())
 
     def get_mutable_values(self):
         """
-
         Get the values of all of the sub-variables that are not fixed. (used for optimization, etc.)
-
         """
-
-        return self._value[self._unfixed_values]
+        return [self._values[k] for k in self.keys() if self._mutable[k]]
 
     def set_mutable_values(self, values):
         """
-
         Set the values of all of the sub-variables that are not fixed. (used for optimization, etc.)
-
         """
-
-        self._value[self._unfixed_values] = values
+        assert(len(values) == self.mutable_dimension())
+        i = 0
+        for (i, k) in enumerate(self.keys())
+            if self._mutable[k]:
+                self._value[k] = values[i]
+                i += 1
 
     def low_bounds(self):
         return [np.float('-inf'),] * self.mutable_dimension()
@@ -168,21 +161,17 @@ class VectorNode(Node):
         return [np.float('inf'),] * self.mutable_dimension()
 
     def set_value(self, value, override_fixed=False):
-        assert(len(value) == self.dimension())
-
+        assert(set(value.iterkeys()) == set(self._value.iterkeys()))
         if override_fixed:
             self._value = value
         else:
-            self._value[self._unfixed_values] = value[self._unfixed_values]
+            self._value = {k : value[k] if self._mutable[k] else self._value[k] for k in value.iterkeys() }
 
-    def set_index(self, value, i):
-        if self._unfixed_values[i]:
-            self._value[i] = value
+    def set_key(self, value, key):
+        if self._mutable[key]:
+            self._value[key] = value
 
-    def mutable_i_to_i(self, mutable_i):
-        return np.arange(self.dimension())[self._unfixed_values][mutable_i]
-
-    def deriv_log_p(self, i=None, parent=None, parent_i=None, eps=1e-4, lp0=None):
+    def deriv_log_p(self, key=None, parent=None, parent_key=None, eps=1e-4, lp0=None):
         lp0 = lp0 if lp0 else self.log_p()
         if i is not None:
             v_new = np.array(self.get_value()).copy()
@@ -194,10 +183,7 @@ class VectorNode(Node):
         return deriv
 
 
-
-
-
-class ClusterNode(VectorNode):
+class ClusterNode(DictNode):
 
     """
 
@@ -208,71 +194,77 @@ class ClusterNode(VectorNode):
 
     """
 
-    def __init__(self, label="", nodes = None, parents = None, children=None):
+    def __init__(self, nodes, label="", parents = None, children=None):
 
         # setup below here assumes that the set of nodes is finalized,
         # so subclasses should only call this constructor after
         # constructing all sub-nodes.
-        self._nodes = np.array(nodes, dtype=object) if nodes is not None else np.array((), dtype=object)
+        assert( isinstance(nodes, dict) )
+        self._nodes = nodes
 
-        # invariant: self._unfixed_values[i] == self._nodes[i]._fixed_value for all nodes i
+        # invariant: self._mutable[i] == self._nodes[i]._fixed for all nodes i
         super(ClusterNode, self).__init__(model=None, label=label,
                                           parents=parents, children=children,
-                                          dimension=len(nodes),
-                                          fixed_values = [n._fixed_value for n in self._nodes])
+                                          fixed = { k : n[k]._fixed for n in nodes })
 
-        for node in self._nodes:
+        for node in self._nodes.itervalues():
             node.parents = self.parents
             node.children = self.children
 
         self._value = None
 
-    def fix_value(self, i=None):
-        if i is None:
-            for node in self._nodes:
+    def fix_value(self, key=None):
+        if key is None:
+            for node in self._nodes.itervalues():
                 node.fix_value()
-            self._unfixed_values = np.array([False,] * self.dimension(), dtype=bool)
+            self._mutable = {k : False for k in self._mutable.iterkeys() }
         else:
-            self._nodes[i].fix_value()
-            self._unfixed_values[i] = False
-        self._fixed_value = ~self._unfixed_values.any()
+            self._nodes[key].fix_value()
+            self._mutable[key] = False
+        self._fixed = not any(self._mutable.itervalues())
 
-    def unfix_value(self, i=None):
+    def unfix_value(self, key=None):
         if i is None:
-            for node in self._nodes:
+            for node in self._nodes.itervalues():
                 node.unfix_value()
-            self._unfixed_values = np.array([True,] * self.dimension(), dtype=bool)
+            self._mutable = {k : True for k in self._mutable.iterkeys() }
         else:
-            self._nodes[i].unfix_value()
-            self._unfixed_values[i] = True
-        self._fixed_value = False
+            self._nodes[key].unfix_value()
+            self._mutable[key] = True
+        self._fixed = False
 
     def get_mutable_values(self):
-        return np.array([n.get_value() for n in self._nodes[self._unfixed_values]])
+        values = []
+        for (k,n) in sorted(self._nodes.iteritems()):
+            if self._mutable[k]:
+                values.append(n.get_value())
 
     def set_mutable_values(self, values):
         assert(len(values) == self.mutable_dimension())
-        for (i, node) in enumerate([n for n in self._nodes[self._unfixed_values]]):
-            node.set_value(values[i])
+        i = 0
+        for (i, k) in enumerate(sorted(self._nodes.keys())):
+            if self._mutable[k]:
+                self._node[k].set_value(values[i])
+                i += 1
 
     def get_value(self):
-        return [n.get_value() for n in self._nodes]
+        return { k : self._nodes[k].get_value() for k in self._nodes.iterkeys() }
 
     def set_value(self, value, override_fixed=False):
-        assert(len(value) == self.dimension())
-        for (i, node) in enumerate(self._nodes):
-            node.set_value(value[i], override_fixed=override_fixed)
+        assert(set(value.iterkeys()) == set(self._value.iterkeys()))
+        for (k, v) in value.iteritems():
+            self._nodes[k].set_value(v, override_fixed=override_fixed)
 
-    def set_index(self, value, i):
-        if self._unfixed_value[i]:
-            self.nodes[i].set_value(value = value)
+    def set_key(self, value, key):
+        if self._mutable[key]:
+            self._nodes[key].set_value(value = value)
 
     def log_p(self, value = None):
         if value is None:
             value = self.get_value()
 
         lp = 0
-        for (i, node) in enumerate(self._nodes):
+        for (i, node) in enumerate(self._nodes.itervalues()):
             lp += node.log_p(value = value[i])
         return lp
 
@@ -280,14 +272,14 @@ class ClusterNode(VectorNode):
         if parent_values is None:
             parent_values = self._parent_values()
 
-        for node in self._nodes:
+        for node in self._nodes.itervalues():
             node.prior_sample(parent_values = parent_values)
 
     def prior_predict(self, parent_values=None):
         if parent_values is None:
             parent_values = self._parent_values()
 
-        for node in self._nodes:
+        for node in self._nodes.itervalues():
             node.prior_predict(parent_values = parent_values)
 
 
