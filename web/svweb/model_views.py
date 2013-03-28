@@ -120,6 +120,7 @@ def plot_gp_heatmap(request, model_record, X, y, axes):
         print item
         item.set_fontsize(2)
 
+    axes.set_title(model_record.param)
 
 def plot_gaussian(request, model_record, axes):
 
@@ -133,7 +134,7 @@ def plot_gaussian(request, model_record, axes):
 
 
 def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
-    fig = Figure(figsize=(5, 3), dpi=144)
+    fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
 
