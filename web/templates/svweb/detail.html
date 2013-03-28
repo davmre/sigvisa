@@ -128,10 +128,10 @@ document.getElementById('loading').style.visibility = 'hidden';
       {% for phase in fit.sigvisacodafitphase_set.all %}
       <tr>
 	<td>{{ phase.phase }}</td>
-	<td>{{ phase.param1 }}</td>
-	<td>{{ phase.param2 }}</td>
-	<td>{{ phase.param3 }}</td>
-	<td>{{ phase.param4 }}</td>
+	<td>{{ phase.arrival_time }}</td>
+	<td>{{ phase.peak_offset }}</td>
+	<td>{{ phase.coda_height }}</td>
+	<td>{{ phase.coda_decay }}</td>
 	<td>{{ phase.amp_transfer }}</td>
 	<td>
 	{% if phase.wiggle_fname and phase.wiggle_fname != 'NONE' %}

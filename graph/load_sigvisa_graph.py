@@ -22,16 +22,15 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
     nm_type = fit[8]
     runid = fit[0]
 
-    phase_sql_query = "select fpid, phase, template_model, param1, param2, param3, param4 from sigvisa_coda_fit_phase where fitid=%d" % fitid
+    phase_sql_query = "select fpid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay from sigvisa_coda_fit_phase where fitid=%d" % fitid
     cursor.execute(phase_sql_query)
     phase_details = cursor.fetchall()
     phases = [p[1] for p in phase_details]
     templates = {}
     tmshapes = {}
     for (phase, p) in zip(phases, phase_details):
-        templates[phase] = p[3:7]
         tmshapes[phase] = p[2]
-
+        templates[phase] = {'arrival_time': p[3], 'peak_offset': p[4], 'coda_height': p[5], 'coda_decay': p[6]}
 
     if load_wiggles:
         wiggle_family = None

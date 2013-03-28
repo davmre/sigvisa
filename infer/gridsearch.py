@@ -15,7 +15,6 @@ from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.signals.io import load_segments
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.models.ttime import tt_predict
-from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB, EV_NATURAL_SOURCE
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
@@ -79,7 +78,7 @@ def save_gsrun_to_db(d, ev, sg):
 
 
         for tm_node in [tmn for (lbl, tmn) in wave_node.parents.items() if lbl.startswith("template_")]:
-            for modelid in tm_node.get_modelids():
+            for modelid in tm_node.get_modelids().values():
                 gsmid = execute_and_return_id(s.dbconn, "insert into sigvisa_gsrun_tmodel (gswid, modelid) values (%d, %d)" % (gswid, modelid), 'gsmid')
 
     s.dbconn.commit()
@@ -223,18 +222,18 @@ def main():
 
         event_node = sg.toplevel_nodes[0]
         event_node.unfix_value()
-        event_node.set_index(i=EV_LON, value=lon)
-        event_node.set_index(i=EV_LAT, value=lat)
-        event_node.fix_value(i=EV_LON)
-        event_node.fix_value(i=EV_LAT)
-        event_node.fix_value(i=EV_NATURAL_SOURCE)
+        event_node.set_key(key='lon', value=lon)
+        event_node.set_key(key='lat', value=lat)
+        event_node.fix_value(key='lon')
+        event_node.fix_value(key='lat')
+        event_node.fix_value(key='natural_source')
 
         if true_mb:
-            event_node.fix_value(i=EV_MB)
+            event_node.fix_value(key='mb')
         if true_time:
-            event_node.fix_value(i=EV_TIME)
+            event_node.fix_value(key='time')
         if true_depth:
-            event_node.fix_value(i=EV_DEPTH)
+            event_node.fix_value(key='depth')
 
         best_ll = np.float("-inf")
         best_graph = None
@@ -249,11 +248,11 @@ def main():
                 for mb in ev_mags:
 
                     if not true_mb:
-                        event_node.set_index(i=EV_MB, value=mb)
+                        event_node.set_key(key='mb', value=mb)
                     if not true_time:
-                        event_node.set_index(i=EV_TIME, value=t)
+                        event_node.set_key(key='time', value=t)
                     if not true_depth:
-                        event_node.set_index(i=EV_DEPTH, value=depth)
+                        event_node.set_key(key='depth', value=depth)
 
                     f_update_graph(sg)
                     ll = sg.current_log_p()

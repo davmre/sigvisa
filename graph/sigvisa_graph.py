@@ -255,15 +255,15 @@ class SigvisaGraph(DirectedGraphModel):
     def fix_arrival_times(self, fixed=True):
         for tm_node in self.template_nodes:
             if fixed:
-                tm_node.fix_value(i=0)
+                tm_node.fix_value(key='arrival_time')
             else:
-                tm_node.unfix_value(i=0)
+                tm_node.unfix_value(key='arrival_time')
 
     def init_wiggles_from_template(self):
         wave_node = self.leaf_nodes[0]
         for wm_node in self.wiggle_nodes:
             tm_node = self.get_partner_node(wm_node)
-            atime = tm_node.get_value()[0]
+            atime = tm_node.get_value()['arrival_time']
 
             wiggle, st, et = extract_phase_wiggle(tm_node=tm_node, wave_node=wave_node)
             if st is None or len(wiggle) < wm_node.npts:
@@ -387,10 +387,10 @@ class SigvisaGraph(DirectedGraphModel):
 
             for tm in parent_templates:
                 fit_params = tm.get_value()
-                transfer = fit_params[2] - event.source_logamp(band, tm.phase)
+                transfer = fit_params['coda_height'] - event.source_logamp(band, tm.phase)
 
-                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, param1, param2, param3, param4, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (
-                    fitid, tm.phase, fit_params[0], fit_params[1], fit_params[2], fit_params[3], transfer)
+                phase_insert_query = "insert into sigvisa_coda_fit_phase (fitid, phase, template_model, arrival_time, peak_offset, coda_height, coda_decay, amp_transfer) values (%d, '%s', 'paired_exp', %f, %f, %f, %f, %f)" % (
+                    fitid, tm.phase, fit_params['arrival_time'], fit_params['peak_offset'], fit_params['coda_height'], fit_params['coda_decay'], transfer)
                 fpid = execute_and_return_id(s.dbconn, phase_insert_query, "fpid")
                 tm.fpid = fpid
 

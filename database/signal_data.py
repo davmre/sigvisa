@@ -140,7 +140,7 @@ def benchmark_fitting_run(cursor, runid, return_raw_data=False):
 def load_template_params_by_fitid(cursor, fitid, return_cost=True):
 
     s = Sigvisa()
-    sql_query = "select phase, round(param1,16), round(param2, 16), round(param3, 16), round(param4, 16) from sigvisa_coda_fit_phase where fitid=%d" % (
+    sql_query = "select phase, round(arrival_time,16), round(peak_offset, 16), round(coda_height, 16), round(coda_decay, 16) from sigvisa_coda_fit_phase where fitid=%d" % (
         fitid)
     cursor.execute(sql_query)
     rows = cursor.fetchall()
@@ -204,7 +204,7 @@ def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=Non
     approval_cond = "and human_approved==2" if require_human_approved else ""
     cost_cond = "and fit.acost<%f" % max_acost if np.isfinite(max_acost) else ""
 
-    cond = "fp.fitid = fit.fitid and fp.param3 > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond)
+    cond = "fp.fitid = fit.fitid and fp.coda_height > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond)
 
     return cond
 
@@ -244,7 +244,7 @@ def load_shape_data(cursor, **kwargs):
 
     cond = sql_param_condition(**kwargs)
 
-    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.param1, fp.param2, fp.param3, fp.param4, fp.amp_transfer from  leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
+    sql_query = "select distinct lebo.evid, lebo.mb, lebo.lon, lebo.lat, lebo.depth, fp.phase, fit.sta, fit.dist, fit.azi, fit.band, fp.arrival_time, fp.peak_offset, fp.coda_height, fp.coda_decay, fp.amp_transfer from  leb_origin lebo, sigvisa_coda_fit_phase fp, sigvisa_coda_fit fit where %s" % (cond)
 
     ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
     fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))

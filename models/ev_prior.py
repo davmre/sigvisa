@@ -10,13 +10,13 @@ class EventPriorModel(Distribution):
 
     def log_p(self, x, cond=None):
         s = Sigvisa()
-        if x[EV_NATURAL_SOURCE]:
+        if x['natural_source']:
             source_lp = 0 # eventually I should have a real model for event source type
-            loc_lp = s.sigmodel.event_location_prior_logprob(x[EV_LON], x[EV_LAT], x[EV_DEPTH])
+            loc_lp = s.sigmodel.event_location_prior_logprob(x['lon'], x['lat'], x['depth'])
         else:
             raise NotImplementedError("prior for artificial-source events is not currently implemented")
 
-        mb_lp = s.sigmodel.event_mag_prior_logprob(x[EV_MB])
+        mb_lp = s.sigmodel.event_mag_prior_logprob(x['mb'])
 
         return loc_lp + mb_lp + source_lp
 

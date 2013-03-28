@@ -12,7 +12,7 @@ def create_wiggled_phase(tm_node, wave_node, wiggle_data):
     wave = wave_node.get_wave()
     vals = tm_node.get_value()
 
-    start_idx = int(np.floor((vals[0] -  wave['stime']) * wave['srate']))
+    start_idx = int(np.floor((vals['arrival_time'] -  wave['stime']) * wave['srate']))
 
 
     wiggled_phase_data = template_with_phase - template_without_phase
@@ -32,9 +32,9 @@ def extract_phase_wiggle(tm_node, wave_node, skip_initial_s=1.0):
 
     vals = tm_node.get_value()
 
-    start_idx = int(np.floor((vals[0] - wave['stime']) * wave['srate']))
-    wiggle_stime = vals[0]
-    peak_idx = max(start_idx, int(start_idx + (vals[1]  * wave['srate'])))
+    start_idx = int(np.floor((vals['arrival_time'] - wave['stime']) * wave['srate']))
+    wiggle_stime = vals['arrival_time']
+    peak_idx = max(start_idx, int(start_idx + (vals['peak_offset']  * wave['srate'])))
     skipped_idx = start_idx + int(skip_initial_s * wave['srate'])
     template_with_phase[start_idx: skipped_idx] = ma.masked
 

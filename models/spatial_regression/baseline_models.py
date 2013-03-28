@@ -46,12 +46,12 @@ class ParamModel(Distribution):
         raise Exception("not implemented")
 
     def event_dict_to_array(self, ev_dict):
-        if ev_dict in self.ev_cache:
-            a = self.ev_cache[ev_dict]
-        else:
-            distance = geog.dist_km((ev_dict['lon'], ev_dict['lat']), (self.site_lon, self.site_lat))
-            azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_dict['lon'], ev_dict['lat']))
-            a = np.array(((ev_dict['lon'], ev_dict['lat'], ev_dict['depth'], distance, azimuth),))
+#        if ev_dict in self.ev_cache:
+#            a = self.ev_cache[ev_dict]
+#        else:
+        distance = geog.dist_km((ev_dict['lon'], ev_dict['lat']), (self.site_lon, self.site_lat))
+        azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_dict['lon'], ev_dict['lat']))
+        a = np.array(((ev_dict['lon'], ev_dict['lat'], ev_dict['depth'], distance, azimuth),))
         return a
 
     def event_to_array(self, event):
@@ -73,7 +73,7 @@ class ParamModel(Distribution):
             if len(c) == 1:
                 X1 = self.standardize_input_array(c=c.values()[0])
             else:
-                X1 = self.event_dict_to_array(ev_dict)
+                X1 = self.event_dict_to_array(ev_dict=c)
         else:
             raise ValueError("unknown event object type %s input to spatial regression model!" % type(c))
         assert(len(X1.shape) == 2)

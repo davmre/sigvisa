@@ -238,7 +238,7 @@ def custom_wave_plus_template_view(evid, sta, chan, band, phases, vals, nmid, pa
 
 def phases_from_fit(fit):
     fit_phases = fit.sigvisacodafitphase_set.all()
-    fit_params = np.asfarray([(p.param1, p.param2, p.param3, p.param4) for p in fit_phases])
+    fit_params = np.asfarray([(p.arrival_time, p.peak_offset, p.coda_height, p.coda_decay) for p in fit_phases])
     phases = tuple([str(p.phase) for p in fit_phases])
     (phases, vals) = filter_and_sort_template_params(phases, fit_params, filter_list=Sigvisa().phases)
     return phases, vals
@@ -372,8 +372,8 @@ def template_debug_view(request, fitid):
 
     phase_objs = []
     for (i, phase) in enumerate(phases):
-        p = {'phase': phase, 'param1': vals[i, 0], 'param2': vals[i, 1],
-             'param3': vals[i, 2], 'param4': vals[i, 3]}
+        p = {'phase': phase, 'arrival_time': vals[i, 0], 'peak_offset': vals[i, 1],
+             'coda_height': vals[i, 2], 'coda_decay': vals[i, 3]}
         phase_objs.append(p)
 
     return render_to_response('svweb/template_debug.html', {

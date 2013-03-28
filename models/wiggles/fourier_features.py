@@ -88,7 +88,7 @@ class FourierFeatureNode(WiggleModelNode):
 
         amps = np.abs(coeffs)[: self.nparams/2]
         phases = np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)
-        return array_to_param_dict(np.concatenate([amps, phases]))
+        return self.array_to_param_dict(np.concatenate([amps, phases]))
 
     def basis_decomposition_naive(self, signal):
         assert(len(signal) == self.npts)
@@ -120,7 +120,7 @@ class FourierFeatureNode(WiggleModelNode):
             amps.append(amp)
             phases.append(phase)
 
-        return array_to_param_dict(np.concatenate([amps, phases]))
+        return self.array_to_param_dict(np.concatenate([amps, phases]))
 
     def basis_type(self):
         return "fourier"

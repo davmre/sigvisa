@@ -75,7 +75,7 @@ class DirectedGraphModel(DAG):
 
     def prior_predict_all(self):
         for node in self.topo_sorted_nodes():
-            if not node._fixed_value:
+            if not node._fixed:
                 node.prior_predict()
 
     def prior_sample_all(self):
