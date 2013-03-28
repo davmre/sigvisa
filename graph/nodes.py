@@ -260,6 +260,11 @@ class ClusterNode(DictNode):
         if value is None:
             value = self.get_value()
 
+        # ignore initial log_prob optimization since it doesn't
+        # (currently) decompose across clusternodes
+        if 'lp0' in kwargs:
+            del kwargs['lp0']
+
         return self._nodes[key].deriv_log_p(value = value[key], **kwargs)
 
     def prior_sample(self, parent_values=None):
