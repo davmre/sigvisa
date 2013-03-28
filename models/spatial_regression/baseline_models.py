@@ -143,7 +143,17 @@ class ConstGaussianModel(ParamModel):
 
         return r1
 
+    def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4):
+        assert(idx == None)
+        X1 = self.standardize_input_array(cond)
+        x = x if isinstance(x, collections.Iterable) else (x,)
 
+        if cond_key is not None:
+            deriv = 0
+        else:
+            deriv = np.sum( [ (self.mean - z) / (self.std ** 2)  for z in x ] )
+
+        return deriv
 class LinearModel(ParamModel):
 
     def __init__(self, sta=None, X=None, y=None, fname=None):

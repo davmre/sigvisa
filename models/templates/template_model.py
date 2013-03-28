@@ -13,10 +13,9 @@ from sigvisa.models.ttime import TravelTimeModel
 from sigvisa.models import DummyModel
 
 
-def get_template_param_model_ids(runid, sta, chan, band, phase, model_type):
+def get_template_param_model_ids(runid, sta, chan, band, phase, model_type, template_shape):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-
 
     if isinstance(model_type, str):
         model_type_cond = "model_type = '%s'" % model_type
@@ -26,7 +25,7 @@ def get_template_param_model_ids(runid, sta, chan, band, phase, model_type):
     else:
         raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
 
-    sql_query = "select modelid from sigvisa_param_model where %s and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d" % (model_type_cond, sta, chan, band, phase, runid)
+    sql_query = "select modelid from sigvisa_param_model where %s and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and template_shape='%s'" % (model_type_cond, sta, chan, band, phase, runid, template_shape)
     cursor.execute(sql_query)
     modelids = [m[0] for m in cursor.fetchall()]
     cursor.close()
@@ -39,7 +38,6 @@ class TemplateModelNode(ClusterNode):
 
     def __init__(self, label="", parents = None, children=None, runid=None, model_type=None, sta=None, chan=None, band=None, phase=None, modelids=None, dummy_fallback=False):
 
-
         s = Sigvisa()
         cursor = s.dbconn.cursor()
 
@@ -50,7 +48,7 @@ class TemplateModelNode(ClusterNode):
             cursor.execute(sql_query)
             sta, chan, band, phase = cursor.fetchone()
         elif model_type != "dummy":
-            modelids = get_template_param_model_ids(runid = runid, sta=sta, band=band, chan=chan, phase=phase, model_type = model_type)
+            modelids = get_template_param_model_ids(runid = runid, sta=sta, band=band, chan=chan, phase=phase, model_type = model_type, template_shape = self.model_name())
 
         # load all relevant models as new graph nodes
         nodes = dict()
