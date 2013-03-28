@@ -48,22 +48,12 @@ class Node(object):
 
         return self.model.log_p(x = value, cond=parent_values)
 
-    def deriv_log_p(self, value=None, parent=None, parent_i=None, eps=1e-4, lp0=None):
-        if parent is not None and parent_i is not None:
-            deriv = self.parent_deriv(parent=parent, parent_i=parent_i, eps=eps, lp0=lp0)
-        else:
-            raise NotImplementedError("derivative not implemented for non-vector node %s" % self.label)
-        return deriv
-
-    def parent_deriv(self, parent, parent_i, eps=1e-4, lp0=None):
-        lp0 = lp0 if lp0 else self.log_p()
-        pvals = self._parent_values()
-        pv = np.array(pvals[parent]).copy()
-        mi = self.parents[parent].mutable_i_to_i(mutable_i=parent_i)
-        pv[mi] += eps
-        pvals[parent] = pv
-        deriv = ( self.log_p(parent_values=pvals) - lp0 ) / eps
-        return deriv
+    def deriv_log_p(self, value=None, key=None, parent_values=None, parent_name=None, parent_key=None, **kwargs):
+        if parent_values is None:
+            parent_values = self._parent_values()
+        if value is None:
+            value = self.get_value()
+        return self.model.deriv_log_p(x = value, cond=parent_values, idx=key, cond_key=parent_name, cond_idx=parent_key, **kwargs)
 
     def prior_sample(self, parent_values=None):
         if self._fixed: return
@@ -101,16 +91,23 @@ class DictNode(Node):
 
     """
 
-    def __init__(self, initial_value=None, fixed=None, **kwargs):
+    def __init__(self, initial_value=None, fixed=None, keys=None, **kwargs):
         super(DictNode, self).__init__(**kwargs)
 
+        if keys:
+            if initial_value:
+                assert (set(keys) == set(initial_value.iterkeys()) )
+            if fixed and isinstance(fixed, dict):
+                assert (set(keys) == set(fixed.iterkeys()) )
+        else:
+            keys = initial_value.keys() if initial_value else fixed.keys()
+
         if isinstance(fixed, bool):
-            self._mutable = { k : not fixed for k in initial_value.iterkeys() }
+            self._mutable = { k : not fixed for k in keys }
         elif isinstance(fixed, dict):
-            assert(initial_value is None or (set(fixed.iterkeys()) == set(initial_value.iterkeys())) )
-            self._mutable = { k : not fixed[k] for k in initial_value.iterkeys() }
+            self._mutable = { k : not fixed[k] for k in keys }
         elif fixed is None:
-            self._mutable = { k : True for k in initial_value.iterkeys() }
+            self._mutable = { k : True for k in keys() }
         else:
             raise ValueError("passed invalid fixed-values setting %s" % fixed)
         self._fixed = not any(self._mutable.itervalues())
@@ -137,11 +134,14 @@ class DictNode(Node):
     def mutable_dimension(self):
         return sum(self._mutable.itervalues())
 
+    def mutable_keys(self):
+        return [k for k in self.keys() if self._mutable[k]]
+
     def get_mutable_values(self):
         """
         Get the values of all of the sub-variables that are not fixed. (used for optimization, etc.)
         """
-        return [self._values[k] for k in self.keys() if self._mutable[k]]
+        return [self._value[k] for k in self.keys() if self._mutable[k]]
 
     def set_mutable_values(self, values):
         """
@@ -149,7 +149,7 @@ class DictNode(Node):
         """
         assert(len(values) == self.mutable_dimension())
         i = 0
-        for (i, k) in enumerate(self.keys())
+        for k in self.keys():
             if self._mutable[k]:
                 self._value[k] = values[i]
                 i += 1
@@ -161,7 +161,7 @@ class DictNode(Node):
         return [np.float('inf'),] * self.mutable_dimension()
 
     def set_value(self, value, override_fixed=False):
-        assert(set(value.iterkeys()) == set(self._value.iterkeys()))
+        assert(set(value.iterkeys()) == set(self._mutable.iterkeys()))
         if override_fixed:
             self._value = value
         else:
@@ -170,17 +170,6 @@ class DictNode(Node):
     def set_key(self, value, key):
         if self._mutable[key]:
             self._value[key] = value
-
-    def deriv_log_p(self, key=None, parent=None, parent_key=None, eps=1e-4, lp0=None):
-        lp0 = lp0 if lp0 else self.log_p()
-        if i is not None:
-            v_new = np.array(self.get_value()).copy()
-            mi = self.mutable_i_to_i(mutable_i = i)
-            v_new[i] += eps
-            deriv = ( self.log_p(value=v_new) - lp0 ) / eps
-        elif parent is not None and parent_i is not None:
-            deriv = self.parent_deriv(parent=parent, parent_i=parent_i, lp0=lp0, eps=eps)
-        return deriv
 
 
 class ClusterNode(DictNode):
@@ -205,7 +194,7 @@ class ClusterNode(DictNode):
         # invariant: self._mutable[i] == self._nodes[i]._fixed for all nodes i
         super(ClusterNode, self).__init__(model=None, label=label,
                                           parents=parents, children=children,
-                                          fixed = { k : n[k]._fixed for n in nodes })
+                                          fixed = { k : nodes[k]._fixed for k in nodes.keys() })
 
         for node in self._nodes.itervalues():
             node.parents = self.parents
@@ -224,7 +213,7 @@ class ClusterNode(DictNode):
         self._fixed = not any(self._mutable.itervalues())
 
     def unfix_value(self, key=None):
-        if i is None:
+        if key is None:
             for node in self._nodes.itervalues():
                 node.unfix_value()
             self._mutable = {k : True for k in self._mutable.iterkeys() }
@@ -238,20 +227,21 @@ class ClusterNode(DictNode):
         for (k,n) in sorted(self._nodes.iteritems()):
             if self._mutable[k]:
                 values.append(n.get_value())
+        return values
 
     def set_mutable_values(self, values):
         assert(len(values) == self.mutable_dimension())
         i = 0
-        for (i, k) in enumerate(sorted(self._nodes.keys())):
+        for k in self.keys():
             if self._mutable[k]:
-                self._node[k].set_value(values[i])
+                self._nodes[k].set_value(values[i])
                 i += 1
 
     def get_value(self):
         return { k : self._nodes[k].get_value() for k in self._nodes.iterkeys() }
 
     def set_value(self, value, override_fixed=False):
-        assert(set(value.iterkeys()) == set(self._value.iterkeys()))
+        assert(set(value.iterkeys()) == set(self._mutable.iterkeys()))
         for (k, v) in value.iteritems():
             self._nodes[k].set_value(v, override_fixed=override_fixed)
 
@@ -263,10 +253,14 @@ class ClusterNode(DictNode):
         if value is None:
             value = self.get_value()
 
-        lp = 0
-        for (i, node) in enumerate(self._nodes.itervalues()):
-            lp += node.log_p(value = value[i])
+        lp = sum( [self._nodes[key].log_p(value = value[key]) for key in self.keys() ] )
         return lp
+
+    def deriv_log_p(self, value = None, key=None, **kwargs):
+        if value is None:
+            value = self.get_value()
+
+        return self._nodes[key].deriv_log_p(value = value[key], **kwargs)
 
     def prior_sample(self, parent_values=None):
         if parent_values is None:

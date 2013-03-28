@@ -29,10 +29,11 @@ class PairedExpTemplateNode(TemplateModelNode):
 
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7, idx_offset=0, srate=40):
-        arr_time, peak_offset, coda_height, coda_decay = vals
+        arr_time, peak_offset, coda_height, coda_decay = \
+            vals['arrival_time'], vals['peak_offset'], vals['coda_height'], vals['coda_decay']
         assert(idx_offset >= 0 and idx_offset < 1)
 
-        if np.isnan(vals).any() or coda_decay > 0:
+        if np.isnan(vals.values()).any() or coda_decay > 0:
             return np.empty((0,))
 
         if coda_decay > -0.001:

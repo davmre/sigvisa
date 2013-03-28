@@ -111,14 +111,13 @@ class DirectedGraphModel(DAG):
         grad = np.zeros((len(values),))
         i = 0
         for node in node_list:
-            n = node.mutable_dimension()
-            lp0 = node.log_p()
-            for ni in range(n):
-                deriv = node.deriv_log_p(i=ni, lp0 = initial_lp[node.label], eps=eps[i + ni])
+            keys = node.mutable_keys()
+            for (ni, key) in enumerate(keys):
+                deriv = node.deriv_log_p(key=key, eps=eps[i + ni])
                 for child in node.children:
-                    deriv += child.deriv_log_p(parent=node.label, parent_i = ni, lp0 = initial_lp[child.label], eps=eps[i + ni])
+                    deriv += child.deriv_log_p(parent_name=node.label, parent_key = key, eps=eps[i + ni])
                 grad[i + ni] = deriv
-            i += n
+            i += len(keys)
         self.set_all(values=v, node_list=node_list)
         return grad * c
 

@@ -154,6 +154,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         min_amp = float(request.GET.get("min_amp", "-10"))
         template_shape = request.GET.get("shape", "paired_exp")
         require_human_approved = str(request.GET.get("human_approved", "0")) == "2"
+        basisid=None
 
         azi_range = request.GET.get("azi", "0i..360i")
         (min_azi, max_azi) = [float(x[:-1]) if x[-1] == 'i' else float(x) for x in azi_range.split('..')]

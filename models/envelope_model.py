@@ -34,7 +34,7 @@ class EnvelopeNode(Node):
 
     def __init__(self, model_waveform, nm_type="ar", nmid=None, observed=True, **kwargs):
 
-        super(EnvelopeNode, self).__init__(model=None, initial_value=model_waveform.data, fixed_value=observed, **kwargs)
+        super(EnvelopeNode, self).__init__(model=None, initial_value=model_waveform.data, fixed=observed, **kwargs)
 
 
         self.mw = model_waveform
@@ -80,7 +80,7 @@ class EnvelopeNode(Node):
             key = tm.label[9:]
             v = parent_values[tm.label] if parent_values else tm.get_value()
 
-            arr_time = v[0]
+            arr_time = v['arrival_time']
             start = (arr_time - self.st) * self.srate
             start_idx = int(np.floor(start))
             if start_idx >= self.npts:
@@ -135,3 +135,11 @@ class EnvelopeNode(Node):
 
         return lp
 
+    def deriv_log_p(self, value=None, parent_values=None, parent_name=None, parent_key=None, lp0=None, eps=1e-4):
+        parent_values = parent_values if parent_values else self._parent_values()
+        lp0 = lp0 if lp0 else self.log_p(value=value, parent_values=parent_values)
+        pv = parent_values[parent_name]
+        pv[parent_key] += eps
+        parent_values[parent_name] = pv
+        deriv = ( self.log_p(value=value, parent_values=parent_values) - lp0 ) / eps
+        return deriv

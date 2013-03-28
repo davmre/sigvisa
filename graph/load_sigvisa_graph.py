@@ -42,6 +42,9 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
             wiggle_sql_query = "select w.wiggleid, w.params, w.basisid from sigvisa_wiggle w where w.fpid=%d " % (phase_detail[0])
             cursor.execute(wiggle_sql_query)
             w = cursor.fetchall()
+            if len(w) < 1:
+                raise KeyError("no wiggle found for phase fit ID %d" % phase_detail[0])
+
             assert(len(w) == 1) # if there's more than one wiggle
                                 # parameterization of a phase, we'd need
                                 # some way to disambiguate.

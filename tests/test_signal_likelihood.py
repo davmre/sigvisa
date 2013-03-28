@@ -24,9 +24,10 @@ class TestSignalLikelihood(unittest.TestCase):
         st = self.seg['stime']
 
         tm_P_node = self.sg.get_template_node(ev=self.event, wave=self.wave, phase='P')
-        tm_P_node.set_value(np.array((st + 10.0, 15.0, 10.0, -.01)))
+        tm_P_node.set_value({'arrival_time': st + 10.0, 'peak_offset': 15.0, 'coda_height': 10.0, 'coda_decay': -.01})
         tm_S_node = self.sg.get_template_node(ev=self.event, wave=self.wave, phase='S')
-        tm_S_node.set_value(np.array((st + 50.0, 15.0, 15.0, -.04)))
+        tm_P_node.set_value({'arrival_time': st + 50.0, 'peak_offset': 15.0, 'coda_height': 15.0, 'coda_decay': -.04})
+
 
 
     def test_generate(self):

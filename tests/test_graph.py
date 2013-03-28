@@ -1,6 +1,6 @@
 import numpy as np
 
-from sigvisa.graph.nodes import Node, VectorNode, ClusterNode
+from sigvisa.graph.nodes import Node, DictNode, ClusterNode
 from sigvisa.graph.dag import DAG, DirectedGraphModel, CyclicGraphError
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
@@ -60,59 +60,65 @@ class TestGraph(unittest.TestCase):
             node3.addChild(node1)
             dm._topo_sort()
 
-    def testVectorNode(self):
-        n = VectorNode(dimension=5, fixed_values=False)
-        n.set_value(value=np.ones(5))
-        self.assertTrue(  (n.get_value() == np.ones(5)).all()   )
+    def testDictNode(self):
+        n = DictNode(keys = ['A', 'B', 'C'], fixed=False)
+        v = {'A': 1, 'B': 1, 'C': 1 }
+        n.set_value(value=v)
+        self.assertEqual(n.get_value(), v)
 
-        n.fix_value(i=3)
-        self.assertTrue(n.mutable_dimension() == 4)
-        self.assertTrue(  (n.get_mutable_values() == np.ones(4)).all()   )
-        n.set_mutable_values(values = np.ones(4) * 2)
+        n.fix_value(key='A')
+        self.assertTrue(n.mutable_dimension() == 2)
+        self.assertTrue(  (n.get_mutable_values() == np.ones(2)).all()   )
+        n.set_mutable_values(values = np.ones(2) * 2)
 
-        target_value = np.ones(5) * 2
-        target_value[3] = 1
-        self.assertTrue(  (n.get_value() == target_value).all()   )
+        target_value = {'A': 1, 'B': 2, 'C': 2 }
+        self.assertTrue(  (n.get_value() == target_value)  )
 
-        n.set_value(value=np.ones(5) * 9)
-        target_value = np.ones(5) * 9
-        target_value[3] = 1
-        self.assertTrue(  (n.get_value() == target_value).all()   )
+        v = {'A': 3, 'B': 3, 'C': 3 }
+        n.set_value(value=v)
+        target_value = {'A': 1, 'B': 3, 'C': 3 }
+        self.assertTrue(  (n.get_value() == target_value)  )
 
-        n.set_value(value=np.ones(5) * 11, override_fixed=True)
-        self.assertTrue(  (n.get_value() == np.ones(5) * 11).all()   )
+        v = {'A': 4, 'B': 4, 'C': 4}
+        n.set_value(value=v, override_fixed=True)
+        self.assertTrue(  (n.get_value() == {'A': 4, 'B': 4, 'C': 4} )   )
 
         n.unfix_value()
-        n.set_value(value=np.ones(5) * 13, override_fixed=False)
-        self.assertTrue(  (n.get_value() == np.ones(5) * 13).all()   )
+        v = {'A': 5, 'B': 5, 'C': 5}
+        target_value = {'A': 5, 'B': 5, 'C': 5}
+        n.set_value(value=v, override_fixed=False)
+        self.assertTrue(  n.get_value() == target_value   )
 
     def testClusterNode(self):
-        nodes = [Node() for i in range(5)]
+        nodes = { k : Node() for k in ('A', 'B', 'C') }
         n = ClusterNode(nodes=nodes)
 
-        n.set_value(value=np.ones(5))
-        self.assertTrue(  (n.get_value() == np.ones(5)).all()   )
+        v = {'A': 1, 'B': 1, 'C': 1 }
+        n.set_value(value=v)
+        self.assertEqual(n.get_value(), v)
 
-        n.fix_value(i=3)
-        self.assertTrue(n.mutable_dimension() == 4)
-        self.assertTrue(  (n.get_mutable_values() == np.ones(4)).all()   )
-        n.set_mutable_values(values = np.ones(4) * 2)
+        n.fix_value(key='A')
+        self.assertTrue(n.mutable_dimension() == 2)
+        self.assertTrue(  (n.get_mutable_values() == np.ones(2)).all()   )
+        n.set_mutable_values(values = np.ones(2) * 2)
 
-        target_value = np.ones(5) * 2
-        target_value[3] = 1
-        self.assertTrue(  (n.get_value() == target_value).all()   )
+        target_value = {'A': 1, 'B': 2, 'C': 2 }
+        self.assertTrue(  (n.get_value() == target_value)  )
 
-        n.set_value(value=np.ones(5) * 9)
-        target_value = np.ones(5) * 9
-        target_value[3] = 1
-        self.assertTrue(  (n.get_value() == target_value).all()   )
+        v = {'A': 3, 'B': 3, 'C': 3 }
+        n.set_value(value=v)
+        target_value = {'A': 1, 'B': 3, 'C': 3 }
+        self.assertTrue(  (n.get_value() == target_value)  )
 
-        n.set_value(value=np.ones(5) * 11, override_fixed=True)
-        self.assertTrue(  (n.get_value() == np.ones(5) * 11).all()   )
+        v = {'A': 4, 'B': 4, 'C': 4}
+        n.set_value(value=v, override_fixed=True)
+        self.assertTrue(  (n.get_value() == {'A': 4, 'B': 4, 'C': 4} )   )
 
         n.unfix_value()
-        n.set_value(value=np.ones(5) * 13, override_fixed=False)
-        self.assertTrue(  (n.get_value() == np.ones(5) * 13).all()   )
+        v = {'A': 5, 'B': 5, 'C': 5}
+        target_value = {'A': 5, 'B': 5, 'C': 5}
+        n.set_value(value=v, override_fixed=False)
+        self.assertTrue(  n.get_value() == target_value   )
 
         self.assertTrue( n._value is None )
 

@@ -15,6 +15,7 @@ class EventNotFound(Exception):
     pass
 
 
+
 @functools32.lru_cache(1024)
 def get_event(*args, **kwargs):
     return Event(*args, **kwargs)
@@ -22,12 +23,12 @@ def get_event(*args, **kwargs):
 
 class Event(object):
 
-    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'id']
+    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'internal_id']
     __id_counter__ = 0
 
-    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, internal_id=None):
+    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, internal_id=None, autoload=True):
 
-        if (evid is not None or orid is not None) and evtype is not None:
+        if (evid is not None or orid is not None) and evtype is not None and autoload:
 
             try:
                 ev = read_event(Sigvisa().dbconn.cursor(), evid=evid, evtype=evtype, orid=orid)
@@ -48,11 +49,9 @@ class Event(object):
             self.natural_source = natural_source
 
         if internal_id is not None:
-            self.id = internal_id
-        elif self.evid is not None:
-            self.id = self.evid
+            self.internal_id = internal_id
         else:
-            self.id = Event.__id_counter__
+            self.internal_id = Event.__id_counter__
             Event.__id_counter__ += 1
 
     def source_logamp(self, band, phase):
@@ -60,6 +59,9 @@ class Event(object):
             return brune.source_logamp(event=self, band=band, phase=phase)
         else:
             return mm.source_logamp(event=self, band=band, phase=phase)
+
+    def to_dict(self):
+        return {'lon': self.lon, 'lat': self.lat, 'depth': self.depth, 'time': self.time, 'mb': self.mb, 'natural_source': self.natural_source }
 
     def __str__(self):
         s = "evid %d, loc %s, depth %.1fkm, time %.1f, mb %.1f, %s source" % (self.evid, lonlatstr(

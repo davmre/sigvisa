@@ -1,14 +1,13 @@
 import numpy as np
 
-from sigvisa.models import ConditionalDist
+from sigvisa.models import Distribution
 
 from sigvisa import Sigvisa
 from sigvisa.source.event import Event
-from sigvisa.models.ev_prior import EV_LON, EV_LAT, EV_DEPTH, EV_TIME
 
 
 
-class TravelTimeModel(ConditionalDist):
+class TravelTimeModel(Distribution):
 
     def __init__(self, sta, phase, arrival_time=False):
         s = Sigvisa()
@@ -27,14 +26,13 @@ class TravelTimeModel(ConditionalDist):
 
     @staticmethod
     def _get_lldt(cond):
-        if isinstance(cond, dict):
-            assert( len(cond) == 1 )
+        if isinstance(cond, dict) and len(cond) == 1:
             cond = cond.values()[0]
 
         if isinstance(cond, Event):
             lon, lat, depth, t = cond.lon, cond.lat, cond.depth, cond.time
-        elif isinstance(cond, np.ndarray):
-            lon, lat, depth, t = cond[EV_LON], cond[EV_LAT], cond[EV_DEPTH], cond[EV_TIME]
+        elif isinstance(cond, dict):
+            lon, lat, depth, t = cond['lon'], cond['lat'], cond['depth'], cond['time']
         else:
             raise ValueError("don't know how to extract lon, lat, depth from %s" % cond)
         return lon, lat, depth, t

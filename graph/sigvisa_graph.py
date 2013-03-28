@@ -9,7 +9,7 @@ from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensur
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import load_event_station_chan
 import sigvisa.utils.geog as geog
-from sigvisa.models.ev_prior import EventNode, EV_LON, EV_LAT, EV_DEPTH, EV_TIME, EV_MB, EV_NATURAL_SOURCE
+from sigvisa.models.ev_prior import EventNode
 from sigvisa.models.ttime import tt_predict, tt_log_p
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
@@ -173,7 +173,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         """
 
-        event_node = EventNode(event=ev, label='ev_%d' % ev.id, fixed_values=True)
+        event_node = EventNode(event=ev, label='ev_%d' % ev.internal_id, fixed=True)
         self.toplevel_nodes.append(event_node)
         self.all_nodes[event_node.label] = event_node
 
@@ -218,7 +218,7 @@ class SigvisaGraph(DirectedGraphModel):
             sta = wave['sta']
             chan = wave['chan']
             band = wave['band']
-        return "%d_%s_%s_%s_%s" % (ev.id, phase, sta, chan, band)
+        return "%d_%s_%s_%s_%s" % (ev.internal_id, phase, sta, chan, band)
 
     def _get_wave_label(self, wave):
         return 'wave_%s_%s_%s_%.1f' % (wave['sta'], wave['chan'], wave['band'], wave['stime'])
@@ -294,12 +294,12 @@ class SigvisaGraph(DirectedGraphModel):
     def optimize_with_seed_time_and_depth(lon, lat, t, depth):
         assert(len(self.toplevel_nodes) == 1)
         ev_node = self.toplevel_nodes[0]
-        ev_node.set_index(i=EV_LON, value=lon)
-        ev_node.set_index(i=EV_LAT, value=lat)
-        ev_node.set_index(i=EV_TIME, value=t)
-        ev_node.set_index(i=EV_DEPTH, value=depth)
-        ev_node.fix_value(i=EV_LON)
-        ev_node.fix_value(i=EV_LAT)
+        ev_node.set_index(key="lon", value=lon)
+        ev_node.set_index(key="lat", value=lat)
+        ev_node.set_index(key="time", value=t)
+        ev_node.set_index(key="depth", value=depth)
+        ev_node.fix_value(key="lon")
+        ev_node.fix_value(key="lat")
         self.fix_arrival_times(fixed=False)
 
         # initialize

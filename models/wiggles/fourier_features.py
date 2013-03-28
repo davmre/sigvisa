@@ -35,6 +35,10 @@ class FourierFeatureNode(WiggleModelNode):
 
     def signal_from_features_naive(self, features):
         assert(len(features) == self.nparams)
+        if isinstance(features, dict):
+            features = self.param_dict_to_array(features)
+        else:
+            features= np.asarray(features)
         amps = features[:self.nparams/2]
         phases = features[self.nparams/2:] * 2.0 * np.pi
 
@@ -53,6 +57,10 @@ class FourierFeatureNode(WiggleModelNode):
 
     def signal_from_features(self, features):
         assert(len(features) == self.nparams)
+        if isinstance(features, dict):
+            features = self.param_dict_to_array(features)
+        else:
+            features= np.asarray(features)
         amps = features[:self.nparams/2] * (self.npts/2.0)
         phases = features[self.nparams/2:] * 2.0 * np.pi
         coeffs = amps * np.cos(phases) + 1j * amps * np.sin(phases)
@@ -80,7 +88,7 @@ class FourierFeatureNode(WiggleModelNode):
 
         amps = np.abs(coeffs)[: self.nparams/2]
         phases = np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)
-        return np.concatenate([amps, phases])
+        return array_to_param_dict(np.concatenate([amps, phases]))
 
     def basis_decomposition_naive(self, signal):
         assert(len(signal) == self.npts)
@@ -112,7 +120,7 @@ class FourierFeatureNode(WiggleModelNode):
             amps.append(amp)
             phases.append(phase)
 
-        return np.concatenate([amps, phases])
+        return array_to_param_dict(np.concatenate([amps, phases]))
 
     def basis_type(self):
         return "fourier"
@@ -120,23 +128,17 @@ class FourierFeatureNode(WiggleModelNode):
     def dimension(self):
         return self.nparams
 
+    def keys(self):
+        freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
+        return ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
 
-    def param_num_to_name(self, param_num):
-        ptype = "amp" if param_num < self.nparams/2 else "phase"
-        freq = ((param_num % (self.nparams/2)) + 1) * self.fundamental
-        return "%s_%.3f" % (ptype, freq)
+    def param_dict_to_array(self, d):
+        a = np.asarray([ d[k] for k in self.keys() ])
+        return a
 
-    def param_name_to_num(self, param_name):
-        freq = float(param_name.split('_')[1])
-        nfreq = np.round(freq / self.fundamental) - 1
-        if param_name.startswith("amp_"):
-            param_num = nfreq
-        elif param_name.startswith("phase_"):
-            param_num = self.nparams/2 + nfreq
-        else:
-            raise ValueError("invalid param name %s" % param_name)
-
-        return int(param_num)
+    def array_to_param_dict(self, a):
+        d = {k : v for (k,v) in zip(self.keys(), a)}
+        return d
 
     def save_to_db(self, dbconn):
         assert(self.basisid is None)

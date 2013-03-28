@@ -34,12 +34,11 @@ class WiggleModelNode(ClusterNode):
             chan = model_waveform['chan']
             band = model_waveform['band']
 
-        nodes = []
+        nodes = {}
         if wiggle_model_type=="dummy":
-            for param in range(self.dimension()):
-                param_str = "%03d" % param
-                mNode = Node(model=DummyModel(), parents=parents, children=children, label=param_str)
-                nodes.append(mNode)
+            for param in self.keys():
+                mNode = Node(model=DummyModel(), parents=parents, children=children, label=param)
+                nodes[param] = mNode
         else:
             modelids = get_wiggle_param_model_ids(runid = runid, sta=sta, band=band, chan=chan, phase=phase, model_type = wiggle_model_type, basisid = self.basisid)
 
@@ -53,13 +52,11 @@ class WiggleModelNode(ClusterNode):
             cursor.close()
 
             # load all relevant models as new graph nodes
-
             basedir = os.getenv("SIGVISA_HOME")
             for (param, db_model_type, fname, modelid) in sorted(models):
                 model = load_model(os.path.join(basedir, fname), db_model_type)
                 mNode = Node(model=model, parents=parents, children=children, label='%s' % (param))
-                nodes.append(mNode)
-
+                nodes[param] = mNode
 
         assert(len(nodes) == self.dimension())
         super(WiggleModelNode, self).__init__(label=label, nodes=nodes, parents=parents, children=children)
@@ -68,33 +65,28 @@ class WiggleModelNode(ClusterNode):
     from functools32 import lru_cache
     @lru_cache(maxsize=1024)
     def _wiggle_cache(self, feature_tuple):
-        return self.signal_from_features(features = np.array(feature_tuple))
+        return self.signal_from_features(features = feature_tuple)
 
     def get_wiggle(self, value=None):
         if not value:
             value = self.get_value()
-        wiggle = self._wiggle_cache(feature_tuple = tuple(value))
+        wiggle = self._wiggle_cache(feature_tuple = tuple(self.param_dict_to_array(value)))
         return wiggle
 
     def set_params_from_wiggle(self, wiggle):
         params = self.basis_decomposition(wiggle)
-        recr_wiggle = self.signal_from_features(params)
-
-        np.savetxt('set_wiggle.txt', wiggle)
-        np.savetxt('recr_wiggle.txt', recr_wiggle)
-
         self.set_value(params)
 
     def get_encoded_params(self):
         f_string = cStringIO.StringIO()
-        scipy.io.savemat(f_string, {"params": self.get_value()}, oned_as='row')
+        scipy.io.savemat(f_string, {"params": self.param_dict_to_array(self.get_value())}, oned_as='row')
         ostr = f_string.getvalue()
         f_string.close()
         return ostr
 
     def set_encoded_params(self, encoded):
         params = self.decode_params(encoded=encoded)
-        self.set_value(params)
+        self.set_value(self.array_to_param_dict(params))
 
     @staticmethod
     def decode_params(encoded):

@@ -84,7 +84,6 @@ class TemplateModelNode(ClusterNode):
                 nodes[param] = mNode
 
         # ensure that the node list ordering matches the parameter list
-        nodes = []
         for param in ('arrival_time',) + self.params():
             if not param in nodes:
                 if dummy_fallback:

@@ -1,7 +1,7 @@
 import numpy as np
 
 from sigvisa import Sigvisa
-from sigvisa.graph.nodes import VectorNode
+from sigvisa.graph.nodes import DictNode
 from sigvisa.models import Distribution
 from sigvisa.source.event import Event
 
@@ -25,12 +25,16 @@ class EventNode(DictNode):
 
     def __init__(self, event, fixed = True, **kwargs):
 
-        self._event = event
+        self.internal_id = event.internal_id
+        self.evid = event.evid
+        self.orid = event.orid
+        initial_value=event.to_dict()
 
-        super(EventNode, self).__init__(model = EventPriorModel(), dimension = dimension, initial_value=event.__dict__, fixed=fixed, **kwargs)
+        super(EventNode, self).__init__(model = EventPriorModel(), initial_value=initial_value,
+                                        fixed=fixed, **kwargs)
 
     def get_event(self):
-        return self._event
+        return Event(autoload=False, internal_id=self.internal_id, evid=self.evid, orid=self.orid, **self._value)
 
     def prior_predict(self, parent_values=None):
         pass

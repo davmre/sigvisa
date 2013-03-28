@@ -405,7 +405,7 @@ def template_residual_view(request, fitid):
     sg = setup_sigvisa_graph(evid=fit.evid, wave=wave, phases=phases, vals=vals)
     wave_node = sg.get_wave_node(wave=wave)
     wave_node.set_noise_model(nmid=fit.nmid.nmid)
-    wave_node.fixed_value = False
+    wave_node.unfix_value()
     wave_node.prior_predict()
 
     diff = Waveform(data =wave.data - wave_node.get_value(), segment_stats = wave.segment_stats, my_stats=wave.my_stats)
