@@ -203,7 +203,7 @@ class Heatmap(object):
 
         self.bmap = bmap
 
-    def plot_earth(self):
+    def plot_earth(self, y_fontsize=8, x_fontsize=5, zorder=4):
         try:
             bmap = self.bmap
         except:
@@ -213,12 +213,12 @@ class Heatmap(object):
         if len(parallels) > 10:
             parallels = [int(k) for k in np.linspace(int(self.bottom_lat) - 1, int(self.top_lat + 1), 10)]
 
-        self.bmap.drawparallels(parallels, labels=[False, True, True, False])
+        self.bmap.drawparallels(parallels, labels=[False, True, True, False], fontsize=y_fontsize, zorder=zorder)
         meridians = np.arange(int(self.left_lon) - 1, int(self.right_lon) + 1)
         if len(meridians) > 10:
             meridians = [int(k) for k in np.linspace(int(self.left_lon) - 1, int(self.right_lon + 1), 10)]
 
-        self.bmap.drawmeridians(meridians, labels=[True, False, False, True])
+        self.bmap.drawmeridians(meridians, labels=[True, False, False, True], fontsize=x_fontsize, zorder=zorder)
 
     def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, **plotargs):
         try:
@@ -264,7 +264,8 @@ class Heatmap(object):
 
 
     def plot_density(self, f_preprocess=None, colorbar=True, nolines=False,
-                     colorbar_orientation="vertical", colorbar_shrink=0.9, smooth=False):
+                     colorbar_orientation="vertical", colorbar_shrink=0.9, colorbar_format='%.1f',
+                     smooth=False):
         try:
             bmap = self.bmap
         except:
@@ -312,7 +313,7 @@ class Heatmap(object):
             bmap.ax.figure.add_axes(cax)
 
             bmap.ax.figure.colorbar(cs2, orientation=colorbar_orientation, drawedges=not nolines,
-                                    cax=cax, format='%.1f')
+                                    cax=cax, format=colorbar_format)
 
 
     def normalize_lonlat(self, lon, lat):

@@ -28,6 +28,7 @@ from pytz import timezone
 import hashlib
 
 import sigvisa.plotting.plot as plot
+from sigvisa.plotting.event_heatmap import EventHeatmap
 import sigvisa.plotting.histogram as histogram
 import textwrap
 
@@ -103,6 +104,22 @@ def plot_gp_model_distance(request, model_record, axes):
     var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
     axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
 
+def plot_gp_heatmap(request, model_record, X, y, axes):
+
+    full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
+    model = load_model(full_fname, model_record.model_type)
+
+    ev_locs = X[:, 0:2]
+    f = lambda lon, lat : model.predict( cond={'lon': lon, 'lat': lat, 'depth': 0 } )
+    hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = full_fname + ".heatmap")
+    hm.add_stations((model_record.site,))
+    hm.add_events(locations=ev_locs)
+    hm.plot(axes=axes, nolines=True, smooth=True, colorbar_format='%.3f')
+
+    for item in (axes.get_xticklabels() + axes.get_yticklabels()):
+        print item
+        item.set_fontsize(2)
+
 
 def plot_gaussian(request, model_record, axes):
 
@@ -121,7 +138,6 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     axes = fig.add_subplot(111)
 
     d = {}
-
     if modelid is not None:
         model = SigvisaParamModel.objects.get(modelid=modelid)
         runid = model.fitting_runid.runid
@@ -135,15 +151,6 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         max_acost = model.max_acost
         basisid = model.wiggle_basisid.basisid if model.wiggle_basisid else None
         require_human_approved = (model.require_human_approved == 't')
-
-        if plot_type == "histogram":
-            plot_gaussian(request, model, axes=axes)
-        elif plot_type == "distance":
-            if model.model_type == "linear_distance":
-                plot_linear_model_distance(request, model_record=model, axes=axes)
-            elif model.model_type[:2] == "gp":
-                plot_gp_model_distance(request, model_record=model, axes=axes)
-
     else:
         param = request.GET.get("plot_param", "coda_decay")
         sta = request.GET.get("sta", None)
@@ -180,6 +187,18 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
                                                 max_acost=max_acost, min_amp=min_amp, **d)
             xy_by_phase[phase] = (X, y)
 
+    if modelid is not None:
+        if plot_type == "histogram":
+            plot_gaussian(request, model, axes=axes)
+        elif plot_type == "distance":
+            if model.model_type == "linear_distance":
+                plot_linear_model_distance(request, model_record=model, axes=axes)
+            elif model.model_type[:2] == "gp":
+                plot_gp_model_distance(request, model_record=model, axes=axes)
+        elif plot_type == "heatmap" and model.model_type[:2] == "gp":
+                plot_gp_heatmap(request, model_record=model, X=xy_by_phase[model.phase][0], y=xy_by_phase[model.phase][1], axes=axes)
+
+    if runid is not None:
         if plot_type == "histogram":
             plot_empirical_histogram(request=request, xy_by_phase=xy_by_phase, axes=axes)
         elif plot_type == "distance":
@@ -222,7 +241,7 @@ def model_distance_plot(request, modelid):
 
 
 def model_heatmap(request, modelid):
-    pass
+    return plot_fit_param(request, modelid=modelid, plot_type="heatmap")
 
 
 def data_distance_plot(request, **kwargs):
