@@ -78,6 +78,7 @@ create table sigvisa_param_model (
  wiggle_basisid int,
  training_ll double precision not null,
  timestamp double precision not null,
+ elapsed double precision not null,
  primary key (modelid),
  foreign key (fitting_runid) REFERENCES sigvisa_coda_fitting_run(runid),
  foreign key (wiggle_basisid) REFERENCES sigvisa_wiggle_basis (basisid)
@@ -127,7 +128,7 @@ create table sigvisa_gsrun_tmodel (
  modelid int not null,
  primary key (gsmid),
  foreign key (gswid) REFERENCES sigvisa_gsrun_wave(gswid),
- foreign key (modelid) REFERENCES sigvisa_template_param_model(modelid)
+ foreign key (modelid) REFERENCES sigvisa_param_model(modelid)
 );
 
 create table sigvisa_noise_model (

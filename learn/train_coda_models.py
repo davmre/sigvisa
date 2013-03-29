@@ -3,6 +3,7 @@ from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.database import db
 
+import time
 import sys
 import os
 import pickle
@@ -78,6 +79,8 @@ def main():
                       help="only consider fits above the given amplitude (does not apply to amp_transfer fits)")
     parser.add_option("--min_amp_for_at", dest="min_amp_for_at", default=-5, type=float,
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
+    parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
+                      help="train models even if a model of the same type already appears in the DB")
 
     (options, args) = parser.parse_args()
 
@@ -113,7 +116,7 @@ def main():
                     model_type, site, chan, band, phase, runid, target)
                 cursor.execute(sql_query)
                 dups = cursor.fetchall()
-                if len(dups) > 0:
+                if len(dups) > 0 and not options.enable_dupes:
                     print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dups[0][0])
                     continue
 
@@ -134,7 +137,9 @@ def main():
                 np.savetxt(evid_fname, evids, fmt='%d')
 
                 distfn = model_type[3:]
+                st = time.time()
                 model = learn_model(X, y, model_type, target=target, sta=site)
+                et = time.time()
 
                 if np.isnan(model.log_likelihood()):
                     print "error training model for %s %s %s, likelihood is nan! skipping.." % (site, target, phase)
@@ -144,7 +149,7 @@ def main():
                 modelid = insert_model(
                     s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(
                     ),
-                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp)
+                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st))
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
 if __name__ == "__main__":
@@ -154,6 +159,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         raise
     except Exception as e:
+        import sys, traceback, pdb
         print e
         type, value, tb = sys.exc_info()
         traceback.print_exc()

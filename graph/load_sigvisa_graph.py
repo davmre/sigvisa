@@ -49,7 +49,7 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
                                 # some way to disambiguate.
 
             basisids[phase] = w[0][2]
-            wiggles[phase] = w[0][1]
+            wiggles[phase] = str(w[0][1])
     else:
         wiggle_family = "fourier_0.1"
         basisids = None

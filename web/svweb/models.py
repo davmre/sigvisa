@@ -304,6 +304,7 @@ class SigvisaParamModel(models.Model):
     n_evids = models.IntegerField()
     training_ll = models.FloatField()
     timestamp = UnixTimestampField()
+    elapsed = models.FloatField()
 
     class Meta:
         db_table = u'sigvisa_param_model'

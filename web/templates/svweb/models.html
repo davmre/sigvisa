@@ -19,6 +19,7 @@
       <tr>
 	<td><strong>modelid</strong></td>
         <td><strong>timestamp</strong></td>
+        <td><strong>elapsed</strong></td>
 	<td><strong>run</strong></td>
 	<td><strong>shape</strong></td>
 	<td><strong>param</strong></td>
@@ -39,6 +40,7 @@
             <tr>
                 <td>{{ model.modelid }}</td>
 		<td>{{ model.timestamp }}</td>
+		<td>{{ model.elapsed }}</td>
                 <td><a href="{% url fit_list runid=model.fitting_runid.runid %}?chan={{model.chan}};band={{model.band}};sta={{model.site}}">{{ model.fitting_runid.run_name }} iter {{ model.fitting_runid.iter }}</a></td>
                 <td>{{ model.template_shape }}</td>
                 <td>{{ model.param }}</td>
