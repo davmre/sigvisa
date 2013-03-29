@@ -122,7 +122,7 @@ class DirectedGraphModel(DAG):
         self.set_all(values=v, node_list=node_list)
         return grad * c
 
-    def joint_optimize_nodes(self, node_list, optim_params, use_grad=False):
+    def joint_optimize_nodes(self, node_list, optim_params, use_grad=True):
         """
         Assume that the value at each node is a 1D array.
         """

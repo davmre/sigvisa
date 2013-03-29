@@ -1,0 +1,3 @@
+[submodule "gpr"]
+	path = gpr
+	url = http://github.com/davmre/gpr.git
