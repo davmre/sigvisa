@@ -17,6 +17,9 @@ class view_options(models.Model):
     logscale = models.BooleanField()
     sample = models.BooleanField()
 
+    class Meta:
+        db_table = u'coda_fits_view_options'
+
 
 class Dataset(models.Model):
     label = models.CharField(max_length=60)
