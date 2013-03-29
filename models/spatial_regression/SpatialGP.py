@@ -5,8 +5,8 @@ import collections
 import sigvisa.utils.geog as geog
 
 
-from gpr import munge, kernels, evaluate, learn, distributions, plot
-from gpr.gp import GaussianProcess
+from sigvisa.gpr import munge, kernels, evaluate, learn, distributions, plot
+from sigvisa.gpr.gp import GaussianProcess
 
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
 from sigvisa.source.event import Event
