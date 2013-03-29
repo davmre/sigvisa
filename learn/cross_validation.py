@@ -5,7 +5,8 @@ import traceback
 import pdb
 from optparse import OptionParser
 
-from sigvisa.learn.train_param_common import learn_model, load_model, get_model_fname, get_training_data, analyze_model_fname
+from sigvisa.learn.train_param_common import learn_model, load_model, get_model_fname, analyze_model_fname
+from sigvisa.learn.train_coda_models import get_shape_training_data
 from sigvisa import *
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
 from sigvisa.database.signal_data import *
@@ -89,7 +90,7 @@ def train_cv_models(cv_dir, model_type):
         with RedirectStdStreams(stdout=logfile, stderr=logfile):
             try:
                 print "learning model"
-                model = learn_model(trainX, trainy, model_type, target=d['target'])
+                model = learn_model(X=trainX, y=trainy, model_type=model_type, target=d['target'], sta=d['sta'])
                 print "learned"
             except KeyboardInterrupt:
                 logfile.close()
@@ -122,7 +123,7 @@ def cv_eval_models(cv_dir, model_type):
 
         fname = ".".join(["fold_%02d" % i, evidhash, model_type])
         model = load_model(os.path.join(cv_dir, fname), model_type)
-        residuals += [model.predict(testX[i]) - testy[i] for i in range(len(testevids))]
+        residuals += [model.predict(testX[i:i+1]) - testy[i] for i in range(len(testevids))]
         residual_evids.extend(testevids)
         i += 1
 
@@ -152,8 +153,8 @@ def main():
     parser.add_option(
         "-p", "--phase", dest="phase", default=",".join(s.phases), type="str", help="phase for which to train models)")
     parser.add_option("-t", "--target", dest="target", default="decay", type="str", help="target parameter name (decay)")
-    parser.add_option("-m", "--model_types", dest="model_types", default="gp_dad_log,constant,linear_distance",
-                      type="str", help="types of model to train (gp_dad_log,constant,linear_distance)")
+    parser.add_option("-m", "--model_types", dest="model_types", default="gp_dad_log,constant_gaussian,linear_distance",
+                      type="str", help="types of model to train (gp_dad_log,constant_gaussian,linear_distance)")
 
     (options, args) = parser.parse_args()
 
@@ -172,7 +173,7 @@ def main():
     else:
         run_iter = int(options.run_iter)
 
-    X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase, ], target)
+    X, y, evids = get_shape_training_data(run_name, run_iter, site, chan, band, [phase, ], target)
 
     model_fname = get_model_fname(
         run_name, run_iter, site, chan, band, phase, target, model_types[0], evids, model_name="paired_exp", prefix="eval")
