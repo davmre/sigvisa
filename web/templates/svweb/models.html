@@ -63,6 +63,7 @@
 		{% if model.model_type|slice:":2" == "gp" %}
 		<a href="{% url model_distance_plot modelid=model.modelid %}">distance plot</a>
 		<a href="{% url model_heatmap modelid=model.modelid %}">heatmap</a>
+		<a href="{% url model_heatmap_std modelid=model.modelid %}">heatmap_std</a>
 		{% endif %}
 		</td>
             </tr>

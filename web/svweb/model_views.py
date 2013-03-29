@@ -104,14 +104,18 @@ def plot_gp_model_distance(request, model_record, axes):
     var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
     axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
 
-def plot_gp_heatmap(request, model_record, X, y, axes):
+def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
 
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
 
     ev_locs = X[:, 0:2]
-    f = lambda lon, lat : model.predict( cond={'lon': lon, 'lat': lat, 'depth': 0 } )
-    hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = full_fname + ".heatmap")
+    if stddev:
+        print "plotting with stddev"
+        f = lambda lon, lat : np.sqrt(model.variance( cond={'lon': lon, 'lat': lat, 'depth': 0 } ))
+    else:
+        f = lambda lon, lat : model.predict( cond={'lon': lon, 'lat': lat, 'depth': 0 } )
+    hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = full_fname + ('.std' if stddev else '') + ".heatmap")
     hm.add_stations((model_record.site,))
     hm.add_events(locations=ev_locs)
     hm.plot(axes=axes, nolines=True, smooth=True, colorbar_format='%.3f')
@@ -197,7 +201,9 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
             elif model.model_type[:2] == "gp":
                 plot_gp_model_distance(request, model_record=model, axes=axes)
         elif plot_type == "heatmap" and model.model_type[:2] == "gp":
-                plot_gp_heatmap(request, model_record=model, X=xy_by_phase[model.phase][0], y=xy_by_phase[model.phase][1], axes=axes)
+                plot_gp_heatmap(request, model_record=model, X=xy_by_phase[model.phase][0], y=xy_by_phase[model.phase][1], axes=axes, stddev=False)
+        elif plot_type == "heatmap_std" and model.model_type[:2] == "gp":
+                plot_gp_heatmap(request, model_record=model, X=xy_by_phase[model.phase][0], y=xy_by_phase[model.phase][1], axes=axes, stddev=True)
 
     if runid is not None:
         if plot_type == "histogram":
@@ -243,6 +249,9 @@ def model_distance_plot(request, modelid):
 
 def model_heatmap(request, modelid):
     return plot_fit_param(request, modelid=modelid, plot_type="heatmap")
+
+def model_heatmap_std(request, modelid):
+    return plot_fit_param(request, modelid=modelid, plot_type="heatmap_std")
 
 
 def data_distance_plot(request, **kwargs):
