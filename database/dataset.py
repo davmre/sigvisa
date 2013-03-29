@@ -173,12 +173,16 @@ def read_isc_events(cursor, start_time, end_time, author):
     return events
 
 
-def read_evids_detected_at_station(cursor, sta, start_time, end_time, phases=[], min_mb=0, max_mb=99999, min_snr=0, max_snr=99999):
+def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[], min_mb=0, max_mb=99999, min_snr=0, max_snr=99999, only_phases=[]):
+
+    cursor = dbconn.cursor()
 
     if phases:
         phase_condition = "and (" + " or ".join(["leba.phase='%s'" % (pn) for pn in phases]) + ")"
     else:
         phase_condition = ""
+
+
 # ev_condition = "and l.time between %f and %f and lebo.mb between %f and
 # %f and l.snr > 5" % (start_time, end_time, min_mb, max_mb)
     if max_snr > 99999:
@@ -189,15 +193,27 @@ def read_evids_detected_at_station(cursor, sta, start_time, end_time, phases=[],
         phase_condition, sta, ev_condition)
     print sql_query, "ADDITIONALLY FILTERING FOR l.time between %f and %f" % (start_time, end_time)
     cursor.execute(sql_query)
+
+    def test_only_phase_condition(cursor, evid):
+        only_phase_condition = " and ".join(["leba.phase != '%s'" % p for p in only_phases])
+        sql_query = "select count(leba.phase) from leb_origin lebo, leb_assoc leba, leb_arrival l where l.sta='%s' and lebo.evid='%d' and %s and l.arid=leba.arid and lebo.orid=leba.orid" % (sta, evid, only_phase_condition)
+        cursor.execute(sql_query)
+        a = cursor.fetchone()[0]
+        return a == 0
+
+    cursor2 = dbconn.cursor()
     evids = set()
     for (i, row) in enumerate(cursor):
         t = row[1]
         if t > start_time and t < end_time:
-            evids.add(row[0])
+            if test_only_phase_condition(cursor = cursor2, evid=row[0]):
+                evids.add(row[0])
         if i % 1000 == 0:
             print ".",
             sys.stdout.flush()
     print
+    cursor2.close()
+    cursor.close()
     return evids
 
 

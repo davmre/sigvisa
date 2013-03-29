@@ -37,6 +37,10 @@ def main():
                       help="exclude all events with time less than this value (0)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float",
                       help="exclude all events with time greater than this value (1237680000)")
+    parser.add_option("--require_phases", dest="require_phases", default='P', type="str",
+                      help="exclude all ev/sta pairs not having arrivals for *all* phases in the specificed (comma-separated) list (P)")
+    parser.add_option("--only_phases", dest="only_phases", default=None, type="str",
+                      help="exclude all ev/sta pairs having arrivals for any phase *not* in the specified list (None)")
 
     (options, args) = parser.parse_args()
 
@@ -49,6 +53,8 @@ def main():
     st = options.start_time if options.start_time is not None else st
     et = options.end_time if options.end_time is not None else et
 
+    required_phase_list = options.require_phases.split(',')
+    only_phase_list = options.only_phases.split(',') if options.only_phases else []
     if options.output is None:
         raise Exception("must specify an output file")
 
@@ -56,8 +62,10 @@ def main():
     with open(options.output, 'w') as f:
         for sta in options.stations.split(','):
             # want to select all events, with certain properties, which have a P or S phase detected at this station
-            evids = read_evids_detected_at_station(cursor, sta, st, et, s.P_phases + s.S_phases, min_mb=options.min_mb,
-                                                   max_mb=options.max_mb, min_snr=options.min_snr, max_snr=options.max_snr)
+            evids = read_evids_detected_at_station(s.dbconn, sta, st, et, phases=required_phase_list,
+                                                   min_mb=options.min_mb, max_mb=options.max_mb,
+                                                   min_snr=options.min_snr, max_snr=options.max_snr,
+                                                   only_phases=only_phase_list)
             for evid in evids:
                 f.write('%s %d\n' % (sta, evid))
 
