@@ -10,12 +10,14 @@
 from django.db import models
 from svweb.fields import UnixTimestampField, BlobField
 
+from sigvisa.models.noise.noise_model import NoiseModel
+from sigvisa.signals.io import fetch_waveform
 
 class view_options(models.Model):
     id = models.IntegerField(primary_key=True)
     smoothing = models.IntegerField()
     logscale = models.BooleanField()
-    sample = models.BooleanField()
+    wiggle = models.BooleanField()
 
     class Meta:
         db_table = u'coda_fits_view_options'
@@ -175,6 +177,31 @@ class LebOrigin(models.Model):
     class Meta:
         db_table = u'leb_origin'
 
+class SigvisaNoiseModel(models.Model):
+    nmid = models.IntegerField(primary_key=True)
+    timestamp = models.FloatField()
+    sta = models.CharField(max_length=10)
+    chan = models.CharField(max_length=10)
+    band = models.CharField(max_length=15)
+    hz = models.FloatField()
+    window_stime = models.FloatField()
+    window_len = models.FloatField()
+    model_type = models.CharField(max_length=15)
+    nparams = models.IntegerField()
+    mean = models.FloatField()
+    std = models.FloatField()
+    fname = models.CharField(max_length=255)
+    created_for_hour = models.IntegerField()
+
+    class Meta:
+        db_table = u'sigvisa_noise_model'
+
+    def load(self):
+        return NoiseModel.load_from_file(self.fname, self.model_type)
+
+    def get_data(self):
+        return fetch_waveform(str(self.sta), str(self.chan), self.window_stime, self.window_stime + self.window_len).filter('%s;env;hz_%.2f' % (self.band, self.hz))
+
 
 class SigvisaCodaFittingRun(models.Model):
     runid = models.IntegerField(primary_key=True)
@@ -192,12 +219,15 @@ class SigvisaCodaFittingRun(models.Model):
 class SigvisaCodaFit(models.Model):
     fitid = models.IntegerField(primary_key=True)
     runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='runid')
+    nmid = models.ForeignKey(SigvisaNoiseModel, db_column='nmid')
     evid = models.IntegerField()
     sta = models.CharField(max_length=30)
     chan = models.CharField(max_length=30)
     band = models.CharField(max_length=45)
     hz = models.FloatField(null=True, blank=True)
-    optim_method = models.CharField(max_length=45, blank=True)
+    tmpl_optim_method = models.CharField(max_length=1024, blank=True)
+    wiggle_optim_method = models.CharField(max_length=1024, blank=True)
+    optim_log = models.CharField(max_length=2048, blank=True)
     iid = models.IntegerField(null=True, blank=True)
     stime = UnixTimestampField(null=True, blank=True)
     etime = UnixTimestampField(null=True, blank=True)
@@ -217,10 +247,10 @@ class SigvisaCodaFitPhase(models.Model):
     fitid = models.ForeignKey(SigvisaCodaFit, db_column='fitid')
     phase = models.CharField(max_length=60)
     template_model = models.CharField(max_length=60, blank=True)
-    param1 = models.FloatField(null=True, blank=True)
-    param2 = models.FloatField(null=True, blank=True)
-    param3 = models.FloatField(null=True, blank=True)
-    param4 = models.FloatField(null=True, blank=True)
+    arrival_time = models.FloatField(null=True, blank=True)
+    peak_offset = models.FloatField(null=True, blank=True)
+    coda_height = models.FloatField(null=True, blank=True)
+    coda_decay = models.FloatField(null=True, blank=True)
     amp_transfer = models.FloatField(null=True, blank=True)
     wiggle_stime = models.FloatField(null=True, blank=True)
     wiggle_fname = models.CharField(max_length=255, blank=True)
@@ -228,31 +258,41 @@ class SigvisaCodaFitPhase(models.Model):
     class Meta:
         db_table = u'sigvisa_coda_fit_phase'
 
+class SigvisaWiggleBasis(models.Model):
+    basisid = models.IntegerField(primary_key=True)
+    family_name = models.CharField(max_length=63)
+    basis_type = models.CharField(max_length=31)
+    srate = models.FloatField()
+    logscale = models.CharField(max_length=1)
+    dimension = models.IntegerField()
+    npts = models.IntegerField()
+    max_freq = models.FloatField(null=True, blank=True)
+    training_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column="training_runid", blank=True)
+    training_set_fname = models.CharField(max_length=255, blank=True)
+    training_sta = models.CharField(max_length=10, blank=True)
+    training_chan = models.CharField(max_length=10, blank=True)
+    training_band = models.CharField(max_length=15, blank=True)
+    training_phase = models.CharField(max_length=10, blank=True)
+    basis_fname = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = u'sigvisa_wiggle_basis'
+
 
 class SigvisaWiggle(models.Model):
     wiggleid = models.IntegerField(primary_key=True)
     fpid = models.ForeignKey(SigvisaCodaFitPhase, db_column='fpid')
-    stime = models.FloatField()
-    etime = models.FloatField()
-    srate = models.FloatField()
+    basisid = models.ForeignKey(SigvisaWiggleBasis, db_column='basisid')
     timestamp = UnixTimestampField()
-    type = models.CharField(max_length=31)
-    log = models.IntegerField()
-    meta0 = models.FloatField(null=True, blank=True)
-    meta1 = models.FloatField(null=True, blank=True)
-    meta2 = models.FloatField(null=True, blank=True)
-    meta3 = models.FloatField(null=True, blank=True)
-    meta_str = models.CharField(max_length=255, blank=True)
     params = BlobField()  # This field type is a guess.
-
     class Meta:
         db_table = u'sigvisa_wiggle'
 
-
-class SigvisaTemplateParamModel(models.Model):
+class SigvisaParamModel(models.Model):
     modelid = models.IntegerField(primary_key=True)
     fitting_runid = models.ForeignKey(SigvisaCodaFittingRun, db_column='fitting_runid')
-    template_shape = models.CharField(max_length=15)
+    wiggle_basisid = models.ForeignKey(SigvisaWiggleBasis, db_column='wiggle_basisid', null=True, blank=True)
+    template_shape = models.CharField(max_length=15, blank=True)
     param = models.CharField(max_length=15)
     site = models.CharField(max_length=10)
     chan = models.CharField(max_length=10)
@@ -269,7 +309,8 @@ class SigvisaTemplateParamModel(models.Model):
     timestamp = UnixTimestampField()
 
     class Meta:
-        db_table = u'sigvisa_template_param_model'
+        db_table = u'sigvisa_param_model'
+
 
 
 class SigvisaGridsearchRun(models.Model):
@@ -283,8 +324,11 @@ class SigvisaGridsearchRun(models.Model):
     lat_se = models.FloatField()
     pts_per_side = models.IntegerField()
     likelihood_method = models.CharField(max_length=63)
+    optim_method = models.CharField(max_length=1024, blank=True, null=True)
     max_evtime_proposals = models.IntegerField()
     true_depth = models.CharField(max_length=1)
+    true_time = models.CharField(max_length=1)
+    true_mb = models.CharField(max_length=1)
     phases = models.CharField(max_length=127)
     wiggle_model_type = models.CharField(max_length=31)
     heatmap_fname = models.CharField(max_length=255)
@@ -297,11 +341,12 @@ class SigvisaGridsearchRun(models.Model):
 class SigvisaGsrunWave(models.Model):
     gswid = models.IntegerField(primary_key=True)
     gsid = models.ForeignKey(SigvisaGridsearchRun, db_column='gsid')
+    nmid = models.ForeignKey(SigvisaNoiseModel, db_column='nmid')
     sta = models.CharField(max_length=10)
     chan = models.CharField(max_length=10)
     band = models.CharField(max_length=15)
-    stime = UnixTimestampField()
-    etime = UnixTimestampField()
+    stime = models.FloatField()
+    etime = models.FloatField()
     hz = models.FloatField()
 
     class Meta:
@@ -312,7 +357,7 @@ class SigvisaGsrunWave(models.Model):
 class SigvisaGsrunTModel(models.Model):
     gsmid = models.IntegerField(primary_key=True)
     gswid = models.ForeignKey(SigvisaGsrunWave, db_column='gswid')
-    modelid = models.ForeignKey(SigvisaTemplateParamModel, db_column='modelid')
+    modelid = models.ForeignKey(SigvisaParamModel, db_column='modelid')
 
     class Meta:
         db_table = u'sigvisa_gsrun_tmodel'

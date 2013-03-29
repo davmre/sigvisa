@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 
-from sigvisa.learn.train_coda_models import learn_model, load_model, gp_extract_features
+from sigvisa.learn.train_param_common import learn_model, load_model, gp_extract_features
 
 
 class TestModels(unittest.TestCase):
@@ -42,7 +42,7 @@ class TestModels(unittest.TestCase):
         self.assertAlmostEqual(pred1, pred3)
 
         ll = nmodel.log_likelihood()
-        ll1 = nmodel.posterior_log_likelihood(self.X, self.y)
+        ll1 = nmodel.log_p(cond=self.X, x=self.y)
         self.assertAlmostEqual(ll, ll1)
 
         s = nmodel.sample(self.X)
@@ -61,7 +61,7 @@ class TestModels(unittest.TestCase):
         self.assertAlmostEqual(pred1, pred3)
 
         ll = nmodel.log_likelihood()
-        ll1 = nmodel.posterior_log_likelihood(self.X, self.y)
+        ll1 = nmodel.log_p(cond=self.X, x=self.y)
         self.assertAlmostEqual(ll, ll1)
 
         s = nmodel.sample(self.X)
@@ -78,7 +78,7 @@ class TestModels(unittest.TestCase):
         self.assertAlmostEqual(pred1, pred3)
 
         ll = nmodel.log_likelihood()
-        ll1 = nmodel.posterior_log_likelihood(gp_extract_features(self.X, "dad_log"), self.y)
+        ll1 = nmodel.log_p(cond=gp_extract_features(self.X, "dad_log"), x=self.y)
         # unlike with the other models, these likelihoods are not
         # necessarily equal in the GP case
 

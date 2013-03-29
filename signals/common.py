@@ -65,8 +65,6 @@ class Waveform(object):
                 fraction_valid = 1
 
             self.my_stats.update({"filter_str": "",
-                                  "freq_low": 0.0,
-                                  "freq_high": self.my_stats["srate"] / 2.0,
                                   "fraction_valid": fraction_valid})
 
             self.my_stats.update(my_stats_entries)
@@ -228,8 +226,6 @@ class Waveform(object):
 
             f = lambda x: bandpass_missing(x, low, high, self.my_stats['srate'])
 
-            fstats["freq_low"] = low
-            fstats["freq_high"] = high
         else:
             raise Exception("unrecognized filter description %s" % desc)
         return f, fstats

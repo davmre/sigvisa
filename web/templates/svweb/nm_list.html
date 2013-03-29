@@ -1,0 +1,60 @@
+{% load pagination_tags %}
+{% autopaginate nm_list 20 %}
+
+<html>
+<head>
+<title>noise models - sigvisa</title>
+<link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+{% include "svweb/header.html"  %}
+<h1>models</h1>
+
+
+{{ nm_filter }}<br>
+
+{% if nm_list %}
+
+    <table id="models" border=1 cellpadding=3 width=90%>
+      <tr>
+	<td><strong>nmid</strong></td>
+	<td><strong>timestamp</strong></td>
+        <td><strong>sta</strong></td>
+	<td><strong>chan</strong></td>
+	<td><strong>band</strong></td>
+	<td><strong>hz</strong></td>
+	<td><strong>stime</strong></td>
+	<td><strong>len</strong></td>
+	<td><strong>model_type</strong></td>
+	<td><strong>n</strong></td>
+	<td><strong>mean</strong></td>
+	<td><strong>std</strong></td>
+	<td><strong>hour</strong></td>
+	<td><strong>details</strong></td>
+      </tr>
+        {% for nm in nm_list %}
+            <tr>
+	      <td>{{ nm.nmid }}</td>
+	      <td>{{ nm.timestamp }}</td>
+	      <td><a href="{% url site sta=nm.sta %}">{{ nm.sta }}</a></td>
+	      <td>{{ nm.chan }}</td>
+	      <td>{{ nm.band }}</td>
+	      <td>{{ nm.hz }}</td>
+	      <td>{{ nm.window_stime }}</td>
+	      <td>{{ nm.window_len }}</td>
+	      <td>{{ nm.model_type }}</td>
+	      <td>{{ nm.nparams }}</td>
+	      <td>{{ nm.mean }}</td>
+	      <td>{{ nm.std }}</td>
+	      <td>{{ nm.created_for_hour }}</td>
+	      <td><a href="{% url nm_detail nmid=nm.nmid %}">details</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+{% paginate %}
+{% else %}
+    <p>No noise models found!!! :(</p>
+{% endif %}
+{% include "svweb/footer.html"  %}
+</body>
+</html>

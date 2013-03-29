@@ -6,6 +6,7 @@ from svweb.gridsearch_views import *
 from svweb.event_views import *
 from svweb.site_views import *
 from svweb.wave_views import *
+from svweb.nm_views import *
 from django.views.generic import DetailView, ListView
 from django.http import HttpResponseRedirect
 from django.core.urlresolvers import reverse
@@ -30,10 +31,14 @@ urlpatterns = patterns('',
                        url(r'^fits/(?P<fitid>\d+)/delete$', delete_fit, name='delete_fit'),
                        url(r'^fits/(?P<fitid>\d+)/debug$', template_debug_view, name="template_debug"),
                        url(r'^fits/(?P<fitid>\d+)/custom_phases.png$', custom_template_view, name="custom_phase_image"),
+                       url(r'^fits/(?P<fitid>\d+)/template_residual.png$', template_residual_view, name="template_residual"),
                        url(r'^phases/(?P<fpid>\d+)/$', wiggle_detail_view, name='fit_phase_wiggles'),
                        url(r'^phases/(?P<fpid>\d+)/raw_wiggle.png$', raw_wiggle_view, name='raw_wiggle'),
+                       url(r'^phases/(?P<fpid>\d+)/wiggle_spectrum.png$', wiggle_spectrum_view, name='wiggle_spectrum'),
                        url(r'^wiggles/(?P<wiggleid>\d+)/reconstructed_wiggle.png$',
                            reconstructed_wiggle_view, name='reconstructed_wiggle'),
+                       url(r'^wiggles/(?P<wiggleid>\d+)/reconstructed_wiggle_spectrum.png$',
+                           reconstructed_wiggle_spectrum_view, name='reconstructed_wiggle_spectrum'),
                        url(r'^phases/(?P<fpid>\d+)/template_wiggle.png$', template_wiggle_view, name='template_wiggle'),
                        url(r'^wiggles/(?P<wiggleid>\d+)/reconstructed_template_wiggle.png$', reconstructed_template_wiggle_view,
                            name='reconstructed_template_wiggle'),
@@ -45,15 +50,21 @@ urlpatterns = patterns('',
                        url(r'^gridsearch/(?P<gsid>\d+)/$', gridsearch_detail_view, name='gsrun_detail'),
                        url(r'^gridsearch/(?P<gsid>\d+)/heatmap.png$', gs_heatmap_view, name='gs_heatmap'),
                        url(r'^gridsearch/(?P<gsid>\d+)/delete$', delete_gsrun, name='gsrun_delete'),
-                       url(r'^gsdebug/(?P<gswid>\d+)/$', gs_debug_view, name='gs_debug'),
-                       url(r'^gsdebug/(?P<gswid>\d+)/overlay.png$', gs_debug_wave_view, name='gs_debug_wave'),
+                       url(r'^gsdebug/(?P<gswid>\d+)/pickled_wave.png$', gs_pickled_env_view, name='gs_pickled_wave'),
+                       url(r'^gsdebug/(?P<gswid>\d+)/phase_frame$', gs_wave_phase_frame_view, name='gs_phase_frame'),
                        url(r'^event/(?P<evid>\d+)/$', event_view, name='event'),
                        url(r'^event/(?P<evid>\d+)/context.png$', event_context_img_view, name='event_context_img'),
+                       url(r'^event/(?P<evid>\d+)/wave_view$', event_wave_view, name='event_wave'),
                        url(r'^site/(?P<sta>\w+)/$', site_view, name='site'),
                        url(r'^site/(?P<sta>\w+)/context.png$', site_det_img_view, name='site_det_img'),
                        url(r'^waves/$', WaveSelectView, name='wave_select'),
                        url(r'^waves/wave.png$',
                            WaveImageView,
                            name='wave_image'),
-
+                       url(r'^nm/$', nm_list_view, name='nm_list'),
+                       url(r'^nm/(?P<nmid>\d+)/detail$', nm_detail_view, name='nm_detail'),
+                       url(r'^nm/(?P<nmid>\d+)/params.png$', nm_param_plot, name='nm_param_plot'),
+                       url(r'^nm/(?P<nmid>\d+)/sample.png$', nm_sample, name='nm_sample'),
+                       url(r'^nm/(?P<nmid>\d+)/spectrum.png$', nm_spectrum, name='nm_spectrum'),
+                       url(r'^nm/(?P<nmid>\d+)/crossval.png$', nm_crossval, name='nm_crossval'),
                        )

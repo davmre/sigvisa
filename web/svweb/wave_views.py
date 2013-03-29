@@ -20,6 +20,9 @@ import django.db
 import sigvisa.plotting.plot as plot
 import textwrap
 
+from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
+
+
 # detail view for a particular fit
 def WaveSelectView(request):
     return render_to_response('svweb/select_wave.html', {}, context_instance=RequestContext(request))
@@ -29,37 +32,21 @@ def WaveSelectView(request):
 def WaveImageView(request):
     quote_name = django.db.connection.ops.quote_name
 
-    sta = quote_name(request.GET.get("sta", ""))[1:-1]
-    chan = quote_name(request.GET.get("chan", ""))[1:-1]
+    sta = str(quote_name(request.GET.get("sta", ""))[1:-1])
+    chan = str(quote_name(request.GET.get("chan", ""))[1:-1])
     stime = float(request.GET.get("stime", ""))
     etime = float(request.GET.get("etime", ""))
     logscale = request.GET.get("logscale", "false").lower().startswith('t')
-    filter_str = quote_name(request.GET.get("filter_str", ""))[1:-1].lower()
+    filter_str = str(quote_name(request.GET.get("filter_str", ""))[1:-1].lower())
     ratio = float(request.GET.get("ratio", "1.6"))
     dpi = int(request.GET.get("dpi", "144"))
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
-    try:
-        wave = fetch_waveform(sta, chan, stime, etime)
+    wave = fetch_waveform(sta, chan, stime, etime).filter(filter_str)
 
-        fig = Figure(figsize=(5 * ratio,5), dpi=dpi)
-        fig.patch.set_facecolor('white')
-        axes = fig.add_subplot(111)
-        axes.set_xlabel("Time (s)", fontsize=8)
-        plot.subplot_waveform(wave.filter(filter_str), axes, color='black', linewidth=1.5, logscale=logscale)
 
-    except Exception as e:
-        raise
-        error_text = 'Error plotting waveform: \"%s\"' % str(e)
-        fig = Figure(figsize=(5,3), dpi=144)
-        fig.patch.set_facecolor('white')
-        axes = fig.add_subplot(111)
-        axes.text(.5, .5, "\n".join(textwrap.wrap(error_text, 60)), horizontalalignment='center', verticalalignment='center', transform = axes.transAxes, fontsize=8)
 
-    canvas=FigureCanvas(fig)
-    response=django.http.HttpResponse(content_type='image/png')
-    fig.tight_layout()
-    canvas.print_png(response)
-    return response
+
+    return view_wave(request, wave, ratio=ratio, dpi=dpi, color='black', linewidth=1.5, logscale=logscale)

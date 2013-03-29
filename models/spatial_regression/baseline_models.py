@@ -3,12 +3,14 @@ import scipy.stats
 
 from sigvisa import Sigvisa
 from sigvisa.source.event import Event
+from sigvisa.models import Distribution
 import sigvisa.utils.geog as geog
-
+import collections
+import hashlib
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
 
-class ParamModel(object):
+class ParamModel(Distribution):
 
     def __init__(self, sta=None, **kwargs):
         self.ev_cache = dict()
@@ -31,17 +33,26 @@ class ParamModel(object):
     def load_trained_model(self, fname):
         raise Exception("not implemented")
 
-    def predict(self, X1):
+    def predict(self, cond):
         raise Exception("not implemented")
 
-    def sample(self, X1):
+    def sample(self, cond):
         raise Exception("not implemented")
 
     def log_likelihood(self):
         raise Exception("not implemented")
 
-    def posterior_log_likelihood(self, X1, y):
+    def log_p(self, x, cond):
         raise Exception("not implemented")
+
+    def event_dict_to_array(self, ev_dict):
+#        if ev_dict in self.ev_cache:
+#            a = self.ev_cache[ev_dict]
+#        else:
+        distance = geog.dist_km((ev_dict['lon'], ev_dict['lat']), (self.site_lon, self.site_lat))
+        azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_dict['lon'], ev_dict['lat']))
+        a = np.array(((ev_dict['lon'], ev_dict['lat'], ev_dict['depth'], distance, azimuth),))
+        return a
 
     def event_to_array(self, event):
         if event in self.ev_cache:
@@ -52,6 +63,24 @@ class ParamModel(object):
             a = np.array(((event.lon, event.lat, event.depth, distance, azimuth),))
             self.ev_cache[event] = a
         return a
+
+    def standardize_input_array(self, c):
+        if isinstance(c, np.ndarray):
+                X1 = c
+        elif isinstance(c, Event):
+            X1 = self.event_to_array(c)
+        elif isinstance(c, dict):
+            if len(c) == 1:
+                X1 = self.standardize_input_array(c=c.values()[0])
+            else:
+                X1 = self.event_dict_to_array(ev_dict=c)
+        else:
+            raise ValueError("unknown event object type %s input to spatial regression model!" % type(c))
+        assert(len(X1.shape) == 2)
+        return X1
+
+
+
 
 
 class ConstGaussianModel(ParamModel):
@@ -66,7 +95,9 @@ class ConstGaussianModel(ParamModel):
         self.mean = np.mean(y)
         self.std = np.std(y)
 
-        self.ll = np.sum([scipy.stats.norm.logpdf((z - self.mean) / self.std) for z in y])
+        self.ll = np.sum([scipy.stats.norm.logpdf(z,  loc= self.mean, scale= self.std) for z in y])
+
+        self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
 
     def save_trained_model(self, fname):
         with open(fname, 'w') as f:
@@ -80,36 +111,49 @@ class ConstGaussianModel(ParamModel):
             self.mean = p_dict['mean']
             self.std = p_dict['std']
             self.ll = p_dict['ll']
+            self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
             super(ConstGaussianModel, self).__unrepr_base_params__(l[1])
 
-    def predict(self, X1):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-        assert(len(X1.shape) == 2)
+    def predict(self, cond):
+        X1 = self.standardize_input_array(cond)
         if len(X1.shape) == 1 or X1.shape[0] == 1:
             return self.mean
         n = X1.shape[1]
         return self.mean * np.ones((n, 1))
 
-    def sample(self, X1):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-        assert(len(X1.shape) == 2)
-
+    def sample(self, cond):
+        X1 = self.standardize_input_array(cond)
         return scipy.stats.norm.rvs(size=X1.shape[0], loc=self.mean, scale=self.std)
 
     def log_likelihood(self):
         return self.ll
 
-    def posterior_log_likelihood(self, X1, y):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-            y = np.array((y,))
-        assert(len(X1.shape) == 2)
-
-        return np.sum([scipy.stats.norm.logpdf((z - self.mean) / self.std) for z in y])
+    def log_p(self, x, cond):
+        X1 = self.standardize_input_array(cond)
+        x = x if isinstance(x, collections.Iterable) else (x,)
 
 
+        # HERE FOR BACKWARDS COMPATIBILITY WITH OLD PICKLED OBJECTS: REMOVE EVENTUALLY
+        self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
+
+
+        r1 = np.sum([self.l1 -.5 * ( (z - self.mean) / self.std )**2 for z in x])
+        # r2 = np.sum([scipy.stats.norm.logpdf(z, loc=self.mean, scale=self.std) for z in x])
+        # assert( np.abs(r1 - r2) < 0.0001)
+
+        return r1
+
+    def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4):
+        assert(idx == None)
+        X1 = self.standardize_input_array(cond)
+        x = x if isinstance(x, collections.Iterable) else (x,)
+
+        if cond_key is not None:
+            deriv = 0
+        else:
+            deriv = np.sum( [ (self.mean - z) / (self.std ** 2)  for z in x ] )
+
+        return deriv
 class LinearModel(ParamModel):
 
     def __init__(self, sta=None, X=None, y=None, fname=None):
@@ -150,8 +194,9 @@ class LinearModel(ParamModel):
             regional_residuals = regional_y - np.array([self.predict_dist(d) for d in regional_dist])
             self.regional_std = np.std(regional_residuals) if len(regional_residuals) > 1 else std
 
-            regional_ll = np.sum([scipy.stats.norm.logpdf(
-                (y1 - self.predict_dist(z)) / self.regional_std) for (z, y1) in zip(regional_dist, regional_y)])
+            regional_items = [scipy.stats.norm.logpdf(
+                y1, loc= self.predict_dist(z), scale= self.regional_std) for (z, y1) in zip(regional_dist, regional_y)]
+            regional_ll = np.sum(regional_items)
 
         except ValueError:
             self.regional_coeffs = np.array([0, mean])
@@ -165,8 +210,8 @@ class LinearModel(ParamModel):
             tele_residuals = tele_y - np.array([self.predict_dist(d) for d in tele_dist])
             self.tele_std = np.std(tele_residuals) if len(tele_residuals) > 1 else std
 
-            tele_ll = np.sum(
-                [scipy.stats.norm.logpdf((y1 - self.predict_dist(z)) / self.tele_std) for (z, y1) in zip(tele_dist, tele_y)])
+            tele_items = [scipy.stats.norm.logpdf(y1, loc= self.predict_dist(z), scale= self.tele_std) for (z, y1) in zip(tele_dist, tele_y)]
+            tele_ll = np.sum(tele_items)
 
         except ValueError:
             self.tele_coeffs = np.array([0, mean])
@@ -213,10 +258,8 @@ class LinearModel(ParamModel):
         d = x[X_DIST]
         return self.predict_dist(d)
 
-    def predict(self, X1):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-        assert(len(X1.shape) == 2)
+    def predict(self, cond):
+        X1 = self.standardize_input_array(cond)
         results = np.array([self.predict_item(x) for x in X1])
         return results
 
@@ -224,20 +267,19 @@ class LinearModel(ParamModel):
         return self.ll
 
     def ll_item(self, x1, y1):
+
         d = x1[X_DIST]
         if d > self.tele_cutoff:
-            ll = scipy.stats.norm.logpdf((y1 - self.predict_item(x1)) / self.tele_std)
+            ll = scipy.stats.norm.logpdf(y1, loc= self.predict_item(x1), scale=self.tele_std)
         else:
-            ll = scipy.stats.norm.logpdf((y1 - self.predict_item(x1)) / self.regional_std)
+            ll = scipy.stats.norm.logpdf(y1, loc= self.predict_item(x1), scale=self.regional_std)
         return ll
 
-    def posterior_log_likelihood(self, X1, y):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-            y = np.array((y,))
-        assert(len(X1.shape) == 2)
-
-        return np.sum([self.ll_item(x1, y1) for (x1, y1) in zip(X1, y)])
+    def log_p(self, x, cond):
+        X1 = self.standardize_input_array(cond)
+        x = x if isinstance(x, collections.Iterable) else (x,)
+        items = [self.ll_item(x1, y1) for (x1, y1) in zip(X1, x)]
+        return np.sum(items)
 
     def std(self, x):
         std = self.tele_std if x[X_DIST] > self.tele_cutoff else self.regional_std
@@ -248,8 +290,7 @@ class LinearModel(ParamModel):
         s = mean + scipy.stats.norm.rvs(scale=self.std(x))
         return s
 
-    def sample(self, X1):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-        assert(len(X1.shape) == 2)
+    def sample(self, cond):
+        X1 = self.standardize_input_array(cond)
         return np.array([self.sample_item(x1) for x1 in X1])
+

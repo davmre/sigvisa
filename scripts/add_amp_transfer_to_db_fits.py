@@ -4,7 +4,7 @@ from sigvisa.source.event import get_event
 s = Sigvisa()
 cursor1 = s.dbconn.cursor()
 
-sql_query = "select f.evid, f.band, fp.phase, fp.param3, fp.fpid from sigvisa_coda_fit f, sigvisa_coda_fit_phase fp where fp.fitid=f.fitid and fp.amp_transfer is null"
+sql_query = "select f.evid, f.band, fp.phase, fp.coda_height, fp.fpid from sigvisa_coda_fit f, sigvisa_coda_fit_phase fp where fp.fitid=f.fitid and fp.amp_transfer is null"
 cursor1.execute(sql_query)
 
 cursor2 = s.dbconn.cursor()

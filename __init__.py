@@ -4,6 +4,7 @@ from sigvisa.database import db, dataset
 from sigvisa.load_c_components import load_sigvisa, load_earth
 import sigvisa.sigvisa_c
 
+import threading
 
 class NestedDict(dict):
     def __getitem__(self, key):
@@ -16,7 +17,7 @@ class BadParamTreeException(Exception):
     pass
 
 
-class Sigvisa(object):
+class Sigvisa(threading.local):
 
     # some channels are referred to by multiple names, i.e. the
     # north-south channel can be BHN or BH2.  here we define a
@@ -63,7 +64,7 @@ class Sigvisa(object):
             "SIGVISA_HOME"), "parameters"), self.sites,
             self.phasenames, self.phasetimedef)
         self.sigmodel = load_sigvisa(os.path.join(os.getenv(
-            "SIGVISA_HOME"), "parameters"), 
+            "SIGVISA_HOME"), "parameters"),
             self.site_up, self.sites,
             self.phasenames, self.phasetimedef )
 

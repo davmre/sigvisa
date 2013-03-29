@@ -5,30 +5,35 @@ from sigvisa import Sigvisa
 import sigvisa.models.noise.noise_model as noise_model
 from sigvisa.source.event import get_event
 from sigvisa.signals.common import *
-from sigvisa.models.templates.template_model import TemplateModel
+from sigvisa.models.templates.template_model import TemplateModelNode
 
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4 + 1)
 
+class PairedExpTemplateNode(TemplateModelNode):
 
-class PairedExpTemplateModel(TemplateModel):
+    @staticmethod
+    def params():
+        return ("peak_offset", "coda_height", "coda_decay")
 
-# target_fns = {"decay": lambda r : r[FIT_CODA_DECAY], "onset": lambda r :
-# r[FIT_PEAK_DELAY], "amp": lambda r: r[FIT_CODA_HEIGHT] - r[FIT_MB],
-# "amp_transfer": lambda r : r[FIT_CODA_HEIGHT] -
-# SourceSpectrumModel().source_logamp(r[FIT_MB], int(r[FIT_PHASEID]),
-# bandid=int(r[FIT_BANDID]))}
+    @staticmethod
+    def default_param_vals():
+        d = dict()
+        d['peak_offset'] = 1
+        d['coda_height'] = 1
+        d['coda_decay'] = -0.03
+        return d
 
-    def params(self):
-        return ("arrival_time", "peak_offset", "coda_height", "coda_decay")
-
-    def model_name(self):
+    @staticmethod
+    def model_name():
         return "paired_exp"
 
-    def abstract_logenv_raw(self, vals, min_logenv=-7, idx_offset=0, srate=40):
-        arr_time, peak_offset, coda_height, coda_decay = vals
+    @staticmethod
+    def abstract_logenv_raw(vals, min_logenv=-7, idx_offset=0, srate=40):
+        arr_time, peak_offset, coda_height, coda_decay = \
+            vals['arrival_time'], vals['peak_offset'], vals['coda_height'], vals['coda_decay']
         assert(idx_offset >= 0 and idx_offset < 1)
 
-        if np.isnan(vals).any() or coda_decay > 0:
+        if np.isnan(vals.values()).any() or coda_decay > 0:
             return np.empty((0,))
 
         if coda_decay > -0.001:
@@ -77,46 +82,29 @@ class PairedExpTemplateModel(TemplateModel):
 
         return d
 
-    def low_bounds(self, phases, default_atimes=None):
-        bounds = np.ones((len(phases), len(self.params()))) * -np.inf
-        bounds[:, CODA_HEIGHT_PARAM] = -7
-        bounds[:, PEAK_OFFSET_PARAM] = 0
-        bounds[:, CODA_DECAY_PARAM] = -.2
-        if default_atimes is not None:
-            bounds[:, ARR_TIME_PARAM] = default_atimes - 15
+    def low_bounds(self):
+
+        bounds = { k: -np.inf for k in self.keys() }
+
+        bounds['coda_height'] = -7
+        bounds['peak_offset'] = 0.5
+        bounds['coda_decay'] = -.2
+
+        # only return bounds for the mutable params, since these are what we're optimizing over
+        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
+
         return bounds
 
-    def high_bounds(self, phases, default_atimes=None):
-        bounds = np.ones((len(phases), len(self.params()))) * np.inf
-        bounds[:, PEAK_OFFSET_PARAM] = 25
-        bounds[:, CODA_DECAY_PARAM] = -0.0001
-        bounds[:, CODA_HEIGHT_PARAM] = 10
-        if default_atimes is not None:
-            bounds[:, ARR_TIME_PARAM] = default_atimes + 15
+    def high_bounds(self):
+
+        bounds = { k: np.inf for k in self.keys() }
+
+        bounds['coda_height'] = 10
+        bounds['peak_offset'] = 25
+        bounds['coda_decay'] = -.0001
+
+        # only return bounds for the mutable params, since these are what we're optimizing over
+        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
+
         return bounds
 
-    def heuristic_starting_params(self, wave, detected_phases_only=True):
-        s = Sigvisa()
-
-        ev = get_event(wave['evid'])
-        if detected_phases_only:
-            arrivals = wave['event_arrivals']
-            arrival_phases = [s.phasenames[pid_m1] for pid_m1 in arrivals[:, DET_PHASE_COL]]
-            all_phases = arrival_phases
-        else:
-            all_phases = s.arriving_phases(ev, wave['sta'])
-
-        start_params = np.zeros((len(all_phases), 4))
-        for (i, phase) in enumerate(all_phases):
-            start_params[i, ARR_TIME_PARAM] = ev.time + s.sigmodel.mean_travel_time(
-                ev.lon, ev.lat, ev.depth, wave['siteid'] - 1, s.phaseids[phase] - 1)
-            start_params[i, PEAK_OFFSET_PARAM] = 1
-
-            start_params[i, CODA_HEIGHT_PARAM] = np.log(np.max(wave.data)) + .1
-
-            # arrival_idx = int((start_params[i, ARR_TIME_PARAM] - wave['stime']) * wave['srate'])
-            # np.log(np.max(wave.data[arrival_idx: arrival_idx + wave['srate']*5]))+.5
-
-            start_params[i, CODA_DECAY_PARAM] = -0.001
-
-        return (all_phases, start_params)

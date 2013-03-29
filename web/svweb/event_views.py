@@ -6,7 +6,7 @@ import django
 
 
 from svweb.models import LebOrigin
-
+from svweb.plotting_utils import view_wave
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -15,6 +15,10 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa import Sigvisa
 from sigvisa.database.dataset import *
 import sigvisa.utils.geog as geog
+from sigvisa.signals.io import fetch_waveform
+from sigvisa.source.event import get_event
+from sigvisa.graph.sigvisa_graph import predict_phases
+from sigvisa.models.ttime import tt_predict
 
 def event_view(request, evid):
 
@@ -35,9 +39,9 @@ def event_view(request, evid):
 
         try:
             sta = rd[0]
-            
+
             try:
-                site_ll = s.stations[sta][0:2]
+                site_ll = tuple(s.stations[sta][0:2])
             except KeyError:
                 continue
 
@@ -92,3 +96,23 @@ def event_context_img_view(request, evid):
     response = django.http.HttpResponse(content_type='image/png')
     canvas.print_png(response)
     return response
+
+def event_wave_view(request, evid):
+    sta = str(request.GET.get('sta', None))
+    chan = str(request.GET.get('chan', None))
+    filter_str = str(request.GET.get('filter_str', None))
+    ev = LebOrigin.objects.get(evid=evid)
+
+    event = get_event(evid=ev.evid)
+    phases = predict_phases(ev=event, sta=sta, phases="auto")
+    phase_atimes = dict([(phase, event.time + tt_predict(event=event, sta=sta, phase=phase)) for phase in phases])
+
+    stime = np.min(phase_atimes.values()) - 10
+    etime = np.max(phase_atimes.values()) + 200
+
+    wave = fetch_waveform(station=sta, chan=chan, stime=stime, etime=etime).filter(filter_str)
+
+    return view_wave(request=request, wave=wave, color='black', linewidth=1.0, plot_predictions=phase_atimes)
+
+
+

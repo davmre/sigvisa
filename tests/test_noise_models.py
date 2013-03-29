@@ -9,7 +9,7 @@ import numpy.ma as ma
 from sigvisa import Sigvisa
 from sigvisa.source.event import get_event
 from sigvisa.signals.common import Waveform, Segment, load_waveform_from_file
-from sigvisa.models.noise.noise_model import *
+from sigvisa.models.noise.noise_util import get_noise_model
 
 
 class TestNoiseModels(unittest.TestCase):
@@ -29,16 +29,7 @@ class TestNoiseModels(unittest.TestCase):
         chan = self.chan
         filter_str = self.filter_str
 
-        # delete existing saved noise models
-        hour = (int(ev.time / 3600) - 1)
-        hour_dir, model_fname = model_path(sta, chan, filter_str, srate=40, order=17, hour_time=hour * 3600)
-        overall_dir = os.path.dirname(hour_dir)
-        try:
-            shutil.rmtree(overall_dir)
-        except OSError as e:
-            pass
-
-    def test_immediate_noise_model(self):
+    def test_AR_noise_model(self):
         s = self.s
         ev = self.ev
         sta = self.sta
@@ -46,35 +37,21 @@ class TestNoiseModels(unittest.TestCase):
         filter_str = self.filter_str
 
         model1 = get_noise_model(
-            sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, noise_mode=NOISE_MODE_IMMEDIATE)
-        self.assertAlmostEqual(model1.c, 0.3324, places=2)
+            sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, force_train=True)
+        self.assertAlmostEqual(model1.location(), 0.3324, places=2)
 
-    def test_hourly_noise_model(self):
+    def test_L1_noise_model(self):
         s = self.s
         ev = self.ev
         sta = self.sta
         chan = self.chan
         filter_str = self.filter_str
 
-        # the first model we request should actually build models for all frequency bands
-        for freq in s.bands:
-            # test that we can load models, and are not reconstructing them differently each time
-            model1 = get_noise_model(
-                sta=sta, chan=chan, filter_str=freq + ';env', time=ev.time, srate=40, order=17, noise_mode=NOISE_MODE_HOURLY)
-            model2 = get_noise_model(
-                sta=sta, chan=chan, filter_str=freq + ';env', time=ev.time, srate=40, order=17, noise_mode=NOISE_MODE_HOURLY)
-            self.assertAlmostEqual(np.sum(np.asarray(model1.params) - np.asarray(model2.params)), 0)
+        model1 = get_noise_model(sta=sta, chan=chan, filter_str=filter_str, time=ev.time, srate=40, order=17, force_train=True, model_type='l1')
+        self.assertAlmostEqual(model1.location(), 0.296377193948, places=5)
 
-        weird_band = 'freq_12_14'
-        old_bands = s.bands
-        s.bands = old_bands + (weird_band,)
-        model1 = get_noise_model(
-            sta=sta, chan=chan, filter_str=weird_band + ';env', time=ev.time, srate=40, order=17, noise_mode=NOISE_MODE_HOURLY)
-        model2 = get_noise_model(
-            sta=sta, chan=chan, filter_str=weird_band + ';env', time=ev.time, srate=40, order=17, noise_mode=NOISE_MODE_HOURLY)
-        self.assertAlmostEqual(np.sum(np.asarray(model1.params) - np.asarray(model2.params)), 0)
-        s.bands = old_bands
 
+    """"
     def _test_across_several_hours(self):
         t_start = 1238917955 - 6 * 3600
         t_max = t_start + 14 * 24 * 3600
@@ -102,6 +79,7 @@ class TestNoiseModels(unittest.TestCase):
             fs.write("\n")
         f.close()
         fs.close()
+        """
 
 
 if __name__ == '__main__':

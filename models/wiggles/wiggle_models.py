@@ -1,68 +1,97 @@
+import os
 import numpy as np
-from sigvisa.models.noise.noise_model import get_noise_model
+
+import scipy.io
+import cStringIO
 
 
-def wiggle_model_by_name(name, **kwargs):
-    if name == "base":
-        return WiggleModel(**kwargs)
-    elif name == "stupidiid":
-        return StupidL1WiggleModel(**kwargs)
-    elif name == "plain":
-        return PlainWiggleModel(**kwargs)
-    elif name.startswith("sampling_"):
-        featurizer_name = name.split("_")[1:]
-        featurizer = featurizer_by_name(featurizer_name)
-        return SamplingWiggleModel(featurizer=featurizer, **kwargs)
-
-class WiggleModel(object):
-
-    def __init__(self, tm):
-        self.tm = tm
-
-    def template_ncost(wave, phases, params):
-        raise Exception("not implemented")
-
-    def summary_str(self):
-        return "base"
+from sigvisa import Sigvisa
+from sigvisa.learn.train_param_common import load_model
+from sigvisa.models import DummyModel
+from sigvisa.graph.nodes import Node, ClusterNode
+from sigvisa.models.noise.noise_util import get_noise_model
 
 
-class SamplingWiggleModel(WiggleModel):
+def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisid):
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
-    def __init__(self, tm, featurizer):
-        super(SamplingWiggleModel, self).__init__(self, tm)
-        self.featurizer = featurizer
+    sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and wiggle_basisid=%d and fitting_runid=%d" % (model_type, sta, chan, band, phase, basisid, runid)
+    cursor.execute(sql_query)
+    modelids = [m[0] for m in cursor.fetchall()]
+    cursor.close()
+    return modelids
 
-    def template_ncost(self, wave, phases, params):
-        pass
+class WiggleModelNode(ClusterNode):
 
-    def summary_str(self):
-        return "sampling_" + self.featurizer.summary_str()
+    def __init__(self, wiggle_model_type="dummy", runid=None, phase=None, logscale =False, model_waveform=None, sta=None, chan=None, band=None, label="", parents={}, children=[]):
+
+        # child classes should set these before calling super()
+        assert(self.srate is not None and self.npts is not None and self.logscale is not None and self.basisid is not None)
+
+        if model_waveform is not None:
+            sta = model_waveform['sta']
+            chan = model_waveform['chan']
+            band = model_waveform['band']
+
+        nodes = {}
+        if wiggle_model_type=="dummy":
+            for param in self.keys():
+                mNode = Node(model=DummyModel(), parents=parents, children=children, label=param)
+                nodes[param] = mNode
+        else:
+            modelids = get_wiggle_param_model_ids(runid = runid, sta=sta, band=band, chan=chan, phase=phase, model_type = wiggle_model_type, basisid = self.basisid)
+
+            s = Sigvisa()
+            cursor = s.dbconn.cursor()
+            models = []
+            for modelid in modelids:
+                sql_query = "select param, model_type, model_fname, modelid from sigvisa_param_model where modelid=%d" % (modelid)
+                cursor.execute(sql_query)
+                models.append(cursor.fetchone())
+            cursor.close()
+
+            # load all relevant models as new graph nodes
+            basedir = os.getenv("SIGVISA_HOME")
+            for (param, db_model_type, fname, modelid) in sorted(models):
+                model = load_model(os.path.join(basedir, fname), db_model_type)
+                mNode = Node(model=model, parents=parents, children=children, label='%s' % (param))
+                nodes[param] = mNode
+
+        assert(len(nodes) == self.dimension())
+        super(WiggleModelNode, self).__init__(label=label, nodes=nodes, parents=parents, children=children)
 
 
-class StupidL1WiggleModel(WiggleModel):
+    from functools32 import lru_cache
+    @lru_cache(maxsize=1024)
+    def _wiggle_cache(self, feature_tuple):
+        return self.signal_from_features(features = feature_tuple)
 
-    def template_ncost(self, wave, phases, params):
-        generated = self.tm.generate_template_waveform((phases, params), model_waveform=wave)
-        diff = (wave.data - generated.data)
-        return np.sum(np.abs(diff))
+    def get_wiggle(self, value=None):
+        if not value:
+            value = self.get_value()
+        wiggle = self._wiggle_cache(feature_tuple = tuple(self.param_dict_to_array(value)))
+        return wiggle
 
-    def summary_str(self):
-        return "stupidiid"
+    def set_params_from_wiggle(self, wiggle):
+        params = self.basis_decomposition(wiggle)
+        self.set_value(params)
 
+    def get_encoded_params(self):
+        f_string = cStringIO.StringIO()
+        scipy.io.savemat(f_string, {"params": self.param_dict_to_array(self.get_value())}, oned_as='row')
+        ostr = f_string.getvalue()
+        f_string.close()
+        return ostr
 
-class PlainWiggleModel(WiggleModel):
+    def set_encoded_params(self, encoded):
+        params = self.decode_params(encoded=encoded)
+        self.set_value(self.array_to_param_dict(params))
 
-    """
-
-    Model signal as AR noise + plain template (no wiggles)
-
-    """
-
-    def template_ncost(self, wave, phases, params):
-        generated = self.tm.generate_template_waveform((phases, params), model_waveform=wave)
-        nm = get_noise_model(wave)
-        ll = nm.lklhood(data=(wave.data - generated.data), zero_mean=True)
-        return ll
-
-    def summary_str(self):
-        return "plain"
+    @staticmethod
+    def decode_params(encoded):
+        f_string = cStringIO.StringIO(encoded)
+        d = scipy.io.loadmat(f_string)
+        params = d['params'].flatten()
+        f_string.close()
+        return params

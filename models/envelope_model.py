@@ -16,167 +16,130 @@ from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_
 from optparse import OptionParser
 
 from sigvisa import Sigvisa, NestedDict
-import sigvisa.utils.geog
-import obspy.signal.util
+from sigvisa.signals.common import Waveform
+from sigvisa.models.noise.noise_util import get_noise_model
+from sigvisa.models.noise.noise_model import NoiseModel
+from sigvisa.graph.nodes import Node
 
-
-class EnvelopeModel:
+class EnvelopeNode(Node):
 
     """
 
     Compute the probability of a set of segments (signal
-    envelopes), given a set of events. This is doen by either
+    envelopes), given a set of events. This is done by either
     maximizing or integrating the probability over the template
     parameters describing the signals.
 
     """
 
-    def __init__(self, template_model, wiggle_model, bands=None, chans=None, phases=None):
+    def __init__(self, model_waveform, nm_type="ar", nmid=None, observed=True, **kwargs):
 
-        self.sigvisa = Sigvisa()
-        self.template_model = template_model
-        self.wiggle_model = wiggle_model
+        super(EnvelopeNode, self).__init__(model=None, initial_value=model_waveform.data, fixed=observed, **kwargs)
 
-        if bands is None:
-            self.bands = self.sigvisa.bands
+
+        self.mw = model_waveform
+        self.filter_str = model_waveform['filter_str']
+        self.sta = model_waveform['sta']
+        self.chan = model_waveform['chan']
+        self.band = model_waveform['band']
+        self.srate = model_waveform['srate']
+        self.st = model_waveform['stime']
+        self.et = model_waveform['etime']
+        self.npts = model_waveform['npts']
+
+        self.set_noise_model(nm_type=nm_type, nmid=nmid)
+
+
+    def set_value(self, value):
+        assert(len(value) == len(self._value))
+        super(EnvelopeNode, self).set_value(value)
+
+    def get_wave(self):
+        return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
+
+    def set_noise_model(self, nm_type="ar", nmid=None):
+        if nmid is None:
+            self.nm_type = nm_type
+            self.nm, self.nmid, _ = get_noise_model(waveform=self.mw, model_type=self.nm_type, return_details=True)
         else:
-            self.bands = bands
+            self.nmid = nmid
+            self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
+            self.nm_type = self.nm.noise_model_type()
 
-        if chans is None:
-            self.chans = self.sigvisa.chans
-        else:
-            self.chans = chans
 
-        if phases is None:
-            self.phases = self.sigvisa.phases
-        else:
-            self.phases = phases
+    def assem_signal(self, include_wiggles=True, parent_templates=None, parent_values = None):
+        signal = np.zeros((self.npts,))
 
-    def get_method(self, method_str, segment=True):
-        f_ll = None
-        if method_str == "mode":
-            f_ll = self.log_likelihood_mode if segment else self.wave_log_likelihood_mode
-        elif method_str == "monte_carlo":
-            f_ll = self.log_likelihood_montecarlo if segment else self.wave_log_likelihood_montecarlo
-        elif method_str == "optimize":
-            f_ll = self.log_likelihood_optimize if segment else self.wave_log_likelihood_optimize
-        else:
-            raise Exception("unrecognized marginalization method %s" % options.method)
-        return f_ll
+        # we allow specifying the list of parents in order to generate
+        # signals with a subset of arriving phases (used e.g. in
+        # wiggle extraction)
+        if parent_templates is None:
+            parent_templates = [tm for tm in self.parents.values() if tm.label.startswith("template_")]
 
-    def wave_log_likelihood_mode(self, wave, event):
+        for tm in parent_templates:
+            key = tm.label[9:]
+            v = parent_values[tm.label] if parent_values else tm.get_value()
 
-        sta = wave['sta']
-        chan = wave['chan']
-        band = wave['band']
+            arr_time = v['arrival_time']
+            start = (arr_time - self.st) * self.srate
+            start_idx = int(np.floor(start))
+            if start_idx >= self.npts:
+                continue
 
-        # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
-        f = lambda params: self.wiggle_model.template_ncost(
-            wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
+            offset = start - start_idx
+            phase_env = np.exp(tm.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
+            if include_wiggles:
+                wm = self.parents['wiggle_%s' % key]
+                wiggle = wm.get_wiggle(value = parent_values[wm.label] if parent_values else None)
+                wiggle_len = min(len(wiggle), len(phase_env))
+                phase_env[:wiggle_len] *= wiggle[:wiggle_len]
 
-        # just use the mode parameters
-        params = self.template_model.predictTemplate(event, sta, chan, band, phases=self.phases)
-        ll = f(params)
+            end_idx = start_idx + len(phase_env)
+            if end_idx <= 0:
+                continue
+            early = max(0, - start_idx)
+            overshoot = max(0, end_idx - len(signal))
+            final_template = phase_env[early:len(phase_env) - overshoot]
 
-        return ll, params
+            signal[start_idx + early:end_idx - overshoot] += final_template
 
-    def log_likelihood_mode(self, segment, event):
+            if not np.isfinite(signal).all():
+                raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
 
-        total_ll = 0
-        all_params = NestedDict()
-        sta = segment['sta']
+        return signal
 
-        for chan in self.chans:
-            for band in self.bands:
-                wave = segment.with_filter(band)[chan]
-                ll, params = self.wave_log_likelihood_mode(wave, event)
-                all_params[chan][band] = params
-                total_ll += ll
+    def prior_predict(self):
+        signal = self.assem_signal()
+        noise = self.nm.predict(n=len(signal))
+        self.set_value(signal + noise)
 
-        return total_ll, all_params
+    def prior_sample(self):
+        signal = self.assem_signal()
+        noise = self.nm.sample(n=len(signal))
+        self.set_value(signal + noise)
 
-    def wave_log_likelihood_optimize(self, wave, event, use_leb_phases=False, optim_params=None):
+    def log_p(self, value=None, parent_values=None):
+        if value is None:
+            value = self.get_value()
 
-        if optim_params is None:
-            optim_params = construct_optim_params("")
 
-        sta = wave['sta']
-        chan = wave['chan']
-        band = wave['band']
 
-        if use_leb_phases:
-            (phases, start_param_vals) = self.template_model.heuristic_starting_params(wave)
-            (phases, start_param_vals) = filter_and_sort_template_params(phases, start_param_vals, Sigvisa().phases)
-        else:
-            phases = self.phases
-            start_param_vals = self.template_model.predictTemplate(event, sta, chan, band, phases=phases)
+        pred_signal = self.assem_signal(parent_values=parent_values)
+        diff = value - pred_signal
+        lp = self.nm.log_p(diff)
+#        import hashlib
+#        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
+#        np.savetxt(fname, diff)
+#        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
 
-        # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
-        f = lambda params: -self.wiggle_model.template_ncost(
-            wave, phases, params) - self.template_model.log_likelihood((phases, params), event, sta, chan, band)
 
-        low_bounds = None
-        high_bounds = None
-        if optim_params['method'] != "simplex":
-            atimes = start_param_vals[:, 0]
-            low_bounds = self.template_model.low_bounds(phases, default_atimes=atimes)
-            high_bounds = self.template_model.high_bounds(phases, default_atimes=atimes)
+        return lp
 
-        params, nll = minimize_matrix(
-            f, start_param_vals, low_bounds=low_bounds, high_bounds=high_bounds, optim_params=optim_params)
-        return nll, (phases, params)
-
-    def log_likelihood_optimize(self, segment, event):
-
-        total_ll = 0
-        all_params = NestedDict()
-        sta = segment['sta']
-
-        for chan in self.chans:
-            for band in self.bands:
-                wave = segment.with_filter(band)[chan]
-                ll, params = self.wave_log_likelihood_optimize(wave, event)
-                all_params[chan][band] = params
-                total_ll += ll
-
-        return total_ll, all_params
-
-    def wave_log_likelihood_montecarlo(self, wave, event, n=50):
-
-        sta = wave['sta']
-        chan = wave['chan']
-        band = wave['band']
-
-        # p(template | wave, event) ~ p(wave | template, event) * p(template | event)
-        f = lambda params: self.wiggle_model.template_ncost(
-            wave, self.phases, params) + self.template_model.log_likelihood((self.phases, params), event, sta, chan, band)
-
-        sum_ll = np.float("-inf")
-
-        samples = []
-
-        for i in range(n):
-            params = self.template_model.sample(event, sta, chan, band, self.phases)
-            ll = f(params)
-            samples.append((ll, params))
-            sum_ll = np.logaddexp(sum_ll, ll) if not (ll < 1e-300) else sum_ll
-            assert (not np.isnan(sum_ll))
-
-        ll = sum_ll - np.log(n)
-
-        return ll, samples
-
-    def log_likelihood_montecarlo(self, segment, event):
-
-        total_ll = 0
-        all_samples = NestedDict()
-        sta = segment['sta']
-
-        for chan in self.chans:
-            for band in self.bands:
-                wave = segment.with_filter(band)[chan]
-                ll, samples = self.wave_log_likelihood_montecarlo(wave, event)
-                all_samples[chan][band] = samples
-                total_ll += ll
-
-        return total_ll, all_samples
+    def deriv_log_p(self, value=None, parent_values=None, parent_name=None, parent_key=None, lp0=None, eps=1e-4):
+        parent_values = parent_values if parent_values else self._parent_values()
+        lp0 = lp0 if lp0 else self.log_p(value=value, parent_values=parent_values)
+        pv = parent_values[parent_name]
+        pv[parent_key] += eps
+        parent_values[parent_name] = pv
+        deriv = ( self.log_p(value=value, parent_values=parent_values) - lp0 ) / eps
+        return deriv

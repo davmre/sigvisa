@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import collections
 
 import sigvisa.utils.geog as geog
 
@@ -188,59 +189,41 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         GaussianProcess.__init__(self, *args, **kwargs)
 
-    def variance(self, X1):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-        if len(X1.shape) == 1:
-            X1 = np.reshape(X1, (1, -1))
-        if X1.shape[1] == 5:
-            X1 = gp_extract_features(X1, self.distfn_str)
+    def variance(self, cond):
+        X1 = self.standardize_input_array(cond)
 
         result = GaussianProcess.variance(self, X1)
         if len(result) == 1:
             result = result[0]
         return result
 
-    def sample(self, X1):
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-        if len(X1.shape) == 1:
-            X1 = np.reshape(X1, (1, -1))
-        if X1.shape[1] == 5:
-            X1 = gp_extract_features(X1, self.distfn_str)
+    def sample(self, cond):
+        X1 = self.standardize_input_array(cond)
 
         result = GaussianProcess.sample(self, X1)
         if len(result) == 1:
             result = result[0]
         return result
 
-    def posterior_log_likelihood(self, X1, y):
-
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-            y = np.array((y,))
-
-        if len(X1.shape) == 1:
-            X1 = np.reshape(X1, (1, -1))
-        if X1.shape[1] == 5:
-            X1 = gp_extract_features(X1, self.distfn_str)
-
-        result = GaussianProcess.posterior_log_likelihood(self, X1, y)
+    def log_p(self, x, cond):
+        X1 = self.standardize_input_array(cond)
+        x = x if isinstance(x, collections.Iterable) else (x,)
+        result = GaussianProcess.posterior_log_likelihood(self, X1, x)
         return result
 
-    def predict(self, X1):
-        # X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI  = range(5)
-        if isinstance(X1, Event):
-            X1 = self.event_to_array(X1)
-        if len(X1.shape) == 1:
-            X1 = np.reshape(X1, (1, -1))
-        if X1.shape[1] == 5:
-            X1 = gp_extract_features(X1, self.distfn_str)
+    def predict(self, cond):
+        X1 = self.standardize_input_array(cond)
 
         result = GaussianProcess.predict(self, X1)
         if len(result) == 1:
             result = result[0]
         return result
+
+    def standardize_input_array(self, c):
+        X1 = super(SpatialGP, self).standardize_input_array(c)
+        if X1.shape[1] == 5:
+            X1 = gp_extract_features(X1, self.distfn_str)
+        return X1
 
     def save_trained_model(self, filename):
         """

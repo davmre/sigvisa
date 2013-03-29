@@ -9,20 +9,20 @@ from sigvisa.source.event import get_event
 
 from sigvisa.signals.common import Waveform, Segment
 from sigvisa.signals.io import load_event_station
-from sigvisa.models.templates.paired_exp import PairedExpTemplateModel
-
+from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
 
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
+from sigvisa.infer.optimize.gradient_descent import approx_gradient
 
-from sigvisa.models.wiggles.wiggle_models import StupidL1WiggleModel, PlainWiggleModel
-from sigvisa.models.envelope_model import EnvelopeModel
 
 import matplotlib
 
 from sigvisa.plotting.plot_coda_decays import *
 
-from sigvisa.learn.train_coda_models import learn_model, load_model, get_training_data, get_model_fname
+from sigvisa.learn.train_param_common import learn_model, load_model, get_model_fname
+from sigvisa.learn.train_coda_models import get_shape_training_data
+from sigvisa.learn.train_wiggle_models import get_wiggle_training_data
 from sigvisa.database.signal_data import RunNotFoundException
 
 class TestFit(unittest.TestCase):
@@ -31,51 +31,60 @@ class TestFit(unittest.TestCase):
         np.random.seed(0)
         self.event = get_event(evid=5301405)
         self.sta = "FITZ"
+
         self.s = Sigvisa()
         cursor = self.s.dbconn.cursor()
         self.seg = load_event_station(self.event.evid, self.sta, cursor=cursor).with_filter("freq_2.0_3.0;env")
-        self.tm = PairedExpTemplateModel(run_name="", run_iter=0, model_type="dummy")
+        cursor.close()
+        self.wave = self.seg['BHZ']
 
-    def test_plot(self):
-        pvals = np.array([[1238917955.54000, 4.10006, 1.35953, -0.04931],
-                          [1238918128.71000, 10.70001, .9597, -0.03423]])
-        params = (('P', 'S'), pvals)
+        self.sg = SigvisaGraph(phases = ['P', 'S'])
+        self.sg.add_event(self.event)
+        self.sg.add_wave(self.wave)
 
-        pp = PdfPages("testplot.pdf")
-        plot_waveform_with_pred(wave=self.seg['BHZ'], tm=self.tm, template_params=params, logscale=True)
-        pp.savefig()
-        pp.close()
+        self.optim_params = construct_optim_params("'method': 'none'")
+
+    def test_deriv(self):
+        wave_node = self.sg.get_wave_node(wave=self.wave)
+        wave_node.set_noise_model(nm_type='l1')
+
+        node_list = list(self.sg.template_nodes)
+        all_children = [child for node in node_list for child in node.children]
+        relevant_nodes = set(node_list + all_children)
+
+        vals = np.concatenate([node.get_mutable_values() for node in node_list])
+        jp = lambda v: self.sg.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)
+
+        grad1 = approx_gradient(jp, vals, eps=1e-4)
+        grad2 = self.sg.log_p_grad(values=vals, node_list = list(self.sg.template_nodes), relevant_nodes=relevant_nodes)
+
+        self.assertTrue( (np.abs(grad1-grad2) < 0.001 ).all()  )
+
 
     def test_fit_template_iid(self):
-        tm = self.tm
-        wave = self.seg['BHZ']
+        wave_node = self.sg.get_wave_node(wave=self.wave)
+        wave_node.set_noise_model(nm_type='l1')
+
         t = time.time()
 
-        wm = StupidL1WiggleModel(tm)
-        em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
-        ll, fit_params = em.wave_log_likelihood_optimize(
-            wave=wave, event=self.event, use_leb_phases=True, optim_params=construct_optim_params())
+        self.sg.joint_optimize_nodes(node_list = self.sg.template_nodes, optim_params=self.optim_params)
 
-        print "iid fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
-        print "got params", fit_params
+#        print "iid fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
+#        print "got params", fit_params
 
     def test_fit_template_AR(self):
-        tm = self.tm
-        wave = self.seg['BHZ']
         t = time.time()
 
-        wm = PlainWiggleModel(tm)
-        em = EnvelopeModel(template_model=tm, wiggle_model=wm, phases=None)
-        ll, fit_params = em.wave_log_likelihood_optimize(
-            wave=wave, event=self.event, use_leb_phases=True, optim_params=construct_optim_params())
+        wave_node = self.sg.get_wave_node(wave=self.wave)
+        wave_node.set_noise_model(nm_type='ar')
 
-        print "AR fit ev %d at %s in %f seconds." % (self.event.evid, self.sta, time.time() - t)
-        print "got params", fit_params
+
+        self.sg.joint_optimize_nodes(node_list = self.sg.template_nodes, optim_params=self.optim_params)
 
 
 class TestLearnModel(unittest.TestCase):
 
-    def test_learn_model(self):
+    def test_learn_shape_model(self):
         site = "CTA"
         chan = "BHZ"
         band = "freq_2.0_3.0"
@@ -88,7 +97,7 @@ class TestLearnModel(unittest.TestCase):
         model_type = "linear_distance"
 
         try:
-            X, y, evids = get_training_data(run_name, run_iter, site, chan, band, [phase, ], target)
+            X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target)
         except RunNotFoundException:
             return
 

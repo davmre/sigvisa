@@ -1,5 +1,6 @@
 import model
 import numpy as np
+import numpy.ma as ma
 import stat
 import matplotlib.mlab
 
@@ -81,7 +82,7 @@ class ARLearner:
         em = model.ErrorModel(0, std)
         return model.ARModel(ar, em, c=self.c)
 
-# n-fold crossvalidation
+    # n-fold crossvalidation
     def crossval(self, p, n=5):
         sum_L = 0.0
 
@@ -89,23 +90,38 @@ class ARLearner:
             training_list = []
             test_list = []
             for d in self.norm_data:
-                training_slice = np.array(())
+                train_slice_list = []
                 for j in range(n):
                     if j != i:
-                        training_slice = np.concatenate([training_slice, self.segment(d, n, j)])
-                training_list.append(training_slice)
+                        train_slice_list.append(self.segment(d, n, j))
+                        #training_list.append(self.segment(d, n, j))
+                training_list.append(np.concatenate(train_slice_list))
                 test_list.append(self.segment(d, n, i))
 
             lnr = ARLearner(training_list)
             ar, std = lnr.yulewalker(p)
             em = model.ErrorModel(0, std)
             arm = model.ARModel(ar, em)
-            sum_L += arm.lklhood(test_list)
+            sum_L += arm.log_p(test_list)
+
+        """
+        d = self.norm_data[0]
+        l = len(d)
+        train = d[0:int(l*.8)]
+        test = d[int(l*.8):]
+
+        lnr = ARLearner([train,])
+        ar, std = lnr.yulewalker(p)
+        em = model.ErrorModel(0, std)
+        arm = model.ARModel(ar, em)
+        sum_L = arm.log_p(test)"""
+
         return sum_L
+
 
     ############# WARNING: EVERYTHING BELOW IS BROKEN (since norm_data is now a list) ########
     def psd(self):
-        y, x = matplotlib.mlab.psd(self.norm_data, len(self.norm_data), 1)
+        y, x = matplotlib.mlab.psd(self.norm_data[0], len(self.norm_data[0]), 1)
         return (x * self.sf, np.log(y))
 
     def aic(self, p, const=500):
@@ -113,7 +129,7 @@ class ARLearner:
         params, std = lnr.yulewalker(p)
         em = model.ErrorModel(0, std)
         arm = model.ARModel(params, em)
-        return 2 * (len(self.norm_data) / const) * p - 2 * arm.lklhood(self.norm_data)
+        return 2 * (len(self.norm_data) / const) * p - 2 * arm.log_p(self.norm_data)
 
     def psdcrossval(self, p, n=5):
         sum_L = 0.0

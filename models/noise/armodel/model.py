@@ -7,30 +7,11 @@ from scipy.weave import converters
 import time
 
 
-def load_armodel_from_file(fname):
-    f = open(fname, 'r')
-    try:
-        srate = int(f.readline().split(" ")[1])
-        c = float(f.readline().split(" ")[1])
-        _ = f.readline()
-        mean = float(f.readline().split(" ")[1])
-        std = float(f.readline().split(" ")[1])
-        _ = f.readline()
-        _ = f.readline()
-        params = []
-        for line in f:
-            params.append(float(line))
-        em = ErrorModel(mean, std)
-        arm = ARModel(params, em, c=c, sf=0)
-    except Exception as e:
-        raise Exception("error reading AR model from file %s: %s" % (fname, str(e)))
-    finally:
-        f.close()
-    return arm
-#    return cPickle.load(open(fname, 'rb'))
+from sigvisa.models import TimeSeriesDist
+from sigvisa.models.noise.noise_model import NoiseModel
 
+class ARModel(NoiseModel):
 
-class ARModel:
     # params: array of parameters
     # p: number of parametesr
     # em: error model
@@ -42,24 +23,24 @@ class ARModel:
         self.c = c
         self.sf = sf
 
+
+
+
     # samples based on the defined AR Model
-    # if init data is not given, then the first p points are
-    # sampled from error model (i.e. normally distributed)
-    def sample(self, num, initdata=[]):
-        data = np.zeros(num)
-        for t in range(num):
-            if t < self.p:
-                if len(initdata) == 0:
-                    data[t] = self.em.sample()
-                else:
-                    assert len(initdata) == self.p
-                    data[t] = initdata[t]
-            else:
-                s = self.c
-                for i in range(self.p):
-                    s += self.params[i] * data[t - i - 1]
-                data[t] = s + self.em.sample()
-        return data
+    def sample(self, n):
+        data = np.zeros(n + self.p)
+
+        # initialize with iid samples
+        for t in range(self.p):
+            data[t] = self.c + self.em.sample()
+
+        for t in range(self.p, n+self.p):
+            s = self.c
+            for i in range(self.p):
+                s += self.params[i] * (data[t - i - 1] - self.c)
+            data[t] = s + self.em.sample()
+
+        return data[self.p:]
 
     def fastAR_missingData(self, d, c, std):
         n = len(d)
@@ -252,7 +233,7 @@ class ARModel:
                           compiler='gcc')
         return ll
 
-    def slow_AR(self, d, c):
+    def slow_AR(self, d, c, return_debug=False):
         d_prob = 0
         skipped = 0
         masked = ma.getmaskarray(d)
@@ -291,6 +272,9 @@ class ARModel:
         # THEN we observe the real 101 and can zero out the 0th row and column of K,
         # and we can also update the 0th row of u.
 
+        lls = []
+        expecteds = []
+        errors = []
         for t in range(len(d)):
 
             if masked[t]:
@@ -332,6 +316,11 @@ class ARModel:
             error = actual - expected
             t2 = 0.5 * np.square((error - self.em.mean) / std)
             ell = -t2 - t1
+
+            if return_debug:
+                lls.append(ell)
+                expecteds.append(expected)
+                errors.append(error)
             d_prob += ell
 
             # print "py t %d error %f s %f t2 %f ell %f d_prob %f" % (t, error, std, t2, ell, d_prob)
@@ -351,10 +340,14 @@ class ARModel:
                 t_since_mask += 1
                 t1 = np.log(orig_std) + 0.5 * np.log(2 * np.pi)
 
-        return d_prob
+        if return_debug:
+            return d_prob, lls, expecteds, errors
+        else:
+            return d_prob
 
     # likelihood in log scale
-    def lklhood(self, data, zero_mean=False):
+    def log_p(self, x, zero_mean=False):
+        data = x
         if not isinstance(data, (list, tuple)):
             data = [data, ]
 
@@ -365,6 +358,8 @@ class ARModel:
 
         prob = 0
         for d in data:
+            if not isinstance(d, ma.masked_array):
+                d = ma.masked_array(d, mask=[False,] * len(d))
 
             """
             t1 = time.time()
@@ -382,6 +377,16 @@ class ARModel:
             prob += d_prob
 
         return prob
+
+
+    def location(self):
+        return self.c
+
+    def scale(self):
+        return self.em.std
+
+    def predict(self, n):
+        return np.ones((n,)) * self.c
 
     # given data as argument,
     def errors(self, data):
@@ -420,6 +425,29 @@ class ARModel:
             rss += np.square(psd[i] - S[i])
         return rss
 
+    @staticmethod
+    def load_from_file(fname):
+        f = open(fname, 'r')
+        try:
+            srate = int(f.readline().split(" ")[1])
+            c = float(f.readline().split(" ")[1])
+            _ = f.readline()
+            mean = float(f.readline().split(" ")[1])
+            std = float(f.readline().split(" ")[1])
+            _ = f.readline()
+            _ = f.readline()
+            params = []
+            for line in f:
+                params.append(float(line))
+            em = ErrorModel(mean, std)
+            arm = ARModel(params, em, c=c, sf=srate)
+        except Exception as e:
+            raise Exception("error reading AR model from file %s: %s" % (fname, str(e)))
+        finally:
+            f.close()
+        return arm
+
+
     def dump_to_file(self, fname):
         f = open(fname, 'w')
         f.write("srate %d\n" % self.sf)
@@ -433,7 +461,11 @@ class ARModel:
             f.write("%.8f\n" % p)
         f.close()
 
-        # cPickle.dump(self, open(fname, 'wb'), protocol=0)
+    def noise_model_type(self):
+        return "ar"
+
+    def order(self):
+        return len(self.params)
 
 
 # error model obeys normal distribution

@@ -5,14 +5,27 @@
 <title>gsrun {{ gs.gsid }} -- sigvisa</title>
 
 <link href="{{ STATIC_URL }}header.css" rel="stylesheet" type="text/css">
+
+<script>
+
+function expand_iframe(src, frame_id) {
+var ifr = document.getElementById(frame_id);
+ifr.style.display = "block";
+ifr.src = src;
+}
+
+</script>
+
 </head>
 <body>
 {% include "svweb/header.html"  %}
 
 <table>
  <tr>
-  <td rowspan=2>
-   <img src="{% url gs_heatmap gsid=gs.gsid %}?colorbar=true;smooth=true" width=600 height=600>
+  <td rowspan=2 valign=top>
+    <a href="{% url gsrun_detail gsid=gs.gsid %}">
+   <img ismap src="{% url gs_heatmap gsid=gs.gsid %}?colorbar=true;smooth=true;query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}" width=550 height=400>
+    </a>
   </td>
    <td valign=top>
      <table>
@@ -31,11 +44,44 @@
        </tr>
      </table>
    </td>
+   <td valign=top>
+     <strong>Origin times</strong>:
+     <ul>
+       <li><strong>true</strong>: {{ true_ev.time }} {% if gs.true_time == 't' %} (fixed) {% else %}</li>
+       <li><strong>query-optimal</strong>: {{ query_ev.time }}</li>
+       <li><strong>proposed</strong>:
+       <ul>
+       {% for t in query_origin_time_proposals %}
+       <li>{{ t }}</li>
+       {% endfor %}
+       </ul>{% endif %}</li>
+     </ul>
+
+     <strong>Depths</strong>:
+     <ul>
+       <li><strong>true</strong>: {{ true_ev.depth }} km {% if gs.true_depth == 't' %} (fixed) {% else %}</li>
+       <li><strong>query-optimal</strong>: {{ query_ev.depth }} km {% endif %}</li>
+     </ul>
+
+     <strong>Magnitude</strong>:
+     <ul>
+       <li><strong>true</strong>: {{ true_ev.mb }} {% if gs.true_mb == 't' %} (fixed) {% else %}</li>
+       <li><strong>query-optimal</strong>: {{ query_ev.mb }} {% endif %}</li>
+     </ul>
+
+
+     {% if gs.optim_method %}
+     <strong>Optimization method</strong>: {{ gs.optim_method }}
+     {% endif %}
+   </td>
  </tr>
 <tr>
- <td valign=center><strong>True event</strong>: {{ true_ev_str }}<br>
-<strong>MAP event</strong>: {{ max_ev_str }}<br>
-<strong>distance</strong>: {{ dist }}km
+<td valign=center><strong>True event</strong>: {{ true_ev_str }} <br>
+<strong>Query event</strong>: {{ query_ev_str }} (ll {{query_ll}})<br>
+<strong>distance</strong>: {{ dist }}km<br>
+<strong>True event ll</strong>: {{true_ll}}<br>
+<strong>Query event ll</strong>: {{query_ll}}<br>
+<strong>ll difference</strong>: {{ll_diff}}<br>
 </td>
 </tr>
 
@@ -45,24 +91,38 @@
      <table border=1>
 
        <tr>
-	 <td><strong>sta</strong></td>
-	 <td><strong>band</strong></td>
-	 <td><strong>chan</strong></td>
-	 <td><strong>hz</strong></td>
+	 <td><strong>info</strong></td>
 	 <td><strong>wave</strong></td>
-<!--	 <td><strong>mode</strong></td> -->
-	 <td><strong>models</strong></td>
-	 <td><strong>debug</strong> {% if wave_likelihood_tuples %}{{ overall_ll }}{% else %}<a href="{% url gsrun_detail gsid=gs.gsid %}?debug=true">compute logodds</a>{% endif %} </td>
+	 <td><strong>phases</strong></td>
+	 <td><strong>map</strong></td>
+	 <td><strong>likelihoods</strong></td>
+	 <td><strong>template param models</strong></td>
+	 <td><strong>noise</strong></td>
        </tr>
-       {% for wave  in gs.sigvisagsrunwave_set.all %}
+       {% for k,wave  in wave_dict.items %}
 
        <tr>
-	 <td valign=top><a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a></td>
-	 <td valign=top>{{ wave.band }}</td>
-	 <td valign=top>{{ wave.chan }}</td>
-	 <td valign=top>{{ wave.hz }}</td>
-	 <td valign=top><a href="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}}"><img src="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}};ratio=2;dpi=30" width=150 height=75></a></td>
-<!--	 <td valign=top><a href=""><img src="" width=150 height=75></a></td> -->
+	 <td valign=top>
+	   <strong>sta:</strong>: <a href="{% url site sta=wave.sta %}">{{ wave.sta }}</a><br>
+	   <strong>band:</strong>: {{ wave.band }}<br>
+	   <strong>chan:</strong>: {{ wave.chan }}<br>
+	   <strong>hz:</strong>: {{ wave.hz }}<br>
+	   <br>
+	   <strong>dist:</strong> {{ query_distances|get_item:k|floatformat:1 }}km
+	 </td>
+	 <td valign=top><a href="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}"><img src="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}" width=200 height=125></a>
+<a href="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}"><img src="{% url gs_pickled_wave gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}" width=200 height=125></a></td></td>
+	 <td valign=top>{% for phase in wave_phases|get_item:k %}{{phase}}, {% endfor %} <br>
+	   <a href="" onclick="expand_iframe('{% url gs_phase_frame gswid=wave.gswid %}?lon={{true_ev.lon}};lat={{true_ev.lat}}', 'phase_frame_true_{{ k }}'); expand_iframe('{% url gs_phase_frame gswid=wave.gswid %}?lon={{query_ev.lon}};lat={{query_ev.lat}}', 'phase_frame_query_{{ k }}'); return false;">Expand phase arrivals.</a><br>
+	   <iframe id="phase_frame_true_{{ k }}" src="" width=400 height=300 style="display: none"></iframe>
+	   <iframe id="phase_frame_query_{{ k }}" src="" width=400 height=300 style="display: none"></iframe>
+	 </td>
+<!--	 <td valign=top><a href="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}}"><img src="{% url wave_image %}?sta={{wave.sta}};chan={{wave.chan}};stime={{wave.stime|date:'U.u'}};etime={{wave.etime|date:'U.u'}};filter_str={{wave.band}}%3Benv%3Bhz_{{wave.hz}};ratio=2;dpi=30" width=150 height=75></a></td> -->
+	 <td valign=top><a href="{% url gs_heatmap gsid=gs.gsid %}?colorbar=false;smooth=true;wave_label={{wave.sta}}_{{wave.chan}}_{{wave.band}};query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}"><img src="{% url gs_heatmap gsid=gs.gsid %}?colorbar=false;smooth=true;wave_label={{wave.sta}}_{{wave.chan}}_{{wave.band}};query_lon={{query_ev.lon}};query_lat={{query_ev.lat}}" width=150 height=109></a></td>
+	 <td valign=top>
+	   <strong>true ev ll:</strong>: {{ true_wave_lls|get_item:k|floatformat:1 }}<br>
+	 <strong>query ev ll:</strong>: {{ query_wave_lls|get_item:k|floatformat:1 }}<br>
+	 <strong>ll diff:</strong>: {{ ll_diffs|get_item:k|floatformat:1 }}</td>
 	 <td valign=top>
 
 	   <table>
@@ -94,12 +154,10 @@
 	   </table>
 
 	 </td>
-	 <td><a href="{% url gs_debug gswid=wave.gswid %}">debug</a>
-
-	   {% if wave_likelihood_tuples %}
-	   {{wave_likelihood_tuples|get_item:wave.gswid}}
-	   {% endif %}
-	 </td>
+	 <td valign=top>
+	   noise type: {{ wave.nmid.model_type }} {% if wave.nmid.model_type != "l1" %} order {{ wave.nmid.nparams }} {% endif %}
+	   <a href="{% url nm_detail nmid=wave.nmid.nmid %}"><img src="{% url nm_sample nmid=wave.nmid.nmid %}" width=150 height=90></a></td>
+</td>
        </tr>
 
        {% endfor %}

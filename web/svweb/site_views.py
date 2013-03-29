@@ -35,12 +35,12 @@ def site_det_img_view(request, sta):
     hm.add_stations([sta, ])
 
     # get all events arriving at this station in an arbitrary three-month
-    # period (which happens to be the first three months of 2007)
+    # period (which happens to be March-May 2009)
     cursor = s.dbconn.cursor()
-    sql_query = "select lebo.lon, lebo.lat from leb_origin lebo, leb_assoc leba, leb_arrival l where l.sta='%s' and l.time between 1167631200 and 1175403600 and leba.arid=l.arid and lebo.orid=leba.orid" % sta
+    sql_query = "select lebo.lon, lebo.lat from leb_origin lebo, leb_assoc leba, leb_arrival l where l.sta='%s' and l.time between 1235887200 and 1243832400 and leba.arid=l.arid and lebo.orid=leba.orid" % sta
     cache_key = hashlib.sha1(sql_query).hexdigest()
     evs = cache.get(cache_key)
-    if evs is None:
+    if not evs:
         cursor.execute(sql_query)
         evs = cursor.fetchall()
         cache.set(cache_key, evs, 60 * 60 * 24 * 365)

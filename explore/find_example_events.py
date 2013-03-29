@@ -4,6 +4,8 @@
 
 import sigvisa.database.db
 from sigvisa.database.dataset import *
+from sigvisa import Sigvisa
+import sigvisa.utils.geog as geog
 import time
 import learn
 import sys
@@ -13,10 +15,8 @@ from collections import defaultdict
 
 from optparse import OptionParser
 
-from priors.coda_decay.coda_decay_common import *
 
-
-def print_event_set(cursor, evids, siteids, stas, sites, runids_source, runids_cond, exclude_sta=""):
+def print_event_set(cursor, evids, stas,  runids_source, runids_cond, exclude_sta=""):
 
     print "evid\tmb\tdepth\tsta\tdistance\tphase\tttime\tamp\tsnr"
     for evid in evids:
@@ -29,9 +29,8 @@ def print_event_set(cursor, evids, siteids, stas, sites, runids_source, runids_c
             if r[5] == exclude_sta:
                 import pdb
                 pdb.set_trace()
-            siteid = siteids[stas.index(r[5])]
-            sll = sites[siteid - 1][0:2]
-            dist = utils.geog.dist_km(r[0:2], sll)
+            sll = tuple(Sigvisa().stations[r[5]][0:2])
+            dist = geog.dist_km(r[0:2], sll)
             ttime = r[8] - r[7]
             print "%d\t%.2f\t%.1f\t%s\t%.1f\t\t%s\t%.2f\t%.2f\t%.2f" % (evid, r[3], r[2], r[5], dist, r[4], ttime, r[6], r[9])
 
@@ -40,8 +39,8 @@ def main():
 
     parser = OptionParser()
 
-    parser.add_option("-s", "--siteids", dest="siteids", default=None, type="str",
-                      help="comma-separated list of station siteids (default is no stations)")
+    parser.add_option("-s", "--sites", dest="sites", default=None, type="str",
+                      help="comma-separated list of stations  (default is no stations)")
     parser.add_option("-r", "--runids", dest="runids", default=None, type="str",
                       help="only consider arrivals having fits from this set of runids (default is to consider all arrivals)")
     parser.add_option(
@@ -55,12 +54,13 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    cursor, sigmodel, earthmodel, sites, dbconn = sigvisa_util.init_sigmodel()
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
-    if options.siteids is not None:
-        siteids = [int(s) for s in options.siteids.split(',')]
+    if options.sites is not None:
+        stas =  options.sites.split(',')
     else:
-        siteids = []
+        stas = []
 
     if options.runids is not None:
         runids = [int(s) for s in options.runids.split(',')]
@@ -73,13 +73,11 @@ def main():
 
     # first find events detected at all stations
     evids = dict()
-    stas = []
     overlap = None
-    for siteid in siteids:
-        sta = siteid_to_sta(siteid, cursor)
-        stas.append(sta)
+    for sta in stas:
         sql_query = "select distinct lebo.evid from leb_origin lebo, leb_assoc leba %s where lebo.mb > %f and lebo.mb < %f and lebo.time > %f and lebo.time < %f and lebo.orid=leba.orid and leba.sta='%s' %s" % (
             runids_source, options.min_mb, options.max_mb, options.start_time, options.end_time, sta, runids_cond)
+        print sql_query
         cursor.execute(sql_query)
         evids[sta] = set([r[0] for r in cursor.fetchall()])
 
@@ -87,31 +85,8 @@ def main():
 
     print "events detected at all stations"
     print overlap
-    print_event_set(cursor, overlap, siteids, stas, sites, runids_source, runids_cond)
+    print_event_set(cursor, overlap, stas, runids_source, runids_cond)
     print
-
-    # next, find events which are missed by one station
-
-    # the first step is to find events that each station could
-    # plausibly have detected (i.e., events for which we know the
-    # station has waveform data)
-
-    all_evids = reduce(lambda a, b: a.union(b), evids.values())
-
-    for sta in stas:
-        siteid = siteids[stas.index(sta)]
-        potential_examples = all_evids
-
-        for sta2 in stas:
-            if sta2 != sta:
-                potential_examples = potential_examples.intersection(evids[sta2])
-
-        print "checking %d possible examples at sta %s" % (len(potential_examples), sta)
-        confirmed_examples = [evid for evid in potential_examples if sigvisa_util.has_trace(
-            cursor, siteid=siteid, sta=sta, evid=evid, earthmodel=earthmodel)]
-
-        print "events detected everywhere except %s:" % sta
-        print_event_set(cursor, confirmed_examples, siteids, stas, sites, runids_source, runids_cond, exclude_sta=sta)
 
 
 if __name__ == "__main__":

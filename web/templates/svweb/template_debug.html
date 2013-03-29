@@ -17,9 +17,19 @@
 {% include "svweb/header.html"  %}
 
 <center>
-  <div id="wavediv">
+
+<table>
+<tr><td>
     <img id="wave" src="{% url custom_phase_image fitid=fitid %}?{{ phase_GET_string }}" width=800 height=500 border=1>
-  </div>
+</td>
+
+<td>
+
+    <img id="residual" src="{% url template_residual fitid=fitid %}?{{ phase_GET_string }}" width=400 height=250 border=1>
+      {% for phase in phases %}
+    <br/><img id="residual" src="{% url template_residual fitid=fitid %}?{{ phase_GET_string }};xmin={{phase.param1|add:-2}};xmax={{phase.param1|add:7}}" width=400 height=250 border=1>
+    {% endfor %}
+</td></tr></table>
   <br/>
 
   <form action="{% url template_debug fitid=fitid %}" method="get" id='phase_form'>
@@ -38,10 +48,10 @@
 </tr>
 <tr>
 <td>
-<strong>log-likelihood</strong>: {{ ll }}</td><td> ({{ wiggle_model }} wiggle model)</td>
+<strong>log-likelihood</strong>: {{ ll }}</td><td></td>
 </tr>
 <tr><td><strong>param ll:</strong> {{ param_ll }}</td><td></td>
-<tr><td><strong>noise</strong> mean: {{nm.c}}</td><td>std = {{nm.em.std }}</td></tr>
+<tr><td><strong>noise</strong> location: {{nm.location}}</td><td>scale = {{nm.scale }}</td></tr>
 
 </tr>
 </table>
@@ -67,6 +77,10 @@
     </table>
     <input type="submit" name="action" value="newrow"/>
     <input type="submit" name="action" value="update"/>
+
+<p>raw waveform saved to {{env_fname}}</p>
+<p>template saved to {{generated_fname}}</p>
+<p>using noise model <a href="{% url nm_detail nmid=fit.nmid.nmid %}">{{ fit.nmid.nmid }}</a>.</p>
     <p><a href="{% url template_debug fitid=fitid %}">reset</a> :::::: <a href="{% url fit_run_detail fitid=fitid %}">back to fit detail</a></p>
 </center>
 

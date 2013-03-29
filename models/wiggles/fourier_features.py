@@ -1,114 +1,149 @@
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import sigvisa.infer.optimize.optim_utils
-import scipy.io
-import cStringIO
-from sigvisa.models.wiggles.featurizer import Featurizer
+from sigvisa import Sigvisa
+from sigvisa.database.signal_data import execute_and_return_id
+from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
 
+class FourierFeatureNode(WiggleModelNode):
 
-class FourierFeatures(Featurizer):
+    def __init__(self, npts, srate, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
 
-    def __init__(self, fundamental=.1, min_freq=0.8, max_freq=3.5, srate=None):
-        self.fundamental = fundamental
-        self.max_freq = max_freq
-        self.min_freq = min_freq
         self.srate = srate
+        self.npts = npts
+        assert( self.npts % 2 == 0 )
 
-    def signal_from_features(self, features, srate=None, len_seconds=30):
-        srate = srate if srate is not None else self.srate
+        if max_freq:
+            self.max_freq = max_freq
+        else:
+            self.max_freq = srate / 2.0
 
-        x = np.linspace(0, len_seconds, len_seconds * srate)
+        self.fundamental = float(self.srate) / self.npts
+        self.nparams = int(self.max_freq / self.fundamental) * 2
 
-        s = np.zeros((len_seconds * srate,))
+        self.len_s = float(npts-1) / srate
+        self.x = np.linspace(0, self.len_s, self.npts)
 
-        for (i, row) in enumerate(features):
-            (amp, phase) = row
+        self.logscale = logscale
 
-#            (c1, c2) = row
-            freq = self.min_freq + self.fundamental * i
-#            basis1  =  np.sin(x*2*np.pi*freq)
-#            basis2  =  np.cos(x*2*np.pi*freq)
+        self.family_name = family_name
+        self.basisid = basisid
+        if basisid is None:
+            s = Sigvisa()
+            self.save_to_db(s.dbconn)
 
-#            s += c1 * basis1
-#            s += c2 * basis2
+        # load template params and initialize Node stuff
+        super(FourierFeatureNode, self).__init__(**kwargs)
 
-            s += amp * np.sin(x * 2 * np.pi * freq + phase)
+    def signal_from_features_naive(self, features):
+        assert(len(features) == self.nparams)
+        if isinstance(features, dict):
+            features = self.param_dict_to_array(features)
+        else:
+            features= np.asarray(features)
+        amps = features[:self.nparams/2]
+        phases = features[self.nparams/2:] * 2.0 * np.pi
 
-        s = s / np.std(s) - np.mean(s)
+        s = np.zeros((self.npts,))
+
+        for (i, (amp, phase)) in enumerate(zip(amps, phases)):
+            freq = self.fundamental * (i+1)
+            s += amp * np.cos(2 * np.pi * self.x * freq + phase)
+
+        if self.logscale:
+            s = np.exp(s)
+        else:
+            s += 1
+
         return s
 
-    def basis_decomposition(self, signal, srate=None):
-        srate = srate if srate is not None else self.srate
+    def signal_from_features(self, features):
+        assert(len(features) == self.nparams)
+        if isinstance(features, dict):
+            features = self.param_dict_to_array(features)
+        else:
+            features= np.asarray(features)
+        amps = features[:self.nparams/2] * (self.npts/2.0)
+        phases = features[self.nparams/2:] * 2.0 * np.pi
+        coeffs = amps * np.cos(phases) + 1j * amps * np.sin(phases)
 
-        n_features = int((self.max_freq - self.min_freq) / self.fundamental)
-        len_seconds = len(signal) / float(srate)
+        padded_coeffs = np.zeros((self.npts/2.0 + 1,), dtype=complex)
+        padded_coeffs[1:len(coeffs)+1] = coeffs
 
-        x = np.linspace(0, len_seconds, len(signal))
-        assert(len(x) == len(signal))
+        signal = np.fft.irfft(padded_coeffs)
 
-        features = np.zeros((n_features, 2))
-        for i in np.arange(n_features):
-            freq = self.fundamental * i + self.min_freq
+        if self.logscale:
+            signal = np.exp(signal)
+        else:
+            signal += 1
 
-            periods = freq * len_seconds
+        return signal
 
-            basis1 = np.sin(x * 2 * np.pi * freq)
-            basis2 = np.cos(x * 2 * np.pi * freq)
+    def basis_decomposition(self, signal):
+        assert(len(signal) == self.npts)
 
-            b1d = np.dot(basis1, basis1)
-            b2d = np.dot(basis2, basis2)
+        if self.logscale:
+            signal = np.log(signal)
 
-            c1 = np.dot(signal, basis1) / len(signal)
-            c2 = np.dot(signal, basis2) / len(signal)
+        coeffs = 2 * np.fft.rfft(signal) / self.npts
+        coeffs = coeffs[1:self.nparams/2+1]
+
+        amps = np.abs(coeffs)[: self.nparams/2]
+        phases = np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)
+        return self.array_to_param_dict(np.concatenate([amps, phases]))
+
+    def basis_decomposition_naive(self, signal):
+        assert(len(signal) == self.npts)
+
+        if self.logscale:
+            signal = np.log(signal)
+        else:
+            signal = signal - 1 # we want zero-mean for the Fourier projection
+
+        amps = []
+        phases = []
+        for i in np.arange(self.nparams/2):
+            freq = self.fundamental * (i+1)
+
+            basis1 = np.cos(self.x * 2 * np.pi * freq)
+            basis2 = -1 * np.sin(self.x * 2 * np.pi * freq)
+
+            c1 = np.dot(signal, basis1) / ((len(signal))/ 2.0)
+            c2 = np.dot(signal, basis2) / ((len(signal))/ 2.0)
 
             if np.isnan(c1):
                 c1 = 0
             if np.isnan(c2):
                 c2 = 0
 
-#            features[i, :] = [c1, c2]
-
             c = complex(c1, c2)
 
-            (amp, phase) = (np.abs(c), np.angle(c))
-            features[i, :] = (amp, phase)
+            (amp, phase) = (np.abs(c), np.angle(c) / (2 * np.pi))
+            amps.append(amp)
+            phases.append(phase)
 
-        return features
+        return self.array_to_param_dict(np.concatenate([amps, phases]))
+
+    def basis_type(self):
+        return "fourier"
+
+    def dimension(self):
+        return self.nparams
+
+    def keys(self):
+        freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
+        return ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
+
+    def param_dict_to_array(self, d):
+        a = np.asarray([ d[k] for k in self.keys() ])
+        return a
+
+    def array_to_param_dict(self, a):
+        d = {k : v for (k,v) in zip(self.keys(), a)}
+        return d
+
+    def save_to_db(self, dbconn):
+        assert(self.basisid is None)
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, max_freq) values (%f, '%s', '%s', '%s', %d, %d, %f)" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.max_freq)
+        self.basisid = execute_and_return_id(dbconn, sql_query, "basisid")
+        return self.basisid
 
 
-def main():
-    ff = FourierFeatures(fundamental=1 / 20.0, min_freq=0.8, max_freq=3.5)
-
-#    wave = np.loadtxt("test.wave")
-    features = np.zeros((35, 2))
-    features[5, :] = [1, 1]
-    wave = ff.signal_from_features(features, len_seconds=30)
-
-    wave = wave / np.std(wave) - np.mean(wave)
-    plt.figure()
-    plt.plot(wave)
-
-    f = ff.basis_decomposition(wave)
-    plt.figure()
-    plt.plot(f[:, 0])
-#    plt.plot(features[:, 0])
-
-    print f
-#    print features
-
-    plt.figure()
-    s = ff.signal_from_features(f, len_seconds=len(wave) / 40)
-    plt.plot(s)
-
-    plt.figure()
-    plt.plot(s)
-    plt.plot(wave)
-
-    offby = s / wave
-    print "off by", np.mean(offby), np.median(offby)
-
-    plt.show()
-
-if __name__ == "__main__":
-    main()
