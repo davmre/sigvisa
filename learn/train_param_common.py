@@ -16,7 +16,7 @@ import hashlib
 
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
-import sigvisa.gpr.learn
+import sigvisa.gpr as gpr
 from sigvisa.gpr.distributions import InvGamma, LogNormal
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)

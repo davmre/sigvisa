@@ -35,7 +35,6 @@ When all dependencies are installed, run the following commands to set up the wo
  workon sigvisa
  echo "export SIGVISA_HOME=$HOME/python/sigvisa" >> $VIRTUAL_ENV/bin/postactivate
  echo "export PYTHONPATH=\$HOME/python:\$PYTHONPATH" >> $VIRTUAL_ENV/bin/postactivate
- echo "export NOSE_WHERE=$SIGVISA_HOME/tests" >> $VIRTUAL_ENV/bin/postactivate
  source $VIRTUAL_ENV/bin/postactivate
  cp githooks/pre-commit .git/hooks/pre-commit
 
