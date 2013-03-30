@@ -162,12 +162,27 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
                 fp1 = lambda params: fprime(scale_unnormalize(params, low_bounds, high_bounds),
                                             eps=normalized_eps)  \
                                             * normalized_eps/eps
+                approx_grad = 0
             else:
                 print "fp1 is None, not normalizing gradient..."
                 fp1 = None
+                approx_grad = 1
+
+            if fprime == "grad_included":
+                f1 = lambda params: (f(scale_unnormalize(params, low_bounds, high_bounds)),
+                                     fprime(scale_unnormalize(params, low_bounds, high_bounds),
+                                            eps=normalized_eps) * normalized_eps/eps )
+                fp1 = "grad_included"
+
     else:
         f1 = f
-        fp1 = fprime
+        fp1 = fprime if fprime != "grad_included" else None
+        approx_grad=0 if fprime else 1
+
+    if fprime == "grad_included":
+        f_only = lambda x : f1(x)[0]
+    else:
+        f_only = f1
 
     if method == "bfgscoord":
         iters = 0
@@ -175,12 +190,12 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
         x1 = x0
         while iters < optim_params['bfgscoord_iters']:
             x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
-                f1, x1, fprime=fp1, approx_grad=0 if fp1 else 1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
+                f1, x1, fprime=fp1, approx_grad=approx_grad, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
             success = (d['warnflag'] == 0)
             print d
             v1 = best_cost
-            x2 = coord_steps(f1, x1, eps=eps, bounds=bounds)
-            v2 = f1(x2)
+            x2 = coord_steps(f_only, x1, eps=eps, bounds=bounds)
+            v2 = f_only(x2)
 
             if success and v2 > v1 * .999 or np.linalg.norm(x2 - x1, 2) < 0.00001:
                 break
@@ -189,25 +204,26 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
 
     elif method == "bfgs":
         x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
-            f1, x0, fprime=fp1, approx_grad=0 if fp1 else 1, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
+            f1, x0, fprime=fp1, approx_grad=approx_grad, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
     elif method == "tnc":
-        x1, nfeval, rc = scipy.optimize.fmin_tnc(f1, x0, fprime=fp1, approx_grad=0 if fp1 else 1, ftol=optim_params['ftol'], bounds=bounds, disp=disp, maxfun=maxfun)
+        x1, nfeval, rc = scipy.optimize.fmin_tnc(f1, x0, fprime=fp1, approx_grad=approx_grad, ftol=optim_params['ftol'], bounds=bounds, disp=disp, maxfun=maxfun)
         x1 = np.array(x1)
     elif method == "simplex":
-        x1 = scipy.optimize.fmin(f1, x0, xtol=optim_params['xtol'], ftol=optim_params['ftol'], disp=disp)
+        x1 = scipy.optimize.fmin(f_only, x0, xtol=optim_params['xtol'], ftol=optim_params['ftol'], disp=disp)
     elif method == "grad":
         x1 = gradient_descent(
             f1, x0, f_grad=fp1, eps=eps, stopping_eps=optim_params['grad_stopping_eps'], alpha=0.3, beta=0.9, bounds=bounds, disp=disp)
     elif method == "coord":
-        x1 = coord_descent(f1, x0, steps=steps)
+        x1 = coord_descent(f_only, x0, steps=steps)
     elif method == "none":
         x1 = x0
     else:
         raise Exception("unknown optimization method %s" % (method))
 
+    result = f_only(x1)
     if normalize:
         x1 = scale_unnormalize(x1, low_bounds, high_bounds)
-    return x1, f(x1)
+    return x1, result
 
 
 def scale_normalize(x, low_bounds, high_bounds):

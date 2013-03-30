@@ -308,6 +308,8 @@ class SigvisaParamModel(models.Model):
     training_ll = models.FloatField()
     timestamp = UnixTimestampField()
     elapsed = models.FloatField()
+    hyperparams = models.CharField(max_length=1024)
+    optim_method = models.CharField(max_length=1024)
 
     class Meta:
         db_table = u'sigvisa_param_model'

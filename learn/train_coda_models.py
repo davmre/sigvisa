@@ -14,7 +14,7 @@ import numpy as np
 from optparse import OptionParser
 
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname
-
+from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, **kwargs):
     s = Sigvisa()
@@ -81,6 +81,7 @@ def main():
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
     parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
                       help="train models even if a model of the same type already appears in the DB")
+    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs', 'normalize': False, 'disp': True, 'bfgs_factr': 1e12", type="str", help="fitting param string")
 
     (options, args) = parser.parse_args()
 
@@ -90,6 +91,8 @@ def main():
     targets = options.targets.split(',')
     model_type = options.model_type
     band = options.band
+
+    optim_params = construct_optim_params(options.optim_params)
 
     run_name = options.run_name
     if options.run_iter == "latest":
@@ -132,13 +135,13 @@ def main():
                     continue
 
                 model_fname = get_model_fname(
-                    run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape)
-                evid_fname = os.path.splitext(model_fname)[0] + '.evids'
+                    run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
+                evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
                 np.savetxt(evid_fname, evids, fmt='%d')
 
                 distfn = model_type[3:]
                 st = time.time()
-                model = learn_model(X, y, model_type, target=target, sta=site)
+                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params)
                 et = time.time()
 
                 if np.isnan(model.log_likelihood()):
@@ -149,7 +152,7 @@ def main():
                 modelid = insert_model(
                     s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(
                     ),
-                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st))
+                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = repr(model.kernel_params) if model_type.startswith('gp') else None, optim_method = repr(optim_params) if model_type.startswith('gp') else None)
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
 if __name__ == "__main__":

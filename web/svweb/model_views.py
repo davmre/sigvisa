@@ -115,7 +115,8 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
         f = lambda lon, lat : np.sqrt(model.variance( cond={'lon': lon, 'lat': lat, 'depth': 0 } ))
     else:
         f = lambda lon, lat : model.predict( cond={'lon': lon, 'lat': lat, 'depth': 0 } )
-    hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = full_fname + ('.std' if stddev else '') + ".heatmap")
+    heatmap_fname = full_fname + ('.std' if stddev else '')  + ".heatmap"
+    hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = heatmap_fname)
     hm.add_stations((model_record.site,))
     hm.add_events(locations=ev_locs)
     hm.plot(axes=axes, nolines=True, smooth=True, colorbar_format='%.3f')

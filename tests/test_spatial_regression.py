@@ -2,7 +2,7 @@ import numpy as np
 import unittest
 
 from sigvisa.learn.train_param_common import learn_model, load_model, gp_extract_features
-
+from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 class TestModels(unittest.TestCase):
 
@@ -67,7 +67,7 @@ class TestModels(unittest.TestCase):
         s = nmodel.sample(self.X)
 
     def test_GP(self):
-        model = learn_model(self.X, self.y, model_type="gp_dad_log", target="coda_decay", sta='AAK')
+        model = learn_model(self.X, self.y, model_type="gp_dad_log", target="coda_decay", sta='AAK', optim_params=construct_optim_params("'method': 'none', 'normalize': False"))
         pred1 = model.predict(self.testX1)
         pred2 = model.predict(self.testX2)
 
