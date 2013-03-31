@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 import scipy.optimize
-from sigvisa.infer.optimize.gradient_descent import gradient_descent, coord_steps
+from sigvisa.infer.optimize.gradient_descent import gradient_descent, coord_steps, fast_coord_step
 
 
 class BoundsViolation(Exception):
@@ -22,6 +22,7 @@ def construct_optim_params(optim_param_str=''):
         "normalize": True,
         "maxfun": 15000,
         'disp': False,
+        'random_inits': 0,
         "eps": 1e-4,  # increment for approximate gradient evaluation
 
         "bfgscoord_iters": 5,
@@ -34,11 +35,12 @@ def construct_optim_params(optim_param_str=''):
 
     optim_params = {}
     optim_params['method'] = overrides['method'] if 'method' in overrides else defaults['method']
-    copy_dict_entries(["fix_first_cols", "normalize", "disp", "eps", "maxfun"], src=defaults, dest=optim_params)
+    copy_dict_entries(["fix_first_cols", "normalize", "disp", "eps", "maxfun", "random_inits"],
+                      src=defaults, dest=optim_params)
     method = optim_params['method']
 
     # load appropriate defaults for each method
-    if method == "bfgscoord":
+    if method == "bfgscoord" or method == "bfgs_fastcoord":
         copy_dict_entries(["bfgscoord_iters", "bfgs_factr"], src=defaults, dest=optim_params)
     elif method == "bfgs":
         copy_dict_entries(["bfgs_factr", ], src=defaults, dest=optim_params)
@@ -130,13 +132,9 @@ def optimize(f, start_params, bounds, method, phaseids=None, maxfun=None):
 
 
 def minimize(f, x0, optim_params, fprime=None, bounds=None):
-
-    np.seterr(all="raise", under="ignore")
-    method = optim_params['method']
     eps = optim_params['eps']
-    disp = optim_params['disp']
     normalize = optim_params['normalize']
-    maxfun = optim_params['maxfun']
+    random_inits = optim_params['random_inits']
 
     if normalize:
         if bounds is None:
@@ -184,6 +182,37 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
     else:
         f_only = f1
 
+    x0 = np.asfarray(x0)
+    new_params = lambda  :  np.exp(np.log(x0) + np.random.randn(len(x0)) * 1.5)
+    starting_points = [x0,] + [new_params() for i in range(random_inits)]
+
+    print starting_points
+
+    best_result = np.inf
+    best_val = None
+    results = []
+    for x in starting_points:
+        x1 = _minimize(f1=f1, f_only=f_only, fp1=fp1, approx_grad=approx_grad, x0=x,
+                       optim_params=optim_params, bounds=bounds)
+        result = f_only(x1)
+        results.append(result)
+        if result < best_result:
+            best_result = result
+            best_val = x1
+
+    if normalize:
+        best_val = scale_unnormalize(best_val, low_bounds, high_bounds)
+    return best_val, best_result
+
+def _minimize(f1, f_only, fp1, approx_grad, x0, optim_params, bounds=None):
+
+    np.seterr(all="raise", under="ignore")
+    method = optim_params['method']
+    eps = optim_params['eps']
+    disp = optim_params['disp']
+    maxfun = optim_params['maxfun']
+
+
     if method == "bfgscoord":
         iters = 0
         success = False
@@ -194,14 +223,30 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
             success = (d['warnflag'] == 0)
             print d
             v1 = best_cost
-            x2 = coord_steps(f_only, x1, eps=eps, bounds=bounds)
+            x2 = coord_steps(f1, approx_grad=approx_grad, x=x1, eps=eps, bounds=bounds)
             v2 = f_only(x2)
 
             if success and v2 > v1 * .999 or np.linalg.norm(x2 - x1, 2) < 0.00001:
                 break
             x1 = x2
             iters += 1
+    elif method == "bfgs_fastcoord":
+        iters = 0
+        success = False
+        x1 = x0
+        while iters < optim_params['bfgscoord_iters']:
+            x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
+                f1, x1, fprime=fp1, approx_grad=approx_grad, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
+            success = (d['warnflag'] == 0)
+            print d
+            v1 = best_cost
+            x2 = fast_coord_step(f1, approx_grad=approx_grad, x=x1, eps=eps, bounds=bounds)
+            v2 = f_only(x2)
 
+            if success and v2 > v1 * .999 or np.linalg.norm(x2 - x1, 2) < 0.00001:
+                break
+            x1 = x2
+            iters += 1
     elif method == "bfgs":
         x1, best_cost, d = scipy.optimize.fmin_l_bfgs_b(
             f1, x0, fprime=fp1, approx_grad=approx_grad, factr=optim_params['bfgs_factr'], epsilon=eps, bounds=bounds, disp=disp, maxfun=maxfun)
@@ -220,10 +265,7 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
     else:
         raise Exception("unknown optimization method %s" % (method))
 
-    result = f_only(x1)
-    if normalize:
-        x1 = scale_unnormalize(x1, low_bounds, high_bounds)
-    return x1, result
+    return x1
 
 
 def scale_normalize(x, low_bounds, high_bounds):

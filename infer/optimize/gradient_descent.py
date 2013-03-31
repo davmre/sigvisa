@@ -7,11 +7,11 @@ class LineSearchFailed(Exception):
 
 
 def project_into_bounds(x, low_bounds, high_bounds):
-    if low_bounds is not None:
+    if low_bounds is not None and any(low_bounds):
         violations = (x < low_bounds)
         if violations.any():
             x[violations] = low_bounds[violations]
-    if high_bounds is not None:
+    if high_bounds is not None and any(high_bounds):
         violations = (x > high_bounds)
         if violations.any():
             x[violations] = high_bounds[violations]
@@ -40,14 +40,19 @@ def backtracking_line_search(f, x, step, grad_x, alpha, beta, max_iters=1000, lo
     return t
 
 
-def coord_steps(f, x, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", disp=False):
+def coord_steps(f, x, approx_grad=True, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", disp=False):
     low_bounds, high_bounds = unpack_bounds(bounds)
 
     dims = len(x)
-    grad_x = approx_gradient(f, x, eps)
+    if approx_grad:
+        grad_x = approx_gradient(f, x, eps)
+        f_only = f
+    else:
+        grad_x =  f(x)[1]
+        f_only = lambda x : f(x)[0]
     x1 = x
     if disp:
-        print "start w/ f", f(x), "x", x, "grad", grad_x
+        print "start w/ f", f_only(x), "x", x, "grad", grad_x
     for d in range(dims):
         step = np.zeros((dims,))
         if grad_x[d] == 0:
@@ -55,14 +60,46 @@ def coord_steps(f, x, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", 
         step[d] = -.3 * grad_x[d] / np.abs(grad_x[d])
         try:
             t = backtracking_line_search(
-                f, x1, step, grad_x, alpha=0.3, beta=0.9, max_iters=50, low_bounds=low_bounds, high_bounds=high_bounds)
+                f_only, x1, step, grad_x, alpha=0.3, beta=0.9, max_iters=50, low_bounds=low_bounds, high_bounds=high_bounds)
         except LineSearchFailed as e:
             if disp:
                 print e
             continue
         x1 = project_into_bounds(x1 + step * t, low_bounds, high_bounds)
     if disp:
-        print "end w/ f", f(x1), "x", x1
+        print "end w/ f", f_only(x1), "x", x1
+    return x1
+
+def fast_coord_step(f, x, approx_grad=True, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", disp=False):
+    low_bounds, high_bounds = unpack_bounds(bounds)
+
+    dims = len(x)
+    if approx_grad:
+        grad_x = approx_gradient(f, x, eps)
+        f_only = f
+    else:
+        grad_x =  f(x)[1]
+        f_only = lambda x : f(x)[0]
+    x1 = x
+    if disp:
+        print "start w/ f", f_only(x), "x", x, "grad", grad_x
+    for d in range(dims):
+        step = np.zeros((dims,))
+        if grad_x[d] == 0:
+            continue
+        step[d] = -.3 * grad_x[d] / np.abs(grad_x[d])
+        try:
+            t = backtracking_line_search(
+                f_only, x1, step, grad_x, alpha=0.3, beta=0.4, max_iters=3, low_bounds=low_bounds, high_bounds=high_bounds)
+        except LineSearchFailed as e:
+            if disp:
+                print e
+            continue
+        x1 = project_into_bounds(x1 + step * t, low_bounds, high_bounds)
+        if t > 0:
+            break
+    if disp:
+        print "end w/ f", f_only(x1), "x", x1
     return x1
 
 

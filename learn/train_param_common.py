@@ -61,7 +61,8 @@ def learn_gp(sta, X, y, distfn, params, optimize=True, optim_params=None):
             sy = y
         print "learning hyperparams on", len(sy), "examples"
 
-        llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel='distfn', kernel_params=p,
+        kernel = "distfn" if distfn != "composite" else "composite"
+        llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=kernel, kernel_params=p,
                                              kernel_extra=distfns[distfn], kernel_priors=priors)
 
         bounds = [(1e-20,None),] * len(params)

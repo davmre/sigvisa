@@ -27,10 +27,17 @@ start_params_lld = {"coda_decay": [.022, .0187, 50.00],
                     "amp_transfer": [1.1, 3.4, 100.00],
                     "peak_offset": [2.7, 3.4, 50.00]
                     }
+
+start_params_composite = {"coda_decay": [.022, .01, 1.0, .01, 100.0, .01, 3.0, .01, 100.0],
+                          "amp_transfer": [1.1, 3.0, 5.0, 3.0, 100.0, 3.0, 3.0, 3.0, 100.0],
+                          "peak_offset": [2.7, 3.0, 5.0, 3.0, 100.0, 3.0, 3.0, 3.0, 100.0],
+                          }
+
 start_params = {"dad_log": start_params_dad_log,
                 "dad_cuberoot": start_params_dad_cuberoot,
                 "dad_linear": start_params_dad_linear,
-                "lld": start_params_lld
+                "lld": start_params_lld,
+                "composite": start_params_composite
                 }
 
 
@@ -156,18 +163,30 @@ def dist_azi_depth_distfn_deriv_log(i, dad1, dad2, params):
     return deriv
 
 
-def lon_lat_depth_distfn(lld1, lld2, params=None):
-    ll = geog.dist_km(lld1[0:2], lld2[0:2])
-    depth = lld1[2] - lld2[2]
+def lon_lat_depth_distfn(lldda1, lldda2, params=None):
+    ll = geog.dist_km(tuple(lldda1[0:2]), tuple(lldda2[0:2]))
+    depth = lldda1[2] - lldda2[2]
     r = np.sqrt(ll ** 2 + depth ** 2)
     return r
 
+def logdist_diff_distfn(lldda1, lldda2, params=None):
+    dist = np.log(lldda1[3] + 1) - np.log(lldda2[3] + 1)
+    return dist
+
+def azi_diff_distfn(lldda1, lldda2, params=None):
+    azi = np.abs ( geog.degdiff(lldda1[4], lldda2[4]) )
+    return azi
+
+def logdepth_diff_distfn(lldda1, lldda2, params=None):
+    depth = np.log(lldda1[2] + 1) - np.log(lldda2[2] + 1)
+    return depth
 
 distfns = {
     "dad_cuberoot": [dist_azi_depth_distfn_cuberoot, dist_azi_depth_distfn_deriv_cuberoot],
-"dad_linear": [dist_azi_depth_distfn_linear, dist_azi_depth_distfn_deriv_linear],
-"dad_log": [dist_azi_depth_distfn_log, dist_azi_depth_distfn_deriv_log],
-"lld": lon_lat_depth_distfn
+    "dad_linear": [dist_azi_depth_distfn_linear, dist_azi_depth_distfn_deriv_linear],
+    "dad_log": [dist_azi_depth_distfn_log, dist_azi_depth_distfn_deriv_log],
+    "lld": lon_lat_depth_distfn,
+    "composite": [logdist_diff_distfn, azi_diff_distfn, logdepth_diff_distfn, lon_lat_depth_distfn]
 }
 
 
@@ -185,7 +204,7 @@ class SpatialGP(GaussianProcess, ParamModel):
             pass
 
         kwargs['kernel_extra'] = distfns[self.distfn_str]
-        kwargs['kernel'] = "distfn"
+        kwargs['kernel'] = "distfn" if self.distfn_str != "composite" else "composite"
 
         GaussianProcess.__init__(self, *args, **kwargs)
 
