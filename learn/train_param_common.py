@@ -74,11 +74,11 @@ def learn_gp(sta, X, y, distfn, params, optimize=True, optim_params=None):
     return gp
 
 
-def learn_linear(X, y, sta):
+def learn_linear(X, y, sta, optim_params=None):
     return baseline_models.LinearModel(X=X, y=y, sta=sta)
 
 
-def learn_constant_gaussian(X, y, sta):
+def learn_constant_gaussian(X, y, sta, optim_params=None):
     return baseline_models.ConstGaussianModel(X=X, y=y, sta=sta)
 
 

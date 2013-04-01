@@ -10,7 +10,7 @@ from sigvisa.learn.train_coda_models import get_shape_training_data
 from sigvisa import *
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
 from sigvisa.database.signal_data import *
-
+from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 class RedirectStdStreams(object):
     def __init__(self, stdout=None, stderr=None):
@@ -58,7 +58,7 @@ def save_cv_folds(X, y, evids, cv_dir, folds=3):
         np.savetxt(os.path.join(cv_dir, "fold_%02d_test.txt" % i), test)
 
 
-def train_cv_models(cv_dir, model_type):
+def train_cv_models(cv_dir, model_type, **kwargs):
     X = np.loadtxt(os.path.join(cv_dir, "X.txt"))
     y = np.loadtxt(os.path.join(cv_dir, "y.txt"))
     evids = np.loadtxt(os.path.join(cv_dir, "evids.txt"))
@@ -90,7 +90,7 @@ def train_cv_models(cv_dir, model_type):
         with RedirectStdStreams(stdout=logfile, stderr=logfile):
             try:
                 print "learning model"
-                model = learn_model(X=trainX, y=trainy, model_type=model_type, target=d['target'], sta=d['sta'])
+                model = learn_model(X=trainX, y=trainy, model_type=model_type, target=d['target'], sta=d['sta'], **kwargs)
                 print "learned"
             except KeyboardInterrupt:
                 logfile.close()
@@ -155,6 +155,7 @@ def main():
     parser.add_option("-t", "--target", dest="target", default="decay", type="str", help="target parameter name (decay)")
     parser.add_option("-m", "--model_types", dest="model_types", default="gp_dad_log,constant_gaussian,linear_distance",
                       type="str", help="types of model to train (gp_dad_log,constant_gaussian,linear_distance)")
+    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 0", type="str", help="fitting param string")
 
     (options, args) = parser.parse_args()
 
@@ -164,6 +165,7 @@ def main():
     band = options.band
     target = options.target
     model_types = options.model_types.split(',')
+    optim_params = construct_optim_params(options.optim_params)
 
     run_name = options.run_name
 
@@ -185,7 +187,7 @@ def main():
 
     for model_type in model_types:
         print "training cross-validation models for", model_type
-        train_cv_models(cv_dir, model_type)
+        train_cv_models(cv_dir, model_type, optim_params=optim_params)
 
     print "DONE TRAINING, NOW EVALUATING!"
     for model_type in model_types:
