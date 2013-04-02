@@ -79,7 +79,7 @@ def save_gsrun_to_db(d, ev, sg):
 
         for tm_node in [tmn for (lbl, tmn) in wave_node.parents.items() if lbl.startswith("template_")]:
             for modelid in tm_node.get_modelids().values():
-                gsmid = execute_and_return_id(s.dbconn, "insert into sigvisa_gsrun_tmodel (gswid, modelid) values (%d, %d)" % (gswid, modelid), 'gsmid')
+                gsmid = execute_and_return_id(s.dbconn, "insert into sigvisa_gsrun_model (gswid, modelid) values (%d, %d)" % (gswid, modelid), 'gsmid')
 
     s.dbconn.commit()
 

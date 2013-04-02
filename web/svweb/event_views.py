@@ -90,7 +90,7 @@ def event_context_img_view(request, evid):
     fig = Figure(figsize=(6, 6), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(1, 1, 1)
-    hm.plot(axes=axes, colorbar=False)
+    hm.plot(axes=axes, colorbar=False, offmap_station_arrows=False)
     fig.subplots_adjust(bottom=0.05, top=1, left=0, right=0.9)
     canvas = FigureCanvas(fig)
     response = django.http.HttpResponse(content_type='image/png')
@@ -113,6 +113,3 @@ def event_wave_view(request, evid):
     wave = fetch_waveform(station=sta, chan=chan, stime=stime, etime=etime).filter(filter_str)
 
     return view_wave(request=request, wave=wave, color='black', linewidth=1.0, plot_predictions=phase_atimes)
-
-
-

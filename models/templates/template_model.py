@@ -11,7 +11,7 @@ from sigvisa.signals.common import *
 from sigvisa.graph.nodes import Node, ClusterNode
 from sigvisa.models.ttime import TravelTimeModel
 from sigvisa.models import DummyModel
-
+from sigvisa.source.event import Event
 
 def get_template_param_model_ids(runid, sta, chan, band, phase, model_type, template_shape):
     s = Sigvisa()
@@ -25,6 +25,7 @@ def get_template_param_model_ids(runid, sta, chan, band, phase, model_type, temp
     else:
         raise Exception("model_type must be either a string, or a dict of param->model_type mappings")
 
+
     sql_query = "select modelid from sigvisa_param_model where %s and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and template_shape='%s'" % (model_type_cond, sta, chan, band, phase, runid, template_shape)
     cursor.execute(sql_query)
     modelids = [m[0] for m in cursor.fetchall()]
@@ -32,6 +33,55 @@ def get_template_param_model_ids(runid, sta, chan, band, phase, model_type, temp
 
     return modelids
 
+class CodaHeightNode(Node):
+    def __init__(self, band, phase, **kwargs):
+        self.band=band
+        self.phase=phase
+        super(CodaHeightNode, self).__init__(**kwargs)
+
+    def log_p(self, value=None, parent_values=None):
+        if parent_values is None:
+            parent_values = self._parent_values()
+        if value is None:
+            value = self.get_value()
+
+        ev = Event(**parent_values.values()[0])
+        return self.model.log_p(x = value - ev.source_logamp(band=self.band, phase=self.phase), cond=parent_values)
+
+    def deriv_log_p(self, value=None, key=None, parent_values=None, parent_name=None, parent_key=None, **kwargs):
+        if parent_values is None:
+            parent_values = self._parent_values()
+        if value is None:
+            value = self.get_value()
+
+        if parent_name is not None:
+            # do a numerical deriv to get the source logamp correct,
+            # since I haven't implemented an analytic deriv yet.
+            l0 = self.log_p(value=value, parent_values=parent_values)
+            eps = kwargs['eps'] if eps in kwargs else 1e-4
+            parent_values[parent_name][parent_key] += eps
+            l1 = self.log_p(value=value, parent_values=parent_values)
+            parent_values[parent_name][parent_key] -= eps
+            deriv = (l1-l0)/eps
+        else:
+            deriv = self.model.deriv_log_p(x = value, cond=parent_values, idx=key, cond_key=parent_name, cond_idx=parent_key, **kwargs)
+        return
+
+    def prior_sample(self, parent_values=None):
+        if self._fixed: return
+        if parent_values is None:
+            parent_values = self._parent_values()
+        ev = Event(**parent_values.values()[0])
+        new_value = self.model.sample(cond=parent_values) + ev.source_logamp(band=self.band, phase=self.phase)
+        self.set_value(new_value)
+
+    def prior_predict(self, parent_values=None):
+        if self._fixed: return
+        if parent_values is None:
+            parent_values = self._parent_values()
+        ev = Event(**parent_values.values()[0])
+        new_value = self.model.predict(cond=parent_values) + ev.source_logamp(band=self.band, phase=self.phase)
+        self.set_value(new_value)
 
 
 class TemplateModelNode(ClusterNode):
@@ -73,10 +123,12 @@ class TemplateModelNode(ClusterNode):
                 param, db_model_type, fname = cursor.fetchone()
 
                 basedir = os.getenv("SIGVISA_HOME")
+                model = load_model(os.path.join(basedir, fname), db_model_type)
                 if param == "amp_transfer":
                     param = "coda_height"
-                model = load_model(os.path.join(basedir, fname), db_model_type)
-                mNode = Node(model=model, label=param)
+                    mNode = CodaHeightNode(model=model, label=param, band=band, phase=phase)
+                else:
+                    mNode = Node(model=model, label=param)
                 mNode.modelid = modelid
 
                 nodes[param] = mNode
@@ -109,5 +161,3 @@ class TemplateModelNode(ClusterNode):
     @staticmethod
     def params():
         raise Exception("abstract class: method not implemented")
-
-

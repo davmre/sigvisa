@@ -34,7 +34,7 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 import textwrap
 import hashlib
 
-from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunTModel, SigvisaGsrunWave, SigvisaParamModel
+from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunModel, SigvisaGsrunWave, SigvisaParamModel
 
 from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
 from svweb.views import wave_plus_template_view

@@ -24,9 +24,11 @@ def main():
         f = open(result_file, 'r')
 
         stations.add(d['sta'])
-
         for line in f:
-            key, value = line.split()
+            try:
+                key, value = line.split()
+            except:
+                import pdb; pdb.set_trace()
             value = float(value)
             results[d['target'] + "_" + key][model_type][d['sta']] = value
 

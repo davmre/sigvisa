@@ -280,5 +280,3 @@ class ClusterNode(DictNode):
 
         for node in self._nodes.itervalues():
             node.prior_predict(parent_values = parent_values)
-
-

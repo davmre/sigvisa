@@ -357,13 +357,13 @@ class SigvisaGsrunWave(models.Model):
         ordering = ['gswid']
 
 
-class SigvisaGsrunTModel(models.Model):
+class SigvisaGsrunModel(models.Model):
     gsmid = models.IntegerField(primary_key=True)
     gswid = models.ForeignKey(SigvisaGsrunWave, db_column='gswid')
     modelid = models.ForeignKey(SigvisaParamModel, db_column='modelid')
 
     class Meta:
-        db_table = u'sigvisa_gsrun_tmodel'
+        db_table = u'sigvisa_gsrun_model'
 
 
 class StaticPhaseid(models.Model):
