@@ -65,7 +65,7 @@ class CodaHeightNode(Node):
             deriv = (l1-l0)/eps
         else:
             deriv = self.model.deriv_log_p(x = value, cond=parent_values, idx=key, cond_key=parent_name, cond_idx=parent_key, **kwargs)
-        return
+        return deriv
 
     def prior_sample(self, parent_values=None):
         if self._fixed: return

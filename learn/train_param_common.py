@@ -87,7 +87,7 @@ def load_modelid(modelid):
     cursor.execute("select model_fname, model_type from sigvisa_param_model where modelid=%d" % modelid)
     fname, model_type = cursor.fetchone()
     cursor.close()
-    return load_model(fname=fname, model_type=model_type)
+    return load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type)
 
 def load_model(fname, model_type):
     if model_type.startswith("gp"):
