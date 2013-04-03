@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import collections
 
@@ -227,7 +228,12 @@ class SpatialGP(GaussianProcess, ParamModel):
     def log_p(self, x, cond):
         X1 = self.standardize_input_array(cond)
         x = x if isinstance(x, collections.Iterable) else (x,)
+
+#        print "log_p at", cond
+#        st  =time.time()
         result = GaussianProcess.posterior_log_likelihood(self, X1, x)
+#        et =time.time()
+#        print " took %.4f s, %d training examples, ratio %f" % (et-st, len(self.alpha), (et-st)/len(self.alpha))
         return result
 
     def predict(self, cond):
