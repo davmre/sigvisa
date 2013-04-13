@@ -11,6 +11,8 @@ from sigvisa.signals.common import Waveform, Segment
 from sigvisa.signals.io import load_event_station
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
+from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel, poly_basisfns, learn_poly_model
+
 
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.optimize.gradient_descent import approx_gradient
@@ -109,6 +111,40 @@ class TestLearnModel(unittest.TestCase):
 
         model.save_trained_model(model_fname)
 
+    def test_poly_regression(self):
+        N = 10
+        bfn = poly_basisfns(3)
+        X = np.reshape(np.linspace(-5, 5, N), (-1, 1))
+        H = np.array([[f(x) for f in bfn] for x in X])
+        coeffs = np.array([50, 1, 3, -3])
+        sigma_n = 1
+        np.random.seed(0)
+        y = np.dot(H, coeffs) + np.random.randn(N) * sigma_n
+
+        tol = np.array((1, .4, .05, .05))
+        model = learn_poly_model(X=X, y=y, sta=None, order=3)
+
+        self.assertTrue( (np.abs(model.mean - coeffs) < tol ).all())
+
+        # test that the variances are reasonable: we should be most
+        # certain about the high-order terms and least certain about
+        # the low-order terms.
+        v = np.diag(np.dot(model.sqrt_covar.T, model.sqrt_covar))
+        self.assertGreater(v[0], v[1])
+        self.assertGreater(v[1], v[2])
+        self.assertGreater(v[2], v[3])
+
+        # test that loading and saving work
+        p = model.predict(X)
+        c = model.covariance(X, include_obs=True)
+
+        model.save_trained_model('model.npz')
+        m = LinearBasisModel(fname='model.npz')
+        p1 = m.predict(X)
+        c1 = m.covariance(X, include_obs=True)
+
+        self.assertTrue( (np.abs(p-p1) < .001).all() )
+        self.assertTrue( (np.abs(c-c1) < .001).flatten().all() )
 
 if __name__ == '__main__':
     unittest.main()

@@ -7,7 +7,24 @@ from sigvisa.models import Distribution
 import sigvisa.utils.geog as geog
 import collections
 import hashlib
+import marshal
+import types
+
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
+
+def marshal_fn(f):
+    if f.func_closure is not None:
+        raise ValueError("function has non-empty closure %s, cannot marshal!" % f.func_closure)
+    s = marshal.dumps(f.func_code)
+    return s
+
+def unmarshal_fn(dumped_code):
+    try:
+        f_code = marshal.loads(dumped_code)
+    except:
+        import pdb; pdb.set_trace()
+    f = types.FunctionType(f_code, globals())
+    return f
 
 
 class ParamModel(Distribution):
@@ -154,6 +171,7 @@ class ConstGaussianModel(ParamModel):
             deriv = np.sum( [ (self.mean - z) / (self.std ** 2)  for z in x ] )
 
         return deriv
+
 class LinearModel(ParamModel):
 
     def __init__(self, sta=None, X=None, y=None, fname=None):
@@ -294,3 +312,148 @@ class LinearModel(ParamModel):
         X1 = self.standardize_input_array(cond)
         return np.array([self.sample_item(x1) for x1 in X1])
 
+
+
+def poly_basisfns(order):
+    basisfn_strs = ["lambda x : " + ("1" if d==0 else "x**%d" % d)   for d in range(order+1)]
+    return [eval(s) for s in basisfn_strs]
+
+def learn_poly_model(X, y, sta, order=6, param_var=100, x0=10):
+    k = order+1
+    basisfns = poly_basisfns(order)
+    b = np.zeros((k,))
+    B = np.eye(k) * param_var
+    B[0,0] = (1000000)**2 # be very accomodating in estimating the constant term
+
+
+    noise_prior = scipy.stats.invgamma([1.0,])
+
+    def nllgrad(std):
+        if std < 1e-4:
+            return (np.inf, -1)
+
+        try:
+            lbm = LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, compute_ll=True)
+        except scipy.linalg.LinAlgError:
+            return (np.inf, np.array((-1.0,)))
+        return (-lbm.ll, -lbm.ll_deriv)
+
+    result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
+                                     tol=.0001, method='L-BFGS-B', bounds=((1e-3, None),))
+    opt_std = result['x']
+    return LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=opt_std)
+
+class LinearBasisModel(ParamModel):
+
+    def __init__(self, fname=None, sta=None, X=None, y=None, basisfns=None, param_mean=None, param_covar=None, noise_std=1, compute_ll=False):
+        super(LinearBasisModel, self).__init__(sta=sta)
+
+        if fname is not None:
+            self.load_trained_model(fname)
+            return
+
+        X = self.standardize_input_array(X)
+        n = X.shape[0]
+        self.basisfns = basisfns
+        H = np.array([[f(x) for f in basisfns] for x in X], dtype=float)
+        b = param_mean
+        B = param_covar
+
+        self.noise_var = float(noise_std**2)
+
+        B_chol = scipy.linalg.cholesky(B, lower=True)
+        B_chol_inv = scipy.linalg.inv(B_chol)
+        prior_precision = np.dot(B_chol_inv.T, B_chol_inv)
+        precision = 1.0/self.noise_var * np.dot(H.T, H) + prior_precision
+        precision_chol = scipy.linalg.cholesky(precision, lower=True)
+        precision_chol_inv = scipy.linalg.inv(precision_chol)
+        covar = np.dot(precision_chol_inv.T, precision_chol_inv)
+        self.mean = np.dot(covar, np.dot(prior_precision, b) + 1.0/self.noise_var * np.dot(H.T, y))
+        self.sqrt_covar=precision_chol_inv
+
+        self.ll=None
+        if compute_ll:
+            marginal_covar = self.noise_var * np.eye(n) + np.dot(H, np.dot(B, H.T))
+            marginal_covar_chol = scipy.linalg.cholesky(marginal_covar, lower=True)
+            marginal_covar_chol_inv = scipy.linalg.inv(marginal_covar_chol)
+            r = y - np.dot(H, b)
+            tmp = np.dot(marginal_covar_chol_inv, r)
+
+            ld2 = np.log(np.diag(marginal_covar_chol)).sum()
+            self.ll =  -.5 * (np.dot(tmp.T, tmp) + n * np.log(2*np.pi)) - ld2
+
+            marginal_precision = np.dot(marginal_covar_chol_inv.T, marginal_covar_chol_inv)
+            tmp = np.dot(marginal_precision, r)
+            self.ll_deriv = noise_std * (np.dot(tmp.T, tmp) - np.trace(marginal_precision))
+
+    def save_trained_model(self, fname):
+        np.savez(fname,
+                 sqrt_covar=self.sqrt_covar,
+                 mean=self.mean,
+                 noise_var=self.noise_var,
+                 ll=self.ll,
+                 basisfns = np.array([marshal_fn(f) for f in self.basisfns], dtype=object))
+
+    def load_trained_model(self, fname):
+        npzfile = np.load(fname)
+        self.sqrt_covar = npzfile['sqrt_covar']
+        self.mean = npzfile['mean']
+        self.noise_var = npzfile['noise_var']
+        self.ll = npzfile['ll']
+        self.basisfns = [unmarshal_fn(code) for code in npzfile['basisfns']]
+        del npzfile.f
+        npzfile.close()
+
+    def predict(self, cond):
+        X1 = self.standardize_input_array(cond)
+        X2 = np.array([[f(x) for f in self.basisfns] for x in X1])
+        return np.dot(X2, self.mean)
+
+    def log_likelihood(self):
+        return self.ll
+
+    def covariance(self, cond, return_sqrt=False, include_obs=False):
+        X1 = self.standardize_input_array(cond)
+        X2 = np.array([[f(x) for f in self.basisfns] for x in X1], dtype=float)
+        tmp = np.dot(self.sqrt_covar, X2.T)
+
+        if return_sqrt and not include_obs:
+            return tmp.T
+        else:
+            covar = np.dot(tmp.T, tmp) + (self.noise_var if include_obs else 1e-8) * np.eye(X1.shape[0])
+            if return_sqrt:
+                return scipy.linalg.cholesky(covar, lower=True)
+            else:
+                return covar
+
+    def variance(self, cond):
+        return np.diag(self.covariance(cond))
+
+    def log_p(self, x, cond):
+        mean = self.predict(cond)
+        n = len(mean)
+        covar = self.covariance(cond, include_obs=True)
+
+        r = x - mean
+
+        if n==1:
+            var = covar[0,0]
+            ll1 = - .5 * ((r)**2 / var + np.log(2*np.pi*var) )
+
+        chol = scipy.linalg.cholesky(covar, lower=True)
+        ld2 = np.log(np.diag(chol)).sum()
+        csi = scipy.linalg.inv(chol)
+        tmp = np.dot(csi, r)
+        d = np.dot(tmp.T, tmp)
+        ll =  -.5 * ( d + n * np.log(2*np.pi)) - ld2
+
+        return ll
+
+    def sample(self, cond, include_obs=False):
+        mean = self.predict(cond)
+        n = len(mean)
+        covar_sqrt = self.covariance(cond, return_sqrt=True, include_obs=include_obs)
+
+        samples = np.random.randn(covar_sqrt.shape[1], 1)
+        samples = mean + np.dot(covar_sqrt, samples).flatten()
+        return samples
