@@ -31,6 +31,7 @@ import sigvisa.plotting.plot as plot
 from sigvisa.plotting.event_heatmap import EventHeatmap
 import sigvisa.plotting.histogram as histogram
 import textwrap
+import sigvisa.utils.geog as geog
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaParamModel
 from svweb.views import filterset_GET_string, process_plot_args, FitsFilterSet
@@ -60,13 +61,13 @@ def model_list_view(request):
 
 def plot_empirical_distance(request, xy_by_phase, axes):
 
-    colors = ['b', 'r', 'g', 'y']
+    colors = ['r', 'g', 'b', 'y']
 
     xmin = np.float('-inf')
     xmax = np.float('inf')
     for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
         X, y = xy_by_phase[phase]
-        axes.scatter(X[:, 3], y, alpha=1 / np.log(len(y)), c=colors[i], s=10, marker='.', edgecolors="none")
+        axes.scatter(X[:, 3], y, alpha=min(1, 4 / np.log(len(y))), c=colors[i], s=10, marker='.', edgecolors="none")
         xmin = max(xmin, np.min(X[:, 3]))
         xmax = min(xmax, np.max(X[:, 3]))
     r = xmax - xmin
@@ -88,18 +89,25 @@ def plot_linear_model_distance(request, model_record, axes):
     axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
 
 
-def plot_gp_model_distance(request, model_record, axes):
+def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
 
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
 
-    # TODO : use specified azimuth and depth ranges
+    site_loc = Sigvisa().stations[model_record.site][:2]
+    distances = np.linspace(0, 10000, 40)
+    pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
 
-    distances = np.linspace(0, 20000, 200)
-    pred = np.array([model.predict(np.array(((0, 0, 0, d, 0),))) for d in distances]).flatten()
+    pred = np.array([model.predict(np.array(((pt[0], pt[1], depth, d, azi),))) for (pt, d) in zip(pts, distances)]).flatten()
     axes.plot(distances, pred, 'k-')
 
-    std = np.array([np.sqrt(model.variance(np.array(((0, 0, 0, d, 0),)))) for d in distances])
+    array_inputs = [np.array(((pt[0], pt[1], depth, d, azi),)) for (pt, d) in zip(pts, distances)]
+    stds = np.zeros((len(distances),))
+    for (i, arr) in enumerate(array_inputs):
+        v = model.variance(arr, include_obs=True)
+        stds[i] = np.sqrt(v)
+    std = np.array(stds)
+
     var_x = np.concatenate((distances, distances[::-1]))
     var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
     axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
@@ -108,6 +116,13 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
 
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
+
+    draw_azi = request.GET.get("draw_azi", None)
+    if draw_azi:
+        azi = float(draw_azi)
+        distances = np.linspace(0, 15000, 200)
+        site_loc = Sigvisa().stations[model_record.site][:2]
+        pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
 
     ev_locs = X[:, 0:2]
     if stddev:
@@ -119,7 +134,11 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
     hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = heatmap_fname)
     hm.add_stations((model_record.site,))
     hm.add_events(locations=ev_locs)
+    if draw_azi:
+        hm.add_events(pts)
     hm.plot(axes=axes, nolines=True, smooth=True, colorbar_format='%.3f')
+
+
 
     for item in (axes.get_xticklabels() + axes.get_yticklabels()):
         print item
@@ -157,6 +176,15 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         max_acost = model.max_acost
         basisid = model.wiggle_basisid.basisid if model.wiggle_basisid else None
         require_human_approved = (model.require_human_approved == 't')
+
+        gp_plot_azi = float(request.GET.get("azi", 0))
+        azi_window = float(request.GET.get("azi_window", -1))
+        gp_plot_depth = float(request.GET.get("depth", 0))
+
+        if azi_window > 0:
+            d['min_azi'] = gp_plot_azi - azi_window
+            d['max_azi'] = gp_plot_azi + azi_window
+
     else:
         param = request.GET.get("plot_param", "coda_decay")
         sta = request.GET.get("sta", None)
@@ -199,11 +227,17 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         elif plot_type == "distance":
             if model.model_type == "linear_distance":
                 plot_linear_model_distance(request, model_record=model, axes=axes)
-            elif model.model_type[:2] == "gp":
-                plot_gp_model_distance(request, model_record=model, axes=axes)
-        elif plot_type == "heatmap" and model.model_type[:2] == "gp":
+            else:
+                nplots = int(request.GET.get('nplots', 1))
+                if nplots == 1:
+                    plot_azis = [gp_plot_azi,]
+                else:
+                    plot_azis = np.linspace(d['min_azi'], d['max_azi'], nplots)
+                for azi in plot_azis:
+                    plot_gp_model_distance(request, model_record=model, axes=axes, azi=azi, depth=gp_plot_depth)
+        elif plot_type == "heatmap": # and model.model_type[:2] == "gp":
                 plot_gp_heatmap(request, model_record=model, X=xy_by_phase[model.phase][0], y=xy_by_phase[model.phase][1], axes=axes, stddev=False)
-        elif plot_type == "heatmap_std" and model.model_type[:2] == "gp":
+        elif plot_type == "heatmap_std": #and model.model_type[:2] == "gp":
                 plot_gp_heatmap(request, model_record=model, X=xy_by_phase[model.phase][0], y=xy_by_phase[model.phase][1], axes=axes, stddev=True)
 
     if runid is not None:
@@ -240,17 +274,19 @@ def plot_empirical_histogram(request, xy_by_phase, axes):
         histogram.plot_histogram(y, axes=axes, normed=True)
 
 
+@cache_page(60 * 60 * 24 * 365)
 def model_density(request, modelid):
     return plot_fit_param(request, modelid=modelid, plot_type="histogram")
 
-
+@cache_page(60 * 60 * 24 * 365)
 def model_distance_plot(request, modelid):
     return plot_fit_param(request, modelid=modelid, plot_type="distance")
 
-
+@cache_page(60 * 60 * 24 * 365)
 def model_heatmap(request, modelid):
     return plot_fit_param(request, modelid=modelid, plot_type="heatmap")
 
+@cache_page(60 * 60 * 24 * 365)
 def model_heatmap_std(request, modelid):
     return plot_fit_param(request, modelid=modelid, plot_type="heatmap_std")
 

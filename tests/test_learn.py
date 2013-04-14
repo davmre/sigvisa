@@ -11,7 +11,7 @@ from sigvisa.signals.common import Waveform, Segment
 from sigvisa.signals.io import load_event_station
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
-from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel, poly_basisfns, learn_poly_model
+from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel, poly_basisfns
 
 
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
@@ -121,9 +121,13 @@ class TestLearnModel(unittest.TestCase):
         np.random.seed(0)
         y = np.dot(H, coeffs) + np.random.randn(N) * sigma_n
 
-        tol = np.array((1, .4, .05, .05))
-        model = learn_poly_model(X=X, y=y, sta=None, order=3)
+        b = np.zeros((4,))
+        B = np.eye(4) * 100000
+        B[0,0] = (1000000)**2
 
+        model = LinearBasisModel(X=X, y=y, basisfns=bfn, param_mean=b, param_covar=B, noise_std=sigma_n, H=H, compute_ll=True)
+
+        tol = np.array((1, .4, .05, .05))
         self.assertTrue( (np.abs(model.mean - coeffs) < tol ).all())
 
         # test that the variances are reasonable: we should be most

@@ -209,10 +209,10 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         GaussianProcess.__init__(self, *args, **kwargs)
 
-    def variance(self, cond):
+    def variance(self, cond, **kwargs):
         X1 = self.standardize_input_array(cond)
 
-        result = GaussianProcess.variance(self, X1)
+        result = GaussianProcess.variance(self, X1, **kwargs)
         if len(result) == 1:
             result = result[0]
         return result

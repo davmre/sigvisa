@@ -13,7 +13,7 @@ import numpy as np
 
 from optparse import OptionParser
 
-from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname
+from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname, model_params
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, **kwargs):
@@ -153,7 +153,7 @@ def main():
                 modelid = insert_model(
                     s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(
                     ),
-                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = repr(model.kernel_params) if model_type.startswith('gp') else None, optim_method = repr(optim_params) if model_type.startswith('gp') else None)
+                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None)
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
 if __name__ == "__main__":

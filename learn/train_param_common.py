@@ -27,6 +27,17 @@ X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp, elapsed, template_shape=None, wiggle_basisid=None, optim_method=None, hyperparams=None):
     return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams)
 
+def model_params(model, model_type):
+    if model_type.startswith('gp'):
+        return repr(model.kernel_params)
+    elif model_type.startswith('param'):
+        d = dict()
+        d['mean'] = model.mean
+        d['covar'] = np.dot(model.sqrt_covar.T, model.sqrt_covar)
+        return repr(d)
+    else:
+        return None
+
 
 def learn_model(X, y, model_type, sta, target=None, **kwargs):
     if model_type.startswith("gp"):
@@ -37,10 +48,66 @@ def learn_model(X, y, model_type, sta, target=None, **kwargs):
         model = learn_constant_gaussian(sta=sta, X=X, y=y, **kwargs)
     elif model_type == "linear_distance":
         model = learn_linear(sta=sta, X=X, y=y, **kwargs)
+    elif model_type.startswith('param_dist'):
+        order = int(model_type[10:])
+        model = learn_parametric(X=X, y=y, sta=sta, dist_order=order)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
 
+
+def learn_parametric(sta, X, y, dist_order, param_var=10000, x0=10):
+
+    def distance_poly_basisfns(order):
+        basisfn_strs = ["lambda x : " + ("1" if d==0 else "x[3]**%d" % d)   for d in range(order+1)]
+        return [eval(s) for s in basisfn_strs]
+
+
+    k = dist_order+1
+    basisfns = distance_poly_basisfns(dist_order)
+    b = np.zeros((k,))
+    B = np.eye(k) * param_var
+    B[0,0] = (1000000)**2 # be very accomodating in estimating the constant term
+
+    H = np.array([[f(x) for f in basisfns] for x in X], dtype=float)
+
+    """
+    def nllgrad(std):
+        if std < 1e-4:
+            return (np.inf, -1)
+        try:
+            lbm = baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=True)
+        except scipy.linalg.LinAlgError:
+            print " warning: lin alg error for std %f" % std
+            return (np.inf, np.array((-1.0,)))
+        return (-lbm.ll, -lbm.ll_deriv)
+
+    result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
+                                     tol=.0001, method='L-BFGS-B', bounds=((1e-3, None),))
+    opt_std = result['x']
+    print "got opt std", opt_std"""
+
+    std = 10
+    lbm = baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=False)
+    p = lbm.predict(X)
+    r = y-p
+    std = np.std(r)
+
+    return baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=True)
+
+
+def subsample_data(X, y, k=250):
+    # subsample for efficient hyperparam learning
+    n = len(y)
+    if n > k:
+        np.random.seed(0)
+        perm = np.random.permutation(n)[0:k]
+        sX = X[perm, :]
+        sy = y[perm, :]
+    else:
+        sX = X
+        sy = y
+    return sX, sy
 
 def learn_gp(sta, X, y, distfn, params, optimize=True, optim_params=None):
 
@@ -49,16 +116,7 @@ def learn_gp(sta, X, y, distfn, params, optimize=True, optim_params=None):
     if optimize:
         priors = [None for p in params]
 
-        # subsample for efficient hyperparam learning
-        n = len(y)
-        if n > 250:
-            np.random.seed(0)
-            perm = np.random.permutation(n)[0:250]
-            sX = X[perm, :]
-            sy = y[perm, :]
-        else:
-            sX = X
-            sy = y
+        sX, sy = subsample_data(X=X, y=y)
         print "learning hyperparams on", len(sy), "examples"
 
         kernel = "distfn" if distfn != "composite" else "composite"
@@ -92,6 +150,8 @@ def load_modelid(modelid):
 def load_model(fname, model_type):
     if model_type.startswith("gp"):
         model = SpatialGP(fname=fname)
+    elif model_type.startswith("param"):
+        model = baseline_models.LinearBasisModel(fname=fname)
     elif model_type == "constant_gaussian":
         model = baseline_models.ConstGaussianModel(fname=fname)
     elif model_type == "linear_distance":

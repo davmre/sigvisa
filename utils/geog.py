@@ -154,6 +154,33 @@ def azimuth(loc1, loc2):
     return zeta
 
 
+
+
+
+def pointRadialDistance(lon1, lat1, azi, distance):
+    """
+    Return final coordinates (lat2,lon2) [in degrees] given initial coordinates
+    (lat1,lon1) [in degrees] and an azimuth [in degrees] and distance [in km]
+
+    """
+
+    bearing = -azi % 360
+
+    rlat1 = np.radians(lat1)
+    rlon1 = np.radians(lon1)
+    rbearing = np.radians(bearing)
+    rdistance = distance / AVG_EARTH_RADIUS_KM # normalize linear distance to radian angle
+
+    rlat = np.arcsin( np.sin(rlat1) * np.cos(rdistance) + np.cos(rlat1) * np.sin(rdistance) * np.cos(rbearing) )
+
+    dlon = np.arctan2( np.sin(rbearing) * np.sin(rdistance) * np.cos(rlat1),
+                       np.cos(rdistance) - np.sin(rlat1)*np.sin(rlat) )
+    rlon = (rlon1 - dlon + np.pi) % (2*np.pi) - np.pi
+
+    lat = np.degrees(rlat)
+    lon = np.degrees(rlon)
+    return (lon, lat)
+
 def _test():
     import doctest
     doctest.testmod()

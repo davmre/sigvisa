@@ -258,7 +258,7 @@ def main():
                     ll = sg.current_log_p()
                     if ll > best_ll:
                         best_ll = ll
-                        best_graph = pickle.dumps(sg)
+                        best_graph = pickle.dumps(sg, protocol=pickle.HIGHEST_PROTOCOL)
 
         sg = pickle.loads(best_graph)
 
@@ -304,17 +304,33 @@ def main():
                       center=(ev_true.lon, ev_true.lat),
                       width=map_width, fname="%s/overall.txt" % heatmap_dir, calc=False)
     coord_list = hm.coord_list()
-    coord_graphs = [f_sg(lon=lon, lat=lat) for (lon, lat) in coord_list]
-    overall_lls = [sg.current_log_p() for sg in coord_graphs]
+
+    overall_lls = []
+    for (lon, lat) in coord_list:
+        sg = f_sg(lon=lon, lat=lat)
+        ll = sg.current_log_p()
+        overall_lls.append(ll)
+
+        f = open(os.path.join(heatmap_dir, "graph_%.3f_%.3f.pickle" % (lon, lat)), 'wb')
+        assert(np.abs(sg.toplevel_nodes[0].get_event().lon - lon) < 0.001)
+        pickle.dump(sg, f, protocol=pickle.HIGHEST_PROTOCOL)
+        f.close()
+
     hm.set_coord_fvals(overall_lls)
     hm.save()
     etime = time.time()
     print "finished heatmap; saving results..."
 
-    sg0 = coord_graphs[0]
     for wn in sg.leaf_nodes:
         wave = wn.mw
-        lls = [sg.get_wave_node_log_p(sg.get_wave_node(wave)) for sg in coord_graphs]
+
+        lls = []
+        for (lon, lat) in coord_list:
+            f = open(os.path.join(heatmap_dir, "graph_%.3f_%.3f.pickle" % (lon, lat)), 'rb')
+            sg = pickle.load(f)
+            lls.append(sg.get_wave_node_log_p(sg.get_wave_node(wave)))
+            f.close()
+
         wave_label = "%s_%s_%s" % (wave['sta'], wave['chan'], wave['band'])
         hm = EventHeatmap(f=None, n=options.n * 2 + 1,
                           center=(ev_true.lon, ev_true.lat),
@@ -323,12 +339,6 @@ def main():
         hm.set_coord_fvals(lls)
         hm.save()
 
-    print "done saving heatmaps, now pickling graphs..."
-    for (sg, (lon, lat)) in zip(coord_graphs, coord_list):
-        f = open(os.path.join(heatmap_dir, "graph_%.3f_%.3f.pickle" % (lon, lat)), 'wb')
-        assert(np.abs(sg.toplevel_nodes[0].get_event().lon - lon) < 0.001)
-        pickle.dump(sg, f)
-        f.close()
 
     print "done pickling graphs, now writing DB entries..."
     d = {'evid': ev_true.evid,
