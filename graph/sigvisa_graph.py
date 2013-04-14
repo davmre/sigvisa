@@ -413,5 +413,3 @@ class SigvisaGraph(DirectedGraphModel):
         cursor.close()
 
         return fitids
-
-

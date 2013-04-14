@@ -49,7 +49,7 @@ class EventHeatmap(Heatmap):
 
         self.save(fname + ".log")
 
-    def plot(self, event_alpha=0.6, axes=None, **density_args):
+    def plot(self, event_alpha=0.6, axes=None, offmap_station_arrows=True, **density_args):
 
         self.init_bmap(axes=axes)
         self.plot_earth()
@@ -66,7 +66,7 @@ class EventHeatmap(Heatmap):
                                 marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
 
         sta_locations = [self.sitenames[n][0:2] for n in self.stations]
-        self.plot_locations(sta_locations, labels=self.stations, offmap_arrows=True,
+        self.plot_locations(sta_locations, labels=self.stations, offmap_arrows=offmap_station_arrows,
                             marker="x", ms=7, mfc="none", mec="white", mew=2, alpha=1)
 
     def title(self):

@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import time
 from sigvisa.database import db, dataset
 from sigvisa.load_c_components import load_sigvisa, load_earth
 import sigvisa.sigvisa_c
@@ -52,8 +53,19 @@ class Sigvisa(threading.local):
 
         st = 1237680000
         et = st + 24 * 3600
-        self.dbconn = db.connect()
-        cursor = self.dbconn.cursor()
+
+        while True:
+            try:
+                self.dbconn = db.connect()
+                cursor = self.dbconn.cursor()
+                break
+            except Exception as e:
+                if "SESSIONS_PER_USER" in str(e):
+                    print "too many DB sessions, trying again in 1s..."
+                    time.sleep(1)
+                else:
+                    raise
+
         self.sites = dataset.read_sites(cursor)
         self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(cursor)
         self.site_up = dataset.read_uptime(cursor, st, et)

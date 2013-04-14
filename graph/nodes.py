@@ -1,7 +1,11 @@
 import numpy as np
 
+import copy
 from collections import deque, Iterable
+from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.infer.optimize.optim_utils as optim_utils
+from sigvisa.models import DummyModel
+
 
 class Node(object):
 
@@ -80,6 +84,27 @@ class Node(object):
 
     def get_mark(self):
         return self.mark
+
+    # use custom getstate() and setstate() methods to avoid pickling
+    # param models when we pickle a graph object (since these models
+    # can be large, and GP models can't be pickled anyway).
+    def __getstate__(self):
+        try:
+            self.modelid
+            d = copy.copy(self.__dict__)
+            del d['model']
+            state = d
+        except AttributeError:
+            state = self.__dict__
+        return state
+
+    def __setstate__(self, state):
+        if "model" not in state:
+            if state['modelid'] is None:
+                state['model'] = DummyModel()
+            else:
+                state["model"] = load_modelid(modelid=state['modelid'])
+        self.__dict__.update(state)
 
 class DictNode(Node):
 
@@ -280,5 +305,3 @@ class ClusterNode(DictNode):
 
         for node in self._nodes.itervalues():
             node.prior_predict(parent_values = parent_values)
-
-

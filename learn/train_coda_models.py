@@ -142,6 +142,7 @@ def main():
                 distfn = model_type[3:]
                 st = time.time()
                 model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params)
+
                 et = time.time()
 
                 if np.isnan(model.log_likelihood()):

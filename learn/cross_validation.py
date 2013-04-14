@@ -1,5 +1,6 @@
 import numpy as np
 
+import time
 import sys
 import traceback
 import pdb
@@ -141,8 +142,13 @@ def cv_eval_models(cv_dir, model_type):
 def main():
     parser = OptionParser()
 
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
+    while True:
+        try:
+            s = Sigvisa()
+            cursor = s.dbconn.cursor()
+            break
+        except:
+            time.sleep(1)
 
     parser.add_option("-s", "--site", dest="site", default=None, type="str", help="site for which to train models")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")

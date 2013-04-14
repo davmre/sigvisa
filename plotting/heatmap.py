@@ -43,7 +43,7 @@ class Heatmap(object):
         self.bottom_lat = center[1] - height_deg/2.0
         self.top_lat = center[1] + height_deg/2.0
 
-        assert ( -180 < self.left_lon < 180 )
+        assert ( -180 < center[0] < 180 )
         assert ( 0 < self.right_lon - self.left_lon < 360 )
 
 

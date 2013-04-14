@@ -162,7 +162,7 @@ create table sigvisa_gsrun_wave (
  foreign key(nmid) REFERENCES sigvisa_noise_model(nmid)
 );
 
-create table sigvisa_gsrun_tmodel (
+create table sigvisa_gsrun_model (
  gsmid int not null auto_increment,
  gswid int not null,
  modelid int not null,

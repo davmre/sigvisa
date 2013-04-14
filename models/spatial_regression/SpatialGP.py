@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import collections
 
@@ -227,6 +228,7 @@ class SpatialGP(GaussianProcess, ParamModel):
     def log_p(self, x, cond):
         X1 = self.standardize_input_array(cond)
         x = x if isinstance(x, collections.Iterable) else (x,)
+
         result = GaussianProcess.posterior_log_likelihood(self, X1, x)
         return result
 

@@ -41,6 +41,10 @@ def main():
 
     parser.add_option("-s", "--sites", dest="sites", default=None, type="str",
                       help="comma-separated list of stations  (default is no stations)")
+    parser.add_option("--require_phases", dest="require_phases", default="", type="str",
+                      help="comma-separated list of phases that each station *must* have")
+    parser.add_option("--only_phases", dest="only_phases", default="", type="str",
+                      help="comma-separated list of phases that each station can *only* have (meaning, discard any event/station pair with a phase arrival not in this list)")
     parser.add_option("-r", "--runids", dest="runids", default=None, type="str",
                       help="only consider arrivals having fits from this set of runids (default is to consider all arrivals)")
     parser.add_option(
@@ -71,12 +75,18 @@ def main():
         runids_source = ""
         runids_cond = ""
 
+    phase_cond = ""
+    if options.require_phases:
+        phase_cond += "and (" + " or ".join(["leba.phase='%s'" % p for p in options.require_phases.split(',')]) + ")"
+    if options.only_phases:
+        phase_cond += " and (select count(leba2.phase) from leb_assoc leba2 where leba2.orid=lebo.orid and " + " and ".join(["leba2.phase!='%s'" % p for p in options.only_phases.split(',')] ) + ") = 0"
+
     # first find events detected at all stations
     evids = dict()
     overlap = None
     for sta in stas:
-        sql_query = "select distinct lebo.evid from leb_origin lebo, leb_assoc leba %s where lebo.mb > %f and lebo.mb < %f and lebo.time > %f and lebo.time < %f and lebo.orid=leba.orid and leba.sta='%s' %s" % (
-            runids_source, options.min_mb, options.max_mb, options.start_time, options.end_time, sta, runids_cond)
+        sql_query = "select distinct lebo.evid from leb_origin lebo, leb_assoc leba %s where lebo.mb > %f and lebo.mb < %f and lebo.time > %f and lebo.time < %f and lebo.orid=leba.orid and leba.sta='%s' %s %s" % (
+            runids_source, options.min_mb, options.max_mb, options.start_time, options.end_time, sta, runids_cond, phase_cond)
         print sql_query
         cursor.execute(sql_query)
         evids[sta] = set([r[0] for r in cursor.fetchall()])

@@ -81,6 +81,13 @@ def learn_linear(X, y, sta, optim_params=None):
 def learn_constant_gaussian(X, y, sta, optim_params=None):
     return baseline_models.ConstGaussianModel(X=X, y=y, sta=sta)
 
+def load_modelid(modelid):
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+    cursor.execute("select model_fname, model_type from sigvisa_param_model where modelid=%d" % modelid)
+    fname, model_type = cursor.fetchone()
+    cursor.close()
+    return load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type)
 
 def load_model(fname, model_type):
     if model_type.startswith("gp"):
