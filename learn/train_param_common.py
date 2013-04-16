@@ -34,47 +34,66 @@ def model_params(model, model_type):
         d = dict()
         d['mean'] = model.mean
         d['covar'] = np.dot(model.sqrt_covar.T, model.sqrt_covar)
-        return repr(d)
+        r = repr(d)
+        if len(r) > 4000:
+            del d['covar']
+            r = repr(d)
+        return r
     else:
         return None
 
-
 def learn_model(X, y, model_type, sta, target=None, **kwargs):
+    if model_type.startswith("gplocal_"):
+        s = model_type.split('_')
+        kernel_str = s[1]
+        basisfn_str = '_'.join(s[2:])
+        params = start_params['local'][target]
+        model = learn_gp(X=X, y=y, sta=sta, distfn=None, basisfn_str=basisfn_str, kernel_str=kernel_str, params=params, **kwargs)
     if model_type.startswith("gp"):
         distfn = model_type[3:]
         params = start_params[distfn][target]
-        model = learn_gp(X=X, y=y, sta=sta, distfn=distfn, params=params, **kwargs)
+        if distfn == "composite":
+            distfn = None
+            kernel_str = "composite"
+        else:
+            kernel_str = "distfn"
+        model = learn_gp(X=X, y=y, sta=sta, distfn=distfn, kernel_str=kernel_str, params=params, **kwargs)
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y, **kwargs)
     elif model_type == "linear_distance":
         model = learn_linear(sta=sta, X=X, y=y, **kwargs)
     elif model_type.startswith('param_dist'):
-        order = int(model_type[10:])
-        model = learn_parametric(X=X, y=y, sta=sta, dist_order=order)
+        basisfn_str = model_type[6:]
+        model = learn_parametric(X=X, y=y, sta=sta, basisfn_str=basisfn_str)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
 
-
-def learn_parametric(sta, X, y, dist_order, param_var=10000, x0=10):
-
+def basisfns_from_str(basisfn_str, param_var=10000):
     def distance_poly_basisfns(order):
         basisfn_strs = ["lambda x : " + ("1" if d==0 else "x[3]**%d" % d)   for d in range(order+1)]
         return [eval(s) for s in basisfn_strs]
 
+    basisfns = []
+    if basisfn_str.startswith('dist'):
+        dist_order = int(basisfn_str[4:])
+        basisfns += distance_poly_basisfns(dist_order)
 
-    k = dist_order+1
-    basisfns = distance_poly_basisfns(dist_order)
+    k = len(basisfns)
     b = np.zeros((k,))
     B = np.eye(k) * param_var
     B[0,0] = (1000000)**2 # be very accomodating in estimating the constant term
 
+    return basisfns, b, B
+
+def learn_parametric(sta, X, y, basisfn_str, param_var=10000, optimize_marginal_ll=False):
+    basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
+    k = len(basisfns)
+
     H = np.array([[f(x) for f in basisfns] for x in X], dtype=float)
 
-    """
+
     def nllgrad(std):
-        if std < 1e-4:
-            return (np.inf, -1)
         try:
             lbm = baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=True)
         except scipy.linalg.LinAlgError:
@@ -82,18 +101,20 @@ def learn_parametric(sta, X, y, dist_order, param_var=10000, x0=10):
             return (np.inf, np.array((-1.0,)))
         return (-lbm.ll, -lbm.ll_deriv)
 
-    result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
-                                     tol=.0001, method='L-BFGS-B', bounds=((1e-3, None),))
-    opt_std = result['x']
-    print "got opt std", opt_std"""
+    if optimize_marginal_ll:
+        x0 = 10
+        result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
+                                         tol=.0001, method='L-BFGS-B', bounds=((1e-3, None),))
+        opt_std = result['x']
+        print "got opt std", opt_std
+    else:
+        std = 10
+        lbm = baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=False, sta=sta)
+        p = lbm.predict(X)
+        r = y-p
+        opt_std = np.std(r)
 
-    std = 10
-    lbm = baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=False)
-    p = lbm.predict(X)
-    r = y-p
-    std = np.std(r)
-
-    return baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=True)
+    return baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=opt_std, H=H, compute_ll=True, sta=sta)
 
 
 def subsample_data(X, y, k=250):
@@ -109,9 +130,17 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, distfn, params, optimize=True, optim_params=None):
+def learn_gp(sta, X, y, params, distfn=None, kernel_str="distfn", basisfn_str=None, optimize=True, optim_params=None):
 
-    X = gp_extract_features(X, distfn)
+    if distfn:
+        X = gp_extract_features(X, distfn)
+
+    if basisfn_str:
+        basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
+    else:
+        basisfns = None
+        b = None
+        B = None
 
     if optimize:
         priors = [None for p in params]
@@ -119,16 +148,19 @@ def learn_gp(sta, X, y, distfn, params, optimize=True, optim_params=None):
         sX, sy = subsample_data(X=X, y=y)
         print "learning hyperparams on", len(sy), "examples"
 
-        kernel = "distfn" if distfn != "composite" else "composite"
-        llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=kernel, kernel_params=p,
-                                             kernel_extra=distfns[distfn], kernel_priors=priors)
+        ke = distfns[distfn] if distfn else []
+        llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=kernel_str, kernel_params=p,
+                                                  kernel_extra=ke, kernel_priors=priors,
+                                                  basisfns=basisfns, param_mean=b, param_cov=B)
 
         bounds = [(1e-20,None),] * len(params)
         params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
 
         print "got params", params, "giving ll", ll
 
-    gp = SpatialGP(X=X, y=y, sta=sta, distfn_str=distfn, kernel_params=params)
+    gp = SpatialGP(X=X, y=y, sta=sta, kernel=kernel_str,
+                   distfn_str=distfn, kernel_params=params,
+                   basisfns=basisfns, param_mean=b, param_cov=B)
     return gp
 
 

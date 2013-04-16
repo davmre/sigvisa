@@ -38,9 +38,9 @@ def main():
         f = open(fname_aggregate, 'w')
         print "writing to", fname_aggregate
 
-        f.write("model_type\t" + "\t".join(stations) + "\n")
+        f.write("model_type\t\t" + "\t".join(stations) + "\n")
         for model_type in sorted(results[target_key].keys()):
-            f.write("%s\t" % model_type)
+            f.write("%s\t\t" % model_type)
             for sta in stations:
                 try:
                     f.write("%.4f\t" % results[target_key][model_type][sta])

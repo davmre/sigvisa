@@ -197,15 +197,15 @@ class SpatialGP(GaussianProcess, ParamModel):
         try:
             self.distfn_str = kwargs.pop("distfn_str")
         except KeyError:
-            self.distfn_str = "dad_log"
+            self.distfn_str = None
 
         try:
             ParamModel.__init__(self, sta=kwargs.pop("sta"))
         except KeyError:
             pass
 
-        kwargs['kernel_extra'] = distfns[self.distfn_str]
-        kwargs['kernel'] = "distfn" if self.distfn_str != "composite" else "composite"
+        if self.distfn_str:
+            kwargs['kernel_extra'] = distfns[self.distfn_str]
 
         GaussianProcess.__init__(self, *args, **kwargs)
 

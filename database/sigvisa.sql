@@ -117,7 +117,7 @@ create table sigvisa_param_model (
  training_ll double precision not null,
  timestamp double precision not null,
  elapsed double precision not null,
- hyperparams varchar(1024),
+ hyperparams varchar(4000),
  optim_method varchar(1024),
  primary key (modelid),
  foreign key (fitting_runid) REFERENCES sigvisa_coda_fitting_run(runid),

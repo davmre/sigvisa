@@ -353,7 +353,7 @@ class LinearBasisModel(ParamModel):
 
             empirical_covar = np.dot(H.T, H)
             inner = prior_precision + 1.0/self.noise_var * empirical_covar
-            inner_chol = scipy.linalg.cholesky(inner)
+            inner_chol = scipy.linalg.cholesky(inner, lower=True)
             inner_chol_inv = scipy.linalg.inv(inner_chol)
             inner_inv = np.dot(inner_chol_inv.T, inner_chol_inv)
             outer = 1.0/self.noise_var**2 * np.dot(H, np.dot(inner_inv, H.T))
@@ -375,12 +375,15 @@ class LinearBasisModel(ParamModel):
 
     def save_trained_model(self, fname):
         with open(fname, 'wb') as f:
+            base_str = super(LinearBasisModel, self).__repr_base_params__()
             np.savez(f,
                      sqrt_covar=self.sqrt_covar,
                      mean=self.mean,
                      noise_var=self.noise_var,
                      ll=self.ll,
-                     basisfns = np.array([marshal_fn(f) for f in self.basisfns], dtype=object))
+                     basisfns = np.array([marshal_fn(f) for f in self.basisfns], dtype=object),
+                     base_str = base_str,
+            )
 
     def load_trained_model(self, fname):
         npzfile = np.load(fname)
@@ -389,6 +392,7 @@ class LinearBasisModel(ParamModel):
         self.noise_var = npzfile['noise_var']
         self.ll = npzfile['ll']
         self.basisfns = [unmarshal_fn(code) for code in npzfile['basisfns']]
+        super(LinearBasisModel, self).__unrepr_base_params__(str(npzfile['base_str']))
         del npzfile.f
         npzfile.close()
 
