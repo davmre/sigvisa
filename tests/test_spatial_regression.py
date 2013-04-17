@@ -1,8 +1,12 @@
 import numpy as np
 import unittest
 
-from sigvisa.learn.train_param_common import learn_model, load_model, gp_extract_features
+from sigvisa.learn.train_param_common import learn_model, load_model
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
+
+from sigvisa.models.spatial_regression.SpatialGP import SpatialGP, start_params
+from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel, poly_basisfns
+
 
 class TestModels(unittest.TestCase):
 
@@ -78,11 +82,51 @@ class TestModels(unittest.TestCase):
         self.assertAlmostEqual(pred1, pred3)
 
         ll = nmodel.log_likelihood()
-        ll1 = nmodel.log_p(cond=gp_extract_features(self.X, "dad_log"), x=self.y)
+        ll1 = nmodel.log_p(cond=self.X, x=self.y)
         # unlike with the other models, these likelihoods are not
         # necessarily equal in the GP case
 
         s = nmodel.sample(self.X)
+
+    def test_poly_regression(self):
+        N = 10
+        bfn = poly_basisfns(3)
+        X = np.reshape(np.linspace(-5, 5, N), (-1, 1))
+        H = np.array([[f(x) for f in bfn] for x in X])
+        coeffs = np.array([50, 1, 3, -3])
+        sigma_n = 1
+        np.random.seed(0)
+        y = np.dot(H, coeffs) + np.random.randn(N) * sigma_n
+
+        b = np.zeros((4,))
+        B = np.eye(4) * 100000
+        B[0,0] = (1000000)**2
+
+        model = LinearBasisModel(X=X, y=y, basisfns=bfn, param_mean=b, param_covar=B, noise_std=sigma_n, H=H, compute_ll=True, sta="AAK")
+
+        tol = np.array((1, .4, .05, .05))
+        self.assertTrue( (np.abs(model.mean - coeffs) < tol ).all())
+
+        # test that the variances are reasonable: we should be most
+        # certain about the high-order terms and least certain about
+        # the low-order terms.
+        v = np.diag(np.dot(model.sqrt_covar.T, model.sqrt_covar))
+        self.assertGreater(v[0], v[1])
+        self.assertGreater(v[1], v[2])
+        self.assertGreater(v[2], v[3])
+
+        # test that loading and saving work
+        p = model.predict(X)
+        c = model.covariance(X, include_obs=True)
+
+        model.save_trained_model('model.npz')
+        m = LinearBasisModel(fname='model.npz')
+        p1 = m.predict(X)
+        c1 = m.covariance(X, include_obs=True)
+
+        self.assertTrue( (np.abs(p-p1) < .001).all() )
+        self.assertTrue( (np.abs(c-c1) < .001).flatten().all() )
+
 
 
 if __name__ == '__main__':

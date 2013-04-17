@@ -91,6 +91,9 @@ def plot_linear_model_distance(request, model_record, axes):
 
 def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
 
+    parametric_only = request.GET.get('parametric_only', 'f').lower().startswith('t')
+    kwargs = {'parametric_only': parametric_only}
+
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
 
@@ -98,13 +101,15 @@ def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
     distances = np.linspace(0, 10000, 40)
     pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
 
-    pred = np.array([model.predict(np.array(((pt[0], pt[1], depth, d, azi),))) for (pt, d) in zip(pts, distances)]).flatten()
+    print model.param_predict()
+
+    pred = np.array([model.predict(np.array(((pt[0], pt[1], depth, d, azi),)), **kwargs) for (pt, d) in zip(pts, distances)]).flatten()
     axes.plot(distances, pred, 'k-')
 
     array_inputs = [np.array(((pt[0], pt[1], depth, d, azi),)) for (pt, d) in zip(pts, distances)]
     stds = np.zeros((len(distances),))
     for (i, arr) in enumerate(array_inputs):
-        v = model.variance(arr, include_obs=True)
+        v = model.variance(arr, include_obs=True, **kwargs)
         stds[i] = np.sqrt(v)
     std = np.array(stds)
 

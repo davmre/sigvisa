@@ -15,7 +15,7 @@ import numpy as np
 import scipy.linalg
 import hashlib
 
-from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params, gp_extract_features
+from sigvisa.models.spatial_regression.SpatialGP import SpatialGP, spatial_kernel_from_str
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 import sigvisa.gpr as gpr
 from sigvisa.gpr.distributions import InvGamma, LogNormal
@@ -28,8 +28,18 @@ def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_ty
     return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams)
 
 def model_params(model, model_type):
+    if model_type.startswith('gplocal'):
+        d = dict()
+        d['kernel'] =model.kernel.get_params()
+        d['mean'] = model.beta_bar
+        d['covar'] = np.dot(model.invc.T, model.invc)
+        r = repr(d)
+        if len(r) > 4000:
+            del d['covar']
+            r = repr(d)
+        return r
     if model_type.startswith('gp'):
-        return repr(model.kernel_params)
+        return repr(model.kernel.get_params())
     elif model_type.startswith('param'):
         d = dict()
         d['mean'] = model.mean
@@ -43,21 +53,19 @@ def model_params(model, model_type):
         return None
 
 def learn_model(X, y, model_type, sta, target=None, **kwargs):
-    if model_type.startswith("gplocal_"):
-        s = model_type.split('_')
+    if model_type.startswith("gplocal"):
+        s = model_type.split('+')
         kernel_str = s[1]
-        basisfn_str = '_'.join(s[2:])
-        params = start_params['local'][target]
-        model = learn_gp(X=X, y=y, sta=sta, distfn=None, basisfn_str=basisfn_str, kernel_str=kernel_str, params=params, **kwargs)
-    if model_type.startswith("gp"):
-        distfn = model_type[3:]
-        params = start_params[distfn][target]
-        if distfn == "composite":
-            distfn = None
-            kernel_str = "composite"
-        else:
-            kernel_str = "distfn"
-        model = learn_gp(X=X, y=y, sta=sta, distfn=distfn, kernel_str=kernel_str, params=params, **kwargs)
+        basisfn_str = s[2]
+        model = learn_gp(X=X, y=y, sta=sta,
+                         basisfn_str=basisfn_str,
+                         kernel_str=kernel_str,
+                         target=target, **kwargs)
+    elif model_type.startswith("gp_"):
+        kernel_str = model_type[3:]
+        model = learn_gp(X=X, y=y, sta=sta,
+                         kernel_str=kernel_str,
+                         target=target, **kwargs)
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y, **kwargs)
     elif model_type == "linear_distance":
@@ -130,36 +138,34 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, params, distfn=None, kernel_str="distfn", basisfn_str=None, optimize=True, optim_params=None):
-
-    if distfn:
-        X = gp_extract_features(X, distfn)
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, optimize=True, optim_params=None, param_var=100000):
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
+        mean = "parametric"
     else:
         basisfns = None
         b = None
         B = None
+        mean = "constant"
+
+    k = spatial_kernel_from_str(kernel_str=kernel_str, params=params, target=target)
+    params = k.get_params()
 
     if optimize:
-        priors = [None for p in params]
-
-        sX, sy = subsample_data(X=X, y=y)
+        sX, sy = subsample_data(X=X, y=y, k=100)
         print "learning hyperparams on", len(sy), "examples"
 
-        ke = distfns[distfn] if distfn else []
-        llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=kernel_str, kernel_params=p,
-                                                  kernel_extra=ke, kernel_priors=priors,
-                                                  basisfns=basisfns, param_mean=b, param_cov=B)
+        llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=k, kernel_params=p,
+                                                  basisfns=basisfns, param_mean=b, param_cov=B,
+                                                  mean=mean)
 
         bounds = [(1e-20,None),] * len(params)
         params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
-
+        k.set_params(params)
         print "got params", params, "giving ll", ll
 
-    gp = SpatialGP(X=X, y=y, sta=sta, kernel=kernel_str,
-                   distfn_str=distfn, kernel_params=params,
+    gp = SpatialGP(X=X, y=y, sta=sta, kernel=k, mean=mean,
                    basisfns=basisfns, param_mean=b, param_cov=B)
     return gp
 
