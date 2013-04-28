@@ -2,7 +2,7 @@ numpy
 scipy
 scikit-learn
 matplotlib
--e git+http://github.com/matplotlib/basemap.git#egg=basemap 
+-e git+http://github.com/matplotlib/basemap.git#egg=basemap
 obspy
 django
 #cx_Oracle
@@ -15,6 +15,7 @@ django-extensions
 django-debug-toolbar
 pytz
 nose
+pyublas
 
 # not strictly necessary, but useful:
 
