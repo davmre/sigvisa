@@ -85,7 +85,10 @@ def dist_km(loc1, loc2):
     lon1, lat1 = loc1
     lon2, lat2 = loc2
 
-    return np.radians(dist_deg(loc1, loc2)) * AVG_EARTH_RADIUS_KM
+
+    d = np.radians(dist_deg(loc1, loc2)) * AVG_EARTH_RADIUS_KM
+
+    return d
 
 
 def degdiff(angle1, angle2):

@@ -14,6 +14,8 @@ public:
 		     std::string wfn_str, const pyublas::numpy_vector<double> &weight_params);
 
 
+  pyublas::numpy_matrix<double> debug_kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, std::string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only);
+
   void set_dist_params(const pyublas::numpy_vector<double> &dist_params);
   double *dist_params;
 

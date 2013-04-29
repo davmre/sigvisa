@@ -10,11 +10,12 @@
 using namespace std;
 
 float pair_distance(const point &pt1, const point &pt2, float BOUND_IGNORED, const double * PARAMS_IGNORED) {
-  return sqrt(pow(pt2[1] - pt1[1], 2) + pow(pt2[0] - pt1[0], 2));
+  float a = sqrt(pow(pt2[1] - pt1[1], 2) + pow(pt2[0] - pt1[0], 2));
+  return a;
 }
 
-float w_se(float d, const double * PARAMS_IGNORED) {
-  return exp(-.5 * pow(d,2));
+float w_se(float d, const double * variance) {
+  return variance[0] * exp(-1 * pow(d,2));
 }
 
 
