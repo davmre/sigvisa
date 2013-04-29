@@ -7,7 +7,7 @@
 using namespace std;
 
 
-float distance_bounded(const point &p1, const point &p2, float upper_bound)
+float distance_bounded(const point &p1, const point &p2, float upper_bound, const double *NO_PARAMS)
 {
   float sum = 0.;
   for(point::size_type i = 0; i != p1.size(); i+=1) {

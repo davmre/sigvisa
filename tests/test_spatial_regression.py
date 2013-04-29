@@ -7,6 +7,8 @@ from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.spatial_regression.SpatialGP import SpatialGP, start_params
 from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel, poly_basisfns
 
+from sigvisa.utils.cover_tree import CoverTree
+import pyublas
 
 class TestModels(unittest.TestCase):
 
@@ -127,6 +129,32 @@ class TestModels(unittest.TestCase):
         self.assertTrue( (np.abs(p-p1) < .001).all() )
         self.assertTrue( (np.abs(c-c1) < .001).flatten().all() )
 
+
+class TestCTree(unittest.TestCase):
+
+    def test_cover_tree_multiplication(self):
+        np.random.seed(6)
+        cluster = np.random.normal(size=(10, 2)) * 10
+        cluster_locations = np.random.normal(size=(100, 2)) * 1000
+        X = np.zeros((1000, 2))
+        for (i,cl) in enumerate(cluster_locations):
+            X[10*i:10*(i+1),:] = cluster + cl
+
+        dummy_param = np.array((), dtype=float)
+        tree = CoverTree(X, "pair", dummy_param)
+
+        v = np.array([1,2,3,4,5,6,7,8,9,10] * 100, dtype=float)
+        tree.set_v(0, v)
+
+        #w = lambda x1, x2 : np.exp(-.5 * np.linalg.norm(x1-x2, 2)**2 )
+        query_pt = np.matrix(cluster_locations[29,:], dtype=float, copy=True)
+        #k = [w(query_pt, x) for x in X]
+        #kv = np.dot(k, v)
+
+        kv_tree = tree.weighted_sum(0, query_pt, 1e-4, 'se', dummy_param)
+        self.assertAlmostEqual(3.89605696515, kv_tree, places=4)
+
+        self.assertLess(tree.fcalls, 80)
 
 
 if __name__ == '__main__':
