@@ -22,19 +22,33 @@ float dist_km(const point &p1, const point &p2, float BOUND_IGNORED, const doubl
   float lat1 = p1[1];
   float lon2 = p2[0];
   float lat2 = p2[1];
+  float rlon1 = RADIAN(lon1);
+  float rlat1 = RADIAN(lat1);
+  float rlon2 = RADIAN(lon2);
+  float rlat2 = RADIAN(lat2);
 
-  float dist_rad = acos(sin(RADIAN(lat1))
-			* sin(RADIAN(lat2))
-			+ cos(RADIAN(lat1))
-			* cos(RADIAN(lat2))
-			* cos(RADIAN(lon2 - lon1)));
-  // printf("returning C:dist_km of (%f, %f) and (%f, %f) is %f\n", lon1, lat1, lon2, lat2, dist_rad * AVG_EARTH_RADIUS_KM);
+  /*
+  float dist_rad = acos(sin(rlat1)
+			* sin(rlat2)
+			+ cos(rlat1)
+			* cos(rlat2)
+			* cos(rlon2 - rlon1));
+			*/
+
+  float dist_rad = asin(sqrt(
+			     pow(sin((rlat1-rlat2)/2.0),2) +
+			     cos(rlat1)*cos(rlat2)*
+			     pow(sin((rlon1-rlon2)/2.0),2)
+			     ));
+
+  //printf("returning C:dist_km of (%f, %f) and (%f, %f) is %f\n", lon1, lat1, lon2, lat2, dist_rad * AVG_EARTH_RADIUS_KM);
   return dist_rad * AVG_EARTH_RADIUS_KM;
 }
 
 float dist_3d_km(const point &p1, const point &p2, float BOUND_IGNORED, const double *scales) {
   float distkm = dist_km(p1, p2, -1, NULL) * scales[0];
   float dist_d = (p2[2] - p1[2]) * scales[1];
+  //printf("dist3d returning sqrt(%f^2 + %f^2) = %f\n", distkm, dist_d, sqrt(pow(distkm, 2) + pow(dist_d, 2)));
   return sqrt(pow(distkm, 2) + pow(dist_d, 2));
 }
 

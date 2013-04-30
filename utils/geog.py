@@ -69,11 +69,19 @@ def dist_deg(loc1, loc2):
     lon1, lat1 = loc1
     lon2, lat2 = loc2
 
-    return np.degrees(safe_acos(np.sin(np.radians(lat1))
-                                * np.sin(np.radians(lat2))
-                                + np.cos(np.radians(lat1))
-                                * np.cos(np.radians(lat2))
-                                * np.cos(np.radians(lon2 - lon1))))
+    rlon1 = np.radians(lon1)
+    rlat1 = np.radians(lat1)
+    rlon2 = np.radians(lon2)
+    rlat2 = np.radians(lat2)
+
+    dist_rad = np.arcsin( \
+        np.sqrt( \
+            np.sin((rlat1-rlat2)/2.0)**2 + \
+            np.cos(rlat1)*np.cos(rlat2)*   \
+            np.sin((rlon1-rlon2)/2.0)** 2) \
+                      )
+    return np.degrees(dist_rad)
+
 
 
 @functools32.lru_cache(maxsize=2048)

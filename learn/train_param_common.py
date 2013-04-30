@@ -166,7 +166,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, 
         print "got params", params, "giving ll", ll
 
     gp = SpatialGP(X=X, y=y, sta=sta, kernel=k, mean=mean,
-                   basisfns=basisfns, param_mean=b, param_cov=B)
+                   basisfns=basisfns, param_mean=b, param_cov=B, compute_ll=True)
     return gp
 
 

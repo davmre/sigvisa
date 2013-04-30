@@ -3,7 +3,7 @@ import time
 import numpy as np
 import collections
 import scipy
-
+import pyublas
 
 from sigvisa.gpr import munge, kernels, evaluate, learn, distributions, plot
 from sigvisa.gpr.gp import GaussianProcess
@@ -185,14 +185,17 @@ class SpatialGP(GaussianProcess, ParamModel):
     def predict(self, cond, eps=1e-8):
         X1 = self.standardize_input_array(cond)
 
-        Kstar = self.get_query_K(X1)
+        # Kstar = self.get_query_K(X1)
         #gp_pred = self.mu + np.dot(Kstar.T, self.alpha_r)
-        gp_pred = np.array([self.mu + np.dot(k, self.alpha_r) for k in Kstar.T])
-
-
+        #gp_pred = np.array([self.mu + np.dot(k, self.alpha_r) for k in Kstar.T])
 
         signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
-        #gp_pred = np.array([self.mu + self.tree.weighted_sum(0, np.reshape(x, (1,-1)), eps, "se", signal_var) for x in X1])
+        Kstar2 = self.tree.debug_kernel_matrix(X1, self.X, "se", signal_var, False)
+
+        #np.savetxt('Kstar.txt', Kstar)
+        #np.savetxt('Kstar2.txt', Kstar2)
+
+        gp_pred = np.array([self.mu + self.tree.weighted_sum(0, np.reshape(x, (1,-1)), eps, "se", signal_var) for x in X1])
 
         if self.basisfns:
             H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
