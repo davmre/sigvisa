@@ -7,11 +7,11 @@
 using namespace std;
 
 
-float distance_bounded(const point &p1, const point &p2, float upper_bound, const double *NO_PARAMS)
+double distance_bounded(const point &p1, const point &p2, double upper_bound, const double *NO_PARAMS)
 {
-  float sum = 0.;
+  double sum = 0.;
   for(point::size_type i = 0; i != p1.size(); i+=1) {
-    float d1 = p1[i] - p2[i];
+    double d1 = p1[i] - p2[i];
     sum += d1 * d1;
   }
   return sqrt(sum);
@@ -38,7 +38,7 @@ vector<point > parse_points(FILE *input)
       c = getc(input);
     if (c != '\n' && c != EOF) {
       ungetc(c,input);
-      float f;
+      double f;
       fscanf(input, "%f",&f);
       point_len++;
     } else if (c == '\n') {
@@ -61,7 +61,7 @@ vector<point > parse_points(FILE *input)
 	c = getc(input);
       if (c != '\n' && c != EOF) {
 	ungetc(c,input);
-	float f;
+	double f;
 	fscanf(input, "%f",&f);
 	parsed[i][j++] = f;
       }

@@ -170,6 +170,7 @@ class SpatialGP(GaussianProcess, ParamModel):
             self.alpha_r = scipy.linalg.cho_solve((self.L, True), r)
             self.build_point_tree()
 
+
     def build_point_tree(self):
         #noise_var = self.kernel.lhs.params[0]
         #signal_var = self.kernel.rhs.params[0]
@@ -190,7 +191,7 @@ class SpatialGP(GaussianProcess, ParamModel):
         #gp_pred = np.array([self.mu + np.dot(k, self.alpha_r) for k in Kstar.T])
 
         signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
-        Kstar2 = self.tree.debug_kernel_matrix(X1, self.X, "se", signal_var, False)
+        #Kstar2 = self.tree.debug_kernel_matrix(X1, self.X, "se", signal_var, False)
 
         #np.savetxt('Kstar.txt', Kstar)
         #np.savetxt('Kstar2.txt', Kstar2)
@@ -206,6 +207,44 @@ class SpatialGP(GaussianProcess, ParamModel):
             gp_pred = gp_pred[0]
 
         return gp_pred
+
+    def covariance_single_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8):
+        X1 = self.standardize_input_array(cond)
+        m = X1.shape[0]
+        d = len(self.basisfns)
+        gp_cov = self.kernel(X1, X1, identical=include_obs)
+        tmp = np.zeros((self.n, m))
+
+        # compute self.invL * Kstar, where Kstar is the n x m kernel
+        # matrix, where m is the number of query points (so e.g. Kstar
+        # is a column vector if there's just one query point).
+        import time
+        t0 = time.time()
+        signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
+        for i in range(self.n):
+            self.tree.set_v(1, self.invL[i, :])
+            for j in range(m):
+                tmp[i,j] = self.tree.weighted_sum(1, X1[j:j+1,:], eps, "se", signal_var)
+        gp_cov -= np.dot(tmp.T, tmp)
+        t1 = time.time()
+
+        if self.basisfns:
+            H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
+            HKinvKstar = np.zeros((d, m))
+            for i in range(d):
+                self.tree.set_v(1, self.HKinv[i, :])
+                for j in range(m):
+                    HKinvKstar[i,j] = self.tree.weighted_sum(1, X1[j:j+1,:], eps, "se", signal_var)
+            R = H - HKinvKstar
+            v = np.dot(self.invc, R)
+            gp_cov += np.dot(v.T, v)
+        t2 = time.time()
+
+        self.nptime = (t1-t0)
+        self.ptime = (t2-t1)
+
+        gp_cov += pad * np.eye(m)
+        return gp_cov
 
     def variance(self, cond, **kwargs):
         X1 = self.standardize_input_array(cond)

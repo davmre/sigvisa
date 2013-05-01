@@ -15,17 +15,17 @@
 
 struct node {
   point p;
-  float max_dist;  // The maximum distance to any grandchild.
-  float parent_dist; // The distance to the parent.
+  double max_dist;  // The maximum distance to any grandchild.
+  double parent_dist; // The distance to the parent.
   node* children;
   unsigned short int num_children; // The number of children.
   short int scale; // Essentially, an upper bound on the distance to any child.
 
   // additional info to support vector multiplication
   int point_idx;
-  float distance_to_query;
-  float unweighted_sum_v[NUM_VECTORS]; // unweighted sums of each vector, over the points contained at this node
-  float ws[NUM_VECTORS];
+  double distance_to_query;
+  double unweighted_sum_v[NUM_VECTORS]; // unweighted sums of each vector, over the points contained at this node
+  double ws[NUM_VECTORS];
   bool cutoff[NUM_VECTORS];
 };
 
@@ -40,7 +40,7 @@ node batch_create(const std::vector<point> &points, distfn distance, const doubl
 void k_nearest_neighbor(const node &tope_node, const node &query,
 			v_array<v_array<point> > &results, int k, distfn distance, const double * dist_params);
 void epsilon_nearest_neighbor(const node &tope_node, const node &query,
-			      v_array<v_array<point> > &results, float epsilon, distfn distance, const double * dist_params);
+			      v_array<v_array<point> > &results, double epsilon, distfn distance, const double * dist_params);
 void unequal_nearest_neighbor(const node &tope_node, const node &query,
 			      v_array<v_array<point> > &results, distfn distance, const double * dist_params);
 

@@ -14,28 +14,28 @@
 using namespace std;
 namespace bp = boost::python;
 
-const float AVG_EARTH_RADIUS_KM = 6371.0;
-inline float RADIAN(float x) {return x*3.14159265f/180.0f;}
-float dist_km(const point &p1, const point &p2, float BOUND_IGNORED, const double *PARAMS_IGNORED) {
+const double AVG_EARTH_RADIUS_KM = 6371.0;
+inline double RADIAN(double x) {return x*3.14159265f/180.0f;}
+double dist_km(const point &p1, const point &p2, double BOUND_IGNORED, const double *PARAMS_IGNORED) {
 
-  float lon1 = p1[0];
-  float lat1 = p1[1];
-  float lon2 = p2[0];
-  float lat2 = p2[1];
-  float rlon1 = RADIAN(lon1);
-  float rlat1 = RADIAN(lat1);
-  float rlon2 = RADIAN(lon2);
-  float rlat2 = RADIAN(lat2);
+  double lon1 = p1[0];
+  double lat1 = p1[1];
+  double lon2 = p2[0];
+  double lat2 = p2[1];
+  double rlon1 = RADIAN(lon1);
+  double rlat1 = RADIAN(lat1);
+  double rlon2 = RADIAN(lon2);
+  double rlat2 = RADIAN(lat2);
 
   /*
-  float dist_rad = acos(sin(rlat1)
+  double dist_rad = acos(sin(rlat1)
 			* sin(rlat2)
 			+ cos(rlat1)
 			* cos(rlat2)
 			* cos(rlon2 - rlon1));
 			*/
 
-  float dist_rad = asin(sqrt(
+  double dist_rad = asin(sqrt(
 			     pow(sin((rlat1-rlat2)/2.0),2) +
 			     cos(rlat1)*cos(rlat2)*
 			     pow(sin((rlon1-rlon2)/2.0),2)
@@ -45,14 +45,14 @@ float dist_km(const point &p1, const point &p2, float BOUND_IGNORED, const doubl
   return dist_rad * AVG_EARTH_RADIUS_KM;
 }
 
-float dist_3d_km(const point &p1, const point &p2, float BOUND_IGNORED, const double *scales) {
-  float distkm = dist_km(p1, p2, -1, NULL) * scales[0];
-  float dist_d = (p2[2] - p1[2]) * scales[1];
+double dist_3d_km(const point &p1, const point &p2, double BOUND_IGNORED, const double *scales) {
+  double distkm = dist_km(p1, p2, -1, NULL) * scales[0];
+  double dist_d = (p2[2] - p1[2]) * scales[1];
   //printf("dist3d returning sqrt(%f^2 + %f^2) = %f\n", distkm, dist_d, sqrt(pow(distkm, 2) + pow(dist_d, 2)));
   return sqrt(pow(distkm, 2) + pow(dist_d, 2));
 }
 
-float CoverTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> &query_pt, float eps, string wfn_str, const pyublas::numpy_vector<double> &weight_params) {
+double CoverTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> &query_pt, double eps, string wfn_str, const pyublas::numpy_vector<double> &weight_params) {
   point qp(query_pt.size2());
   for (unsigned int i = 0; i < query_pt.size2(); ++i) {
     qp[i] = query_pt(0,i);
@@ -74,10 +74,10 @@ float CoverTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> 
     }
   }
 
-  float weight_sofar = 0;
+  double weight_sofar = 0;
   int fcalls = 0;
-  this->root.distance_to_query = this->dfn(qp, this->root.p, MAXFLOAT, this->dist_params);
-  float ws = weighted_sum_node(this->root, v_select, 8,
+  this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params);
+  double ws = weighted_sum_node(this->root, v_select, 8,
 			       qp, eps, weight_sofar,
 			       fcalls, w, this->dfn, this->dist_params, wp);
   if (wp != NULL) {
@@ -89,11 +89,28 @@ float CoverTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> 
 }
 
 void CoverTree::set_v(int v_select, const pyublas::numpy_vector<double> &v) {
-  vector<float> new_v(v.size());
-  for (pyublas::numpy_vector<double>::const_iterator a = v.begin(); a < v.end(); ++a) {
-    new_v[a - v.begin()] = *a;
+  if (v.ndim() != 1) {
+    printf("error: tree can only hold 1D arrays! (array passed has %lu dimensions)\n", v.ndim());
+    exit(1);
+  }
+  npy_intp item_stride = v.strides()[0] / v.itemsize();
+  vector<double> new_v(v.size());
+  for (pyublas::numpy_vector<double>::const_iterator a = v.begin(); a < v.end(); a += item_stride) {
+    new_v[ (a - v.begin())/item_stride] = *a;
   }
   set_v_node(this->root, v_select, new_v);
+}
+
+pyublas::numpy_vector<double> CoverTree::get_v(int v_select) {
+  vector<double> v(this->n);
+  get_v_node(this->root, v_select, v);
+
+  pyublas::numpy_vector<double> pv(this->n);
+  for (unsigned int i = 0; i < this->n; ++i) {
+    pv(i) = v[i];
+  }
+
+  return pv;
 }
 
 CoverTree::CoverTree (const pyublas::numpy_matrix<double> &pts,
@@ -103,6 +120,7 @@ CoverTree::CoverTree (const pyublas::numpy_matrix<double> &pts,
   for (unsigned i = 0; i < pts.size1 (); ++ i)
     for (unsigned j = 0; j < pts.size2 (); ++ j)
       points[i][j] = pts (i, j);
+  this->n = pts.size1();
   if (distfn_str.compare("pair") == 0) {
     this->dfn = pair_distance;
   } else if (distfn_str.compare("lld") == 0) {
@@ -161,7 +179,7 @@ pyublas::numpy_matrix<double> CoverTree::debug_kernel_matrix(const pyublas::nump
 	p2[pi] = pts2(j, pi);
       }
 
-      float d = this->dfn(p1, p2, MAXFLOAT, this->dist_params);
+      double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params);
       K(i,j) = distance_only ? d : w(d, wp);
     }
   }
@@ -184,6 +202,7 @@ CoverTree::~CoverTree() {
 BOOST_PYTHON_MODULE(cover_tree) {
   bp::class_<CoverTree>("CoverTree", bp::init< pyublas::numpy_matrix< double > const &, string const &, pyublas::numpy_vector< double > const &>())
     .def("set_v", &CoverTree::set_v)
+    .def("get_v", &CoverTree::get_v)
     .def("weighted_sum", &CoverTree::weighted_sum)
     .def("set_dist_params", &CoverTree::weighted_sum)
     .def("debug_kernel_matrix", &CoverTree::debug_kernel_matrix)

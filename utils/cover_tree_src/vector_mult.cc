@@ -9,17 +9,17 @@
 #include <string>
 using namespace std;
 
-float pair_distance(const point &pt1, const point &pt2, float BOUND_IGNORED, const double * PARAMS_IGNORED) {
-  float a = sqrt(pow(pt2[1] - pt1[1], 2) + pow(pt2[0] - pt1[0], 2));
+double pair_distance(const point &pt1, const point &pt2, double BOUND_IGNORED, const double * PARAMS_IGNORED) {
+  double a = sqrt(pow(pt2[1] - pt1[1], 2) + pow(pt2[0] - pt1[0], 2));
   return a;
 }
 
-float w_se(float d, const double * variance) {
+double w_se(double d, const double * variance) {
   return variance[0] * exp(-1 * pow(d,2));
 }
 
 
-void set_v_node(node &n, int v_select, const vector<float> &v) {
+void set_v_node(node &n, int v_select, const vector<double> &v) {
   if (n.num_children == 0) {
       n.unweighted_sum_v[v_select] = v[n.point_idx];
   } else {
@@ -31,17 +31,28 @@ void set_v_node(node &n, int v_select, const vector<float> &v) {
   }
 }
 
-typedef pair<float,int> mypair;
-float weighted_sum_node(node &n, int v_select, int pt_len,
-			const point &query_pt, float eps,
-			float &weight_sofar,
+void get_v_node(node &n, int v_select, vector<double> &v) {
+  if (n.num_children == 0) {
+    v[n.point_idx] = n.unweighted_sum_v[v_select];
+  } else {
+    for(int i=0; i < n.num_children; ++i) {
+      get_v_node(n.children[i], v_select, v);
+    }
+  }
+}
+
+
+typedef pair<double,int> mypair;
+double weighted_sum_node(node &n, int v_select, int pt_len,
+			const point &query_pt, double eps,
+			double &weight_sofar,
 			int &fcalls,
 			wfn w,
 			distfn dist,
 			const double * dist_params,
 			const double* weight_params) {
-  float ws = 0;
-  float d = n.distance_to_query; // avoid duplicate distance
+  double ws = 0;
+  double d = n.distance_to_query; // avoid duplicate distance
 				    // calculations by assuming this
 				    // distance has already been
 				    // computed by the parent, in the
@@ -54,16 +65,16 @@ float weighted_sum_node(node &n, int v_select, int pt_len,
   if (n.num_children == 0) {
     // if we're at a leaf, just do the multiplication
 
-    float weight = w(d, weight_params);
+    double weight = w(d, weight_params);
     ws = weight * n.unweighted_sum_v[v_select];
     weight_sofar += weight;
     cutoff = true;
   } else {
     bool query_in_bounds = (d <= n.max_dist);
     if (!query_in_bounds) {
-      float min_weight = w(d + n.max_dist, weight_params);
-      float max_weight = w(max(0.0f, d - n.max_dist), weight_params);
-      float cutoff_threshold = 2 * eps * (weight_sofar + n.num_children * min_weight);
+      double min_weight = w(d + n.max_dist, weight_params);
+      double max_weight = w(max(0.0, d - n.max_dist), weight_params);
+      double cutoff_threshold = 2 * eps * (weight_sofar + n.num_children * min_weight);
       cutoff = (max_weight - min_weight) <= cutoff_threshold;
       if (cutoff) {
 	// if we're cutting off, just compute an estimate of the sum
@@ -77,7 +88,7 @@ float weighted_sum_node(node &n, int v_select, int pt_len,
       // children of this node, from nearest to furthest.
       vector<mypair> v(n.num_children);
       for(int i=0; i < n.num_children; ++i) {
-	n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXFLOAT, dist_params);
+	n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXDOUBLE, dist_params);
 	v[i] = mypair(n.children[i].distance_to_query, i);
       }
       sort(v.begin(), v.end());
