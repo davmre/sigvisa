@@ -3,7 +3,9 @@ import time
 import numpy as np
 import collections
 import scipy
+import scipy.sparse
 import pyublas
+import hashlib
 
 from sigvisa.gpr import munge, kernels, evaluate, learn, distributions, plot
 from sigvisa.gpr.gp import GaussianProcess
@@ -11,7 +13,7 @@ from sigvisa.gpr.gp import GaussianProcess
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
 from sigvisa.source.event import Event
 
-from sigvisa.utils.cover_tree import CoverTree
+from sigvisa.utils.cover_tree import VectorTree, MatrixTree
 
 start_params_dad_log = {"coda_decay": [.022, .0187, 1.00, .14, .1],
                         "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31],
@@ -159,6 +161,21 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         if 'fname' not in kwargs:
             kwargs['X'] = np.array(kwargs['X'], copy=False, dtype=float)
+            if 'K' not in kwargs:
+                k = kwargs['kernel']
+                noise_var = k.lhs.params[0]
+                width_param = k.rhs.params[1]
+                depthscale_param = k.rhs.params[2]
+                signal_var = np.array((k.rhs.params[0],), copy=True, dtype=float)
+                ll_scale = 1.0/width_param
+                d_scale = depthscale_param/width_param
+                X = kwargs['X']
+                vt = VectorTree(X[0:1,:], 1, "lld", np.array((ll_scale, d_scale), dtype=float))
+                import time
+                t0 = time.time()
+                kwargs['K'] = vt.debug_kernel_matrix(pyublas.why_not(X), pyublas.why_not(X), "se", signal_var, False) + noise_var * np.eye(len(X))
+                t1 = time.time()
+                print "got kernel matrix in %f seconds", t1 - t0
 
         GaussianProcess.__init__(self, *args, save_extra_info=True, **kwargs)
 
@@ -180,8 +197,62 @@ class SpatialGP(GaussianProcess, ParamModel):
         ll_scale = 1.0/width_param
         d_scale = depthscale_param/width_param
 
-        self.tree = CoverTree(self.X, "lld", np.array((ll_scale, d_scale), dtype=float))
-        self.tree.set_v(0, self.alpha_r)
+        import time
+
+        t0 = time.time()
+        self.predict_tree = VectorTree(self.X, 1, "lld", np.array((ll_scale, d_scale), dtype=float))
+        self.predict_tree.set_v(0, self.alpha_r)
+        t1 = time.time()
+
+        d = len(self.basisfns)
+        self.cov_tree = VectorTree(self.X, d, "lld", np.array((ll_scale, d_scale), dtype=float))
+        for i in range(d):
+            self.cov_tree.set_v(i, self.HKinv[i, :])
+        t2 = time.time()
+
+        Kinv = np.dot(self.invL.T, self.invL)
+        t3 = time.time()
+        self.spKinv = scipy.sparse.csr_matrix(Kinv * (np.abs(Kinv) > 1e-20 ) )
+
+        nzr, nzc = self.spKinv.nonzero()
+        print "Kinv matrix has %d of %d nonzero elements" % (len(nzr), np.product(Kinv.shape))
+        t4 = time.time()
+        self.double_tree = MatrixTree(self.X, nzr, nzc, "lld", np.array((ll_scale, d_scale), dtype=float))
+        t5 = time.time()
+        self.double_tree.set_m(Kinv)
+        t6 = time.time()
+
+        print "predict tree time:", t1-t0
+        print "cov tree time:", t2-t1
+        print "matrix mult time:", t3-t2
+        print "sparse matrix time:", t4-t3
+        print "double tree creation time:", t5-t4
+        print "double tree population time:", t6-t5
+
+        self.Kinv = Kinv
+
+    def get_query_K(self, X1):
+        # avoid recomputing the kernel if we're evaluating at the same
+        # point multiple times. This is effectively a size-1 cache.
+        try:
+            self.query_hsh
+        except AttributeError:
+            self.query_hsh = None
+
+        hsh = hashlib.sha1(X1.view(np.uint8)).hexdigest()
+        if hsh != self.query_hsh:
+            signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
+            self.query_K = self.predict_tree.debug_kernel_matrix(self.X, X1, "se", signal_var, False)
+            self.query_hsh = hsh
+
+            if self.basisfns:
+                H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
+                self.query_R = H - np.dot(self.HKinv, self.query_K)
+
+#            print "cache fail: model %d called with " % (len(self.alpha)), X1
+#        else:
+#            print "cache hit!"
+        return self.query_K
 
     def predict(self, cond, eps=1e-8):
         X1 = self.standardize_input_array(cond)
@@ -196,7 +267,7 @@ class SpatialGP(GaussianProcess, ParamModel):
         #np.savetxt('Kstar.txt', Kstar)
         #np.savetxt('Kstar2.txt', Kstar2)
 
-        gp_pred = np.array([self.mu + self.tree.weighted_sum(0, np.reshape(x, (1,-1)), eps, "se", signal_var) for x in X1])
+        gp_pred = np.array([self.mu + self.predict_tree.weighted_sum(0, np.reshape(x, (1,-1)), eps, "se", signal_var) for x in X1])
 
         if self.basisfns:
             H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
@@ -208,12 +279,42 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         return gp_pred
 
-    def covariance_single_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8):
+
+    def cov_sparse(self, X1, include_obs=False, pad=1e-8):
+        """
+        Compute the posterior covariance matrix at a set of points given by the rows of X1.
+
+        Default is to compute the covariance of f, the latent function values. If obs_covar
+        is True, we instead compute the covariance of y, the observed values.
+
+        By default, we add a tiny bit of padding to the diagonal to counteract any potential
+        loss of positive definiteness from numerical issues. Setting pad=0 disables this.
+
+        """
+
+        Kstar = self.get_query_K(X1)
+        tmp = self.spKinv * Kstar
+        a = np.dot(Kstar.T, tmp)
+        gp_cov = self.kernel(X1,X1, identical=include_obs) - a
+
+        if self.basisfns:
+            R = self.query_R
+            tmp = np.dot(self.invc, R)
+            mean_cov = np.dot(tmp.T, tmp)
+            gp_cov += mean_cov
+
+        gp_cov += pad * np.eye(gp_cov.shape[0])
+        return gp_cov
+
+
+    """
+    def covariance_single_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=0):
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
         d = len(self.basisfns)
+        n = self.n
         gp_cov = self.kernel(X1, X1, identical=include_obs)
-        tmp = np.zeros((self.n, m))
+        tmp = np.zeros((n, m))
 
         # compute self.invL * Kstar, where Kstar is the n x m kernel
         # matrix, where m is the number of query points (so e.g. Kstar
@@ -221,20 +322,21 @@ class SpatialGP(GaussianProcess, ParamModel):
         import time
         t0 = time.time()
         signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
-        for i in range(self.n):
-            self.tree.set_v(1, self.invL[i, :])
+        for i in range(n):
             for j in range(m):
-                tmp[i,j] = self.tree.weighted_sum(1, X1[j:j+1,:], eps, "se", signal_var)
-        gp_cov -= np.dot(tmp.T, tmp)
+                tmp[i,j] = self.cov_tree.weighted_sum(i, X1[j:j+1,:], eps, "se", signal_var)
+        qf = np.dot(tmp.T, tmp)
+        gp_cov -= qf
+        print "single qf", qf
         t1 = time.time()
 
         if self.basisfns:
             H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
             HKinvKstar = np.zeros((d, m))
+
             for i in range(d):
-                self.tree.set_v(1, self.HKinv[i, :])
                 for j in range(m):
-                    HKinvKstar[i,j] = self.tree.weighted_sum(1, X1[j:j+1,:], eps, "se", signal_var)
+                    HKinvKstar[i,j] = self.cov_tree.weighted_sum(n+i, X1[j:j+1,:], eps, "se", signal_var)
             R = H - HKinvKstar
             v = np.dot(self.invc, R)
             gp_cov += np.dot(v.T, v)
@@ -245,6 +347,44 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         gp_cov += pad * np.eye(m)
         return gp_cov
+    """
+
+    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8):
+        X1 = self.standardize_input_array(cond)
+        m = X1.shape[0]
+        d = len(self.basisfns)
+        n = self.n
+        gp_cov = self.kernel(X1, X1, identical=include_obs)
+
+        # compute self.invL * Kstar, where Kstar is the n x m kernel
+        # matrix, where m is the number of query points (so e.g. Kstar
+        # is a column vector if there's just one query point).
+        import time
+        t0 = time.time()
+        signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
+        qf = self.double_tree.quadratic_form(X1, eps, "se", signal_var)
+        gp_cov -= qf
+        t1 = time.time()
+        print t1-t0
+
+        if self.basisfns:
+            H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
+            HKinvKstar = np.zeros((d, m))
+
+            for i in range(d):
+                for j in range(m):
+                    HKinvKstar[i,j] = self.cov_tree.weighted_sum(i, X1[j:j+1,:], eps, "se", signal_var)
+            R = H - HKinvKstar
+            v = np.dot(self.invc, R)
+            gp_cov += np.dot(v.T, v)
+        t2 = time.time()
+
+        self.nptime = (t1-t0)
+        self.ptime = (t2-t1)
+
+        gp_cov += pad * np.eye(m)
+        return gp_cov
+
 
     def variance(self, cond, **kwargs):
         X1 = self.standardize_input_array(cond)

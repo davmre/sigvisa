@@ -1,5 +1,5 @@
-#include "cover_tree.h"
-#include "vector_mult.h"
+#include "cover_tree.hpp"
+#include "vector_mult.hpp"
 
 #include <boost/python/module.hpp>
 #include <boost/python/def.hpp>
@@ -14,49 +14,31 @@
 using namespace std;
 namespace bp = boost::python;
 
-const double AVG_EARTH_RADIUS_KM = 6371.0;
-inline double RADIAN(double x) {return x*3.14159265f/180.0f;}
-double dist_km(const point &p1, const point &p2, double BOUND_IGNORED, const double *PARAMS_IGNORED) {
-
-  double lon1 = p1[0];
-  double lat1 = p1[1];
-  double lon2 = p2[0];
-  double lat2 = p2[1];
-  double rlon1 = RADIAN(lon1);
-  double rlat1 = RADIAN(lat1);
-  double rlon2 = RADIAN(lon2);
-  double rlat2 = RADIAN(lat2);
-
-  /*
-  double dist_rad = acos(sin(rlat1)
-			* sin(rlat2)
-			+ cos(rlat1)
-			* cos(rlat2)
-			* cos(rlon2 - rlon1));
-			*/
-
-  double dist_rad = asin(sqrt(
-			     pow(sin((rlat1-rlat2)/2.0),2) +
-			     cos(rlat1)*cos(rlat2)*
-			     pow(sin((rlon1-rlon2)/2.0),2)
-			     ));
-
-  //printf("returning C:dist_km of (%f, %f) and (%f, %f) is %f\n", lon1, lat1, lon2, lat2, dist_rad * AVG_EARTH_RADIUS_KM);
-  return dist_rad * AVG_EARTH_RADIUS_KM;
-}
-
-double dist_3d_km(const point &p1, const point &p2, double BOUND_IGNORED, const double *scales) {
-  double distkm = dist_km(p1, p2, -1, NULL) * scales[0];
-  double dist_d = (p2[2] - p1[2]) * scales[1];
-  //printf("dist3d returning sqrt(%f^2 + %f^2) = %f\n", distkm, dist_d, sqrt(pow(distkm, 2) + pow(dist_d, 2)));
-  return sqrt(pow(distkm, 2) + pow(dist_d, 2));
-}
-
-double CoverTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> &query_pt, double eps, string wfn_str, const pyublas::numpy_vector<double> &weight_params) {
-  point qp(query_pt.size2());
-  for (unsigned int i = 0; i < query_pt.size2(); ++i) {
-    qp[i] = query_pt(0,i);
+void set_v_node (node<point> &n, int v_select, const std::vector<double> &v) {
+  if (n.num_children == 0) {
+      n.unweighted_sums[v_select] = v[n.p.idx];
+  } else {
+    n.unweighted_sums[v_select] = 0;
+    for(int i=0; i < n.num_children; ++i) {
+      set_v_node(n.children[i], v_select, v);
+      n.unweighted_sums[v_select] += n.children[i].unweighted_sums[v_select];
+    }
   }
+}
+
+void get_v_node(node<point> &n, int v_select, std::vector<double> &v) {
+  if (n.num_children == 0) {
+    v[n.p.idx] = n.unweighted_sums[v_select];
+  } else {
+    for(int i=0; i < n.num_children; ++i) {
+      get_v_node(n.children[i], v_select, v);
+    }
+  }
+}
+
+
+double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> &query_pt, double eps, string wfn_str, const pyublas::numpy_vector<double> &weight_params) {
+  point qp = {&query_pt(0,0), 0};
 
   wfn w;
   if (wfn_str.compare("se") == 0) {
@@ -77,9 +59,9 @@ double CoverTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double>
   double weight_sofar = 0;
   int fcalls = 0;
   this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params);
-  double ws = weighted_sum_node(this->root, v_select, 8,
-			       qp, eps, weight_sofar,
-			       fcalls, w, this->dfn, this->dist_params, wp);
+  double ws = weighted_sum_node(this->root, v_select,
+				qp, eps, weight_sofar,
+				fcalls, w, this->dfn, this->dist_params, wp);
   if (wp != NULL) {
     delete wp;
     wp = NULL;
@@ -88,7 +70,7 @@ double CoverTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double>
   return ws;
 }
 
-void CoverTree::set_v(int v_select, const pyublas::numpy_vector<double> &v) {
+void VectorTree::set_v(int v_select, const pyublas::numpy_vector<double> &v) {
   if (v.ndim() != 1) {
     printf("error: tree can only hold 1D arrays! (array passed has %lu dimensions)\n", v.ndim());
     exit(1);
@@ -101,7 +83,7 @@ void CoverTree::set_v(int v_select, const pyublas::numpy_vector<double> &v) {
   set_v_node(this->root, v_select, new_v);
 }
 
-pyublas::numpy_vector<double> CoverTree::get_v(int v_select) {
+pyublas::numpy_vector<double> VectorTree::get_v(int v_select) {
   vector<double> v(this->n);
   get_v_node(this->root, v_select, v);
 
@@ -113,13 +95,15 @@ pyublas::numpy_vector<double> CoverTree::get_v(int v_select) {
   return pv;
 }
 
-CoverTree::CoverTree (const pyublas::numpy_matrix<double> &pts,
+VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
+			const unsigned int narms,
 			const string &distfn_str,
 			const pyublas::numpy_vector<double> &dist_params) {
-  vector< point > points(pts.size1(), point(pts.size2()));
-  for (unsigned i = 0; i < pts.size1 (); ++ i)
-    for (unsigned j = 0; j < pts.size2 (); ++ j)
-      points[i][j] = pts (i, j);
+  vector< point > points(pts.size1());
+  for (unsigned i = 0; i < pts.size1 (); ++ i) {
+    point p = {&pts (i, 0), i};
+    points[i] = p;
+  }
   this->n = pts.size1();
   if (distfn_str.compare("pair") == 0) {
     this->dfn = pair_distance;
@@ -134,9 +118,10 @@ CoverTree::CoverTree (const pyublas::numpy_matrix<double> &pts,
   this->set_dist_params(dist_params);
 
   this->root = batch_create(points, this->dfn, this->dist_params);
+  this->root.alloc_arms(narms);
 }
 
-void CoverTree::set_dist_params(const pyublas::numpy_vector<double> &dist_params) {
+void VectorTree::set_dist_params(const pyublas::numpy_vector<double> &dist_params) {
   if (this->dist_params != NULL) {
     delete this->dist_params;
     this->dist_params = NULL;
@@ -148,7 +133,7 @@ void CoverTree::set_dist_params(const pyublas::numpy_vector<double> &dist_params
 }
 
 
-pyublas::numpy_matrix<double> CoverTree::debug_kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only) {
+pyublas::numpy_matrix<double> VectorTree::debug_kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only) {
 
   wfn w;
   if (wfn_str.compare("se") == 0) {
@@ -168,17 +153,9 @@ pyublas::numpy_matrix<double> CoverTree::debug_kernel_matrix(const pyublas::nump
 
   pyublas::numpy_matrix<double> K(pts1.size1(), pts2.size1());
   for (unsigned i = 0; i < pts1.size1 (); ++ i) {
-    point p1(pts1.size2());
-    for (unsigned int pi=0; pi < pts1.size2(); pi++) {
-      p1[pi] = pts1(i, pi);
-    }
-
+    point p1 = {&pts1(i, 0), 0};
     for (unsigned j = 0; j < pts2.size1 (); ++ j) {
-      point p2(pts2.size2());
-      for (unsigned int pi=0; pi < pts2.size2(); pi++) {
-	p2[pi] = pts2(j, pi);
-      }
-
+      point p2 = {&pts2(j, 0), 0};
       double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params);
       K(i,j) = distance_only ? d : w(d, wp);
     }
@@ -192,7 +169,7 @@ pyublas::numpy_matrix<double> CoverTree::debug_kernel_matrix(const pyublas::nump
 }
 
 
-CoverTree::~CoverTree() {
+VectorTree::~VectorTree() {
   if (this->dist_params != NULL) {
     delete this->dist_params;
     this->dist_params = NULL;
@@ -200,11 +177,19 @@ CoverTree::~CoverTree() {
 }
 
 BOOST_PYTHON_MODULE(cover_tree) {
-  bp::class_<CoverTree>("CoverTree", bp::init< pyublas::numpy_matrix< double > const &, string const &, pyublas::numpy_vector< double > const &>())
-    .def("set_v", &CoverTree::set_v)
-    .def("get_v", &CoverTree::get_v)
-    .def("weighted_sum", &CoverTree::weighted_sum)
-    .def("set_dist_params", &CoverTree::weighted_sum)
-    .def("debug_kernel_matrix", &CoverTree::debug_kernel_matrix)
-    .def_readonly("fcalls", &CoverTree::fcalls);
+  bp::class_<VectorTree>("VectorTree", bp::init< pyublas::numpy_matrix< double > const &, int const, string const &, pyublas::numpy_vector< double > const &>())
+    .def("set_v", &VectorTree::set_v)
+    .def("get_v", &VectorTree::get_v)
+    .def("weighted_sum", &VectorTree::weighted_sum)
+    .def("set_dist_params", &VectorTree::set_dist_params)
+    .def("debug_kernel_matrix", &VectorTree::debug_kernel_matrix)
+    .def_readonly("fcalls", &VectorTree::fcalls);
+
+  bp::class_<MatrixTree>("MatrixTree", bp::init< pyublas::numpy_matrix< double > const &, pyublas::numpy_vector< int > const &, pyublas::numpy_vector< int > const &, string const &, pyublas::numpy_vector< double > const &>())
+    .def("set_m", &MatrixTree::set_m)
+    .def("get_m", &MatrixTree::get_m)
+    .def("quadratic_form", &MatrixTree::quadratic_form)
+    .def("set_dist_params", &MatrixTree::set_dist_params)
+    .def_readonly("fcalls", &MatrixTree::fcalls);
+
 }
