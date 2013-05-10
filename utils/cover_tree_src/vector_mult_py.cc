@@ -58,10 +58,10 @@ double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double
 
   double weight_sofar = 0;
   int fcalls = 0;
-  this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params);
+  this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, NULL);
   double ws = weighted_sum_node(this->root, v_select,
 				qp, eps, weight_sofar,
-				fcalls, w, this->dfn, this->dist_params, wp);
+				fcalls, w, this->dfn, this->dist_params, NULL, wp);
   if (wp != NULL) {
     delete wp;
     wp = NULL;
@@ -105,9 +105,7 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     points[i] = p;
   }
   this->n = pts.size1();
-  if (distfn_str.compare("pair") == 0) {
-    this->dfn = pair_distance;
-  } else if (distfn_str.compare("lld") == 0) {
+  if (distfn_str.compare("lld") == 0) {
     this->dfn = dist_3d_km;
   } else{
     printf("error: unrecognized distance function %s\n", distfn_str.c_str());
@@ -117,7 +115,7 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
   this->dist_params = NULL;
   this->set_dist_params(dist_params);
 
-  this->root = batch_create(points, this->dfn, this->dist_params);
+  this->root = batch_create(points, this->dfn, this->dist_params, NULL);
   this->root.alloc_arms(narms);
 }
 
@@ -133,7 +131,7 @@ void VectorTree::set_dist_params(const pyublas::numpy_vector<double> &dist_param
 }
 
 
-pyublas::numpy_matrix<double> VectorTree::debug_kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only) {
+pyublas::numpy_matrix<double> VectorTree::kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only) {
 
   wfn w;
   if (wfn_str.compare("se") == 0) {
@@ -156,7 +154,7 @@ pyublas::numpy_matrix<double> VectorTree::debug_kernel_matrix(const pyublas::num
     point p1 = {&pts1(i, 0), 0};
     for (unsigned j = 0; j < pts2.size1 (); ++ j) {
       point p2 = {&pts2(j, 0), 0};
-      double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params);
+      double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params, NULL);
       K(i,j) = distance_only ? d : w(d, wp);
     }
   }
@@ -167,6 +165,37 @@ pyublas::numpy_matrix<double> VectorTree::debug_kernel_matrix(const pyublas::num
   }
   return K;
 }
+
+pyublas::numpy_matrix<double> VectorTree::kernel_deriv_wrt_i(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, string wfn_str, const pyublas::numpy_vector<double> &weight_params, int param_i) {
+  if (wfn_str.compare("se") != 0) {
+    printf("error: unrecognized weight function %s\n", wfn_str.c_str());
+    exit(1);
+  }
+
+  double * wp = NULL;
+  if (weight_params.size() > 0) {
+    wp = new double[weight_params.size()];
+    for (unsigned i = 0; i < weight_params.size(); ++i) {
+      wp[i] = weight_params(i);
+    }
+  }
+
+  pyublas::numpy_matrix<double> K(pts1.size1(), pts2.size1());
+  for (unsigned i = 0; i < pts1.size1 (); ++ i) {
+    point p1 = {&pts1(i, 0), 0};
+    for (unsigned j = 0; j < pts2.size1 (); ++ j) {
+      point p2 = {&pts2(j, 0), 0};
+      K(i,j) = dist3d_se_deriv_wrt_i(param_i, p1, p2, wp, this->dist_params);
+    }
+  }
+
+  if (wp != NULL) {
+    delete wp;
+    wp = NULL;
+  }
+  return K;
+}
+
 
 
 VectorTree::~VectorTree() {
@@ -182,7 +211,8 @@ BOOST_PYTHON_MODULE(cover_tree) {
     .def("get_v", &VectorTree::get_v)
     .def("weighted_sum", &VectorTree::weighted_sum)
     .def("set_dist_params", &VectorTree::set_dist_params)
-    .def("debug_kernel_matrix", &VectorTree::debug_kernel_matrix)
+    .def("kernel_matrix", &VectorTree::kernel_matrix)
+    .def("kernel_deriv_wrt_i", &VectorTree::kernel_deriv_wrt_i)
     .def_readonly("fcalls", &VectorTree::fcalls);
 
   bp::class_<MatrixTree>("MatrixTree", bp::init< pyublas::numpy_matrix< double > const &, pyublas::numpy_vector< int > const &, pyublas::numpy_vector< int > const &, string const &, pyublas::numpy_vector< double > const &>())

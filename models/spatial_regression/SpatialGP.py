@@ -9,11 +9,14 @@ import hashlib
 
 from sigvisa.gpr import munge, kernels, evaluate, learn, distributions, plot
 from sigvisa.gpr.gp import GaussianProcess
+from sigvisa.gpr.util import marshal_fn, unmarshal_fn
+
 
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
 from sigvisa.source.event import Event
 
 from sigvisa.utils.cover_tree import VectorTree, MatrixTree
+
 
 start_params_dad_log = {"coda_decay": [.022, .0187, 1.00, .14, .1],
                         "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31],
@@ -107,6 +110,9 @@ def logdepth_diff_distfn(lldda1, lldda2, params=None):
     depth = np.log(lldda1[2] + 1) - np.log(lldda2[2] + 1)
     return depth
 
+X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
+
+
 def spatial_kernel_from_str(kernel_str, target=None, params=None):
     params = params if params is not None else start_params[kernel_str][target]
     priors = [None,] * len(params) # TODO: use real priors
@@ -146,141 +152,180 @@ def spatial_kernel_from_str(kernel_str, target=None, params=None):
 
     return k
 
+"""
+def spatial_kernel_from_str(target=None, params=None):
+    params = params if params is not None else start_params_lld[target]
+
+    return params
+"""
+
 class SpatialGP(GaussianProcess, ParamModel):
 
-    def __init__(self, *args, **kwargs):
+    def init_hyperparams(self, hyperparams):
+        (noise_var, signal_var, ll_scale, d_scale) = hyperparams
+        self.noise_var = noise_var
+        self.dfn_params = np.array((ll_scale, d_scale), dtype=np.float)
+        self.wfn_params = np.array((signal_var,), copy=True, dtype=np.float)
+
+    def build_kernel_matrix(self, X, hyperparams):
+        self.init_hyperparams(hyperparams)
+        vt = VectorTree(X[0:1,:], 1, "lld", self.dfn_params)
+        K = vt.kernel_matrix(X, X, "se", self.wfn_params, False) + self.noise_var * np.eye(len(X), dtype=np.float64)
+
+        K += np.eye(K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
+                                       # positive-definiteness
+                                       # to numeric issues
+
+        return K
+
+    def invert_kernel_matrix(self, K):
+        L = None
+        alpha = None
         try:
-            self.distfn_str = kwargs.pop("distfn_str")
-        except KeyError:
-            self.distfn_str = None
+            L = scipy.linalg.cholesky(K, lower=True)
+            alpha = scipy.linalg.cho_solve((L, True), self.y)
+            Kinv = scipy.linalg.inv(K)
+        except np.linalg.linalg.LinAlgError:
+            #u,v = np.linalg.eig(K)
+            #print K, u
+            #import pdb; pdb.set_trace()
+            raise
+        except ValueError:
+            raise
+        return alpha, L, Kinv
+
+    def build_parametric_model(self, alpha, Kinv_sp, H, b, B):
+        # notation follows section 2.7 of Rasmussen and Williams
+        Binv = scipy.linalg.inv(B)
+        tmp = np.dot(H, alpha) + np.dot(Binv, b)  # H * K^-1 * y + B^-1 * b
+
+        HKinv = H * Kinv_sp
+        M_inv  = Binv + np.dot(HKinv, H.T) # here M = (inv(B) +
+                                           # H*K^-1*H.T)^-1 is the
+                                           # posterior covariance
+                                           # matrix on the params.
+
+        c = scipy.linalg.cholesky(M_inv, lower=True) # c = sqrt(inv(B) + H*K^-1*H.T)
+        beta_bar = scipy.linalg.cho_solve((c, True), tmp)
+        invc = scipy.linalg.inv(c)
+
+        return c, beta_bar, invc, HKinv
+
+    def sparsify(self, M):
+        return scipy.sparse.csr_matrix(M * (np.abs(M) > self.sparse_threshold))
+
+    def __init__(self, X=None, y=None,
+                 fname=None, basisfns=None,
+                 hyperparams=None,
+                 param_mean=None, param_cov=None,
+                 compute_ll=False,
+                 compute_grad=False,
+                 sparse_threshold=1e-20,
+                 sta = None):
 
         try:
-            ParamModel.__init__(self, sta=kwargs.pop("sta"))
+            ParamModel.__init__(self, sta=sta)
         except KeyError:
             pass
 
-        if 'fname' not in kwargs:
-            kwargs['X'] = np.array(kwargs['X'], copy=False, dtype=float)
-            if 'K' not in kwargs:
-                k = kwargs['kernel']
-                noise_var = k.lhs.params[0]
-                width_param = k.rhs.params[1]
-                depthscale_param = k.rhs.params[2]
-                signal_var = np.array((k.rhs.params[0],), copy=True, dtype=float)
-                ll_scale = 1.0/width_param
-                d_scale = depthscale_param/width_param
-                X = kwargs['X']
-                vt = VectorTree(X[0:1,:], 1, "lld", np.array((ll_scale, d_scale), dtype=float))
-                import time
-                t0 = time.time()
-                kwargs['K'] = vt.debug_kernel_matrix(pyublas.why_not(X), pyublas.why_not(X), "se", signal_var, False) + noise_var * np.eye(len(X))
-                t1 = time.time()
-                print "got kernel matrix in %f seconds", t1 - t0
 
-        GaussianProcess.__init__(self, *args, save_extra_info=True, **kwargs)
+        if fname is not None:
+            self.load_trained_model(fname)
+        else:
+            X = X.astype(np.float)
 
-        if 'fname' not in kwargs:
-            if self.basisfns is not None:
-                r = self.y - np.dot(self.H.T, self.beta_bar)
+            self.hyperparams = np.array(hyperparams)
+            self.sparse_threshold = sparse_threshold
+            self.X = X
+            self.n = X.shape[0]
+            self.basisfns = basisfns
+            mu, self.y, H = self.setup_mean("parametric", X, y)
+
+            # train model
+            #t0 = time.time()
+            K = self.build_kernel_matrix(self.X, hyperparams)
+            #t1 = time.time()
+            self.alpha, L, Kinv = self.invert_kernel_matrix(K)
+            #t2 = time.time()
+            self.Kinv_sp = self.sparsify(Kinv)
+            #t3 = time.time()
+            self.c,self.beta_bar, self.invc, self.HKinv = self.build_parametric_model(self.alpha,
+                                                                                      self.Kinv_sp, H,
+                                                                                      b=param_mean,
+                                                                                      B=param_cov)
+            #t4 = time.time()
+
+
+            r = self.y - np.dot(H.T, self.beta_bar)
+            self.alpha_r = scipy.linalg.cho_solve((L, True), r)
+            #t5 = time.time()
+
+            self.build_point_tree(HKinv = self.HKinv, Kinv = Kinv, Kinv_sp=self.Kinv_sp, alpha_r = self.alpha_r)
+            #t6 = time.time()
+
+            # precompute training set log likelihood, so we don't need
+            # to keep L around.
+            z = np.dot(H.T, param_mean) - self.y
+            B = param_cov
+            if compute_ll:
+                self._compute_marginal_likelihood(L=L, z=z, B=B, H=H, K=K, Kinv_sp=self.Kinv_sp)
             else:
-                r = self.y
-            self.alpha_r = scipy.linalg.cho_solve((self.L, True), r)
-            self.build_point_tree()
+                self.ll = -np.inf
+            #t7 = time.time()
+            if compute_grad:
+                self.ll_grad = self._log_likelihood_gradient(z=z, K=K, H=H, B=B, Kinv=Kinv)
 
 
-    def build_point_tree(self):
-        #noise_var = self.kernel.lhs.params[0]
-        #signal_var = self.kernel.rhs.params[0]
-        width_param = self.kernel.rhs.params[1]
-        depthscale_param = self.kernel.rhs.params[2]
+            #t8 = time.time()
+            """
+            print t1-t0
+            print t2-t1
+            print t3-t2
+            print t4-t3
+            print t5-t4
+            print t6-t5
+            print t7-t6
+            print t8-t7
+            """
 
-        ll_scale = 1.0/width_param
-        d_scale = depthscale_param/width_param
+    def build_point_tree(self, HKinv, Kinv, Kinv_sp, alpha_r):
+        self.predict_tree = VectorTree(self.X, 1, "lld", self.dfn_params)
+        self.predict_tree.set_v(0, alpha_r.astype(np.float))
 
-        import time
-
-        t0 = time.time()
-        self.predict_tree = VectorTree(self.X, 1, "lld", np.array((ll_scale, d_scale), dtype=float))
-        self.predict_tree.set_v(0, self.alpha_r)
-        t1 = time.time()
 
         d = len(self.basisfns)
-        self.cov_tree = VectorTree(self.X, d, "lld", np.array((ll_scale, d_scale), dtype=float))
+        self.cov_tree = VectorTree(self.X, d, "lld", self.dfn_params)
+        HKinv = HKinv.astype(np.float)
         for i in range(d):
-            self.cov_tree.set_v(i, self.HKinv[i, :])
-        t2 = time.time()
+            self.cov_tree.set_v(i, HKinv[i, :])
 
-        Kinv = np.dot(self.invL.T, self.invL)
-        t3 = time.time()
-        self.spKinv = scipy.sparse.csr_matrix(Kinv * (np.abs(Kinv) > 1e-20 ) )
 
-        nzr, nzc = self.spKinv.nonzero()
-        print "Kinv matrix has %d of %d nonzero elements" % (len(nzr), np.product(Kinv.shape))
-        t4 = time.time()
-        self.double_tree = MatrixTree(self.X, nzr, nzc, "lld", np.array((ll_scale, d_scale), dtype=float))
-        t5 = time.time()
-        self.double_tree.set_m(Kinv)
-        t6 = time.time()
-
-        print "predict tree time:", t1-t0
-        print "cov tree time:", t2-t1
-        print "matrix mult time:", t3-t2
-        print "sparse matrix time:", t4-t3
-        print "double tree creation time:", t5-t4
-        print "double tree population time:", t6-t5
-
-        self.Kinv = Kinv
-
-    def get_query_K(self, X1):
-        # avoid recomputing the kernel if we're evaluating at the same
-        # point multiple times. This is effectively a size-1 cache.
-        try:
-            self.query_hsh
-        except AttributeError:
-            self.query_hsh = None
-
-        hsh = hashlib.sha1(X1.view(np.uint8)).hexdigest()
-        if hsh != self.query_hsh:
-            signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
-            self.query_K = self.predict_tree.debug_kernel_matrix(self.X, X1, "se", signal_var, False)
-            self.query_hsh = hsh
-
-            if self.basisfns:
-                H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
-                self.query_R = H - np.dot(self.HKinv, self.query_K)
-
-#            print "cache fail: model %d called with " % (len(self.alpha)), X1
-#        else:
-#            print "cache hit!"
-        return self.query_K
+        nzr, nzc = Kinv_sp.nonzero()
+        self.double_tree = MatrixTree(self.X, nzr, nzc, "lld", self.dfn_params)
+        kkk = np.matrix(Kinv, copy=True, dtype=np.float64)
+        self.double_tree.set_m(kkk)
 
     def predict(self, cond, eps=1e-8):
-        X1 = self.standardize_input_array(cond)
+        X1 = self.standardize_input_array(cond).astype(np.float)
 
-        # Kstar = self.get_query_K(X1)
-        #gp_pred = self.mu + np.dot(Kstar.T, self.alpha_r)
-        #gp_pred = np.array([self.mu + np.dot(k, self.alpha_r) for k in Kstar.T])
+        gp_pred = np.array([self.predict_tree.weighted_sum(0, np.reshape(x, (1,-1)), eps, "se", self.wfn_params) for x in X1])
 
-        signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
-        #Kstar2 = self.tree.debug_kernel_matrix(X1, self.X, "se", signal_var, False)
-
-        #np.savetxt('Kstar.txt', Kstar)
-        #np.savetxt('Kstar2.txt', Kstar2)
-
-        gp_pred = np.array([self.mu + self.predict_tree.weighted_sum(0, np.reshape(x, (1,-1)), eps, "se", signal_var) for x in X1])
-
-        if self.basisfns:
-            H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
-            mean_pred = np.reshape(np.dot(H.T, self.beta_bar), gp_pred.shape)
-            gp_pred += mean_pred
+        H = self.get_data_features(X1)
+        mean_pred = np.reshape(np.dot(H.T, self.beta_bar), gp_pred.shape)
+        gp_pred += mean_pred
 
         if len(gp_pred) == 1:
             gp_pred = gp_pred[0]
 
         return gp_pred
 
+    def kernel(self, X1, X2, identical=False):
+        K = self.predict_tree.kernel_matrix(X1, X2, "se", self.wfn_params, False)
+        if identical:
+            K += self.noise_var * np.eye(K.shape[0])
+        return K
 
-    def cov_sparse(self, X1, include_obs=False, pad=1e-8):
+    def covariance(self, cond, include_obs=False, parametric_only=False, pad=1e-8):
         """
         Compute the posterior covariance matrix at a set of points given by the rows of X1.
 
@@ -291,92 +336,50 @@ class SpatialGP(GaussianProcess, ParamModel):
         loss of positive definiteness from numerical issues. Setting pad=0 disables this.
 
         """
+        X1 = self.standardize_input_array(cond)
+        m = X1.shape[0]
 
         Kstar = self.get_query_K(X1)
-        tmp = self.spKinv * Kstar
-        a = np.dot(Kstar.T, tmp)
-        gp_cov = self.kernel(X1,X1, identical=include_obs) - a
+        if not parametric_only:
+            tmp = self.Kinv_sp * Kstar
+            qf = np.dot(Kstar.T, tmp)
+            k = self.kernel(X1,X1, identical=include_obs)
+            gp_cov = k - qf
+        else:
+            gp_cov = np.zeros((m,m))
 
-        if self.basisfns:
-            R = self.query_R
-            tmp = np.dot(self.invc, R)
-            mean_cov = np.dot(tmp.T, tmp)
-            gp_cov += mean_cov
+        R = self.query_R
+        tmp = np.dot(self.invc, R)
+        mean_cov = np.dot(tmp.T, tmp)
+        gp_cov += mean_cov
 
         gp_cov += pad * np.eye(gp_cov.shape[0])
         return gp_cov
-
-
-    """
-    def covariance_single_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=0):
-        X1 = self.standardize_input_array(cond)
-        m = X1.shape[0]
-        d = len(self.basisfns)
-        n = self.n
-        gp_cov = self.kernel(X1, X1, identical=include_obs)
-        tmp = np.zeros((n, m))
-
-        # compute self.invL * Kstar, where Kstar is the n x m kernel
-        # matrix, where m is the number of query points (so e.g. Kstar
-        # is a column vector if there's just one query point).
-        import time
-        t0 = time.time()
-        signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
-        for i in range(n):
-            for j in range(m):
-                tmp[i,j] = self.cov_tree.weighted_sum(i, X1[j:j+1,:], eps, "se", signal_var)
-        qf = np.dot(tmp.T, tmp)
-        gp_cov -= qf
-        print "single qf", qf
-        t1 = time.time()
-
-        if self.basisfns:
-            H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
-            HKinvKstar = np.zeros((d, m))
-
-            for i in range(d):
-                for j in range(m):
-                    HKinvKstar[i,j] = self.cov_tree.weighted_sum(n+i, X1[j:j+1,:], eps, "se", signal_var)
-            R = H - HKinvKstar
-            v = np.dot(self.invc, R)
-            gp_cov += np.dot(v.T, v)
-        t2 = time.time()
-
-        self.nptime = (t1-t0)
-        self.ptime = (t2-t1)
-
-        gp_cov += pad * np.eye(m)
-        return gp_cov
-    """
 
     def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8):
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
         d = len(self.basisfns)
-        n = self.n
-        gp_cov = self.kernel(X1, X1, identical=include_obs)
 
-        # compute self.invL * Kstar, where Kstar is the n x m kernel
-        # matrix, where m is the number of query points (so e.g. Kstar
-        # is a column vector if there's just one query point).
-        import time
         t0 = time.time()
-        signal_var = np.array((self.kernel.rhs.params[0],), copy=True, dtype=float)
-        qf = self.double_tree.quadratic_form(X1, eps, "se", signal_var)
-        gp_cov -= qf
+        if not parametric_only:
+            k = self.kernel(X1, X1, identical=include_obs)
+            qf = self.double_tree.quadratic_form(X1, eps, "se", self.wfn_params)
+            gp_cov = k - qf
+        else:
+            gp_cov = np.zeros((m,m))
         t1 = time.time()
-        print t1-t0
 
-        if self.basisfns:
-            H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=float)
-            HKinvKstar = np.zeros((d, m))
+        H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=np.float64)
+        HKinvKstar = np.zeros((d, m))
 
-            for i in range(d):
-                for j in range(m):
-                    HKinvKstar[i,j] = self.cov_tree.weighted_sum(i, X1[j:j+1,:], eps, "se", signal_var)
-            R = H - HKinvKstar
-            v = np.dot(self.invc, R)
-            gp_cov += np.dot(v.T, v)
+        for i in range(d):
+            for j in range(m):
+                HKinvKstar[i,j] = self.cov_tree.weighted_sum(i, X1[j:j+1,:], eps, "se", self.wfn_params)
+        R = H - HKinvKstar
+        v = np.dot(self.invc, R)
+        mc = np.dot(v.T, v)
+        gp_cov += mc
         t2 = time.time()
 
         self.nptime = (t1-t0)
@@ -384,7 +387,6 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         gp_cov += pad * np.eye(m)
         return gp_cov
-
 
     def variance(self, cond, **kwargs):
         X1 = self.standardize_input_array(cond)
@@ -409,21 +411,160 @@ class SpatialGP(GaussianProcess, ParamModel):
         result = GaussianProcess.posterior_log_likelihood(self, X1, x)
         return result
 
+    def pack_npz(self):
+        d = dict()
+        d['c'] = self.c
+        d['beta_bar'] = self.beta_bar
+        d['invc'] = self.invc
+        d['HKinv'] = self.HKinv
+        d['basisfns'] = np.array([marshal_fn(f) for f in self.basisfns], dtype=object)
+        d['X']  = self.X,
+        d['y'] =self.y,
+        d['alpha'] =self.alpha,
+        d['hyperparams'] = self.hyperparams
+        d['Kinv_sp'] =self.Kinv_sp,
+        d['sparse_threshold'] =self.sparse_threshold,
+        d['ll'] =self.ll,
+        d['alpha_r'] = self.alpha_r
+
+        return d
+
     def save_trained_model(self, filename):
         """
         Serialize the model to a file.
         """
         d = self.pack_npz()
-        d['alpha_r'] = self.alpha_r
         with open(filename, 'wb') as f:
             np.savez(f, base_str=super(SpatialGP, self).__repr_base_params__(), **d)
+
+
+    def unpack_npz(self, npzfile):
+        self.X = npzfile['X'][0]
+        self.y = npzfile['y'][0]
+        self.alpha = npzfile['alpha'][0]
+        self.hyperparams = npzfile['hyperparams']
+        self.init_hyperparams(self.hyperparams)
+        self.Kinv_sp = npzfile['Kinv_sp'][0]
+        self.sparse_threshold = npzfile['sparse_threshold'][0]
+        self.ll = npzfile['ll'][0]
+        self.basisfns = npzfile['basisfns']
+        self.basisfns = [unmarshal_fn(code) for code in self.basisfns]
+        self.beta_bar = npzfile['beta_bar']
+        self.c = npzfile['c']
+        self.invc = npzfile['invc']
+        self.HKinv = npzfile['HKinv']
+        self.alpha_r = npzfile['alpha_r']
 
     def load_trained_model(self, filename):
         npzfile = np.load(filename)
         self.unpack_npz(npzfile)
         super(SpatialGP, self).__unrepr_base_params__(str(npzfile['base_str']))
-        self.alpha_r = npzfile['alpha_r']
         del npzfile.f
         npzfile.close()
         self.n = self.X.shape[0]
-        self.build_point_tree()
+        self.build_point_tree(HKinv=self.HKinv, Kinv=self.Kinv_sp.todense(), Kinv_sp=self.Kinv_sp, alpha_r=self.alpha_r)
+
+    def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv_sp):
+
+        # here we follow eqn 2.43 in R&W
+        #
+        # let z = H.T*b - y, then we want
+        # .5 * z.T * (K + H.T * B * H)^-1 * z
+        # minus some other stuff (dealt with below).
+        # by the matrix inv lemma,
+        # (K + H.T * B * H)^-1
+        # = Kinv - Kinv*H.T*(Binv + H*Kinv*H.T)^-1*H*Kinv
+        # = Kinv - Kinv*H.T*     invc.T * invc    *H*Kinv
+        # = Kinv - (invc * HKinv)^T (invc * HKinv)
+        #
+        # so we have z.T * Kinv * z - z.T * (other thing) * z
+        # i.e.:            term1    -     term2
+        # in the notation of the code.
+
+        tmp1 = Kinv_sp * z
+        term1 = np.dot(z.T, tmp1)
+
+        tmp2 = np.dot(self.HKinv, z)
+        tmp3 = np.dot(self.invc, tmp2)
+        term2 = np.dot(tmp3.T, tmp3)
+
+        # following eqn 2.43 in R&W, we want to compute
+        # log det(K + H.T * B * H). using the matrix inversion
+        # lemma, we instead compute
+        # log det(K) + log det(B) + log det(B^-1 + H*K^-1*H.T)
+
+        # to compute log(det(K)), we use the trick that the
+        # determinant of a symmetric pos. def. matrix is the
+        # product of squares of the diagonal elements of the
+        # Cholesky factor
+
+        ld2_K = np.log(np.diag(L)).sum()
+        ld2 =  np.log(np.diag(self.c)).sum() # det( B^-1 - H * K^-1 * H.T )
+        ld_B = np.log(np.linalg.det(B))
+
+        # eqn 2.43 in R&W, using the matrix inv lemma
+        self.ll = -.5 * (term1 - term2 + self.n * np.log(2*np.pi) + ld_B) - ld2_K - ld2
+
+    def _log_likelihood_gradient(self, z, K, H, B, Kinv):
+        """
+        Gradient of the training set log likelihood with respect to the kernel hyperparams.
+        """
+
+        nparams = 4
+        grad = np.zeros((nparams,))
+
+        #t0 = time.time()
+        tmp = np.dot(self.invc, self.HKinv)
+        #t1 = time.time()
+        K_HBH_inv = Kinv - np.dot(tmp.T, tmp)
+        #t2 = time.time()
+        alpha_z = np.dot(K_HBH_inv, z)
+        #t3 = time.time()
+
+        #print "gradient: %f %f %f" % (t1-t0, t2-t1, t3-t2)
+
+        for i in range(nparams):
+            tA = time.time()
+            if (i == 0):
+                dKdi = np.eye(self.n)
+            else:
+                dKdi = self.predict_tree.kernel_deriv_wrt_i(self.X, self.X, "se", self.wfn_params, i-1)
+
+            dlldi = .5 * np.dot(alpha_z.T, np.dot(dKdi, alpha_z))
+            tB = time.time()
+            # here we use the fact:
+            # trace(AB) = sum_{ij} A_ij * B_ij
+            dlldi -= .5 * np.sum(np.sum(K_HBH_inv.T * dKdi))
+
+            grad[i] = dlldi
+            tC = time.time()
+            print "  %d: %f %f" % (i, tB-tA, tC-tB)
+
+        return grad
+
+
+def spatialgp_nll_ngrad(**kwargs):
+    """
+    Get both the negative log-likelihood and its gradient
+    simultaneously (more efficient than doing it separately since we
+    only create one new GP object, which only constructs the kernel
+    matrix once, etc.).
+    """
+
+    try:
+#        print "optimizing params", kernel_params
+        gp = SpatialGP(compute_ll=True, compute_grad=True, **kwargs)
+
+        nll = -1 * gp.ll
+        ngrad = -1 * gp.ll_grad
+
+    except np.linalg.linalg.LinAlgError as e:
+        print "warning: lin alg error (%s) in likelihood computation, returning likelihood -inf" % str(e)
+        nll = np.float("inf")
+        ngrad = None
+    except ValueError as e:
+        print "warning: value error (%s) in likelihood computation, returning likelihood -inf" % str(e)
+        nll = np.float("inf")
+        ngrad = None
+
+    return nll, ngrad

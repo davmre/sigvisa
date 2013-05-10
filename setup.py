@@ -45,7 +45,9 @@ print sys_includes
 print sys_libraries
 
 extra_compile_args = ['-std=c99', '-g', '-O0']
-extra_link_args = []
+#extra_compile_args = ['-std=c99', '-O3']
+#extra_link_args = ['-Wl,--strip-all']
+extra_link_args = ['-lrt',]
 
 priors_sources = ['NumEventPrior.c', 'EventLocationPrior.c',
                   'EventMagPrior.c',
@@ -80,6 +82,7 @@ covertree_module = ctree = Extension('utils.cover_tree',
                                      library_dirs=['/'],
                                      libraries=['boost_python'],
                                      extra_compile_args=extra_compile_args,
+                                     extra_link_args = extra_link_args,
                                  )
 
 

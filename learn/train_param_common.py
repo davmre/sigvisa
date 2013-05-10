@@ -15,7 +15,7 @@ import numpy as np
 import scipy.linalg
 import hashlib
 
-from sigvisa.models.spatial_regression.SpatialGP import SpatialGP, spatial_kernel_from_str
+from sigvisa.models.spatial_regression.SpatialGP import SpatialGP, start_params
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 import sigvisa.gpr as gpr
 from sigvisa.gpr.distributions import InvGamma, LogNormal
@@ -149,24 +149,25 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, 
         B = None
         mean = "constant"
 
-    k = spatial_kernel_from_str(kernel_str=kernel_str, params=params, target=target)
-    params = k.get_params()
+        params = start_params[kernel_str][target]
 
     if optimize:
         sX, sy = subsample_data(X=X, y=y, k=100)
         print "learning hyperparams on", len(sy), "examples"
 
+        """
         llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=k, kernel_params=p,
                                                   basisfns=basisfns, param_mean=b, param_cov=B,
                                                   mean=mean)
+        """
+        llgrad = lambda p : spatialgp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta)
 
         bounds = [(1e-20,None),] * len(params)
+
         params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
-        k.set_params(params)
         print "got params", params, "giving ll", ll
 
-    gp = SpatialGP(X=X, y=y, sta=sta, kernel=k, mean=mean,
-                   basisfns=basisfns, param_mean=b, param_cov=B, compute_ll=True)
+    gp = SpatialGP(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True)
     return gp
 
 

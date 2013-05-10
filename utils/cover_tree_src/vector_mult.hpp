@@ -1,5 +1,6 @@
 #include "cover_tree.hpp"
 #include <limits.h>
+#include <pthread.h>
 #include <values.h>
 #include <stdint.h>
 #include <iostream>
@@ -27,6 +28,7 @@ double weighted_sum_node(node<T> &n, int v_select,
 			 wfn w,
 			 typename distfn<T>::Type dist,
 			 const double * dist_params,
+			 void * dist_extra,
 			 const double* weight_params) {
   double ws = 0;
   double d = n.distance_to_query; // avoid duplicate distance
@@ -65,24 +67,57 @@ double weighted_sum_node(node<T> &n, int v_select,
     if (!cutoff) {
       // if not cutting off, we expand the sum recursively at the
       // children of this node, from nearest to furthest.
-      std::vector<mypair> v(n.num_children);
       for(int i=0; i < n.num_children; ++i) {
-	n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXDOUBLE, dist_params);
-	v[i] = mypair(n.children[i].distance_to_query, i);
+	n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXDOUBLE, dist_params, dist_extra);
       }
-      sort(v.begin(), v.end());
+      int permutation[20];
+      if (n.num_children > 20){ printf("error: too many (%d) children!\n", n.num_children); exit(1); }
+      bubblesort_nodes(n.children, n.num_children, permutation);
       for(int i=0; i < n.num_children; ++i) {
-	int child_i = v[i].second;
-	ws +=weighted_sum_node(n.children[child_i], v_select,
+	ws +=weighted_sum_node(n.children[permutation[i]], v_select,
 			  query_pt, eps, weight_sofar, fcalls,
-			       w, dist, dist_params, weight_params);
+			       w, dist, dist_params, dist_extra, weight_params);
       }
     }
   }
   return ws;
 }
 
+template <class T>
+void bubblesort_nodes(node<T> * children, int num_children, int (&permutation)[20]) {
+  /*printf("bubble sorting... ");
+  for(int i=0; i < num_children; ++i) {
+    printf(" %.3f ", children[i].distance_to_query);
+  }
+  printf("\n");*/
 
+  for(int i=0; i < num_children; ++i) {
+    permutation[i] = i;
+  }
+
+  while(1) {
+    int i;
+    for(i=1; i < num_children; ++i) {
+      int current = permutation[i];
+      int prev = permutation[i-1];
+      if (children[current].distance_to_query < children[prev].distance_to_query) {
+	permutation[i] = prev;
+	permutation[i-1] = current;
+	break;
+      }
+    }
+    if (i == num_children) break;
+  }
+
+  /*
+  printf("done... ");
+  for(int i=0; i < num_children; ++i) {
+    printf(" %.3f ", children[permutation[i]].distance_to_query);
+  }
+  printf("\n");
+  sleep(1);*/
+
+}
 
 class VectorTree {
   node<point> root;
@@ -99,7 +134,9 @@ public:
 		     std::string wfn_str, const pyublas::numpy_vector<double> &weight_params);
 
 
-  pyublas::numpy_matrix<double> debug_kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, std::string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only);
+  pyublas::numpy_matrix<double> kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, std::string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only);
+  pyublas::numpy_matrix<double> kernel_deriv_wrt_i(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, std::string wfn_str, const pyublas::numpy_vector<double> &weight_params, int param_i);
+
 
   void set_dist_params(const pyublas::numpy_vector<double> &dist_params);
   double *dist_params;
@@ -110,6 +147,7 @@ public:
 class MatrixTree {
   node<pairpoint> root;
   distfn<pairpoint>::Type dfn;
+  double * distance_cache;
 
 public:
   unsigned int n;

@@ -31,15 +31,16 @@ struct pairpoint {
 inline pairpoint double_point(const double *p) { pairpoint pp = {p, p, 0, 0}; return pp; }
 
 template<typename T> struct distfn {
-  typedef double (*Type)(const T, const T, double, const double*);
+  typedef double (*Type)(const T, const T, double, const double*, void*);
 };
 
 
-double pair_distance(const point pt1, const point pt2, double BOUND_IGNORED, const double * PARAMS_IGNORED);
 double dist_km(const double *p1, const double *p2);
-double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales);
-double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales);
+double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void * extra);
+double distsq_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, void * extra);
+double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void * extra);
 double w_se(double d, const double * variance);
+double dist3d_se_deriv_wrt_i(int i, const point p1, const point p2,  const double *variance, const double *scales);
 typedef double (*wfn)(double, const double *);
 
 
@@ -200,14 +201,15 @@ void dist_split(v_array<ds_node <T> >& point_set,
 		T new_point,
 		int max_scale,
 		typename distfn<T>::Type distance,
-		const double* dist_params)
+		const double* dist_params,
+		void * dist_extra)
 {
   unsigned int new_index = 0;
   double fmax = dist_of_scale(max_scale);
   for(int i = 0; i < point_set.index; i++)
     {
       double new_d;
-      new_d = distance(new_point, point_set[i].p, fmax, dist_params);
+      new_d = distance(new_point, point_set[i].p, fmax, dist_params, dist_extra);
       if (new_d <= fmax ) {
 	push(point_set[i].dist, new_d);
 	push(new_point_set,point_set[i]);
@@ -231,7 +233,7 @@ node<T> batch_insert(const ds_node<T>& p,
 		  v_array< ds_node<T> >& consumed_set,
 		  v_array<v_array< ds_node<T> > >& stack,
 		  typename distfn<T>::Type distance,
-		const double* dist_params)
+		const double* dist_params, void* dist_extra)
 {
   if (point_set.index == 0)
     return new_leaf(p);
@@ -263,7 +265,7 @@ node<T> batch_insert(const ds_node<T>& p,
 
 	node<T> child = batch_insert(p, next_scale, top_scale,
 				  point_set, consumed_set, stack,
-				  distance, dist_params);
+				  distance, dist_params, dist_extra);
 
 	if (point_set.index == 0)
 	  {
@@ -284,13 +286,13 @@ node<T> batch_insert(const ds_node<T>& p,
 	    push(consumed_set, point_set.last());
 	    point_set.decr();
 
-	    dist_split(point_set, new_point_set, new_point, max_scale, distance, dist_params); //O(|point_saet|)
-	    dist_split(far,new_point_set,new_point,max_scale, distance, dist_params); //O(|far|)
+	    dist_split(point_set, new_point_set, new_point, max_scale, distance, dist_params, dist_extra); //O(|point_saet|)
+	    dist_split(far,new_point_set,new_point,max_scale, distance, dist_params, dist_extra); //O(|far|)
 
 	    node<T> new_child =
 	      batch_insert(new_point_node, next_scale, top_scale,
 			   new_point_set, new_consumed_set, stack,
-			   distance, dist_params);
+			   distance, dist_params, dist_extra);
 	    new_child.parent_dist = new_dist;
 
 	    push(children, new_child);
@@ -329,7 +331,7 @@ node<T> batch_insert(const ds_node<T>& p,
 
 template<class T> node<T> batch_create(const std::vector<T> &points,
 					typename distfn<T>::Type distance,
-					const double* dist_params)
+					const double* dist_params, void* dist_extra)
 {
   v_array<ds_node<T> > point_set;
   v_array<v_array<ds_node<T> > > stack;
@@ -338,7 +340,7 @@ template<class T> node<T> batch_create(const std::vector<T> &points,
   initial_pt.p = points[0];
   for (std::vector<point>::size_type i = 1; i < points.size(); i++) {
     ds_node<T> temp;
-    push(temp.dist, distance(points[0], points[i], MAXDOUBLE, dist_params));
+    push(temp.dist, distance(points[0], points[i], MAXDOUBLE, dist_params, dist_extra));
     temp.p = points[i];
     push(point_set,temp);
   }
@@ -352,7 +354,7 @@ template<class T> node<T> batch_create(const std::vector<T> &points,
 			  point_set,
 			  consumed_set,
 			  stack,
-			  distance, dist_params);
+			  distance, dist_params, dist_extra);
   for (int i = 0; i<consumed_set.index;i++)
     free(consumed_set[i].dist.elements);
   free(consumed_set.elements);
