@@ -4,172 +4,68 @@ import numpy as np
 import collections
 import scipy
 import scipy.sparse
+import scikits.sparse.cholmod
 import pyublas
 import hashlib
-
-from sigvisa.gpr import munge, kernels, evaluate, learn, distributions, plot
-from sigvisa.gpr.gp import GaussianProcess
-from sigvisa.gpr.util import marshal_fn, unmarshal_fn
+import types
+import marshal
 
 
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
-from sigvisa.source.event import Event
 
 from sigvisa.utils.cover_tree import VectorTree, MatrixTree
 
-
-start_params_dad_log = {"coda_decay": [.022, .0187, 1.00, .14, .1],
-                        "amp_transfer": [1.1, 3.4, 9.5, 0.1, .31],
-                        "peak_offset": [2.7, 3.4, 2, .7, 0.1]
-                        }
 
 start_params_lld = {"coda_decay": [.022, .0187, 50.00, 1.0],
                     "amp_transfer": [1.1, 3.4, 100.00, 1.0],
                     "peak_offset": [2.7, 3.4, 50.00, 1.0]
                     }
 
-start_params_composite = {"coda_decay": [.022, .01, 1.0, .01, 100.0, .01, 3.0, .01, 100.0],
-                          "amp_transfer": [1.1, 3.0, 5.0, 3.0, 100.0, 3.0, 3.0, 3.0, 100.0],
-                          "peak_offset": [2.7, 3.0, 5.0, 3.0, 100.0, 3.0, 3.0, 3.0, 100.0],
-                          }
-
-start_params = {"dad_log": start_params_dad_log,
-                "lld": start_params_lld,
-                "composite": start_params_composite
+start_params = {"lld": start_params_lld,
                 }
 
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
-def dist_azi_depth_distfn_log(lldda1, lldda2, params):
-    import sigvisa.utils.geog as geog
-    import numpy as np
 
-    azi_scale = params[0]
-    depth_scale = params[1]
-    dist = np.log(lldda1[3] + 1) - np.log(lldda2[3] + 1)
-    avg_dist = (lldda1[3] + lldda2[3]) / 2
-    azi = geog.degdiff(lldda1[4], lldda2[4]) * np.log(avg_dist)
-    depth = np.log(lldda1[2] + 1) - np.log(lldda2[2] + 1)
+def marshal_fn(f):
+    if f.func_closure is not None:
+        raise ValueError("function has non-empty closure %s, cannot marshal!" % repr(f.func_closure))
+    s = marshal.dumps(f.func_code)
+    return s
 
-    r = np.sqrt(dist ** 2 + (azi_scale * azi) ** 2 + (depth_scale * depth) ** 2)
-    return r
-
-
-def dist_azi_depth_distfn_deriv_log(i, lldda1, lldda2, params):
-    import numpy as np
-    import sigvisa.utils.geog as geog
-    azi_scale = params[0]
-    depth_scale = params[1]
-    dist = np.log(lldda1[3] + 1) - np.log(lldda2[3] + 1)
-    avg_dist = (lldda1[3] + lldda2[3]) / 2
-    azi = geog.degdiff(lldda1[4], lldda2[4]) * np.log(avg_dist + 1)
-    depth = np.log(lldda1[2] + 1) - np.log(lldda2[2] + 1)
-    r = np.sqrt(dist ** 2 + (azi_scale * azi) ** 2 + (depth_scale * depth) ** 2)
-
-    if i == 0:  # deriv wrt azi_scale
-        deriv = azi_scale * azi ** 2 / r if r != 0 else 0
-    elif i == 1:  # deriv wrt depth_scale
-        deriv = depth_scale * depth ** 2 / r if r != 0 else 0
-    else:
-        raise Exception("unknown parameter number %d" % i)
-
-    return deriv
-
-
-def lon_lat_depth_distfn(lldda1, lldda2, params=None):
-    import sigvisa.utils.geog as geog
-    import numpy as np
-    ll = geog.dist_km(tuple(lldda1[0:2]), tuple(lldda2[0:2]))
-    depth = ( lldda1[2] - lldda2[2] ) * params[0]
-    r = np.sqrt(ll ** 2 + depth ** 2)
-    return r
-
-def lon_lat_depth_distfn_deriv(i, lldda1, lldda2, params=None):
-    import sigvisa.utils.geog as geog
-    import numpy as np
-    assert (i == 0)
-    ll = geog.dist_km(tuple(lldda1[0:2]), tuple(lldda2[0:2]))
-    depth = ( lldda1[2] - lldda2[2] ) * params[0]
-    r = np.sqrt(ll ** 2 + depth ** 2)
-    return ( params[0] * ( lldda1[2] - lldda2[2] )**2 ) / r if r != 0 else 0.0
-
-def logdist_diff_distfn(lldda1, lldda2, params=None):
-    import numpy as np
-    dist = np.log(lldda1[3] + 1) - np.log(lldda2[3] + 1)
-    return dist
-
-def azi_diff_distfn(lldda1, lldda2, params=None):
-    import sigvisa.utils.geog as geog
-    import numpy as np
-    azi = np.abs ( geog.degdiff(lldda1[4], lldda2[4]) )
-    return azi
-
-def logdepth_diff_distfn(lldda1, lldda2, params=None):
-    import numpy as np
-    depth = np.log(lldda1[2] + 1) - np.log(lldda2[2] + 1)
-    return depth
+def unmarshal_fn(dumped_code):
+    f_code = marshal.loads(dumped_code)
+    f = types.FunctionType(f_code, globals())
+    return f
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
-
-def spatial_kernel_from_str(kernel_str, target=None, params=None):
-    params = params if params is not None else start_params[kernel_str][target]
-    priors = [None,] * len(params) # TODO: use real priors
-
-    if kernel_str == "dad_log":
-        k = kernels.setup_kernel(name='distfn',
-                                 params = params,
-                                 extra=[dist_azi_depth_distfn_log, dist_azi_depth_distfn_deriv_log],
-                                 )
-    elif kernel_str == "lld":
-        noise_kernel = kernels.DiagonalKernel(params=params[0:1], priors = priors[0:1])
-        local_kernel = kernels.DistFNKernel(params=params[1:4], priors=priors[1:4],
-                                            distfn = lon_lat_depth_distfn, deriv=lon_lat_depth_distfn_deriv)
-        k = noise_kernel + local_kernel
-    elif kernel_str == "composite":
-        # assume we are passed the following params/priors:
-        # 0 : sigma2_n -- noise variance
-        # 1 : sigma2_f_dist -- function variance wrt dist_diff
-        # 2 : w_dist -- length scale for dist_diff
-        # 3 : sigma2_f_azi -- function variance wrt azi_diff
-        # 4 : w_azi -- length scale for azi_diff
-        # 5 : sigma2_f_depth -- function variance wrt depth_diff
-        # 6 : w_depth -- length scale for depth_diff
-        # 7 : sigma2_f_local -- function variance wrt local_dist
-        # 8 : w_local -- length scale for local_dist
-
-        noise_kernel = kernels.DiagonalKernel(params=params[0:1], priors = priors[0:1])
-        distdiff_kernel = kernels.DistFNKernel(params=params[1:3], priors=priors[1:3],
-                                       distfn = logdist_diff_distfn, deriv=None)
-        azidiff_kernel = kernels.DistFNKernel(params=params[3:5], priors=priors[3:5],
-                                              distfn = azi_diff_distfn, deriv=None)
-        depthdiff_kernel = kernels.DistFNKernel(params=params[5:7], priors=priors[5:7],
-                                                distfn = logdepth_diff_distfn, deriv=None)
-        local_kernel = kernels.DistFNKernel(params=params[7:10], priors=priors[7:10],
-                                            distfn = lon_lat_depth_distfn, deriv=lon_lat_depth_distfn_deriv)
-        k = noise_kernel + distdiff_kernel + azidiff_kernel + depthdiff_kernel + local_kernel
-
-    return k
-
-"""
-def spatial_kernel_from_str(target=None, params=None):
-    params = params if params is not None else start_params_lld[target]
-
-    return params
-"""
-
-class SpatialGP(GaussianProcess, ParamModel):
-
-    def init_hyperparams(self, hyperparams):
+def extract_hyperparams(kernel_str, hyperparams):
+    if kernel_str=="lld":
         (noise_var, signal_var, ll_scale, d_scale) = hyperparams
-        self.noise_var = noise_var
-        self.dfn_params = np.array((ll_scale, d_scale), dtype=np.float)
-        self.wfn_params = np.array((signal_var,), copy=True, dtype=np.float)
+        noise_var = noise_var
+        dfn_params = np.array((ll_scale, d_scale), dtype=np.float)
+        wfn_params = np.array((signal_var,), copy=True, dtype=np.float)
+    return noise_var, dfn_params, wfn_params
+
+def prior_sample(X, hyperparams, kernel_str="lld"):
+    n = X.shape[0]
+    noise_var, dfn_params, wfn_params = extract_hyperparams(kernel_str, hyperparams)
+    predict_tree = VectorTree(X, 1, kernel_str, dfn_params)
+    spK = predict_tree.sparse_kernel(X, wfn_params) + noise_var * scipy.sparse.eye(n)
+    factor = scikits.sparse.cholmod.cholesky(spK)
+    L = factor.L()
+    P = factor.P()
+    Pinv = np.argsort(P)
+    z = np.random.randn(n)
+    y = (L * z)[Pinv]
+    return y
+
+class SparseGP(ParamModel):
 
     def build_kernel_matrix(self, X, hyperparams):
-        self.init_hyperparams(hyperparams)
-        vt = VectorTree(X[0:1,:], 1, "lld", self.dfn_params)
+        vt = self.predict_tree
         K = vt.kernel_matrix(X, X, "se", self.wfn_params, False) + self.noise_var * np.eye(len(X), dtype=np.float64)
 
         K += np.eye(K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
@@ -211,6 +107,10 @@ class SpatialGP(GaussianProcess, ParamModel):
 
         return c, beta_bar, invc, HKinv
 
+    def get_data_features(self, X):
+        H = np.array([[f(x) for x in X] for f in self.basisfns], dtype=float)
+        return H
+
     def sparsify(self, M):
         return scipy.sparse.csr_matrix(M * (np.abs(M) > self.sparse_threshold))
 
@@ -223,7 +123,7 @@ class SpatialGP(GaussianProcess, ParamModel):
 
     def __init__(self, X=None, y=None,
                  fname=None, basisfns=None,
-                 hyperparams=None,
+                 kernel_str="lld", hyperparams=None,
                  param_mean=None, param_cov=None,
                  compute_ll=False,
                  compute_grad=False,
@@ -248,14 +148,17 @@ class SpatialGP(GaussianProcess, ParamModel):
                                               # kernel matrix
 
             self.hyperparams = np.array(hyperparams)
+            self.noise_var, self.dfn_params, self.wfn_params = extract_hyperparams(hyperparams)
             self.sparse_threshold = sparse_threshold
             self.X = X
+            self.y = y
             self.n = X.shape[0]
             self.basisfns = basisfns
-            mu, self.y, H = self.setup_mean("parametric", X, y)
+            H = self.get_data_features(X)
 
             # train model
             #t0 = time.time()
+            self.predict_tree = VectorTree(self.X, 1, "lld", self.dfn_params)
             K = self.build_kernel_matrix(self.X, hyperparams)
             #t1 = time.time()
             self.alpha, L, Kinv = self.invert_kernel_matrix(K)
@@ -306,7 +209,6 @@ class SpatialGP(GaussianProcess, ParamModel):
             """
 
     def build_point_tree(self, HKinv, Kinv, Kinv_sp, alpha_r):
-        self.predict_tree = VectorTree(self.X, 1, "lld", self.dfn_params)
         self.predict_tree.set_v(0, alpha_r.astype(np.float))
 
 
@@ -405,28 +307,76 @@ class SpatialGP(GaussianProcess, ParamModel):
         gp_cov += pad * np.eye(m)
         return gp_cov
 
-    def variance(self, cond, **kwargs):
+    def variance(self, X1, **kwargs):
+        return np.diag(self.covariance(X1, **kwargs))
+
+    def sample(self, cond, include_obs=False):
+        """
+        Sample from the GP posterior at a set of points given by the rows of X1.
+
+        Default is to sample values of the latent function f. If obs=True, we instead
+        sample observed values (i.e. we include observation noise)
+        """
+
         X1 = self.standardize_input_array(cond)
+        (n,d) = X1.shape
+        means = np.reshape(self.predict(X1), (-1, 1))
+        K = self.covariance(X1, include_obs=include_obs)
+        samples = np.random.randn(n, 1)
 
-        result = GaussianProcess.variance(self, X1, **kwargs)
-        if len(result) == 1:
-            result = result[0]
-        return result
+        L = scipy.linalg.cholesky(K, lower=True)
+        samples = means + np.dot(L, samples)
 
-    def sample(self, cond):
-        X1 = self.standardize_input_array(cond)
 
-        result = GaussianProcess.sample(self, X1)
-        if len(result) == 1:
-            result = result[0]
-        return result
+        if len(samples) == 1:
+            samples = samples[0]
+
+        return samples
+
+    def param_predict(self):
+        return self.beta_bar
+
+    def param_covariance(self, chol=False):
+        if chol:
+            return self.invc
+        else:
+            return np.dot(self.invc.T, self.invc)
+
+    def param_sample(self, n=1):
+        samples = np.random.randn(len(self.beta_bar), n)
+        samples = np.reshape(self.beta_bar, (1, -1)) + np.dot(self.invc.T, samples).T
+        return samples
+
 
     def log_p(self, x, cond):
-        X1 = self.standardize_input_array(cond)
-        x = x if isinstance(x, collections.Iterable) else (x,)
+        """
+        The log probability of the observations (X1, y) under the posterior distribution.
+        """
 
-        result = GaussianProcess.posterior_log_likelihood(self, X1, x)
-        return result
+        X1 = self.standardize_input_array(cond)
+        y = x if isinstance(x, collections.Iterable) else (x,)
+
+        y = np.array(y)
+        if len(y.shape) == 0:
+            n = 1
+        else:
+            n = len(y)
+
+        K = self.covariance(X1)
+        y = y-self.predict(X1)
+
+        if n==1:
+            var = K[0,0]
+            ll1 = - .5 * ((y)**2 / var + np.log(2*np.pi*var) )
+
+        L = scipy.linalg.cholesky(K, lower=True)
+        ld2 = np.log(np.diag(L)).sum() # this computes .5 * log(det(K))
+        alpha = scipy.linalg.cho_solve((L, True), y)
+        ll =  -.5 * ( np.dot(y.T, alpha) + n * np.log(2*np.pi)) - ld2
+        return ll
+
+
+
 
     def pack_npz(self):
         d = dict()

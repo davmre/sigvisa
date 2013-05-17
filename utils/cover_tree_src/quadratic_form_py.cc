@@ -129,12 +129,14 @@ double MatrixTree::quadratic_form(const pyublas::numpy_matrix<double> &query_pt,
   double ws = weighted_sum_node(this->root, 0,
 				qp, eps, weight_sofar,
 				fcalls, w, factored_query_distance, this->dist_params, (void *)this->distance_cache, wp);
+  this->fcalls = fcalls;
   //printf("quadratic form did %.0lf distance calculations for %d fcalls\n", ((double *)(this->distance_cache))[0], this->fcalls);
+
   if (wp != NULL) {
     delete wp;
     wp = NULL;
   }
-  this->fcalls = fcalls;
+
   return ws;
 }
 
