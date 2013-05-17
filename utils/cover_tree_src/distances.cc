@@ -2,6 +2,24 @@
 #include "vector_mult.hpp"
 
 #include <cmath>
+#include <unistd.h>
+
+double dist_euclidean(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *dims) {
+  return sqrt(sqdist_euclidean(p1.p, p2.p, BOUND_IGNORED, scales, dims));
+}
+
+double sqdist_euclidean(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *dims) {
+  int d = *(int *)dims;
+  double sqdist = 0;
+  double diff = 0;
+  for (int i=0; i < d; ++i) {
+    diff = (p1[i] - p2[i]) / scales[i];
+    sqdist += (diff * diff);
+  }
+
+  return sqdist;
+}
+
 
 
 const double AVG_EARTH_RADIUS_KM = 6371.0;

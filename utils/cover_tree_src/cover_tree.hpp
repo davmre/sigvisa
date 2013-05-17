@@ -34,7 +34,11 @@ template<typename T> struct distfn {
   typedef double (*Type)(const T, const T, double, const double*, void*);
 };
 
+typedef double (*partial_dfn)(const double *, const double *, double, const double*, void*);
 
+
+double dist_euclidean(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *dims);
+double sqdist_euclidean(const double *, const double *, double BOUND_IGNORED, const double *scales, void *dims);
 double dist_km(const double *p1, const double *p2);
 double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void * extra);
 double distsq_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, void * extra);

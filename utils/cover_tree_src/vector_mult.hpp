@@ -14,6 +14,7 @@
 #include <pyublas/numpy.hpp>
 
 
+#include <google/dense_hash_map>
 
 
 
@@ -122,6 +123,7 @@ void bubblesort_nodes(node<T> * children, int num_children, int (&permutation)[2
 class VectorTree {
   node<point> root;
   distfn<point>::Type dfn;
+  void * dfn_extra;
 
 public:
   unsigned int n;
@@ -144,9 +146,21 @@ public:
   ~VectorTree();
 };
 
+
+
+struct pair_dfn_extra {
+  partial_dfn dfn;
+  google::dense_hash_map<long, double> *cache;
+  void * dfn_extra;
+  int NPTS;
+  int hits;
+  int misses;
+};
+
 class MatrixTree {
   node<pairpoint> root;
   distfn<pairpoint>::Type dfn;
+  pair_dfn_extra * dfn_extra;
   double * distance_cache;
 
 public:

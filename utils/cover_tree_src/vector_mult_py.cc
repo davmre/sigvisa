@@ -58,10 +58,10 @@ double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double
 
   double weight_sofar = 0;
   int fcalls = 0;
-  this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, NULL);
+  this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, this->dfn_extra);
   double ws = weighted_sum_node(this->root, v_select,
 				qp, eps, weight_sofar,
-				fcalls, w, this->dfn, this->dist_params, NULL, wp);
+				fcalls, w, this->dfn, this->dist_params, this->dfn_extra, wp);
   if (wp != NULL) {
     delete wp;
     wp = NULL;
@@ -107,7 +107,12 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
   this->n = pts.size1();
   if (distfn_str.compare("lld") == 0) {
     this->dfn = dist_3d_km;
-  } else{
+    this->dfn_extra = NULL;
+  } else if (distfn_str.compare("euclidean") == 0) {
+    this->dfn = dist_euclidean;
+    this->dfn_extra = malloc(sizeof(int));
+    *((int *) this->dfn_extra) = pts.size2();
+  }else{
     printf("error: unrecognized distance function %s\n", distfn_str.c_str());
     exit(1);
   }
@@ -115,7 +120,7 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
   this->dist_params = NULL;
   this->set_dist_params(dist_params);
 
-  this->root = batch_create(points, this->dfn, this->dist_params, NULL);
+  this->root = batch_create(points, this->dfn, this->dist_params, this->dfn_extra);
   this->root.alloc_arms(narms);
 }
 
@@ -154,7 +159,7 @@ pyublas::numpy_matrix<double> VectorTree::kernel_matrix(const pyublas::numpy_mat
     point p1 = {&pts1(i, 0), 0};
     for (unsigned j = 0; j < pts2.size1 (); ++ j) {
       point p2 = {&pts2(j, 0), 0};
-      double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params, NULL);
+      double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params, this->dfn_extra);
       K(i,j) = distance_only ? d : w(d, wp);
     }
   }
@@ -203,6 +208,12 @@ VectorTree::~VectorTree() {
     delete this->dist_params;
     this->dist_params = NULL;
   }
+  if (this->dfn_extra != NULL) {
+    free(this->dfn_extra);
+    this->dfn_extra = NULL;
+  }
+
+
 }
 
 BOOST_PYTHON_MODULE(cover_tree) {

@@ -12,7 +12,6 @@ using google::dense_hash_map;
 using namespace std;
 namespace bp = boost::python;
 
-
 double gt(void)
 {
   struct timespec tv;
@@ -45,52 +44,35 @@ void get_m_node(node<pairpoint> &n, pyublas::numpy_matrix<double> &m) {
   }
 }
 
-double factored_query_distance(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void * dc) {
-  double * distance_cache = (double *) dc;
-  double d1 = distance_cache[p2.idx1+1];
-  if (d1 < 0) {
-    d1 = distsq_3d_km(p1.pt1, p2.pt1, BOUND_IGNORED, scales, NULL);
-    distance_cache[p2.idx1+1] = d1;
-    distance_cache[0] += 1;
-  }
+double factored_distance(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *params, void * extra) {
 
-  double d2 = distance_cache[p2.idx2+1];
-  if (d2 < 0) {
-    d2 = distsq_3d_km(p1.pt1, p2.pt2, BOUND_IGNORED, scales, NULL);
-    distance_cache[p2.idx2+1] = d2;
-    distance_cache[0] += 1;
-  }
+  pair_dfn_extra * p = (pair_dfn_extra *) extra;
+  dense_hash_map<long, double> &distance_cache = *(p->cache);
 
-  return sqrt(d1 + d2);
-}
-
-double factored_build_distance(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void * dc) {
-  dense_hash_map<long, double> &distance_cache = * ((dense_hash_map<long, double> *) dc);
-
-  const int NPTS = (const int) scales[2];
+  const int NPTS = (const int) p->NPTS;
 
   double d1;
   long pair1_idx = p1.idx1 * NPTS + p2.idx1;
   dense_hash_map<long, double>::iterator i = distance_cache.find(pair1_idx);
   if (i == distance_cache.end()) {
-    d1 = distsq_3d_km(p1.pt1, p2.pt1, BOUND_IGNORED, scales, NULL);
+    d1 = p->dfn(p1.pt1, p2.pt1, BOUND_IGNORED, params, p->dfn_extra);
     distance_cache[pair1_idx] = d1;
-    distance_cache[-2] += 1;
+    p->misses += 1;
   } else {
     d1 = distance_cache[pair1_idx];
-    distance_cache[-3] += 1;
+    p->hits += 1;
   }
 
   double d2;
   long pair2_idx = p1.idx2 * NPTS + p2.idx2;
   i = distance_cache.find(pair2_idx);
   if (i == distance_cache.end()) {
-    d2 = distsq_3d_km(p1.pt2, p2.pt2, BOUND_IGNORED, scales, NULL);
+    d2 = p->dfn(p1.pt2, p2.pt2, BOUND_IGNORED, params, p->dfn_extra);
     distance_cache[pair2_idx] = d2;
-    distance_cache[-2] += 1;
+    p->misses += 1;
   } else {
     d2 = distance_cache[pair2_idx];
-    distance_cache[-3] += 1;
+    p->hits += 1;
   }
 
   return sqrt(d1 + d2);
@@ -128,7 +110,7 @@ double MatrixTree::quadratic_form(const pyublas::numpy_matrix<double> &query_pt,
   this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, (void*)this->distance_cache);
   double ws = weighted_sum_node(this->root, 0,
 				qp, eps, weight_sofar,
-				fcalls, w, factored_query_distance, this->dist_params, (void *)this->distance_cache, wp);
+				fcalls, w, this->dfn, this->dist_params, (void *)this->dfn_extra, wp);
   this->fcalls = fcalls;
   //printf("quadratic form did %.0lf distance calculations for %d fcalls\n", ((double *)(this->distance_cache))[0], this->fcalls);
 
@@ -155,6 +137,7 @@ pyublas::numpy_matrix<double> MatrixTree::get_m() {
   return pm;
 }
 
+
 MatrixTree::MatrixTree (const pyublas::numpy_matrix<double> &pts,
 			const pyublas::numpy_strided_vector<int> &nonzero_rows,
 			const pyublas::numpy_strided_vector<int> &nonzero_cols,
@@ -175,25 +158,30 @@ MatrixTree::MatrixTree (const pyublas::numpy_matrix<double> &pts,
     pairs[i].idx2 = c;
   }
   this->n = n;
-  this->distance_cache = new double[n+1];
 
-if (distfn_str.compare("lld") == 0) {
-    this->dfn = pair_dist_3d_km;
+  pair_dfn_extra * p = new pair_dfn_extra;
+
+  p->dfn_extra = NULL;
+  if (distfn_str.compare("lld") == 0) {
+    p->dfn = distsq_3d_km;
+  } else if (distfn_str.compare("euclidean") == 0) {
+    p->dfn = sqdist_euclidean;
+    p->dfn_extra = malloc(sizeof(int));
+    *((int *) p->dfn_extra) = pts.size2();
   } else{
     printf("error: unrecognized distance function %s\n", distfn_str.c_str());
     exit(1);
   }
+  p->cache = new dense_hash_map<long, double>(nzero*pts.size2());
+  p->cache->set_empty_key(-1);
+  p->hits = 0;
+  p->misses = 0;
+  p->NPTS = n;
 
-
+  this->dfn_extra = p;
 
   this->dist_params = NULL;
   this->set_dist_params(dist_params);
-  dense_hash_map<long, double> * build_cache = new dense_hash_map<long, double>(nzero*5);
-  build_cache->set_empty_key(-1);
-  (*build_cache)[-2] = 0;
-  (*build_cache)[-3] = 0;
-
-
 
   // next block contains some benchmarking code, not needed
   /*
@@ -231,18 +219,12 @@ if (distfn_str.compare("lld") == 0) {
  exit(0);*/
 
   double t0 = gt();
-  this->root = batch_create(pairs, factored_build_distance, this->dist_params, (void *) build_cache);
+  this->root = batch_create(pairs, factored_distance, this->dist_params, this->dfn_extra);
   double t1 = gt();
-  printf("built tree in %lfs: %d cache hits and %d cache misses\n", t1-t0, (int)((*build_cache)[-3]), (int)((*build_cache)[-2]));
-
-  /*
-  this->root = batch_create(pairs, this->dfn, this->dist_params, (void *) build_cache);
-  double t2 = gt();
-  printf("built tree normally in %lfs\n", t2-t1);
-  */
+  printf("built tree in %lfs: %d cache hits and %d cache misses\n", t1-t0, p->hits, p->misses);
 
   this->root.alloc_arms(1);
-  delete build_cache;
+  delete p->cache;
 }
 
 void MatrixTree::set_dist_params(const pyublas::numpy_vector<double> &dist_params) {
@@ -263,5 +245,5 @@ MatrixTree::~MatrixTree() {
     delete this->dist_params;
     this->dist_params = NULL;
   }
-  delete this->distance_cache;
+  delete this->dfn_extra;
 }
