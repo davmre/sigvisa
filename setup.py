@@ -72,7 +72,7 @@ sigvisa_module = Extension('sigvisa_c',
                            )
 
 ctree_root = 'utils/cover_tree_src/'
-ctree_sources = ['distances.cc', 'vector_mult_py.cc', 'quadratic_form_py.cc']
+ctree_sources = ['cover_tree_point.cc', 'cover_tree_pp_debug.cc', 'distances.cc', 'vector_mult_py.cc', 'quadratic_form_py.cc']
 from imp import find_module
 f, pathname, descr = find_module("pyublas")
 CTREE_INCLUDE_DIRS = [os.path.join(pathname, "include"),]

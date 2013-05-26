@@ -1,9 +1,11 @@
 #include "cover_tree.hpp"
 #include "vector_mult.hpp"
 
+
 #include <boost/python/module.hpp>
 #include <boost/python/def.hpp>
 #include <pyublas/numpy.hpp>
+#include <boost/numeric/ublas/matrix_sparse.hpp>
 
 #include <cmath>
 #include <memory>
@@ -14,9 +16,73 @@
 using namespace std;
 namespace bp = boost::python;
 
+double weighted_sum_node(node<point> &n, int v_select,
+			 const point &query_pt, double eps,
+			 double &weight_sofar,
+			 int &fcalls,
+			 wfn w,
+			 typename distfn<point>::Type dist,
+			 const double * dist_params,
+			 void * dist_extra,
+			 const double* weight_params) {
+  double ws = 0;
+  double d = n.distance_to_query; // avoid duplicate distance
+				    // calculations by assuming this
+				    // distance has already been
+				    // computed by the parent, in the
+				    // recursive expansion below. Note
+				    // this calculation must be done
+				    // explicitly at the root before
+				    // this function is called.
+  fcalls += 1;
+  bool cutoff = false;
+  if (n.num_children == 0) {
+    // if we're at a leaf, just do the multiplication
+
+    double weight = w(d, weight_params);
+    ws = weight * n.unweighted_sums[v_select];
+    weight_sofar += weight;
+
+    //printf("at leaf: ws = %lf*%lf = %lf\n", weight, n.unweighted_sums[v_select], ws);
+    cutoff = true;
+  } else {
+    bool query_in_bounds = (d <= n.max_dist);
+    if (!query_in_bounds) {
+      double min_weight = w(d + n.max_dist, weight_params);
+      double max_weight = w(max(0.0, d - n.max_dist), weight_params);
+      double cutoff_threshold = 2 * eps * (weight_sofar + n.num_leaves * min_weight);
+      cutoff = n.num_leaves * (max_weight - min_weight) <= cutoff_threshold;
+      if (cutoff) {
+	// if we're cutting off, just compute an estimate of the sum
+	// in this region
+	ws = .5 * (max_weight + min_weight) * n.unweighted_sums[v_select];
+	//printf("cutting off: ws = %lf*%lf = %lf\n", .5 * (max_weight + min_weight), n.unweighted_sums[v_select], ws);
+	weight_sofar += min_weight * n.num_leaves;
+      }
+    }
+    if (!cutoff) {
+      // if not cutting off, we expand the sum recursively at the
+      // children of this node, from nearest to furthest.
+      for(int i=0; i < n.num_children; ++i) {
+	n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXDOUBLE, dist_params, dist_extra);
+      }
+      int permutation[20];
+      if (n.num_children > 20){ printf("error: too many (%d) children!\n", n.num_children); exit(1); }
+      bubblesort_nodes(n.children, n.num_children, permutation);
+      for(int i=0; i < n.num_children; ++i) {
+	ws +=weighted_sum_node(n.children[permutation[i]], v_select,
+			  query_pt, eps, weight_sofar, fcalls,
+			       w, dist, dist_params, dist_extra, weight_params);
+      }
+    }
+  }
+  return ws;
+}
+
+
 void set_v_node (node<point> &n, int v_select, const std::vector<double> &v) {
   if (n.num_children == 0) {
-      n.unweighted_sums[v_select] = v[n.p.idx];
+    n.unweighted_sums[v_select] = v[n.p.idx];
   } else {
     n.unweighted_sums[v_select] = 0;
     for(int i=0; i < n.num_children; ++i) {
@@ -37,37 +103,31 @@ void get_v_node(node<point> &n, int v_select, std::vector<double> &v) {
 }
 
 
-double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> &query_pt, double eps, string wfn_str, const pyublas::numpy_vector<double> &weight_params) {
+double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double> &query_pt, double eps) {
   point qp = {&query_pt(0,0), 0};
-
-  wfn w;
-  if (wfn_str.compare("se") == 0) {
-    w = w_se;
-  } else{
-    printf("error: unrecognized weight function %s\n", wfn_str.c_str());
-    exit(1);
-  }
-
-  double * wp = NULL;
-  if (weight_params.size() > 0) {
-    wp = new double[weight_params.size()];
-    for (unsigned i = 0; i < weight_params.size(); ++i) {
-      wp[i] = weight_params(i);
-    }
-  }
-
   double weight_sofar = 0;
   int fcalls = 0;
   this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, this->dfn_extra);
   double ws = weighted_sum_node(this->root, v_select,
 				qp, eps, weight_sofar,
-				fcalls, w, this->dfn, this->dist_params, this->dfn_extra, wp);
-  if (wp != NULL) {
-    delete wp;
-    wp = NULL;
-  }
+				fcalls, this->w,
+				this->dfn, this->dist_params,
+				this->dfn_extra, this->wp);
   this->fcalls = fcalls;
   return ws;
+}
+
+void dump_tree_node (node<point> &n, int depth, FILE * fp) {
+  fprintf(fp, "%f %f %f %d\n", n.p.p[0], n.p.p[1], n.max_dist, depth);
+  for(int i=0; i < n.num_children; ++i) {
+    dump_tree_node(n.children[i], depth+1, fp);
+  }
+}
+
+void VectorTree::dump_tree(const string &fname) {
+  FILE * fp = fopen(fname.c_str(), "w");
+  dump_tree_node(this->root, 0, fp);
+  fclose(fp);
 }
 
 void VectorTree::set_v(int v_select, const pyublas::numpy_vector<double> &v) {
@@ -98,7 +158,9 @@ pyublas::numpy_vector<double> VectorTree::get_v(int v_select) {
 VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
 			const unsigned int narms,
 			const string &distfn_str,
-			const pyublas::numpy_vector<double> &dist_params) {
+			const pyublas::numpy_vector<double> &dist_params,
+			const string wfn_str,
+			const pyublas::numpy_vector<double> &weight_params) {
   vector< point > points(pts.size1());
   for (unsigned i = 0; i < pts.size1 (); ++ i) {
     point p = {&pts (i, 0), i};
@@ -120,7 +182,26 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
   this->dist_params = NULL;
   this->set_dist_params(dist_params);
 
+  if (wfn_str.compare("se") == 0) {
+    this->w = w_se;
+  } else if (wfn_str.compare("matern32") == 0) {
+    this->w = w_matern32;
+  } else {
+    printf("error: unrecognized weight function %s\n", wfn_str.c_str());
+    exit(1);
+  }
+
+  this->wp = NULL;
+  if (weight_params.size() > 0) {
+    this->wp = new double[weight_params.size()];
+    for (unsigned i = 0; i < weight_params.size(); ++i) {
+      this->wp[i] = weight_params(i);
+    }
+  }
+
   this->root = batch_create(points, this->dfn, this->dist_params, this->dfn_extra);
+  node<point> * a = NULL;
+  set_leaves(this->root, a);
   this->root.alloc_arms(narms);
 }
 
@@ -136,23 +217,7 @@ void VectorTree::set_dist_params(const pyublas::numpy_vector<double> &dist_param
 }
 
 
-pyublas::numpy_matrix<double> VectorTree::kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, string wfn_str, const pyublas::numpy_vector<double> &weight_params, bool distance_only) {
-
-  wfn w;
-  if (wfn_str.compare("se") == 0) {
-    w = w_se;
-  } else{
-    printf("error: unrecognized weight function %s\n", wfn_str.c_str());
-    exit(1);
-  }
-
-  double * wp = NULL;
-  if (weight_params.size() > 0) {
-    wp = new double[weight_params.size()];
-    for (unsigned i = 0; i < weight_params.size(); ++i) {
-      wp[i] = weight_params(i);
-    }
-  }
+pyublas::numpy_matrix<double> VectorTree::kernel_matrix(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, bool distance_only) {
 
   pyublas::numpy_matrix<double> K(pts1.size1(), pts2.size1());
   for (unsigned i = 0; i < pts1.size1 (); ++ i) {
@@ -160,30 +225,52 @@ pyublas::numpy_matrix<double> VectorTree::kernel_matrix(const pyublas::numpy_mat
     for (unsigned j = 0; j < pts2.size1 (); ++ j) {
       point p2 = {&pts2(j, 0), 0};
       double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params, this->dfn_extra);
-      K(i,j) = distance_only ? d : w(d, wp);
+      K(i,j) = distance_only ? d : this->w(d, this->wp);
     }
   }
 
-  if (wp != NULL) {
-    delete wp;
-    wp = NULL;
-  }
   return K;
 }
 
-pyublas::numpy_matrix<double> VectorTree::kernel_deriv_wrt_i(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, string wfn_str, const pyublas::numpy_vector<double> &weight_params, int param_i) {
-  if (wfn_str.compare("se") != 0) {
-    printf("error: unrecognized weight function %s\n", wfn_str.c_str());
-    exit(1);
-  }
 
-  double * wp = NULL;
-  if (weight_params.size() > 0) {
-    wp = new double[weight_params.size()];
-    for (unsigned i = 0; i < weight_params.size(); ++i) {
-      wp[i] = weight_params(i);
+pyublas::numpy_matrix<double> VectorTree::sparse_training_kernel_matrix(const pyublas::numpy_matrix<double> &pts, double max_distance) {
+
+  pyublas::numpy_matrix<double> K(pts.size1()*2, 3);
+  unsigned long nzero = 0;
+  for (unsigned i = 0; i < pts.size1 (); ++ i) {
+    v_array<v_array<point> > res;
+    point p1 = {&pts(i, 0), 0};
+
+    node<point> np1;
+    np1.p = p1;
+    np1.max_dist = 0.;
+    np1.parent_dist = 0.;
+    np1.children = NULL;
+    np1.num_children = 0;
+    np1.scale = 100;
+
+    epsilon_nearest_neighbor(this->root,np1,res,max_distance, this->dfn, this->dist_params, this->dfn_extra);
+
+    for(int jj = 1; jj < res[0].index; ++jj) {
+      point p2 = res[0][jj];
+      int j = p2.idx;
+
+      double d = this->dfn(p1, p2, MAXDOUBLE, this->dist_params, this->dfn_extra);
+      if (nzero == K.size1()) {
+	K.resize(K.size1()*2, 3);
+      }
+      K(nzero,0) = i;
+      K(nzero,1) = j;
+      K(nzero,2) = this->w(d, this->wp);
+      nzero++;
     }
+    //printf("inserted %d neighbors for point %d\n", res[0].index-1, i);
   }
+  K.resize(nzero, 3);
+  return K;
+}
+
+pyublas::numpy_matrix<double> VectorTree::kernel_deriv_wrt_i(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, int param_i) {
 
   pyublas::numpy_matrix<double> K(pts1.size1(), pts2.size1());
   for (unsigned i = 0; i < pts1.size1 (); ++ i) {
@@ -194,10 +281,6 @@ pyublas::numpy_matrix<double> VectorTree::kernel_deriv_wrt_i(const pyublas::nump
     }
   }
 
-  if (wp != NULL) {
-    delete wp;
-    wp = NULL;
-  }
   return K;
 }
 
@@ -212,25 +295,30 @@ VectorTree::~VectorTree() {
     free(this->dfn_extra);
     this->dfn_extra = NULL;
   }
-
-
+  if (this->wp != NULL) {
+    delete this->wp;
+    this->wp = NULL;
+  }
 }
 
 BOOST_PYTHON_MODULE(cover_tree) {
-  bp::class_<VectorTree>("VectorTree", bp::init< pyublas::numpy_matrix< double > const &, int const, string const &, pyublas::numpy_vector< double > const &>())
+  bp::class_<VectorTree>("VectorTree", bp::init< pyublas::numpy_matrix< double > const &, int const, string const &, pyublas::numpy_vector< double > const &, string const &, pyublas::numpy_vector< double > const &>())
+    .def("dump_tree", &VectorTree::dump_tree)
     .def("set_v", &VectorTree::set_v)
     .def("get_v", &VectorTree::get_v)
     .def("weighted_sum", &VectorTree::weighted_sum)
-    .def("set_dist_params", &VectorTree::set_dist_params)
     .def("kernel_matrix", &VectorTree::kernel_matrix)
+    .def("sparse_training_kernel_matrix", &VectorTree::sparse_training_kernel_matrix)
     .def("kernel_deriv_wrt_i", &VectorTree::kernel_deriv_wrt_i)
     .def_readonly("fcalls", &VectorTree::fcalls);
 
-  bp::class_<MatrixTree>("MatrixTree", bp::init< pyublas::numpy_matrix< double > const &, pyublas::numpy_vector< int > const &, pyublas::numpy_vector< int > const &, string const &, pyublas::numpy_vector< double > const &>())
+  bp::class_<MatrixTree>("MatrixTree", bp::init< pyublas::numpy_matrix< double > const &, pyublas::numpy_vector< int > const &, pyublas::numpy_vector< int > const &, string const &, pyublas::numpy_vector< double > const &, string const &, pyublas::numpy_vector< double > const &>())
     .def("set_m", &MatrixTree::set_m)
+    .def("set_m_sparse", &MatrixTree::set_m_sparse)
     .def("get_m", &MatrixTree::get_m)
     .def("quadratic_form", &MatrixTree::quadratic_form)
-    .def("set_dist_params", &MatrixTree::set_dist_params)
-    .def_readonly("fcalls", &MatrixTree::fcalls);
+    .def("print_hierarchy", &MatrixTree::print_hierarchy)
+    .def_readonly("fcalls", &MatrixTree::fcalls)
+    .def_readonly("dfn_evals", &MatrixTree::dfn_evals);
 
 }

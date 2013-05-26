@@ -8,16 +8,28 @@ double dist_euclidean(const point p1, const point p2, double BOUND_IGNORED, cons
   return sqrt(sqdist_euclidean(p1.p, p2.p, BOUND_IGNORED, scales, dims));
 }
 
+double dist_euclidean(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *dims) {
+  return sqrt(sqdist_euclidean(p1, p2, BOUND_IGNORED, scales, dims));
+}
+
 double sqdist_euclidean(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *dims) {
   int d = *(int *)dims;
   double sqdist = 0;
   double diff = 0;
+  //printf("sqdist dim %d: ", d);
   for (int i=0; i < d; ++i) {
     diff = (p1[i] - p2[i]) / scales[i];
     sqdist += (diff * diff);
+    //printf("+ %f*%f ", diff, diff);
   }
-
+  //printf(" = %f\n", sqdist);
   return sqdist;
+}
+
+double pair_dist_euclidean(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void *dims) {
+  double d1 = sqdist_euclidean(p1.pt1, p2.pt1, BOUND_IGNORED, scales, dims);
+  double d2 = sqdist_euclidean(p1.pt2, p2.pt2, BOUND_IGNORED, scales, dims);
+  return sqrt(d1 + d2);
 }
 
 
@@ -60,6 +72,12 @@ double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const do
   return sqrt(pow(distkm, 2) + pow(dist_d, 2));
 }
 
+double dist_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void * extra) {
+  double distkm = dist_km(p1, p2) / scales[0];
+  double dist_d = (p2[2] - p1[2]) / scales[1];
+  return sqrt(pow(distkm, 2) + pow(dist_d, 2));
+}
+
 double distsq_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void * extra) {
   double distkm = dist_km(p1, p2) / scales[0];
   double dist_d = (p2[2] - p1[2]) / scales[1];
@@ -77,11 +95,6 @@ double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNO
   return sqrt(pow(distkm1, 2) + pow(distkm2, 2) + pow(dist_d1, 2) + pow(dist_d2,2));
 }
 
-
-
-double w_se(double d, const double * variance) {
-  return variance[0] * exp(-1 * d*d);
-}
 
 double dist3d_se_deriv_wrt_i(int i, const point p1, const point p2,  const double *variance, const double *scales) {
   double distkm = dist_km(p1.p, p2.p) / scales[0];
@@ -101,4 +114,31 @@ double dist3d_se_deriv_wrt_i(int i, const point p1, const point p2,  const doubl
     exit(-1);
     return 0;
   }
+}
+
+
+
+
+
+double w_se(double d, const double * variance) {
+  return variance[0] * exp(-1 * d*d);
+}
+
+double w_e(double d, const double * variance) {
+  return variance[0] * exp(-1 * d);
+}
+
+double w_matern32(double d, const double * variance) {
+  double sqrt3 = 1.73205080757;
+  return variance[0] * (1 + sqrt3*d) * exp(-sqrt3 * d);
+}
+
+double w_matern32_lower(double d, const double *variance) {
+  double sqrt3 = 1.73205080757;
+  return variance[0] * (1 + sqrt3*d) * exp(-sqrt3 * d);
+}
+
+double w_matern32_upper(double d, const double *variance) {
+  double sqrt3 = 1.73205080757;
+  return variance[0] * (1 + sqrt3*d + .75*d*d) * exp(-sqrt3 * d);
 }

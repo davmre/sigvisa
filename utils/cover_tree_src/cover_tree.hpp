@@ -6,6 +6,7 @@
 #include<math.h>
 #include<list>
 #include<stdlib.h>
+#include<stdio.h>
 #include<assert.h>
 #include <vector>
 #include "stack.h"
@@ -28,8 +29,6 @@ struct pairpoint {
   unsigned int idx2;
 };
 
-inline pairpoint double_point(const double *p) { pairpoint pp = {p, p, 0, 0}; return pp; }
-
 template<typename T> struct distfn {
   typedef double (*Type)(const T, const T, double, const double*, void*);
 };
@@ -38,12 +37,19 @@ typedef double (*partial_dfn)(const double *, const double *, double, const doub
 
 
 double dist_euclidean(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *dims);
+double dist_euclidean(const double *, const double *, double BOUND_IGNORED, const double *scales, void *dims);
 double sqdist_euclidean(const double *, const double *, double BOUND_IGNORED, const double *scales, void *dims);
+double pair_dist_euclidean(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void *dims);
 double dist_km(const double *p1, const double *p2);
 double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void * extra);
+double dist_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, void * extra);
 double distsq_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, void * extra);
 double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void * extra);
 double w_se(double d, const double * variance);
+double w_e(double d, const double * variance);
+double w_matern32(double d, const double * variance);
+double w_matern32_upper(double d, const double * variance);
+double w_matern32_lower(double d, const double * variance);
 double dist3d_se_deriv_wrt_i(int i, const point p1, const point p2,  const double *variance, const double *scales);
 typedef double (*wfn)(double, const double *);
 
@@ -58,6 +64,7 @@ class node {
   double parent_dist; // The distance to the parent.
   node<T>* children;
   unsigned short int num_children; // The number of children.
+  unsigned int num_leaves; // The number of leaves under this node.
   short int scale; // Essentially, an upper bound on the distance to any child.
 
   // additional info to support vector multiplication
@@ -66,6 +73,8 @@ class node {
   unsigned int narms;
   double *unweighted_sums; // unweighted sums of each vector, over the points contained at this node
   double unweighted_sum;
+
+  node<T>* debug_parent;
 
   node();
   void alloc_arms(unsigned int narms);
@@ -83,6 +92,15 @@ node<T>::node() {
   this->unweighted_sums = &(this->unweighted_sum);
   this->narms = 1;
 }
+
+void epsilon_nearest_neighbor(const node<point> &top_node, const node<point> &query,
+			      v_array<v_array<point> > &results, double epsilon,
+			      distfn<point>::Type distance,
+			      const double* dist_params, void* dist_extra);
+void k_nearest_neighbor(const node<pairpoint> &top_node, const node<pairpoint> &query,
+			v_array<v_array< node<pairpoint> > > &results, int k,
+			distfn<pairpoint>::Type distance,
+			const double* dist_params, void* dist_extra);
 
 template<class T>
 void node<T>::alloc_arms(unsigned int narms) {
@@ -115,6 +133,20 @@ void node<T>::free_tree() {
   }
 }
 
+
+template<class T>
+void set_leaves(node<T> &n, node<T> * parent) {
+  n.debug_parent = parent;
+  if (n.num_children == 0) {
+    n.num_leaves = 1;
+  } else {
+    n.num_leaves = 0;
+    for(int i=0; i < n.num_children; ++i) {
+      set_leaves(n.children[i], &n);
+      n.num_leaves += n.children[i].num_leaves;
+    }
+  }
+}
 
 template <class T>
 struct ds_node {
@@ -244,6 +276,15 @@ node<T> batch_insert(const ds_node<T>& p,
   else {
     double max_dist = max_set(point_set); //O(|point_set|)
     int next_scale = min (max_scale - 1, get_scale(max_dist));
+    /*if (next_scale == -2147483648) {
+      printf("whoawhoawhoa\n");
+      printf("max_set %f\n", max_dist);
+      printf("next scale %d %d %d\n", max_scale-1, get_scale(max_dist), next_scale);
+      printf("p %f %f %f %f\n", p.p.pt1[0], p.p.pt1[1], p.p.pt2[0], p.p.pt2[1]);
+      printf("ps %f %f %f %f\n", point_set[0].p.pt1[0], point_set[0].p.pt1[1], point_set[0].p.pt2[0], point_set[0].p.pt2[1]);
+      printf("distance %f\n", distance(point_set[0].p, p.p, MAXDOUBLE, dist_params, dist_extra));
+    }*/
+
     if (top_scale - next_scale == 100) // We have points with distance 0.
       {
 	v_array< node<T> > children;
@@ -368,6 +409,9 @@ template<class T> node<T> batch_create(const std::vector<T> &points,
   free(point_set.elements);
   return top;
 }
+
+
+
 
 
 #endif
