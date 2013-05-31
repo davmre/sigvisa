@@ -63,17 +63,27 @@ double weighted_sum_node(node<point> &n, int v_select,
     if (!cutoff) {
       // if not cutting off, we expand the sum recursively at the
       // children of this node, from nearest to furthest.
+
+      int small_perm[10];
+      int * permutation = (int *)&small_perm;
+      if(n.num_children > 10) {
+	permutation = (int *)malloc(n.num_children * sizeof(int));
+      }
+
       for(int i=0; i < n.num_children; ++i) {
 	n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXDOUBLE, dist_params, dist_extra);
+	permutation[i] = i;
       }
-      int permutation[20];
-      if (n.num_children > 20){ printf("error: too many (%d) children!\n", n.num_children); exit(1); }
-      bubblesort_nodes(n.children, n.num_children, permutation);
+      halfsort(permutation, n.num_children, n.children);
       for(int i=0; i < n.num_children; ++i) {
 	ws +=weighted_sum_node(n.children[permutation[i]], v_select,
-			  query_pt, eps, weight_sofar, fcalls,
+			       query_pt, eps, weight_sofar, fcalls,
 			       w, dist, dist_params, dist_extra, weight_params);
       }
+      if (permutation != (int *)&small_perm) {
+	free(permutation);
+      }
+
     }
   }
   return ws;
@@ -107,12 +117,15 @@ double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double
   point qp = {&query_pt(0,0), 0};
   double weight_sofar = 0;
   int fcalls = 0;
+
+
   this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, this->dfn_extra);
   double ws = weighted_sum_node(this->root, v_select,
 				qp, eps, weight_sofar,
 				fcalls, this->w,
 				this->dfn, this->dist_params,
 				this->dfn_extra, this->wp);
+
   this->fcalls = fcalls;
   return ws;
 }

@@ -17,9 +17,11 @@ lscales = (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1, 0.5, 10)
 #cluster_ns = (50, 100, 200, 400)
 #cluster_ns = (8000,)
 
-Ns = (1000, 2000, 4000, 8000, 20000, 40000, 80000, 160000) #,50000, 60000, 80000, 160000)
-#Ns = (1000, 2000, 4000, 8000)
+#Ns = (1000, 2000, 4000, 8000, 20000, 40000, 80000, 160000) #,50000, 60000, 80000, 160000)#
+Ns = (1000, 2000, 4000, 8000,16000, 24000, 32000, 48000, 64000,) #,50000, 60000, 80000, 160000)
+#Ns = (20000, 40000, 60000, 80000)
 #Ns = (4000,)
+
 wfn_str = "se"
 
 def genX_clusters(dim, n_clusters, cluster_pts, cluster_width):
@@ -27,28 +29,25 @@ def genX_clusters(dim, n_clusters, cluster_pts, cluster_width):
     pts = [  c +  np.array([np.random.randn() * cluster_width for d in range(dim)])  for (c,i) in itertools.product(centers, range(cluster_pts))]
     return np.array(pts)
 
+def sort_events(X):
+    X_sorted = np.array(sorted(X, key = lambda x: x[0]), dtype=float)
+    return X_sorted
 
 def genX(dim, npts):
     pts = np.array([[np.random.rand() for d in range(dim)] for i in range(npts)]) # generate n_clusters points within the unit cube of dimension dim
     return pts
 
-def kernel(X, cluster_width, sigma2_n):
-    n = X.shape[0]
-    norms = np.reshape(np.sum(X**2,axis=-1), (n, 1))
-    sqdistances = np.tile(norms, (1, n)) + np.tile(norms.T, (n, 1)) - 2*np.dot(X, X.T)
-    K = np.exp(-sqdistances / cluster_width**2) + sigma2_n * np.eye(n)
-    spK = scipy.sparse.csc_matrix(K * (np.abs(K) > 1e-40))
-    return K, spK
 
-
-def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None):
+def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, test_n=None):
     if bdir is not None:
         gp = SparseGP(fname=os.path.join(bdir, 'trained.gp'))
         testX = np.load(os.path.join(bdir, "testX.npy"))
         resultfile = os.path.join(bdir, 'results.txt')
         errorfile = os.path.join(bdir, "error.npz")
 
-    test_n = len(testX)
+
+    if test_n is None:
+        test_n = len(testX)
 
     naive_predict = np.zeros(test_n)
 
@@ -61,12 +60,6 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None):
     tree_covar8 = np.zeros(test_n)
     tree_covar8_terms = np.zeros(test_n, dtype=int)
     tree_covar8_distevals = np.zeros(test_n, dtype=int)
-    tree_covar4 = np.zeros(test_n)
-    tree_covar4_terms = np.zeros(test_n, dtype=int)
-    tree_covar4_distevals = np.zeros(test_n, dtype=int)
-    tree_covar1 = np.zeros(test_n)
-    tree_covar1_terms = np.zeros(test_n, dtype=int)
-    tree_covar1_distevals = np.zeros(test_n, dtype=int)
 
     t0 = time.time()
     for i in range(test_n):
@@ -76,77 +69,57 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None):
 
     t2 = time.time()
     for i in range(test_n):
-        tree_predict[i] = gp.predict(testX[i:i+1,:])
+        tree_predict[i] = gp.predict(testX[i:i+1,:], eps=1e-4)
         tree_predict_terms[i] = gp.predict_tree.fcalls
     t3 = time.time()
     tree_predict_time = t3-t2
 
     t4 = time.time()
     for i in range(test_n):
-        sparse_covar[i] = gp.covariance(testX[i:i+1,:])
+        sparse_covar[i] = gp.covariance_dense(testX[i:i+1,:])
     t5 = time.time()
     sparse_covar_time = t5-t4
+    sparse_covar_spkernel = sparse_covar
 
     t41 = time.time()
+    """
     for i in range(test_n):
         sparse_covar_spkernel[i] = gp.covariance_spkernel(testX[i:i+1,:])
+    """
     t51 = time.time()
     sparse_covar_spkernel_time = t51-t41
-
-    t6 = time.time()
-    for i in range(test_n):
-        tree_covar8[i] = gp.covariance_double_tree(testX[i:i+1,:], eps=1e-8)
-        tree_covar8_terms[i] = gp.double_tree.fcalls
-        tree_covar8_distevals[i] = gp.double_tree.dfn_evals
-    t7 = time.time()
-    tree_covar8_time = t7-t6
-
-    t6 = time.time()
-    for i in range(test_n):
-        tree_covar4[i] = gp.covariance_double_tree(testX[i:i+1,:], eps=1e-4)
-        tree_covar4_terms[i] = gp.double_tree.fcalls
-        tree_covar4_distevals[i] = gp.double_tree.dfn_evals
-    t7 = time.time()
-    tree_covar4_time = t7-t6
-
-    t6 = time.time()
-    for i in range(test_n):
-        tree_covar1[i] = gp.covariance_double_tree(testX[i:i+1,:], eps=1e-1)
-        tree_covar1_terms[i] = gp.double_tree.fcalls
-        tree_covar1_distevals[i] = gp.double_tree.dfn_evals
-    t7 = time.time()
-    tree_covar1_time = t7-t6
 
     def stats(v):
         return (scipy.stats.scoreatpercentile(v, 10), np.mean(v), np.median(v) , scipy.stats.scoreatpercentile(v, 90) )
 
-    with open(resultfile, 'w') as f:
-        f.write("naive predict time: %f\n" % (naive_predict_time/test_n))
+    f = open(resultfile, 'w')
+    f.write("naive predict time: %f\n" % (naive_predict_time/test_n))
 
-        f.write("tree predict time: %f\n" % (tree_predict_time/test_n))
-        f.write("tree predict terms:  10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_predict_terms))
-        f.write("tree predict errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" % stats(np.abs(tree_predict - naive_predict) ))
+    f.write("tree predict time: %f\n" % (tree_predict_time/test_n))
+    f.write("tree predict terms:  10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_predict_terms))
+    f.write("tree predict errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" % stats(np.abs(tree_predict - naive_predict) ))
 
-        f.write("sparse covar time: %f\n" % (sparse_covar_time/test_n))
-        f.write("sparse covar spkernel time: %f\n" % (sparse_covar_spkernel_time/test_n))
+    f.write("sparse covar time: %f\n" % (sparse_covar_time/test_n))
+    f.write("sparse covar spkernel time: %f\n" % (sparse_covar_spkernel_time/test_n))
 
-        f.write("tree covar8 time: %f\n" % (tree_covar8_time/test_n))
-        f.write("tree covar8 terms: 10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_covar8_terms))
-        f.write("tree covar8 dfnevals: 10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_covar8_distevals))
-        f.write("tree covar8 rel errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" % stats(np.abs(tree_covar8 - sparse_covar)/sparse_covar))
+    for epsm in (2,4,8,16):
+        for eps_abs in (4,8):
+            t6 = time.time()
+            for i in range(test_n):
+                tree_covar8[i] = gp.covariance_double_tree(testX[i:i+1,:], eps=10**(-epsm), eps_abs=10**(-eps_abs))
+                tree_covar8_terms[i] = gp.double_tree.fcalls
+                tree_covar8_distevals[i] = gp.double_tree.dfn_evals
+            t7 = time.time()
+            tree_covar8_time = t7-t6
+            f.write("tree covar%d_%d time: %f\n" % (epsm, eps_abs, tree_covar8_time/test_n))
+            f.write("tree covar%d_%d terms: 10th %.2f mean %.2f median %.2f 90th %.2f \n" % ((epsm, eps_abs) + stats(tree_covar8_terms)))
+            f.write("tree covar%d_%d dfnevals: 10th %.2f mean %.2f median %.2f 90th %.2f \n" %  ((epsm, eps_abs) + stats(tree_covar8_distevals)))
+            f.write("tree covar%d_%d rel errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" %  ((epsm, eps_abs) + stats(np.abs(tree_covar8 - sparse_covar_spkernel)/(1-sparse_covar_spkernel))))
+            f.write("tree covar%d_%d var-rel errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" %  ((epsm, eps_abs) + stats(np.abs(tree_covar8 - sparse_covar_spkernel)/sparse_covar_spkernel)))
+            f.write("tree covar%d_%d abs errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" %  ((epsm, eps_abs) + stats(np.abs(tree_covar8 - sparse_covar_spkernel))))
 
-        f.write("tree covar4 time: %f\n" % (tree_covar4_time/test_n))
-        f.write("tree covar4 terms: 10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_covar4_terms))
-        f.write("tree covar4 dfnevals: 10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_covar4_distevals))
-        f.write("tree covar4 rel errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" % stats(np.abs(tree_covar4 - sparse_covar)/sparse_covar))
+    np.savez(errorfile, tree_covar8=tree_covar8, sparse_covar=sparse_covar, tree_predict=tree_predict, naive_predict=naive_predict, sparse_covar_spkernel=sparse_covar_spkernel)
 
-        f.write("tree covar1 time: %f\n" % (tree_covar1_time/test_n))
-        f.write("tree covar1 terms: 10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_covar1_terms))
-        f.write("tree covar1 dfnevals: 10th %.2f mean %.2f median %.2f 90th %.2f \n" % stats(tree_covar1_distevals))
-        f.write("tree covar1 rel errors: 10th %.9f mean %.9f median %.9f 90th %.9f \n" % stats(np.abs(tree_covar1 - sparse_covar)/(np.abs(sparse_covar-1))))
-
-
-    np.savez(errorfile, tree_covar8=tree_covar8, tree_covar4=tree_covar4, tree_covar1=tree_covar1, sparse_covar=sparse_covar, tree_predict=tree_predict, naive_predict=naive_predict, sparse_covar_spkernel=sparse_covar_spkernel)
 
 """
 def geny(X, cluster_width, sigma2_n):
@@ -213,23 +186,30 @@ def run_lscale_benchmark():
 
 def create_bench(bdir, dim, test_n, npts, lengthscale, sigma2_n, sigma2_f):
     mkdir_p(bdir)
+    sparse_threshold=1e-8
     hyperparams = [sigma2_n, sigma2_f, lengthscale, lengthscale]
     X = genX(dim, npts + test_n)
     test_p = np.random.permutation(len(X))
     test_X = X[test_p[:test_n], :]
-    X = np.array(X[test_p[test_n:], :], copy=True)
+    X = np.array(X[test_p[test_n:], :])
 
-    y, spK = prior_sample(X, hyperparams=hyperparams, dfn_str="euclidean", wfn_str=wfn_str, return_kernel=True)
-    gp = SparseGP(X=X, y=y, basisfns = [],
-                  dfn_str="euclidean", wfn_str=wfn_str,
-                  hyperparams = hyperparams,
-                  K = spK,
-                  sort_events=False, build_tree=False)
+    X = sort_events(X)
+
+    y, spK = prior_sample(X, hyperparams=hyperparams, dfn_str="euclidean", wfn_str=wfn_str, sparse_threshold=sparse_threshold, return_kernel=True)
 
     np.save(os.path.join(bdir, 'testX.npy'), test_X)
+    np.save(os.path.join(bdir, 'hyperparams.npy'), hyperparams)
     np.save(os.path.join(bdir, 'K.npy'), spK)
     np.save(os.path.join(bdir, 'X.npy'), X)
     np.save(os.path.join(bdir, 'y.npy'), y)
+
+    gp = SparseGP(X=X, y=y, basisfns = [],
+                  dfn_str="euclidean", wfn_str=wfn_str,
+                  hyperparams = hyperparams,
+                  K = spK, sparse_threshold=sparse_threshold,
+                  sort_events=False, build_tree=False)
+
+
     gp.save_trained_model(os.path.join(bdir, 'trained.gp'))
 
     with open(os.path.join(bdir, 'stats.txt'), 'w') as f:
@@ -242,31 +222,30 @@ def create_bench(bdir, dim, test_n, npts, lengthscale, sigma2_n, sigma2_f):
         for k in gp.timings:
             f.write("timing %s: %.3f\n" % (k, gp.timings[k]))
 
-    print "done at scale", lengthscale
 
 def build_size_benchmark():
-    sigma2_n = 0.000001
+    sigma2_n = 1.0
     sigma2_f = 1.0
     #extra_nc = test_n / cluster_size
 
-    base_lengthscale = .15
     for npts in Ns:
-        for base_lengthscale in (.15,):
-            lengthscale = base_lengthscale/np.sqrt(npts)
-            bdir = os.path.join(basedir, "%s_base%f_%d" % (wfn_str,base_lengthscale,npts))
-
-            if not os.path.exists(bdir):
+        for points_within_lscale in (0.25, 1.0, 5.0, ):
+            lengthscale = np.sqrt(points_within_lscale/npts) / np.sqrt(np.pi)
+            bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
+            if not os.path.exists(os.path.join(bdir, "trained.gp")):
+                print "building", npts, points_within_lscale, "at", lengthscale
+                print bdir
                 create_bench(bdir=bdir, dim=2, test_n=1000, npts=npts, lengthscale=lengthscale, sigma2_n=sigma2_n, sigma2_f=sigma2_f)
 
 def run_size_benchmark():
-    base_lengthscale = .15
     for npts in Ns:
-        for base_lengthscale in (.15,):
-            bdir = os.path.join(basedir, "%s_base%f_%d" % (wfn_str,base_lengthscale,npts))
+        for points_within_lscale in (1.0,5.0):
+            bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
+            print bdir
             eval_gp(bdir)
 
 def build_highd_benchmark():
-    sigma2_n = 0.000001
+    sigma2_n = 1.0
     sigma2_f = 1.0
     npts = 10000
     points_within_lscale=1.0
@@ -314,7 +293,7 @@ def main():
 if __name__ == "__main__":
     #build_lscale_benchmark()
     #run_lscale_benchmark()
-    #build_size_benchmark()
+    build_size_benchmark()
     #run_size_benchmark()
-    build_highd_benchmark()
+    #build_highd_benchmark()
     #main()

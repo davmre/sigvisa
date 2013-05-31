@@ -1,19 +1,20 @@
 import os
 import sys
 import numpy as np
+import time
 
 from cross_validation import save_cv_folds, train_cv_models, cv_eval_models
 from synth_dataset import mkdir_p, eval_gp
 from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel
 import itertools
-
+o
 base1 = os.path.join(os.getenv("SIGVISA_HOME"), "papers", "product_tree")
 wfn_str = "matern32"
 
-def plot_distance(X, y, model, axes, azi=0, depth=0):
+def plot_distance(X, y, model, axes, nstd, azi=0, depth=0):
 
-    axes.scatter(X[:, 3], y, alpha = 4/np.log(len(y)), s=5, marker='.', edgecolors="none", c="red")
+    axes.scatter(X[:, 3], y, alpha = 6/np.log(len(y)), s=15, marker='.', edgecolors="none", c="red")
 
     #pred = model.predict(X)
     distances = np.linspace(0, 10000, 100)
@@ -24,13 +25,13 @@ def plot_distance(X, y, model, axes, azi=0, depth=0):
 
     stds = np.zeros((len(distances),))
     for i in range(len(fakeX)):
-        v = model.variance(fakeX[i:i+1, :], parametric_only=True, include_obs=False)
+        v = model.variance(fakeX[i:i+1, :], parametric_only=True, include_obs=True)
         stds[i] = np.sqrt(v)
-    std = np.array(stds)
+    std = np.array(stds) + nstd
 
     var_x = np.concatenate((distances, distances[::-1]))
     var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
-    axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
+    axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.4)
 
 def setup_azi_basisfns(order, n_azi_buckets, param_var):
 
@@ -69,15 +70,12 @@ def plot_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir):
 
     f = Figure()
     ax = f.add_subplot(111)
-    plot_distance(X, y, sgp, ax)
+    plot_distance(X, y, sgp, ax, nstd)
     ax.set_xlim([1900, 10000])
     ax.set_ylim([-2, 4])
     canvas = FigureCanvasAgg(f)
     canvas.draw()
-    f.savefig("gp%d_%d_%d.png" % (lscale, order, n_azi_buckets))
-    basisfns, b, B = setup_azi_basisfns(order, n_azi_buckets, param_var=3)
-    sgp = SparseGP(X=X, y=y, basisfns = basisfns, param_mean=b, param_cov=B, hyperparams=[nstd, 1.0, lscale, lscale], sta="FITZ", dense_invert=True, dfn_str="lld", wfn_str=wfn_str)
-    sgp.save_trained_model(os.path.join(cv_dir, "fitz_gp%d_%d_%d.sgp" % (lscale, order, n_azi_buckets)))
+    f.savefig(os.path.join(cv_dir, "gp%d_%d_%d.png" % (lscale, order, n_azi_buckets)), bbox_inches='tight')
 
 
 def cov_timing(cv_dir, lscale, order, n_azi_buckets):
@@ -88,6 +86,18 @@ def cov_timing(cv_dir, lscale, order, n_azi_buckets):
     resultfile = os.path.join(cv_dir, "results_gp%d_%d_%d.txt" % (lscale, order, n_azi_buckets))
     errorfile = os.path.join(cv_dir, "error_gp%d_%d_%d.npz" % (lscale, order, n_azi_buckets))
     eval_gp(gp=sgp, testX=testX, resultfile=resultfile, errorfile=errorfile)
+
+    poly = LinearBasisModel(fname=os.path.join(cv_dir, "fold_00.poly_%d_%d" % (order, n_azi_buckets)))
+    resultfile_poly = os.path.join(cv_dir, "results_poly_%d_%d.txt" % (order, n_azi_buckets))
+    f = open(resultfile_poly, 'w')
+    test_n = len(test_idx)
+    poly_covars = np.zeros((test_n,))
+    t0 = time.time()
+    for i in range(test_n):
+        poly_covars[i] = poly.covariance(testX[i:i+1,:])
+    t1 = time.time()
+    f.write("cov time %f\n" % ((t1-t0)/test_n))
+    f.close()
 
 def main():
 
@@ -114,15 +124,16 @@ def main():
 
     nstd = get_nstd(X, y, order, n_azi_buckets, param_var)
     plot_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
+    return
     cv_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
+    cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir)
     cov_timing(cv_dir, lscale, order, n_azi_buckets)
 
-
-def cv_poly(X, y, nstd, order, n_azi_buckets):
+def cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir):
     load_model = lambda fname : LinearBasisModel(fname=fname)
-    basisfns, b, B = setup_azi_basisfns(order, n_azi_buckets, param_var=3)
+    basisfns, b, B = setup_azi_basisfns(order, n_azi_buckets, param_var=param_var)
     learn_model = lambda X, y: LinearBasisModel(X=X, y=y, basisfns = basisfns, param_mean=b, param_covar=B, noise_std=nstd, sta="FITZ")
-    do_cv(X=X, y=y, model_type="poly%d" % order, learn_model=learn_model, load_model=load_model)
+    do_cv(X=X, y=y, model_type="poly_%d_%d" % (order, n_azi_buckets), learn_model=learn_model, load_model=load_model, cv_dir=cv_dir)
 
 def cv_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir):
     load_model = lambda fname : SparseGP(fname=fname)
@@ -137,7 +148,7 @@ def do_cv(X, y, model_type, learn_model, load_model, cv_dir):
     np.savetxt(os.path.join(cv_dir, "evids.txt"), evids)
 
     print "generating cross-validation folds in dir", cv_dir
-    save_cv_folds(X, y, evids, cv_dir)
+    save_cv_folds(X, y, evids, cv_dir, folds=5)
 
     train_cv_models(cv_dir, learn_model,  model_type)
 

@@ -20,43 +20,87 @@
 
 
 
+template<class T>
+double compare(int *i1, int *i2, const node<T> * children)
+{
+  return children[*i1].distance_to_query - children[*i2].distance_to_query;
+}
 
+static void SWAP(int *a, int *b) {
+  int tmp;
+  tmp = *a;
+  *a = *b;
+  *b = tmp;
+}
 
 template <class T>
-void bubblesort_nodes(node<T> * children, int num_children, int (&permutation)[20]) {
-  /*printf("bubble sorting... ");
-  for(int i=0; i < num_children; ++i) {
-    printf(" %.3f ", children[i].distance_to_query);
-  }
-  printf("\n");*/
+void halfsort (int * permutation, int num_children, node<T> * children)
+{
+  if (num_children <= 1)
+    return;
+  register int *base_ptr =  permutation;
 
-  for(int i=0; i < num_children; ++i) {
-    permutation[i] = i;
-  }
+  int *hi = &base_ptr[num_children - 1];
+  int *right_ptr = hi;
+  int *left_ptr;
+  int swaps;
 
-  while(1) {
-    int i;
-    for(i=1; i < num_children; ++i) {
-      int current = permutation[i];
-      int prev = permutation[i-1];
-      if (children[current].distance_to_query < children[prev].distance_to_query) {
-	permutation[i] = prev;
-	permutation[i-1] = current;
-	break;
+  while (right_ptr > base_ptr)
+    {
+      int *mid = base_ptr + ((hi - base_ptr) >> 1);
+
+      if (compare ( mid,  base_ptr, children) < 0.){
+	SWAP (mid, base_ptr);
+	swaps++;
       }
+      if (compare ( hi,  mid, children) < 0.) {
+	SWAP (mid, hi);
+	swaps++;
+      }
+      else
+	goto jump_over;
+      if (compare ( mid,  base_ptr, children) < 0.) {
+	SWAP (mid, base_ptr);
+	swaps++;
+      }
+    jump_over:;
+
+      left_ptr  = base_ptr + 1;
+      right_ptr = hi - 1;
+
+      do
+	{
+	  while (compare (left_ptr, mid, children) < 0.)
+	    left_ptr ++;
+
+	  while (compare (mid, right_ptr, children) < 0.)
+	    right_ptr --;
+
+	  if (left_ptr < right_ptr)
+	    {
+	      SWAP (left_ptr, right_ptr);
+	      swaps++;
+	      if (mid == left_ptr)
+		mid = right_ptr;
+	      else if (mid == right_ptr)
+		mid = left_ptr;
+	      left_ptr ++;
+	      right_ptr --;
+	    }
+	  else if (left_ptr == right_ptr)
+	    {
+	      left_ptr ++;
+	      right_ptr --;
+	      break;
+	    }
+	}
+      while (left_ptr <= right_ptr);
+
+      hi = right_ptr;
     }
-    if (i == num_children) break;
-  }
-
-  /*
-  printf("done... ");
-  for(int i=0; i < num_children; ++i) {
-    printf(" %.3f ", children[permutation[i]].distance_to_query);
-  }
-  printf("\n");
-  sleep(1);*/
-
 }
+
+
 
 class VectorTree {
   node<point> root;
@@ -107,7 +151,8 @@ struct pair_dfn_extra {
 };
 
 class MatrixTree {
-  node<pairpoint> root;
+  node<pairpoint> root_offdiag;
+  node<pairpoint> root_diag;
   distfn<pairpoint>::Type raw_pair_dfn;
   distfn<pairpoint>::Type factored_build_dist;
   distfn<pairpoint>::Type factored_query_dist;
@@ -141,7 +186,7 @@ public:
 
   double quadratic_form(const pyublas::numpy_matrix<double> &query_pt1,
 			const pyublas::numpy_matrix<double> &query_pt2,
-			double eps);
+			double eps_rel, double eps_abs);
 
   void print_hierarchy(const pyublas::numpy_matrix<double> &query_pt1, const pyublas::numpy_matrix<double> &query_pt2);
 

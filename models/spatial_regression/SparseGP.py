@@ -71,12 +71,12 @@ def sparse_kernel_from_tree(tree, X, sparse_threshold, identical, noise_var):
     return spK.tocsc()
 
 
-def prior_sample(X, hyperparams, dfn_str, wfn_str, return_kernel=False):
+def prior_sample(X, hyperparams, dfn_str, wfn_str, sparse_threshold=1e-20, return_kernel=False):
     n = X.shape[0]
     noise_var, dfn_params, wfn_params = extract_hyperparams(dfn_str, wfn_str, hyperparams)
     predict_tree = VectorTree(X, 1, dfn_str, dfn_params, wfn_str, wfn_params)
 
-    spK = sparse_kernel_from_tree(predict_tree, X, 1e-50, True, noise_var)
+    spK = sparse_kernel_from_tree(predict_tree, X, sparse_threshold, True, noise_var)
     factor = scikits.sparse.cholmod.cholesky(spK)
     L = factor.L()
     P = factor.P()
@@ -91,42 +91,17 @@ def prior_sample(X, hyperparams, dfn_str, wfn_str, return_kernel=False):
 class SparseGP(ParamModel):
 
     def build_kernel_matrix(self, X):
-        K = self.sparse_kernel(X, identical=True)
+        #K = self.sparse_kernel(X, identical=True)
+        K = scipy.sparse.coo_matrix(self.kernel(X, X, identical=True))
         K = K + scipy.sparse.eye(K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
                                        # positive-definiteness
                                        # to numeric issues
         return K.tocsc()
 
-    def dense_invert_kernel_matrix(self, K):
-        alpha = None
-        K = K.todense()
-        try:
-
-            t0 = time.time()
-            L = scipy.linalg.cholesky(K, lower=True)
-            factor = lambda z : scipy.linalg.cho_solve((L, True), z)
-            t1 = time.time()
-            self.timings['chol_factor'] = t1-t0
-            alpha = scipy.linalg.cho_solve((L, True), self.y)
-            t2 = time.time()
-            self.timings['solve_alpha'] = t2-t1
-            Kinv = scipy.linalg.inv(K)
-            t3 = time.time()
-            self.timings['solve_Kinv'] = t3-t2
-            Kinv = self.sparsify(Kinv)
-        except np.linalg.linalg.LinAlgError:
-            #u,v = np.linalg.eig(K)
-            #print K, u
-            #import pdb; pdb.set_trace()
-            raise
-        except ValueError:
-            raise
-        return alpha, factor, Kinv
-
-
     def invert_kernel_matrix(self, K):
         alpha = None
         try:
+            print "K nonzero", K.nnz
             t0 = time.time()
             factor = scikits.sparse.cholmod.cholesky(K)
             t1 = time.time()
@@ -142,6 +117,13 @@ class SparseGP(ParamModel):
             Kinv = factor(scipy.sparse.eye(K.shape[0]).tocsc())
             t3 = time.time()
             self.timings['solve_Kinv'] = t3-t2
+            print "invert K", t3-t2
+
+            I = (Kinv.getrow(0) * K.getcol(0)).todense()[0,0]
+            if np.abs(I - 1) > 0.01:
+                print "WARNING: poorly conditioned inverse (I=%f)" % I
+            else:
+                print "conditioning OK: I=%f" % I
 
         except np.linalg.linalg.LinAlgError:
             #u,v = np.linalg.eig(K)
@@ -154,6 +136,7 @@ class SparseGP(ParamModel):
 
     def build_parametric_model(self, alpha, Kinv_sp, H, b, B):
         # notation follows section 2.7 of Rasmussen and Williams
+        b = np.reshape(b, (-1,))
         Binv = scipy.linalg.inv(B)
         tmp = np.reshape(np.asarray(np.dot(H, alpha)), (-1,)) + np.dot(Binv, b)  # H * K^-1 * y + B^-1 * b
 
@@ -174,8 +157,14 @@ class SparseGP(ParamModel):
         return H
 
     def sparsify(self, M):
+        import scipy.sparse
         if scipy.sparse.issparse(M):
-            return M.multiply(sklearn.preprocessing.binarize(np.abs(M), self.sparse_threshold, copy=True))
+            M = M.copy()
+            for i in range(len(M.data)):
+                if np.abs(M.data[i]) < self.sparse_threshold:
+                    M.data[i] = 0
+            M.eliminate_zeros()
+            return M
         else:
             return scipy.sparse.csr_matrix(np.asarray(M) * (np.abs(M) > self.sparse_threshold))
 
@@ -198,8 +187,7 @@ class SparseGP(ParamModel):
                  dfn_str = "lld",
                  wfn_str = "se",
                  sort_events=False,
-                 build_tree=True,
-                 dense_invert=False):
+                 build_tree=True):
 
         try:
             ParamModel.__init__(self, sta=sta)
@@ -208,7 +196,7 @@ class SparseGP(ParamModel):
 
 
         if fname is not None:
-            self.load_trained_model(fname)
+            self.load_trained_model(fname, build_tree=build_tree)
         else:
             if sort_events:
                 X, y = self.sort_events(X, y) # arrange events by
@@ -230,7 +218,7 @@ class SparseGP(ParamModel):
 
             # train model
             t0 = time.time()
-            self.predict_tree = VectorTree(self.X, 1, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
+            self.predict_tree = VectorTree(pyublas.why_not(self.X), 1, self.dfn_str, pyublas.why_not(self.dfn_params), self.wfn_str, pyublas.why_not(self.wfn_params))
             t1 = time.time()
             self.timings['build_predict_tree'] = t1-t0
 
@@ -238,15 +226,13 @@ class SparseGP(ParamModel):
                 K = self.build_kernel_matrix(self.X)
             else:
                 K = K.tocsc()
-
-            if dense_invert:
-                self.alpha, factor, Kinv = self.dense_invert_kernel_matrix(K)
-            else:
-                self.alpha, factor, Kinv = self.invert_kernel_matrix(K)
+            self.K = K
+            alpha, factor, Kinv = self.invert_kernel_matrix(K)
+            import pdb; pdb.set_trace()
             self.Kinv = self.sparsify(Kinv)
-
+            import pdb; pdb.set_trace()
             if len(self.basisfns) > 0:
-                self.c,self.beta_bar, self.invc, self.HKinv = self.build_parametric_model(self.alpha,
+                self.c,self.beta_bar, self.invc, self.HKinv = self.build_parametric_model(alpha,
                                                                                           self.Kinv,
                                                                                           H,
                                                                                           b=param_mean,
@@ -329,7 +315,7 @@ class SparseGP(ParamModel):
             gp_pred = np.zeros((X1.shape[0],))
         else:
             Kstar = self.kernel(self.X, X1)
-            gp_pred = np.dot(Kstar.T, self.alpha)
+            gp_pred = np.dot(Kstar.T, self.alpha_r)
 
         if len(self.basisfns) > 0:
             H = self.get_data_features(X1)
@@ -401,18 +387,7 @@ class SparseGP(ParamModel):
 #            print "cache hit!"
         return self.query_K
 
-
     def covariance_spkernel(self, cond, include_obs=False, parametric_only=False, pad=1e-8):
-        """
-        Compute the posterior covariance matrix at a set of points given by the rows of X1.
-
-        Default is to compute the covariance of f, the latent function values. If obs_covar
-        is True, we instead compute the covariance of y, the observed values.
-
-        By default, we add a tiny bit of padding to the diagonal to counteract any potential
-        loss of positive definiteness from numerical issues. Setting pad=0 disables this.
-
-        """
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
 
@@ -432,9 +407,10 @@ class SparseGP(ParamModel):
             gp_cov += mean_cov
 
         gp_cov += pad * np.eye(gp_cov.shape[0])
+
         return gp_cov
 
-    def covariance(self, cond, include_obs=False, parametric_only=False, pad=1e-8):
+    def covariance(self, cond, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
         """
         Compute the posterior covariance matrix at a set of points given by the rows of X1.
 
@@ -453,7 +429,6 @@ class SparseGP(ParamModel):
             tmp = self.Kinv * Kstar
             qf = np.dot(Kstar.T, tmp)
             k = self.kernel(X1,X1, identical=include_obs)
-            print qf
             gp_cov = k - qf
         else:
             gp_cov = np.zeros((m,m))
@@ -465,17 +440,51 @@ class SparseGP(ParamModel):
             gp_cov += mean_cov
 
         gp_cov += pad * np.eye(gp_cov.shape[0])
+
+        return gp_cov
+
+    def covariance_dense(self, cond, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
+        """
+        Compute the posterior covariance matrix at a set of points given by the rows of X1.
+
+        Default is to compute the covariance of f, the latent function values. If obs_covar
+        is True, we instead compute the covariance of y, the observed values.
+
+        By default, we add a tiny bit of padding to the diagonal to counteract any potential
+        loss of positive definiteness from numerical issues. Setting pad=0 disables this.
+
+        """
+        X1 = self.standardize_input_array(cond)
+        m = X1.shape[0]
+
+        Kstar = self.get_query_K(X1)
+        if not parametric_only:
+            tmp = np.dot(self.Kinv_dense, Kstar)
+            qf = np.dot(Kstar.T, tmp)
+            k = self.kernel(X1,X1, identical=include_obs)
+            gp_cov = k - qf
+        else:
+            gp_cov = np.zeros((m,m))
+
+        if len(self.basisfns) > 0:
+            R = self.query_R
+            tmp = np.dot(self.invc, R)
+            mean_cov = np.dot(tmp.T, tmp)
+            gp_cov += mean_cov
+
+        gp_cov += pad * np.eye(gp_cov.shape[0])
+
         return gp_cov
 
 
-    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8):
+    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4):
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
         d = len(self.basisfns)
 
         if not parametric_only:
             k = self.kernel(X1, X1, identical=include_obs)
-            qf = self.double_tree.quadratic_form(X1, X1, eps)
+            qf = self.double_tree.quadratic_form(X1, X1, eps, eps_abs)
             gp_cov = k - qf
         else:
             gp_cov = np.zeros((m,m))
@@ -578,7 +587,7 @@ class SparseGP(ParamModel):
             d['basisfns'] = np.empty(0)
         d['X']  = self.X,
         d['y'] =self.y,
-        d['alpha'] =self.alpha,
+        d['alpha_r'] =self.alpha_r,
         d['hyperparams'] = self.hyperparams
         d['Kinv'] =self.Kinv,
         d['sparse_threshold'] =self.sparse_threshold,
@@ -604,7 +613,7 @@ class SparseGP(ParamModel):
     def unpack_npz(self, npzfile):
         self.X = npzfile['X'][0]
         self.y = npzfile['y'][0]
-        self.alpha = npzfile['alpha'][0]
+        self.alpha_r = npzfile['alpha_r'][0]
         self.hyperparams = npzfile['hyperparams']
         self.dfn_str  = npzfile['dfn_str'].item()
         self.wfn_str  = npzfile['wfn_str'].item()
@@ -623,7 +632,7 @@ class SparseGP(ParamModel):
             self.HKinv = None
         self.alpha_r = npzfile['alpha_r']
 
-    def load_trained_model(self, filename):
+    def load_trained_model(self, filename, build_tree=True):
         npzfile = np.load(filename)
         self.unpack_npz(npzfile)
         if len(str(npzfile['base_str'])) > 0:
@@ -632,7 +641,10 @@ class SparseGP(ParamModel):
         npzfile.close()
         self.n = self.X.shape[0]
         self.predict_tree = VectorTree(self.X, 1, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
-        self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r)
+        if build_tree:
+            self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r)
+
+        self.Kinv_dense = self.Kinv.todense()
 
     def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv_sp):
 

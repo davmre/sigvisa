@@ -72,7 +72,9 @@ class node {
 
   unsigned int narms;
   double *unweighted_sums; // unweighted sums of each vector, over the points contained at this node
+  double *unweighted_sums_abs; // unweighted absolute sums of each vector, over the points contained at this node
   double unweighted_sum;
+  double unweighted_sum_abs;
 
   node<T>* debug_parent;
 
@@ -90,6 +92,7 @@ node<T>::node() {
    */
 
   this->unweighted_sums = &(this->unweighted_sum);
+  this->unweighted_sums_abs = &(this->unweighted_sum_abs);
   this->narms = 1;
 }
 
@@ -107,12 +110,16 @@ void node<T>::alloc_arms(unsigned int narms) {
   if (this->narms > 1) {
     delete this->unweighted_sums;
     this->unweighted_sums = NULL;
+    delete this->unweighted_sums_abs;
+    this->unweighted_sums_abs = NULL;
   }
 
   if ( narms > 1 ) {
     this->unweighted_sums = new double[narms];
+    this->unweighted_sums_abs = new double[narms];
   } else {
     this->unweighted_sums = &(this->unweighted_sum);
+    this->unweighted_sums_abs = &(this->unweighted_sum_abs);
   }
   this->narms = narms;
 
@@ -126,6 +133,7 @@ template<class T>
 void node<T>::free_tree() {
   if (this->narms > 1) {
     delete this->unweighted_sums;
+    delete this->unweighted_sums_abs;
   }
 
   for(unsigned int i=0; i < num_children; ++i) {
