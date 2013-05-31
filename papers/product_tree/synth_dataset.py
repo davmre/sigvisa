@@ -228,8 +228,8 @@ def build_size_benchmark():
     sigma2_f = 1.0
     #extra_nc = test_n / cluster_size
 
-    for npts in Ns:
-        for points_within_lscale in (0.25, 1.0, 5.0, ):
+    for points_within_lscale in (0.25, 5.0, ):
+        for npts in Ns:
             lengthscale = np.sqrt(points_within_lscale/npts) / np.sqrt(np.pi)
             bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
             if not os.path.exists(os.path.join(bdir, "trained.gp")):

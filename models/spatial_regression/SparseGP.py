@@ -13,7 +13,7 @@ import types
 import marshal
 
 
-from sigvisa.models.spatial_regression.baseline_models import ParamModel
+#from sigvisa.models.spatial_regression.baseline_models import ParamModel
 
 from sigvisa.utils.cover_tree import VectorTree, MatrixTree
 
@@ -66,8 +66,8 @@ def sparse_kernel_from_tree(tree, X, sparse_threshold, identical, noise_var):
     print "sparse kernel", t1-t0
 
     if identical:
-        spK = spK + noise_var * scipy.sparse.eye(spK.shape[0])
-    spK = spK + 1e-8 * scipy.sparse.eye(spK.shape[0])
+        spK = spK + noise_var * scipy.sparse.eye(*spK.shape)
+    spK = spK + 1e-8 * scipy.sparse.eye(*spK.shape)
     return spK.tocsc()
 
 
@@ -88,12 +88,12 @@ def prior_sample(X, hyperparams, dfn_str, wfn_str, sparse_threshold=1e-20, retur
     else:
         return y
 
-class SparseGP(ParamModel):
+class SparseGP():
 
     def build_kernel_matrix(self, X):
         #K = self.sparse_kernel(X, identical=True)
         K = scipy.sparse.coo_matrix(self.kernel(X, X, identical=True))
-        K = K + scipy.sparse.eye(K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
+        K = K + scipy.sparse.eye(*K.shape, dtype=np.float64) * 1e-8 # try to avoid losing
                                        # positive-definiteness
                                        # to numeric issues
         return K.tocsc()
@@ -114,7 +114,7 @@ class SparseGP(ParamModel):
             alpha = factor(self.y)
             t2 = time.time()
             self.timings['solve_alpha'] = t2-t1
-            Kinv = factor(scipy.sparse.eye(K.shape[0]).tocsc())
+            Kinv = factor(scipy.sparse.eye(*K.shape).tocsc())
             t3 = time.time()
             self.timings['solve_Kinv'] = t3-t2
             print "invert K", t3-t2
@@ -160,9 +160,12 @@ class SparseGP(ParamModel):
         import scipy.sparse
         if scipy.sparse.issparse(M):
             M = M.copy()
-            for i in range(len(M.data)):
-                if np.abs(M.data[i]) < self.sparse_threshold:
-                    M.data[i] = 0
+
+            chunksize=1000000
+            nchunks = len(M.data)/chunksize+1
+            for i in range(nchunks):
+                cond = (np.abs(M.data[i*chunksize:(i+1)*chunksize]) < self.sparse_threshold)
+                M.data[i*chunksize:(i+1)*chunksize][cond] = 0
             M.eliminate_zeros()
             return M
         else:
@@ -188,11 +191,6 @@ class SparseGP(ParamModel):
                  wfn_str = "se",
                  sort_events=False,
                  build_tree=True):
-
-        try:
-            ParamModel.__init__(self, sta=sta)
-        except KeyError:
-            pass
 
 
         if fname is not None:
@@ -228,9 +226,7 @@ class SparseGP(ParamModel):
                 K = K.tocsc()
             self.K = K
             alpha, factor, Kinv = self.invert_kernel_matrix(K)
-            import pdb; pdb.set_trace()
             self.Kinv = self.sparsify(Kinv)
-            import pdb; pdb.set_trace()
             if len(self.basisfns) > 0:
                 self.c,self.beta_bar, self.invc, self.HKinv = self.build_parametric_model(alpha,
                                                                                           self.Kinv,
@@ -339,7 +335,7 @@ class SparseGP(ParamModel):
         entries = self.predict_tree.sparse_training_kernel_matrix(X, max_distance)
         spK = scipy.sparse.coo_matrix((entries[:,2], (entries[:,1], entries[:,0])), shape=(self.n, len(X)), dtype=float)
         if identical:
-            spK = spK + self.noise_var * scipy.sparse.eye(spK.shape[0])
+            spK = spK + self.noise_var * scipy.sparse.eye(*spK.shape)
         return spK
 
 
@@ -603,10 +599,7 @@ class SparseGP(ParamModel):
         """
         d = self.pack_npz()
         with open(filename, 'wb') as f:
-            if 'site_lon' in self.__dict__:
-                base_str = super(SparseGP, self).__repr_base_params__()
-            else:
-                base_str = ""
+            base_str = ""
             np.savez(f, base_str=base_str, **d)
 
 
@@ -635,8 +628,6 @@ class SparseGP(ParamModel):
     def load_trained_model(self, filename, build_tree=True):
         npzfile = np.load(filename)
         self.unpack_npz(npzfile)
-        if len(str(npzfile['base_str'])) > 0:
-            super(SparseGP, self).__unrepr_base_params__(str(npzfile['base_str']))
         del npzfile.f
         npzfile.close()
         self.n = self.X.shape[0]
