@@ -286,8 +286,8 @@ class SparseGP():
         self.double_tree = MatrixTree(self.X, nzr, nzc, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
         self.double_tree.set_m_sparse(nzr, nzc, vals)
 
-    def predict(self, cond, parametric_only=False, eps=1e-8):
-        X1 = self.standardize_input_array(cond).astype(np.float)
+    def predict(self, X1, parametric_only=False, eps=1e-8):
+        
 
         if parametric_only:
             gp_pred = np.zeros((X1.shape[0],))
@@ -304,8 +304,8 @@ class SparseGP():
 
         return gp_pred
 
-    def predict_naive(self, cond, parametric_only=False, eps=1e-8):
-        X1 = self.standardize_input_array(cond).astype(np.float)
+    def predict_naive(self, X1, parametric_only=False, eps=1e-8):
+        
 
         if parametric_only:
             gp_pred = np.zeros((X1.shape[0],))
@@ -383,8 +383,7 @@ class SparseGP():
 #            print "cache hit!"
         return self.query_K
 
-    def covariance_spkernel(self, cond, include_obs=False, parametric_only=False, pad=1e-8):
-        X1 = self.standardize_input_array(cond)
+    def covariance_spkernel(self, X1, include_obs=False, parametric_only=False, pad=1e-8):
         m = X1.shape[0]
 
         Kstar = self.get_query_K_sparse(X1)
@@ -406,7 +405,7 @@ class SparseGP():
 
         return gp_cov
 
-    def covariance(self, cond, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
+    def covariance(self, X1, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
         """
         Compute the posterior covariance matrix at a set of points given by the rows of X1.
 
@@ -417,7 +416,6 @@ class SparseGP():
         loss of positive definiteness from numerical issues. Setting pad=0 disables this.
 
         """
-        X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
 
         Kstar = self.get_query_K(X1)
@@ -439,7 +437,7 @@ class SparseGP():
 
         return gp_cov
 
-    def covariance_dense(self, cond, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
+    def covariance_dense(self, X1, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
         """
         Compute the posterior covariance matrix at a set of points given by the rows of X1.
 
@@ -450,7 +448,6 @@ class SparseGP():
         loss of positive definiteness from numerical issues. Setting pad=0 disables this.
 
         """
-        X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
 
         Kstar = self.get_query_K(X1)
@@ -473,8 +470,7 @@ class SparseGP():
         return gp_cov
 
 
-    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4):
-        X1 = self.standardize_input_array(cond)
+    def covariance_double_tree(self, X1, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4):
         m = X1.shape[0]
         d = len(self.basisfns)
 
@@ -503,7 +499,7 @@ class SparseGP():
     def variance(self, X1, **kwargs):
         return np.diag(self.covariance(X1, **kwargs))
 
-    def sample(self, cond, include_obs=False):
+    def sample(self, X1, include_obs=False):
         """
         Sample from the GP posterior at a set of points given by the rows of X1.
 
@@ -511,7 +507,6 @@ class SparseGP():
         sample observed values (i.e. we include observation noise)
         """
 
-        X1 = self.standardize_input_array(cond)
         (n,d) = X1.shape
         means = np.reshape(self.predict(X1), (-1, 1))
         K = self.covariance(X1, include_obs=include_obs)
@@ -546,7 +541,6 @@ class SparseGP():
         The log probability of the observations (X1, y) under the posterior distribution.
         """
 
-        X1 = self.standardize_input_array(cond)
         y = x if isinstance(x, collections.Iterable) else (x,)
 
         y = np.array(y)
@@ -635,7 +629,11 @@ class SparseGP():
         if build_tree:
             self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r)
 
-        self.Kinv_dense = self.Kinv.todense()
+        if self.Kinv.shape[0] <= 20000:
+            self.Kinv_dense = self.Kinv.todense()
+            self.has_dense = True
+        else:
+            self.has_dense = False
 
     def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv_sp):
 
