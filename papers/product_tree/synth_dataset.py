@@ -20,7 +20,7 @@ lscales = (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1, 0.5, 10)
 #Ns = (1000, 2000, 4000, 8000, 20000, 40000, 80000, 160000) #,50000, 60000, 80000, 160000)#
 Ns = (1000, 2000, 4000, 8000,16000, 24000, 32000, 48000, 64000,) #,50000, 60000, 80000, 160000)
 ##Ns = (20000, 40000, 60000, 80000)
-Ns = (4000,)
+#Ns = (4000,)
 
 wfn_str = "se"
 
@@ -279,7 +279,7 @@ def build_size_benchmark():
     sigma2_f = 1.0
     #extra_nc = test_n / cluster_size
 
-    for points_within_lscale in (5.0, ):
+    for points_within_lscale in (1.0, 5.0, ):
         for npts in Ns:
             lengthscale = np.sqrt(points_within_lscale/npts) / np.sqrt(np.pi)
             bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
@@ -290,7 +290,7 @@ def build_size_benchmark():
 
 def run_size_benchmark():
     for npts in Ns:
-        for points_within_lscale in (1.0,5.0):
+        for points_within_lscale in (5.0,):
             bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
             print bdir
             eval_gp(bdir)

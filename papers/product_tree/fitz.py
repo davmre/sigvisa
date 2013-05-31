@@ -122,9 +122,9 @@ def main():
     mkdir_p(cv_dir)
 
     nstd = get_nstd(X, y, order, n_azi_buckets, param_var)
-    plot_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
-    cv_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
-    cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir)
+    #plot_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
+    #cv_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
+    #cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir)
     cov_timing(cv_dir, lscale, order, n_azi_buckets)
 
 def cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir):
