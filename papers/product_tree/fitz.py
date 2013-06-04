@@ -8,9 +8,9 @@ from synth_dataset import mkdir_p, eval_gp
 from sigvisa.models.spatial_regression.SparseGP import SparseGP
 from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel
 import itertools
-o
+
 base1 = os.path.join(os.getenv("SIGVISA_HOME"), "papers", "product_tree")
-wfn_str = "matern32"
+wfn_str = "se"
 
 def plot_distance(X, y, model, axes, nstd, azi=0, depth=0):
 
@@ -62,7 +62,7 @@ def get_nstd(X, y, order, n_azi_buckets, param_var):
 
 def plot_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir):
     basisfns, b, B = setup_azi_basisfns(order, n_azi_buckets, param_var)
-    sgp = SparseGP(X=X, y=y, basisfns = basisfns, param_mean=b, param_cov=B, hyperparams=[nstd, 1.0, lscale, lscale], sta="FITZ", dense_invert=True, dfn_str="lld", wfn_str=wfn_str)
+    sgp = SparseGP(X=X, y=y, basisfns = basisfns, param_mean=b, param_cov=B, hyperparams=[nstd, 1.0, lscale, lscale], sta="FITZ", dfn_str="lld", wfn_str=wfn_str)
     sgp.save_trained_model(os.path.join(cv_dir, "fitz%d_gp%d_%d.sgp" % (lscale, order, n_azi_buckets)))
 
     from matplotlib.figure import Figure
@@ -111,7 +111,6 @@ def main():
     n_azi_buckets = int(sys.argv[5])
     param_var=10
 
-
     X = np.loadtxt(os.path.join(base1, "X_%s_%s.txt" % (target, sta)))
     y = np.loadtxt(os.path.join(base1, "y_%s_%s.txt" % (target, sta)))
 
@@ -124,10 +123,9 @@ def main():
 
     nstd = get_nstd(X, y, order, n_azi_buckets, param_var)
     plot_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
-    return
-    cv_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
-    cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir)
-    cov_timing(cv_dir, lscale, order, n_azi_buckets)
+    #cv_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir)
+    #cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir)
+    #cov_timing(cv_dir, lscale, order, n_azi_buckets)
 
 def cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir):
     load_model = lambda fname : LinearBasisModel(fname=fname)
@@ -138,7 +136,7 @@ def cv_poly(X, y, nstd, order, n_azi_buckets, param_var, cv_dir):
 def cv_gp(X, y, nstd, lscale, order, n_azi_buckets, param_var, cv_dir):
     load_model = lambda fname : SparseGP(fname=fname)
     basisfns, b, B = setup_azi_basisfns(order, n_azi_buckets, param_var=param_var)
-    learn_model = lambda X, y: SparseGP(X=X, y=y, basisfns = basisfns, param_mean=b, param_cov=B, hyperparams=[nstd, 1.0, lscale, lscale], sta="FITZ", dfn_str="lld", wfn_str=wfn_str, dense_invert=True)
+    learn_model = lambda X, y: SparseGP(X=X, y=y, basisfns = basisfns, param_mean=b, param_cov=B, hyperparams=[nstd, 1.0, lscale, lscale], sta="FITZ", dfn_str="lld", wfn_str=wfn_str)
     do_cv(X=X, y=y, model_type="gp%d_%d_%d" % (lscale, order, n_azi_buckets), learn_model=learn_model, load_model=load_model, cv_dir=cv_dir)
 
 def do_cv(X, y, model_type, learn_model, load_model, cv_dir):
