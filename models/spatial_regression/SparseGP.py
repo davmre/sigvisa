@@ -91,8 +91,13 @@ def prior_sample(X, hyperparams, dfn_str, wfn_str, sparse_threshold=1e-20, retur
 class SparseGP(ParamModel):
 
     def build_kernel_matrix(self, X):
-        #K = self.sparse_kernel(X, identical=True)
-        K = scipy.sparse.coo_matrix(self.kernel(X, X, identical=True))
+        K = self.kernel(X, X, identical=True)
+        return K + np.eye(K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
+                                       # positive-definiteness
+                                       # to numeric issues
+
+    def sparse_build_kernel_matrix(self, X):
+        K = self.sparse_kernel(X, identical=True)
         K = K + scipy.sparse.eye(K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
                                        # positive-definiteness
                                        # to numeric issues
@@ -100,39 +105,49 @@ class SparseGP(ParamModel):
 
     def invert_kernel_matrix(self, K):
         alpha = None
-        try:
-            print "K nonzero", K.nnz
-            t0 = time.time()
-            factor = scikits.sparse.cholmod.cholesky(K)
-            t1 = time.time()
-            self.timings['chol_factor'] = t1-t0
+        t0 = time.time()
+        L = scipy.linalg.cholesky(K, lower=True) # c = sqrt(inv(B) + H*K^-1*H.T)
+        factor = lambda z : scipy.linalg.cho_solve((L, True), z)
+        t1 = time.time()
+        self.timings['chol_factor'] = t1-t0
 
-            #unpermuted_L = factor.L()
-            #P = factor.P()
-            #Pinv = np.argsort(P)
-            #L = unpermuted_L[Pinv,:]
-            alpha = factor(self.y)
-            t2 = time.time()
-            self.timings['solve_alpha'] = t2-t1
-            Kinv = factor(scipy.sparse.eye(K.shape[0]).tocsc())
-            t3 = time.time()
-            self.timings['solve_Kinv'] = t3-t2
-            print "invert K", t3-t2
+        alpha = factor(self.y)
+        t2 = time.time()
+        self.timings['solve_alpha'] = t2-t1
 
-            I = (Kinv.getrow(0) * K.getcol(0)).todense()[0,0]
-            if np.abs(I - 1) > 0.01:
-                print "WARNING: poorly conditioned inverse (I=%f)" % I
-            else:
-                print "conditioning OK: I=%f" % I
+        Kinv = np.linalg.inv(K)
+        t3 = time.time()
+        self.timings['solve_Kinv'] = t3-t2
 
-        except np.linalg.linalg.LinAlgError:
-            #u,v = np.linalg.eig(K)
-            #print K, u
-            #import pdb; pdb.set_trace()
-            raise
-        except ValueError:
-            raise
-        return alpha, factor, Kinv
+        I = np.dot(Kinv[0,:], K[:,0])
+        if np.abs(I - 1) > 0.01:
+            print "WARNING: poorly conditioned inverse (I=%f)" % I
+
+        return alpha, factor, L, Kinv
+
+    def sparse_invert_kernel_matrix(self, K):
+        alpha = None
+        t0 = time.time()
+        factor = scikits.sparse.cholmod.cholesky(K)
+        t1 = time.time()
+        self.timings['chol_factor'] = t1-t0
+
+        #unpermuted_L = factor.L()
+        #P = factor.P()
+        #Pinv = np.argsort(P)
+        #L = unpermuted_L[Pinv,:]
+        alpha = factor(self.y)
+        t2 = time.time()
+        self.timings['solve_alpha'] = t2-t1
+        Kinv = factor(scipy.sparse.eye(K.shape[0]).tocsc())
+        t3 = time.time()
+        self.timings['solve_Kinv'] = t3-t2
+
+        I = (Kinv.getrow(0) * K.getcol(0)).todense()[0,0]
+        if np.abs(I - 1) > 0.01:
+            print "WARNING: poorly conditioned inverse (I=%f)" % I
+
+        return alpha, factor, factor.L(), Kinv
 
     def build_parametric_model(self, alpha, Kinv_sp, H, b, B):
         # notation follows section 2.7 of Rasmussen and Williams
@@ -160,9 +175,11 @@ class SparseGP(ParamModel):
         import scipy.sparse
         if scipy.sparse.issparse(M):
             M = M.copy()
-            for i in range(len(M.data)):
-                if np.abs(M.data[i]) < self.sparse_threshold:
-                    M.data[i] = 0
+            chunksize=1000000
+            nchunks = len(M.data)/chunksize+1
+            for i in range(nchunks):
+                cond = (np.abs(M.data[i*chunksize:(i+1)*chunksize]) < self.sparse_threshold)
+                M.data[i*chunksize:(i+1)*chunksize][cond] = 0
             M.eliminate_zeros()
             return M
         else:
@@ -187,7 +204,8 @@ class SparseGP(ParamModel):
                  dfn_str = "lld",
                  wfn_str = "se",
                  sort_events=False,
-                 build_tree=True):
+                 build_tree=True,
+                 sparse_invert=False):
 
         try:
             ParamModel.__init__(self, sta=sta)
@@ -223,14 +241,18 @@ class SparseGP(ParamModel):
             self.timings['build_predict_tree'] = t1-t0
 
             if K is None:
-                K = self.build_kernel_matrix(self.X)
+                if sparse_invert:
+                    K = self.sparse_build_kernel_matrix(self.X)
+                else:
+                    K = self.build_kernel_matrix(self.X)
+            self.K = self.sparsify(K)
+
+            if sparse_invert:
+                alpha, factor, L, Kinv = self.sparse_invert_kernel_matrix(K)
             else:
-                K = K.tocsc()
-            self.K = K
-            alpha, factor, Kinv = self.invert_kernel_matrix(K)
-            import pdb; pdb.set_trace()
+                alpha, factor, L, Kinv = self.invert_kernel_matrix(K)
             self.Kinv = self.sparsify(Kinv)
-            import pdb; pdb.set_trace()
+
             if len(self.basisfns) > 0:
                 self.c,self.beta_bar, self.invc, self.HKinv = self.build_parametric_model(alpha,
                                                                                           self.Kinv,
@@ -255,12 +277,12 @@ class SparseGP(ParamModel):
             # precompute training set log likelihood, so we don't need
             # to keep L around.
             if compute_ll:
-                self._compute_marginal_likelihood(L=L, z=z, B=B, H=H, K=K, Kinv_sp=self.Kinv_sp_tri)
+                self._compute_marginal_likelihood(L=L, z=z, B=B, H=H, K=self.K, Kinv=self.Kinv)
             else:
                 self.ll = -np.inf
             #t7 = time.time()
             if compute_grad:
-                self.ll_grad = self._log_likelihood_gradient(z=z, K=K, H=H, B=B, Kinv=Kinv)
+                self.ll_grad = self._log_likelihood_gradient(z=z, K=self.K, H=H, B=B, Kinv=self.Kinv)
 
             #t8 = time.time()
             """
@@ -646,7 +668,7 @@ class SparseGP(ParamModel):
 
         self.Kinv_dense = self.Kinv.todense()
 
-    def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv_sp):
+    def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv):
 
         # here we follow eqn 2.43 in R&W
         #
@@ -663,7 +685,7 @@ class SparseGP(ParamModel):
         # i.e.:            term1    -     term2
         # in the notation of the code.
 
-        tmp1 = Kinv_sp * z
+        tmp1 = Kinv * z
         term1 = np.dot(z.T, tmp1)
 
         tmp2 = np.dot(self.HKinv, z)
@@ -680,7 +702,12 @@ class SparseGP(ParamModel):
         # product of squares of the diagonal elements of the
         # Cholesky factor
 
-        ld2_K = np.log(np.diag(L)).sum()
+        if scipy.sparse.issparse(L):
+            ldiag = L.diagonal()
+        else:
+            ldiag = np.diag(L)
+
+        ld2_K = np.log(ldiag).sum()
         ld2 =  np.log(np.diag(self.c)).sum() # det( B^-1 - H * K^-1 * H.T )
         ld_B = np.log(np.linalg.det(B))
 
@@ -700,7 +727,7 @@ class SparseGP(ParamModel):
         #t1 = time.time()
         K_HBH_inv = Kinv - np.dot(tmp.T, tmp)
         #t2 = time.time()
-        alpha_z = np.dot(K_HBH_inv, z)
+        alpha_z = np.reshape(np.dot(K_HBH_inv, z), (-1, 1))
         #t3 = time.time()
 
         #print "gradient: %f %f %f" % (t1-t0, t2-t1, t3-t2)
@@ -716,11 +743,11 @@ class SparseGP(ParamModel):
             tB = time.time()
             # here we use the fact:
             # trace(AB) = sum_{ij} A_ij * B_ij
-            dlldi -= .5 * np.sum(np.sum(K_HBH_inv.T * dKdi))
+            dlldi -= .5 * np.sum(np.sum(np.multiply(K_HBH_inv.T, dKdi)))
 
             grad[i] = dlldi
             tC = time.time()
-            print "  %d: %f %f" % (i, tB-tA, tC-tB)
+            # print "  %d: %f %f" % (i, tB-tA, tC-tB)
 
         return grad
 
