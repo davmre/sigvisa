@@ -10,6 +10,7 @@ static int py_sig_model_init(SigModel_t *self, PyObject *args);
 static void py_sig_model_dealloc(SigModel_t * self);
 
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,PyObject *args);
+static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_mag_prior_logprob(SigModel_t * p_sigmodel, PyObject *args);
@@ -17,6 +18,9 @@ static PyObject * py_event_mag_prior_logprob(SigModel_t * p_sigmodel, PyObject *
 static PyMethodDef SigModel_methods[] = {
   {"mean_travel_time", (PyCFunction)py_mean_travel_time, METH_VARARGS,
    "mean_travel_time(evlon, evlat, evdepth, siteid-1, phaseid-1)"
+   " -> travel time in seconds"},
+  {"mean_travel_time_coord", (PyCFunction)py_mean_travel_time_coord, METH_VARARGS,
+   "mean_travel_time(evlon, evlat, evdepth, sitelon, sitelat, sitedepth, phaseid-1)"
    " -> travel time in seconds"},
   {"arrtime_logprob", (PyCFunction)py_arrtime_logprob, METH_VARARGS,
    "arrtime_logprob(arrtime, pred_arrtime, det_deltime, siteid-1, phaseid-1)"
@@ -283,6 +287,27 @@ void convert_tuple_int(PyObject * tuple,
   *pp_ints = p_ints;
 }
 
+static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,
+                                      PyObject * args)
+{
+  double evlon, evlat, evdepth;
+  double sitelon, sitelat, siteelev;
+  int phaseid;
+  double trvtime;
+
+  EarthModel_t * p_earth;
+
+  if (!PyArg_ParseTuple(args, "ddddddi", &evlon, &evlat, &evdepth,
+                        &sitelon, &sitelat, &siteelev, &phaseid))
+    return NULL;
+
+  p_earth = p_sigmodel->p_earth;
+
+  trvtime = EarthModel_ArrivalTime_Coord(p_earth, evlon, evlat, evdepth, 0, phaseid,
+                                   sitelon, sitelat, siteelev);
+
+  return Py_BuildValue("d", trvtime);
+}
 
 
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,

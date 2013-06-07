@@ -68,7 +68,7 @@ class ParamModel(Distribution):
 #        else:
         distance = geog.dist_km((ev_dict['lon'], ev_dict['lat']), (self.site_lon, self.site_lat))
         azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_dict['lon'], ev_dict['lat']))
-        a = np.array(((ev_dict['lon'], ev_dict['lat'], ev_dict['depth'], distance, azimuth),))
+        a = np.array(((ev_dict['lon'], ev_dict['lat'], ev_dict['depth'], distance, azimuth),), dtype=float)
         return a
 
     def event_to_array(self, event):
@@ -77,13 +77,13 @@ class ParamModel(Distribution):
         else:
             distance = geog.dist_km((event.lon, event.lat), (self.site_lon, self.site_lat))
             azimuth = geog.azimuth((self.site_lon, self.site_lat), (event.lon, event.lat))
-            a = np.array(((event.lon, event.lat, event.depth, distance, azimuth),))
+            a = np.array(((event.lon, event.lat, event.depth, distance, azimuth),), dtype=float)
             self.ev_cache[event] = a
         return a
 
     def standardize_input_array(self, c):
         if isinstance(c, np.ndarray):
-                X1 = c
+                X1 = np.array(c, dtype=float, copy=False)
         elif isinstance(c, Event):
             X1 = self.event_to_array(c)
         elif isinstance(c, dict):

@@ -71,9 +71,9 @@ class EventHeatmap(Heatmap):
 
     def title(self):
         peak = self.max()[0:2]
-        title = "Peak: " + utils.geog.lonlatstr(*peak)
+        title = "Peak: " + lonlatstr(*peak)
         if self.true_event is not None:
-            title += "\nTrue: " + utils.geog.lonlatstr(*self.true_event)
+            title += "\nTrue: " + lonlatstr(*self.true_event)
             title += "\nDistance: %.2f km" % dist_km(self.true_event, peak)
 
         return title

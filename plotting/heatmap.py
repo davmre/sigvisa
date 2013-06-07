@@ -191,7 +191,7 @@ class Heatmap(object):
                        llcrnrlon=self.left_lon, llcrnrlat=self.bottom_lat,
                        urcrnrlon=self.right_lon, urcrnrlat=self.top_lat,
                        **kwargs)
-        bmap.drawmapboundary(fill_color=(.7, .7, 1, 1))
+        bmap.drawmapboundary(fill_color=(1, 1, 1, 1))
         bmap.drawcoastlines(zorder=10)
 
         if not nofillcontinents:
@@ -349,7 +349,7 @@ class Heatmap(object):
         assert ( -90 < lat < 90 )
         return (lon, lat)
 
-    def event_bounds(self, X, quantile=0.9):
+    def event_bounds(self, X, quantile=0.98):
 
         X = X[:, 0:2]
 
