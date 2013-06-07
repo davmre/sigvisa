@@ -27,11 +27,17 @@ class Sigvisa(threading.local):
     # method (defined below) returns a list of all channel names
     # equivalent to a particular channel.
     canonical_channel_name = {"BHZ": "BHZ", "BHN": "BHN", "BHE": "BHE",
-                              "BH1": "BHE", "BH2": "BHN"}
+                              "BH1": "BHE", "BH2": "BHN",
+                              "SHZ": "SHZ", "sz": "SHZ",
+                              "SHN": "SHN", "sn": "SHN",
+                              "SHE": "SHE", "se": "SHE",}
 
     # defined only for canonical channels
     __equivalent_channels = {"BHZ": ["BHZ"], "BHE": ["BHE", "BH1"],
-                             "BHN": ["BHN", "BH2"]}
+                             "BHN": ["BHN", "BH2"],
+                             "SHZ": ["SHZ", "sz"],
+                             "SHE": ["SHE", "se"],
+                             "SHN": ["SHN", "sn"],}
 
     # singleton pattern -- only initialize once
     _instance = None
@@ -118,3 +124,21 @@ class Sigvisa(threading.local):
         high_match = [band for band in low_match if np.abs(
             float(band.split('_')[2]) - high_band) < 0.01] if high_band is not None else low_match
         return high_match[0]
+
+    def is_array_station(self, sta):
+        return self.earthmodel.site_info(sta, 0)[3] == 1
+
+    def get_array_elements(self, sta):
+        if not self.is_array_station(sta):
+            raise Exception("cannot get elements of non-array station %s" % sta)
+        else:
+            ref_siteid = self.earthmodel.site_info(sta, 0)[6]
+            cursor = self.dbconn.cursor()
+            sql_query = "select distinct s.refsta from static_site s, static_siteid sid where sid.id=%d and s.sta=sid.sta" % ref_siteid
+            cursor.execute(sql_query)
+            refsta = cursor.fetchone()[0]
+            sql_query = "select distinct s.sta from static_site s where s.refsta='%s' and s.statype='ss'" % refsta
+            cursor.execute(sql_query)
+            elements = cursor.fetchall()
+            return [s[0] for s in elements]
+            cursor.close()

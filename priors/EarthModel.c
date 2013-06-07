@@ -259,6 +259,12 @@ static void alloc_sites(PyArrayObject * sitenamesobj, PyArrayObject * sitesobj,
   nsites = sitesobj->dimensions[0];
   Site_t *p_site_block = (Site_t *)calloc(nsites, sizeof(Site_t));
 
+  int name_len = PyArray_ITEMSIZE(sitenamesobj);
+  if (name_len > 6) {
+    printf("error: site names can be at most 6 characters! (name_len is %d)\n", name_len);
+    exit(1);
+  }
+
   for(i=0; i<nsites; i++)
   {
 
@@ -271,10 +277,13 @@ static void alloc_sites(PyArrayObject * sitenamesobj, PyArrayObject * sitesobj,
     p_site_block[i].ref_siteid = (int)ARRAY2(sitesobj, i, SITE_REF_SITEID_COL);
     p_site_block[i].previous = NULL;
 
-    strncpy(p_site_block[i].sta, (char *)PyArray_GETPTR1(sitenamesobj, i), 7);
-    if (i==0 || strncmp(p_site_block[i].sta, p_site_block[i-1].sta, 6) != 0) {
+    strncpy(p_site_block[i].sta, (char *)PyArray_GETPTR1(sitenamesobj, i), name_len);
+    p_site_block[i].sta[name_len] = '\0';
+    if (i==0 || strncmp(p_site_block[i].sta, p_site_block[i-1].sta, name_len) != 0) {
+      //printf("adding entry for %s\n", p_site_block[i].sta);
       HASH_ADD_STR( p_sites, sta, (p_site_block +i));
     } else {
+      //printf("NOT adding entry for %s, same as previous\n", p_site_block[i].sta);
       p_site_block[i-1].previous = p_site_block + i;
     }
   }

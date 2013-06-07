@@ -472,3 +472,17 @@ def read_sitenames():
     cursor.execute("select sta from static_siteid site order by id")
     sitenames = np.array(cursor.fetchall())[:, 0]
     return sitenames
+
+def has_signal_data_for_window(cursor, sta, stime, etime, chans=None):
+
+    if chans is None:
+        chan_cond = ""
+    else:
+        chan_cond=sql_multi_str("chan", chans) + " and "
+
+    MAX_SIGNAL_LEN = 3600 * 8
+    sql = "select count(wfid) from idcx_wfdisc where sta = '%s' and %s time between %f and %f and endtime between %f and %f" % (
+        sta, chan_cond, stime - MAX_SIGNAL_LEN, etime, stime, etime + MAX_SIGNAL_LEN)
+    cursor.execute(sql)
+    count = cursor.fetchone()[0]
+    return count > 0

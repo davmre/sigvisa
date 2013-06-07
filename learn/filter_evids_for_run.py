@@ -14,7 +14,17 @@ from optparse import OptionParser
 
 from sigvisa import *
 from sigvisa.utils.interaction import query_yes_no
+from sigvisa.source.event import Event
+from sigvisa.models.ttime import tt_predict
 
+def has_signal_data_for_event(cursor, sta, evid, chans=None):
+
+    ev = Event(evid=evid)
+    atime = tt_predict(ev, sta, 'P') + ev.time
+    stime = atime - 60
+    etime = atime + 1200
+
+    return has_signal_data_for_window(cursor, sta, stime, etime, chans)
 
 def main():
     parser = OptionParser()
@@ -68,8 +78,14 @@ def main():
                                                    min_mb=options.min_mb, max_mb=options.max_mb,
                                                    min_snr=options.min_snr, max_snr=options.max_snr,
                                                    only_phases=only_phase_list)
+
             for evid in evids:
-                f.write('%s %d\n' % (sta, evid))
+                if s.is_array_station(sta):
+                    elements = [el for el in s.get_array_elements(sta) if has_signal_data_for_event(cursor, el, evid)]
+                else:
+                    elements = [sta,]
+                for element in elements:
+                    f.write('%s %d\n' % (element, evid))
 
     print "done."
 

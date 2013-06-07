@@ -80,12 +80,10 @@ def read_all_sites(cursor):
         if refsta_ids[row[7]] == -1:
             continue
         sitedata.append((row[0], row[1], row[2], row[3], row[4], to_unixtime(row[5]), to_unixtime(row[6]), refsta_ids[row[7]]))
-    print i, "rows"
     sitedata = sorted(sitedata, key = lambda x: (x[0], -x[6], -x[7]))
 
     sitenames = np.array([sd[0] for sd in sitedata])
     sitedata = np.array([sd[1:] for sd in sitedata])
-
     return sitenames, sitedata
 
 def read_sites_by_name(cursor):

@@ -63,3 +63,8 @@ database/setup_db_custom.sql
 *mtx
 evid*
 *ps
+test.armodel
+test_constant_model
+test_gp_model
+test_linear_model
+*_list
