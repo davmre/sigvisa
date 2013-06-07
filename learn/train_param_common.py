@@ -153,7 +153,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, 
     params = k.get_params()
 
     if optimize:
-        sX, sy = subsample_data(X=X, y=y, k=100)
+        sX, sy = subsample_data(X=X, y=y, k=250)
         print "learning hyperparams on", len(sy), "examples"
 
         llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=k, kernel_params=p,

@@ -54,7 +54,6 @@ def main():
     et = options.end_time if options.end_time is not None else et
 
     print st, et
-    import pdb; pdb.set_trace()
 
     required_phase_list = options.require_phases.split(',')
     only_phase_list = options.only_phases.split(',') if options.only_phases else []

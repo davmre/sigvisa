@@ -91,8 +91,10 @@ def plot_linear_model_distance(request, model_record, axes):
 
 def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
 
+    kwargs = {}
     parametric_only = request.GET.get('parametric_only', 'f').lower().startswith('t')
-    kwargs = {'parametric_only': parametric_only}
+    if parametric_only:
+        kwargs['parametric_only'] = parametric_only
 
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
@@ -100,8 +102,6 @@ def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
     site_loc = Sigvisa().stations[model_record.site][:2]
     distances = np.linspace(0, 10000, 40)
     pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
-
-    print model.param_predict()
 
     pred = np.array([model.predict(np.array(((pt[0], pt[1], depth, d, azi),)), **kwargs) for (pt, d) in zip(pts, distances)]).flatten()
     axes.plot(distances, pred, 'k-')
@@ -118,6 +118,11 @@ def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
     axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
 
 def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
+
+    vmin = request.GET.get('vmin', None)
+    vmin = float(vmin) if vmin is not None else None
+    vmax = request.GET.get('vmax', None)
+    vmax = float(vmax) if vmax is not None else None
 
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
@@ -141,7 +146,8 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
     hm.add_events(locations=ev_locs)
     if draw_azi:
         hm.add_events(pts)
-    hm.plot(axes=axes, nolines=True, smooth=True, colorbar_format='%.3f')
+    hm.plot(axes=axes, nolines=True, smooth=True,
+            colorbar_format='%.3f',vmin=vmin, vmax=vmax)
 
 
 

@@ -40,7 +40,7 @@ def backtracking_line_search(f, x, step, grad_x, alpha, beta, max_iters=1000, lo
     return t
 
 
-def coord_steps(f, x, approx_grad=True, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", disp=False):
+def coord_steps(f, x, fprime=None, approx_grad=True, eps=1e-4, bounds=None, maxfun="this_argument_is_ignored", disp=False):
     low_bounds, high_bounds = unpack_bounds(bounds)
 
     dims = len(x)
@@ -48,8 +48,12 @@ def coord_steps(f, x, approx_grad=True, eps=1e-4, bounds=None, maxfun="this_argu
         grad_x = approx_gradient(f, x, eps)
         f_only = f
     else:
-        grad_x =  f(x)[1]
-        f_only = lambda x : f(x)[0]
+        if fprime is not None:
+            grad_x =  fprime(x)
+            f_only = f
+        else:
+            grad_x =  f(x)[1]
+            f_only = lambda x : f(x)[0]
     x1 = x
     if disp:
         print "start w/ f", f_only(x), "x", x, "grad", grad_x

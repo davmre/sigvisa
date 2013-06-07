@@ -9,7 +9,6 @@ from optparse import OptionParser
 from sigvisa.learn.train_param_common import learn_model, load_model, get_model_fname, analyze_model_fname
 from sigvisa.learn.train_coda_models import get_shape_training_data
 from sigvisa import *
-from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
 from sigvisa.database.signal_data import *
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 

@@ -223,7 +223,7 @@ def _minimize(f1, f_only, fp1, approx_grad, x0, optim_params, bounds=None):
             success = (d['warnflag'] == 0)
             print d
             v1 = best_cost
-            x2 = coord_steps(f1, approx_grad=approx_grad, x=x1, eps=eps, bounds=bounds)
+            x2 = coord_steps(f1, fprime=fp1, approx_grad=approx_grad, x=x1, eps=eps, bounds=bounds)
             v2 = f_only(x2)
 
             if success and v2 > v1 * .999 or np.linalg.norm(x2 - x1, 2) < 0.00001:

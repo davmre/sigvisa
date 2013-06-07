@@ -265,7 +265,7 @@ class Heatmap(object):
 
     def plot_density(self, f_preprocess=None, colorbar=True, nolines=False,
                      colorbar_orientation="vertical", colorbar_shrink=0.9, colorbar_format='%.1f',
-                     smooth=False):
+                     smooth=False, vmin=None, vmax=None):
         try:
             bmap = self.bmap
         except:
@@ -286,8 +286,9 @@ class Heatmap(object):
         # plot it, hence we need to transpose.
         fv = fv.T
 
-        minlevel = scipy.stats.scoreatpercentile([v for v in fv.flatten() if not np.isnan(v)], 20)
-        levels = np.linspace(minlevel, np.max(fv), 10)
+        vmin = vmin if vmin is not None else np.min(fv)
+        vmax = vmax if vmax is not None else np.max(fv)
+        levels = np.linspace(vmin, vmax, 10)
 
         lon_arr, lat_arr, x_arr, y_arr = bmap.makegrid(nx = self.n, ny = self.n, returnxy=True)
 
@@ -301,7 +302,7 @@ class Heatmap(object):
                                 extend="both",
                                 norm=norm)
         else:
-            norm = matplotlib.colors.Normalize()
+            norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
             cs2 = bmap.pcolormesh(x_arr, y_arr, fv, cmap=cm, zorder=5, norm=norm, shading='gouraud')
 
         if colorbar:

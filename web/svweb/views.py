@@ -205,11 +205,14 @@ def wave_plus_template_view(wave, template, logscale=True, smoothing=0, request=
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     axes.set_xlabel("Time (s)", fontsize=8)
-    plot.subplot_waveform(wave.filter(
-        "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
-    plot.subplot_waveform(template.filter("smooth_%d" % smoothing), axes, color="green",
-                          linewidth=tmpl_width, alpha = tmpl_alpha,
-                          logscale=logscale, plot_dets=False)
+
+    if wave is not None:
+        plot.subplot_waveform(wave.filter(
+            "smooth_%d" % smoothing) if smoothing > 0 else wave, axes, color='black', linewidth=1.5, logscale=logscale)
+    if template is not None:
+        plot.subplot_waveform(template.filter("smooth_%d" % smoothing), axes, color="green",
+                              linewidth=tmpl_width, alpha = tmpl_alpha,
+                              logscale=logscale, plot_dets=False)
 
     if request is not None:
         process_plot_args(request, axes)
@@ -253,6 +256,8 @@ def FitImageView(request, fitid):
     wiggle = request.GET.get("wiggle", "False").lower().startswith('t')
     saveprefs = request.GET.get("saveprefs", "False").lower().startswith('t')
 
+    template_only = request.GET.get("template_only", "False").lower().startswith('t')
+
     if saveprefs:
         fit_view_options = view_options.objects.get(id=1)
         fit_view_options.smoothing = smoothing
@@ -267,7 +272,7 @@ def FitImageView(request, fitid):
     pred_wave = wave_node.get_wave()
     pred_wave.data.mask = obs_wave.data.mask
 
-    return wave_plus_template_view(wave=obs_wave, template=pred_wave,
+    return wave_plus_template_view(wave=None if template_only else obs_wave, template=pred_wave,
                                    logscale=logscale, smoothing=smoothing, request=request,
                                    tmpl_alpha = 0.8 if wiggle else 1)
 
@@ -486,4 +491,3 @@ def fit_cost_quality(request, runid):
     fig.tight_layout()
     canvas.print_png(response)
     return response
-

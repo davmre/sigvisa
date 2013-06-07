@@ -81,7 +81,7 @@ def main():
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
     parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
                       help="train models even if a model of the same type already appears in the DB")
-    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10", type="str", help="fitting param string")
+    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 10", type="str", help="fitting param string")
 
     (options, args) = parser.parse_args()
 
