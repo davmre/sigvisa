@@ -6,23 +6,17 @@ from sigvisa.database import db
 import time
 import sys
 import os
-import pickle
 
-import sigvisa.utils.geog
-import obspy.signal.util
-from sigvisa import *
+from sigvisa import Sigvisa
 import numpy as np
 import scipy.linalg
 import hashlib
 
-from sigvisa.models.spatial_regression.SpatialGP import SpatialGP, start_params
+from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params, sparsegp_nll_ngrad
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
-import sigvisa.gpr as gpr
-from sigvisa.gpr.distributions import InvGamma, LogNormal
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
-
 
 def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp, elapsed, template_shape=None, wiggle_basisid=None, optim_method=None, hyperparams=None):
     return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams)
@@ -142,32 +136,24 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, 
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
-        mean = "parametric"
     else:
-        basisfns = None
-        b = None
-        B = None
-        mean = "constant"
+        basisfns = ()
+        b = np.array(())
+        B = np.array(((),))
 
         params = start_params[kernel_str][target]
 
     if optimize:
-        sX, sy = subsample_data(X=X, y=y, k=100)
+        sX, sy = subsample_data(X=X, y=y, k=500)
         print "learning hyperparams on", len(sy), "examples"
-
-        """
-        llgrad = lambda p: gpr.learn.gp_nll_ngrad(X=sX, y=sy, kernel=k, kernel_params=p,
-                                                  basisfns=basisfns, param_mean=b, param_cov=B,
-                                                  mean=mean)
-        """
-        llgrad = lambda p : spatialgp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta)
+        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta)
 
         bounds = [(1e-20,None),] * len(params)
 
         params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
 
-    gp = SpatialGP(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True)
+    gp = SparseGP(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True)
     return gp
 
 
@@ -188,7 +174,7 @@ def load_modelid(modelid):
 
 def load_model(fname, model_type):
     if model_type.startswith("gp"):
-        model = SpatialGP(fname=fname)
+        model = SparseGP(fname=fname)
     elif model_type.startswith("param"):
         model = baseline_models.LinearBasisModel(fname=fname)
     elif model_type == "constant_gaussian":

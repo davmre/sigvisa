@@ -8,11 +8,11 @@ double dist_euclidean(const point p1, const point p2, double BOUND_IGNORED, cons
   return sqrt(sqdist_euclidean(p1.p, p2.p, BOUND_IGNORED, scales, dims));
 }
 
-double dist_euclidean(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *dims) {
+double dist_euclidean(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, const void *dims) {
   return sqrt(sqdist_euclidean(p1, p2, BOUND_IGNORED, scales, dims));
 }
 
-double sqdist_euclidean(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *dims) {
+double sqdist_euclidean(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, const void *dims) {
   int d = *(int *)dims;
   double sqdist = 0;
   double diff = 0;
@@ -26,6 +26,27 @@ double sqdist_euclidean(const double * p1, const double * p2, double BOUND_IGNOR
   return sqdist;
 }
 
+
+
+
+double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims) {
+  int d = *(int *)dims;
+  double sqd = sqdist_euclidean(p1, p2, -1, scales, (const void*)dims);
+  if (i==0) {
+    return exp(-1 * sqd);
+  } else if (i - 1 < d) {
+    double diff = (p1[i-1] - p2[i-1]);
+    return variance[0] * exp(-1 * sqd) * 2 * (diff*diff / pow(scales[i-1],3) );
+  } else {
+    printf("taking derivative wrt unrecognized parameter %d!\n", i);
+    exit(-1);
+    return 0;
+  }
+}
+
+
+
+
 double pair_dist_euclidean(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void *dims) {
   double d1 = sqdist_euclidean(p1.pt1, p2.pt1, BOUND_IGNORED, scales, dims);
   double d2 = sqdist_euclidean(p1.pt2, p2.pt2, BOUND_IGNORED, scales, dims);
@@ -34,8 +55,8 @@ double pair_dist_euclidean(const pairpoint p1, const pairpoint p2, double BOUND_
 
 
 
-const double AVG_EARTH_RADIUS_KM = 6371.0;
-inline double RADIAN(double x) {return x*3.14159265/180.0;}
+static const double AVG_EARTH_RADIUS_KM = 6371.0;
+static double RADIAN(double x) {return x*3.14159265/180.0;}
 double dist_km(const double *p1, const double *p2) {
 
   double lon1 = p1[0];
@@ -72,13 +93,13 @@ double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const do
   return sqrt(pow(distkm, 2) + pow(dist_d, 2));
 }
 
-double dist_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void * extra) {
+double dist_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, const void * extra) {
   double distkm = dist_km(p1, p2) / scales[0];
   double dist_d = (p2[2] - p1[2]) / scales[1];
   return sqrt(pow(distkm, 2) + pow(dist_d, 2));
 }
 
-double distsq_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void * extra) {
+double distsq_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, const void * extra) {
   double distkm = dist_km(p1, p2) / scales[0];
   double dist_d = (p2[2] - p1[2]) / scales[1];
   //printf("dist3d returning sqrt(%f^2 + %f^2) = %f\n", distkm, dist_d, sqrt(pow(distkm, 2) + pow(dist_d, 2)));
@@ -86,7 +107,7 @@ double distsq_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, 
 }
 
 
-double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void * extra) {
+double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void  * extra) {
   double distkm1 = dist_km(p1.pt1, p2.pt1) / scales[0];
   double distkm2 = dist_km(p1.pt2, p2.pt2) / scales[0];
 
@@ -96,14 +117,13 @@ double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNO
 }
 
 
-double dist3d_se_deriv_wrt_i(int i, const point p1, const point p2,  const double *variance, const double *scales) {
-  double distkm = dist_km(p1.p, p2.p) / scales[0];
-  double dist_d = (p2.p[2] - p1.p[2]) / scales[1];
+double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *variance, const double *scales, const double *EXTRA_IGNORED) {
+  double distkm = dist_km(p1, p2) / scales[0];
+  double dist_d = (p2[2] - p1[2]) / scales[1];
   //printf("dist3d returning sqrt(%f^2 + %f^2) = %f\n", distkm, dist_d, sqrt(pow(distkm, 2) + pow(dist_d, 2)));
   double sqd =  distkm*distkm + dist_d * dist_d;
 
   if (i==0) { // deriv wrt variance
-
     return exp(-1 * sqd);
   } else if (i == 1) {
     return variance[0] * exp(-1 * sqd) * 2 * (distkm*distkm / scales[0] );
@@ -115,6 +135,7 @@ double dist3d_se_deriv_wrt_i(int i, const point p1, const point p2,  const doubl
     return 0;
   }
 }
+
 
 
 

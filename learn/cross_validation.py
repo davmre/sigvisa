@@ -8,8 +8,7 @@ from optparse import OptionParser
 
 from sigvisa.learn.train_param_common import learn_model, load_model, get_model_fname, analyze_model_fname
 from sigvisa.learn.train_coda_models import get_shape_training_data
-from sigvisa import *
-from sigvisa.models.spatial_regression.SpatialGP import distfns, SpatialGP, start_params
+from sigvisa import Sigvisa
 from sigvisa.database.signal_data import *
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
@@ -71,7 +70,7 @@ def train_cv_models(cv_dir, model_type, **kwargs):
         i += 1
 
         train = [int(x) for x in np.loadtxt(os.path.join(cv_dir, "fold_%02d_train.txt" % i))]
-        test = [int(x) for x in np.loadtxt(os.path.join(cv_dir, "fold_%02d_test.txt" % i))]
+        # test = [int(x) for x in np.loadtxt(os.path.join(cv_dir, "fold_%02d_test.txt" % i))]
 
         trainX = X[train, :]
         trainy = y[train]

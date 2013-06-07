@@ -193,7 +193,7 @@ class SparseGP(ParamModel):
         return X_sorted, y_sorted
 
     def __init__(self, X=None, y=None,
-                 fname=None, basisfns=None,
+                 fname=None, basisfns=(),
                  hyperparams=None,
                  param_mean=None, param_cov=None,
                  compute_ll=False,
@@ -205,7 +205,7 @@ class SparseGP(ParamModel):
                  wfn_str = "se",
                  sort_events=False,
                  build_tree=True,
-                 sparse_invert=False):
+                 sparse_invert=True):
 
         try:
             ParamModel.__init__(self, sta=sta)
@@ -282,7 +282,7 @@ class SparseGP(ParamModel):
                 self.ll = -np.inf
             #t7 = time.time()
             if compute_grad:
-                self.ll_grad = self._log_likelihood_gradient(z=z, K=self.K, H=H, B=B, Kinv=self.Kinv)
+                self.ll_grad = self._log_likelihood_gradient(z=z, H=H, B=B, Kinv=self.Kinv)
 
             #t8 = time.time()
             """
@@ -357,7 +357,10 @@ class SparseGP(ParamModel):
         return K
 
     def sparse_kernel(self, X, identical=False):
-        max_distance = np.sqrt(-np.log(self.sparse_threshold)) # assuming a SE kernel
+        if self.sparse_threshold ==0:
+            max_distance = 1e300
+        else:
+            max_distance = np.sqrt(-np.log(self.sparse_threshold)) # assuming a SE kernel
         entries = self.predict_tree.sparse_training_kernel_matrix(X, max_distance)
         spK = scipy.sparse.coo_matrix((entries[:,2], (entries[:,1], entries[:,0])), shape=(self.n, len(X)), dtype=float)
         if identical:
@@ -670,6 +673,17 @@ class SparseGP(ParamModel):
 
     def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv):
 
+        if scipy.sparse.issparse(L):
+            ldiag = L.diagonal()
+        else:
+            ldiag = np.diag(L)
+
+        # everything is much simpler in the pure nonparametric case
+        if not self.basisfns:
+            ld2_K = np.log(ldiag).sum()
+            self.ll =  -.5 * (np.dot(self.y.T, self.alpha_r) + self.n * np.log(2*np.pi)) - ld2_K
+            return
+
         # here we follow eqn 2.43 in R&W
         #
         # let z = H.T*b - y, then we want
@@ -702,10 +716,6 @@ class SparseGP(ParamModel):
         # product of squares of the diagonal elements of the
         # Cholesky factor
 
-        if scipy.sparse.issparse(L):
-            ldiag = L.diagonal()
-        else:
-            ldiag = np.diag(L)
 
         ld2_K = np.log(ldiag).sum()
         ld2 =  np.log(np.diag(self.c)).sum() # det( B^-1 - H * K^-1 * H.T )
@@ -714,45 +724,95 @@ class SparseGP(ParamModel):
         # eqn 2.43 in R&W, using the matrix inv lemma
         self.ll = -.5 * (term1 - term2 + self.n * np.log(2*np.pi) + ld_B) - ld2_K - ld2
 
-    def _log_likelihood_gradient(self, z, K, H, B, Kinv):
+    def _log_likelihood_gradient(self, z, H, B, Kinv):
         """
         Gradient of the training set log likelihood with respect to the kernel hyperparams.
         """
 
-        nparams = 4
+        nparams = len(self.hyperparams)
         grad = np.zeros((nparams,))
 
-        #t0 = time.time()
-        tmp = np.dot(self.invc, self.HKinv)
-        #t1 = time.time()
-        K_HBH_inv = Kinv - np.dot(tmp.T, tmp)
-        #t2 = time.time()
-        alpha_z = np.reshape(np.dot(K_HBH_inv, z), (-1, 1))
-        #t3 = time.time()
+        if self.basisfns:
+            #t0 = time.time()
+            tmp = np.dot(self.invc, self.HKinv)
+            #t1 = time.time()
+            K_HBH_inv = Kinv - np.dot(tmp.T, tmp)
+            #t2 = time.time()
+            alpha_z = np.reshape(np.dot(K_HBH_inv, z), (-1, 1))
+            #t3 = time.time()
+            #print "gradient: %f %f %f" % (t1-t0, t2-t1, t3-t2)
 
-        #print "gradient: %f %f %f" % (t1-t0, t2-t1, t3-t2)
+            M = np.matrix(K_HBH_inv)
+            alpha = np.matrix(np.reshape(alpha_z, (-1,1)))
+        else:
+            M = Kinv
+            alpha = np.matrix(np.reshape(self.alpha_r, (-1,1)))
 
-        for i in range(nparams):
-            tA = time.time()
+        def get_dKdi_dense(X, i):
             if (i == 0):
                 dKdi = np.eye(self.n)
             else:
                 dKdi = self.predict_tree.kernel_deriv_wrt_i(self.X, self.X, i-1)
+            return dKdi
+        def get_dKdi_sparse(X, i, M):
+            if (i == 0):
+                dKdi = scipy.sparse.eye(self.n)
+            else:
+                nzr, nzc = M.nonzero()
+                entries = self.predict_tree.sparse_kernel_deriv_wrt_i(self.X, self.X, nzr, nzc, i-1)
+                dKdi = scipy.sparse.coo_matrix((entries, (nzr, nzc)), shape=(self.n, self.n), dtype=float)
+            return dKdi
 
-            dlldi = .5 * np.dot(alpha_z.T, np.dot(dKdi, alpha_z))
-            tB = time.time()
-            # here we use the fact:
-            # trace(AB) = sum_{ij} A_ij * B_ij
-            dlldi -= .5 * np.sum(np.sum(np.multiply(K_HBH_inv.T, dKdi)))
+        def get_dKdi_empirical(X, i, eps=1e-8):
+            # for debugging
+
+            new_hparams = self.hyperparams.copy()
+            new_hparams[i] -= eps
+            nv, dfnp, wfnp = extract_hyperparams(dfn_str=self.dfn_str, wfn_str=self.wfn_str, hyperparams=new_hparams)
+            pt = VectorTree(self.X, 1, self.dfn_str, dfnp, self.wfn_str, wfnp)
+            K1 = np.array(pt.kernel_matrix(self.X, self.X, False))
+
+            new_hparams = self.hyperparams.copy()
+            new_hparams[i] += eps
+            nv, dfnp, wfnp = extract_hyperparams(dfn_str=self.dfn_str, wfn_str=self.wfn_str, hyperparams=new_hparams)
+            pt = VectorTree(self.X, 1, self.dfn_str, dfnp, self.wfn_str, wfnp)
+            K2 = np.array(pt.kernel_matrix(self.X, self.X, False))
+
+            dKdi = (K2-K1)/(2*eps)
+            return dKdi
+
+        for i in range(nparams):
+            if scipy.sparse.issparse(M):
+                tA = time.time()
+                dKdi = get_dKdi_sparse(self.X, i, M)
+                dlldi = .5 * alpha.T * dKdi * alpha
+                tB = time.time()
+
+                # here we use the fact:
+                # trace(AB) = sum_{ij} A_ij * B_ij
+                dlldi -= .5 * M.T.multiply(dKdi).sum()
+                tC = time.time()
+
+            else:
+                tA = time.time()
+                dKdi = get_dKdi_dense(self.X, i)
+                dlldi = .5 * np.dot(alpha.T, np.dot(dKdi, alpha))
+                tB = time.time()
+
+                # here we use the fact:
+                # trace(AB) = sum_{ij} A_ij * B_ij
+                dlldi -= .5 * np.sum(np.sum(np.multiply(M.T, dKdi)))
+                tC = time.time()
 
             grad[i] = dlldi
-            tC = time.time()
-            # print "  %d: %f %f" % (i, tB-tA, tC-tB)
+            #print "  %d: %f %f" % (i, tB-tA, tC-tB)
 
         return grad
 
+    def log_likelihood(self):
+        return self.ll
 
-def spatialgp_nll_ngrad(**kwargs):
+def sparsegp_nll_ngrad(**kwargs):
     """
     Get both the negative log-likelihood and its gradient
     simultaneously (more efficient than doing it separately since we
@@ -761,8 +821,7 @@ def spatialgp_nll_ngrad(**kwargs):
     """
 
     try:
-#        print "optimizing params", kernel_params
-        gp = SpatialGP(compute_ll=True, compute_grad=True, **kwargs)
+        gp = SparseGP(compute_ll=True, compute_grad=True, **kwargs)
 
         nll = -1 * gp.ll
         ngrad = -1 * gp.ll_grad

@@ -194,9 +194,16 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
 
   this->dist_params = NULL;
   this->set_dist_params(dist_params);
-
+  this->ddfn = NULL;
   if (wfn_str.compare("se") == 0) {
     this->w = w_se;
+
+    if (distfn_str.compare("lld") == 0) {
+      this->ddfn = dist3d_se_deriv_wrt_i;
+    } else if (distfn_str.compare("euclidean") == 0) {
+      this->ddfn = euclidean_se_deriv_wrt_i;
+    }
+
   } else if (wfn_str.compare("matern32") == 0) {
     this->w = w_matern32;
   } else {
@@ -286,15 +293,38 @@ pyublas::numpy_matrix<double> VectorTree::sparse_training_kernel_matrix(const py
 pyublas::numpy_matrix<double> VectorTree::kernel_deriv_wrt_i(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, int param_i) {
 
   pyublas::numpy_matrix<double> K(pts1.size1(), pts2.size1());
+  if (this->ddfn == NULL) {
+    printf("ERROR: gradient not implemented for this kernel.\n");
+    exit(1);
+  }
+
+
   for (unsigned i = 0; i < pts1.size1 (); ++ i) {
     point p1 = {&pts1(i, 0), 0};
     for (unsigned j = 0; j < pts2.size1 (); ++ j) {
       point p2 = {&pts2(j, 0), 0};
-      K(i,j) = dist3d_se_deriv_wrt_i(param_i, p1, p2, wp, this->dist_params);
+      K(i,j) = this->ddfn(param_i, p1.p, p2.p, this->wp, this->dist_params, (const double *)this->dfn_extra);
     }
   }
 
   return K;
+}
+
+pyublas::numpy_vector<double> VectorTree::sparse_kernel_deriv_wrt_i(const pyublas::numpy_matrix<double> &pts1, const pyublas::numpy_matrix<double> &pts2, const pyublas::numpy_vector<int> &nzr, const pyublas::numpy_vector<int> &nzc, int param_i) {
+
+  pyublas::numpy_vector<double> entries(nzr.size());
+  if (this->ddfn == NULL) {
+    printf("ERROR: gradient not implemented for this kernel.\n");
+    exit(1);
+  }
+
+  for (unsigned i = 0; i < nzr.size(); ++ i) {
+    point p1 = {&pts1(nzr[i], 0), 0};
+    point p2 = {&pts2(nzc[i], 0), 0};
+    entries[i] = this->ddfn(param_i, p1.p, p2.p, this->wp, this->dist_params,  (const double *)this->dfn_extra);
+  }
+
+  return entries;
 }
 
 
@@ -323,6 +353,7 @@ BOOST_PYTHON_MODULE(cover_tree) {
     .def("kernel_matrix", &VectorTree::kernel_matrix)
     .def("sparse_training_kernel_matrix", &VectorTree::sparse_training_kernel_matrix)
     .def("kernel_deriv_wrt_i", &VectorTree::kernel_deriv_wrt_i)
+    .def("sparse_kernel_deriv_wrt_i", &VectorTree::sparse_kernel_deriv_wrt_i)
     .def_readonly("fcalls", &VectorTree::fcalls);
 
   bp::class_<MatrixTree>("MatrixTree", bp::init< pyublas::numpy_matrix< double > const &, pyublas::numpy_vector< int > const &, pyublas::numpy_vector< int > const &, string const &, pyublas::numpy_vector< double > const &, string const &, pyublas::numpy_vector< double > const &>())

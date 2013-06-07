@@ -33,24 +33,27 @@ template<typename T> struct distfn {
   typedef double (*Type)(const T, const T, double, const double*, void*);
 };
 
-typedef double (*partial_dfn)(const double *, const double *, double, const double*, void*);
+typedef double (*partial_dfn)(const double *, const double *, double, const double*, const void*);
+
+typedef double (*dfn_deriv)(int, const double *, const double *,  const double *, const double *, const double *);
 
 
 double dist_euclidean(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *dims);
-double dist_euclidean(const double *, const double *, double BOUND_IGNORED, const double *scales, void *dims);
-double sqdist_euclidean(const double *, const double *, double BOUND_IGNORED, const double *scales, void *dims);
+double dist_euclidean(const double *, const double *, double BOUND_IGNORED, const double *scales, const void *dims);
+double sqdist_euclidean(const double *, const double *, double BOUND_IGNORED, const double *scales, const void *dims);
 double pair_dist_euclidean(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void *dims);
 double dist_km(const double *p1, const double *p2);
 double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void * extra);
-double dist_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, void * extra);
-double distsq_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, void * extra);
+double dist_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, const void * extra);
+double distsq_3d_km(const double * p1, const double*  p2, double BOUND_IGNORED, const double *scales, const void * extra);
 double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void * extra);
 double w_se(double d, const double * variance);
 double w_e(double d, const double * variance);
 double w_matern32(double d, const double * variance);
 double w_matern32_upper(double d, const double * variance);
 double w_matern32_lower(double d, const double * variance);
-double dist3d_se_deriv_wrt_i(int i, const point p1, const point p2,  const double *variance, const double *scales);
+double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *variance, const double *scales, const double *EXTRA_IGNORED);
+double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims);
 typedef double (*wfn)(double, const double *);
 
 
