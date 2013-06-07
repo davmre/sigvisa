@@ -4,6 +4,7 @@
 #include <Python.h>
 #include <math.h>
 #include <float.h>
+#include "uthash.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -74,10 +75,16 @@ typedef struct Event_t
 
 typedef struct Site_t
 {
+  char sta[7];
   double sitelon;
   double sitelat;
   double siteelev;
   int    siteisarr;
+  double ontime;
+  double offtime;
+  int ref_siteid;
+  struct Site_t * previous;
+  UT_hash_handle hh;
 } Site_t;
 
 /* event array columns */
@@ -95,7 +102,10 @@ typedef struct Site_t
 #define SITE_LAT_COL      1
 #define SITE_ELEV_COL     2
 #define SITE_ISARR_COL    3        /* is the site an array station? */
-#define SITE_NUM_COLS     4
+#define SITE_ONTIME_COL   4
+#define SITE_OFFTIME_COL  5
+#define SITE_REF_SITEID_COL 6
+#define SITE_NUM_COLS     7
 
 /* detections array columns */
 #define DET_SITE_COL    0

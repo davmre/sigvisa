@@ -14,13 +14,14 @@ class TravelTimeModel(Distribution):
         self.sta = sta
         self.phase = phase
 
-        self.siteid = s.name_to_siteid_minus1[sta] + 1
+        self.sta = sta
+        self.ref_siteid = s.ref_siteid[sta]
         self.phaseid = s.phaseids[phase]
 
         # peak of a laplace distribution is 1/2b, where b is the
         # scale param, so (HACK ALERT) we can recover b by
         # evaluating the density at the peak
-        self.ttscale = 2.0 / np.exp(s.sigmodel.arrtime_logprob(0, 0, 0, self.siteid - 1, self.phaseid - 1))
+        self.ttscale = 2.0 / np.exp(s.sigmodel.arrtime_logprob(0, 0, 0, self.ref_siteid - 1, self.phaseid - 1))
 
         self.atime = arrival_time
 
@@ -40,7 +41,11 @@ class TravelTimeModel(Distribution):
     def predict(self, cond):
         s = Sigvisa()
         lon, lat, depth, t = self._get_lldt(cond)
-        meantt = s.sigmodel.mean_travel_time(lon, lat, depth, self.siteid - 1, self.phaseid - 1)
+
+        if t < 1:
+            import pdb; pdb.set_trace()
+
+        meantt = s.sigmodel.mean_travel_time(lon, lat, depth, t, self.sta, self.phaseid - 1)
         if self.atime:
             return meantt + t
         else:
@@ -57,23 +62,30 @@ class TravelTimeModel(Distribution):
     def log_p(self, x, cond):
         s = Sigvisa()
         meantt = self.predict(cond)
-        ll = s.sigmodel.arrtime_logprob(x, meantt, 0, self.siteid - 1, self.phaseid - 1)
+        ll = s.sigmodel.arrtime_logprob(x, meantt, 0, self.ref_siteid - 1, self.phaseid - 1)
         return ll
 
 
 def tt_predict(event, sta, phase):
     s = Sigvisa()
-    siteid = s.name_to_siteid_minus1[sta] + 1
     phaseid = s.phaseids[phase]
 
-    meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid - 1, phaseid - 1)
+    if event.time < 1:
+        import pdb; pdb.set_trace()
+
+
+    meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1)
     return meantt
 
 def tt_log_p(x, event, sta, phase):
     s = Sigvisa()
-    siteid = s.name_to_siteid_minus1[sta] + 1
     phaseid = s.phaseids[phase]
+    ref_siteid = s.ref_siteid[sta]
 
-    meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, siteid - 1, phaseid - 1)
-    ll = s.sigmodel.arrtime_logprob(x, meantt, 0, siteid - 1, phaseid - 1)
+    if event.time < 1:
+        import pdb; pdb.set_trace()
+
+
+    meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1)
+    ll = s.sigmodel.arrtime_logprob(x, meantt, 0, ref_siteid-1, phaseid - 1)
     return ll

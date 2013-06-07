@@ -30,6 +30,7 @@ from time import strftime, gmtime
 from math import ceil
 import os
 import sys
+import datetime, pytz, calendar
 
 # local imports
 import db
@@ -345,6 +346,32 @@ def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
 
     return uptime
 
+
+def read_all_sites(cursor):
+
+    def to_unixtime(jdate):
+        if jdate == -1:
+            return sys.float_info.max
+        year = jdate / 1000
+        day = jdate % 1000
+        dt = datetime.datetime(year, 1, 1, tzinfo=pytz.utc) + datetime.timedelta(day - 1)
+        return calendar.timegm(dt.timetuple())
+
+    cursor.execute("select s.sta, s.lon, s.lat, s.elev, "
+                   "(case s.statype when 'ar' then 1 else 0 end), "
+                   "s.ondate, s.offdate, static_siteid.id "
+                   "from static_site s, static_siteid "
+                   "where s.refsta=static_siteid.sta "
+                   "order by s.sta")
+    sitedata = []
+    for row in cursor.fetchall():
+        sitedata.append((row[0], row[1], row[2], row[3], row[4], to_unixtime(row[5]), to_unixtime(row[6]), row[7]))
+    sitedata = sorted(sitedata, key = lambda x: (x[0], -x[6], -x[7]))
+
+    sitenames = np.array([sd[0] for sd in sitedata])
+    sitedata = np.array([sd[1:] for sd in sitedata])
+
+    return sitenames, sitedata
 
 def read_sites_by_name(cursor):
     sites = read_sites(cursor)

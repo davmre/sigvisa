@@ -140,7 +140,7 @@ def gridsearch_detail_view(request, gsid):
     query_ll = query_sg.current_log_p()
     wave_phases = dict([(key, predict_phases(ev=true_sg.toplevel_nodes[0].get_event(), sta=w.sta, phases=true_sg.phases)) for (key,w) in wave_dict.items()])
 
-    query_distances = dict([(key, geog.dist_km((query_ev.lon, query_ev.lat), tuple(s.stations[wave_dict[key].sta][0:2])) ) for key in wave_dict.keys()])
+    query_distances = dict([(key, geog.dist_km((query_ev.lon, query_ev.lat), tuple(s.earthmodel.site_info(wave_dict[key].sta, ev.time)[0:2]))) for key in wave_dict.keys()])
 
     query_origin_time_proposals = sorted(propose_origin_times(ev=query_sg.toplevel_nodes[0].get_event(),
                                                        segments=[wn.get_wave() for wn in query_sg.leaf_nodes],

@@ -41,11 +41,11 @@ def event_view(request, evid):
             sta = rd[0]
 
             try:
-                site_ll = tuple(s.stations[sta][0:2])
+                site_ll = tuple(s.earthmodel.site_info(sta, 0)[0:2])
             except KeyError:
                 continue
 
-            site_type = 'ar' if s.stations[sta][3] == 1 else 'ss'
+            site_type = 'ar' if s.earthmodel.site_info(sta, 0)[3] == 1 else 'ss'
             if ss_only and site_type != 'ss':
                 continue
 

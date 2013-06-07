@@ -51,7 +51,7 @@ class Waveform(object):
             npts = len(data)
             etime = stime + npts / float(srate)
             self.segment_stats = {"stime": stime, "sta": sta, "etime": etime, "len": npts / float(
-                srate), "siteid": Sigvisa().name_to_siteid_minus1[sta] + 1}
+                srate)}
 
         # attributes specific to this waveform, e.g. channel or freq band
         if my_stats is not None:

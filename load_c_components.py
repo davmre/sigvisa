@@ -23,8 +23,8 @@ import priors.ArrivalAmplitudePrior
 import sigvisa_c, sigvisa
 
 
-def load_earth(param_dirname, sites, phasenames, phasetimedef):
-  model = sigvisa_c.EarthModel(sites, phasenames, phasetimedef,
+def load_earth(param_dirname, sitenames, allsites, phasenames, phasetimedef):
+  model = sigvisa_c.EarthModel(sitenames, allsites, phasenames, phasetimedef,
                              os.path.join(param_dirname, "ttime", "iasp91."),
                              "",
                              os.path.join(param_dirname,"GA_dist_depth_ranges"),
@@ -33,10 +33,8 @@ def load_earth(param_dirname, sites, phasenames, phasetimedef):
   return model
 
 
-def load_sigvisa(param_dirname, site_up,
+def load_sigvisa(earthmodel, param_dirname, site_up,
                  sites, phasenames, phasetimedef):
-  earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
-
   sigmodel = sigvisa_c.SigModel(earthmodel,
                               os.path.join(param_dirname, "NumEventPrior.txt"),
                               os.path.join(param_dirname, "EventLocationPrior.txt"),

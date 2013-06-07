@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2012, Bayesian Logic, Inc.
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
@@ -12,7 +12,7 @@
  *     * Neither the name of Bayesian Logic, Inc. nor the
  *       names of its contributors may be used to endorse or promote products
  *       derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -25,7 +25,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
+ *
  */
 
 #include <stdlib.h>
@@ -59,6 +59,49 @@
 
 #define	SIGN(a1, a2)	((a2) >= 0 ? -(a1) : (a1))
 
+
+PyObject * py_EarthModel_SiteInfo(EarthModel_t * p_earth,
+				  PyObject * args) {
+
+  double time;
+  const char *sitename;
+
+  if (!PyArg_ParseTuple(args, "sd", &sitename, &time))
+    return NULL;
+
+  Site_t * p_site = get_site(p_earth, sitename, time);
+
+  return Py_BuildValue("dddiddi", p_site->sitelon, p_site->sitelat, p_site->siteelev, p_site->siteisarr, p_site->ontime, p_site->offtime, p_site->ref_siteid);
+}
+
+
+Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time) {
+
+  Site_t * site = NULL;
+  HASH_FIND_STR(p_earth->p_sites, sta, site);
+  if (!site) { printf("ERROR: site %s not found!\n", sta); exit(1); }
+
+  // if we're given a dummy time, just return the most recent version of the site
+  if (time <= 0) {
+    return site;
+  }
+
+  while (site->ontime > time) {
+    if (site->previous == NULL) {
+      printf("ERROR: no record for site %s at time %f (earliest ontime is %f)!\n", sta, time, site->ontime);
+      exit(1);
+    } else {
+      site = site->previous;
+    }
+  }
+  if (site->offtime < time) {
+      printf("ERROR: no record for site %s at time %f (matching record has offtime of %f)!\n", sta, time, site->offtime);
+      exit(1);
+  }
+
+  return site;
+}
+
 /* TYPES */
 
 static char * read_line(FILE * fp)
@@ -66,7 +109,7 @@ static char * read_line(FILE * fp)
   char * buf;
   int pos;
   int ch;
-  
+
   buf = (char *)malloc((MAX_LINE+1) * sizeof(*buf));
 
   /* read till the end of the line or the file */
@@ -99,7 +142,7 @@ static int read_first_int(FILE * fp)
   char * buf;
   char * ptr;
   int first_int;
-  
+
   while (1)
   {
     buf = read_line(fp);
@@ -110,7 +153,7 @@ static int read_first_int(FILE * fp)
   }
 
   ptr = strtok(buf, " ");
-  
+
   if (!ptr || (1 != sscanf(ptr, "%d", &first_int)))
   {
     fprintf(stderr, "error: expecting an integer at '%s'\n", buf);
@@ -126,7 +169,7 @@ static double read_first_double(FILE * fp)
   char * buf;
   char * ptr;
   double first_double;
-  
+
   while (1)
   {
     buf = read_line(fp);
@@ -136,7 +179,7 @@ static double read_first_double(FILE * fp)
   }
 
   ptr = strtok(buf, " ");
-  
+
   if (!ptr || (1 != sscanf(ptr, "%lf", &first_double)))
   {
     fprintf(stderr, "error: expecting a double at '%s'\n", buf);
@@ -152,7 +195,7 @@ static int read_doubles(FILE * fp, double * out)
   char * buf;
   char * ptr;
   int cnt;
-  
+
   while (1)
   {
     buf = read_line(fp);
@@ -162,7 +205,7 @@ static int read_doubles(FILE * fp, double * out)
   }
 
   ptr = strtok(buf, " ");
-  
+
   if (!ptr)
   {
     fprintf(stderr, "error: expecting a floating point at '%s'\n", buf);
@@ -179,19 +222,19 @@ static int read_doubles(FILE * fp, double * out)
       free(buf);
       exit(1);
     }
-    
+
     ptr = strtok(NULL, " ");
   }
 
   free(buf);
-  
+
   return cnt;
 }
 
 static void read_n_doubles(FILE * fp, double * out, int n)
 {
   int cnt;
-  
+
   cnt = 0;
   while (cnt < n)
     cnt += read_doubles(fp, out + cnt);
@@ -200,47 +243,59 @@ static void read_n_doubles(FILE * fp, double * out, int n)
 static void read_n_lines_doubles(FILE * fp, double * out, int n)
 {
   int cnt;
-  
+
   for(cnt=0; cnt < n; ++cnt) {
     *(out+cnt) = read_first_double(fp);
   }
 }
 
-static void alloc_sites(PyArrayObject * sitesobj, int * p_nsites,
-                        Site_t ** p_p_sites)
+static void alloc_sites(PyArrayObject * sitenamesobj, PyArrayObject * sitesobj,
+			int * p_nsites, Site_t ** p_p_sites, Site_t ** p_p_siteblock)
 {
   int nsites;
-  Site_t * p_sites;
+  Site_t * p_sites = NULL;
   int i;
-  
-  nsites = sitesobj->dimensions[0];
 
-  p_sites = (Site_t *)calloc(nsites, sizeof(*p_sites));
+  nsites = sitesobj->dimensions[0];
+  Site_t *p_site_block = (Site_t *)calloc(nsites, sizeof(Site_t));
 
   for(i=0; i<nsites; i++)
   {
-    p_sites[i].sitelon = ARRAY2(sitesobj, i, SITE_LON_COL);
-    p_sites[i].sitelat = ARRAY2(sitesobj, i, SITE_LAT_COL);
-    p_sites[i].siteelev = ARRAY2(sitesobj, i, SITE_ELEV_COL);
-    p_sites[i].siteisarr = (int) ARRAY2(sitesobj, i, SITE_ISARR_COL);
+
+    p_site_block[i].sitelon = ARRAY2(sitesobj, i, SITE_LON_COL);
+    p_site_block[i].sitelat = ARRAY2(sitesobj, i, SITE_LAT_COL);
+    p_site_block[i].siteelev = ARRAY2(sitesobj, i, SITE_ELEV_COL);
+    p_site_block[i].siteisarr = (int) ARRAY2(sitesobj, i, SITE_ISARR_COL);
+    p_site_block[i].ontime = ARRAY2(sitesobj, i, SITE_ONTIME_COL);
+    p_site_block[i].offtime = ARRAY2(sitesobj, i, SITE_OFFTIME_COL);
+    p_site_block[i].ref_siteid = (int)ARRAY2(sitesobj, i, SITE_REF_SITEID_COL);
+    p_site_block[i].previous = NULL;
+
+    strncpy(p_site_block[i].sta, (char *)PyArray_GETPTR1(sitenamesobj, i), 7);
+    if (i==0 || strncmp(p_site_block[i].sta, p_site_block[i-1].sta, 6) != 0) {
+      HASH_ADD_STR( p_sites, sta, (p_site_block +i));
+    } else {
+      p_site_block[i-1].previous = p_site_block + i;
+    }
   }
-  
+
   *p_nsites = nsites;
   *p_p_sites = p_sites;
+  *p_p_siteblock = p_site_block;
 }
 
-static void free_sites(int nsites, Site_t * p_sites)
+static void free_sites(int nsites, Site_t * p_siteblock)
 {
-  free(p_sites);
+  free(p_siteblock);
 }
 
-static void alloc_phases(PyArrayObject * phasenamesobj, 
+static void alloc_phases(PyArrayObject * phasenamesobj,
                          PyArrayObject * phasetimedefobj,
                          int * p_nphases, char *** p_p_phasenames,
                          int ** p_p_phase_time_def)
 {
   int nphases;
-  
+
   char ** p_phasenames;
   int * p_phase_time_def;
 
@@ -250,15 +305,15 @@ static void alloc_phases(PyArrayObject * phasenamesobj,
 
   p_phasenames = (char **) calloc(nphases, sizeof(*p_phasenames));
   p_phase_time_def = (int *) calloc(nphases, sizeof(*p_phase_time_def));
-  
+
   for (i=0; i<nphases; i++)
   {
-    p_phasenames[i] = (char *)calloc(PHASENAME_MAXLEN+1, 
+    p_phasenames[i] = (char *)calloc(PHASENAME_MAXLEN+1,
                                      sizeof(p_phasenames[i]));
 
     strncpy(p_phasenames[i], (char *)PyArray_GETPTR1(phasenamesobj, i),
             PHASENAME_MAXLEN);
-    
+
     p_phase_time_def[i] = BOOLARRAY1(phasetimedefobj, i);
   }
 
@@ -271,7 +326,7 @@ static void free_phases(int nphases, char ** p_phasenames,
                         int * p_phase_time_def)
 {
   int i;
-  
+
   for (i=0; i<nphases; i++)
   {
     free(p_phasenames[i]);
@@ -286,8 +341,8 @@ void read_samples(EarthModel_t * p_earth, int phasenum, const char * table_prefi
       int len;
       EarthPhaseModel_t * p_phase = p_earth->p_phases + phasenum;
       char * phasename = p_earth->p_phasenames[phasenum];
-      
-      /* use the last leg of the phase to determine the surface velocity 
+
+      /* use the last leg of the phase to determine the surface velocity
        * otherwise use the first leg and finaly just stick to S */
       if (phasename[strlen(phasename)-1] == 'P')
         p_phase->surf_vel = EARTH_SURF_P_VEL;
@@ -298,9 +353,9 @@ void read_samples(EarthModel_t * p_earth, int phasenum, const char * table_prefi
       else if (phasename[0] == 'S')
         p_phase->surf_vel = EARTH_SURF_S_VEL;
       else
-        p_phase->surf_vel = EARTH_SURF_S_VEL;        
+        p_phase->surf_vel = EARTH_SURF_S_VEL;
 
-      
+
       char * fname = (char *)calloc(1, strlen(table_prefix) + PHASENAME_MAXLEN + 10);
       len = sprintf(fname, "%s%s", table_prefix, phasename);
       fname[len] = '\0';
@@ -309,36 +364,36 @@ void read_samples(EarthModel_t * p_earth, int phasenum, const char * table_prefi
       if (!fp)
       {
         //printf("EarthModel: Unable to open travel time file %s\n", fname);
-	
+
 	// TODO: TauP doesn't seem to give Lg, Rg, or PKPab info; let's ignore that for the moment
 	free(fname);
 	return;
         //exit(1);
       }
       free(fname);
-      
+
       int numdepth = read_first_int(fp);
       if (p_phase->numdepth != 0) assert(numdepth == p_phase->numdepth);
       p_phase->numdepth = numdepth;
-            
+
       p_phase->p_depths = (double *)calloc(p_phase->numdepth,
                                            sizeof(*p_phase->p_depths));
       read_n_doubles(fp, p_phase->p_depths, p_phase->numdepth);
-      
+
       int numdist = read_first_int(fp);
       if (p_phase->numdist != 0) assert(numdist == p_phase->numdist);
       p_phase->numdist = numdist;
-      
+
       p_phase->p_dists = (double *)calloc(p_phase->numdist,
                                           sizeof(*p_phase->p_dists));
       read_n_doubles(fp, p_phase->p_dists, p_phase->numdist);
-      
+
       *(pp_samples) = (double *)calloc(p_phase->numdist
 				       * p_phase->numdepth,
 				       sizeof(*pp_samples));
       read_n_lines_doubles(fp, *pp_samples, p_phase->numdist
 			   * p_phase->numdepth);
-      
+
       fclose(fp);
 }
 
@@ -349,21 +404,21 @@ static DDRange * read_dist_depth_ranges(const char * fname, int * p_num_ranges)
   char * buf;
 
   fp = fopen(fname, "r");
-  
+
   if (!fp)
   {
     fprintf(stderr, "EarthModel: Unable to open dist-depth ranges file %s",
             fname);
     exit(1);
   }
-  
+
   *p_num_ranges = 0;
   p_ranges = (DDRange *) malloc(sizeof(DDRange) * MAX_NUM_DDRANGES);
 
   while ((buf = read_line(fp)) != NULL)
   {
     DDRange * p_curr = p_ranges + (*p_num_ranges);
-    
+
     /* skip comments or empty lines */
     if ((buf[0] == '#') || (strlen(buf) == 0))
     {
@@ -378,9 +433,9 @@ static DDRange * read_dist_depth_ranges(const char * fname, int * p_num_ranges)
       fprintf(stderr, "incorrect number of ranges in line: %s", buf);
       exit(1);
     }
-    
+
     free(buf);
-    
+
     (*p_num_ranges) ++;
   }
 
@@ -392,9 +447,9 @@ static DDRange * read_dist_depth_ranges(const char * fname, int * p_num_ranges)
 static void read_qfvc(const char * fname, QFactorModel_t * p_qfvc)
 {
   FILE * fp;
-  
+
   fp = fopen(fname, "r");
-  
+
   if (!fp)
   {
     fprintf(stderr, "EarthModel: Unable to open qfvc file %s",
@@ -410,18 +465,18 @@ static void read_qfvc(const char * fname, QFactorModel_t * p_qfvc)
   p_qfvc->p_depths = (double *) calloc(p_qfvc->numdepth,
                                        sizeof(*p_qfvc->p_depths));
   read_n_doubles(fp, p_qfvc->p_depths, p_qfvc->numdepth);
-  
+
   /* read distances */
   p_qfvc->numdist = read_first_int(fp);
   p_qfvc->p_dists = (double *) calloc(p_qfvc->numdist,
                                       sizeof(*p_qfvc->p_dists));
   read_n_doubles(fp, p_qfvc->p_dists, p_qfvc->numdist);
-  
+
   /* read all the samples */
   p_qfvc->p_samples = (double *) calloc(p_qfvc->numdepth * p_qfvc->numdist,
                                         sizeof(*p_qfvc->p_samples));
   read_n_doubles(fp, p_qfvc->p_samples, p_qfvc->numdepth * p_qfvc->numdist);
-  
+
   fclose(fp);
 }
 
@@ -429,6 +484,7 @@ static void read_qfvc(const char * fname, QFactorModel_t * p_qfvc)
 int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
 {
   /* input arguments */
+  PyArrayObject * sitenamesobj;
   PyArrayObject * sitesobj;
   PyArrayObject * phasenamesobj;
   PyArrayObject * phasetimedefobj;
@@ -437,19 +493,30 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
   const char * iatable_prefix;
   const char * ddranges_file;              /* distance depth ranges */
   const char * qfvc_file;                  /* Q-Factor Veith Clawson */
-  
+
   int i, j;
   char * fname;
   DDRange * p_ddranges;
   int num_ddrange;
-  
-  if (!PyArg_ParseTuple(args, "O!O!O!ssss", &PyArray_Type, &sitesobj,
+
+  if (!PyArg_ParseTuple(args, "O!O!O!O!ssss",
+			&PyArray_Type, &sitenamesobj,
+			&PyArray_Type, &sitesobj,
                         &PyArray_Type, &phasenamesobj,
                         &PyArray_Type, &phasetimedefobj,
                         &tttable_prefix, &iatable_prefix,
 			&ddranges_file, &qfvc_file)
       || !sitesobj || !phasenamesobj || !phasetimedefobj)
     return -1;
+
+  if ((1 != sitenamesobj->nd)
+      || (NPY_STRING != sitenamesobj->descr->type_num))
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: incorrect shape or type"
+                    " of sitenames array");
+    return -1;
+  }
+
 
   if ((2 != sitesobj->nd) || (NPY_DOUBLE != sitesobj->descr->type_num)
       || (SITE_NUM_COLS != sitesobj->dimensions[1]))
@@ -459,7 +526,7 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
     return -1;
   }
 
-  if ((1 != phasenamesobj->nd) 
+  if ((1 != phasenamesobj->nd)
       || (NPY_STRING != phasenamesobj->descr->type_num))
   {
     PyErr_SetString(PyExc_ValueError, "EarthModel: incorrect shape or type"
@@ -467,29 +534,37 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
     return -1;
   }
 
-  if ((1 != phasetimedefobj->nd) 
+  if ((1 != phasetimedefobj->nd)
       || (NPY_BOOL != phasetimedefobj->descr->type_num))
   {
     PyErr_SetString(PyExc_ValueError, "EarthModel: incorrect shape or type"
                     " of phasetimedef array");
     return -1;
   }
-  
+
+  if (sitenamesobj->dimensions[0] != sitesobj->dimensions[0])
+  {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: sitenames and "
+                    "sites have different number of phases");
+    return -1;
+  }
+
   if (phasenamesobj->dimensions[0] != phasetimedefobj->dimensions[0])
   {
     PyErr_SetString(PyExc_ValueError, "EarthModel: phasenames and "
                     "phasetimedef have different number of phases");
     return -1;
   }
-  
-  alloc_sites(sitesobj, &p_earth->numsites, &p_earth->p_sites);
+
+
+  alloc_sites(sitenamesobj, sitesobj, &p_earth->numsites, &p_earth->p_sites, &p_earth->p_siteblock);
 
   alloc_phases(phasenamesobj, phasetimedefobj, &p_earth->numphases,
                &p_earth->p_phasenames, &p_earth->p_phase_time_def);
 
   fname = (char *)calloc(1, strlen(tttable_prefix) + PHASENAME_MAXLEN + 10);
-  
-  p_earth->p_phases = (EarthPhaseModel_t *)calloc(p_earth->numphases, 
+
+  p_earth->p_phases = (EarthPhaseModel_t *)calloc(p_earth->numphases,
                                                   sizeof(*p_earth->p_phases));
 
   /* calculate the number of time-defining phases, assuming that the
@@ -503,7 +578,7 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
 
   /* read the valid distance depth ranges */
   p_ddranges = read_dist_depth_ranges(ddranges_file, &num_ddrange);
-  
+
   for (i=0; i<p_earth->numphases; i++)
   {
     EarthPhaseModel_t * p_phase;
@@ -515,7 +590,7 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
       read_samples(p_earth, i, tttable_prefix, &p_phase->p_ttsamples);
       read_samples(p_earth, i, iatable_prefix, &p_phase->p_iasamples);
     }
-    
+
     /* now read the distance depth ranges for this phase */
     p_phase->numddrange = 0;
     if (p_earth->p_phase_time_def[i])
@@ -523,7 +598,7 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
       for (j=0; j<num_ddrange; j++)
       {
         DDRange * curr_ddrange = p_ddranges + j;
-        
+
         if (!strcmp(curr_ddrange->phase, p_earth->p_phasenames[i]))
         {
           p_phase->p_ddranges[p_phase->numddrange ++] = *curr_ddrange;
@@ -541,7 +616,7 @@ int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args)
   free(p_ddranges);
 
   read_qfvc(qfvc_file, &p_earth->qfvc);
-  
+
   p_earth->enforce_ddrange = 0;              /* TODO: ddrange disabled */
 
   return 0;
@@ -566,10 +641,15 @@ void py_EarthModel_UnInit(EarthModel_t * p_earth)
       free(p_phase->p_iasamples);
     }
   }
-  
+
   free(p_earth->p_phases);
 
-  free_sites(p_earth->numsites, p_earth->p_sites);
+  free_sites(p_earth->numsites, p_earth->p_siteblock);
+  // NOTE: there's currently a memory leak because the
+  // p_earth->p_sites hashtable doesn't get freed. I don't think this
+  // matters for anything, but maybe it should be fixed.
+
+
   /* phase_time_def is used above so it has to be freed at the end */
   free_phases(p_earth->numphases, p_earth->p_phasenames,
               p_earth->p_phase_time_def);
@@ -577,13 +657,14 @@ void py_EarthModel_UnInit(EarthModel_t * p_earth)
 
 PyObject * py_EarthModel_InRange(EarthModel_t * p_earth, PyObject * args)
 {
-  double lon, lat, depth;
-  int phaseid, siteid;
-  
-  if (!PyArg_ParseTuple(args, "dddii", &lon, &lat, &depth, &phaseid, &siteid))
+  double lon, lat, depth, time;
+  int phaseid;
+  const char * sitename;
+
+  if (!PyArg_ParseTuple(args, "dddisd", &lon, &lat, &depth, &phaseid, &sitename, &time))
     return NULL;
-  
-  if (EarthModel_InRange(p_earth, lon, lat, depth, phaseid, siteid))
+
+  if (EarthModel_InRange(p_earth, lon, lat, depth, phaseid, sitename, time))
     Py_RETURN_TRUE;
   else
     Py_RETURN_FALSE;
@@ -594,7 +675,7 @@ double simple_distance_deg(double lon1, double lat1, double lon2,
 {
   double tmp;
   double dist;
-  
+
   tmp = sin(lat1 * DEG2RAD) * sin(lat2 * DEG2RAD)
     + cos(lat1 * DEG2RAD) * cos(lat2 * DEG2RAD)
     * cos((lon2 - lon1) * DEG2RAD);
@@ -611,20 +692,20 @@ double simple_distance_deg(double lon1, double lat1, double lon2,
 }
 
 int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
-                       double depth, int phaseid, int siteid)
+                       double depth, int phaseid, const char *sitename, double time)
 {
-  assert((phaseid < p_earth->numphases) && (siteid < p_earth->numsites));
-  
+  assert(phaseid < p_earth->numphases);
+
   /* non-time-defining phases are never in-range */
-  if (!p_earth->p_phase_time_def[phaseid] 
-      || (EarthModel_ArrivalTime(p_earth, lon, lat, depth, 0, phaseid, siteid)
+  if (!p_earth->p_phase_time_def[phaseid]
+      || (EarthModel_ArrivalTime(p_earth, lon, lat, depth, time, phaseid, sitename) - time
           < 0))
     return 0;
 
   return 1;
 }
 
-static void dist_azimuth(double alon1, double alat1, double alon2, 
+static void dist_azimuth(double alon1, double alat1, double alon2,
                          double alat2, double *delta, double *azi, double *baz)
 {
   double clat1, cdlon, cdel, geoc_co_lat, geoc_lat1, geoc_lat2;
@@ -642,21 +723,21 @@ static void dist_azimuth(double alon1, double alat1, double alon2,
     *baz = 180.0;
     return;
   }
-  
+
   /*
-   * Convert alat2 from geographic latitude to geocentric latitude 
+   * Convert alat2 from geographic latitude to geocentric latitude
    * (radians) in geoc_lat2
    */
   geog_co_lat = (90.0-(alat2))*DEG2RAD;
   geoc_co_lat = GEOCENTRIC_COLAT(geog_co_lat);
   geoc_lat2 = 90.0*DEG2RAD-geoc_co_lat;
-  
+
   clat2 = cos(geoc_lat2);
   slat2 = sin(geoc_lat2);
 
-  
+
   /*
-   * Convert alat1 from geographic latitude to geocentric latitude 
+   * Convert alat1 from geographic latitude to geocentric latitude
    * (radians) in geoc_lat1
    */
   geog_co_lat = (90.0-(alat1))*DEG2RAD;
@@ -677,11 +758,11 @@ static void dist_azimuth(double alon1, double alat1, double alon2,
   xazi = clat1*slat2 - slat1*clat2*cdlon;
   ybaz = -sdlon * clat1;
   xbaz = clat2*slat1 - slat2*clat1*cdlon;
-  
+
   *delta = RAD2DEG * acos(cdel);
   *azi   = RAD2DEG * atan2(yazi, xazi);
   *baz   = RAD2DEG * atan2(ybaz, xbaz);
-  
+
   if (*azi < 0.0)
     *azi += 360.0;
   if (*baz < 0.0)
@@ -689,12 +770,12 @@ static void dist_azimuth(double alon1, double alat1, double alon2,
 }
 
 double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
-                        int siteid)
+                        const char *sitename, double time)
 {
   double delta, esaz, seaz;
   Site_t * p_site;
-  p_site = p_earth->p_sites + siteid;
-  
+  p_site = get_site(p_earth, sitename, time);
+
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
                &delta, &esaz, &seaz);
   return delta;
@@ -702,20 +783,13 @@ double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
 
 PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args)
 {
-  double lon, lat;
-  int siteid;
-  
-  if (!PyArg_ParseTuple(args, "ddi", &lon, &lat, &siteid))
+  double lon, lat, time;
+  const char * sitename;
+
+  if (!PyArg_ParseTuple(args, "ddsd", &lon, &lat, &sitename, &time))
     return NULL;
 
-  if ((siteid < 0) || (siteid > p_earth->numsites))
-  {
-
-    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid siteid");
-    return NULL;
-  }
-
-  return Py_BuildValue("d", EarthModel_Delta(p_earth, lon, lat, siteid));
+  return Py_BuildValue("d", EarthModel_Delta(p_earth, lon, lat, sitename, time));
 }
 
 // convert an arriving slowness (seconds/degree) to incidence angle
@@ -790,7 +864,7 @@ int iangle_to_slowness(double iangle, int phase, double * slowness) {
     /* I don't currently have numbers for Love or Raleigh waves */
     success = 0;
   }
-  
+
   *slowness = sin(iangle*DEG2RAD)/v;
   if (isnan(*slowness)) success = 0;
   return success;
@@ -809,11 +883,11 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
   double slo_mdist1, slo_mdist2;
   int in_range;
   int i;
-  
+
   /* check that the depth and distance are within the bounds for this phase */
-  if ((depth < p_phase->p_depths[0]) 
+  if ((depth < p_phase->p_depths[0])
       || (depth > p_phase->p_depths[p_phase->numdepth-1])
-      || (distance < p_phase->p_dists[0]) 
+      || (distance < p_phase->p_dists[0])
       || (distance > p_phase->p_dists[p_phase->numdist-1]))
   {
     *p_trvtime = *p_slow = -1;
@@ -825,7 +899,7 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
   for (i=0; i<p_phase->numddrange; i++)
   {
     DDRange * range = p_phase->p_ddranges + i;
-    
+
     if ((distance >= range->mindist) && (distance <= range->maxdist)
         && (depth >= range->mindepth) && (depth <= range->maxdepth))
       in_range = 1;
@@ -836,8 +910,8 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
     *p_trvtime = *p_slow = *p_iangle = -1;
     return;
   }
-  
-  for (depthi = 0; (depthi < p_phase->numdepth) 
+
+  for (depthi = 0; (depthi < p_phase->numdepth)
          && (depth >= p_phase->p_depths[depthi]); depthi++)
     ;
   depthi --;
@@ -849,8 +923,8 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
     depthi = p_phase->numdepth-2;
     depthi2 = p_phase->numdepth-1;
   }
-  
-  for (disti = 0; (disti < p_phase->numdist) 
+
+  for (disti = 0; (disti < p_phase->numdist)
          && (distance >= p_phase->p_dists[disti]); disti++)
     ;
   disti --;
@@ -886,9 +960,9 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
 
   d_depth = p_phase->p_depths[depthi2] - p_phase->p_depths[depthi];
   d_dist = p_phase->p_dists[disti2] - p_phase->p_dists[disti];
-  
+
   /* compute the scaled manhattan distance to the four corners */
-  mdist11 = (depth - p_phase->p_depths[depthi]) / d_depth 
+  mdist11 = (depth - p_phase->p_depths[depthi]) / d_depth
     + (distance - p_phase->p_dists[disti]) / d_dist;
 
   mdist12 = (depth - p_phase->p_depths[depthi]) / d_depth
@@ -932,10 +1006,10 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
     }
     **/
 
-    *p_trvtime = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21 
+    *p_trvtime = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21
                   + val22 / mdist22)
       / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
-    *p_iangle = (iaval11 / mdist11 + iaval12 / mdist12 + iaval21 / mdist21 
+    *p_iangle = (iaval11 / mdist11 + iaval12 / mdist12 + iaval21 / mdist21
                   + iaval22 / mdist22)
       / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
   }
@@ -968,8 +1042,8 @@ static void travel_time(EarthModel_t *p_earth, EarthPhaseModel_t * p_phase, doub
              slo_val1, slo_val2, slo_mdist1, slo_mdist2);
     }
     **/
-    
-    *p_slow = (slo_val1 / slo_mdist1 + slo_val2 / slo_mdist2) 
+
+    *p_slow = (slo_val1 / slo_mdist1 + slo_val2 / slo_mdist2)
       / (1 / slo_mdist1 + 1 / slo_mdist2);
   }
 }
@@ -1041,7 +1115,7 @@ static double ellipticity_corr (double delta, double esaz, double ecolat,
           0.0306,  0.07113,   0.0000,   0.0000 }
       }
     };
- 
+
 
   /*
    * First, determine phase-type index
@@ -1070,7 +1144,7 @@ static double ellipticity_corr (double delta, double esaz, double ecolat,
   else if (EARTH_PHASE_PKPbc == phaseid)
   {
     iphs = 4;
-    if (delta < 140.0 || delta > 160.0) 
+    if (delta < 140.0 || delta > 160.0)
       /* Correction not valid except between 140 & 160 deg. */
       return (0.0);
   }
@@ -1127,7 +1201,7 @@ static double ellipticity_corr (double delta, double esaz, double ecolat,
                                 + t[2][iphs][9]*edist);
 
   /*
-   * Compute ellipticity correction via equations (22) and (26) 
+   * Compute ellipticity correction via equations (22) and (26)
    * of Dziewonski and Gilbert (1976).
    */
 
@@ -1146,10 +1220,10 @@ PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
   int phaseid;
   double depth, dist, ttime, slow, iangle;
   EarthPhaseModel_t * p_phase;
-  
+
   if (!PyArg_ParseTuple(args, "idd", &phaseid, &depth, &dist))
     return NULL;
-  
+
   if ((phaseid < 0) || (phaseid > p_earth->numphases))
   {
     PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid");
@@ -1163,31 +1237,31 @@ PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
   }
 
   p_phase = p_earth->p_phases + phaseid;
-  
+
   travel_time(p_earth, p_phase, depth, dist, &ttime, &slow, &iangle);
-  
+
   if (ttime < 0)
   {
     PyErr_SetString(PyExc_ValueError, "EarthModel: ttime is not defined");
     return NULL;
   }
-  
+
   return Py_BuildValue("d", ttime);
 }
 
 PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args)
 {
   double lon, lat, depth, evtime;
-  int phaseid, siteid;
-  
-  if (!PyArg_ParseTuple(args, "ddddii", &lon, &lat, &depth, &evtime, 
-                        &phaseid, &siteid))
+  int phaseid;
+  const char *sitename;
+
+  if (!PyArg_ParseTuple(args, "ddddis", &lon, &lat, &depth, &evtime,
+                        &phaseid, &sitename))
     return NULL;
 
-  if ((phaseid < 0) || (phaseid > p_earth->numphases) || (siteid < 0) ||
-      (siteid > p_earth->numsites))
+  if ((phaseid < 0) || (phaseid > p_earth->numphases))
   {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid or siteid"
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid"
       );
     return NULL;
   }
@@ -1199,7 +1273,7 @@ PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args)
   }
 
   return Py_BuildValue("d", EarthModel_ArrivalTime(p_earth, lon, lat, depth,
-                                                   evtime, phaseid, siteid));
+                                                   evtime, phaseid, sitename));
 }
 
 PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
@@ -1208,8 +1282,8 @@ PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
   double lon, lat, depth, evtime;
   int phaseid;
   double sitelon, sitelat, siteelev;
-  
-  if (!PyArg_ParseTuple(args, "ddddiddd", &lon, &lat, &depth, &evtime, 
+
+  if (!PyArg_ParseTuple(args, "ddddiddd", &lon, &lat, &depth, &evtime,
                         &phaseid, &sitelon, &sitelat, &siteelev))
     return NULL;
 
@@ -1232,14 +1306,12 @@ PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
 }
 
 double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
-                              double lat, double depth, double evtime, 
-                              int phaseid, int siteid)
+                              double lat, double depth, double evtime,
+                              int phaseid, const char *sitename)
 {
   Site_t * p_site;
-  
-  assert(siteid < p_earth->numsites);
-  
-  p_site = p_earth->p_sites + siteid;  
+
+  p_site = get_site(p_earth, sitename, evtime);
 
   return EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
                                       evtime, phaseid, p_site->sitelon,
@@ -1247,8 +1319,8 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
 }
 
 
-double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon, 
-                                    double lat, double depth, double evtime, 
+double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon,
+                                    double lat, double depth, double evtime,
                                     int phaseid, double sitelon,
                                     double sitelat, double siteelev)
 {
@@ -1258,101 +1330,93 @@ double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon,
   double delta, esaz, seaz;
 
   assert((phaseid < p_earth->numphases) && p_earth->p_phase_time_def[phaseid]);
-  
+
   p_phase = p_earth->p_phases + phaseid;
-  
+
   dist_azimuth(lon, lat, sitelon, sitelat, &delta, &esaz, &seaz);
-  
+
   travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
-  
+
   if (trvtime < 0)
     return -1;
-  
+
   trvtime += ellipticity_corr(delta, esaz,
-                              GEOCENTRIC_COLAT((90-lat) * DEG2RAD), 
+                              GEOCENTRIC_COLAT((90-lat) * DEG2RAD),
                               depth, phaseid);
 
   if (siteelev >= -998)
     trvtime += siteelev / p_phase->surf_vel;
-  
+
   return evtime + trvtime;
 }
 
 
-PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth,
                                         PyObject * args)
 {
-  double lon, lat;
-  int siteid;
-  
-  if (!PyArg_ParseTuple(args, "ddi", &lon, &lat, &siteid))
-    return NULL;
+  double lon, lat, time;
+  const char * sitename;
 
-  if ((siteid < 0) || (siteid > p_earth->numsites))
-  {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid siteid");
+  if (!PyArg_ParseTuple(args, "ddsd", &lon, &lat, &sitename, &time))
     return NULL;
-  }
 
   return Py_BuildValue("d", EarthModel_ArrivalAzimuth(p_earth, lon, lat,
-                                                      siteid));
+                                                      sitename, time));
 }
 
 double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
-                                 double lat, int siteid)
+                                 double lat, const char *sitename, double time)
 {
   Site_t * p_site;
   double delta;
   double esaz;
   double seaz;
-  
-  assert((siteid >= 0) && (siteid < p_earth->numsites));
 
-  p_site = p_earth->p_sites + siteid;
+  p_site = get_site(p_earth, sitename, time);
 
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
                &delta, &esaz, &seaz);
-  
+
   return seaz;
 }
 
 double EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth, double lon,
 				       double lat, double depth,
-				       int phaseid, int siteid)
+				       int phaseid, const char *sitename, double time)
 {
   double trvtime, slow, iangle;
   Site_t * p_site;
   EarthPhaseModel_t * p_phase;
   double delta, esaz, seaz;
 
-  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases)
+  assert((phaseid < p_earth->numphases)
          && p_earth->p_phase_time_def[phaseid]);
-  
-  p_site = p_earth->p_sites + siteid;
+
+  p_site = get_site(p_earth, sitename, time);
   p_phase = p_earth->p_phases + phaseid;
-  
+
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
                &seaz);
-  
+
   travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
 
   return iangle;
 }
 
-PyObject * py_EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth,
 					      PyObject * args)
 {
-  double lon, lat, depth;
-  int phaseid, siteid;
-  
-  if (!PyArg_ParseTuple(args, "dddii", &lon, &lat, &depth, 
-                        &phaseid, &siteid))
+  double lon, lat, depth, time;
+  int phaseid;
+  const char *sitename;
+
+  if (!PyArg_ParseTuple(args, "dddisd", &lon, &lat, &depth,
+                        &phaseid, &sitename, &time))
     return NULL;
 
-  if ((phaseid < 0) || (phaseid > p_earth->numphases) || (siteid < 0) ||
-      (siteid > p_earth->numsites))
+  if ((phaseid < 0) || (phaseid > p_earth->numphases))
   {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid or siteid"
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid"
       );
     return NULL;
   }
@@ -1363,14 +1427,14 @@ PyObject * py_EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth,
     return NULL;
   }
 
-  return Py_BuildValue("d", EarthModel_ArrivalIncidentAngle(p_earth, lon, 
-							    lat, depth, 
-							    phaseid,siteid));
+  return Py_BuildValue("d", EarthModel_ArrivalIncidentAngle(p_earth, lon,
+							    lat, depth,
+							    phaseid,sitename,time));
 }
 
 double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
                                   double lat, double depth,
-                                  int phaseid, int siteid)
+                                  int phaseid, const char *sitename, double time)
 {
 
   double trvtime, slow, iangle;
@@ -1378,34 +1442,34 @@ double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
   EarthPhaseModel_t * p_phase;
   double delta, esaz, seaz;
 
-  assert((siteid < p_earth->numsites) && (phaseid < p_earth->numphases)
+  assert((phaseid < p_earth->numphases)
          && p_earth->p_phase_time_def[phaseid]);
-  
-  p_site = p_earth->p_sites + siteid;
+
+  p_site = get_site(p_earth, sitename, time);
   p_phase = p_earth->p_phases + phaseid;
-  
+
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
                &seaz);
-  
+
   travel_time(p_earth, p_phase, depth, delta, &trvtime, &slow, &iangle);
 
   return slow;
 }
 
-PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth,
                                          PyObject * args)
 {
-  double lon, lat, depth;
-  int phaseid, siteid;
-  
-  if (!PyArg_ParseTuple(args, "dddii", &lon, &lat, &depth, 
-                        &phaseid, &siteid))
+  double lon, lat, depth, time;
+  int phaseid;
+  const char *sitename;
+
+  if (!PyArg_ParseTuple(args, "dddisd", &lon, &lat, &depth,
+                        &phaseid, &sitename, &time))
     return NULL;
 
-  if ((phaseid < 0) || (phaseid > p_earth->numphases) || (siteid < 0) ||
-      (siteid > p_earth->numsites))
+  if ((phaseid < 0) || (phaseid > p_earth->numphases))
   {
-    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid or siteid"
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid phaseid"
       );
     return NULL;
   }
@@ -1417,14 +1481,14 @@ PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth,
   }
 
   return Py_BuildValue("d", EarthModel_ArrivalSlowness(p_earth, lon, lat,
-                                                       depth, phaseid,siteid));
+                                                       depth, phaseid,sitename, time));
 }
 
-PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth,
                                         PyObject * args)
 {
   int phaseid;
-  
+
   if (!PyArg_ParseTuple(args, "i", &phaseid))
     return NULL;
 
@@ -1440,7 +1504,7 @@ PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth,
     Py_RETURN_FALSE;
 }
 
-PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth,
                                    PyObject * args)
 {
   if (!PyArg_ParseTuple(args, ""))
@@ -1449,7 +1513,7 @@ PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth,
   return Py_BuildValue("i", EarthModel_NumPhases(p_earth));
 }
 
-PyObject * py_EarthModel_NumTimeDefPhases(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_NumTimeDefPhases(EarthModel_t * p_earth,
                                    PyObject * args)
 {
   if (!PyArg_ParseTuple(args, ""))
@@ -1458,7 +1522,7 @@ PyObject * py_EarthModel_NumTimeDefPhases(EarthModel_t * p_earth,
   return Py_BuildValue("i", EarthModel_NumTimeDefPhases(p_earth));
 }
 
-PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth,
                                   PyObject * args)
 {
   if (!PyArg_ParseTuple(args, ""))
@@ -1467,11 +1531,11 @@ PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth,
   return Py_BuildValue("i", EarthModel_NumSites(p_earth));
 }
 
-PyObject * py_EarthModel_DiffAzimuth(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_DiffAzimuth(EarthModel_t * p_earth,
                                      PyObject * args)
 {
   double azi1, azi2;
-  
+
   if (!PyArg_ParseTuple(args, "dd", &azi1, &azi2))
     return NULL;
 
@@ -1481,9 +1545,9 @@ PyObject * py_EarthModel_DiffAzimuth(EarthModel_t * p_earth,
 double EarthModel_DiffAzimuth(double azi1, double azi2)
 {
   double diff;
-  
+
   diff = azi2 - azi1;
-  
+
   if (diff > 180)
     return diff - 360;
   else if (diff <= -180)
@@ -1492,25 +1556,25 @@ double EarthModel_DiffAzimuth(double azi1, double azi2)
     return diff;
 }
 
-PyObject * py_EarthModel_PhaseName(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_PhaseName(EarthModel_t * p_earth,
                                    PyObject * args)
 {
   int phaseid;
-  
+
   if (!PyArg_ParseTuple(args, "i", &phaseid))
     return NULL;
 
   if ((phaseid < 0) || (phaseid >= p_earth->numphases))
   {
     PyErr_SetString(PyExc_ValueError, "EarthModel: illegal phaseid");
-    
+
     return NULL;
   }
 
   return Py_BuildValue("s", p_earth->p_phasenames[phaseid]);
 }
 
-PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth,
                                        PyObject * args)
 {
   if (!PyArg_ParseTuple(args, ""))
@@ -1525,25 +1589,25 @@ static double invert_slowness(const EarthPhaseModel_t * p_phase, double depth,
 {
   int depthi;
   int disti;
-  
+
   /* check that the depth is within the bounds for this phase */
   if ((depth < p_phase->p_depths[0])
       || (depth > p_phase->p_depths[p_phase->numdepth-1]))
     return -1;
 
-  for (depthi = 0; (depthi < p_phase->numdepth) 
+  for (depthi = 0; (depthi < p_phase->numdepth)
          && (depth >= p_phase->p_depths[depthi]); depthi++)
     ;
   depthi --;
-  
+
   for (disti = 0; (disti+1) < p_phase->numdist; disti++)
   {
     double curr_slow;
-    
+
     curr_slow = (EarthPhaseModel_GetTTSample(p_phase, depthi, disti+1)
                  - EarthPhaseModel_GetTTSample(p_phase, depthi, disti))
       / (p_phase->p_dists[disti+1] - p_phase->p_dists[disti]);
-    
+
     if (slow > curr_slow)
       break;
   }
@@ -1553,15 +1617,15 @@ static double invert_slowness(const EarthPhaseModel_t * p_phase, double depth,
 
 /* delta,azi is geocentric; lon,lat are all geographic */
 /* From idc ->libgeog -> lat_lon.c */
-static void invert_dist_azimuth(double alon1, double alat1, double delta, 
+static void invert_dist_azimuth(double alon1, double alat1, double delta,
                                 double azi, double *alon2, double *alat2)
 {
   double alat, alon, a, b, c, coslat, dlon;
   double geoc_co_lat, geog_co_lat;
   double  r123, r13, r13sq, sinlat, x1, x2, x3;
-  
+
   /*
-   * Convert a geographical location to geocentric cartesian 
+   * Convert a geographical location to geocentric cartesian
    * coordinates, assuming a spherical Earth.
    */
   alat = 90.0 - delta;
@@ -1569,8 +1633,8 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
   r13  = cos(DEG2RAD*alat);
 
   /*
-   * x1:  Axis 1 intersects equator at  0 deg longitude  
-   * x2:  Axis 2 intersects equator at 90 deg longitude  
+   * x1:  Axis 1 intersects equator at  0 deg longitude
+   * x2:  Axis 2 intersects equator at 90 deg longitude
    * x3:  Axis 3 intersects north pole
    */
 
@@ -1582,9 +1646,9 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
   geoc_co_lat = GEOCENTRIC_COLAT(geog_co_lat);    /* radians */
 
   /*
-   * Rotate in cartesian coordinates.  The cartesian coordinate system 
-   * is most easily described in geocentric terms.  The origin is at 
-   * the Earth's center.  Rotation by alat1 degrees southward, about 
+   * Rotate in cartesian coordinates.  The cartesian coordinate system
+   * is most easily described in geocentric terms.  The origin is at
+   * the Earth's center.  Rotation by alat1 degrees southward, about
    * the 1-axis.
    */
 
@@ -1596,10 +1660,10 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
   x3     = b*sinlat + c*coslat;
 
   /*
-   * Finally, convert geocentric cartesian coordinates back to 
+   * Finally, convert geocentric cartesian coordinates back to
    * a geographical location.
    */
- 
+
   r13sq  = x3*x3 + x1*x1;
   r13    = sqrt(r13sq);
   r123   = sqrt(r13sq + x2*x2);
@@ -1618,30 +1682,33 @@ static void invert_dist_azimuth(double alon1, double alat1, double delta,
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
                      Event_t * p_event, int perturb)
 {
+  printf("warning, invert_detection is BROKEN, do not use until fixed (detections still depend on siteids which don't exist anymore...)\n");
+  exit(1);
+
   double dist;
   int phaseid;
   const EarthPhaseModel_t * p_phase;
   const Site_t * p_site;
-  double arrtime;  
-  
+  double arrtime;
+
   /* inverting the P phase leads to the most number of events */
   phaseid = EARTH_PHASE_P;
 
   p_phase = p_earth->p_phases + phaseid;
-  
+
   /* we want to fix the depth at zero otherwise invert_slowness can produce
    * unexpected results */
   p_event->evdepth = 0;
-  
+
   dist = invert_slowness(p_phase, p_event->evdepth, p_det->slo_det);
-  
+
   /* we don't want to propose an event smack on top of a station! */
   if (dist < 1e-3) {
     printf("invert failed, too close to station\n");
     return -1;
   }
   p_site = p_earth->p_sites + p_det->site_det;
-  
+
   invert_dist_azimuth(p_site->sitelon, p_site->sitelat, dist,
                       p_det->azi_det,
                       &p_event->evlon, &p_event->evlat);
@@ -1652,58 +1719,58 @@ int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,
     p_event->evlon += Gaussian_sample(0, 1);
 
     p_event->evlat += Gaussian_sample(0, 1);
-  
+
     if (p_event->evlon < -180)
       p_event->evlon += 360;
     else if (p_event->evlon >= 180)
       p_event->evlon -= 360;
-  
+
     if (p_event->evlat < -90)
       p_event->evlat = -180 - p_event->evlat;
     else if (p_event->evlat > 90)
       p_event->evlat = 180 - p_event->evlat;
   }
-  
-  arrtime = EarthModel_ArrivalTime((EarthModel_t *)p_earth, 
+
+  arrtime = EarthModel_ArrivalTime((EarthModel_t *)p_earth,
                                    p_event->evlon, p_event->evlat,
                                    p_event->evdepth, 0 /* evtime */,
                                    phaseid, p_det->site_det);
-  
+
 
   if (arrtime < 0) {
     printf("invert failed, couldn't compute arrtime from lon %lf lat %lf dep %lf\n", p_event->evlon, p_event->evlat, p_event->evdepth);
     return -1;
   }
-  
+
   p_event->evtime = p_det->time_det - arrtime;
-  
+
   /* perturb the arrival time as well */
   if (perturb)
   {
     p_event->evtime += Gaussian_sample(0, 5);
   }
-  
+
   /* low magnitude to ensure better odds of acceptance */
   p_event->evmag = MIN_MAGNITUDE;
-  
+
   return 0;
 }
 
 PyObject * py_EarthModel_InvertDetection(const EarthModel_t * p_earth, PyObject * args) {
-  int siteid;
   double azi, slo, time;
-  
-  if (!PyArg_ParseTuple(args, "iddd", &siteid, &azi, &slo, &time))
+  const char *sitename;
+
+  if (!PyArg_ParseTuple(args, "ddds", &azi, &slo, &time, &sitename))
     return NULL;
 
   Detection_t d;
-  d.site_det = siteid-1;
+  d.site_det = -1; // FIX THIS
   d.time_det = time;
   d.azi_det = azi;
   d.slo_det = slo;
 
   Event_t ev;
-  
+
   invert_detection(p_earth, &d, &ev, 0);
 
   return Py_BuildValue("dddd", ev.evlon, ev.evlat, ev.evdepth, ev.evtime);
@@ -1716,7 +1783,7 @@ PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args)
   int phaseid;
   EarthPhaseModel_t * p_phase;
   double min, max;
-  
+
   if (!PyArg_ParseTuple(args, "i", &phaseid))
     return NULL;
 
@@ -1730,11 +1797,11 @@ PyObject * py_EarthModel_PhaseRange(EarthModel_t * p_earth, PyObject * args)
 
   min = p_phase->p_dists[0];
   max = p_phase->p_dists[p_phase->numdist-1];
-  
+
   for (i=0; i<p_phase->numddrange; i++)
   {
     DDRange * range = p_phase->p_ddranges + i;
-  
+
     if ((0 >= range->mindepth) && (0 <= range->maxdepth))
     {
       min = range->mindist;
@@ -1754,7 +1821,7 @@ double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double distance)
   double val11, val12, val21, val22;
   double d_depth, d_dist;
   double mdist11, mdist12, mdist21, mdist22;
-  
+
   /* check that the depth and distance are within the bounds for this phase */
   if ((depth < p_qfvc->p_depths[0])
       || (depth > p_qfvc->p_depths[p_qfvc->numdepth-1])
@@ -1764,8 +1831,8 @@ double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double distance)
     fprintf(stderr, "QFVC: Illegal depth %f distance %f", depth, distance);
     exit(1);
   }
-  
-  for (depthi = 0; (depthi < p_qfvc->numdepth) 
+
+  for (depthi = 0; (depthi < p_qfvc->numdepth)
          && (depth >= p_qfvc->p_depths[depthi]); depthi++)
     ;
   depthi --;
@@ -1777,8 +1844,8 @@ double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double distance)
     depthi = p_qfvc->numdepth-2;
     depthi2 = p_qfvc->numdepth-1;
   }
-  
-  for (disti = 0; (disti < p_qfvc->numdist) 
+
+  for (disti = 0; (disti < p_qfvc->numdist)
          && (distance >= p_qfvc->p_dists[disti]); disti++)
     ;
   disti --;
@@ -1801,9 +1868,9 @@ double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double distance)
 
   d_depth = p_qfvc->p_depths[depthi2] - p_qfvc->p_depths[depthi];
   d_dist = p_qfvc->p_dists[disti2] - p_qfvc->p_dists[disti];
-  
+
   /* compute the scaled manhattan distance to the four corners */
-  mdist11 = (depth - p_qfvc->p_depths[depthi]) / d_depth 
+  mdist11 = (depth - p_qfvc->p_depths[depthi]) / d_depth
     + (distance - p_qfvc->p_dists[disti]) / d_dist;
 
   mdist12 = (depth - p_qfvc->p_depths[depthi]) / d_depth
@@ -1827,12 +1894,12 @@ double EarthModel_QFVC(EarthModel_t * p_earth, double depth, double distance)
 
   else if (!mdist22)
     qfactor = val22;
-  
+
   else
   {
     assert((mdist11 > 0) && (mdist12 > 0) && (mdist21 > 0) && (mdist22 > 0));
 
-    qfactor = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21 
+    qfactor = (val11 / mdist11 + val12 / mdist12 + val21 / mdist21
                   + val22 / mdist22)
       / (1/mdist11 + 1/mdist12 + 1/mdist21 + 1/mdist22);
   }
@@ -1844,7 +1911,7 @@ PyObject * py_EarthModel_QFVC(EarthModel_t * p_earth, PyObject * args)
 {
   double depth;
   double dist;
-  
+
   if (!PyArg_ParseTuple(args, "dd", &depth, &dist))
     return NULL;
 
@@ -1859,13 +1926,13 @@ double dist_depth_range_error(EarthModel_t * p_earth, int phaseid,
   EarthPhaseModel_t * p_phase;
   double minerr;
   int i;
-  
+
   assert((phaseid < p_earth->numphases) && p_earth->p_phase_time_def[phaseid]);
-  
-  p_phase = p_earth->p_phases + phaseid;  
-  
+
+  p_phase = p_earth->p_phases + phaseid;
+
   minerr = INFINITY;
-  
+
   for (i=0; i<p_phase->numddrange; i++)
   {
     DDRange * range = p_phase->p_ddranges + i;

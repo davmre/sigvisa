@@ -66,18 +66,21 @@ class Sigvisa(threading.local):
                 else:
                     raise
 
-        self.sites = dataset.read_sites(cursor)
-        self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(cursor)
-        self.site_up = dataset.read_uptime(cursor, st, et)
+        sites = dataset.read_sites(cursor)
+        sitenames, allsites = dataset.read_all_sites(cursor)
+        self.ref_siteid = dict(zip(sitenames, [int(rsi) for rsi in allsites[:,6]]))
+        #self.sitedata = dict(zip(sitenames, allsites))
+        #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(cursor)
+        site_up = dataset.read_uptime(cursor, st, et)
         self.phasenames, self.phasetimedef = dataset.read_phases(cursor)
         self.phaseids = dict(
             zip(self.phasenames, range(1, len(self.phasenames) + 1)))
         self.earthmodel = load_earth(os.path.join(os.getenv(
-            "SIGVISA_HOME"), "parameters"), self.sites,
+            "SIGVISA_HOME"), "parameters"), sitenames, allsites,
             self.phasenames, self.phasetimedef)
-        self.sigmodel = load_sigvisa(os.path.join(os.getenv(
+        self.sigmodel = load_sigvisa(self.earthmodel, os.path.join(os.getenv(
             "SIGVISA_HOME"), "parameters"),
-            self.site_up, self.sites,
+            site_up, sites,
             self.phasenames, self.phasetimedef )
 
 #        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
@@ -98,7 +101,6 @@ class Sigvisa(threading.local):
         return [self.phasenames[pid] for pid in phase_id_minus1_list]
 
     def arriving_phases(self, event, sta):
-        siteid = self.name_to_siteid_minus1[sta] + 1
         phases = [p for p in self.phases if self.sigmodel.mean_travel_time(
             event.lon, event.lat, event.depth, siteid - 1, self.phaseids[p] - 1) > 0]
         return phases

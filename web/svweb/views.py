@@ -161,7 +161,7 @@ def fit_detail(request, fitid):
     try:
         ev = get_event(evid=fit.evid)
 
-        station_location = tuple(s.stations[str(fit.sta)][0:2])
+        station_location = tuple(s.earthmodel.site_info(str(fit.sta), ev.time)[0:2])
         dist = utils.geog.dist_km((ev.lon, ev.lat), station_location)
         azi = utils.geog.azimuth(station_location, (ev.lon, ev.lat))
 

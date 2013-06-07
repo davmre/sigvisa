@@ -353,7 +353,6 @@ class SigvisaGraph(DirectedGraphModel):
             wave = wave_node.mw
 
             sta = wave['sta']
-            siteid = wave['siteid']
             chan = wave['chan']
             band = wave['band']
             st = wave['stime']
@@ -371,9 +370,9 @@ class SigvisaGraph(DirectedGraphModel):
                 except:
                     raise
 
-
-            distance = geog.dist_km((event.lon, event.lat), (s.sites[siteid - 1][0], s.sites[siteid - 1][1]))
-            azimuth = geog.azimuth((s.sites[siteid - 1][0], s.sites[siteid - 1][1]), (event.lon, event.lat))
+            slon, slat, _, _, _, _, _ = s.earthmodel.site_info(sta, st)
+            distance = geog.dist_km((event.lon, event.lat), (slon, slat))
+            azimuth = geog.azimuth((slon, slat), (event.lon, event.lat))
 
             tmpl_optim_param_str = tmpl_optim_param_str.replace("'", "''")
             wiggle_optim_param_str = wiggle_optim_param_str.replace("'", "''")
