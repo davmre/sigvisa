@@ -33,7 +33,7 @@ class ParamModel(Distribution):
         self.ev_cache = dict()
 
         if sta is not None:
-            (self.site_lon, self.site_lat, self.site_elev, siteid) = Sigvisa().stations[sta]
+            self.site_lon, self.site_lat, self.site_elev, _, _, _, _ = Sigvisa().earthmodel.site_info(sta, 0)
 
     def __repr_base_params__(self):
         return repr({'site_lon': self.site_lon, 'site_lat': self.site_lat, 'site_elev': self.site_elev})
