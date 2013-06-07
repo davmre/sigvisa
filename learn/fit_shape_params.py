@@ -41,7 +41,7 @@ def setup_graph(event, sta, chan, band,
         wave = wave.filter('hz_%.2f' % fit_hz)
     sg.add_wave(wave=wave)
 
-    sg.fix_arrival_times()
+    #sg.fix_arrival_times()
 
     return sg
 
@@ -122,7 +122,7 @@ def main():
 
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=options.template_model,
-                                wm_family=options.wiggle_family, wm_type=options.wiggle_model, phases="leb",
+                                wm_family=options.wiggle_family, wm_type=options.wiggle_model, phases=["P",],
                                 fit_hz=options.hz, nm_type=options.nm_type,
                                 output_run_name = options.run_name, output_iteration = options.run_iteration)
 

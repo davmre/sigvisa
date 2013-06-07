@@ -1,26 +1,8 @@
-import os, cPickle, sys, tarfile, csv
+import os
 import numpy as np
-from optparse import OptionParser
 
-from sigvisa.database.dataset import *
 
-from datetime import datetime
-from sigvisa.database.az_slow_corr import load_az_slow_corr
-
-import priors.SecDetPrior
-import priors.NumEventPrior
-import priors.EventLocationPrior
-import priors.EventMagPrior
-import priors.EventDetectionPrior
-import priors.NumFalseDetPrior
-import priors.ArrivalTimePrior
-import priors.ArrivalAzimuthPrior
-import priors.ArrivalSlownessPrior
-import priors.ArrivalPhasePrior
-import priors.ArrivalSNR
-import priors.ArrivalAmplitudePrior
-
-import sigvisa_c, sigvisa
+import sigvisa_c
 
 
 def load_earth(param_dirname, sitenames, allsites, phasenames, phasetimedef):

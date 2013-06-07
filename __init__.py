@@ -1,7 +1,8 @@
 import numpy as np
 import os
 import time
-from sigvisa.database import db, dataset
+from sigvisa.database import db
+import sigvisa.database.sites as db_sites
 from sigvisa.load_c_components import load_sigvisa, load_earth
 import sigvisa.sigvisa_c
 
@@ -66,13 +67,13 @@ class Sigvisa(threading.local):
                 else:
                     raise
 
-        sites = dataset.read_sites(cursor)
-        sitenames, allsites = dataset.read_all_sites(cursor)
+        sites = db_sites.read_sites(cursor)
+        sitenames, allsites = db_sites.read_all_sites(cursor)
         self.ref_siteid = dict(zip(sitenames, [int(rsi) for rsi in allsites[:,6]]))
         #self.sitedata = dict(zip(sitenames, allsites))
-        #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(cursor)
-        site_up = dataset.read_uptime(cursor, st, et)
-        self.phasenames, self.phasetimedef = dataset.read_phases(cursor)
+        #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = sites.read_sites_by_name(cursor)
+        site_up = db_sites.read_uptime(cursor, st, et)
+        self.phasenames, self.phasetimedef = db_sites.read_phases(cursor)
         self.phaseids = dict(
             zip(self.phasenames, range(1, len(self.phasenames) + 1)))
         self.earthmodel = load_earth(os.path.join(os.getenv(
