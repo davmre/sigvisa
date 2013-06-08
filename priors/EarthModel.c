@@ -70,6 +70,10 @@ PyObject * py_EarthModel_SiteInfo(EarthModel_t * p_earth,
     return NULL;
 
   Site_t * p_site = get_site(p_earth, sitename, time);
+  if (p_site == NULL) {
+    PyErr_SetString(PyExc_KeyError, "EarthModel: invalid site name, or site does not exist at specified time.");
+    return NULL;
+  }
 
   return Py_BuildValue("dddiddi", p_site->sitelon, p_site->sitelat, p_site->siteelev, p_site->siteisarr, p_site->ontime, p_site->offtime, p_site->ref_siteid);
 }
@@ -79,7 +83,7 @@ Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time) {
 
   Site_t * site = NULL;
   HASH_FIND_STR(p_earth->p_sites, sta, site);
-  if (!site) { printf("ERROR: site %s not found!\n", sta); exit(1); }
+  if (!site) { printf("WARNING: site %s not found!\n", sta); return NULL; }
 
   // if we're given a dummy time, just return the most recent version of the site
   if (time <= 0) {
@@ -88,15 +92,15 @@ Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time) {
 
   while (site->ontime > time) {
     if (site->previous == NULL) {
-      printf("ERROR: no record for site %s at time %f (earliest ontime is %f)!\n", sta, time, site->ontime);
-      exit(1);
+      printf("WARNING: no record for site %s at time %f (earliest ontime is %f)!\n", sta, time, site->ontime);
+      return NULL;
     } else {
       site = site->previous;
     }
   }
   if (site->offtime < time) {
-      printf("ERROR: no record for site %s at time %f (matching record has offtime of %f)!\n", sta, time, site->offtime);
-      exit(1);
+      printf("WARNING: no record for site %s at time %f (matching record has offtime of %f)!\n", sta, time, site->offtime);
+      return NULL;
   }
 
   return site;
@@ -784,6 +788,7 @@ double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
   double delta, esaz, seaz;
   Site_t * p_site;
   p_site = get_site(p_earth, sitename, time);
+  if (p_site == NULL) return -1;
 
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
                &delta, &esaz, &seaz);
@@ -1321,6 +1326,10 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
   Site_t * p_site;
 
   p_site = get_site(p_earth, sitename, evtime);
+  if (p_site == NULL) {
+    printf("p_site is null for %s, returing -1\n", sitename);
+    return -1;
+  }
 
   return EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
                                       evtime, phaseid, p_site->sitelon,
@@ -1382,6 +1391,7 @@ double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
   double seaz;
 
   p_site = get_site(p_earth, sitename, time);
+  if (p_site == NULL) return -1;
 
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat,
                &delta, &esaz, &seaz);
@@ -1402,6 +1412,7 @@ double EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth, double lon,
          && p_earth->p_phase_time_def[phaseid]);
 
   p_site = get_site(p_earth, sitename, time);
+  if (p_site == NULL) return -1;
   p_phase = p_earth->p_phases + phaseid;
 
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,
@@ -1455,6 +1466,7 @@ double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
          && p_earth->p_phase_time_def[phaseid]);
 
   p_site = get_site(p_earth, sitename, time);
+  if (p_site == NULL) return -1;
   p_phase = p_earth->p_phases + phaseid;
 
   dist_azimuth(lon, lat, p_site->sitelon, p_site->sitelat, &delta, &esaz,

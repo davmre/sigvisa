@@ -332,8 +332,14 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
 
   trvtime = EarthModel_ArrivalTime(p_earth, evlon, evlat, evdepth, 0, phaseid,
                                    sitename);
+  Site_t * p_site = get_site(p_sigmodel->p_earth, sitename, evtime);
 
-  int ref_siteid = get_site(p_sigmodel->p_earth, sitename, evtime)->ref_siteid;
+  if (trvtime == -1 || p_site == NULL) {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid site name, or site does not exist at specified time.");
+    return NULL;
+  }
+
+  int ref_siteid = p_site->ref_siteid;
 
   trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,
                                            ref_siteid, phaseid);

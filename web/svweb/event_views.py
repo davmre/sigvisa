@@ -41,7 +41,8 @@ def event_view(request, evid):
             sta = rd[0]
 
             try:
-                site_ll = tuple(s.earthmodel.site_info(sta, 0)[0:2])
+                a = s.earthmodel.site_info(sta, 0)
+                site_ll = tuple(a[0:2])
             except KeyError:
                 continue
 
@@ -84,7 +85,7 @@ def event_context_img_view(request, evid):
 
     hm = EventHeatmap(f=None, calc=False, center=(ev.lon, ev.lat), width=100)
 
-    hm.add_stations(s.stations.keys())
+    hm.add_stations(s.sitenames)
     hm.set_true_event(ev.lon, ev.lat)
 
     fig = Figure(figsize=(6, 6), dpi=144)

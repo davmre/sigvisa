@@ -14,7 +14,6 @@ class NestedDict(dict):
             return self.get(key)
         return self.setdefault(key, NestedDict())
 
-
 class BadParamTreeException(Exception):
     pass
 
@@ -75,6 +74,7 @@ class Sigvisa(threading.local):
 
         sites = db_sites.read_sites(cursor)
         sitenames, allsites = db_sites.read_all_sites(cursor)
+        self.sitenames = sitenames
         self.ref_siteid = dict(zip(sitenames, [int(rsi) for rsi in allsites[:,6]]))
         #self.sitedata = dict(zip(sitenames, allsites))
         #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = sites.read_sites_by_name(cursor)
