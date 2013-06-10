@@ -44,7 +44,7 @@ class Heatmap(object):
         self.top_lat = center[1] + height_deg/2.0
 
         assert ( -180 < center[0] < 180 )
-        assert ( 0 < self.right_lon - self.left_lon < 360 )
+        assert ( 0 < self.right_lon - self.left_lon <= 360 )
 
 
         # poles are complicated; let's never try to plot them
@@ -240,7 +240,7 @@ class Heatmap(object):
                     base_scale = (self.right_lon - self.left_lon) / 200.0
                     edge_arrow *= base_scale * 10
                     bmap.ax.arrow( edge_pt[0] - edge_arrow[0], edge_pt[1] - edge_arrow[1],
-                                   edge_arrow[0], edge_arrow[1], fc="white", ec="white",
+                                   edge_arrow[0], edge_arrow[1], fc="black", ec="black",
                                    length_includes_head=True, overhang = .6,
                                    head_starts_at_zero=False, width=0.01,
                                    head_width= 3 * base_scale, head_length = 3 * base_scale, zorder=zorder)
@@ -257,7 +257,7 @@ class Heatmap(object):
                     xytext=(x_off, y_off),
                     textcoords='offset points',
                     size=8,
-                    color = 'white',
+                    color = 'black',
                     zorder=zorder,
                     arrowprops = None)
 
