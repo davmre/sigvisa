@@ -109,7 +109,7 @@ class Sigvisa(threading.local):
 
     def arriving_phases(self, event, sta):
         phases = [p for p in self.phases if self.sigmodel.mean_travel_time(
-            event.lon, event.lat, event.depth, siteid - 1, self.phaseids[p] - 1) > 0]
+            event.lon, event.lat, event.depth, event.time, sta, self.phaseids[p] - 1) > 0]
         return phases
 
     def equivalent_channels(self, chan):

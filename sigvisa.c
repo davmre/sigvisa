@@ -334,7 +334,7 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
                                    sitename);
   Site_t * p_site = get_site(p_sigmodel->p_earth, sitename, evtime);
 
-  if (trvtime == -1 || p_site == NULL) {
+  if (trvtime == -2 || p_site == NULL) {
     PyErr_SetString(PyExc_ValueError, "EarthModel: invalid site name, or site does not exist at specified time.");
     return NULL;
   }

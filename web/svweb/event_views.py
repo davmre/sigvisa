@@ -25,7 +25,7 @@ import hashlib
 
 def event_view(request, evid):
 
-    ss_only = request.GET.get('ss_only', 'true').lower().startswith('t')
+    ss_only = request.GET.get('ss_only', 'false').lower().startswith('t')
 
     ev = LebOrigin.objects.get(evid=evid)
     s = Sigvisa()

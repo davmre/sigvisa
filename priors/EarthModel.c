@@ -83,6 +83,7 @@ Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time) {
 
   Site_t * site = NULL;
   HASH_FIND_STR(p_earth->p_sites, sta, site);
+
   if (!site) { printf("WARNING: site %s not found!\n", sta); return NULL; }
 
   // if we're given a dummy time, just return the most recent version of the site
@@ -91,6 +92,7 @@ Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time) {
   }
 
   while (site->ontime > time) {
+    //printf("looping: offtime %f ontime %f time %f\n", site->offtime, site->ontime, time);
     if (site->previous == NULL) {
       printf("WARNING: no record for site %s at time %f (earliest ontime is %f)!\n", sta, time, site->ontime);
       return NULL;
@@ -1327,8 +1329,8 @@ double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon,
 
   p_site = get_site(p_earth, sitename, evtime);
   if (p_site == NULL) {
-    printf("p_site is null for %s, returing -1\n", sitename);
-    return -1;
+    printf("p_site is null for %s, returing -2\n", sitename);
+    return -2;
   }
 
   return EarthModel_ArrivalTime_Coord(p_earth, lon, lat, depth,
