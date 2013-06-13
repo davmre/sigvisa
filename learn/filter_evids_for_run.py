@@ -51,6 +51,9 @@ def main():
                       help="exclude all ev/sta pairs not having arrivals for *all* phases in the specificed (comma-separated) list (P)")
     parser.add_option("--only_phases", dest="only_phases", default=None, type="str",
                       help="exclude all ev/sta pairs having arrivals for any phase *not* in the specified list (None)")
+    parser.add_option("--array_refsta_only", dest="array_refsta_only", default=False, action="store_true",
+                      help="don't explode array stations into their individual elements (False)")
+
 
     (options, args) = parser.parse_args()
 
@@ -80,7 +83,7 @@ def main():
                                                    only_phases=only_phase_list)
 
             for evid in evids:
-                if s.is_array_station(sta):
+                if s.is_array_station(sta) and not options.array_refsta_only:
                     elements = [el for el in s.get_array_elements(sta) if has_signal_data_for_event(cursor, el, evid)]
                 else:
                     elements = [sta,]
