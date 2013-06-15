@@ -1,9 +1,9 @@
 import numpy as np
 from sigvisa import Sigvisa
 from sigvisa.database.signal_data import execute_and_return_id
-from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
+from sigvisa.models.wiggles.wiggle_models import WiggleGenerator
 
-class FourierFeatureNode(WiggleModelNode):
+class FourierFeatureGenerator(WiggleGenerator):
 
     def __init__(self, npts, srate, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
 
@@ -31,7 +31,7 @@ class FourierFeatureNode(WiggleModelNode):
             self.save_to_db(s.dbconn)
 
         # load template params and initialize Node stuff
-        super(FourierFeatureNode, self).__init__(**kwargs)
+        super(FourierFeatureGenerator, self).__init__(**kwargs)
 
     def signal_from_features_naive(self, features):
         assert(len(features) == self.nparams)
@@ -77,7 +77,7 @@ class FourierFeatureNode(WiggleModelNode):
 
         return signal
 
-    def basis_decomposition(self, signal):
+    def features_from_signal(self, signal):
         assert(len(signal) == self.npts)
 
         if self.logscale:
@@ -90,7 +90,7 @@ class FourierFeatureNode(WiggleModelNode):
         phases = np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)
         return self.array_to_param_dict(np.concatenate([amps, phases]))
 
-    def basis_decomposition_naive(self, signal):
+    def features_from_signal_naive(self, signal):
         assert(len(signal) == self.npts)
 
         if self.logscale:
@@ -145,5 +145,3 @@ class FourierFeatureNode(WiggleModelNode):
         sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, max_freq) values (%f, '%s', '%s', '%s', %d, %d, %f)" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.max_freq)
         self.basisid = execute_and_return_id(dbconn, sql_query, "basisid")
         return self.basisid
-
-

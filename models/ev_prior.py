@@ -1,7 +1,7 @@
 import numpy as np
 
 from sigvisa import Sigvisa
-from sigvisa.graph.nodes import DictNode
+from sigvisa.graph.nodes import Node
 from sigvisa.models import Distribution
 from sigvisa.source.event import Event
 
@@ -21,7 +21,7 @@ class EventPriorModel(Distribution):
         return loc_lp + mb_lp + source_lp
 
 
-class EventNode(DictNode):
+class EventNode(Node):
 
     def __init__(self, event, fixed = True, **kwargs):
 

@@ -22,6 +22,37 @@ def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisi
     cursor.close()
     return modelids
 
+class WiggleGenerator(object):
+
+    def __init__(self, **kwargs):
+        # child classes should set these before calling super()
+        assert(self.srate is not None and self.npts is not None and self.logscale is not None and self.basisid is not None)
+
+    def signal_from_features(self, features):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def features_from_signal(self, signal):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def basis_type(self):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def dimension(self):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def keys(self):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def param_dict_to_array(self, d):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def array_to_param_dict(self, a):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def save_to_db(self, dbconn):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+"""
 class WiggleModelNode(ClusterNode):
 
     def __init__(self, wiggle_model_type="dummy", runid=None, phase=None, logscale =False, model_waveform=None, sta=None, chan=None, band=None, label="", parents={}, children=[]):
@@ -95,3 +126,4 @@ class WiggleModelNode(ClusterNode):
         params = d['params'].flatten()
         f_string.close()
         return params
+"""

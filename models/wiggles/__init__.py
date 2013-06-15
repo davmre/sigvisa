@@ -1,6 +1,6 @@
 from sigvisa import Sigvisa
 
-from sigvisa.models.wiggles.fourier_features import FourierFeatureNode
+from sigvisa.models.wiggles.fourier_features import FourierFeatureGenerator
 
 def load_wiggle_node_by_family(family_name, len_s,  model_waveform, **kwargs):
 
@@ -19,7 +19,7 @@ def load_wiggle_node_by_family(family_name, len_s,  model_waveform, **kwargs):
             max_freq = float(family_name.split('_')[1])
             logscale = "logscale" in family_name
 
-            wm_node = FourierFeatureNode(max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, model_waveform=model_waveform, family_name=family_name, **kwargs)
+            wm_node = FourierFeatureGenerator(max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, model_waveform=model_waveform, family_name=family_name, **kwargs)
 
         else:
             raise Exception("unsupported wiggle family name %s" % family_name)
@@ -43,7 +43,7 @@ def load_wiggle_node(basisid, **kwargs):
     logscale = (logscale.lower().startswith('t'))
 
     if basis_type == "fourier":
-        wm_node = FourierFeatureNode(basisid = basisid, max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, family_name=family_name, **kwargs)
+        wm_node = FourierFeatureGenerator(basisid = basisid, max_freq=max_freq, srate = srate, logscale=logscale, npts=npts, family_name=family_name, **kwargs)
         assert(wm_node.dimension() == dimension)
     else:
         raise NotImplementedError('wiggle basis %s not yet implemented' % basis_type)

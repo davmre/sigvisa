@@ -5,15 +5,15 @@ from sigvisa.source.common import *
 # from sigvisa import Sigvisa
 
 
-def source_logamp(event, band, phase):
+def source_logamp(mb, band, phase):
     f = short_band_to_hz(band)
 
-    amp, corner = source_freq_logamp(event, f, phase)
+    amp, corner = source_freq_logamp(mb, f, phase)
 
     return amp
 
 
-def source_freq_logamp(event, f, phase):
+def source_freq_logamp(mb, f, phase):
 
     # Generally follows Fisk (2006)
 
@@ -31,7 +31,7 @@ def source_freq_logamp(event, f, phase):
     w = 2 * np.pi * f
 
     # yield as a function of MB
-    W = np.exp(((event.mb - 4.45) / .75) * np.log(10))
+    W = np.exp(((mb - 4.45) / .75) * np.log(10))
 
     # scaled depth as a function of yield
     # h = 122 * W**(1.3/3.0)

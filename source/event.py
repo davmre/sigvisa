@@ -56,9 +56,9 @@ class Event(object):
 
     def source_logamp(self, band, phase):
         if self.natural_source:
-            return brune.source_logamp(event=self, band=band, phase=phase)
+            return brune.source_logamp(mb=self.mb, band=band, phase=phase)
         else:
-            return mm.source_logamp(event=self, band=band, phase=phase)
+            return mm.source_logamp(mb=self.mb, band=band, phase=phase)
 
     def to_dict(self):
         return {'lon': self.lon, 'lat': self.lat, 'depth': self.depth, 'time': self.time, 'mb': self.mb, 'natural_source': self.natural_source }

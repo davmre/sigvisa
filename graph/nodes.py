@@ -1,9 +1,7 @@
 import numpy as np
 
 import copy
-from collections import deque, Iterable
 from sigvisa.learn.train_param_common import load_modelid
-import sigvisa.infer.optimize.optim_utils as optim_utils
 from sigvisa.models import DummyModel
 
 class Node(object):
@@ -13,7 +11,6 @@ class Node(object):
         self.children = set(children) if children is not None else set()
         self.parents = parents if parents is not None else dict()
         self.model = model
-        self._dict = initial_value
         self._fixed = fixed
         self.label = label
         self.mark = 0
@@ -36,9 +33,13 @@ class Node(object):
             raise ValueError("passed invalid fixed-values setting %s" % fixed)
         self._fixed = not any(self._mutable.itervalues())
 
-        self.single_key = None
         if len(keys) == 1:
             self.single_key = keys[0]
+            self._dict = dict()
+            self.set_value(value=initial_value)
+        else:
+            self.single_key = None
+            self._dict = initial_value
 
     def addChild(self, child):
         self.children.add(child)
@@ -57,10 +58,12 @@ class Node(object):
         # return the list of keys provided by this node
         return sorted(self._dict.keys())
 
-    def get_value(self, key):
+    def get_value(self, key=None):
+        key = key if key else self.single_key
         return self._dict[key]
 
-    def set_value(self, value, key):
+    def set_value(self, value, key=None):
+        key = key if key else self.single_key
         if self._mutable[key]:
             self._dict[key] = value
 
@@ -82,7 +85,7 @@ class Node(object):
         # with respect to whatever the model actually returns.
 
         if self.single_key:
-            self.set_value(value, self.single_key)
+            self.set_value(value=value)
         else:
             self.set_all_values(value)
 
@@ -105,7 +108,7 @@ class Node(object):
 
     def _parent_values(self):
         # return a dict of all keys provided by parent nodes, and their values
-        return dict([(k, v) for p in self.parents.items() for (k,v) in p.items()])
+        return dict([(k, v) for p in self.parents.values() for (k,v) in p.get_dict().items()])
 
     def log_p(self, parent_values=None):
         #  log probability of the values at this node, conditioned on all parent values
@@ -215,17 +218,23 @@ class DeterministicNode(Node):
     def prior_predict(self, parent_values=None):
         self.compute_value(parent_values=parent_values)
 
+    def compute_value(self, parent_values=None):
+        return NotImplementedError("compute_value method not implemented at this node!")
+
+    def invert(self, parent_key, parent_values=None):
+        return NotImplementedError("invert method not implemented at this node!")
+
     def log_p(self, value=None, parent_values=None):
         return AttributeError("cannot compute log_p for a deterministic node!")
 
     def deriv_log_p(**kwargs):
         return AttributeError("cannot compute deriv_log_p for a deterministic node!")
 
-    def set_value(self, value, override_fixed=False):
+    def set_value(self, **kwargs):
         return AttributeError("cannot set value for a deterministic node!")
 
-    def fix_value(self):
+    def fix_value(self, **kwargs):
         return AttributeError("cannot fix/unfix values for a deterministic node!")
 
-    def unfix_value(self):
+    def unfix_value(self, **kwargs):
         return AttributeError("cannot fix/unfix values for a deterministic node!")

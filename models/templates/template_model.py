@@ -13,6 +13,33 @@ from sigvisa.models.ttime import TravelTimeModel
 from sigvisa.models import DummyModel
 from sigvisa.source.event import Event
 
+def TemplateGenerator(object):
+
+    @staticmethod
+    def params():
+        raise NotImplementedError("template model does not implement params")
+
+    @staticmethod
+    def default_param_vals():
+        raise NotImplementedError("template model does not implement default_param_vals")
+
+    @staticmethod
+    def model_name():
+        raise NotImplementedError("template model does not implement model_name")
+
+    @staticmethod
+    def abstract_logenv_raw(vals):
+        raise NotImplementedError("template model does not implement abstract_logenv_raw")
+
+    def low_bounds(self):
+        raise NotImplementedError("template model does not implement low_bounds")
+
+    def high_bounds(self):
+        raise NotImplementedError("template model does not implement high_bounds")
+
+    def create_param_node(self, graph, **kwargs):
+        return graph.setup_site_param_node(**kwargs)
+
 def get_template_param_model_ids(runid, sta, chan, band, phase, model_type, template_shape):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -33,6 +60,8 @@ def get_template_param_model_ids(runid, sta, chan, band, phase, model_type, temp
 
     return modelids
 
+
+"""
 class CodaHeightNode(Node):
     def __init__(self, band, phase, **kwargs):
         self.band=band
@@ -161,3 +190,4 @@ class TemplateModelNode(ClusterNode):
     @staticmethod
     def params():
         raise Exception("abstract class: method not implemented")
+"""

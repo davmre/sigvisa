@@ -99,6 +99,26 @@ class DirectedGraphModel(DAG):
         self.set_all(values=v, node_list=node_list)
         return c * ll
 
+
+    def get_stochastic_children(self, node):
+        # return all stochastic nodes that depend directly on this
+        # node or a deterministic function of this node. For each
+        # such stochastic child, also include the chain of
+        # deterministic nodes connecting it to the given node.
+
+        child_list = []
+        def traverse_child(n, intermediates):
+            if not n.deterministic():
+                child_list.append((n, intermediates))
+                return
+            else:
+                for c in n.children:
+                    traverse_child((c, intermediates + (n,)))
+        for c in node.children:
+            traverse_child(c, ())
+        return child_list
+
+
     def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1):
         try:
             eps0 = eps[0]
@@ -114,9 +134,20 @@ class DirectedGraphModel(DAG):
             keys = node.mutable_keys()
             for (ni, key) in enumerate(keys):
                 deriv = node.deriv_log_p(key=key, eps=eps[i + ni], lp0=initial_lp[node.label])
-                for child in node.children:
-                    deriv += child.deriv_log_p(parent_name=node.label, parent_key = key,
-                                               eps=eps[i + ni], lp0=initial_lp[child.label])
+
+                # sum the derivatives of all child nodes wrt to this value, including
+                # any deterministic nodes along the way
+                child_list = self.get_stochastic_children(node)
+                for (child, intermediate_nodes) in child_list:
+                    d = 1
+                    for i in intermediate_nodes:
+                        d *= i.deriv_value_wrt_parent(parent_key = key)
+                        key = i.label
+                    d *= child.deriv_log_p(parent_key = key,
+                                           eps=eps[i + ni],
+                                           lp0=initial_lp[child.label])
+                    deriv += d
+
                 grad[i + ni] = deriv
             i += len(keys)
         self.set_all(values=v, node_list=node_list)

@@ -6,23 +6,28 @@ import time
 import traceback
 import numpy as np
 import scipy
+import re
 
-from sigvisa.database.signal_data import filter_and_sort_template_params
-from sigvisa.database.dataset import *
-from sigvisa.database import db
-
-from sigvisa.infer.optimize.optim_utils import minimize_matrix, construct_optim_params
-
-from optparse import OptionParser
-
-from sigvisa import Sigvisa, NestedDict
+from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.graph.nodes import Node
+from sigvisa.graph.sigvisa_graph import get_parent_value, create_key
 
-class EnvelopeNode(Node):
 
+def update_arrivals(parent_values):
+    arrivals = set()
+    r = re.compile("(\d+);(.+);(.+);(.+);(.+);(.+)")
+    for k in parent_values.keys():
+        m = r.match(k)
+        if not m: raise ValueError("could not parse parent key %s" % k)
+        eid = int(m.group(1))
+        phase = m.group(2)
+        arrivals.update((eid, phase))
+    return arrivals
+
+class ObservedSignalNode(Node):
     """
 
     Compute the probability of a set of segments (signal
@@ -34,8 +39,9 @@ class EnvelopeNode(Node):
 
     def __init__(self, model_waveform, nm_type="ar", nmid=None, observed=True, **kwargs):
 
-        super(EnvelopeNode, self).__init__(model=None, initial_value=model_waveform.data, fixed=observed, **kwargs)
+        key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['band'], band=model_waveform['band'])
 
+        super(ObservedSignalNode, self).__init__(model=None, initial_value=model_waveform.data, keys=[key,], fixed=observed, **kwargs)
 
         self.mw = model_waveform
         self.filter_str = model_waveform['filter_str']
@@ -51,8 +57,8 @@ class EnvelopeNode(Node):
 
 
     def set_value(self, value):
-        assert(len(value) == len(self._value))
-        super(EnvelopeNode, self).set_value(value)
+        assert(len(value) == len(self.get_value(self.single_key)))
+        super(ObservedSignalNode, self).set_value(value=value, key=self.single_key)
 
     def get_wave(self):
         return Waveform(data=self.get_value(), segment_stats=self.mw.segment_stats.copy(), my_stats=self.mw.my_stats.copy())
@@ -66,31 +72,32 @@ class EnvelopeNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
-
-    def assem_signal(self, include_wiggles=True, parent_templates=None, parent_values = None):
+    def assem_signal(self, include_wiggles=True, arrivals=None, parent_values = None):
         signal = np.zeros((self.npts,))
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
         # wiggle extraction)
-        if parent_templates is None:
-            parent_templates = [tm for tm in self.parents.values() if tm.label.startswith("template_")]
+        if arrivals is None:
+            arrivals = update_arrivals(parent_values)
 
-        for tm in parent_templates:
-            key = tm.label[9:]
-            v = parent_values[tm.label] if parent_values else tm.get_value()
+        for (eid, phase) in arrivals:
+            tg = self.template_generator[phase]
 
-            arr_time = v['arrival_time']
+            v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in tg.params()])
+
+            arr_time = self.get_parent_value(eid, phase, "arrival time", parent_values)
             start = (arr_time - self.st) * self.srate
             start_idx = int(np.floor(start))
             if start_idx >= self.npts:
                 continue
 
             offset = start - start_idx
-            phase_env = np.exp(tm.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
+            phase_env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
             if include_wiggles:
-                wm = self.parents['wiggle_%s' % key]
-                wiggle = wm.get_wiggle(value = parent_values[wm.label] if parent_values else None)
+                wg = self.wiggle_generator[phase]
+                wiggle_params = self.get_parent_value(eid, phase, "wiggle", parent_values)
+                wiggle = wg.get_wiggle(value = wiggle_params)
                 wiggle_len = min(len(wiggle), len(phase_env))
                 phase_env[:wiggle_len] *= wiggle[:wiggle_len]
 
@@ -118,11 +125,8 @@ class EnvelopeNode(Node):
         noise = self.nm.sample(n=len(signal))
         self.set_value(signal + noise)
 
-    def log_p(self, value=None, parent_values=None):
-        if value is None:
-            value = self.get_value()
-
-
+    def log_p(self, parent_values=None):
+        value = self.get_value()
 
         pred_signal = self.assem_signal(parent_values=parent_values)
         diff = value - pred_signal
@@ -132,14 +136,14 @@ class EnvelopeNode(Node):
 #        np.savetxt(fname, diff)
 #        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
 
-
         return lp
 
-    def deriv_log_p(self, value=None, parent_values=None, parent_name=None, parent_key=None, lp0=None, eps=1e-4):
+    def deriv_log_p(self, parent_values=None, parent_key=None, lp0=None, eps=1e-4):
         parent_values = parent_values if parent_values else self._parent_values()
-        lp0 = lp0 if lp0 else self.log_p(value=value, parent_values=parent_values)
-        pv = parent_values[parent_name]
-        pv[parent_key] += eps
-        parent_values[parent_name] = pv
-        deriv = ( self.log_p(value=value, parent_values=parent_values) - lp0 ) / eps
+        lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
+        parent_values[parent_key] += eps
+        deriv = ( self.log_p(parent_values=parent_values) - lp0 ) / eps
         return deriv
+
+    def get_parent_value(self, eid, phase, param_name, parent_values):
+        return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values)
