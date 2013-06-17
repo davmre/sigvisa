@@ -45,7 +45,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                                             chan=chan, phase=phase,
                                             label = label, parents=[event_node, atn])
                 graph.add_node(nodes[sta])
-
+            return nodes
         else:
             return graph.setup_site_param_node(param=param, site=site, phase=phase, parent=event_node,
                                                chan=chan, band=band, **kwargs)

@@ -74,7 +74,7 @@ class SigvisaGraph(DirectedGraphModel):
                 [list of phase names]: model a fixed set of phases
         """
 
-        super(DirectedGraphModel, self).__init__()
+        super(SigvisaGraph, self).__init__()
 
         self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -96,8 +96,7 @@ class SigvisaGraph(DirectedGraphModel):
             self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = True)
             cursor.close()
 
-        self.all_nodes = dict()
-        self.nodes_by_key = dict()
+        self.template_nodes = []
 
         self.station_waves = dict()
         self.site_elements = dict()
@@ -105,10 +104,6 @@ class SigvisaGraph(DirectedGraphModel):
         self.site_chans = dict()
 
         self.optim_log = ""
-
-    def topo_sorted_nodes(self):
-        assert(len(self._topo_sorted_list) == len(self.all_nodes))
-        return self._topo_sorted_list
 
     def wave_captures_event(self, ev, sta, stime, etime):
         for phase in predict_phases(ev=ev, sta=sta, phases=self.phases):
@@ -143,21 +138,10 @@ class SigvisaGraph(DirectedGraphModel):
         return captures
 
     def add_node(self, node):
-        self.all_nodes[node.label] = node
-        for key in node.keys():
-            self.nodes_by_key[key] = node
-        self._topo_sort()
+        if type(node) != EventNode and type(node) != ObservedSignalNode:
+            self.template_nodes.append(node)
 
-    def get_node_from_key(self, key):
-        return self.nodes_by_key[key]
-
-    def set_value(self, key, value):
-        n = self.nodes_by_key[key]
-        n.set_value(value=value, key=key)
-
-    def get_value(self, key):
-        n = self.nodes_by_key[key]
-        return n.get_value(key=key)
+        super(SigvisaGraph, self).add_node(node)
 
     def add_event(self, ev, basisids=None, tmshapes=None):
         """
@@ -178,7 +162,7 @@ class SigvisaGraph(DirectedGraphModel):
             for phase in predict_phases(ev=ev, sta=site, phases=self.phases):
                 tg = self.template_generator
                 wg = self.wiggle_generator
-                self.setup_template_nodes_for_phase(tg, wg, site, phase, element_list, event_node)
+                self.add_event_site_phase(tg, wg, site, phase, element_list, event_node)
 
         self._topo_sort()
         return event_node
@@ -253,9 +237,10 @@ class SigvisaGraph(DirectedGraphModel):
                                phase=phase, eid=parent.eid,
                                chan=chan, band=band)
             if model_type=="dummy":
-                node = Node(label=label, model=DummyModel())
+                node = Node(label=label, model=DummyModel(), parents=[parent,])
             else:
                 node = self.load_node_from_modelid(modelid, label)
+                node.addParent(parent)
             nodes[sta] = node
             self.add_node(node)
         return nodes
@@ -292,16 +277,28 @@ class SigvisaGraph(DirectedGraphModel):
             nodes[sta] = arrtimenode
         return nodes
 
-    def setup_template_nodes_for_phase(self, tg, wg, site, phase, element_list, event_node):
+    def add_event_site_phase(self, tg, wg, site, phase, element_list, event_node):
         # the "nodes" we create here can either be
         # actual nodes (if we are modeling these quantities
         # jointly across an array) or sta:node dictionaries (if we
         # are modeling them independently).
+        def extract_sta_node_list(n):
+            try:
+                return n.values()
+            except AttributeError:
+                return [n,]
 
         tt_residual_node = self.setup_site_param_node(param="tt_residual", site=site,
                                                       phase=phase, parent=event_node)
         tt_node = self.setup_tt(site, phase, event_node=event_node, tt_residual_node=tt_residual_node)
         amp_transfer_node = tg.create_param_node(self, site, phase, band=None, chan=None, param="amp_transfer", event_node=event_node)
+
+        for n in extract_sta_node_list(tt_residual_node):
+            n.parent_predict()
+        for n in extract_sta_node_list(tt_node):
+            n.parent_predict()
+        for n in extract_sta_node_list(amp_transfer_node):
+            n.parent_predict()
 
         nodes = dict()
         nodes["tt_residual"] = tt_residual_node
@@ -317,6 +314,10 @@ class SigvisaGraph(DirectedGraphModel):
                     nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
                                                                   phase=phase, parent=event_node,
                                                                   band=band, chan=chan, basisid=wg.basisid)
+
+        for (band_chan_param_key, ni) in nodes.items():
+            for n in extract_sta_node_list(ni):
+                n.parent_predict()
 
     def add_wave(self, wave):
         """
@@ -348,6 +349,7 @@ class SigvisaGraph(DirectedGraphModel):
     def _get_wave_label(self, wave):
         return 'wave_%s_%s_%s_%.1f' % (wave['sta'], wave['chan'], wave['band'], wave['stime'])
 
+    """
     def get_template_node(self, **kwargs):
         lbl = self._get_interior_node_label(**kwargs)
         return self.all_nodes["template_%s" % lbl]
@@ -355,6 +357,7 @@ class SigvisaGraph(DirectedGraphModel):
     def get_wiggle_node(self, **kwargs):
         lbl = self._get_interior_node_label(**kwargs)
         return self.all_nodes["wiggle_%s" % lbl]
+   """
 
     def get_wave_node(self, wave):
         return self.all_nodes[self._get_wave_label(wave=wave)]
@@ -367,6 +370,7 @@ class SigvisaGraph(DirectedGraphModel):
         log_p += wave_node.log_p()
         return log_p
 
+    """
     def get_partner_node(self, n):
         if n.label.startswith("template_"):
             lbl = n.label[9:]
@@ -432,6 +436,7 @@ class SigvisaGraph(DirectedGraphModel):
             n.prior_predict()
 
         # TODO: optimize
+    """
 
     def save_wiggle_params(self):
         """

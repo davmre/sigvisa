@@ -32,8 +32,8 @@ class DAG(object):
                 self.__ts_visit(pn)
             node.set_mark(1)
             self._topo_sorted_list.append(node)
-    def _topo_sort(self):
 
+    def _topo_sort(self):
         # check graph invariants
         for tn in self.toplevel_nodes:
             assert(len(tn.parents) == 0)
@@ -66,9 +66,23 @@ class DirectedGraphModel(DAG):
     def __init__(self, **kwargs):
         super(DirectedGraphModel, self).__init__(**kwargs)
 
+        self.all_nodes = dict()
+        self.nodes_by_key = dict()
+
+
+        def add_children(n):
+            self.add_node(n)
+            for c in n.children:
+                add_children(c)
+
+        if self.toplevel_nodes is not None:
+            for n in self.toplevel_nodes:
+                add_children(n)
+
     def current_log_p(self):
         logp = 0
         for node in self.topo_sorted_nodes():
+            if node.deterministic(): continue
             lp = node.log_p()
             logp += lp
         return logp
@@ -83,16 +97,26 @@ class DirectedGraphModel(DAG):
             node.prior_predict()
 
     def get_all(self, node_list):
-        return np.concatenate([node.get_mutable_values() for node in node_list])
+        return np.concatenate([node.get_mutable_values() for node in node_list if not node.deterministic()])
 
     def set_all(self, values, node_list):
         i = 0
         for node in node_list:
+            if node.deterministic(): continue
             n = node.mutable_dimension()
             node.set_mutable_values(values[i:i+n])
             i += n
 
+            for dn in self.get_deterministic_children(node):
+                node.prior_predict()
+
+
     def joint_prob(self, values, node_list, relevant_nodes, c=1):
+        # node_list: list of nodes whose values we are interested in
+
+        # relevant_nodes: all nodes whose log_p() depends on a value
+        # from a node in node_list.
+
         v = self.get_all(node_list = node_list)
         self.set_all(values=values, node_list=node_list)
         ll = np.sum([node.log_p() for node in relevant_nodes])
@@ -116,6 +140,26 @@ class DirectedGraphModel(DAG):
                     traverse_child((c, intermediates + (n,)))
         for c in node.children:
             traverse_child(c, ())
+        return child_list
+
+    def get_deterministic_children(self, node):
+        # return all nodes that compute a deterministic function of
+        # this node, in topologically sorted order.
+
+        # TODO: currently assumes a tree structure to the
+        # deterministic children, i.e. doesn't do a true topo
+        # sort. Results will be INCORRECT if this is not the case.
+
+        child_list = []
+        def traverse_child(n):
+            if n.deterministic():
+                child_list.append(n)
+                for c in n.children:
+                    traverse_child(c)
+            else:
+                return
+
+        traverse_child(node)
         return child_list
 
 
@@ -158,12 +202,11 @@ class DirectedGraphModel(DAG):
         Assume that the value at each node is a 1D array.
         """
 
-        node_list = list(node_list) # it's important that the nodes have a consistent order
-        all_children = [child for node in node_list for child in node.children]
-        relevant_nodes = set(node_list + all_children)
-
-
-
+        # note, it's important that the nodes have a consistent order, since
+        # we represent their joint values as a vector.
+        node_list = [node for node in node_list if not node.deterministic()]
+        all_stochastic_children = [child for node in node_list for (child, intermediates) in self.get_stochastic_children(node)]
+        relevant_nodes = set(node_list + all_stochastic_children)
 
         start_values = self.get_all(node_list=node_list)
         low_bounds = np.concatenate([node.low_bounds() for node in node_list])
@@ -189,3 +232,24 @@ class DirectedGraphModel(DAG):
         result_vector, cost = optim_utils.minimize(f=jp, x0=start_values, fprime=g, optim_params=optim_params, bounds=bounds)
         self.set_all(values=result_vector, node_list=node_list)
         print "got optimized x", result_vector
+
+    def add_node(self, node):
+        self.all_nodes[node.label] = node
+        for key in node.keys():
+            self.nodes_by_key[key] = node
+        self._topo_sort()
+
+    def topo_sorted_nodes(self):
+        assert(len(self._topo_sorted_list) == len(self.all_nodes))
+        return self._topo_sorted_list
+
+    def get_node_from_key(self, key):
+        return self.nodes_by_key[key]
+
+    def set_value(self, key, value, **kwargs):
+        n = self.nodes_by_key[key]
+        n.set_value(value=value, key=key, **kwargs)
+
+    def get_value(self, key):
+        n = self.nodes_by_key[key]
+        return n.get_value(key=key)

@@ -20,7 +20,7 @@ class CodaHeightNode(DeterministicNode):
         pv = self._parent_values()
         self.parent_amp_transfer_key, _ = get_parent_value(eid, phase, sta, chan=chan, band=band, param_name="amp_transfer", parent_values = pv, return_key=True)
         self.parent_mb_key = '%d;mb' % eid
-        self.parent_naturalsource_key = '%d;natural' % eid
+        self.parent_naturalsource_key = '%d;natural_source' % eid
 
     def deriv_value_wrt_parent(self, value=None, key=None, parent_values=None, parent_key=None):
         if parent_values is None:
@@ -52,7 +52,7 @@ class CodaHeightNode(DeterministicNode):
         amp_transfer = parent_values[self.parent_amp_transfer_key]
         event_source_amp = self._ev_source_amp(parent_values)
 
-        self._value = amp_transfer+event_source_amp
+        self._dict[self.single_key] = amp_transfer+event_source_amp
 
     def invert(self, value, parent_key, parent_values=None):
         if parent_key == self.parent_mb_key:

@@ -87,7 +87,7 @@ class Node(object):
         else:
             self._dict = {k : value[k] if self._mutable[k] else self._dict[k] for k in value.iterkeys() }
 
-    def set_values_from_model(self, value):
+    def _set_values_from_model(self, value):
         # here "value" is assumed to be whatever is returned when
         # sampling from the model at this node. it can be a single
         # value or a dict/vector of values. in the latter case, we'll
@@ -137,15 +137,18 @@ class Node(object):
             parent_values = self._parent_values()
 
         v = self.get_dict()
-        v = v[self.single_key] if self.single_key else v
-        return self.model.deriv_log_p(x = v, cond=parent_values, idx=key, cond_key=parent_key, cond_idx=parent_idx, **kwargs)
+        if self.single_key:
+            v = v[self.single_key]
+            return self.model.deriv_log_p(x = v, cond=parent_values, idx=None, cond_key=parent_key, cond_idx=parent_idx, **kwargs)
+        else:
+            return self.model.deriv_log_p(x = v, cond=parent_values, idx=key, cond_key=parent_key, cond_idx=parent_idx, **kwargs)
 
     def parent_sample(self, parent_values=None):
         # sample a new value at this node conditioned on its parents
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        self._set_value_from_model(self.model.sample(cond=parent_values))
+        self._set_values_from_model(self.model.sample(cond=parent_values))
 
     def parent_predict(self, parent_values=None):
         # predict a new value at this node conditioned on its parents.
@@ -154,7 +157,7 @@ class Node(object):
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        self._set_value_from_model(self.model.predict(cond=parent_values))
+        self._set_values_from_model(self.model.predict(cond=parent_values))
 
     def get_children(self):
         return self.children
@@ -222,29 +225,38 @@ class DeterministicNode(Node):
     def deterministic(self):
         return True
 
-    def prior_sample(self, parent_values=None):
+    def parent_sample(self, parent_values=None):
         self.compute_value(parent_values=parent_values)
 
-    def prior_predict(self, parent_values=None):
+    def parent_predict(self, parent_values=None):
         self.compute_value(parent_values=parent_values)
 
     def compute_value(self, parent_values=None):
-        return NotImplementedError("compute_value method not implemented at this node!")
+        raise NotImplementedError("compute_value method not implemented at this node!")
 
     def invert(self, parent_key, parent_values=None):
-        return NotImplementedError("invert method not implemented at this node!")
+        raise NotImplementedError("invert method not implemented at this node!")
 
     def log_p(self, value=None, parent_values=None):
-        return AttributeError("cannot compute log_p for a deterministic node!")
+        raise AttributeError("cannot compute log_p for a deterministic node!")
 
     def deriv_log_p(**kwargs):
-        return AttributeError("cannot compute deriv_log_p for a deterministic node!")
+        raise AttributeError("cannot compute deriv_log_p for a deterministic node!")
 
-    def set_value(self, **kwargs):
-        return AttributeError("cannot set value for a deterministic node!")
+    def set_value(self, override_deterministic=False, *args, **kwargs):
+        if override_deterministic:
+            super(DeterministicNode, self).set_value(*args, **kwargs)
+        else:
+            raise AttributeError("cannot set value for a deterministic node!")
+
+    def get_mutable_values(self, **kwargs):
+        raise AttributeError("deterministic node has no mutable values!")
+
+    def set_mutable_values(self, **kwargs):
+        raise AttributeError("deterministic node has no mutable values!")
 
     def fix_value(self, **kwargs):
-        return AttributeError("cannot fix/unfix values for a deterministic node!")
+        raise AttributeError("cannot fix/unfix values for a deterministic node!")
 
     def unfix_value(self, **kwargs):
-        return AttributeError("cannot fix/unfix values for a deterministic node!")
+        raise AttributeError("cannot fix/unfix values for a deterministic node!")

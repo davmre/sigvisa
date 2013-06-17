@@ -28,7 +28,7 @@ class TestSignalLikelihood(unittest.TestCase):
 
         sg.set_value(key=create_key(param="arrival_time", eid=self.event.eid,
                                     sta=self.wave['sta'], phase='P'),
-                     value=st+10.0)
+                     value=st+10.0, override_deterministic=True)
         sg.set_value(key=create_key(param="peak_offset", eid=self.event.eid,
                                     sta=self.wave['sta'], phase='P',
                                     band='freq_2.0_3.0', chan='BHZ'),
@@ -36,25 +36,25 @@ class TestSignalLikelihood(unittest.TestCase):
         sg.set_value(key=create_key(param="coda_height", eid=self.event.eid,
                                     sta=self.wave['sta'], phase='P',
                                     band='freq_2.0_3.0', chan='BHZ'),
-                     value=10.0)
+                     value=10.0, override_deterministic=True)
         sg.set_value(key=create_key(param="coda_decay", eid=self.event.eid,
                                     sta=self.wave['sta'], phase='P',
                                     band='freq_2.0_3.0', chan='BHZ'),
                      value=-.01)
 
         sg.set_value(key=create_key(param="arrival_time", eid=self.event.eid,
-                                    sta=self.wave['sta'], phase='P'),
-                     value=st+50.0)
+                                    sta=self.wave['sta'], phase='S'),
+                     value=st+50.0, override_deterministic=True)
         sg.set_value(key=create_key(param="peak_offset", eid=self.event.eid,
-                                    sta=self.wave['sta'], phase='P',
+                                    sta=self.wave['sta'], phase='S',
                                     band='freq_2.0_3.0', chan='BHZ'),
                      value=15.0)
         sg.set_value(key=create_key(param="coda_height", eid=self.event.eid,
-                                    sta=self.wave['sta'], phase='P',
+                                    sta=self.wave['sta'], phase='S',
                                     band='freq_2.0_3.0', chan='BHZ'),
-                     value=15.0)
+                     value=15.0, override_deterministic=True)
         sg.set_value(key=create_key(param="coda_decay", eid=self.event.eid,
-                                    sta=self.wave['sta'], phase='P',
+                                    sta=self.wave['sta'], phase='S',
                                     band='freq_2.0_3.0', chan='BHZ'),
                      value=-.04)
 

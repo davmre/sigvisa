@@ -20,10 +20,10 @@ class ArrivalTimeNode(DeterministicNode):
 
         pv = self._parent_values()
         self.tt_residual_key, _ = get_parent_value(eid, phase, sta, param_name="tt_residual", parent_values = pv, return_key=True)
-        self.ev_time_key = '%d;time'
-        self.ev_lon_key = '%d;lon'
-        self.ev_lat_key = '%d;lat'
-        self.ev_depth_key = '%d;depth'
+        self.ev_time_key = '%d;time' % eid
+        self.ev_lon_key = '%d;lon' % eid
+        self.ev_lat_key = '%d;lat' % eid
+        self.ev_depth_key = '%d;depth' % eid
 
     def compute_value(self, parent_values=None):
         if self._fixed: return
@@ -39,7 +39,7 @@ class ArrivalTimeNode(DeterministicNode):
 
         s = Sigvisa()
         meantt = s.sigmodel.mean_travel_time(lon, lat, depth, evtime, self.sta, self.phaseid - 1)
-        return evtime + meantt + residual
+        self._dict[self.single_key] = evtime + meantt + residual
 
     def deriv_value_wrt_parent(self, value=None, key=None, parent_values=None, parent_key=None):
         if parent_values is None:
