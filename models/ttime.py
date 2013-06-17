@@ -41,6 +41,26 @@ class ArrivalTimeNode(DeterministicNode):
         meantt = s.sigmodel.mean_travel_time(lon, lat, depth, evtime, self.sta, self.phaseid - 1)
         self._dict[self.single_key] = evtime + meantt + residual
 
+    def default_parent_key(self):
+        return self.tt_residual_key
+
+    def invert(self, value, parent_key, parent_values=None):
+        if parent_values is None:
+            parent_values = self._parent_values()
+
+        lon = parent_values[self.ev_lon_key]
+        lat = parent_values[self.ev_lat_key]
+        depth = parent_values[self.ev_depth_key]
+        evtime = parent_values[self.ev_time_key]
+
+        s = Sigvisa()
+        meantt = s.sigmodel.mean_travel_time(lon, lat, depth, evtime, self.sta, self.phaseid - 1)
+
+        if parent_key == self.tt_residual_key:
+            return value - evtime - meantt
+        else:
+            raise KeyError("can't invert arrival time with respect to %s" % parent_key)
+
     def deriv_value_wrt_parent(self, value=None, key=None, parent_values=None, parent_key=None):
         if parent_values is None:
             parent_values = self._parent_values()

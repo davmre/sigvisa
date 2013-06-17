@@ -105,6 +105,19 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.optim_log = ""
 
+    def set_template(self, eid, sta, phase, band, chan, values):
+        for (param, value) in values.items():
+            if param == "arrival_time":
+                b = None
+                c = None
+            else:
+                b = band
+                c = chan
+            self.set_value(key=create_key(param=param, eid=eid,
+                                          sta=sta, phase=phase,
+                                          band=b, chan=c),
+                           value=value)
+
     def wave_captures_event(self, ev, sta, stime, etime):
         for phase in predict_phases(ev=ev, sta=sta, phases=self.phases):
             if self.wave_captures_event_phase(ev, sta, stime, etime, phase):
@@ -179,7 +192,6 @@ class SigvisaGraph(DirectedGraphModel):
         node.modelid = modelid
         cursor.close()
         return node
-
 
     def create_unassociated_template(self, tg, wg, wave_node, atime, phase="XX", eid=-1):
         unassociated_templateid = self.next_uatemplateid

@@ -54,7 +54,13 @@ class CodaHeightNode(DeterministicNode):
 
         self._dict[self.single_key] = amp_transfer+event_source_amp
 
+    def default_parent_key(self):
+        return self.parent_amp_transfer_key
+
     def invert(self, value, parent_key, parent_values=None):
+        if parent_values is None:
+            parent_values = self._parent_values()
+
         if parent_key == self.parent_mb_key:
             raise NotImplementedError("can't invert coda height with respect to event magnitude")
         elif parent_key == self.parent_amp_transfer_key:

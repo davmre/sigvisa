@@ -53,11 +53,13 @@ class Node(object):
 
     def addChild(self, child):
         self.children.add(child)
-        child.parents[self.label] = self
+        for key in self.keys():
+            child.parents[key] = self
 
     def addParent(self, parent):
         parent.children.add(self)
-        self.parents[parent.label] = parent
+        for key in parent.keys():
+            self.parents[key] = parent
 
     def deterministic(self):
         # deterministic nodes are treated specially (see
@@ -234,8 +236,11 @@ class DeterministicNode(Node):
     def compute_value(self, parent_values=None):
         raise NotImplementedError("compute_value method not implemented at this node!")
 
-    def invert(self, parent_key, parent_values=None):
+    def invert(self, value, parent_key, parent_values=None):
         raise NotImplementedError("invert method not implemented at this node!")
+
+    def default_parent_key():
+        raise NotImplementedError("default_parent_key method not implemented at this node!")
 
     def log_p(self, value=None, parent_values=None):
         raise AttributeError("cannot compute log_p for a deterministic node!")
@@ -243,11 +248,12 @@ class DeterministicNode(Node):
     def deriv_log_p(**kwargs):
         raise AttributeError("cannot compute deriv_log_p for a deterministic node!")
 
-    def set_value(self, override_deterministic=False, *args, **kwargs):
-        if override_deterministic:
-            super(DeterministicNode, self).set_value(*args, **kwargs)
-        else:
-            raise AttributeError("cannot set value for a deterministic node!")
+    def set_value(self, value, key=None, parent_key=None):
+        if not parent_key:
+            parent_key = self.default_parent_key()
+
+        parent_val = self.invert(value=value, parent_key=parent_key)
+        self.parents[parent_key].set_value(value=parent_val, key=parent_key)
 
     def get_mutable_values(self, **kwargs):
         raise AttributeError("deterministic node has no mutable values!")
