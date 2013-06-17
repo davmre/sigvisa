@@ -6,7 +6,8 @@ import sigvisa.models.noise.noise_model as noise_model
 from sigvisa.source.event import get_event
 from sigvisa.signals.common import *
 from sigvisa.models.templates.template_model import TemplateGenerator
-from sigvisa.graph.sigvisa_graph import create_node_label, extract_sta_node
+from sigvisa.models.templates.coda_height import CodaHeightNode
+from sigvisa.graph.graph_utils import create_key, extract_sta_node
 
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4 + 1)
 
@@ -30,21 +31,23 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
 
     def create_param_node(self, graph, site, phase, band, chan, param,
-                          event_node, tt_node, amp_transfer_node, **kwargs):
+                          event_node, tt_node=None, amp_transfer_node=None, **kwargs):
         nodes = dict()
         if param == "coda_height":
             # we want to create a coda height node for each station under the current site.
             # each of these nodes will depend on the approprite amp_transfer parent
             nodes = dict()
             for sta in graph.site_elements[site]:
-                label = create_node_label(param=param, sta=sta, phase=phase,
+                label = create_key(param=param, sta=sta, phase=phase,
                                           eid=event_node.eid, chan=chan, band=band)
                 atn = extract_sta_node(amp_transfer_node, sta)
-                nodes[sta] = CodaHeightNode(eid=event_node.eid, sta=sta, band=band, phase=phase,
+                nodes[sta] = CodaHeightNode(eid=event_node.eid, sta=sta, band=band,
+                                            chan=chan, phase=phase,
                                             label = label, parents=[event_node, atn])
+                graph.add_node(nodes[sta])
 
         else:
-            return graph.setup_site_param_node(param=param, sita=site, phase=phase, parent=event_node,
+            return graph.setup_site_param_node(param=param, site=site, phase=phase, parent=event_node,
                                                chan=chan, band=band, **kwargs)
 
 

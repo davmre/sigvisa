@@ -18,7 +18,7 @@ class CodaHeightNode(DeterministicNode):
         super(CodaHeightNode, self).__init__(**kwargs)
 
         pv = self._parent_values()
-        self.parent_amp_transfer_key, _ = get_parent_value(eid, phase, sta, chan, band, param_name="amp_transfer", parent_values = pv, return_key=True)
+        self.parent_amp_transfer_key, _ = get_parent_value(eid, phase, sta, chan=chan, band=band, param_name="amp_transfer", parent_values = pv, return_key=True)
         self.parent_mb_key = '%d;mb' % eid
         self.parent_naturalsource_key = '%d;natural' % eid
 

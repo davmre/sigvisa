@@ -23,10 +23,10 @@ def get_event(*args, **kwargs):
 
 class Event(object):
 
-    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'internal_id']
+    __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'eid']
     __id_counter__ = 0
 
-    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, internal_id=None, autoload=True):
+    def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, eid=None, autoload=True):
 
         if (evid is not None or orid is not None) and evtype is not None and autoload:
 
@@ -48,10 +48,10 @@ class Event(object):
             self.evid = evid
             self.natural_source = natural_source
 
-        if internal_id is not None:
-            self.internal_id = internal_id
+        if eid is not None:
+            self.eid = eid
         else:
-            self.internal_id = Event.__id_counter__
+            self.eid = Event.__id_counter__
             Event.__id_counter__ += 1
 
     def source_logamp(self, band, phase):

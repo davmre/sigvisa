@@ -63,12 +63,17 @@ class ParamModel(Distribution):
         raise Exception("not implemented")
 
     def event_dict_to_array(self, ev_dict):
-#        if ev_dict in self.ev_cache:
-#            a = self.ev_cache[ev_dict]
-#        else:
-        distance = geog.dist_km((ev_dict['lon'], ev_dict['lat']), (self.site_lon, self.site_lat))
-        azimuth = geog.azimuth((self.site_lon, self.site_lat), (ev_dict['lon'], ev_dict['lat']))
-        a = np.array(((ev_dict['lon'], ev_dict['lat'], ev_dict['depth'], distance, azimuth),), dtype=float)
+        for (k,v) in ev_dict.items():
+            if 'lon' in k:
+                lon = v
+            elif 'lat' in k:
+                lat = v
+            elif 'depth' in k:
+                depth = v
+
+        distance = geog.dist_km((lon, lat), (self.site_lon, self.site_lat))
+        azimuth = geog.azimuth((self.site_lon, self.site_lat), (lon, lat))
+        a = np.array(((lon, lat, depth, distance, azimuth),), dtype=float)
         return a
 
     def event_to_array(self, event):

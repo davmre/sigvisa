@@ -3,8 +3,7 @@ import numpy as np
 from sigvisa import Sigvisa
 
 from sigvisa.graph.nodes import DeterministicNode
-from sigvisa.graph.sigvisa_graph import get_parent_value
-
+from sigvisa.graph.graph_utils import get_parent_value
 
 class ArrivalTimeNode(DeterministicNode):
 

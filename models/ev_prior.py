@@ -25,16 +25,18 @@ class EventNode(Node):
 
     def __init__(self, event, fixed = True, **kwargs):
 
-        self.internal_id = event.internal_id
+        self.eid = event.eid
         self.evid = event.evid
         self.orid = event.orid
-        initial_value=event.to_dict()
+        initial_value=dict()
+        for (k,v) in event.to_dict().iteritems():
+            initial_value['%d;%s' % (self.eid, k)] = v
 
         super(EventNode, self).__init__(model = EventPriorModel(), initial_value=initial_value,
                                         fixed=fixed, **kwargs)
 
     def get_event(self):
-        return Event(autoload=False, internal_id=self.internal_id, evid=self.evid, orid=self.orid, **self._value)
+        return Event(autoload=False, eid=self.eid, evid=self.evid, orid=self.orid, **self._value)
 
     def prior_predict(self, parent_values=None):
         pass

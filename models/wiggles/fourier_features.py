@@ -128,16 +128,16 @@ class FourierFeatureGenerator(WiggleGenerator):
     def dimension(self):
         return self.nparams
 
-    def keys(self):
+    def params(self):
         freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
         return ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
 
     def param_dict_to_array(self, d):
-        a = np.asarray([ d[k] for k in self.keys() ])
+        a = np.asarray([ d[k] for k in self.params() ])
         return a
 
     def array_to_param_dict(self, a):
-        d = {k : v for (k,v) in zip(self.keys(), a)}
+        d = {k : v for (k,v) in zip(self.params(), a)}
         return d
 
     def save_to_db(self, dbconn):

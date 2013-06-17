@@ -5,6 +5,7 @@ import unittest
 from sigvisa.signals.io import load_event_station
 from sigvisa.source.event import get_event
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.graph_utils import create_key
 from sigvisa.plotting import plot
 
 from sigvisa.tests.test_signals import savefig
@@ -17,17 +18,45 @@ class TestSignalLikelihood(unittest.TestCase):
         self.wave = self.seg['BHZ']
         self.event = get_event(evid=5301405)
 
-        self.sg = SigvisaGraph(phases = ['P', 'S'])
-        self.sg.add_event(self.event)
-        self.sg.add_wave(self.wave)
+        sg = SigvisaGraph(phases = ['P', 'S'])
+        sg.add_wave(self.wave)
+        sg.add_event(self.event)
+        self.sg = sg
+
 
         st = self.seg['stime']
 
-        tm_P_node = self.sg.get_template_node(ev=self.event, wave=self.wave, phase='P')
-        tm_P_node.set_value({'arrival_time': st + 10.0, 'peak_offset': 15.0, 'coda_height': 10.0, 'coda_decay': -.01})
-        tm_S_node = self.sg.get_template_node(ev=self.event, wave=self.wave, phase='S')
-        tm_P_node.set_value({'arrival_time': st + 50.0, 'peak_offset': 15.0, 'coda_height': 15.0, 'coda_decay': -.04})
+        sg.set_value(key=create_key(param="arrival_time", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P'),
+                     value=st+10.0)
+        sg.set_value(key=create_key(param="peak_offset", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P',
+                                    band='freq_2.0_3.0', chan='BHZ'),
+                     value=15.0)
+        sg.set_value(key=create_key(param="coda_height", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P',
+                                    band='freq_2.0_3.0', chan='BHZ'),
+                     value=10.0)
+        sg.set_value(key=create_key(param="coda_decay", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P',
+                                    band='freq_2.0_3.0', chan='BHZ'),
+                     value=-.01)
 
+        sg.set_value(key=create_key(param="arrival_time", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P'),
+                     value=st+50.0)
+        sg.set_value(key=create_key(param="peak_offset", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P',
+                                    band='freq_2.0_3.0', chan='BHZ'),
+                     value=15.0)
+        sg.set_value(key=create_key(param="coda_height", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P',
+                                    band='freq_2.0_3.0', chan='BHZ'),
+                     value=15.0)
+        sg.set_value(key=create_key(param="coda_decay", eid=self.event.eid,
+                                    sta=self.wave['sta'], phase='P',
+                                    band='freq_2.0_3.0', chan='BHZ'),
+                     value=-.04)
 
 
     def test_generate(self):

@@ -1,26 +1,9 @@
 import os
 import numpy as np
 
-import scipy.io
-import cStringIO
-
 
 from sigvisa import Sigvisa
-from sigvisa.learn.train_param_common import load_model
-from sigvisa.models import DummyModel
-from sigvisa.graph.nodes import Node, ClusterNode
-from sigvisa.models.noise.noise_util import get_noise_model
 
-
-def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisid):
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-
-    sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and wiggle_basisid=%d and fitting_runid=%d" % (model_type, sta, chan, band, phase, basisid, runid)
-    cursor.execute(sql_query)
-    modelids = [m[0] for m in cursor.fetchall()]
-    cursor.close()
-    return modelids
 
 class WiggleGenerator(object):
 

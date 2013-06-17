@@ -78,6 +78,7 @@ class Sigvisa(threading.local):
         self.ref_siteid = dict(zip(sitenames, [int(rsi) for rsi in allsites[:,6]]))
         #self.sitedata = dict(zip(sitenames, allsites))
         #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = sites.read_sites_by_name(cursor)
+        _, _, self.siteid_minus1_to_name = db_sites.read_sites_by_name(cursor)
         site_up = db_sites.read_uptime(cursor, st, et)
         self.phasenames, self.phasetimedef = db_sites.read_phases(cursor)
         self.phaseids = dict(

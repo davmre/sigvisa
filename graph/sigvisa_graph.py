@@ -4,65 +4,47 @@ import os
 import re
 from sigvisa import Sigvisa
 
-from sigvisa.database.dataset import read_event_detections, DET_PHASE_COL
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists
 
 from sigvisa.source.event import get_event
 from sigvisa.learn.train_param_common import load_model
 import sigvisa.utils.geog as geog
+from sigvisa.models import DummyModel
 from sigvisa.models.ev_prior import EventNode
-from sigvisa.models.ttime import tt_predict, tt_log_p
+from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
-from sigvisa.models.envelope_model import EnvelopeNode
+from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value
+from sigvisa.models.signal_model import ObservedSignalNode
 from sigvisa.models.templates.load_by_name import load_template_generator
-from sigvisa.models.wiggles import load_wiggle_node, load_wiggle_node_by_family
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
+from sigvisa.models.wiggles import load_wiggle_generator_by_family
 from sigvisa.signals.common import Waveform
 
 class ModelNotFoundError(Exception):
     pass
 
-def extract_sta_node(node_or_dict, sta):
-    try:
-        return node_or_dict[sta]
-    except AttributeError:
-        return node_or_dict
 
 
-def predict_phases(ev, sta, phases):
+def get_param_model_id(runid, sta, phase, model_type, param,
+                       template_shape, basisid=None, chan=None, band=None):
+    # get a DB modelid for a previously-trained parameter model
     s = Sigvisa()
-    if phases == "leb":
-        cursor = s.dbconn.cursor()
-        predicted_phases = [s.phasenames[id_minus1] for id_minus1 in read_event_detections(cursor=cursor, evid=ev.evid, stations=[sta, ], evtype="leb")[:,DET_PHASE_COL]]
+    cursor = s.dbconn.cursor()
+    chan_cond = "and chan='%s'" % chan if chan else ""
+    band_cond = "and band='%s'" % band if band else ""
+    basisid_cond = "and wiggle_basisid='%d'" if basisid else ""
+
+    sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond)
+    try:
+        cursor.execute(sql_query)
+        modelid = cursor.fetchone()[0]
+    except:
+        raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param))
+    finally:
         cursor.close()
-    elif phases == "auto":
-        predicted_phases = s.arriving_phases(event=ev, sta=sta)
-    else:
-        predicted_phases = phases
-    return predicted_phases
-
-
-def add_edge(parent_node, child_node):
-    child_node.addParent(parent_node)
-    parent_node.addChild(child_node)
-
-def create_key(param, eid=None, sta=None, phase=None, chan=None, band=None):
-    eid = str(int(eid)) if eid else ';'
-    sta = sta if sta else ';'
-    phase = phase if phase else ';'
-    chan = chan if chan else ';'
-    band = band if band else ';'
-    return "%s;%s;%s;%s;%s;%s" % (eid, phase, sta, chan, band, param)
-
-
-def get_parent_value(self, eid, phase, sta, chan, band, param_name, parent_values, return_key=False):
-    r = re.compile("(%d|:);(%s|:);(%s|:);(%s|:);(%s|:);%s" % (eid, phase, sta, chan, band, param_name))
-    for k in parent_values.keys():
-        if r.match(k):
-            return parent_values[k]
-    raise KeyError("could not find parent providing %d;%s;%s;%s;%s;%s" % (eid, phase, sta, chan, band, param_name))
+    return modelid
 
 
 class SigvisaGraph(DirectedGraphModel):
@@ -72,6 +54,12 @@ class SigvisaGraph(DirectedGraphModel):
     Construct the Sigvisa graphical model.
 
     """
+
+    def _tm_type(self, param):
+        try:
+            return self.template_model_type[param]
+        except TypeError:
+            return self.template_model_type
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
@@ -95,6 +83,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_model_type = wiggle_model_type
         self.wiggle_family = wiggle_family
         self.wiggle_len_s = wiggle_len_s
+        self.wiggle_generator = load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=40.0)
 
         self.dummy_fallback = dummy_fallback
 
@@ -107,12 +96,13 @@ class SigvisaGraph(DirectedGraphModel):
             self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = True)
             cursor.close()
 
-        self.all_nodes = {}
-        self.template_nodes = set()
-        self.wiggle_nodes = set()
+        self.all_nodes = dict()
+        self.nodes_by_key = dict()
 
         self.station_waves = dict()
         self.site_elements = dict()
+        self.site_bands = dict()
+        self.site_chans = dict()
 
         self.optim_log = ""
 
@@ -152,49 +142,22 @@ class SigvisaGraph(DirectedGraphModel):
 
         return captures
 
+    def add_node(self, node):
+        self.all_nodes[node.label] = node
+        for key in node.keys():
+            self.nodes_by_key[key] = node
+        self._topo_sort()
 
-    def connect_ev_wave(self, event_node, wave_node, basisids=None, tmshapes=None):
-        ev = event_node.get_event()
-        wave = wave_node.mw
+    def get_node_from_key(self, key):
+        return self.nodes_by_key[key]
 
-        s = Sigvisa()
+    def set_value(self, key, value):
+        n = self.nodes_by_key[key]
+        n.set_value(value=value, key=key)
 
-        phases =  predict_phases(ev=ev, sta=wave['sta'], phases=self.phases)
-
-        for phase in phases:
-
-            lbl = self._get_interior_node_label(ev=ev, phase=phase, wave=wave)
-
-            tm_shape = tmshapes[phase] if tmshapes is not None else self.template_shape
-            tm_node = load_template_model(runid = self.runid, sta=wave['sta'], chan=wave['chan'], band=wave['band'], phase=phase, model_type = self.template_model_type, label="template_%s" % (lbl,), template_shape = tm_shape, dummy_fallback = self.dummy_fallback)
-            tm_node.addParent(event_node)
-            tm_node.addChild(wave_node)
-            self.all_nodes[tm_node.label] = tm_node
-            self.template_nodes.add(tm_node)
-            tm_node.prior_predict()
-
-            if basisids is not None:
-                wm_basisid = basisids[phase]
-                wm_node = load_wiggle_node(basisid = wm_basisid,
-                                           wiggle_model_type = self.wiggle_model_type,
-                                           model_waveform=wave,
-                                           phase=phase,
-                                           runid=self.runid,
-                                           label="wiggle_%s" % (lbl,))
-            else:
-                wm_node = load_wiggle_node_by_family(family_name = self.wiggle_family,
-                                                     wiggle_model_type = self.wiggle_model_type,
-                                                     len_s = self.wiggle_len_s,
-                                                     model_waveform = wave,
-                                                     phase=phase,
-                                                     runid=self.runid,
-                                                     label="wiggle_%s" % (lbl,))
-
-            wm_node.addParent(event_node)
-            wm_node.addChild(wave_node)
-            self.all_nodes[wm_node.label] = wm_node
-            self.wiggle_nodes.add(wm_node)
-            wm_node.prior_predict()
+    def get_value(self, key):
+        n = self.nodes_by_key[key]
+        return n.get_value(key=key)
 
     def add_event(self, ev, basisids=None, tmshapes=None):
         """
@@ -207,34 +170,18 @@ class SigvisaGraph(DirectedGraphModel):
 
         """
 
-        event_node = EventNode(event=ev, label='ev_%d' % ev.internal_id, fixed=True)
+        event_node = EventNode(event=ev, label='ev_%d' % ev.eid, fixed=True)
         self.toplevel_nodes.append(event_node)
-        self.all_nodes[event_node.label] = event_node
+        self.add_node(event_node)
 
-        for (site, element_list) in self.site_elements:
-            arbitrary_sta = element_list[0] # just need this to get a list of phases
-            for phase in predict_phases(ev=ev, sta=arbitrary_sta, phases=self.phases):
+        for (site, element_list) in self.site_elements.iteritems():
+            for phase in predict_phases(ev=ev, sta=site, phases=self.phases):
                 tg = self.template_generator
-                self.setup_template_nodes_for_phase(tg, site, phase, element_list, event_node)
+                wg = self.wiggle_generator
+                self.setup_template_nodes_for_phase(tg, wg, site, phase, element_list, event_node)
 
         self._topo_sort()
         return event_node
-
-    def get_template_param_model_id(runid, sta, phase, model_type, param, template_shape, chan=None, band=None):
-        # get a DB modelid for a previously-trained parameter model
-        s = Sigvisa()
-        cursor = s.dbconn.cursor()
-        chan_cond = "and chan='%s'" % chan if chan else ""
-        band_cond = "and band='%s'" % band if band else ""
-        sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param)
-        try:
-            cursor.execute(sql_query)
-            modelid = cursor.fetchone()[0]
-        except:
-            raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param))
-        finally:
-            cursor.close()
-        return modelid
 
     def load_node_from_modelid(self, modelid, label):
         s = Sigvisa()
@@ -244,31 +191,73 @@ class SigvisaGraph(DirectedGraphModel):
         param, db_model_type, fname = cursor.fetchone()
         basedir = os.getenv("SIGVISA_HOME")
         model = load_model(os.path.join(basedir, fname), db_model_type)
-        mNode = Node(model=model, label=label)
-        mNode.modelid = modelid
+        node = Node(model=model, label=label)
+        node.modelid = modelid
         cursor.close()
+        return node
 
-    def setup_site_param_node(self, param, site, phase, parent, chan=None, band=None, model_type=None, modelid=None):
+
+    def create_unassociated_template(self, tg, wg, wave_node, atime, phase="XX", eid=-1):
+        unassociated_templateid = self.next_uatemplateid
+        self.next_uatemplateid += 1
+
+        nodes = dict()
+        at_label = create_key(param="arrival_time", sta=wave_node.sta,
+                           phase=phase, eid=eid,
+                           chan=wave_node.chan, band=wave_node.band)
+
+        nodes['arrival_time'] = Node(label=at_label, model=DummyModel(),
+                                     initial_value=atime, children=(wave_node,))
+
+        for param in tg.params():
+            label = create_key(param=param, sta=wave_node.sta,
+                               phase=phase, eid=eid,
+                               chan=wave_node.chan, band=wave_node.band)
+            model = tg.unassociated_model(param)
+            nodes[param] = Node(label=label, model=model, children=(wave_node,))
+        for param in wg.params():
+            label = create_key(param=param, sta=wave_node.sta,
+                               phase=phase, eid=eid,
+                               chan=wave_node.chan, band=wave_node.band)
+            model = wg.unassociated_model(param)
+            nodes[param] = Node(label=label, model=model, children=(wave_node,))
+
+        for node in nodes.values():
+            nodes.unassociated_templateid = unassociated_templateid
+            self.add_node(node)
+
+        return nodes
+
+    def setup_site_param_node(self, param, site, phase, parent, chan=None, band=None, basisid=None, model_type=None, modelid=None):
+
+        if model_type is None:
+            model_type = self._tm_type(param)
+
         # for each station at this site, create a node with the
         # appropriate parameter model.
         nodes = dict()
         for sta in self.site_elements[site]:
-            if modelid is None:
+            if model_type != "dummy" and modelid is None:
                 try:
-                    modelid = self.get_template_param_model_id(site, phase, self.template_model_type[param], param, self.template_shape, chan, band)
+                    modelid = get_param_model_id(runid=self.runid, sta=site,
+                                                 phase=phase, model_type=model_type,
+                                                 param=param, template_shape=self.template_shape,
+                                                 chan=chan, band=band, basisid=basisid)
                 except ModelNotFoundError:
                     if self.dummy_fallback:
                         print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
                         model_type = "dummy"
                     else:
                         raise
-
-            label = create_node_label(param=param, sta=site, phase=phase, eid=parent.eid, chan=chan, band=band)
+            label = create_key(param=param, sta=site,
+                               phase=phase, eid=parent.eid,
+                               chan=chan, band=band)
             if model_type=="dummy":
-                node = self.create_dummy_node(label)
+                node = Node(label=label, model=DummyModel())
             else:
                 node = self.load_node_from_modelid(modelid, label)
             nodes[sta] = node
+            self.add_node(node)
         return nodes
 
     """
@@ -291,91 +280,70 @@ class SigvisaGraph(DirectedGraphModel):
     some params ("coda_decay") should be joint across arrays, and exist above chan/band
     some params ("coda_height") should be specific to a specific sta/chan/band
 
-
-
     """
 
     def setup_tt(self, site, phase, event_node, tt_residual_node):
         nodes = dict()
-        for sta in self.site_elements[sta]:
+        for sta in self.site_elements[site]:
             ttrn = extract_sta_node(tt_residual_node, sta)
-            label = create_node_label(param="arrival_time", sta=sta, phase=phase, eid=event_node.eid)
-            arrtimenode = TravelTimeNode(eid=event_node.eid, sta=sta, phase=phase, parents=[event_node, ttrn], label=)
+            label = create_key(param="arrival_time", sta=sta, phase=phase, eid=event_node.eid)
+            arrtimenode = ArrivalTimeNode(eid=event_node.eid, sta=sta, phase=phase, parents=[event_node, ttrn], label=label)
+            self.add_node(arrtimenode)
             nodes[sta] = arrtimenode
         return nodes
 
-    def setup_template_nodes_for_phase(self, tg, site, phase, element_list, event_node):
+    def setup_template_nodes_for_phase(self, tg, wg, site, phase, element_list, event_node):
         # the "nodes" we create here can either be
         # actual nodes (if we are modeling these quantities
         # jointly across an array) or sta:node dictionaries (if we
         # are modeling them independently).
-        self.setup_tt(site, phase, parent=event_node)
-        tt_residual_node = self.setup_site_param_node(param="tt_residual", site=site, phase=phase, parent=event_node)
-        tt_node = self.setup_tt()
-        amp_transfer_node = tg.create_param_node(site, phase, param="amp_transfer", event_node=event_node)
+
+        tt_residual_node = self.setup_site_param_node(param="tt_residual", site=site,
+                                                      phase=phase, parent=event_node)
+        tt_node = self.setup_tt(site, phase, event_node=event_node, tt_residual_node=tt_residual_node)
+        amp_transfer_node = tg.create_param_node(self, site, phase, band=None, chan=None, param="amp_transfer", event_node=event_node)
 
         nodes = dict()
+        nodes["tt_residual"] = tt_residual_node
+        nodes["arrival_time"] = tt_node
+        nodes["amp_transfer"] = amp_transfer_node
+
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
                 for param in tg.params():
                     # here the "create param node" creates, potentially, a single node or a dict of nodes
                     nodes[(band, chan, param)] = tg.create_param_node(self, site, phase, band, chan, param=param, event_node=event_node, tt_node=tt_node, amp_transfer_node=amp_transfer_node)
-                    nodes[(band, chan, 'wiggle')] = self.setup_wiggles(site, phase, event_node = event_node)
-
-        for sta in element_list:
-            for wave_node in self.station_waves[sta]:
-                band = wave_node.band
-                chan = wave_node.chan
-                # as mentioned above, we allow our setup
-                # functions to return either a single node
-                # providing values for lots of sites (if
-                # modeling an array jointly), or a dictionary
-                # of nodes for individual sites. If the
-                # latter, we need to extract the particular
-                # node this waveform will depend on.
-
-                sta_tt_node = extract_sta_node(tt_node)
-                sta_amp_transfer = extract_sta_node(amp_transfer_node)
-                sta_onset = extract_sta_node(onset_nodes[(band, chan)])
-                sta_decay = extract_sta_node(decay_nodes[(band, chan)])
-                sta_wiggles = extract_sta_node(wiggle_nodes[(band, chan)])
-
-                add_edge(sta_tt_node, wave_node)
-                add_edge(coda_height_node, wave_node)
-                add_edge(sta_onset, wave_node)
-                add_edge(sta_decay, wave_node)
-                add_edge(sta_wiggles, wave_node)
-
+                for param in wg.params():
+                    nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
+                                                                  phase=phase, parent=event_node,
+                                                                  band=band, chan=chan, basisid=wg.basisid)
 
     def add_wave(self, wave):
         """
         Add a wave node to the graph. Assume that all waves are added before all events.
         """
 
-        wave_node = EnvelopeNode(model_waveform=wave, nm_type=self.nm_type, observed=True, label=self._get_wave_label(wave=wave))
+        wave_node = ObservedSignalNode(model_waveform=wave, nm_type=self.nm_type, observed=True, label=self._get_wave_label(wave=wave))
 
         s = Sigvisa()
         sta = wave['sta']
         _, _, _, isarr, _, _, ref_site_id = s.earthmodel.site_info(sta, wave['stime'])
-        if ref_site_id not in self.site_elements:
-            self.site_elements[ref_site_id] = []
-        self.site_elements[ref_site_id].append(sta)
+        ref_site_name = s.siteid_minus1_to_name[ref_site_id-1]
+        if ref_site_name not in self.site_elements:
+            self.site_elements[ref_site_name] = set()
+            self.site_bands[ref_site_name] = set()
+            self.site_chans[ref_site_name] = set()
+        self.site_elements[ref_site_name].add(sta)
+        self.site_bands[ref_site_name].add(wave['band'])
+        self.site_chans[ref_site_name].add(wave['chan'])
 
         if sta not in self.station_waves:
             self.station_waves[sta] = []
         self.station_waves[sta].append(wave_node)
 
         self.leaf_nodes.append(wave_node)
-        self.all_nodes[wave_node.label] = wave_node
-        self._topo_sort()
+        self.add_node(wave_node)
         return wave_node
-
-    def _get_interior_node_label(self, ev, phase, wave=None, sta=None, chan=None, band=None):
-        if wave is not None:
-            sta = wave['sta']
-            chan = wave['chan']
-            band = wave['band']
-        return "%d_%s_%s_%s_%s" % (ev.internal_id, phase, sta, chan, band)
 
     def _get_wave_label(self, wave):
         return 'wave_%s_%s_%s_%.1f' % (wave['sta'], wave['chan'], wave['band'], wave['stime'])

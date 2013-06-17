@@ -13,7 +13,7 @@ from sigvisa.signals.common import Waveform
 from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.graph.nodes import Node
-from sigvisa.graph.sigvisa_graph import get_parent_value, create_key
+from sigvisa.graph.graph_utils import get_parent_value, create_key
 
 
 def update_arrivals(parent_values):
@@ -115,17 +115,20 @@ class ObservedSignalNode(Node):
 
         return signal
 
-    def prior_predict(self):
-        signal = self.assem_signal()
+    def prior_predict(self, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        signal = self.assem_signal(parent_values=parent_values)
         noise = self.nm.predict(n=len(signal))
         self.set_value(signal + noise)
 
-    def prior_sample(self):
-        signal = self.assem_signal()
+    def prior_sample(self, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        signal = self.assem_signal(parent_values=parent_values)
         noise = self.nm.sample(n=len(signal))
         self.set_value(signal + noise)
 
     def log_p(self, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
         value = self.get_value()
 
         pred_signal = self.assem_signal(parent_values=parent_values)

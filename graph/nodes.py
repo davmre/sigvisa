@@ -6,40 +6,50 @@ from sigvisa.models import DummyModel
 
 class Node(object):
 
-    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=None, parents = None):
+    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = ()):
 
-        self.children = set(children) if children is not None else set()
-        self.parents = parents if parents is not None else dict()
+        self.children = set()
+        self.parents = dict()
+        for child in children:
+            self.addChild(child)
+        for parent in parents:
+            self.addParent(parent)
+
         self.model = model
         self._fixed = fixed
         self.label = label
         self.mark = 0
 
-        if keys:
-            if initial_value:
-                assert (set(keys) == set(initial_value.iterkeys()) )
-            if fixed and isinstance(fixed, dict):
-                assert (set(keys) == set(fixed.iterkeys()) )
-        else:
-            keys = initial_value.keys() if initial_value else fixed.keys()
+        if not keys:
+            if isinstance(initial_value, dict):
+                keys = initial_value.keys()
+            elif isinstance(fixed, dict):
+                keys = fixed.keys()
+            else:
+                keys = (label,)
 
         if isinstance(fixed, bool):
             self._mutable = { k : not fixed for k in keys }
         elif isinstance(fixed, dict):
             self._mutable = { k : not fixed[k] for k in keys }
         elif fixed is None:
-            self._mutable = { k : True for k in keys() }
+            self._mutable = { k : True for k in keys }
         else:
             raise ValueError("passed invalid fixed-values setting %s" % fixed)
         self._fixed = not any(self._mutable.itervalues())
 
-        if len(keys) == 1:
-            self.single_key = keys[0]
-            self._dict = dict()
-            self.set_value(value=initial_value)
-        else:
+        if len(keys) > 1:
+            if initial_value:
+                assert (set(keys) == set(initial_value.iterkeys()) )
+            if fixed and isinstance(fixed, dict):
+                assert (set(keys) == set(fixed.iterkeys()) )
             self.single_key = None
             self._dict = initial_value
+        else:
+            self.single_key = keys[0]
+            self._dict = dict()
+            self._dict[self.single_key] = initial_value
+
 
     def addChild(self, child):
         self.children.add(child)
