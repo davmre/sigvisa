@@ -36,8 +36,8 @@ class TestSignalLikelihood(unittest.TestCase):
                         values=s_params)
 
     def test_generate(self):
-
         wave_node = self.sg.get_wave_node(wave=self.wave)
+        wave_node.unfix_value()
         wave_node.prior_predict()
 
         template_wave = wave_node.get_wave()

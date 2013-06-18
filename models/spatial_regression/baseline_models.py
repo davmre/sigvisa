@@ -150,8 +150,8 @@ class ConstGaussianModel(ParamModel):
     def log_likelihood(self):
         return self.ll
 
-    def log_p(self, x, cond):
-        X1 = self.standardize_input_array(cond)
+    def log_p(self, x, cond, **kwargs):
+        X1 = self.standardize_input_array(cond, **kwargs)
         x = x if isinstance(x, collections.Iterable) else (x,)
 
 
@@ -165,9 +165,9 @@ class ConstGaussianModel(ParamModel):
 
         return r1
 
-    def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4):
+    def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4, **kwargs):
         assert(idx == None)
-        X1 = self.standardize_input_array(cond)
+        X1 = self.standardize_input_array(cond, **kwargs)
         x = x if isinstance(x, collections.Iterable) else (x,)
 
         if cond_key is not None:
@@ -298,8 +298,8 @@ class LinearModel(ParamModel):
             ll = scipy.stats.norm.logpdf(y1, loc= self.predict_item(x1), scale=self.regional_std)
         return ll
 
-    def log_p(self, x, cond):
-        X1 = self.standardize_input_array(cond)
+    def log_p(self, x, cond, **kwargs):
+        X1 = self.standardize_input_array(cond, **kwargs)
         x = x if isinstance(x, collections.Iterable) else (x,)
         items = [self.ll_item(x1, y1) for (x1, y1) in zip(X1, x)]
         return np.sum(items)
@@ -426,8 +426,8 @@ class LinearBasisModel(ParamModel):
     def variance(self, cond, include_obs=False):
         return np.diag(self.covariance(cond=cond, include_obs=include_obs))
 
-    def log_p(self, x, cond):
-        mean = self.predict(cond)
+    def log_p(self, x, cond, **kwargs):
+        mean = self.predict(cond, **kwargs)
         n = len(mean)
         covar = self.covariance(cond, include_obs=True)
 

@@ -8,17 +8,11 @@ class Node(object):
 
     def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = ()):
 
-        self.children = set()
-        self.parents = dict()
-        for child in children:
-            self.addChild(child)
-        for parent in parents:
-            self.addParent(parent)
-
         self.model = model
         self._fixed = fixed
         self.label = label
         self.mark = 0
+        self.key_prefix = ""
 
         if not keys:
             if isinstance(initial_value, dict):
@@ -49,6 +43,13 @@ class Node(object):
             self.single_key = keys[0]
             self._dict = dict()
             self._dict[self.single_key] = initial_value
+
+        self.children = set()
+        self.parents = dict()
+        for child in children:
+            self.addChild(child)
+        for parent in parents:
+            self.addParent(parent)
 
 
     def addChild(self, child):
@@ -129,7 +130,7 @@ class Node(object):
             parent_values = self._parent_values()
         v = self.get_dict()
         v = v[self.single_key] if self.single_key else v
-        return self.model.log_p(x = v, cond=parent_values)
+        return self.model.log_p(x = v, cond=parent_values, key_prefix=self.key_prefix)
 
     def deriv_log_p(self, key=None, parent_values=None, parent_key=None, parent_idx=None,  **kwargs):
         # derivative of the log probability at this node, with respect
@@ -141,9 +142,9 @@ class Node(object):
         v = self.get_dict()
         if self.single_key:
             v = v[self.single_key]
-            return self.model.deriv_log_p(x = v, cond=parent_values, idx=None, cond_key=parent_key, cond_idx=parent_idx, **kwargs)
+            return self.model.deriv_log_p(x = v, cond=parent_values, idx=None, cond_key=parent_key, cond_idx=parent_idx, key_prefix=self.key_prefix,  **kwargs)
         else:
-            return self.model.deriv_log_p(x = v, cond=parent_values, idx=key, cond_key=parent_key, cond_idx=parent_idx, **kwargs)
+            return self.model.deriv_log_p(x = v, cond=parent_values, idx=key, cond_key=parent_key, cond_idx=parent_idx, key_prefix=self.key_prefix, **kwargs)
 
     def parent_sample(self, parent_values=None):
         # sample a new value at this node conditioned on its parents

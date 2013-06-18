@@ -15,8 +15,8 @@ class DAG(object):
     """
 
     def __init__(self, toplevel_nodes=None, leaf_nodes=None):
-        self.toplevel_nodes = toplevel_nodes if toplevel_nodes is not None else []
-        self.leaf_nodes = leaf_nodes if leaf_nodes is not None else []
+        self.toplevel_nodes = set(toplevel_nodes) if toplevel_nodes is not None else set()
+        self.leaf_nodes = set(leaf_nodes) if leaf_nodes is not None else set()
 
         # invariant: self._topo_sorted_list should always be a topologically sorted list of nodes
         self._topo_sort()
@@ -237,7 +237,10 @@ class DirectedGraphModel(DAG):
         self.all_nodes[node.label] = node
         for key in node.keys():
             self.nodes_by_key[key] = node
-        self._topo_sort()
+        for child in node.children:
+            self.toplevel_nodes.discard(child)
+        for parent in node.parents.values():
+            self.leaf_nodes.discard(parent)
 
     def topo_sorted_nodes(self):
         assert(len(self._topo_sorted_list) == len(self.all_nodes))

@@ -10,7 +10,6 @@ import scipy
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.database import db
-from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 
@@ -32,7 +31,6 @@ def setup_graph(event, sta, chan, band,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, nm_type = nm_type,
                       run_name = output_run_name, iteration = output_iteration)
-    sg.add_event(ev=event)
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
@@ -40,17 +38,14 @@ def setup_graph(event, sta, chan, band,
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
     sg.add_wave(wave=wave)
-
+    sg.add_event(ev=event)
     #sg.fix_arrival_times()
-
     return sg
-
 
 
 def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_wiggles):
 
     s = Sigvisa()
-
 
     st = time.time()
     sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
