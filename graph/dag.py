@@ -87,14 +87,14 @@ class DirectedGraphModel(DAG):
             logp += lp
         return logp
 
-    def prior_predict_all(self):
+    def parent_predict_all(self):
         for node in self.topo_sorted_nodes():
             if not node._fixed:
-                node.prior_predict()
+                node.parent_predict()
 
-    def prior_sample_all(self):
+    def parent_sample_all(self):
         for node in self.topo_sorted_nodes():
-            node.prior_predict()
+            node.parent_predict()
 
     def get_all(self, node_list):
         return np.concatenate([node.get_mutable_values() for node in node_list if not node.deterministic()])
@@ -163,7 +163,7 @@ class DirectedGraphModel(DAG):
         return child_list
 
 
-    def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1):
+    def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1.0):
         try:
             eps0 = eps[0]
         except:
@@ -183,7 +183,7 @@ class DirectedGraphModel(DAG):
                 # any deterministic nodes along the way
                 child_list = self.get_stochastic_children(node)
                 for (child, intermediate_nodes) in child_list:
-                    d = 1
+                    d = 1.0
                     for inode in intermediate_nodes:
                         d *= inode.deriv_value_wrt_parent(parent_key = key)
                         key = inode.label
@@ -237,6 +237,10 @@ class DirectedGraphModel(DAG):
         self.all_nodes[node.label] = node
         for key in node.keys():
             self.nodes_by_key[key] = node
+        if len(node.children) == 0:
+            self.leaf_nodes.add(node)
+        if len(node.parents) == 0:
+            self.toplevel_nodes.add(node)
         for child in node.children:
             self.toplevel_nodes.discard(child)
         for parent in node.parents.values():

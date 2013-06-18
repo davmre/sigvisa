@@ -14,7 +14,14 @@ class ArrivalTimeNode(DeterministicNode):
 
         self.sta = sta
         self.ref_siteid = s.ref_siteid[sta]
-        self.phaseid = s.phaseids[phase]
+
+        try:
+            self.phaseid = s.phaseids[phase]
+        except KeyError:
+            print "WARNING: unrecognized phase %s, treating as P phase" % phase
+            self.phaseid = 1
+
+
 
         super(ArrivalTimeNode, self).__init__(**kwargs)
 
@@ -81,7 +88,12 @@ class ArrivalTimeNode(DeterministicNode):
 
 def tt_predict(event, sta, phase):
     s = Sigvisa()
-    phaseid = s.phaseids[phase]
+
+    try:
+        phaseid = s.phaseids[phase]
+    except KeyError:
+        print "WARNING: unrecognized phase %s, treating as P phase" % phase
+        phaseid = 1
 
     if event.time < 1:
         import pdb; pdb.set_trace()

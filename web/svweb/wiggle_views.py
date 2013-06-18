@@ -134,7 +134,7 @@ def template_wiggle_view(request, fpid):
     wiggle = load_waveform_from_file(os.path.join(wiggle_dir, phase.wiggle_fname))
 
     sg = load_sg_from_db_fit(fit.fitid)
-    wave_node = sg.leaf_nodes[0]
+    wave_node = list(sg.leaf_nodes)[0]
     wiggled = create_wiggled_phase(arrival=(ev.eid, phase.phase), wave_node=wave_node,
                                    wiggle_data=wiggle.data)
     wave_node.set_value(wiggled)
@@ -160,7 +160,7 @@ def reconstruct_wiggle_wave(request, wiggleid):
 
     sg = load_sg_from_db_fit(fit.fitid)
 
-    wave_node = sg.leaf_nodes[0]
+    wave_node = list(sg.leaf_nodes)[0]
     wiggle_wave = Waveform(data = wave_node.get_wiggle_for_arrival(eid=ev.eid, phase=phase.phase), stime=extracted_wave['stime'], srate=wave_node.srate, sta=fit.sta, chan=fit.chan, filter_str='%s;env;hz_%.2f' % (fit.band, wave_node.srate))
     return wiggle_wave
 
@@ -180,7 +180,7 @@ def reconstructed_template_wiggle_view(request, wiggleid):
     fit = get_object_or_404(SigvisaCodaFit, pk=phase.fitid.fitid)
 
     sg = load_sg_from_db_fit(fit.fitid)
-    wave_node = sg.leaf_nodes[0]
+    wave_node = list(sg.leaf_nodes)[0]
     wave_node.unfix_value()
     wave_node.prior_predict()
 

@@ -44,6 +44,12 @@ class Node(object):
             self._dict = dict()
             self._dict[self.single_key] = initial_value
 
+        self._low_bounds = dict()
+        self._high_bounds = dict()
+        for key in keys:
+            self._low_bounds[key] = np.float("-inf")
+            self._high_bounds[key] = np.float("inf")
+
         self.children = set()
         self.parents = dict()
         for child in children:
@@ -217,10 +223,10 @@ class Node(object):
                 i += 1
 
     def low_bounds(self):
-        return [np.float('-inf'),] * self.mutable_dimension()
+        return [self._low_bounds[k] for k in self.keys() if self._mutable[k]]
 
     def high_bounds(self):
-        return [np.float('inf'),] * self.mutable_dimension()
+        return [self._high_bounds[k] for k in self.keys() if self._mutable[k]]
 
 
 class DeterministicNode(Node):

@@ -85,9 +85,9 @@ class TimeSeriesDist(Distribution):
 
 class DummyModel(Distribution):
 
-    def __init__(self, default_value = 0.0, **kwargs):
+    def __init__(self, default_value = None, **kwargs):
         super(DummyModel, self).__init__(**kwargs)
-        self.default_value = default_value
+        self.default_value = default_value if default_value is not None else 0.0
 
     def log_p(self, x, **kwargs):
         return 0.0

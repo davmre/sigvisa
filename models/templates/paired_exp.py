@@ -20,8 +20,8 @@ class PairedExpTemplateGenerator(TemplateGenerator):
     @staticmethod
     def default_param_vals():
         d = dict()
-        d['peak_offset'] = 1
-        d['coda_height'] = 1
+        d['peak_offset'] = 1.0
+        d['coda_height'] = 1.0
         d['coda_decay'] = -0.03
         return d
 
@@ -43,7 +43,9 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                 atn = extract_sta_node(amp_transfer_node, sta)
                 nodes[sta] = CodaHeightNode(eid=event_node.eid, sta=sta, band=band,
                                             chan=chan, phase=phase,
-                                            label = label, parents=[event_node, atn], children=children)
+                                            label = label, parents=[event_node, atn],
+                                            children=children,
+                                            initial_value=self.default_param_vals()['coda_height'])
                 graph.add_node(nodes[sta], template=True)
             return nodes
         else:
@@ -108,26 +110,20 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
     def low_bounds(self):
 
-        bounds = { k: -np.inf for k in self.keys() }
+        bounds = { k: -np.inf for k in self.params() }
 
         bounds['coda_height'] = -7
         bounds['peak_offset'] = 0.5
         bounds['coda_decay'] = -.2
 
-        # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
-
         return bounds
 
     def high_bounds(self):
 
-        bounds = { k: np.inf for k in self.keys() }
+        bounds = { k: np.inf for k in self.params() }
 
         bounds['coda_height'] = 10
         bounds['peak_offset'] = 25
         bounds['coda_decay'] = -.0001
-
-        # only return bounds for the mutable params, since these are what we're optimizing over
-        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
 
         return bounds

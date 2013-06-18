@@ -37,6 +37,10 @@ def source_freq_logamp(mb, f, phase):
     rho_s = 2700  # source density, kg/m^3
     rho_r = 2500  # receiver density, kg/m^3
 
+    if phase not in P_phases and phase not in S_phases:
+        print "WARNING: don't know how to compute source amplitude for phase %s, treating as P" % (phase)
+        phase = "P"
+
     # choose velocities and other coefficients according to P vs S phase
     if phase in P_phases:
         R = 0.44  # radiation pattern coefficient
@@ -57,8 +61,7 @@ def source_freq_logamp(mb, f, phase):
         sq = 103111374869011.25
         K = 0.33
         cp = 0.49
-    else:
-        raise Exception("don't know how to compute source amplitude for phase %s" % (phase))
+
     # Fisk version of corner frequency calculation:
 #    c = 0.41 if phase in P_phases else 0.49
 #    sigma = 10 # assume stress drop of 10 bars

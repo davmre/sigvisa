@@ -111,13 +111,13 @@ class ObservedSignalNode(Node):
 
         return signal
 
-    def prior_predict(self, parent_values=None):
+    def parent_predict(self, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
         signal = self.assem_signal(parent_values=parent_values)
         noise = self.nm.predict(n=len(signal))
         self.set_value(signal + noise)
 
-    def prior_sample(self, parent_values=None):
+    def parent_sample(self, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
         signal = self.assem_signal(parent_values=parent_values)
         noise = self.nm.sample(n=len(signal))
@@ -149,7 +149,6 @@ class ObservedSignalNode(Node):
 
     def get_wiggle_for_arrival(self, eid, phase, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
-
         wg = self.graph.wiggle_generator(phase, self.srate)
         v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in wg.params()])
         return wg.signal_from_features(features = v)

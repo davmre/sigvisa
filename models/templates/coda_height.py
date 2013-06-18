@@ -10,7 +10,7 @@ class CodaHeightNode(DeterministicNode):
     # a codaHeightNode is the descendent of an amp_transfer node.
     # it adds in the event source amplitude, deterministically
 
-    def __init__(self, eid, sta, band, chan, phase, **kwargs):
+    def __init__(self, eid, sta, band, chan, phase, initial_value=None, **kwargs):
         self.band=band
         self.chan=chan
         self.phase=phase
@@ -21,6 +21,9 @@ class CodaHeightNode(DeterministicNode):
         self.parent_amp_transfer_key, _ = get_parent_value(eid, phase, sta, chan=chan, band=band, param_name="amp_transfer", parent_values = pv, return_key=True)
         self.parent_mb_key = '%d;mb' % eid
         self.parent_naturalsource_key = '%d;natural_source' % eid
+
+        if initial_value is not None:
+            self.set_value(initial_value)
 
     def deriv_value_wrt_parent(self, value=None, key=None, parent_values=None, parent_key=None):
         if parent_values is None:

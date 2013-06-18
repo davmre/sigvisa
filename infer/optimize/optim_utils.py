@@ -212,7 +212,6 @@ def _minimize(f1, f_only, fp1, approx_grad, x0, optim_params, bounds=None):
     disp = optim_params['disp']
     maxfun = optim_params['maxfun']
 
-
     if method == "bfgscoord":
         iters = 0
         success = False
