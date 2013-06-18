@@ -108,8 +108,7 @@ class DirectedGraphModel(DAG):
             i += n
 
             for dn in self.get_deterministic_children(node):
-                node.prior_predict()
-
+                dn.parent_predict()
 
     def joint_prob(self, values, node_list, relevant_nodes, c=1):
         # node_list: list of nodes whose values we are interested in
@@ -137,7 +136,7 @@ class DirectedGraphModel(DAG):
                 return
             else:
                 for c in n.children:
-                    traverse_child((c, intermediates + (n,)))
+                    traverse_child(c, intermediates + (n,))
         for c in node.children:
             traverse_child(c, ())
         return child_list
@@ -159,7 +158,8 @@ class DirectedGraphModel(DAG):
             else:
                 return
 
-        traverse_child(node)
+        for c in node.children:
+            traverse_child(c)
         return child_list
 
 
@@ -184,9 +184,9 @@ class DirectedGraphModel(DAG):
                 child_list = self.get_stochastic_children(node)
                 for (child, intermediate_nodes) in child_list:
                     d = 1
-                    for i in intermediate_nodes:
-                        d *= i.deriv_value_wrt_parent(parent_key = key)
-                        key = i.label
+                    for inode in intermediate_nodes:
+                        d *= inode.deriv_value_wrt_parent(parent_key = key)
+                        key = inode.label
                     d *= child.deriv_log_p(parent_key = key,
                                            eps=eps[i + ni],
                                            lp0=initial_lp[child.label])

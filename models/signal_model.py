@@ -24,7 +24,7 @@ def update_arrivals(parent_values):
         if not m: raise ValueError("could not parse parent key %s" % k)
         eid = int(m.group(1))
         phase = m.group(2)
-        arrivals.update((eid, phase))
+        arrivals.add((eid, phase))
     return arrivals
 
 class ObservedSignalNode(Node):
@@ -37,7 +37,7 @@ class ObservedSignalNode(Node):
 
     """
 
-    def __init__(self, model_waveform, nm_type="ar", nmid=None, observed=True, **kwargs):
+    def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, **kwargs):
 
         key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['band'], band=model_waveform['band'])
 
@@ -55,6 +55,7 @@ class ObservedSignalNode(Node):
 
         self.set_noise_model(nm_type=nm_type, nmid=nmid)
 
+        self.graph = graph
 
     def set_value(self, value):
         assert(len(value) == len(self.get_value(self.single_key)))
@@ -82,11 +83,12 @@ class ObservedSignalNode(Node):
             arrivals = update_arrivals(parent_values)
 
         for (eid, phase) in arrivals:
-            tg = self.template_generator[phase]
+            tg = self.graph.template_generator(phase)
 
             v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in tg.params()])
 
-            arr_time = self.get_parent_value(eid, phase, "arrival time", parent_values)
+            arr_time = self.get_parent_value(eid, phase, "arrival_time", parent_values)
+            v['arrival_time'] = arr_time
             start = (arr_time - self.st) * self.srate
             start_idx = int(np.floor(start))
             if start_idx >= self.npts:
@@ -95,9 +97,9 @@ class ObservedSignalNode(Node):
             offset = start - start_idx
             phase_env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
             if include_wiggles:
-                wg = self.wiggle_generator[phase]
-                wiggle_params = self.get_parent_value(eid, phase, "wiggle", parent_values)
-                wiggle = wg.get_wiggle(value = wiggle_params)
+                wg = self.graph.wiggle_generator(phase, self.srate)
+                v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in wg.params()])
+                wiggle = wg.signal_from_features(features = v)
                 wiggle_len = min(len(wiggle), len(phase_env))
                 phase_env[:wiggle_len] *= wiggle[:wiggle_len]
 

@@ -36,7 +36,12 @@ class EventNode(Node):
                                         fixed=fixed, **kwargs)
 
     def get_event(self):
-        return Event(autoload=False, eid=self.eid, evid=self.evid, orid=self.orid, **self._value)
+        evdict = {}
+        for (k,v) in self._dict.iteritems():
+            evkey = k.split(';')[1]
+            evdict[evkey] = v
+
+        return Event(autoload=False, eid=self.eid, evid=self.evid, orid=self.orid, **evdict)
 
     def prior_predict(self, parent_values=None):
         pass

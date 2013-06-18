@@ -3,7 +3,8 @@ import numpy as np
 
 
 from sigvisa import Sigvisa
-
+import scipy.io
+import cStringIO
 
 class WiggleGenerator(object):
 
@@ -34,6 +35,22 @@ class WiggleGenerator(object):
 
     def save_to_db(self, dbconn):
         raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def encode_params(self, param_dict):
+        f_string = cStringIO.StringIO()
+        scipy.io.savemat(f_string, {"params": self.param_dict_to_array(param_dict)}, oned_as='row')
+        ostr = f_string.getvalue()
+        f_string.close()
+        return ostr
+
+    @staticmethod
+    def decode_params(encoded):
+        f_string = cStringIO.StringIO(encoded)
+        d = scipy.io.loadmat(f_string)
+        params = d['params'].flatten()
+        f_string.close()
+        return params
+
 
 """
 class WiggleModelNode(ClusterNode):
@@ -91,22 +108,4 @@ class WiggleModelNode(ClusterNode):
         params = self.basis_decomposition(wiggle)
         self.set_value(params)
 
-    def get_encoded_params(self):
-        f_string = cStringIO.StringIO()
-        scipy.io.savemat(f_string, {"params": self.param_dict_to_array(self.get_value())}, oned_as='row')
-        ostr = f_string.getvalue()
-        f_string.close()
-        return ostr
-
-    def set_encoded_params(self, encoded):
-        params = self.decode_params(encoded=encoded)
-        self.set_value(self.array_to_param_dict(params))
-
-    @staticmethod
-    def decode_params(encoded):
-        f_string = cStringIO.StringIO(encoded)
-        d = scipy.io.loadmat(f_string)
-        params = d['params'].flatten()
-        f_string.close()
-        return params
 """

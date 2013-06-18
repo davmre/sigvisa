@@ -59,6 +59,8 @@ class TestFit(unittest.TestCase):
         grad1 = approx_gradient(jp, vals, eps=1e-4)
         grad2 = self.sg.log_p_grad(values=vals, node_list = node_list, relevant_nodes=relevant_nodes)
 
+        print grad1
+        print grad2
         self.assertTrue( (np.abs(grad1-grad2) < 0.001 ).all()  )
 
 
