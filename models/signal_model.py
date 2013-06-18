@@ -73,6 +73,7 @@ class ObservedSignalNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
+
     def assem_signal(self, include_wiggles=True, arrivals=None, parent_values = None):
         signal = np.zeros((self.npts,))
 
@@ -83,13 +84,8 @@ class ObservedSignalNode(Node):
             arrivals = update_arrivals(parent_values)
 
         for (eid, phase) in arrivals:
-            tg = self.graph.template_generator(phase)
-
-            v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in tg.params()])
-
-            arr_time = self.get_parent_value(eid, phase, "arrival_time", parent_values)
-            v['arrival_time'] = arr_time
-            start = (arr_time - self.st) * self.srate
+            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase, parent_values=parent_values)
+            start = (v['arrival_time'] - self.st) * self.srate
             start_idx = int(np.floor(start))
             if start_idx >= self.npts:
                 continue
@@ -97,9 +93,7 @@ class ObservedSignalNode(Node):
             offset = start - start_idx
             phase_env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
             if include_wiggles:
-                wg = self.graph.wiggle_generator(phase, self.srate)
-                v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in wg.params()])
-                wiggle = wg.signal_from_features(features = v)
+                wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase, parent_values=parent_values)
                 wiggle_len = min(len(wiggle), len(phase_env))
                 phase_env[:wiggle_len] *= wiggle[:wiggle_len]
 
@@ -152,3 +146,18 @@ class ObservedSignalNode(Node):
 
     def get_parent_value(self, eid, phase, param_name, parent_values):
         return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values)
+
+    def get_wiggle_for_arrival(self, eid, phase, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+
+        wg = self.graph.wiggle_generator(phase, self.srate)
+        v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in wg.params()])
+        return wg.signal_from_features(features = v)
+
+    def get_template_params_for_arrival(self, eid, phase, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
+        tg = self.graph.template_generator(phase)
+        v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in tg.params()])
+        arr_time = self.get_parent_value(eid, phase, "arrival_time", parent_values)
+        v['arrival_time'] = arr_time
+        return v, tg

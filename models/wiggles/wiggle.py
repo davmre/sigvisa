@@ -2,24 +2,23 @@ import numpy as np
 import numpy.ma as ma
 from sigvisa.signals.common import Waveform
 
-def create_wiggled_phase(tm_node, wave_node, wiggle_data):
+def create_wiggled_phase(arrival, wave_node, wiggle_data):
     wiggle_data = wiggle_data.filled(1)
 
     other_tmnodes = [tm for tm in wave_node.parents.values() if (tm.label.startswith("template_") and not tm == tm_node)]
     noise = wave_node.nm.predict(n=wave_node.npts)
-    template_with_phase = wave_node.assem_signal(include_wiggles=False) + noise
-    template_without_phase = wave_node.assem_signal(include_wiggles=False, parent_templates=other_tmnodes) + noise
+    template_with_phase = wave_node.assem_signal(include_wiggles=False, arrivals=[arrival,])
+    #template_without_phase = wave_node.assem_signal(include_wiggles=False, parent_templates=other_tmnodes) + noise
     wave = wave_node.get_wave()
-    vals = tm_node.get_value()
+    vals, tg = wave_node.get_template_params_for_arrival(eid=arrival[0], phase=arrival[1])
 
     start_idx = int(np.floor((vals['arrival_time'] -  wave['stime']) * wave['srate']))
 
-
-    wiggled_phase_data = template_with_phase - template_without_phase
+    wiggled_phase_data = template_with_phase # - template_without_phase
     if start_idx + len(wiggle_data) > len(wiggled_phase_data):
         wiggle_data = wiggle_data[:len(wiggled_phase_data) - start_idx]
     wiggled_phase_data[start_idx:start_idx + len(wiggle_data)] *= wiggle_data
-    wiggled_phase_data += template_without_phase
+    wiggled_phase_data += noise
     return wiggled_phase_data
 
 def extract_phase_wiggle(tm_node, wave_node, skip_initial_s=1.0):
