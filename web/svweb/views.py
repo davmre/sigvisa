@@ -6,7 +6,6 @@ from django.core.cache import cache
 from django.template import RequestContext
 from django.http import HttpResponse, HttpResponseRedirect
 from django.core.urlresolvers import reverse
-from django.core.paginator import Paginator
 from django_easyfilters import FilterSet
 from django_easyfilters.filters import NumericRangeFilter
 
@@ -15,14 +14,12 @@ import sys
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.signals.io import *
-from sigvisa import *
-from sigvisa.models.noise.noise_util import get_noise_model
-from sigvisa.models.templates.load_by_name import load_template_model
+from sigvisa import Sigvisa
 from sigvisa.source.event import get_event, EventNotFound
 from sigvisa.models.noise.armodel.model import ARModel, ErrorModel
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import load_sg_from_db_fit
-import sigvisa.utils.geog
+import sigvisa.utils.geog as geog
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -31,11 +28,9 @@ from pytz import timezone
 import hashlib
 
 import sigvisa.plotting.plot as plot
-import sigvisa.plotting.histogram as histogram
-import textwrap
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, view_options
-from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
+from svweb.plotting_utils import process_plot_args, view_wave
 
 def filterset_GET_string(filterset):
     """
@@ -162,11 +157,11 @@ def fit_detail(request, fitid):
         ev = get_event(evid=fit.evid)
 
         station_location = tuple(s.earthmodel.site_info(str(fit.sta), ev.time)[0:2])
-        dist = utils.geog.dist_km((ev.lon, ev.lat), station_location)
-        azi = utils.geog.azimuth(station_location, (ev.lon, ev.lat))
+        dist = geog.dist_km((ev.lon, ev.lat), station_location)
+        azi = geog.azimuth(station_location, (ev.lon, ev.lat))
 
         ev_time_str = datetime.fromtimestamp(ev.time, timezone('UTC')).strftime(time_format)
-        loc_str = utils.geog.lonlatstr(ev.lon, ev.lat)
+        loc_str = geog.lonlatstr(ev.lon, ev.lat)
     except EventNotFound as e:
         ev = Event()
         dist = None

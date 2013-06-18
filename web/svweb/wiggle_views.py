@@ -14,9 +14,7 @@ from sigvisa.database.signal_data import *
 
 from sigvisa import *
 
-from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.models.wiggles.wiggle import create_wiggled_phase
-from sigvisa.models.wiggles import load_wiggle_node, load_wiggle_node_by_family
 from sigvisa.signals.common import Waveform
 
 import matplotlib

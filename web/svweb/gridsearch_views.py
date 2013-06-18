@@ -18,20 +18,14 @@ from sigvisa.database.signal_data import *
 
 from sigvisa import *
 
-from sigvisa.models.templates.load_by_name import load_template_model
-from sigvisa.signals.common import Waveform
 from sigvisa.source.event import Event
 from sigvisa.signals.io import fetch_waveform, Segment
 from sigvisa.graph.sigvisa_graph import predict_phases
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-import calendar
-from pytz import timezone
 
-import sigvisa.plotting.plot as plot
 from sigvisa.plotting.event_heatmap import EventHeatmap
-import textwrap
 import hashlib
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunModel, SigvisaGsrunWave, SigvisaParamModel

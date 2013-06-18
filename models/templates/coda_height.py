@@ -1,7 +1,7 @@
 import numpy as np
 
 from sigvisa.graph.nodes import DeterministicNode
-from sigvisa.graph.sigvisa_graph import get_parent_value
+from sigvisa.graph.graph_utils import get_parent_value
 import sigvisa.source.brune_source as brune
 import sigvisa.source.mm_source as mm
 

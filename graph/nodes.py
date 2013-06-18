@@ -254,6 +254,7 @@ class DeterministicNode(Node):
 
         parent_val = self.invert(value=value, parent_key=parent_key)
         self.parents[parent_key].set_value(value=parent_val, key=parent_key)
+        self.compute_value()
 
     def get_mutable_values(self, **kwargs):
         raise AttributeError("deterministic node has no mutable values!")

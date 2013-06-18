@@ -19,7 +19,7 @@ from sigvisa.models.signal_model import ObservedSignalNode
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
-from sigvisa.models.wiggles import load_wiggle_generator_by_family
+from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_by_family
 from sigvisa.signals.common import Waveform
 
 class ModelNotFoundError(Exception):
@@ -63,7 +63,8 @@ class SigvisaGraph(DirectedGraphModel):
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                 wiggle_len_s = 30.0, dummy_fallback=False,
+                 wiggle_len_s = 30.0, wiggle_basisids=None,
+                 dummy_fallback=False,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0):
         """
@@ -78,13 +79,21 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.template_model_type = template_model_type
         self.template_shape = template_shape
-        self.tg = load_template_generator(self.template_shape)
+        self.tg = dict()
+        if type(self.template_shape) == dict:
+            for (phase, ts) in self.template_shape.items():
+                self.tg[phase] = load_template_generator(ts)
+
 
         self.wiggle_model_type = wiggle_model_type
         self.wiggle_family = wiggle_family
         self.wiggle_len_s = wiggle_len_s
-        self.wgs = dict()
         self.base_srate = base_srate
+        self.wgs = dict()
+        if wiggle_basisids is not None:
+            for (phase, basisid) in wiggle_basisids.items():
+                wg = load_wiggle_generator(basisid=basisid)
+                self.wgs[(phase, wg.srate)] = wg
 
         self.dummy_fallback = dummy_fallback
 
@@ -107,12 +116,14 @@ class SigvisaGraph(DirectedGraphModel):
         self.optim_log = ""
 
     def template_generator(self, phase):
-        return self.tg
+        if phase not in self.tg and type(self.template_shape) == str:
+            self.tg[phase] = load_template_generator(self.template_shape)
+        return self.tg[phase]
 
     def wiggle_generator(self, phase, srate):
-        if srate not in self.wgs:
-            self.wgs[srate] =  load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=srate)
-        return self.wgs[srate]
+        if (phase, srate) not in self.wgs:
+            self.wgs[(phase, srate)] =  load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=srate)
+        return self.wgs[(phase, srate)]
 
     def set_template(self, eid, sta, phase, band, chan, values):
         for (param, value) in values.items():
@@ -126,6 +137,7 @@ class SigvisaGraph(DirectedGraphModel):
                                           sta=sta, phase=phase,
                                           band=b, chan=c),
                            value=value)
+
 
     def wave_captures_event(self, ev, sta, stime, etime):
         for phase in predict_phases(ev=ev, sta=sta, phases=self.phases):
@@ -254,7 +266,7 @@ class SigvisaGraph(DirectedGraphModel):
                         model_type = "dummy"
                     else:
                         raise
-            label = create_key(param=param, sta=site,
+            label = create_key(param=param, sta=sta,
                                phase=phase, eid=parent.eid,
                                chan=chan, band=band)
             if model_type=="dummy":
