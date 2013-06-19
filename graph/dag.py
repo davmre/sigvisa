@@ -107,7 +107,7 @@ class DirectedGraphModel(DAG):
             node.set_mutable_values(values[i:i+n])
             i += n
 
-            for dn in self.get_deterministic_children(node):
+            for dn in node.get_deterministic_children():
                 dn.parent_predict()
 
     def joint_prob(self, values, node_list, relevant_nodes, c=1):
@@ -116,51 +116,11 @@ class DirectedGraphModel(DAG):
         # relevant_nodes: all nodes whose log_p() depends on a value
         # from a node in node_list.
 
-        v = self.get_all(node_list = node_list)
+        #v = self.get_all(node_list = node_list)
         self.set_all(values=values, node_list=node_list)
         ll = np.sum([node.log_p() for node in relevant_nodes])
-        self.set_all(values=v, node_list=node_list)
+        #self.set_all(values=v, node_list=node_list)
         return c * ll
-
-
-    def get_stochastic_children(self, node):
-        # return all stochastic nodes that depend directly on this
-        # node or a deterministic function of this node. For each
-        # such stochastic child, also include the chain of
-        # deterministic nodes connecting it to the given node.
-
-        child_list = []
-        def traverse_child(n, intermediates):
-            if not n.deterministic():
-                child_list.append((n, intermediates))
-                return
-            else:
-                for c in n.children:
-                    traverse_child(c, intermediates + (n,))
-        for c in node.children:
-            traverse_child(c, ())
-        return child_list
-
-    def get_deterministic_children(self, node):
-        # return all nodes that compute a deterministic function of
-        # this node, in topologically sorted order.
-
-        # TODO: currently assumes a tree structure to the
-        # deterministic children, i.e. doesn't do a true topo
-        # sort. Results will be INCORRECT if this is not the case.
-
-        child_list = []
-        def traverse_child(n):
-            if n.deterministic():
-                child_list.append(n)
-                for c in n.children:
-                    traverse_child(c)
-            else:
-                return
-
-        for c in node.children:
-            traverse_child(c)
-        return child_list
 
 
     def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1.0):
@@ -181,7 +141,7 @@ class DirectedGraphModel(DAG):
 
                 # sum the derivatives of all child nodes wrt to this value, including
                 # any deterministic nodes along the way
-                child_list = self.get_stochastic_children(node)
+                child_list = node.get_stochastic_children()
                 for (child, intermediate_nodes) in child_list:
                     d = 1.0
                     for inode in intermediate_nodes:
@@ -205,7 +165,7 @@ class DirectedGraphModel(DAG):
         # note, it's important that the nodes have a consistent order, since
         # we represent their joint values as a vector.
         node_list = [node for node in node_list if not node.deterministic()]
-        all_stochastic_children = [child for node in node_list for (child, intermediates) in self.get_stochastic_children(node)]
+        all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
         relevant_nodes = set(node_list + all_stochastic_children)
 
         start_values = self.get_all(node_list=node_list)

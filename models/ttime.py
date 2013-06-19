@@ -48,6 +48,9 @@ class ArrivalTimeNode(DeterministicNode):
         meantt = s.sigmodel.mean_travel_time(lon, lat, depth, evtime, self.sta, self.phaseid - 1)
         self._dict[self.single_key] = evtime + meantt + residual
 
+        for child in self.children:
+            child.parent_value_changed = True
+
     def default_parent_key(self):
         return self.tt_residual_key
 

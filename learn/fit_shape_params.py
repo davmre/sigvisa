@@ -53,7 +53,7 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
     if fit_wiggles:
         sigvisa_graph.init_wiggles_from_template()
 
-        for i in range(4):
+        for i in range(1):
             sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
             sigvisa_graph.init_wiggles_from_template()
 

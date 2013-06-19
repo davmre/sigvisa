@@ -74,17 +74,17 @@ class ObservedSignalNode(Node):
             self.nm_type = self.nm.noise_model_type()
 
 
-    def assem_signal(self, include_wiggles=True, arrivals=None, parent_values = None):
+    def assem_signal(self, include_wiggles=True, arrivals=None):
         signal = np.zeros((self.npts,))
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
         # wiggle extraction)
         if arrivals is None:
-            arrivals = update_arrivals(parent_values)
+            arrivals = self.arrivals()
 
         for (eid, phase) in arrivals:
-            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase, parent_values=parent_values)
+            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
             start = (v['arrival_time'] - self.st) * self.srate
             start_idx = int(np.floor(start))
             if start_idx >= self.npts:
@@ -93,7 +93,7 @@ class ObservedSignalNode(Node):
             offset = start - start_idx
             phase_env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
             if include_wiggles:
-                wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase, parent_values=parent_values)
+                wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase)
                 wiggle_len = min(len(wiggle), len(phase_env))
                 phase_env[:wiggle_len] *= wiggle[:wiggle_len]
 
@@ -111,23 +111,67 @@ class ObservedSignalNode(Node):
 
         return signal
 
+    def _parent_values(self):
+        psc = self.parent_set_changed
+        pvc = self.parent_value_changed
+        pv = super(ObservedSignalNode, self)._parent_values()
+        if psc:
+            self._arrivals = update_arrivals(pv)
+            self._tmpl_keys = dict()
+            self._wiggle_keys = dict()
+            # cache the list of tmpl/wiggle param keys for this arrival
+            for (eid, phase) in self._arrivals:
+                tg = self.graph.template_generator(phase=phase)
+                self._tmpl_keys[(eid,phase)] = dict()
+                for p in tg.params() + ('arrival_time',):
+                    k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
+                    self._tmpl_keys[(eid, phase)][p] = k
+
+                wg = self.graph.wiggle_generator(phase=phase, srate=self.srate)
+                self._wiggle_keys[(eid, phase)] = []
+                for p in wg.params():
+                    k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
+                    self._wiggle_keys[(eid, phase)].append(k)
+
+                self._keymap=dict()
+                for (p,k) in self._tmpl_keys[(eid, phase)].iteritems():
+                    self._keymap[k] = (True, eid, phase, p)
+                for (i,k) in enumerate(self._wiggle_keys[(eid, phase)]):
+                    self._keymap[k] = (False, eid, phase, i)
+
+        if pvc:
+            self._tmpl_params = dict()
+            self._wiggle_params = dict()
+            for (eid, phase) in self._arrivals:
+                self._tmpl_params[(eid,phase)] = dict([(p, pv[k]) for (p, k) in self._tmpl_keys[(eid, phase)].iteritems()])
+                self._wiggle_params[(eid, phase)] = np.asarray([pv[k] for k in self._wiggle_keys[(eid, phase)]])
+
+        return pv
+
+    def arrivals(self):
+        self._parent_values()
+        return self._arrivals
+
     def parent_predict(self, parent_values=None):
-        parent_values = parent_values if parent_values else self._parent_values()
-        signal = self.assem_signal(parent_values=parent_values)
+        #parent_values = parent_values if parent_values else self._parent_values()
+        signal = self.assem_signal()
         noise = self.nm.predict(n=len(signal))
         self.set_value(signal + noise)
+        for child in self.children:
+            child.parent_value_changed = True
 
     def parent_sample(self, parent_values=None):
-        parent_values = parent_values if parent_values else self._parent_values()
-        signal = self.assem_signal(parent_values=parent_values)
+        signal = self.assem_signal()
         noise = self.nm.sample(n=len(signal))
         self.set_value(signal + noise)
+        for child in self.children:
+            child.parent_value_changed = True
 
     def log_p(self, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
         value = self.get_value()
 
-        pred_signal = self.assem_signal(parent_values=parent_values)
+        pred_signal = self.assem_signal()
         diff = value - pred_signal
         lp = self.nm.log_p(diff)
 #        import hashlib
@@ -137,26 +181,31 @@ class ObservedSignalNode(Node):
 
         return lp
 
-    def deriv_log_p(self, parent_values=None, parent_key=None, lp0=None, eps=1e-4):
-        parent_values = parent_values if parent_values else self._parent_values()
+    def deriv_log_p(self, parent_key=None, lp0=None, eps=1e-4):
+        parent_values = self._parent_values()
         lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
         parent_values[parent_key] += eps
+        is_tmpl, eid, phase, p = self._keymap[parent_key]
+        if is_tmpl:
+            self._tmpl_params[(eid, phase)][p] += eps
+        else:
+            self._wiggle_params[(eid, phase)][p] += eps
         deriv = ( self.log_p(parent_values=parent_values) - lp0 ) / eps
+        parent_values[parent_key] -= eps
+        if is_tmpl:
+            self._tmpl_params[(eid, phase)][p] -= eps
+        else:
+            self._wiggle_params[(eid, phase)][p] -= eps
         return deriv
 
-    def get_parent_value(self, eid, phase, param_name, parent_values):
-        return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values)
+    def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):
+         return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values, **kwargs)
 
     def get_wiggle_for_arrival(self, eid, phase, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
         wg = self.graph.wiggle_generator(phase, self.srate)
-        v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in wg.params()])
-        return wg.signal_from_features(features = v)
+        return wg.signal_from_features(features = self._wiggle_params[(eid, phase)])
 
     def get_template_params_for_arrival(self, eid, phase, parent_values=None):
-        parent_values = parent_values if parent_values else self._parent_values()
         tg = self.graph.template_generator(phase)
-        v = dict([(p, self.get_parent_value(eid, phase, p, parent_values)) for p in tg.params()])
-        arr_time = self.get_parent_value(eid, phase, "arrival_time", parent_values)
-        v['arrival_time'] = arr_time
-        return v, tg
+        return self._tmpl_params[(eid, phase)], tg

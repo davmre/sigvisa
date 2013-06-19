@@ -182,7 +182,7 @@ def reconstructed_template_wiggle_view(request, wiggleid):
     sg = load_sg_from_db_fit(fit.fitid)
     wave_node = list(sg.leaf_nodes)[0]
     wave_node.unfix_value()
-    wave_node.prior_predict()
+    wave_node.parent_predict()
 
     np.savetxt('param_envelope_%d.txt' % phase.fpid, wave_node.get_wave().data)
     return view_wave(request, wave_node.get_wave(), color='black', linewidth=1.5, logscale=False)

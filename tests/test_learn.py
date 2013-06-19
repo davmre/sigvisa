@@ -50,7 +50,7 @@ class TestFit(unittest.TestCase):
         wave_node.set_noise_model(nm_type='l1')
 
         node_list = [node for node in self.sg.template_nodes if not node.deterministic()]
-        all_stochastic_children = [child for node in node_list for (child, intermediates) in self.sg.get_stochastic_children(node)]
+        all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
         relevant_nodes = set(node_list + all_stochastic_children)
 
         vals = np.concatenate([node.get_mutable_values() for node in node_list])

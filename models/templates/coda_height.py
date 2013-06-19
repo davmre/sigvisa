@@ -56,6 +56,8 @@ class CodaHeightNode(DeterministicNode):
         event_source_amp = self._ev_source_amp(parent_values)
 
         self._dict[self.single_key] = amp_transfer+event_source_amp
+        for child in self.children:
+            child.parent_value_changed = True
 
     def default_parent_key(self):
         return self.parent_amp_transfer_key

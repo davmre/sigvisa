@@ -13,6 +13,7 @@ class Node(object):
         self.label = label
         self.mark = 0
         self.key_prefix = ""
+        self._pv_cache = None
 
         if not keys:
             if isinstance(initial_value, dict):
@@ -21,6 +22,7 @@ class Node(object):
                 keys = fixed.keys()
             else:
                 keys = (label,)
+        self._keys = sorted(keys)
 
         if isinstance(fixed, bool):
             self._mutable = { k : not fixed for k in keys }
@@ -31,6 +33,7 @@ class Node(object):
         else:
             raise ValueError("passed invalid fixed-values setting %s" % fixed)
         self._fixed = not any(self._mutable.itervalues())
+        self._update_mutable_cache()
 
         if len(keys) > 1:
             if initial_value:
@@ -52,30 +55,90 @@ class Node(object):
 
         self.children = set()
         self.parents = dict()
+        self.parent_value_changed=True
+        self.parent_set_changed=True
+        self.child_set_changed=True
         for child in children:
             self.addChild(child)
         for parent in parents:
             self.addParent(parent)
 
-
     def addChild(self, child):
         self.children.add(child)
         for key in self.keys():
             child.parents[key] = self
+        self.child_set_changed=True
+        child.parent_value_changed=True
+        child.parent_set_changed=True
 
     def addParent(self, parent):
         parent.children.add(self)
         for key in parent.keys():
             self.parents[key] = parent
+        parent.child_set_changed=True
+        self.parent_set_changed=True
+        self.parent_value_changed=True
 
     def deterministic(self):
         # deterministic nodes are treated specially (see
         # DeterministicNode below).
         return False
 
+    def _calc_deterministic_children(self):
+        # return all nodes that compute a deterministic function of
+        # this node, in topologically sorted order.
+
+        # TODO: currently assumes a tree structure to the
+        # deterministic children, i.e. doesn't do a true topo
+        # sort. Results will be INCORRECT if this is not the case.
+
+        def traverse_child(n):
+            if n.deterministic():
+                self._deterministic_children.append(n)
+                for c in n.children:
+                    traverse_child(c)
+            else:
+                return
+
+        self._deterministic_children = []
+        for c in self.children:
+            traverse_child(c)
+
+    def _calc_stochastic_children(self):
+        # return all stochastic nodes that depend directly on this
+        # node or a deterministic function of this node. For each
+        # such stochastic child, also include the chain of
+        # deterministic nodes connecting it to the given node.
+
+        def traverse_child(n, intermediates):
+            if not n.deterministic():
+                self._stochastic_children.append((n, intermediates))
+                return
+            else:
+                for c in n.children:
+                    traverse_child(c, intermediates + (n,))
+
+        self._stochastic_children = []
+        for c in self.children:
+            traverse_child(c, ())
+
+    def get_deterministic_children(self):
+        if self.child_set_changed:
+            self._calc_stochastic_children()
+            self._calc_deterministic_children()
+            self.child_set_changed=False
+        return self._deterministic_children
+
+    def get_stochastic_children(self):
+        if self.child_set_changed:
+            self._calc_stochastic_children()
+            self._calc_deterministic_children()
+            self.child_set_changed=False
+        return self._stochastic_children
+
     def keys(self):
         # return the list of keys provided by this node
-        return sorted(self._dict.keys())
+        return self._keys
 
     def get_value(self, key=None):
         key = key if key else self.single_key
@@ -86,6 +149,9 @@ class Node(object):
         if self._mutable[key]:
             self._dict[key] = value
 
+        for child in self.children:
+            child.parent_value_changed = True
+
     def get_dict(self):
         return self._dict
 
@@ -95,6 +161,8 @@ class Node(object):
             self._dict = value
         else:
             self._dict = {k : value[k] if self._mutable[k] else self._dict[k] for k in value.iterkeys() }
+        for child in self.children:
+            child.parent_value_changed = True
 
     def _set_values_from_model(self, value):
         # here "value" is assumed to be whatever is returned when
@@ -106,7 +174,12 @@ class Node(object):
         if self.single_key:
             self.set_value(value=value)
         else:
-            self.set_all_values(value)
+            self.set_dict(value)
+
+    def _update_mutable_cache(self):
+        self._mutable_dimension = sum(self._mutable.itervalues())
+        self._mutable_keys =  [k for k in self.keys() if self._mutable[k]]
+
 
     def fix_value(self, key=None):
         # hold constant (i.e., do not allow to be set or resampled) the value
@@ -117,6 +190,7 @@ class Node(object):
         else:
             self._mutable[key] = False
         self._fixed = not any(self._mutable.itervalues())
+        self._update_mutable_cache()
 
     def unfix_value(self, key=None):
         if key is None:
@@ -124,10 +198,15 @@ class Node(object):
         else:
             self._mutable[key] = True
         self._fixed = False
+        self._update_mutable_cache()
 
     def _parent_values(self):
         # return a dict of all keys provided by parent nodes, and their values
-        return dict([(k, v) for p in self.parents.values() for (k,v) in p.get_dict().items()])
+        if self.parent_value_changed or self.parent_set_changed:
+            self._pv_cache = dict([(k, v) for p in self.parents.values() for (k,v) in p.get_dict().items()])
+            self.parent_value_changed = False
+            self.parent_set_changed = False
+        return self._pv_cache
 
     def log_p(self, parent_values=None):
         #  log probability of the values at this node, conditioned on all parent values
@@ -204,23 +283,22 @@ class Node(object):
     def mutable_dimension(self):
         # return the number of values at this node that are not fixed
         # (and can thus be optimized over, etc).
-        return sum(self._mutable.itervalues())
+        return self._mutable_dimension
 
     def mutable_keys(self):
         # return the set of keys at this node whose values are not
         # fixed (and can thus be optimized over, etc).
-        return [k for k in self.keys() if self._mutable[k]]
+        return self._mutable_keys
 
     def get_mutable_values(self):
-        return [self._dict[k] for k in self.keys() if self._mutable[k]]
+        return [self._dict[k] for k in self._mutable_keys]
 
     def set_mutable_values(self, values):
         assert(len(values) == self.mutable_dimension())
-        i = 0
-        for k in self.keys():
-            if self._mutable[k]:
-                self._dict[k] = values[i]
-                i += 1
+        for (i,k) in enumerate(self._mutable_keys):
+            self._dict[k] = values[i]
+        for child in self.children:
+            child.parent_value_changed = True
 
     def low_bounds(self):
         return [self._low_bounds[k] for k in self.keys() if self._mutable[k]]
@@ -262,6 +340,8 @@ class DeterministicNode(Node):
         parent_val = self.invert(value=value, parent_key=parent_key)
         self.parents[parent_key].set_value(value=parent_val, key=parent_key)
         self.compute_value()
+        for child in self.children:
+            child.parent_value_changed = True
 
     def get_mutable_values(self, **kwargs):
         raise AttributeError("deterministic node has no mutable values!")

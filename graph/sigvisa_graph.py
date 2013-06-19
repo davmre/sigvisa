@@ -480,7 +480,7 @@ class SigvisaGraph(DirectedGraphModel):
                 continue
 
             wiggle = wiggle[:wg.npts].filled(1)
-            self.set_template(eid=arrival[0], sta=wave_node.sta, phase=arrival[1], band=wave_node.band, chan=wave_node.chan, values=wg.array_to_param_dict(wg.features_from_signal(wiggle)))
+            self.set_template(eid=arrival[0], sta=wave_node.sta, phase=arrival[1], band=wave_node.band, chan=wave_node.chan, values=wg.features_from_signal(wiggle))
 
         ll = self.current_log_p()
         self.optim_log += ("init_wiggles: ll=%.1f\n" % ll)
