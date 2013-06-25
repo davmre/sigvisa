@@ -5,13 +5,13 @@ from sigvisa.models.wiggles.wiggle_models import WiggleGenerator
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Uniform, Gaussian
 
-import time
-from numba import double
-from numba.decorators import autojit
+import scipy.weave as weave
+from scipy.weave import converters
+
 
 class FourierFeatureGenerator(WiggleGenerator):
 
-    def __init__(self, npts, srate, logscale=False, basisid=None, family_name=None, max_freq=None, usejit=False, **kwargs):
+    def __init__(self, npts, srate, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
 
         self.srate = srate
         self.npts = npts
@@ -38,8 +38,6 @@ class FourierFeatureGenerator(WiggleGenerator):
 
         self.uamodel_amp = Gaussian(0, 0.1)
         self.uamodel_phase = Uniform(0, 2*np.pi)
-
-        self.usejit = usejit
 
         freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
         self._params = ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
@@ -76,11 +74,31 @@ class FourierFeatureGenerator(WiggleGenerator):
         else:
             features= np.asarray(features)
 
-        # jit doesn't save very much here, maybe 25% relative to naive numpy slicing
-        if self.usejit:
-            return sff_jit(features, self.npts, self.nparams, int(self.logscale))
+        nparams = int(self.nparams)
+        npts = int(self.npts)
+        padded_coeffs = np.zeros((npts/2 + 1,), dtype=complex)
+        code =  """
+int n2 = nparams/2;
+padded_coeffs(0) = 0;
+for (int i=0; i < n2; ++i) {
+    double amp = features(i) * (npts/2);
+    double phase = features(i+n2);
+    padded_coeffs(i+1) = std::complex<double>(amp * cos(phase), amp * sin(phase));
+}
+"""
+        weave.inline(code,['nparams', 'npts', 'features', 'padded_coeffs'],type_converters =
+               converters.blitz,verbose=2,compiler='gcc')
+
+        signal = np.fft.irfft(padded_coeffs)
+
+        if self.logscale:
+            signal = np.exp(signal)
         else:
-            return sff(features, self.npts, self.nparams, self.logscale)
+            signal += 1
+
+        return signal
+
+
 
     def features_from_signal(self, signal):
         assert(len(signal) == self.npts)
@@ -158,38 +176,3 @@ class FourierFeatureGenerator(WiggleGenerator):
         else:
             raise KeyError("unknown param %s" % param)
         #return DummyModel(default_value=0.0)
-
-#@jit('double[:](double[:], int64, int64, int64)')
-@autojit
-def sff_jit(features, npts, nparams, logscale):
-    n2 = nparams/2
-    padded_coeffs = np.zeros((npts/2.0 + 1,), dtype=complex)
-    for i in range(n2):
-        amp = features[i] * (npts/2.0)
-        phase = features[i+n2] * 6.283185307179586
-        padded_coeffs[i+1] = amp * np.cos(phase) + 1j * amp * np.sin(phase)
-
-    signal = np.fft.irfft(padded_coeffs)
-
-    if logscale:
-        signal = np.exp(signal)
-    else:
-        signal += 1
-    return signal
-
-def sff(features, npts, nparams, logscale):
-    amps = features[:nparams/2] * (npts/2.0)
-    phases = features[nparams/2:] * 2.0 * np.pi
-    coeffs = amps * np.cos(phases) + 1j * amps * np.sin(phases)
-
-    padded_coeffs = np.zeros((npts/2.0 + 1,), dtype=complex)
-    padded_coeffs[1:len(coeffs)+1] = coeffs
-
-    signal = np.fft.irfft(padded_coeffs)
-
-    if logscale:
-        signal = np.exp(signal)
-    else:
-        signal += 1
-
-    return signal

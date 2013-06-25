@@ -15,8 +15,9 @@ from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import get_parent_value, create_key
 
-from numba import double
-from numba.decorators import autojit
+
+import scipy.weave as weave
+from scipy.weave import converters
 
 def update_arrivals(parent_values):
     arrivals = set()
@@ -75,7 +76,7 @@ class ObservedSignalNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
-    def assem_signal_usejit(self, include_wiggles=True, arrivals=None):
+    def assem_signal(self, include_wiggles=True, arrivals=None):
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
@@ -84,71 +85,73 @@ class ObservedSignalNode(Node):
             arrivals = self.arrivals()
 
         arrivals = list(arrivals)
-        sidxs = []
-        logenvs = []
-        wiggles = []
+        n = len(arrivals)
+        sidxs = np.empty((n,))
+        logenvs = [None] * n
+        wiggles = [None] * n
+        empty_array = np.reshape(np.array((), dtype=float), (0,))
 
-        for (eid, phase) in arrivals:
+        for (i, (eid, phase)) in enumerate(arrivals):
             v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
             start = (v['arrival_time'] - self.st) * self.srate
             start_idx = int(np.floor(start))
-            sidxs.append(start_idx)
+            sidxs[i] = start_idx
             if start_idx >= self.npts:
-                logenvs.append([])
-                wiggles.append([])
+                logenvs[i] = empty_array
+                wiggles[i] = empty_array
                 continue
 
             offset = start - start_idx
             logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
-            logenvs.append(logenv)
+            logenvs[i] = logenv
 
             if include_wiggles:
                 wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase)
-                wiggles.append(wiggle)
+                wiggles[i] = wiggle
             else:
-                wiggles.append([])
+                wiggles[i] = empty_array
 
-        signal = assem_signal_jit(arrivals, sidxs, logenvs, wiggles, self.npts)
+        npts = self.npts
+        n = len(arrivals)
+        signal = np.zeros((npts,))
+        code = """
+    for (int i = 0; i < n; ++i) {
+        int start_idx = sidxs(i);
+
+        PyArrayObject* logenv_arr = convert_to_numpy(PyList_GetItem(logenvs,i), "logenv");
+        conversion_numpy_check_type(logenv_arr,PyArray_DOUBLE, "logenv");
+        double * logenv = (double *)logenv_arr->data;
+
+        PyArrayObject* wiggle_arr = convert_to_numpy(PyList_GetItem(wiggles,i), "wiggle");
+        conversion_numpy_check_type(wiggle_arr,PyArray_DOUBLE, "wiggle");
+        double * wiggle =  (double *) wiggle_arr->data;
+
+        int len_logenv = logenv_arr->dimensions[0];
+        int len_wiggle = wiggle_arr->dimensions[0];
+
+        int wiggle_len = std::min(len_wiggle, len_logenv);
+
+        int end_idx = start_idx + len_logenv;
+        if (end_idx <= 0) {
+            continue;
+        }
+        int early = std::max(0, - start_idx);
+        int overshoot = std::max(0, end_idx - npts);
+
+        int j = early;
+        int total_wiggle_len = std::min(wiggle_len - early, len_logenv - overshoot - early);
+        for(j=early; j < early + total_wiggle_len; ++j) {
+            signal(j+start_idx) += exp(logenv[j]) * wiggle[j];
+        }
+        for(; j < len_logenv - overshoot; ++j) {
+            signal(j + start_idx) += exp(logenv[j]);
+        }
+    }
+"""
+        weave.inline(code,['n', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
-        return signal
-
-    def assem_signal(self, include_wiggles=True, arrivals=None):
-        signal = np.zeros((self.npts,))
-
-        # we allow specifying the list of parents in order to generate
-        # signals with a subset of arriving phases (used e.g. in
-        # wiggle extraction)
-        if arrivals is None:
-            arrivals = self.arrivals()
-
-        for (eid, phase) in arrivals:
-            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
-            start = (v['arrival_time'] - self.st) * self.srate
-            start_idx = int(np.floor(start))
-            if start_idx >= self.npts:
-                continue
-
-            offset = start - start_idx
-            phase_env = np.exp(tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate))
-            if include_wiggles:
-                wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase)
-                wiggle_len = min(len(wiggle), len(phase_env))
-                phase_env[:wiggle_len] *= wiggle[:wiggle_len]
-
-            end_idx = start_idx + len(phase_env)
-            if end_idx <= 0:
-                continue
-            early = max(0, - start_idx)
-            overshoot = max(0, end_idx - len(signal))
-            final_template = phase_env[early:len(phase_env) - overshoot]
-
-            signal[start_idx + early:end_idx - overshoot] += final_template
-
-        if not np.isfinite(signal).all():
-            raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
-
         return signal
 
     def _parent_values(self):
@@ -257,33 +260,3 @@ class ObservedSignalNode(Node):
     def get_template_params_for_arrival(self, eid, phase, parent_values=None):
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg
-
-@autojit
-def assem_signal_jit(arrivals, sidxs, logenvs, wiggles, npts):
-    signal = np.zeros((npts,))
-
-    for i in range(len(arrivals)):
-        eid = arrivals[i][0]
-        phase = arrivals[i][1]
-        start_idx = sidxs[i]
-        logenv = logenvs[i]
-        wiggle = wiggles[i]
-
-        wiggle_len = min(len(wiggle), len(logenv))
-
-        end_idx = start_idx + len(logenv)
-        if end_idx <= 0:
-            continue
-        early = max(0, - start_idx)
-        overshoot = max(0, end_idx - len(signal))
-
-        j = early
-        total_wiggle_len = min(wiggle_len - early, len(logenv) - overshoot - early)
-        for t in range(start_idx+early, start_idx+early+total_wiggle_len):
-            signal[t] += np.exp(logenv[j]) * wiggle[j]
-            j += 1
-        for t in range(start_idx+early+total_wiggle_len, end_idx - overshoot):
-            signal[t] += np.exp(logenv[j])
-            j += 1
-
-    return signal

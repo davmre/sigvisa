@@ -68,7 +68,7 @@ class SigvisaGraph(DirectedGraphModel):
                  dummy_fallback=False,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0,
-                 no_prune_edges=False, usejit=False):
+                 no_prune_edges=False):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -122,7 +122,6 @@ class SigvisaGraph(DirectedGraphModel):
         self.next_uatemplateid = 1
         self.uatemplate_rate = .02
 
-        self.usejit = usejit
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -131,7 +130,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def wiggle_generator(self, phase, srate):
         if (phase, srate) not in self.wgs:
-            self.wgs[(phase, srate)] =  load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=srate, usejit=self.usejit)
+            self.wgs[(phase, srate)] =  load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=srate)
         return self.wgs[(phase, srate)]
 
     def get_wiggle_nodes(self, eid, sta, phase, band, chan):

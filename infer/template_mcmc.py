@@ -179,8 +179,8 @@ def death_move(sg, wave_node, wiggles):
     lp_new = sg.current_log_p()
 
     u = np.random.rand()
-    print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
+        print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
         return True
     else:
         for (param, (label, node)) in tnodes.items() + wnodes.items():
@@ -195,7 +195,7 @@ def death_move(sg, wave_node, wiggles):
 
 #####################################################################
 
-def run_open_world_MH(sg, wn, burnin=0, skip=20, steps=12, wiggles=False):
+def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=30, wiggles=False):
     n_accepted = dict()
     moves = ('birth', 'death', 'indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
     for move in moves:
@@ -259,7 +259,7 @@ def run_open_world_MH(sg, wn, burnin=0, skip=20, steps=12, wiggles=False):
                 else:
                     print "%s: %d%%, " % (move, float(n_accepted[move]) / (step * len(templates)) * 100),
             print
-            plot_with_fit("unass_step%d.png" % step, wn)
+            plot_with_fit("unass_step%06d.png" % step, wn)
 
 
     """
@@ -285,12 +285,12 @@ def main():
     """
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
                       wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                      phases="leb", nm_type = "l1", usejit=True)
-
+                      phases="leb", nm_type = "ar")
 
     wave = Waveform(data = np.load("sampled_wave.npy"),
                     srate=5.0, stime=1239915900.0,
-                    sta="FIA3", chan="SHZ", arrivals=np.array(()))
+                    sta="FIA3", chan="SHZ", arrivals=np.array(()),
+                    filter_str="freq_2.0_3.0;env;hz_5.0")
     wn = sg.add_wave(wave)
     #sg.create_unassociated_template(wave_node=wn, atime=1239915940.253)
     #sg.create_unassociated_template(wave_node=wn, atime=1239915969.623)
@@ -298,6 +298,8 @@ def main():
     for fname in os.listdir('.'):
         if fname.startswith("unass_step") or fname.startswith("mcmc_unass"):
             os.remove(fname)
+
+    np.random.seed(0)
     run_open_world_MH(sg, wn, wiggles=True)
     #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
 

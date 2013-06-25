@@ -11,10 +11,12 @@ from sigvisa.graph.graph_utils import create_key, extract_sta_node
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Gamma, Negate, Gaussian
 
+import scipy.weave as weave
+from scipy.weave import converters
+
+
 ARR_TIME_PARAM, PEAK_OFFSET_PARAM, CODA_HEIGHT_PARAM, CODA_DECAY_PARAM, NUM_PARAMS = range(4 + 1)
 
-from numba import double
-from numba.decorators import jit
 
 class PairedExpTemplateGenerator(TemplateGenerator):
 
@@ -71,7 +73,55 @@ class PairedExpTemplateGenerator(TemplateGenerator):
         arr_time, peak_offset, coda_height, coda_decay = \
             vals['arrival_time'], vals['peak_offset'], vals['coda_height'], vals['coda_decay']
 
-        return alr(peak_offset, coda_height, coda_decay, min_logenv, idx_offset, srate)
+        if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
+            return np.empty((0,))
+
+
+        code = """
+int l;
+double onset_slope;
+if (coda_decay > -0.001) {
+    l = 1200 * srate;
+} else {
+        /* minimum length is 2, so that even very small arrivals
+         can create a small bump (not doing this confuses the
+         approx-gradient routine; it tries making the bump
+         slightly bigger but with no effect since it's too small
+         to create a nonzero-length envelope). */
+    l = int(std::max(2.0, std::min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate));
+}
+int peak_idx = std::max(0.0, peak_offset * srate);
+if (peak_idx != 0) {
+    onset_slope = exp(coda_height) / peak_idx;
+} else {
+    onset_slope = 0;
+}
+
+int intro_len = std::min(l, int(idx_offset + peak_idx) + 1);
+double min_env = exp(min_logenv);
+
+npy_intp dims[1] = {l};
+
+PyObject* out_array = PyArray_SimpleNew(1, dims, NPY_DOUBLE);
+double* d = (double*) ((PyArrayObject*) out_array)->data;
+
+for (int i=1; i < intro_len; ++i) {
+  d[i] = log((i - idx_offset) * onset_slope + min_env);
+}
+double initial_decay = intro_len - idx_offset - peak_idx;
+for (int i=intro_len; i < l; ++i) {
+  d[i] = (i + initial_decay) / srate * coda_decay + coda_height;
+}
+if (l > 0) {
+  d[0] = -999;
+}
+
+return_val = out_array;
+Py_XDECREF(out_array);
+"""
+        d = weave.inline(code,['peak_offset', 'coda_height', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        return d
+
 
     def low_bounds(self):
 
@@ -95,93 +145,3 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
     def unassociated_model(self, param):
         return self.uamodels[param]
-
-
-# for some reason this is waay slower than the numpy slicing version below
-# @jit('double[:](double, double, double, double, double, double)')
-def alr_jit(peak_offset, coda_height, coda_decay, min_logenv, idx_offset, srate):
-
-    if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
-        return np.empty((0,))
-
-    if coda_decay > -0.001:
-        l = 1200 * srate
-    else:
-        # minimum length is 2, so that even very small arrivals
-        # can create a small bump (not doing this confuses the
-        # approx-gradient routine; it tries making the bump
-        # slightly bigger but with no effect since it's too small
-        # to create a nonzero-length envelope).
-        l = int(max(2, min(1200, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
-
-
-    peak_idx = max(0, peak_offset * srate)
-    if peak_idx != 0:
-        onset_slope = np.exp(coda_height) / peak_idx
-    else:
-        onset_slope = 0
-
-    intro_len = min(l, int(idx_offset + peak_idx) + 1)
-
-    min_env = np.exp(min_logenv)
-    d = np.empty((l,))
-    for i in range(1, intro_len):
-        d[i] = np.log((i - idx_offset) * onset_slope + min_env)
-
-    initial_decay = intro_len - idx_offset - peak_idx
-    for i in range(intro_len, len(d)):
-        d[i] = (i + initial_decay) / srate * coda_decay + coda_height
-    if len(d) > 0:
-        d[0] = -999
-
-    return d
-
-
-
-def alr(peak_offset, coda_height, coda_decay, min_logenv, idx_offset, srate):
-    #assert(idx_offset >= 0 and idx_offset < 1)
-
-    if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
-        return np.empty((0,))
-
-    if coda_decay > -0.001:
-        l = 1200 * srate
-    else:
-        # minimum length is 2, so that even very small arrivals
-        # can create a small bump (not doing this confuses the
-        # approx-gradient routine; it tries making the bump
-        # slightly bigger but with no effect since it's too small
-        # to create a nonzero-length envelope).
-        l = int(max(2, min(1200, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
-    d = np.empty((l,))
-
-    peak_idx = max(0, peak_offset * srate)
-    if peak_idx != 0:
-        onset_slope = np.exp(coda_height) / peak_idx
-    else:
-        onset_slope = 0
-
-    intro_len = min(len(d), int(idx_offset + peak_idx) + 1)
-    if intro_len > 0 and onset_slope > 0:
-        intro_env = (np.arange(intro_len) - idx_offset) * onset_slope + np.exp(min_logenv)
-
-        # avoid taking log(0)
-        intro_env[0] = 0.1
-        d[0:intro_len] = np.log(intro_env)
-
-        # say peak_idx is 9.9 and idx_offset is 0.2, so we have intro_len=11
-        # then at t=1, we have onset[0.8]
-        # up to t=10, where we have onset[9.8], which is what we want.
-        # now imagine peak_idx is 10 and idx_offset is 0; again we have intro_len=11
-        # now at t=10 we have onset[10], which is fine.
-
-    # now for case a, at t=11 we are 10.8 into the signal, so we want decay[0.9]
-    # for case b, at t=11 we are 11 into the signal, so we want decay[1]
-    # in general at t=intro_len we are intro_len - idx_offset into the signal,
-    # so we want decay[intro_len - idx_offset - peak_idx]
-    initial_decay = intro_len - idx_offset - peak_idx
-    d[intro_len:] = (np.arange(len(d) - intro_len) + initial_decay) / srate * coda_decay + coda_height
-    if len(d) > 0:
-        d[0] = -999
-
-    return d
