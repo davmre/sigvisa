@@ -5,6 +5,7 @@ import sys
 import time
 import traceback
 import numpy as np
+import numpy.ma as ma
 import scipy
 import re
 
@@ -18,6 +19,27 @@ from sigvisa.graph.graph_utils import get_parent_value, create_key
 
 import scipy.weave as weave
 from scipy.weave import converters
+
+def get_new_arrivals(new_nodes, r):
+    new_arrivals = set()
+    for n in new_nodes:
+        for k in n.keys():
+            m = r.match(k)
+            if not m: raise ValueError("could not parse parent key %s" % k)
+            eid = int(m.group(1))
+            phase = m.group(2)
+            new_arrivals.add((eid, phase))
+    return new_arrivals
+
+def get_removed_arrivals(removed_keys, r):
+    removed_arrivals = set()
+    for k in removed_keys:
+        m = r.match(k)
+        if not m: raise ValueError("could not parse parent key %s" % k)
+        eid = int(m.group(1))
+        phase = m.group(2)
+        removed_arrivals.add((eid, phase))
+    return removed_arrivals
 
 def update_arrivals(parent_values):
     arrivals = set()
@@ -56,7 +78,17 @@ class ObservedSignalNode(Node):
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
 
+        self.signal_diff = np.empty((self.npts,))
+        self.pred_signal = np.empty((self.npts,))
+
         self.set_noise_model(nm_type=nm_type, nmid=nmid)
+
+
+        self._tmpl_params = dict()
+        self._wiggle_params = dict()
+        self._keymap = dict()
+        self._arrivals = set()
+        self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
 
         self.graph = graph
 
@@ -113,8 +145,9 @@ class ObservedSignalNode(Node):
 
         npts = self.npts
         n = len(arrivals)
-        signal = np.zeros((npts,))
+        signal = self.pred_signal
         code = """
+      for(int i=0; i < npts; ++i) signal(i) = 0;
     for (int i = 0; i < n; ++i) {
         int start_idx = sidxs(i);
 
@@ -155,44 +188,53 @@ class ObservedSignalNode(Node):
         return signal
 
     def _parent_values(self):
-        psc = self.parent_set_changed
-        pvc = self.parent_value_changed
+        parent_keys_removed = self.parent_keys_removed
+        parent_keys_changed = self.parent_keys_changed
+        parent_nodes_added = self.parent_nodes_added
         pv = super(ObservedSignalNode, self)._parent_values()
-        if psc:
-            self._arrivals = update_arrivals(pv)
-            self._tmpl_keys = dict()
-            self._wiggle_keys = dict()
-            # cache the list of tmpl/wiggle param keys for this arrival
-            for (eid, phase) in self._arrivals:
-                tg = self.graph.template_generator(phase=phase)
-                self._tmpl_keys[(eid,phase)] = dict()
-                for p in tg.params() + ('arrival_time',):
+
+        new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
+        removed_arrivals = get_removed_arrivals(parent_keys_removed, self.r)
+        self._arrivals.update(new_arrivals)
+        self._arrivals.difference_update(removed_arrivals)
+
+        # cache the list of tmpl/wiggle param keys for the new arrivals
+        for (eid, phase) in new_arrivals:
+            tg = self.graph.template_generator(phase=phase)
+            self._tmpl_params[(eid,phase)] = dict()
+            for p in tg.params() + ('arrival_time',):
+                k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
+                self._tmpl_params[(eid,phase)][p] = v
+                self._keymap[k] = (True, eid, phase, p)
+
+            wg = self.graph.wiggle_generator(phase=phase, srate=self.srate)
+            self._wiggle_params[(eid, phase)] = np.empty((wg.dimension(),))
+            for (i, p) in enumerate(wg.params()):
+                try:
                     k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
-                    self._tmpl_keys[(eid, phase)][p] = k
-
-                wg = self.graph.wiggle_generator(phase=phase, srate=self.srate)
-                self._wiggle_keys[(eid, phase)] = []
-                for p in wg.params():
-                    try:
-                        k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
-                        self._wiggle_keys[(eid, phase)].append(k)
-                    except KeyError:
-                        #print "WARNING: no wiggles for arrival (%d, %s) at (%s, %s, %s)" % (eid, phase, self.sta, self.band, self.chan)
-                        k = None
-
-
-                self._keymap=dict()
-                for (p,k) in self._tmpl_keys[(eid, phase)].iteritems():
-                    self._keymap[k] = (True, eid, phase, p)
-                for (i,k) in enumerate(self._wiggle_keys[(eid, phase)]):
+                    self._wiggle_params[(eid,phase)][i] = v
                     self._keymap[k] = (False, eid, phase, i)
+                except KeyError:
+                    #print "WARNING: no wiggles for arrival (%d, %s) at (%s, %s, %s)" % (eid, phase, self.sta, self.band, self.chan)
+                    k = None
 
-        if pvc:
-            self._tmpl_params = dict()
-            self._wiggle_params = dict()
-            for (eid, phase) in self._arrivals:
-                self._tmpl_params[(eid,phase)] = dict([(p, pv[k]) for (p, k) in self._tmpl_keys[(eid, phase)].iteritems()])
-                self._wiggle_params[(eid, phase)] = np.asarray([pv[k] for k in self._wiggle_keys[(eid, phase)]])
+        for k in parent_keys_removed:
+            try:
+                tmpl, eid, phase, p = self._keymap[k]
+                if tmpl:
+                    del self._tmpl_params[(eid, phase)]
+                else:
+                    del self._wiggle_params[(eid, phase)]
+                del self._keymap[k]
+            except KeyError:
+                continue
+
+        for (key, node) in parent_keys_changed:
+            tmpl, eid, phase, p = self._keymap[key]
+            if tmpl:
+                self._tmpl_params[(eid,phase)][p] = pv[key]
+            else:
+                self._wiggle_params[(eid,phase)][p] = pv[key]
 
         return pv
 
@@ -206,22 +248,32 @@ class ObservedSignalNode(Node):
         noise = self.nm.predict(n=len(signal))
         self.set_value(signal + noise)
         for child in self.children:
-            child.parent_value_changed = True
+            child.parent_keys_changed.add(self.single_key)
 
     def parent_sample(self, parent_values=None):
         signal = self.assem_signal()
         noise = self.nm.sample(n=len(signal))
         self.set_value(signal + noise)
         for child in self.children:
-            child.parent_value_changed = True
+            child.parent_keys_changed.add((self.single_key), self)
 
     def log_p(self, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
-        value = self.get_value()
+        v = self.get_value()
+        value = v.data
+        mask = v.mask
 
         pred_signal = self.assem_signal()
-        diff = value - pred_signal
-        lp = self.nm.log_p(diff)
+        signal_diff = self.signal_diff
+        npts = self.npts
+        code = """
+for(int i=0; i < npts; ++i) {
+signal_diff(i) =value(i) - pred_signal(i);
+}
+"""
+        weave.inline(code,['npts', 'signal_diff', 'value', 'pred_signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+
+        lp = self.nm.log_p(signal_diff, mask=mask)
 #        import hashlib
 #        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
 #        np.savetxt(fname, diff)

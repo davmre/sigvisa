@@ -73,7 +73,6 @@ class FourierFeatureGenerator(WiggleGenerator):
             features = self.param_dict_to_array(features)
         else:
             features= np.asarray(features)
-
         nparams = int(self.nparams)
         npts = int(self.npts)
         padded_coeffs = np.zeros((npts/2 + 1,), dtype=complex)

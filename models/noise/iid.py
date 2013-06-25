@@ -27,23 +27,26 @@ class L1IIDModel(NoiseModel):
     def sample(self, n):
         return laplace.rvs(size=n, loc=self.median, scale=self.b)
 
-    def log_p(self, x, zero_mean=False):
+    def log_p(self, x, mask=None, zero_mean=False):
         n = len(x)
         c = 0 if zero_mean else self.median
 
-        if not isinstance(x, ma.masked_array):
-            x = ma.masked_array(x, mask=False)
-
+        if isinstance(x, ma.masked_array):
+            d = x.data - c
+            mm = x.mask
+        else:
+            d = x - c
+            mm = mask
 
         try:
-            x.mask[0]
-            m = x.mask
-        except (TypeError,IndexError):
+            mm[0]
+            m = mm
+        except (TypeError,IndexError,AttributeError):
             if len(x) > len(self.nomask):
                 self.nomask = np.array([False,] * (len(self.nomask)*2), dtype=bool)
             m = self.nomask
 
-        d = x.data - c
+
 
         b = self.b
 

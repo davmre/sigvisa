@@ -41,20 +41,25 @@ class ARModel(NoiseModel):
 
         return data[self.p:]
 
-    def fastAR_missingData(self, d, c, std):
+    def fastAR_missingData(self, d, c, std, mask=None):
         n = len(d)
 
+        if isinstance(d, ma.masked_array):
+            mm = d.mask
+            d = d.data - c
+
+        else:
+            d = d - c
+            mm = mask
 
         try:
-            d.mask[0]
-            m = d.mask
-        except (TypeError,IndexError):
+            mm[0]
+            m = mm
+        except (TypeError,IndexError,AttributeError):
             if len(d) > len(self.nomask):
                 self.nomask = np.array([False,] * (len(self.nomask)*2), dtype=bool)
             m = self.nomask
 
-
-        d = d.data - c
         p = np.array(self.params)
         n_p = len(p)
 
@@ -355,7 +360,7 @@ class ARModel(NoiseModel):
             return d_prob
 
     # likelihood in log scale
-    def log_p(self, x, zero_mean=False):
+    def log_p(self, x, zero_mean=False, **kwargs):
         data = x
         if not isinstance(data, (list, tuple)):
             data = [data, ]
@@ -367,8 +372,8 @@ class ARModel(NoiseModel):
 
         prob = 0
         for d in data:
-            if not isinstance(d, ma.masked_array):
-                d = ma.masked_array(d, mask=[False,] * len(d))
+            #if not isinstance(d, ma.masked_array):
+            #    d = ma.masked_array(d, mask=[False,] * len(d))
 
             """
             t1 = time.time()
@@ -381,7 +386,7 @@ class ARModel(NoiseModel):
             print (t2-t1), d_prob, (t3-t2), d_prob_fast_missing, (t4-t3), d_prob_fast
             """
 
-            d_prob = self.fastAR_missingData(d, c, self.em.std)
+            d_prob = self.fastAR_missingData(d, c, self.em.std, **kwargs)
 
             prob += d_prob
 

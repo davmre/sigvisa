@@ -49,7 +49,7 @@ class ArrivalTimeNode(DeterministicNode):
         self._dict[self.single_key] = evtime + meantt + residual
 
         for child in self.children:
-            child.parent_value_changed = True
+            child.parent_keys_changed.add((self.single_key, self))
 
     def default_parent_key(self):
         return self.tt_residual_key

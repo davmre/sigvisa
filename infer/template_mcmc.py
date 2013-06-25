@@ -186,6 +186,7 @@ def death_move(sg, wave_node, wiggles):
         for (param, (label, node)) in tnodes.items() + wnodes.items():
             sg.add_node(node)
             node.addChild(wave_node)
+        wave_node.arrivals()
         sg._topo_sorted_list = orig_topo_sorted
         sg._gc_topo_sorted_nodes()
         #lp = sg.current_log_p()
@@ -218,11 +219,11 @@ def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=30, wiggles=False):
             n_accepted['birth'] += 1
 
         arrivals = wn.arrivals()
-
-        if len(arrivals) > 1:
+        if len(arrivals) >= 1:
             n_accepted['death'] += death_move(sg, wn, wiggles=wiggles)
 
         for (eid, phase) in arrivals:
+            l3 = len(arrivals)
             wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
             tmplid = -eid
             tmnodes = templates[tmplid]
@@ -236,6 +237,7 @@ def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=30, wiggles=False):
             for param in ("arrival_time", "coda_height", "coda_decay"):
                 n = tmnodes[param]
                 n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
+
             if wiggles:
                 for param in wg.params():
                     n = tmnodes[param]
@@ -248,6 +250,7 @@ def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=30, wiggles=False):
                     n_accepted[move] += float(gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[move], phase_wraparound=phase_wraparound)) / (wg.dimension()/2.0)
             for (param, n) in tmnodes.items():
                 params_over_time["%d_%s" % (tmplid, param)].append(n.get_value())
+
 
         if step > 0 and step % skip == 0:
             lp = sg.current_log_p()

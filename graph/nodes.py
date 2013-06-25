@@ -13,7 +13,6 @@ class Node(object):
         self.label = label
         self.mark = 0
         self.key_prefix = ""
-        self._pv_cache = None
 
         if not keys:
             if isinstance(initial_value, dict):
@@ -61,8 +60,11 @@ class Node(object):
 
         self.children = set()
         self.parents = dict()
-        self.parent_value_changed=True
-        self.parent_set_changed=True
+        self.parent_keys_changed = set()
+        self.parent_nodes_added = set()
+        self.parent_keys_removed = set()
+        self._pv_cache = dict()
+
         self.child_set_changed=True
         for child in children:
             self.addChild(child)
@@ -73,17 +75,18 @@ class Node(object):
         self.children.add(child)
         for key in self.keys():
             child.parents[key] = self
+            child.parent_keys_removed.discard(key)
         self.child_set_changed=True
-        child.parent_value_changed=True
-        child.parent_set_changed=True
+        child.parent_nodes_added.add(self)
+
 
     def addParent(self, parent):
         parent.children.add(self)
         for key in parent.keys():
             self.parents[key] = parent
+            self.parent_keys_removed.discard(key)
         parent.child_set_changed=True
-        self.parent_set_changed=True
-        self.parent_value_changed=True
+        self.parent_nodes_added.add(parent)
 
     # NOTE: removeChild and removeParent assume that node is actually
     # being removed from the graph. We'd have to do more bookkeeping
@@ -92,10 +95,11 @@ class Node(object):
         self.children.remove(child)
 
     def removeParent(self, parent):
+        self.parent_nodes_added.discard(parent)
         for key in parent.keys():
             del self.parents[key]
-        self.parent_set_changed=True
-        self.parent_value_changed=True
+            self.parent_keys_removed.add(key)
+            self.parent_keys_changed.discard((key, parent))
 
     def deterministic(self):
         # deterministic nodes are treated specially (see
@@ -168,7 +172,7 @@ class Node(object):
             self._dict[key] = value
 
         for child in self.children:
-            child.parent_value_changed = True
+            child.parent_keys_changed.add((key, self))
 
     def get_dict(self):
         return self._dict
@@ -180,7 +184,7 @@ class Node(object):
         else:
             self._dict = {k : value[k] if self._mutable[k] else self._dict[k] for k in value.iterkeys() }
         for child in self.children:
-            child.parent_value_changed = True
+            child.parent_keys_changed.update((k, self) for k in self._mutable_keys)
 
     def _set_values_from_model(self, value):
         # here "value" is assumed to be whatever is returned when
@@ -220,10 +224,16 @@ class Node(object):
 
     def _parent_values(self):
         # return a dict of all keys provided by parent nodes, and their values
-        if self.parent_value_changed or self.parent_set_changed:
-            self._pv_cache = dict([(k, v) for p in self.parents.values() for (k,v) in p.get_dict().items()])
-            self.parent_value_changed = False
-            self.parent_set_changed = False
+        for key in self.parent_keys_removed:
+            del self._pv_cache[key]
+        self.parent_keys_removed = set()
+        for (key, node) in self.parent_keys_changed:
+            self._pv_cache[key] = node.get_value(key)
+        self.parent_keys_changed = set()
+        for node in self.parent_nodes_added:
+            self._pv_cache.update(node.get_dict())
+        self.parent_nodes_added = set()
+
         return self._pv_cache
 
     def log_p(self, parent_values=None):
@@ -315,8 +325,8 @@ class Node(object):
         assert(len(values) == self.mutable_dimension())
         for (i,k) in enumerate(self._mutable_keys):
             self._dict[k] = values[i]
-        for child in self.children:
-            child.parent_value_changed = True
+            for child in self.children:
+                child.parent_keys_changed.add((k, self))
 
     def low_bounds(self):
         return [self._low_bounds[k] for k in self.keys() if self._mutable[k]]
@@ -359,7 +369,7 @@ class DeterministicNode(Node):
         self.parents[parent_key].set_value(value=parent_val, key=parent_key)
         self.compute_value()
         for child in self.children:
-            child.parent_value_changed = True
+            child.parent_keys_changed.add((self.single_key, self))
 
     def get_mutable_values(self, **kwargs):
         raise AttributeError("deterministic node has no mutable values!")
