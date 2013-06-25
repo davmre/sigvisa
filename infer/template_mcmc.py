@@ -5,8 +5,6 @@ import traceback
 import pickle
 import copy
 
-import objgraph
-
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
@@ -198,8 +196,7 @@ def death_move(sg, wave_node, wiggles):
 
 #####################################################################
 
-
-def run_open_world_MH(sg, wn, burnin=0, skip=50, steps=1000000, wiggles=False):
+def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=500, wiggles=False):
     n_accepted = dict()
     moves = ('birth', 'death', 'indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
     for move in moves:
@@ -212,40 +209,19 @@ def run_open_world_MH(sg, wn, burnin=0, skip=50, steps=1000000, wiggles=False):
     templates = dict()
     params_over_time = dict()
 
-    from guppy import hpy
-    h = hpy()
-
-    for i in range(5):
+    for step in range(steps):
         new_nodes = birth_move(sg, wn, wiggles=wiggles)
         if new_nodes:
             tmplid = new_nodes['arrival_time'].unassociated_templateid
             templates[tmplid] = new_nodes
             for param in new_nodes.keys():
-                params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * i
+                params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
             n_accepted['birth'] += 1
 
-    arrivals = wn.arrivals()
-    for step in range(steps):
-        for (eid, phase) in arrivals:
-            l3 = len(arrivals)
-            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
-            tmplid = -eid
-            tmnodes = templates[tmplid]
-
-            n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                             offset_node=tmnodes["peak_offset"],
-                                                             wave_node=wn, std=stds['peak_offset'])
-            if (step % 50) == 0:
-                print step
-
-    for step in range(steps):
-
         arrivals = wn.arrivals()
+        if len(arrivals) >= 1:
+            n_accepted['death'] += death_move(sg, wn, wiggles=wiggles)
 
-        #if len(arrivals) >= 1:
-        #    n_accepted['death'] += death_move(sg, wn, wiggles=wiggles)
-
-        arrivals = wn.arrivals()
         for (eid, phase) in arrivals:
             l3 = len(arrivals)
             wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
@@ -327,11 +303,7 @@ def main():
             os.remove(fname)
 
     np.random.seed(0)
-    import objgraph
     run_open_world_MH(sg, wn, wiggles=True)
-
-    import pdb; pdb.set_trace()
-
     #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
 
 
