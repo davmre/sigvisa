@@ -236,6 +236,9 @@ class ObservedSignalNode(Node):
             else:
                 self._wiggle_params[(eid,phase)][p] = pv[key]
 
+        del parent_keys_removed
+        del parent_keys_changed
+        del parent_nodes_added
         return pv
 
     def arrivals(self):

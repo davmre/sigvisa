@@ -224,14 +224,19 @@ class Node(object):
 
     def _parent_values(self):
         # return a dict of all keys provided by parent nodes, and their values
+        if "coda_decay" in self.label and len(self.parent_keys_changed) != 0:
+            import pdb; pdb.set_trace()
         for key in self.parent_keys_removed:
             del self._pv_cache[key]
+        del self.parent_keys_removed
         self.parent_keys_removed = set()
         for (key, node) in self.parent_keys_changed:
             self._pv_cache[key] = node.get_value(key)
+        del self.parent_keys_changed
         self.parent_keys_changed = set()
         for node in self.parent_nodes_added:
             self._pv_cache.update(node.get_dict())
+        del self.parent_nodes_added
         self.parent_nodes_added = set()
 
         return self._pv_cache

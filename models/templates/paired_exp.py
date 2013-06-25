@@ -76,20 +76,18 @@ class PairedExpTemplateGenerator(TemplateGenerator):
         if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
             return np.empty((0,))
 
-
+        if coda_decay > -0.001:
+            l = int(1200 * srate)
+        else:
+                # minimum length is 2, so that even very small arrivals
+                # can create a small bump (not doing this confuses the
+                # approx-gradient routine; it tries making the bump
+                # slightly bigger but with no effect since it's too small
+                # to create a nonzero-length envelope).
+            l = int(max(2.0, min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate))
+        d = np.empty((l,))
         code = """
-int l;
 double onset_slope;
-if (coda_decay > -0.001) {
-    l = 1200 * srate;
-} else {
-        /* minimum length is 2, so that even very small arrivals
-         can create a small bump (not doing this confuses the
-         approx-gradient routine; it tries making the bump
-         slightly bigger but with no effect since it's too small
-         to create a nonzero-length envelope). */
-    l = int(std::max(2.0, std::min(1200.0, peak_offset + (min_logenv - coda_height) / coda_decay) * srate));
-}
 int peak_idx = std::max(0.0, peak_offset * srate);
 if (peak_idx != 0) {
     onset_slope = exp(coda_height) / peak_idx;
@@ -102,24 +100,18 @@ double min_env = exp(min_logenv);
 
 npy_intp dims[1] = {l};
 
-PyObject* out_array = PyArray_SimpleNew(1, dims, NPY_DOUBLE);
-double* d = (double*) ((PyArrayObject*) out_array)->data;
-
 for (int i=1; i < intro_len; ++i) {
-  d[i] = log((i - idx_offset) * onset_slope + min_env);
+  d(i) = log((i - idx_offset) * onset_slope + min_env);
 }
 double initial_decay = intro_len - idx_offset - peak_idx;
 for (int i=intro_len; i < l; ++i) {
-  d[i] = (i + initial_decay) / srate * coda_decay + coda_height;
+  d(i) = (i + initial_decay) / srate * coda_decay + coda_height;
 }
 if (l > 0) {
-  d[0] = -999;
+  d(0) = -999;
 }
-
-return_val = out_array;
-Py_XDECREF(out_array);
 """
-        d = weave.inline(code,['peak_offset', 'coda_height', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')
         return d
 
 
