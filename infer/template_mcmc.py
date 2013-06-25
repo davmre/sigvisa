@@ -196,7 +196,7 @@ def death_move(sg, wave_node, wiggles):
 
 #####################################################################
 
-def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=30, wiggles=False):
+def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=500, wiggles=False):
     n_accepted = dict()
     moves = ('birth', 'death', 'indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
     for move in moves:

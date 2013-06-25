@@ -179,7 +179,10 @@ class ObservedSignalNode(Node):
         for(; j < len_logenv - overshoot; ++j) {
             signal(j + start_idx) += exp(logenv[j]);
         }
+       Py_XDECREF(logenv_arr);
+        Py_XDECREF(wiggle_arr);
     }
+
 """
         weave.inline(code,['n', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
