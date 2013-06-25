@@ -2,10 +2,16 @@ import numpy as np
 from sigvisa import Sigvisa
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle_models import WiggleGenerator
+from sigvisa.models import DummyModel
+from sigvisa.models.distributions import Uniform, Gaussian
+
+import time
+from numba import double
+from numba.decorators import jit
 
 class FourierFeatureGenerator(WiggleGenerator):
 
-    def __init__(self, npts, srate, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
+    def __init__(self, npts, srate, logscale=False, basisid=None, family_name=None, max_freq=None, usejit=False, **kwargs):
 
         self.srate = srate
         self.npts = npts
@@ -29,6 +35,14 @@ class FourierFeatureGenerator(WiggleGenerator):
         if basisid is None:
             s = Sigvisa()
             self.save_to_db(s.dbconn)
+
+        self.uamodel_amp = Gaussian(0, 0.1)
+        self.uamodel_phase = Uniform(0, 2*np.pi)
+
+        self.usejit = usejit
+
+        freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
+        self._params = ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
 
         # load template params and initialize Node stuff
         super(FourierFeatureGenerator, self).__init__(**kwargs)
@@ -61,21 +75,12 @@ class FourierFeatureGenerator(WiggleGenerator):
             features = self.param_dict_to_array(features)
         else:
             features= np.asarray(features)
-        amps = features[:self.nparams/2] * (self.npts/2.0)
-        phases = features[self.nparams/2:] * 2.0 * np.pi
-        coeffs = amps * np.cos(phases) + 1j * amps * np.sin(phases)
 
-        padded_coeffs = np.zeros((self.npts/2.0 + 1,), dtype=complex)
-        padded_coeffs[1:len(coeffs)+1] = coeffs
-
-        signal = np.fft.irfft(padded_coeffs)
-
-        if self.logscale:
-            signal = np.exp(signal)
+        # jit doesn't save very much here, maybe 25% relative to naive numpy slicing
+        if self.usejit:
+            return sff_jit(features, self.npts, self.nparams, int(self.logscale))
         else:
-            signal += 1
-
-        return signal
+            return sff(features, self.npts, self.nparams, self.logscale)
 
     def features_from_signal(self, signal):
         assert(len(signal) == self.npts)
@@ -129,8 +134,7 @@ class FourierFeatureGenerator(WiggleGenerator):
         return self.nparams
 
     def params(self):
-        freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
-        return ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
+        return self._params
 
     def param_dict_to_array(self, d):
         a = np.asarray([ d[k] for k in self.params() ])
@@ -145,3 +149,46 @@ class FourierFeatureGenerator(WiggleGenerator):
         sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, max_freq) values (%f, '%s', '%s', '%s', %d, %d, %f)" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.max_freq)
         self.basisid = execute_and_return_id(dbconn, sql_query, "basisid")
         return self.basisid
+
+    def unassociated_model(self, param):
+        if param.startswith("amp"):
+            return self.uamodel_amp
+        elif param.startswith("phase"):
+            return self.uamodel_phase
+        else:
+            raise KeyError("unknown param %s" % param)
+        #return DummyModel(default_value=0.0)
+
+@jit('double[:](double[:], int64, int64, int64)')
+def sff_jit(features, npts, nparams, logscale):
+    n2 = nparams/2
+    padded_coeffs = np.zeros((npts/2.0 + 1,), dtype=complex)
+    for i in range(n2):
+        amp = features[i] * (npts/2.0)
+        phase = features[i+n2] * 6.283185307179586
+        padded_coeffs[i+1] = amp * np.cos(phase) + 1j * amp * np.sin(phase)
+
+    signal = np.fft.irfft(padded_coeffs)
+
+    if logscale:
+        signal = np.exp(signal)
+    else:
+        signal += 1
+    return signal
+
+def sff(features, npts, nparams, logscale):
+    amps = features[:nparams/2] * (npts/2.0)
+    phases = features[nparams/2:] * 2.0 * np.pi
+    coeffs = amps * np.cos(phases) + 1j * amps * np.sin(phases)
+
+    padded_coeffs = np.zeros((npts/2.0 + 1,), dtype=complex)
+    padded_coeffs[1:len(coeffs)+1] = coeffs
+
+    signal = np.fft.irfft(padded_coeffs)
+
+    if logscale:
+        signal = np.exp(signal)
+    else:
+        signal += 1
+
+    return signal

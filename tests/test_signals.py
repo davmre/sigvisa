@@ -5,8 +5,6 @@ import os
 
 import numpy as np
 import numpy.ma as ma
-import matplotlib
-from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 
 from sigvisa import Sigvisa
@@ -15,12 +13,7 @@ from sigvisa.signals.common import Waveform, Segment, load_waveform_from_file
 from sigvisa.signals.mask_util import *
 from sigvisa.signals.io import load_event_station
 import sigvisa.plotting.plot as plot
-
-
-def savefig(fname, fig):
-    canvas = FigureCanvasAgg(fig)
-    canvas.print_figure(fname)
-
+from sigvisa.plotting.plot import savefig
 
 class TestMasks(unittest.TestCase):
 

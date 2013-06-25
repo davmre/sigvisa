@@ -10,7 +10,7 @@ from sigvisa.source.event import get_event
 from sigvisa.signals.common import Waveform, Segment
 from sigvisa.signals.io import load_event_station
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
-
+from sigvisa.graph.dag import get_relevant_nodes
 
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.optimize.gradient_descent import approx_gradient
@@ -49,9 +49,7 @@ class TestFit(unittest.TestCase):
         wave_node = self.sg.get_wave_node(wave=self.wave)
         wave_node.set_noise_model(nm_type='l1')
 
-        node_list = [node for node in self.sg.template_nodes if not node.deterministic()]
-        all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
-        relevant_nodes = set(node_list + all_stochastic_children)
+        node_list, relevant_nodes = get_relevant_nodes(self.sg.template_nodes)
 
         vals = np.concatenate([node.get_mutable_values() for node in node_list])
         jp = lambda v: self.sg.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)

@@ -1,5 +1,6 @@
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 from obspy.core import Trace, Stream, UTCDateTime
 
@@ -9,6 +10,9 @@ from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
 
+def savefig(fname, fig):
+    canvas = FigureCanvasAgg(fig)
+    canvas.print_figure(fname)
 
 def plot_det_times(wave, axes=None, logscale=False):
     if wave is None:

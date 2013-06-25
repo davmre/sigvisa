@@ -6,7 +6,7 @@ from sigvisa.models import DummyModel
 
 class Node(object):
 
-    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = ()):
+    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None):
 
         self.model = model
         self._fixed = fixed
@@ -53,6 +53,12 @@ class Node(object):
             self._low_bounds[key] = np.float("-inf")
             self._high_bounds[key] = np.float("inf")
 
+        # TODO: support specifying bounds for multiple-key nodes
+        if low_bound is not None:
+            self._low_bounds[self.single_key] = low_bound
+        if high_bound is not None:
+            self._high_bounds[self.single_key] = high_bound
+
         self.children = set()
         self.parents = dict()
         self.parent_value_changed=True
@@ -76,6 +82,18 @@ class Node(object):
         for key in parent.keys():
             self.parents[key] = parent
         parent.child_set_changed=True
+        self.parent_set_changed=True
+        self.parent_value_changed=True
+
+    # NOTE: removeChild and removeParent assume that node is actually
+    # being removed from the graph. We'd have to do more bookkeeping
+    # to just remove the edge.
+    def removeChild(self, child):
+        self.children.remove(child)
+
+    def removeParent(self, parent):
+        for key in parent.keys():
+            del self.parents[key]
         self.parent_set_changed=True
         self.parent_value_changed=True
 

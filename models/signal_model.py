@@ -15,10 +15,12 @@ from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import get_parent_value, create_key
 
+from numba import double
+from numba.decorators import autojit
 
 def update_arrivals(parent_values):
     arrivals = set()
-    r = re.compile("(\d+);(.+);(.+);(.+);(.+);(.+)")
+    r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
     for k in parent_values.keys():
         m = r.match(k)
         if not m: raise ValueError("could not parse parent key %s" % k)
@@ -73,6 +75,44 @@ class ObservedSignalNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
+    def assem_signal_usejit(self, include_wiggles=True, arrivals=None):
+
+        # we allow specifying the list of parents in order to generate
+        # signals with a subset of arriving phases (used e.g. in
+        # wiggle extraction)
+        if arrivals is None:
+            arrivals = self.arrivals()
+
+        arrivals = list(arrivals)
+        sidxs = []
+        logenvs = []
+        wiggles = []
+
+        for (eid, phase) in arrivals:
+            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
+            start = (v['arrival_time'] - self.st) * self.srate
+            start_idx = int(np.floor(start))
+            sidxs.append(start_idx)
+            if start_idx >= self.npts:
+                logenvs.append([])
+                wiggles.append([])
+                continue
+
+            offset = start - start_idx
+            logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
+            logenvs.append(logenv)
+
+            if include_wiggles:
+                wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase)
+                wiggles.append(wiggle)
+            else:
+                wiggles.append([])
+
+        signal = assem_signal_jit(arrivals, sidxs, logenvs, wiggles, self.npts)
+
+        if not np.isfinite(signal).all():
+            raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
+        return signal
 
     def assem_signal(self, include_wiggles=True, arrivals=None):
         signal = np.zeros((self.npts,))
@@ -106,8 +146,8 @@ class ObservedSignalNode(Node):
 
             signal[start_idx + early:end_idx - overshoot] += final_template
 
-            if not np.isfinite(signal).all():
-                raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
+        if not np.isfinite(signal).all():
+            raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
 
         return signal
 
@@ -130,8 +170,13 @@ class ObservedSignalNode(Node):
                 wg = self.graph.wiggle_generator(phase=phase, srate=self.srate)
                 self._wiggle_keys[(eid, phase)] = []
                 for p in wg.params():
-                    k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
-                    self._wiggle_keys[(eid, phase)].append(k)
+                    try:
+                        k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
+                        self._wiggle_keys[(eid, phase)].append(k)
+                    except KeyError:
+                        #print "WARNING: no wiggles for arrival (%d, %s) at (%s, %s, %s)" % (eid, phase, self.sta, self.band, self.chan)
+                        k = None
+
 
                 self._keymap=dict()
                 for (p,k) in self._tmpl_keys[(eid, phase)].iteritems():
@@ -204,8 +249,41 @@ class ObservedSignalNode(Node):
     def get_wiggle_for_arrival(self, eid, phase, parent_values=None):
         parent_values = parent_values if parent_values else self._parent_values()
         wg = self.graph.wiggle_generator(phase, self.srate)
-        return wg.signal_from_features(features = self._wiggle_params[(eid, phase)])
+        if len(self._wiggle_params[(eid, phase)]) == wg.dimension():
+            return wg.signal_from_features(features = self._wiggle_params[(eid, phase)])
+        else:
+            return np.ones((wg.npts,))
 
     def get_template_params_for_arrival(self, eid, phase, parent_values=None):
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg
+
+@autojit
+def assem_signal_jit(arrivals, sidxs, logenvs, wiggles, npts):
+    signal = np.zeros((npts,))
+
+    for i in range(len(arrivals)):
+        eid = arrivals[i][0]
+        phase = arrivals[i][1]
+        start_idx = sidxs[i]
+        logenv = logenvs[i]
+        wiggle = wiggles[i]
+
+        wiggle_len = min(len(wiggle), len(logenv))
+
+        end_idx = start_idx + len(logenv)
+        if end_idx <= 0:
+            continue
+        early = max(0, - start_idx)
+        overshoot = max(0, end_idx - len(signal))
+
+        j = early
+        total_wiggle_len = min(wiggle_len - early, len(logenv) - overshoot - early)
+        for t in range(start_idx+early, start_idx+early+total_wiggle_len):
+            signal[t] += np.exp(logenv[j]) * wiggle[j]
+            j += 1
+        for t in range(start_idx+early+total_wiggle_len, end_idx - overshoot):
+            signal[t] += np.exp(logenv[j])
+            j += 1
+
+    return signal

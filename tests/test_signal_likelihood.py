@@ -8,7 +8,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.plotting import plot
 
-from sigvisa.tests.test_signals import savefig
+from sigvisa.plotting.plot import savefig
 
 
 class TestSignalLikelihood(unittest.TestCase):

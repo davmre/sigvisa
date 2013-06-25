@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
-
+import scipy.stats as stats
+from scipy.misc import factorial
 from sigvisa.models import Distribution
 
 class Gamma(Distribution):
@@ -8,7 +9,7 @@ class Gamma(Distribution):
         self.alpha = alpha
         self.beta = beta
 
-    def log_p(self, x):
+    def log_p(self, x, **kwargs):
         alpha = self.alpha
         beta = self.beta
 
@@ -26,6 +27,11 @@ class Gamma(Distribution):
         beta = self.beta
         return (alpha-1)/x - beta
 
+    def predict(self, **kwargs):
+        return self.alpha/self.beta
+
+    def sample(self, **kwargs):
+        return stats.gamma.rvs(self.alpha, scale=1.0/self.beta, loc=0., n=1)
 
 class InvGamma(Distribution):
     def __init__(self, alpha, beta):
@@ -63,3 +69,74 @@ class LogNormal(Distribution):
         mu = self.mu
         sigma = self.sigma
         return (-1 -(np.log(x) - mu)/(sigma**2)) / x
+
+
+class Uniform(Distribution):
+    def __init__(self, lbound, rbound):
+        assert ( lbound < rbound)
+        self.lbound = lbound
+        self.rbound = rbound
+
+    def log_p(self, x,  **kwargs):
+        if self.lbound <= x <= self.rbound:
+            return 1.0 / (self.rbound - self.lbound)
+        else:
+            return 0.0
+
+    def predict(self, **kwargs):
+        return self.lbound + (self.rbound - self.lbound) / 2
+
+    def sample(self, **kwargs):
+        return self.lbound + np.random.rand() * (self.rbound - self.lbound)
+
+class Gaussian(Distribution):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def log_p(self, x,  **kwargs):
+        mu = self.mean
+        sigma = self.std
+        lp = .5 * np.log(2*np.pi*sigma) - .5 * (x - mu)**2 / sigma**2
+        if np.isnan(lp):
+            lp = np.float("-inf")
+        return lp
+
+    def predict(self, **kwargs):
+        return self.mean
+
+    def sample(self, **kwargs):
+        return self.mean + np.random.randn() * self.std
+
+class Poisson(Distribution):
+    def __init__(self, mu):
+        self.mu = mu
+
+    def log_p(self, x, **kwargs):
+        return np.exp(-self.mu) * self.mu**x / factorial(x)
+
+    def predict(self, **kwargs):
+        return self.mu
+
+    def sample(self, **kwargs):
+        return stats.poisson.rvs(self.mu, n=1)
+
+
+class Negate(Distribution):
+    def __init__(self, dist):
+        self.dist = dist
+
+    def dim(self, *args, **kwargs):
+        return self.dist.dim( *args, **kwargs)
+
+    def predict(self, *args, **kwargs):
+        return -1 * self.dist.predict(*args, **kwargs)
+
+    def sample(self, *args, **kwargs):
+        return -1 * self.dist.sample(*args, **kwargs)
+
+    def log_p(self, x, *args, **kwargs):
+        return self.dist.log_p(-x, *args, **kwargs)
+
+    def deriv_log_p(self, x, *args, **kwargs):
+        return self.dist.deriv_log_p(-x, *args, **kwargs)

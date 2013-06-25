@@ -31,6 +31,7 @@ class DAG(object):
             for pn in node.parents.values():
                 self.__ts_visit(pn)
             node.set_mark(1)
+            node._topo_sorted_list_index = len(self._topo_sorted_list)
             self._topo_sorted_list.append(node)
 
     def _topo_sort(self):
@@ -45,7 +46,16 @@ class DAG(object):
             self.__ts_visit(leaf)
         self.clear_visited()
 
+
+    # allow fast removing of nodes by setting their entries to None
+    def _gc_topo_sorted_nodes(self):
+        tsl = [n for n in self._topo_sorted_list if n is not None]
+        for (i, n) in enumerate(tsl):
+            n._topo_sorted_list_index = i
+        self._topo_sorted_list = tsl
+
     def topo_sorted_nodes(self):
+        self._gc_topo_sorted_nodes()
         return self._topo_sorted_list
 
     def clear_visited(self):
@@ -55,6 +65,14 @@ class DAG(object):
             node.clear_mark()
             q.extendleft(node.children)
 
+
+def get_relevant_nodes(node_list):
+    # note, it's important that the nodes have a consistent order, since
+    # we represent their joint values as a vector.
+    node_list = [node for node in node_list if not node.deterministic()]
+    all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
+    relevant_nodes = set(node_list + all_stochastic_children)
+    return node_list, relevant_nodes
 
 class DirectedGraphModel(DAG):
 
@@ -161,12 +179,7 @@ class DirectedGraphModel(DAG):
         """
         Assume that the value at each node is a 1D array.
         """
-
-        # note, it's important that the nodes have a consistent order, since
-        # we represent their joint values as a vector.
-        node_list = [node for node in node_list if not node.deterministic()]
-        all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
-        relevant_nodes = set(node_list + all_stochastic_children)
+        node_list, relevant_nodes = get_relevant_nodes(node_list)
 
         start_values = self.get_all(node_list=node_list)
         low_bounds = np.concatenate([node.low_bounds() for node in node_list])
@@ -193,6 +206,23 @@ class DirectedGraphModel(DAG):
         self.set_all(values=result_vector, node_list=node_list)
         print "got optimized x", result_vector
 
+
+    def remove_node(self, node):
+        del self.all_nodes[node.label]
+        for key in node.keys():
+            del self.nodes_by_key[key]
+
+        for child in node.children:
+            child.removeParent(node)
+            if len(child.parents) == 0:
+                self.toplevel_nodes.add(child)
+
+        for parent in node.parents.values():
+            parent.removeChild(node)
+            if len(parent.children) == 0:
+                self.leaf_nodes.add(parent)
+
+
     def add_node(self, node):
         self.all_nodes[node.label] = node
         for key in node.keys():
@@ -207,6 +237,7 @@ class DirectedGraphModel(DAG):
             self.leaf_nodes.discard(parent)
 
     def topo_sorted_nodes(self):
+        self._gc_topo_sorted_nodes()
         assert(len(self._topo_sorted_list) == len(self.all_nodes))
         return self._topo_sorted_list
 
