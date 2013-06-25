@@ -23,8 +23,7 @@ class ARModel(NoiseModel):
         self.c = c
         self.sf = sf
 
-
-
+        self.nomask = np.array([False,] * 5000, dtype=bool)
 
     # samples based on the defined AR Model
     def sample(self, n):
@@ -44,7 +43,17 @@ class ARModel(NoiseModel):
 
     def fastAR_missingData(self, d, c, std):
         n = len(d)
-        m = d.mask
+
+
+        try:
+            d.mask[0]
+            m = d.mask
+        except (TypeError,IndexError):
+            if len(d) > len(self.nomask):
+                self.nomask = np.array([False,] * (len(self.nomask)*2), dtype=bool)
+            m = self.nomask
+
+
         d = d.data - c
         p = np.array(self.params)
         n_p = len(p)
