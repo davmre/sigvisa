@@ -98,7 +98,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
 
 # for some reason this is waay slower than the numpy slicing version below
-@jit('double[:](double, double, double, double, double, double)')
+# @jit('double[:](double, double, double, double, double, double)')
 def alr_jit(peak_offset, coda_height, coda_decay, min_logenv, idx_offset, srate):
 
     if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:

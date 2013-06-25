@@ -11,33 +11,11 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_event_station_chan
 from sigvisa.source.event import Event
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.graph.dag import get_relevant_nodes
-from sigvisa.plotting import plot
-from sigvisa.plotting.plot import savefig
+from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure
-
-
-def plot_with_fit(fname, wn, **kwargs):
-    fig = Figure(figsize=(8, 5), dpi=144)
-    fig.patch.set_facecolor('white')
-    axes = fig.add_subplot(111)
-    axes.set_xlabel("Time (s)", fontsize=8)
-
-    wave = wn.get_wave()
-    wn.unfix_value()
-    wn.parent_predict()
-    template = wn.get_wave()
-
-    plot.subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
-    plot.subplot_waveform(template, axes, color="green",
-                          linewidth=3, alpha = 1,
-                          plot_dets=False, **kwargs)
-    wn.set_value(wave.data)
-    wn.fix_value()
-
-    savefig(fname, fig)
-
 
 
 #######################################################################
@@ -125,6 +103,7 @@ def improve_offset_move(sg, arrival_node, offset_node, wave_node, **kwargs):
     return accepted
 
 #######################################################################
+
 
 
 def birth_move(sg, wave_node, **kwargs):
@@ -215,111 +194,6 @@ def death_move(sg, wave_node, wiggles):
 
 
 #####################################################################
-def get_node_scales(node_list):
-    low_bounds = np.concatenate([node.low_bounds() for node in node_list])
-    high_bounds = np.concatenate([node.high_bounds() for node in node_list])
-    scales = (high_bounds - low_bounds)/2.0
-    scaled = np.isfinite(scales)
-    scales[~scaled] = 1.0
-    return scales
-
-def gaussian_propose(sg, node_list, values=None, scales=None, std=0.01, phase_wraparound=False):
-    scales = scales if scales else get_node_scales(node_list)
-    values = values if values else sg.get_all(node_list = node_list)
-    n = len(values)
-
-    gsample = np.random.normal(0, std, n)
-    move = gsample * scales
-    if phase_wraparound: # phases must be between 0 and 2pi
-        return (values + move) % 6.283185307179586
-    else:
-        return values + move
-
-def gaussian_MH_move(sg, node_list, relevant_nodes, scales=None, **kwargs):
-    values = sg.get_all(node_list = node_list)
-    proposal = gaussian_propose(sg, node_list, values=values, scales=scales, **kwargs)
-    return MH_accept(sg, values, proposal, node_list, relevant_nodes)
-
-def MH_accept(sg, oldvalues, newvalues, node_list, relevant_nodes, log_qforward=0.0, log_qbackward=0.0):
-    lp_new = sg.joint_prob(values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
-    lp_old = sg.joint_prob(values=oldvalues, node_list=node_list, relevant_nodes=relevant_nodes)
-
-    u = np.random.rand()
-    if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
-        sg.set_all(newvalues, node_list)
-        return True
-    else:
-        return False
-
-def run_closed_world_MH(sg, wn, burnin=0, skip=100, steps=100):
-    n_accepted = dict()
-    moves = ('indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
-    for move in moves:
-        n_accepted[move] = 0
-
-    stds = {'peak_offset': .05, 'arrival_time': .05, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .7}
-
-    wn.cdf = preprocess_signal_for_sampling(wn.get_value())
-
-    arrivals = wn.arrivals()
-    templates = dict()
-    params_over_time = dict()
-    node_list = []
-    for (eid, phase) in arrivals:
-        tmplid = -eid
-        tmnodes = dict((p, n) for (p, (k, n)) in
-                       sg.get_template_nodes(eid=eid, phase=phase, sta=wn.sta, band=wn.band, chan=wn.chan).items() + sg.get_wiggle_nodes(eid=eid, phase=phase, sta=wn.sta, band=wn.band, chan=wn.chan).items())
-        templates[tmplid] = tmnodes
-        node_list += tmnodes.values()
-        for param in tmnodes.keys():
-            params_over_time["%d_%s" % (tmplid, param)] = []
-    relevant_nodes = node_list + [wn,]
-
-    for step in range(steps):
-        for (eid, phase) in arrivals:
-            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
-            tmplid = -eid
-            tmnodes = templates[tmplid]
-
-            n_accepted['indep_peak'] += indep_peak_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                         offset_node=tmnodes["peak_offset"],
-                                                         wave_node=wn)
-            n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                           offset_node=tmnodes["peak_offset"],
-                                                             wave_node=wn, std=stds['peak_offset'])
-            for param in ("arrival_time", "coda_height", "coda_decay"):
-                n = tmnodes[param]
-                n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
-            for param in wg.params():
-                n = tmnodes[param]
-                if param.startswith("amp"):
-                    phase_wraparound = False
-                    move = 'wiggle_amp'
-                else:
-                    phase_wraparound = True
-                    move = 'wiggle_phase'
-                n_accepted[move] += float(gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[move], phase_wraparound = phase_wraparound)) / (wg.dimension()/2.0)
-            for (param, n) in tmnodes.items():
-                params_over_time["%d_%s" % (tmplid, param)].append(n.get_value())
-
-        if step > 0 and step % skip == 0:
-            lp = sg.joint_prob(values=sg.get_all(node_list = node_list), node_list=node_list, relevant_nodes=relevant_nodes)
-
-            print "step %d: lp %.2f, accepted " % (step, lp),
-            for move in moves:
-                print "%s: %d, " % (move, float(n_accepted[move]) / (step * len(templates)) * 100),
-            print
-            plot_with_fit("unass_step%06d.png" % step, wn)
-
-    for (param, vals) in params_over_time.items():
-        fig = Figure(figsize=(8, 5), dpi=144)
-        axes = fig.add_subplot(111)
-        axes.set_xlabel("Steps", fontsize=8)
-        axes.set_ylabel(param, fontsize=8)
-        axes.plot(vals)
-        savefig("mcmc_unass_%s.png" % param, fig)
-
-    np.savez('mcmc_unass_vals.npz', **params_over_time)
 
 def run_open_world_MH(sg, wn, burnin=0, skip=20, steps=12, wiggles=False):
     n_accepted = dict()
@@ -400,26 +274,6 @@ def run_open_world_MH(sg, wn, burnin=0, skip=20, steps=12, wiggles=False):
     np.savez('mcmc_unass_vals.npz', **params_over_time)
     """
 
-def sample_template():
-    sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
-                      wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                      phases="leb", nm_type = "l1")
-
-
-    wave = Waveform(data = np.zeros(500), srate=5.0, stime=1239915900.0, sta="FIA3", chan="SHZ")
-    wn = sg.add_wave(wave)
-
-    templates = sg.prior_sample_uatemplates(wn, wiggles=True)
-    print "sampled %d templates!" % len(templates)
-    for (i, tmpl) in enumerate(templates):
-        for (param, node) in tmpl.items():
-            print "template %d param %s: %.3f" % (i, param, node.get_value())
-
-    plot_with_fit("unass_sampled.png", wn)
-    with open("sampled_templates.pkl", 'w') as f:
-        pickle.dump(templates, f)
-    np.save("sampled_wave.npy", wn.get_value().data)
-    sys.exit(0)
 
 def main():
 
@@ -431,7 +285,7 @@ def main():
     """
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
                       wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                      phases="leb", nm_type = "l1")
+                      phases="leb", nm_type = "l1", usejit=True)
 
 
     wave = Waveform(data = np.load("sampled_wave.npy"),

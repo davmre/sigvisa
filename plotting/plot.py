@@ -14,6 +14,28 @@ def savefig(fname, fig):
     canvas = FigureCanvasAgg(fig)
     canvas.print_figure(fname)
 
+
+def plot_with_fit(fname, wn, **kwargs):
+    fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    axes.set_xlabel("Time (s)", fontsize=8)
+
+    wave = wn.get_wave()
+    wn.unfix_value()
+    wn.parent_predict()
+    template = wn.get_wave()
+
+    subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
+    subplot_waveform(template, axes, color="green",
+                          linewidth=3, alpha = 1,
+                          plot_dets=False, **kwargs)
+    wn.set_value(wave.data)
+    wn.fix_value()
+
+    savefig(fname, fig)
+
+
 def plot_det_times(wave, axes=None, logscale=False):
     if wave is None:
         return

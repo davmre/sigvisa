@@ -7,7 +7,7 @@ from sigvisa.models.distributions import Uniform, Gaussian
 
 import time
 from numba import double
-from numba.decorators import jit
+from numba.decorators import autojit
 
 class FourierFeatureGenerator(WiggleGenerator):
 
@@ -159,7 +159,8 @@ class FourierFeatureGenerator(WiggleGenerator):
             raise KeyError("unknown param %s" % param)
         #return DummyModel(default_value=0.0)
 
-@jit('double[:](double[:], int64, int64, int64)')
+#@jit('double[:](double[:], int64, int64, int64)')
+@autojit
 def sff_jit(features, npts, nparams, logscale):
     n2 = nparams/2
     padded_coeffs = np.zeros((npts/2.0 + 1,), dtype=complex)
