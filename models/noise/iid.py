@@ -19,7 +19,7 @@ class L1IIDModel(NoiseModel):
         self.median = median
         self.b = b
         self.normalizer = np.log(.5 * self.b)
-        self.nomask = np.array([False,] * 50000, dtype=bool)
+        self.nomask = np.array([False,] * 5000, dtype=bool)
 
     def predict(self, n):
         return np.ones((n,)) * self.median
