@@ -68,3 +68,5 @@ test_constant_model
 test_gp_model
 test_linear_model
 *_list
+*.pkl
+cp
