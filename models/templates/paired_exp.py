@@ -24,9 +24,8 @@ class PairedExpTemplateGenerator(TemplateGenerator):
         super(PairedExpTemplateGenerator, self).__init__(*args, **kwargs)
 
         self.uamodels = {"peak_offset": Gamma(2.0, 0.4),
-                         "coda_height": Gaussian(1.5, 1),
+                         "coda_height": Gaussian(-.5, 1),
                          "coda_decay": Negate(Gamma(4.0, 160.0)),}
-
 
     @staticmethod
     def params():
@@ -88,7 +87,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
         d = np.empty((l,))
         code = """
 double onset_slope;
-int peak_idx = std::max(0.0, peak_offset * srate);
+double peak_idx = std::max(0.0, peak_offset * srate);
 if (peak_idx != 0) {
     onset_slope = exp(coda_height) / peak_idx;
 } else {
@@ -104,8 +103,8 @@ for (int i=1; i < intro_len; ++i) {
   d(i) = log((i - idx_offset) * onset_slope + min_env);
 }
 double initial_decay = intro_len - idx_offset - peak_idx;
-for (int i=intro_len; i < l; ++i) {
-  d(i) = (i + initial_decay) / srate * coda_decay + coda_height;
+for (int i=0; i < l-intro_len; ++i) {
+  d(i + intro_len) = (i + initial_decay) / srate * coda_decay + coda_height;
 }
 if (l > 0) {
   d(0) = -999;

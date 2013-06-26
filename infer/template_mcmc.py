@@ -287,13 +287,13 @@ def main():
     cursor.close()
     """
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
-                      wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                      phases="leb", nm_type = "ar")
+                      wiggle_model_type="dummy", wiggle_family="fourier_2.5",
+                      phases="leb", nm_type = "ar", wiggle_len_s = 60.0)
 
     wave = Waveform(data = np.load("sampled_wave.npy"),
                     srate=5.0, stime=1239915900.0,
                     sta="FIA3", chan="SHZ", arrivals=np.array(()),
-                    filter_str="freq_2.0_3.0;env;hz_5.0")
+                    filter_str="freq_2.0_3.0;hz_5.0")
     wn = sg.add_wave(wave)
     #sg.create_unassociated_template(wave_node=wn, atime=1239915940.253)
     #sg.create_unassociated_template(wave_node=wn, atime=1239915969.623)
