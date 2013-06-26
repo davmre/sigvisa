@@ -13,7 +13,7 @@ from sigvisa.plotting.plot import plot_with_fit
 
 def sample_template(env=True):
     if env:
-        wiggle_family = "fourier_0.8"
+        wiggle_family = "dummy"
     else:
         wiggle_family = "fourier_2.5"
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",

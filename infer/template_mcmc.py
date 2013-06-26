@@ -30,13 +30,15 @@ envelope at each point.
 
 def preprocess_signal_for_sampling(wave_env):
 
-    #d = wave_env**2
+    d = wave_env**2
 
+    """
     # sample locations where the envelope is increasing, relative to how fast it's increasing
     grad = np.gradient(wave_env)
     incr = (grad > 0)
     d = grad**2
     d[~incr] = max(np.min(d), 1e-3)
+    """
 
     s = np.sum(d)
     normalized_env = d/s
@@ -200,13 +202,13 @@ def death_move(sg, wave_node):
 
 #####################################################################
 
-def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=500, wiggles=False):
+def run_open_world_MH(sg, wn, burnin=0, skip=40, steps=10000, wiggles=False):
     n_accepted = dict()
     moves = ('birth', 'death', 'indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
     for move in moves:
         n_accepted[move] = 0
 
-    stds = {'peak_offset': .2, 'arrival_time': .25, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .5}
+    stds = {'peak_offset': .1, 'arrival_time': .1, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .5}
 
     wave_env = wn.get_value() if wn.env else wn.get_wave().filter('env').data
     wn.cdf = preprocess_signal_for_sampling(wave_env)
@@ -293,7 +295,7 @@ def main():
     cursor.close()
     """
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
-                      wiggle_model_type="dummy", wiggle_family="fourier_0.8",
+                      wiggle_model_type="dummy", wiggle_family="dummy",
                       phases="leb", nm_type = "ar", wiggle_len_s = 60.0,
                       assume_envelopes=True)
 

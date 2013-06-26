@@ -1,6 +1,7 @@
 from sigvisa import Sigvisa
 
 from sigvisa.models.wiggles.fourier_features import FourierFeatureGenerator
+from sigvisa.models.wiggles.dummy_features import DummyFeatureGenerator
 
 
 def load_wiggle_generator_by_family(family_name, len_s, srate, envelope, **kwargs):
@@ -18,7 +19,8 @@ def load_wiggle_generator_by_family(family_name, len_s, srate, envelope, **kwarg
             max_freq = float(family_name.split('_')[1])
             logscale = "logscale" in family_name
             wg = FourierFeatureGenerator(max_freq=max_freq, srate = srate, envelope=envelope, logscale=logscale, npts=npts, family_name=family_name, **kwargs)
-
+        elif family_name.startswith("dummy"):
+            wg = DummyFeatureGenerator(srate = srate, envelope=envelope, npts=npts, family_name=family_name, **kwargs)
         else:
             raise Exception("unsupported wiggle family name %s" % family_name)
 
@@ -42,6 +44,9 @@ def load_wiggle_generator(basisid, **kwargs):
 
     if basis_type == "fourier":
         wg = FourierFeatureGenerator(basisid = basisid, max_freq=max_freq, srate = srate, envelope=envelope, logscale=logscale, npts=npts, family_name=family_name, **kwargs)
+        assert(wg.dimension() == dimension)
+    elif basis_type == "dummy":
+        wg = DummyFeatureGenerator(basisid = basisid, srate = srate, envelope=envelope, npts=npts, family_name=family_name, **kwargs)
         assert(wg.dimension() == dimension)
     else:
         raise NotImplementedError('wiggle basis %s not yet implemented' % basis_type)
