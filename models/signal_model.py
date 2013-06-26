@@ -77,6 +77,7 @@ class ObservedSignalNode(Node):
         self.st = model_waveform['stime']
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
+        self.env = 'env' in self.filter_str
 
         self.signal_diff = np.empty((self.npts,))
         self.pred_signal = np.empty((self.npts,))
@@ -145,6 +146,7 @@ class ObservedSignalNode(Node):
 
         npts = self.npts
         n = len(arrivals)
+        envelope = self.env or (not include_wiggles)
         signal = self.pred_signal
         code = """
       for(int i=0; i < npts; ++i) signal(i) = 0;
@@ -176,15 +178,17 @@ class ObservedSignalNode(Node):
         for(j=early; j < early + total_wiggle_len; ++j) {
             signal(j+start_idx) += exp(logenv[j]) * wiggle[j];
         }
-        for(; j < len_logenv - overshoot; ++j) {
-            signal(j + start_idx) += exp(logenv[j]);
+        if (envelope) {
+            for(; j < len_logenv - overshoot; ++j) {
+               signal(j + start_idx) += exp(logenv[j]);
+            }
         }
        Py_XDECREF(logenv_arr);
         Py_XDECREF(wiggle_arr);
     }
 
 """
-        weave.inline(code,['n', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['n', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal', 'envelope'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
@@ -248,9 +252,9 @@ class ObservedSignalNode(Node):
         self._parent_values()
         return self._arrivals
 
-    def parent_predict(self, parent_values=None):
+    def parent_predict(self, parent_values=None, **kwargs):
         #parent_values = parent_values if parent_values else self._parent_values()
-        signal = self.assem_signal()
+        signal = self.assem_signal(**kwargs)
         noise = self.nm.predict(n=len(signal))
         self.set_value(signal + noise)
         for child in self.children:

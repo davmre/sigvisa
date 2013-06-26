@@ -28,12 +28,19 @@ envelope at each point.
 
 """
 
-def preprocess_signal_for_sampling(wave_data):
+def preprocess_signal_for_sampling(wave_env):
 
-    d = wave_data**2
+    #d = wave_env**2
+
+    # sample locations where the envelope is increasing, relative to how fast it's increasing
+    grad = np.gradient(wave_env)
+    incr = (grad > 0)
+    d = grad**2
+    d[~incr] = max(np.min(d), 1e-3)
+
     s = np.sum(d)
-    normalized_data = d/s
-    cdf = np.concatenate([np.array((0,)), np.cumsum(normalized_data)])
+    normalized_env = d/s
+    cdf = np.concatenate([np.array((0,)), np.cumsum(normalized_env)])
     return cdf
 
 def atime_log_p(wave_node, arrival_node, offset_node):
@@ -115,6 +122,7 @@ def birth_move(sg, wave_node, **kwargs):
     sg._gc_topo_sorted_nodes()
     tmpl["arrival_time"].set_value(peak_time - tmpl["peak_offset"].get_value())
 
+
     lp_new = sg.current_log_p()
 
     # probability of this birth move is the product of probabilities
@@ -146,7 +154,7 @@ def birth_move(sg, wave_node, **kwargs):
         return False
 
 
-def death_move(sg, wave_node, wiggles):
+def death_move(sg, wave_node):
     templates = [(eid, phase) for (eid, phase) in wave_node.arrivals() if eid < 0]
     u0 = np.random.rand()
     for i in range(len(templates)):
@@ -159,11 +167,7 @@ def death_move(sg, wave_node, wiggles):
     log_qforward = np.log(1.0/len(templates))
 
     tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-
-    if wiggles:
-        wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    else:
-        wnodes = dict()
+    wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
 
     log_qbackward = atime_log_p(wave_node, tnodes['arrival_time'][1], tnodes['peak_offset'][1])
     for (param, (label, node)) in tnodes.items():
@@ -204,7 +208,8 @@ def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=500, wiggles=False):
 
     stds = {'peak_offset': .2, 'arrival_time': .25, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .5}
 
-    wn.cdf = preprocess_signal_for_sampling(wn.get_value())
+    wave_env = wn.get_value() if wn.env else wn.get_wave().filter('env').data
+    wn.cdf = preprocess_signal_for_sampling(wave_env)
 
     templates = dict()
     params_over_time = dict()
@@ -220,7 +225,7 @@ def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=500, wiggles=False):
 
         arrivals = wn.arrivals()
         if len(arrivals) >= 1:
-            n_accepted['death'] += death_move(sg, wn, wiggles=wiggles)
+            n_accepted['death'] += death_move(sg, wn)
 
         for (eid, phase) in arrivals:
             l3 = len(arrivals)
@@ -252,7 +257,7 @@ def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=500, wiggles=False):
                 params_over_time["%d_%s" % (tmplid, param)].append(n.get_value())
 
 
-        if step > 0 and step % skip == 0:
+        if step > 0 and ((step % skip == 0) or (step < 15)):
             lp = sg.current_log_p()
 
             print "step %d: lp %.2f, %d templates, accepted " % (step, lp, len(arrivals)),
@@ -260,7 +265,8 @@ def run_open_world_MH(sg, wn, burnin=0, skip=10, steps=500, wiggles=False):
                 if (move == "birth") or (move == "death"):
                     print "%s: %d, " % (move, n_accepted[move]),
                 else:
-                    print "%s: %d%%, " % (move, float(n_accepted[move]) / (step * len(templates)) * 100),
+                    accepted_percent = float(n_accepted[move]) / (step * len(templates)) * 100 if (step * len(templates)) > 0 else 0
+                    print "%s: %d%%, " % (move, accepted_percent),
             print
             plot_with_fit("unass_step%06d.png" % step, wn)
 
@@ -287,13 +293,14 @@ def main():
     cursor.close()
     """
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
-                      wiggle_model_type="dummy", wiggle_family="fourier_2.5",
-                      phases="leb", nm_type = "ar", wiggle_len_s = 60.0)
+                      wiggle_model_type="dummy", wiggle_family="fourier_0.8",
+                      phases="leb", nm_type = "ar", wiggle_len_s = 60.0,
+                      assume_envelopes=True)
 
     wave = Waveform(data = np.load("sampled_wave.npy"),
                     srate=5.0, stime=1239915900.0,
                     sta="FIA3", chan="SHZ", arrivals=np.array(()),
-                    filter_str="freq_2.0_3.0;hz_5.0")
+                    filter_str="freq_2.0_3.0;env;hz_5.0")
     wn = sg.add_wave(wave)
     #sg.create_unassociated_template(wave_node=wn, atime=1239915940.253)
     #sg.create_unassociated_template(wave_node=wn, atime=1239915969.623)

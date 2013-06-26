@@ -11,13 +11,17 @@ from sigvisa.signals.common import Waveform
 
 from sigvisa.plotting.plot import plot_with_fit
 
-def sample_template():
+def sample_template(env=True):
+    if env:
+        wiggle_family = "fourier_0.8"
+    else:
+        wiggle_family = "fourier_2.5"
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
-                      wiggle_model_type="dummy", wiggle_family="fourier_0.8",
-                      phases="leb", nm_type = "ar")
+                      wiggle_model_type="dummy", wiggle_family=wiggle_family,
+                      phases="leb", nm_type = "ar", assume_envelopes=env,
+                      wiggle_len_s = 60.0)
 
-
-    wave = Waveform(data = np.zeros(500), srate=5.0, stime=1239915900.0, sta="FIA3", chan="SHZ", filter_str="freq_2.0_3.0;env;hz_5.0")
+    wave = Waveform(data = np.zeros(500), srate=5.0, stime=1239915900.0, sta="FIA3", chan="SHZ", filter_str="freq_2.0_3.0;%shz_5.0" % ('env;' if env else ''))
     wn = sg.add_wave(wave)
 
     templates = sg.prior_sample_uatemplates(wn, wiggles=True)

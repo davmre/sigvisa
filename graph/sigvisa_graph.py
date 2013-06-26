@@ -68,7 +68,7 @@ class SigvisaGraph(DirectedGraphModel):
                  dummy_fallback=False,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0,
-                 no_prune_edges=False):
+                 no_prune_edges=False, assume_envelopes=True):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -91,6 +91,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_family = wiggle_family
         self.wiggle_len_s = wiggle_len_s
         self.base_srate = base_srate
+        self.assume_envelopes = assume_envelopes
         self.wgs = dict()
         if wiggle_basisids is not None:
             for (phase, basisid) in wiggle_basisids.items():
@@ -130,7 +131,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def wiggle_generator(self, phase, srate):
         if (phase, srate) not in self.wgs:
-            self.wgs[(phase, srate)] =  load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=srate)
+            self.wgs[(phase, srate)] =  load_wiggle_generator_by_family(family_name=self.wiggle_family, len_s=self.wiggle_len_s, srate=srate, envelope=self.assume_envelopes)
         return self.wgs[(phase, srate)]
 
     def get_wiggle_nodes(self, eid, sta, phase, band, chan):
@@ -315,7 +316,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         for node in nodes.values():
             node.unassociated_templateid = unassociated_templateid
-            node.parent_predict()
+            node.parent_sample()
 
         if not nosort:
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
