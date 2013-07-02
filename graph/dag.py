@@ -97,11 +97,13 @@ class DirectedGraphModel(DAG):
             for n in self.toplevel_nodes:
                 add_children(n)
 
-    def current_log_p(self):
+    def current_log_p(self, verbose=False):
         logp = 0
         for node in self.topo_sorted_nodes():
             if node.deterministic(): continue
             lp = node.log_p()
+            if verbose:
+                print "node %s has logp %.1f" % (node.label, lp)
             logp += lp
         return logp
 

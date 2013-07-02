@@ -172,6 +172,7 @@ class MatrixTree {
 
 public:
   unsigned int n;
+  unsigned int use_offdiag;
   int fcalls;
   int dfn_evals;
   MatrixTree (const pyublas::numpy_matrix<double> &pts,

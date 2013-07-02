@@ -13,6 +13,7 @@ import numpy as np
 
 from optparse import OptionParser
 
+from sigvisa.models.ttime import tt_predict
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname, model_params
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
@@ -31,12 +32,16 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
         raise
 
     try:
-        if target == "coda_decay":
+        if target == "tt_residual":
+            y = fit_data[:, FIT_ATIME]
+            for (i, row) in enumerate(fit_data):
+                ev = get_event(evid=row[FIT_EVID])
+                pred = tt_predict(ev, site, phaseid=int(row[FIT_PHASEID]))
+                y[i] -= (ev.time + pred)
+        elif target == "coda_decay":
             y = fit_data[:, FIT_CODA_DECAY]
         elif target == "amp_transfer":
             y = fit_data[:, FIT_AMP_TRANSFER]
-        elif target == "coda_height":
-            y = fit_data[:, FIT_CODA_HEIGHT]
         elif target == "peak_offset":
             y = fit_data[:, FIT_PEAK_DELAY]
         else:
@@ -75,13 +80,15 @@ def main():
                       help="only train on human-approved good fits")
     parser.add_option(
         "--max_acost", dest="max_acost", default=np.float('inf'), type=float, help="maximum fitting cost of fits in training set (inf)")
-    parser.add_option("--min_amp", dest="min_amp", default=1, type=float,
+    parser.add_option("--min_amp", dest="min_amp", default=-3, type=float,
                       help="only consider fits above the given amplitude (does not apply to amp_transfer fits)")
     parser.add_option("--min_amp_for_at", dest="min_amp_for_at", default=-5, type=float,
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
     parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
                       help="train models even if a model of the same type already appears in the DB")
     parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 10", type="str", help="fitting param string")
+    parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
+                      help="don't explode array stations into their individual elements (False)")
 
     (options, args) = parser.parse_args()
 
@@ -103,7 +110,18 @@ def main():
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
-    for site in sites:
+    allsites = []
+    if options.array_joint:
+        allsites = sites
+    else: # explode array sites into their individual elements
+        for site in sites:
+            try:
+                elems = s.get_array_elements(site)
+                allsites.extend(elems)
+            except:
+                allsites.append(site)
+
+    for site in allsites:
         for target in targets:
 
             if target == "amp_transfer":

@@ -89,14 +89,15 @@ class ArrivalTimeNode(DeterministicNode):
         else:
             raise AttributeError("don't know how to compute coda height derivative with respect to parent %s" % self.parent_key)
 
-def tt_predict(event, sta, phase):
+def tt_predict(event, sta, phase=None, phaseid=None):
     s = Sigvisa()
 
-    try:
-        phaseid = s.phaseids[phase]
-    except KeyError:
-        print "WARNING: unrecognized phase %s, treating as P phase" % phase
-        phaseid = 1
+    if phaseid is None:
+        try:
+            phaseid = s.phaseids[phase]
+        except KeyError:
+            print "WARNING: unrecognized phase %s, treating as P phase" % phase
+            phaseid = 1
 
     if event.time < 1:
         import pdb; pdb.set_trace()

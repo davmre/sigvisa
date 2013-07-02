@@ -228,7 +228,7 @@ class TestGP(unittest.TestCase):
 
         fname = "test_gp_model"
         model.save_trained_model(fname)
-        nmodel = load_model(fname, "gp_dad_log")
+        nmodel = load_model(fname, "gp_lld")
         pred3 = nmodel.predict(self.testX1)
         self.assertAlmostEqual(pred1, pred3)
 

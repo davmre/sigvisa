@@ -224,8 +224,6 @@ class Node(object):
 
     def _parent_values(self):
         # return a dict of all keys provided by parent nodes, and their values
-        if "coda_decay" in self.label and len(self.parent_keys_changed) != 0:
-            import pdb; pdb.set_trace()
         for key in self.parent_keys_removed:
             del self._pv_cache[key]
         del self.parent_keys_removed
@@ -247,8 +245,11 @@ class Node(object):
         if parent_values is None:
             parent_values = self._parent_values()
         v = self.get_dict()
-        v = v[self.single_key] if self.single_key else v
+        v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
         return self.model.log_p(x = v, cond=parent_values, key_prefix=self.key_prefix)
+
+    def _transform_values_for_model(self, vals):
+        return vals
 
     def deriv_log_p(self, key=None, parent_values=None, parent_key=None, parent_idx=None,  **kwargs):
         # derivative of the log probability at this node, with respect

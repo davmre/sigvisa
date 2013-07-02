@@ -327,7 +327,9 @@
 
    int fcalls = 0;
    this->root_diag.distance_to_query = this->factored_query_dist(qp, this->root_diag.p, MAXDOUBLE, this->dist_params, (void*)this->dfn_extra);
-   this->root_offdiag.distance_to_query = this->factored_query_dist(qp, this->root_offdiag.p, MAXDOUBLE, this->dist_params, (void*)this->dfn_extra);
+   if (this->use_offdiag) {
+     this->root_offdiag.distance_to_query = this->factored_query_dist(qp, this->root_offdiag.p, MAXDOUBLE, this->dist_params, (void*)this->dfn_extra);
+   }
 
    if (symmetric) {
      int max_terms = this->n/2;
@@ -340,21 +342,23 @@
 			   this->factored_query_dist,
 			   this->dist_params, this->dfn_extra);
 
-    this->wp_pair[0] *= 2;
-    this->wp_point[0] *= sqrt(2.0);
-    weighted_sum_node(this->root_offdiag, 0,
-			    qp, eps_rel, eps_abs, weight_sofar,
-			    ws, max_terms,
-			    fcalls, this->w_upper,
-			    this->w_lower, this->w_point,
-			    this->wp_pair, this->wp_point,
-			    this->factored_query_dist,
-			    this->dist_params, this->dfn_extra);
-    this->wp_pair[0] /= 2;
-    this->wp_point[0] /= sqrt(2.0);
-
+    if (this->use_offdiag) {
+      this->wp_pair[0] *= 2;
+      this->wp_point[0] *= sqrt(2.0);
+      weighted_sum_node(this->root_offdiag, 0,
+			qp, eps_rel, eps_abs, weight_sofar,
+			ws, max_terms,
+			fcalls, this->w_upper,
+			this->w_lower, this->w_point,
+			this->wp_pair, this->wp_point,
+			this->factored_query_dist,
+			this->dist_params, this->dfn_extra);
+      this->wp_pair[0] /= 2;
+      this->wp_point[0] /= sqrt(2.0);
+    }
    } else{
      int max_terms = this->n;
+     if (this->use_offdiag) {
      weighted_sum_node(this->root_offdiag, 0,
 			    qp, eps_rel, eps_abs, weight_sofar,
 		       ws, max_terms,
@@ -363,6 +367,7 @@
 			    this->wp_pair, this->wp_point,
 			    this->factored_query_dist,
 			    this->dist_params, this->dfn_extra);
+     }
 
      weighted_sum_node(this->root_diag, 0,
 			     qp, eps_rel, eps_abs, weight_sofar,
@@ -373,6 +378,7 @@
 			     this->factored_query_dist,
 			     this->dist_params, this->dfn_extra);
 
+     if (this->use_offdiag) {
      pairpoint qp2 = {&query_pt2(0,0), &query_pt1(0,0), 0, 0};
      weighted_sum_node(this->root_offdiag, 0,
 			     qp2, eps_rel, eps_abs, weight_sofar,
@@ -382,6 +388,7 @@
 			     this->wp_pair, this->wp_point,
 			     this->factored_query_dist,
 			     this->dist_params, this->dfn_extra);
+     }
    }
 
 
@@ -408,7 +415,9 @@
      sparse_m[key] = nonzero_vals[i];
    }
    set_m_node(this->root_diag, sparse_m, (unsigned long)this->n);
-   set_m_node(this->root_offdiag, sparse_m, (unsigned long)this->n);
+   if (this->use_offdiag) {
+     set_m_node(this->root_offdiag, sparse_m, (unsigned long)this->n);
+   }
  }
 
  void MatrixTree::set_m(const pyublas::numpy_matrix<double> &m) {
@@ -417,14 +426,19 @@
      exit(1);
    }
    set_m_node(this->root_diag, m);
-   set_m_node(this->root_offdiag, m);
+
+   if (this->use_offdiag) {
+     set_m_node(this->root_offdiag, m);
+   }
  }
 
  pyublas::numpy_matrix<double> MatrixTree::get_m() {
    vector<double> v(this->n * this->n);
    pyublas::numpy_matrix<double> pm(this->n, this->n);
    get_m_node(this->root_diag, pm);
-   get_m_node(this->root_offdiag, pm);
+   if (this->use_offdiag) {
+     get_m_node(this->root_offdiag, pm);
+   }
    return pm;
  }
 
@@ -526,27 +540,28 @@
   }
 
   double t0 = gt();
+  node<pairpoint> * a = NULL;
   if (pairs_diag.size() == 0) {
     printf("ERROR: no nonzero covariance entries on the diagonal! something is wildly wrong.\n");
     exit(1);
   } else {
     this->root_diag = batch_create(pairs_diag, this->factored_build_dist, this->dist_params, this->dfn_extra);
+    set_leaves(this->root_diag, a);
+    this->root_diag.alloc_arms(1);
   }
   if (pairs_offdiag.size() == 0) {
     printf("WARNING: the covariance matrix is entirely diagonal! This is probably not what you want, and will cause errors later.\n");
-    exit(1);
+    //exit(1);
+    this->use_offdiag = 0;
   } else {
     this->root_offdiag = batch_create(pairs_offdiag, this->factored_build_dist, this->dist_params, this->dfn_extra);
+    set_leaves(this->root_offdiag, a);
+    this->root_offdiag.alloc_arms(1);
+    this->use_offdiag = 1;
   }
 
-  node<pairpoint> * a = NULL;
-  set_leaves(this->root_diag, a);
-  set_leaves(this->root_offdiag, a);
   double t1 = gt();
   // printf("built tree in %lfs: %d cache hits and %d cache misses\n", t1-t0, p->hits, p->misses);
-
-  this->root_diag.alloc_arms(1);
-  this->root_offdiag.alloc_arms(1);
   delete p->build_cache;
 }
 

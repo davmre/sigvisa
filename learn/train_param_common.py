@@ -24,7 +24,7 @@ def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_ty
 def model_params(model, model_type):
     if model_type.startswith('gplocal'):
         d = dict()
-        d['kernel'] =model.kernel.get_params()
+        d['kernel'] =model.hyperparams
         d['mean'] = model.beta_bar
         d['covar'] = np.dot(model.invc.T, model.invc)
         r = repr(d)
@@ -33,7 +33,7 @@ def model_params(model, model_type):
             r = repr(d)
         return r
     if model_type.startswith('gp'):
-        return repr(model.kernel.get_params())
+        return repr(model.hyperparams)
     elif model_type.startswith('param'):
         d = dict()
         d['mean'] = model.mean
@@ -146,14 +146,14 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, 
     if optimize:
         sX, sy = subsample_data(X=X, y=y, k=500)
         print "learning hyperparams on", len(sy), "examples"
-        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta)
+        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False)
 
         bounds = [(1e-20,None),] * len(params)
 
         params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
 
-    gp = SparseGP(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True)
+    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True)
     return gp
 
 

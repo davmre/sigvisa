@@ -20,36 +20,31 @@ from sigvisa.graph.graph_utils import get_parent_value, create_key
 import scipy.weave as weave
 from scipy.weave import converters
 
+def extract_arrival_from_key(k, r):
+    m = r.match(k)
+    if not m: raise ValueError("could not parse parent key %s" % k)
+    eid = int(m.group(1))
+    phase = m.group(2)
+    return (eid, phase)
+
 def get_new_arrivals(new_nodes, r):
     new_arrivals = set()
     for n in new_nodes:
         for k in n.keys():
-            m = r.match(k)
-            if not m: raise ValueError("could not parse parent key %s" % k)
-            eid = int(m.group(1))
-            phase = m.group(2)
-            new_arrivals.add((eid, phase))
+            new_arrivals.add(extract_arrival_from_key(k, r))
     return new_arrivals
 
 def get_removed_arrivals(removed_keys, r):
     removed_arrivals = set()
     for k in removed_keys:
-        m = r.match(k)
-        if not m: raise ValueError("could not parse parent key %s" % k)
-        eid = int(m.group(1))
-        phase = m.group(2)
-        removed_arrivals.add((eid, phase))
+        removed_arrivals.add(extract_arrival_from_key(k, r))
     return removed_arrivals
 
 def update_arrivals(parent_values):
     arrivals = set()
     r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
     for k in parent_values.keys():
-        m = r.match(k)
-        if not m: raise ValueError("could not parse parent key %s" % k)
-        eid = int(m.group(1))
-        phase = m.group(2)
-        arrivals.add((eid, phase))
+        arrivals.add(extract_arrival_from_key(k, r))
     return arrivals
 
 class ObservedSignalNode(Node):
@@ -237,11 +232,14 @@ class ObservedSignalNode(Node):
                 continue
 
         for (key, node) in parent_keys_changed:
-            tmpl, eid, phase, p = self._keymap[key]
-            if tmpl:
-                self._tmpl_params[(eid,phase)][p] = pv[key]
-            else:
-                self._wiggle_params[(eid,phase)][p] = pv[key]
+            try:
+                tmpl, eid, phase, p = self._keymap[key]
+                if tmpl:
+                    self._tmpl_params[(eid,phase)][p] = pv[key]
+                else:
+                    self._wiggle_params[(eid,phase)][p] = pv[key]
+            except KeyError:
+                continue
 
         del parent_keys_removed
         del parent_keys_changed
@@ -256,14 +254,14 @@ class ObservedSignalNode(Node):
         #parent_values = parent_values if parent_values else self._parent_values()
         signal = self.assem_signal(**kwargs)
         noise = self.nm.predict(n=len(signal))
-        self.set_value(signal + noise)
+        self.set_value(ma.masked_array(data=signal + noise, mask=self.get_value().mask, copy=False))
         for child in self.children:
             child.parent_keys_changed.add(self.single_key)
 
     def parent_sample(self, parent_values=None):
         signal = self.assem_signal()
         noise = self.nm.sample(n=len(signal))
-        self.set_value(signal + noise)
+        self.set_value(ma.masked_array(data=signal + noise, mask=self.get_value().mask, copy=False))
         for child in self.children:
             child.parent_keys_changed.add((self.single_key), self)
 
