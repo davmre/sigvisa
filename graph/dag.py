@@ -163,11 +163,12 @@ class DirectedGraphModel(DAG):
                 # any deterministic nodes along the way
                 child_list = node.get_stochastic_children()
                 for (child, intermediate_nodes) in child_list:
+                    current_key = key
                     d = 1.0
                     for inode in intermediate_nodes:
-                        d *= inode.deriv_value_wrt_parent(parent_key = key)
-                        key = inode.label
-                    d *= child.deriv_log_p(parent_key = key,
+                        d *= inode.deriv_value_wrt_parent(parent_key = current_key)
+                        current_key = inode.label
+                    d *= child.deriv_log_p(parent_key = current_key,
                                            eps=eps[i + ni],
                                            lp0=initial_lp[child.label])
                     deriv += d

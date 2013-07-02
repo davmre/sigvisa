@@ -293,7 +293,11 @@ signal_diff(i) =value(i) - pred_signal(i);
         parent_values = self._parent_values()
         lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
         parent_values[parent_key] += eps
-        is_tmpl, eid, phase, p = self._keymap[parent_key]
+        try:
+            is_tmpl, eid, phase, p = self._keymap[parent_key]
+        except KeyError:
+            # if this key doesn't affect signals at this node
+            return 0.0
         if is_tmpl:
             self._tmpl_params[(eid, phase)][p] += eps
         else:

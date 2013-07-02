@@ -87,7 +87,7 @@ class ArrivalTimeNode(DeterministicNode):
         elif parent_key == self.tt_residual_key:
             return 1.0
         else:
-            raise AttributeError("don't know how to compute coda height derivative with respect to parent %s" % self.parent_key)
+            raise AttributeError("don't know how to compute arrival time derivative with respect to parent %s" % parent_key)
 
 def tt_predict(event, sta, phase=None, phaseid=None):
     s = Sigvisa()

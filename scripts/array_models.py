@@ -11,7 +11,7 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_event_station_chan
 from sigvisa.source.event import get_event
 
-
+from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 def main():
     sg = SigvisaGraph(template_model_type="gp_lld", template_shape="paired_exp",
@@ -29,6 +29,7 @@ def main():
     ev = get_event(evid=5326226)
     sg.add_event(ev)
 
+    sg.optimize_templates(construct_optim_params("'disp': True, 'method': 'bfgs'"))
     print sg.current_log_p(verbose=True)
 
 if __name__ == "__main__":

@@ -397,10 +397,11 @@ class SigvisaGraph(DirectedGraphModel):
             label = create_key(param=param, sta=sta,
                                phase=phase, eid=parent.eid,
                                chan=chan, band=band)
+            my_children = [wn for wn in children if wn.sta==sta]
             if model_type=="dummy":
-                node = Node(label=label, model=DummyModel(default_value=initial_value), parents=[parent,], children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = Node(label=label, model=DummyModel(default_value=initial_value), parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
             else:
-                node = self.load_node_from_modelid(modelid, label, parents=[parent,], children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = self.load_node_from_modelid(modelid, label, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
 
             nodes[sta] = node
             self.add_node(node, **kwargs)
@@ -433,9 +434,11 @@ class SigvisaGraph(DirectedGraphModel):
         for sta in self.site_elements[site]:
             ttrn = extract_sta_node(tt_residual_node, sta)
             label = create_key(param="arrival_time", sta=sta, phase=phase, eid=event_node.eid)
+
+            my_children = [wn for wn in children if wn.sta==sta]
             arrtimenode = ArrivalTimeNode(eid=event_node.eid, sta=sta,
                                           phase=phase, parents=[event_node, ttrn],
-                                          label=label, children=children)
+                                          label=label, children=my_children)
             self.add_node(arrtimenode, template=True)
             nodes[sta] = arrtimenode
         return nodes

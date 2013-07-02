@@ -132,6 +132,9 @@ class Node(object):
         # such stochastic child, also include the chain of
         # deterministic nodes connecting it to the given node.
 
+        if self.label == "0;P;FIC2;:;:;tt_residual":
+            import pdb; pdb.set_trace()
+
         def traverse_child(n, intermediates):
             if not n.deterministic():
                 self._stochastic_children.append((n, intermediates))
