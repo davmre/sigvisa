@@ -8,26 +8,6 @@ import sigvisa.plotting.plot as plot
 
 from django.http import HttpResponse, HttpResponseRedirect
 
-def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
-    """
-
-    Given a 1D array, find the min and the max excluding extreme
-    outliers. Intended to be used as min/max values in plotting, to
-    ensure that most of the data is visible on the plot.
-
-    """
-
-    # if data is a masked array, ignore the masked entries
-    try:
-        data = data.compressed()
-    except:
-        pass
-
-    min_bound = scipy.stats.scoreatpercentile(data, per=(100 - coverage) / 2.0)
-    max_bound = scipy.stats.scoreatpercentile(data, per=100 - (100 - coverage) / 2.0)
-    padding = (max_bound - min_bound) * epsilon
-
-    return min_bound - padding, max_bound + padding
 
 def view_wave(request, wave, ratio=1.6, dpi=144, **kwargs):
     """
@@ -66,4 +46,3 @@ def process_plot_args(request, axes):
         xlen = float(request.GET.get('len', "-1"))
         if xlen > 0:
             axes.set_xlim(xmin, xmin + xlen)
-
