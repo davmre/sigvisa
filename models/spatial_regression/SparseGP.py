@@ -53,7 +53,10 @@ def extract_hyperparams(dfn_str, wfn_str, hyperparams):
         noise_var = hyperparams[0]
         wfn_params = np.array((hyperparams[1],), copy=True, dtype=np.float)
         dfn_params = np.array((hyperparams[2:]), dtype=np.float)
-
+    elif dfn_str == "lldlld" and (wfn_str == "se" or wfn_str=="matern32"):
+        noise_var = hyperparams[0]
+        wfn_params = np.array((hyperparams[1],), copy=True, dtype=np.float)
+        dfn_params = np.array((hyperparams[2:]), dtype=np.float)
     return noise_var, dfn_params, wfn_params
 
 def sparse_kernel_from_tree(tree, X, sparse_threshold, identical, noise_var):
@@ -812,7 +815,7 @@ class SparseGP(ParamModel):
     def log_likelihood(self):
         return self.ll
 
-def sparsegp_nll_ngrad(**kwargs):
+def sparsegp_ll_grad(**kwargs):
     """
     Get both the negative log-likelihood and its gradient
     simultaneously (more efficient than doing it separately since we
@@ -823,16 +826,16 @@ def sparsegp_nll_ngrad(**kwargs):
     try:
         gp = SparseGP(compute_ll=True, compute_grad=True, **kwargs)
 
-        nll = -1 * gp.ll
-        ngrad = -1 * gp.ll_grad
+        ll = gp.ll
+        grad = gp.ll_grad
 
     except np.linalg.linalg.LinAlgError as e:
         print "warning: lin alg error (%s) in likelihood computation, returning likelihood -inf" % str(e)
-        nll = np.float("inf")
-        ngrad = None
+        ll = np.float("inf")
+        grad = None
     except ValueError as e:
         print "warning: value error (%s) in likelihood computation, returning likelihood -inf" % str(e)
-        nll = np.float("inf")
-        ngrad = None
+        ll = np.float("inf")
+        grad = None
 
-    return nll, ngrad
+    return ll, grad
