@@ -51,7 +51,7 @@ class Waveform(object):
             npts = len(data)
             etime = stime + npts / float(srate)
             self.segment_stats = {"stime": stime, "sta": sta, "etime": etime, "len": npts / float(
-                srate), "siteid": Sigvisa().name_to_siteid_minus1[sta] + 1}
+                srate)}
 
         # attributes specific to this waveform, e.g. channel or freq band
         if my_stats is not None:
@@ -162,7 +162,6 @@ class Waveform(object):
             return self.segment_stats[key]
         elif key in self.my_stats:
             return self.my_stats[key]
-
         # if we don't have arrivals for this waveform, look them up and cache them
         elif key == "event_arrivals":
             event_arrivals = read_event_detections(

@@ -1,27 +1,58 @@
 import os
 import numpy as np
 
+
+from sigvisa import Sigvisa
 import scipy.io
 import cStringIO
 
+class WiggleGenerator(object):
 
-from sigvisa import Sigvisa
-from sigvisa.learn.train_param_common import load_model
-from sigvisa.models import DummyModel
-from sigvisa.graph.nodes import Node, ClusterNode
-from sigvisa.models.noise.noise_util import get_noise_model
+    def __init__(self, **kwargs):
+        # child classes should set these before calling super()
+        assert(self.srate is not None and self.npts is not None and self.logscale is not None and self.basisid is not None)
+
+    def signal_from_features(self, features):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def features_from_signal(self, signal):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def basis_type(self):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def dimension(self):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def keys(self):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def param_dict_to_array(self, d):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def array_to_param_dict(self, a):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def save_to_db(self, dbconn):
+        raise NotImplementedError("called unimplemented function on WiggleGenerator")
+
+    def encode_params(self, param_dict):
+        f_string = cStringIO.StringIO()
+        scipy.io.savemat(f_string, {"params": self.param_dict_to_array(param_dict)}, oned_as='row')
+        ostr = f_string.getvalue()
+        f_string.close()
+        return ostr
+
+    @staticmethod
+    def decode_params(encoded):
+        f_string = cStringIO.StringIO(encoded)
+        d = scipy.io.loadmat(f_string)
+        params = d['params'].flatten()
+        f_string.close()
+        return params
 
 
-def get_wiggle_param_model_ids(runid, sta, chan, band, phase, model_type, basisid):
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-
-    sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and wiggle_basisid=%d and fitting_runid=%d" % (model_type, sta, chan, band, phase, basisid, runid)
-    cursor.execute(sql_query)
-    modelids = [m[0] for m in cursor.fetchall()]
-    cursor.close()
-    return modelids
-
+"""
 class WiggleModelNode(ClusterNode):
 
     def __init__(self, wiggle_model_type="dummy", runid=None, phase=None, logscale =False, model_waveform=None, sta=None, chan=None, band=None, label="", parents={}, children=[]):
@@ -77,21 +108,4 @@ class WiggleModelNode(ClusterNode):
         params = self.basis_decomposition(wiggle)
         self.set_value(params)
 
-    def get_encoded_params(self):
-        f_string = cStringIO.StringIO()
-        scipy.io.savemat(f_string, {"params": self.param_dict_to_array(self.get_value())}, oned_as='row')
-        ostr = f_string.getvalue()
-        f_string.close()
-        return ostr
-
-    def set_encoded_params(self, encoded):
-        params = self.decode_params(encoded=encoded)
-        self.set_value(self.array_to_param_dict(params))
-
-    @staticmethod
-    def decode_params(encoded):
-        f_string = cStringIO.StringIO(encoded)
-        d = scipy.io.loadmat(f_string)
-        params = d['params'].flatten()
-        f_string.close()
-        return params
+"""

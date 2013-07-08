@@ -15,8 +15,6 @@ from sigvisa.database import db
 import sigvisa.utils.geog
 import obspy.signal.util
 
-from optparse import OptionParser
-
 from sigvisa import *
 from sigvisa.utils.interaction import query_yes_no
 
@@ -28,6 +26,25 @@ import os
 import shutil
 import re
 
+
+from optparse import (OptionParser,BadOptionError,AmbiguousOptionError)
+
+class PassThroughOptionParser(OptionParser):
+    """
+    An unknown option pass-through implementation of OptionParser.
+
+    When unknown arguments are encountered, bundle with largs and try again,
+    until rargs is depleted.
+
+    sys.exit(status) will still be called if a known argument is passed
+    incorrectly (e.g. missing arguments or bad argument types, etc.)
+    """
+    def _process_args(self, largs, rargs, values):
+        while rargs:
+            try:
+                OptionParser._process_args(self,largs,rargs,values)
+            except (BadOptionError,AmbiguousOptionError), e:
+                largs.append(e.opt_str)
 
 def run_fit_and_rename_output(args):
     """
@@ -93,7 +110,7 @@ def work(cmd, output_file_str):
 
 
 def main():
-    parser = OptionParser()
+    parser = PassThroughOptionParser()
 
     parser.add_option("-e", "--evidfile", dest="evidfile", default=None, type="str", help="file of 'evid, sta' pairs to fit")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
@@ -106,11 +123,16 @@ def main():
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default=None, type="str", help="")
     parser.add_option("--optim_params", dest="optim_params", default=None, type="str", help="fitting parameters to use")
-    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
-                      help="type of noise model to use (ar)")
     parser.add_option("--dummy", dest="dummy", default=False, action="store_true", help="don't actually do any fitting; just print out the commands to run")
 
     (options, args) = parser.parse_args()
+
+    extra_option_string = ""
+    for a in args:
+        if a.startswith("--"):
+            extra_option_string += " " + a
+        else:
+            extra_option_string += "=" + a
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -158,13 +180,13 @@ def main():
         for line in f:
             (sta, evid) = [i.strip() for i in line.split(' ')]
 
-            cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s --nm_type=%s" % (
+            cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s %s" % (
                 int(evid), sta, "--fit_wiggles" if options.fit_wiggles else "",
                 "--template_shape=%s" % options.template_shape if options.template_shape else "",
                 "--template_model=%s" % options.template_model if options.template_model else "",
                 run_name, iteration, init_str,
                 "--optim_params=\"%s\" " % options.optim_params if options.optim_params is not None else "",
-                options.nm_type)
+                extra_option_string)
 
 #            run_fit_and_rename_output((cmd_str, runid))
 #            sys.exit(1)

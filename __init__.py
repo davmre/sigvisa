@@ -1,7 +1,8 @@
 import numpy as np
 import os
 import time
-from sigvisa.database import db, dataset
+from sigvisa.database import db
+import sigvisa.database.sites as db_sites
 from sigvisa.load_c_components import load_sigvisa, load_earth
 import sigvisa.sigvisa_c
 
@@ -12,7 +13,6 @@ class NestedDict(dict):
         if key in self:
             return self.get(key)
         return self.setdefault(key, NestedDict())
-
 
 class BadParamTreeException(Exception):
     pass
@@ -26,11 +26,17 @@ class Sigvisa(threading.local):
     # method (defined below) returns a list of all channel names
     # equivalent to a particular channel.
     canonical_channel_name = {"BHZ": "BHZ", "BHN": "BHN", "BHE": "BHE",
-                              "BH1": "BHE", "BH2": "BHN"}
+                              "BH1": "BHE", "BH2": "BHN",
+                              "SHZ": "SHZ", "sz": "SHZ",
+                              "SHN": "SHN", "sn": "SHN",
+                              "SHE": "SHE", "se": "SHE",}
 
     # defined only for canonical channels
     __equivalent_channels = {"BHZ": ["BHZ"], "BHE": ["BHE", "BH1"],
-                             "BHN": ["BHN", "BH2"]}
+                             "BHN": ["BHN", "BH2"],
+                             "SHZ": ["SHZ", "sz"],
+                             "SHE": ["SHE", "se"],
+                             "SHN": ["SHN", "sn"],}
 
     # singleton pattern -- only initialize once
     _instance = None
@@ -66,18 +72,23 @@ class Sigvisa(threading.local):
                 else:
                     raise
 
-        self.sites = dataset.read_sites(cursor)
-        self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = dataset.read_sites_by_name(cursor)
-        self.site_up = dataset.read_uptime(cursor, st, et)
-        self.phasenames, self.phasetimedef = dataset.read_phases(cursor)
+        sites = db_sites.read_sites(cursor)
+        sitenames, allsites = db_sites.read_all_sites(cursor)
+        self.sitenames = sitenames
+        self.ref_siteid = dict(zip(sitenames, [int(rsi) for rsi in allsites[:,6]]))
+        #self.sitedata = dict(zip(sitenames, allsites))
+        #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = sites.read_sites_by_name(cursor)
+        _, _, self.siteid_minus1_to_name = db_sites.read_sites_by_name(cursor)
+        site_up = db_sites.read_uptime(cursor, st, et)
+        self.phasenames, self.phasetimedef = db_sites.read_phases(cursor)
         self.phaseids = dict(
             zip(self.phasenames, range(1, len(self.phasenames) + 1)))
         self.earthmodel = load_earth(os.path.join(os.getenv(
-            "SIGVISA_HOME"), "parameters"), self.sites,
+            "SIGVISA_HOME"), "parameters"), sitenames, allsites,
             self.phasenames, self.phasetimedef)
-        self.sigmodel = load_sigvisa(os.path.join(os.getenv(
+        self.sigmodel = load_sigvisa(self.earthmodel, os.path.join(os.getenv(
             "SIGVISA_HOME"), "parameters"),
-            self.site_up, self.sites,
+            site_up, sites,
             self.phasenames, self.phasetimedef )
 
 #        self.bands = ("freq_2.0_3.0",'freq_0.5_0.7', 'freq_6.0_8.0')
@@ -98,9 +109,8 @@ class Sigvisa(threading.local):
         return [self.phasenames[pid] for pid in phase_id_minus1_list]
 
     def arriving_phases(self, event, sta):
-        siteid = self.name_to_siteid_minus1[sta] + 1
         phases = [p for p in self.phases if self.sigmodel.mean_travel_time(
-            event.lon, event.lat, event.depth, siteid - 1, self.phaseids[p] - 1) > 0]
+            event.lon, event.lat, event.depth, event.time, sta, self.phaseids[p] - 1) > 0]
         return phases
 
     def equivalent_channels(self, chan):
@@ -115,3 +125,21 @@ class Sigvisa(threading.local):
         high_match = [band for band in low_match if np.abs(
             float(band.split('_')[2]) - high_band) < 0.01] if high_band is not None else low_match
         return high_match[0]
+
+    def is_array_station(self, sta):
+        return self.earthmodel.site_info(sta, 0)[3] == 1
+
+    def get_array_elements(self, sta):
+        if not self.is_array_station(sta):
+            raise Exception("cannot get elements of non-array station %s" % sta)
+        else:
+            ref_siteid = self.earthmodel.site_info(sta, 0)[6]
+            cursor = self.dbconn.cursor()
+            sql_query = "select distinct s.refsta from static_site s, static_siteid sid where sid.id=%d and s.sta=sid.sta" % ref_siteid
+            cursor.execute(sql_query)
+            refsta = cursor.fetchone()[0]
+            sql_query = "select distinct s.sta from static_site s where s.refsta='%s' and s.statype='ss'" % refsta
+            cursor.execute(sql_query)
+            elements = cursor.fetchall()
+            return [s[0] for s in elements]
+            cursor.close()

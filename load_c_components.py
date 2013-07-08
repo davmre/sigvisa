@@ -1,30 +1,12 @@
-import os, cPickle, sys, tarfile, csv
+import os
 import numpy as np
-from optparse import OptionParser
-
-from sigvisa.database.dataset import *
-
-from datetime import datetime
-from sigvisa.database.az_slow_corr import load_az_slow_corr
-
-import priors.SecDetPrior
-import priors.NumEventPrior
-import priors.EventLocationPrior
-import priors.EventMagPrior
-import priors.EventDetectionPrior
-import priors.NumFalseDetPrior
-import priors.ArrivalTimePrior
-import priors.ArrivalAzimuthPrior
-import priors.ArrivalSlownessPrior
-import priors.ArrivalPhasePrior
-import priors.ArrivalSNR
-import priors.ArrivalAmplitudePrior
-
-import sigvisa_c, sigvisa
 
 
-def load_earth(param_dirname, sites, phasenames, phasetimedef):
-  model = sigvisa_c.EarthModel(sites, phasenames, phasetimedef,
+import sigvisa_c
+
+
+def load_earth(param_dirname, sitenames, allsites, phasenames, phasetimedef):
+  model = sigvisa_c.EarthModel(sitenames, allsites, phasenames, phasetimedef,
                              os.path.join(param_dirname, "ttime", "iasp91."),
                              "",
                              os.path.join(param_dirname,"GA_dist_depth_ranges"),
@@ -33,10 +15,8 @@ def load_earth(param_dirname, sites, phasenames, phasetimedef):
   return model
 
 
-def load_sigvisa(param_dirname, site_up,
+def load_sigvisa(earthmodel, param_dirname, site_up,
                  sites, phasenames, phasetimedef):
-  earthmodel = load_earth(param_dirname, sites, phasenames, phasetimedef)
-
   sigmodel = sigvisa_c.SigModel(earthmodel,
                               os.path.join(param_dirname, "NumEventPrior.txt"),
                               os.path.join(param_dirname, "EventLocationPrior.txt"),

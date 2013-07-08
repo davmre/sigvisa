@@ -1,17 +1,25 @@
 import numpy as np
 from sigvisa import Sigvisa
 from sigvisa.database.signal_data import execute_and_return_id
-from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
+from sigvisa.models.wiggles.wiggle_models import WiggleGenerator
+from sigvisa.models import DummyModel
+from sigvisa.models.distributions import Uniform, Gaussian
 
-class FourierFeatureNode(WiggleModelNode):
+import scipy.weave as weave
+from scipy.weave import converters
 
-    def __init__(self, npts, srate, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
+
+class FourierFeatureGenerator(WiggleGenerator):
+
+    def __init__(self, npts, srate, envelope, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
 
         self.srate = srate
         self.npts = npts
         assert( self.npts % 2 == 0 )
 
         if max_freq:
+            if max_freq > srate/2.0:
+                raise ValueError("wiggle frequency (%.2f) exceeds the Nyquist limit (%.2f)!" % (max_freq, srate/2.0))
             self.max_freq = max_freq
         else:
             self.max_freq = srate / 2.0
@@ -23,6 +31,8 @@ class FourierFeatureNode(WiggleModelNode):
         self.x = np.linspace(0, self.len_s, self.npts)
 
         self.logscale = logscale
+        print "created with envelope", envelope
+        self.envelope = envelope
 
         self.family_name = family_name
         self.basisid = basisid
@@ -30,8 +40,14 @@ class FourierFeatureNode(WiggleModelNode):
             s = Sigvisa()
             self.save_to_db(s.dbconn)
 
+        self.uamodel_amp = Gaussian(0, 0.1)
+        self.uamodel_phase = Uniform(0, 2*np.pi)
+
+        freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
+        self._params = ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
+
         # load template params and initialize Node stuff
-        super(FourierFeatureNode, self).__init__(**kwargs)
+        super(FourierFeatureGenerator, self).__init__(**kwargs)
 
     def signal_from_features_naive(self, features):
         assert(len(features) == self.nparams)
@@ -48,10 +64,11 @@ class FourierFeatureNode(WiggleModelNode):
             freq = self.fundamental * (i+1)
             s += amp * np.cos(2 * np.pi * self.x * freq + phase)
 
-        if self.logscale:
-            s = np.exp(s)
-        else:
-            s += 1
+        if self.envelope:
+            if self.logscale:
+                s = np.exp(s)
+            else:
+                s += 1
 
         return s
 
@@ -61,23 +78,35 @@ class FourierFeatureNode(WiggleModelNode):
             features = self.param_dict_to_array(features)
         else:
             features= np.asarray(features)
-        amps = features[:self.nparams/2] * (self.npts/2.0)
-        phases = features[self.nparams/2:] * 2.0 * np.pi
-        coeffs = amps * np.cos(phases) + 1j * amps * np.sin(phases)
 
-        padded_coeffs = np.zeros((self.npts/2.0 + 1,), dtype=complex)
-        padded_coeffs[1:len(coeffs)+1] = coeffs
+        nparams = int(self.nparams)
+        npts = int(self.npts)
+        padded_coeffs = np.zeros((npts/2 + 1,), dtype=complex)
+        code =  """
+int n2 = nparams/2;
+padded_coeffs(0) = 0;
+for (int i=0; i < n2; ++i) {
+    double amp = features(i) * (npts/2);
+    double phase = features(i+n2);
+    padded_coeffs(i+1) = std::complex<double>(amp * cos(phase), amp * sin(phase));
+}
+"""
+        weave.inline(code,['nparams', 'npts', 'features', 'padded_coeffs'],type_converters =
+               converters.blitz,verbose=2,compiler='gcc')
 
         signal = np.fft.irfft(padded_coeffs)
 
-        if self.logscale:
-            signal = np.exp(signal)
-        else:
-            signal += 1
+        if self.envelope:
+            if self.logscale:
+                signal = np.exp(signal)
+            else:
+                signal += 1
 
         return signal
 
-    def basis_decomposition(self, signal):
+
+
+    def features_from_signal(self, signal):
         assert(len(signal) == self.npts)
 
         if self.logscale:
@@ -90,7 +119,7 @@ class FourierFeatureNode(WiggleModelNode):
         phases = np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)
         return self.array_to_param_dict(np.concatenate([amps, phases]))
 
-    def basis_decomposition_naive(self, signal):
+    def features_from_signal_naive(self, signal):
         assert(len(signal) == self.npts)
 
         if self.logscale:
@@ -128,22 +157,28 @@ class FourierFeatureNode(WiggleModelNode):
     def dimension(self):
         return self.nparams
 
-    def keys(self):
-        freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
-        return ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
+    def params(self):
+        return self._params
 
     def param_dict_to_array(self, d):
-        a = np.asarray([ d[k] for k in self.keys() ])
+        a = np.asarray([ d[k] for k in self.params() ])
         return a
 
     def array_to_param_dict(self, a):
-        d = {k : v for (k,v) in zip(self.keys(), a)}
+        d = {k : v for (k,v) in zip(self.params(), a)}
         return d
 
     def save_to_db(self, dbconn):
         assert(self.basisid is None)
-        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, max_freq) values (%f, '%s', '%s', '%s', %d, %d, %f)" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.max_freq)
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, max_freq, envelope) values (%f, '%s', '%s', '%s', %d, %d, %f, '%s')" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.max_freq, 't' if self.envelope else 'f')
         self.basisid = execute_and_return_id(dbconn, sql_query, "basisid")
         return self.basisid
 
-
+    def unassociated_model(self, param):
+        if param.startswith("amp"):
+            return self.uamodel_amp
+        elif param.startswith("phase"):
+            return self.uamodel_phase
+        else:
+            raise KeyError("unknown param %s" % param)
+        #return DummyModel(default_value=0.0)

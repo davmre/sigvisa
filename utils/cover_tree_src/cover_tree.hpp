@@ -56,6 +56,10 @@ double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const
 double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims);
 typedef double (*wfn)(double, const double *);
 
+double dist_6d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *extra);
+double dist_6d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *extra);
+double distsq_6d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales,void *extra);
+double dist6d_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double * variance, const double *scales, const double *EXTRA_IGNORED);
 
 
 

@@ -34,7 +34,7 @@ class Heatmap(object):
         center = list(center)
         while center[0] > 180:
             center[0] -= 360
-        while center[0] < -180:
+        while center[0] <= -180:
             center[0] += 360
         center = tuple(center)
 
@@ -43,8 +43,8 @@ class Heatmap(object):
         self.bottom_lat = center[1] - height_deg/2.0
         self.top_lat = center[1] + height_deg/2.0
 
-        assert ( -180 < center[0] < 180 )
-        assert ( 0 < self.right_lon - self.left_lon < 360 )
+        assert ( -180 < center[0] <= 180 )
+        assert ( 0 < self.right_lon - self.left_lon <= 360 )
 
 
         # poles are complicated; let's never try to plot them
@@ -253,12 +253,12 @@ class Heatmap(object):
             if offmap_arrows:
                 edge_pt, edge_arrow = self.project_to_bounds(ev[0], ev[1])
                 x, y = edge_pt
-                arrow_color = plotargs['mec']
+                #arrow_color = plotargs['mec']
                 if edge_arrow is not None:
                     base_scale = (self.right_lon - self.left_lon) / 200.0
                     edge_arrow *= base_scale * 10
                     bmap.ax.arrow( edge_pt[0] - edge_arrow[0], edge_pt[1] - edge_arrow[1],
-                                   edge_arrow[0], edge_arrow[1], fc=arrow_color, ec=arrow_color,
+                                   edge_arrow[0], edge_arrow[1], fc="black", ec="black",
                                    length_includes_head=True, overhang = .6,
                                    head_starts_at_zero=False, width=0.01,
                                    head_width= 3 * base_scale, head_length = 3 * base_scale, zorder=zorder)
@@ -269,18 +269,16 @@ class Heatmap(object):
                 xbounds = bmap(self.right_lon, self.top_lat)
                 x_off = 6 if x < self.right_lon else -20
                 y_off = 6 if y < self.top_lat else -20
-                label_color = plotargs['mec']
+                #label_color = plotargs['mec']
                 axes.annotate(
                     labels[enum],
                     xy=(x, y),
                     xytext=(x_off, y_off),
                     textcoords='offset points',
                     size=8,
-                    color = label_color,
+                    color = 'black',
                     zorder=zorder,
                     arrowprops = None)
-
-
 
     def plot_density(self, f_preprocess=None, colorbar=True, nolines=False,
                      colorbar_orientation="vertical", colorbar_shrink=0.9, colorbar_format='%.1f',

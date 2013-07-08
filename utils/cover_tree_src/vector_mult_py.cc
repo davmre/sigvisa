@@ -118,6 +118,9 @@ double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double
   double weight_sofar = 0;
   int fcalls = 0;
 
+  if (this->n == 0) {
+    return 0;
+  }
 
   this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, this->dfn_extra);
   double ws = weighted_sum_node(this->root, v_select,
@@ -187,7 +190,10 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     this->dfn = dist_euclidean;
     this->dfn_extra = malloc(sizeof(int));
     *((int *) this->dfn_extra) = pts.size2();
-  }else{
+  } else if (distfn_str.compare("lldlld") == 0) {
+    this->dfn = dist_6d_km;
+    this->dfn_extra = NULL;
+  } else {
     printf("error: unrecognized distance function %s\n", distfn_str.c_str());
     exit(1);
   }
@@ -202,6 +208,8 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
       this->ddfn = dist3d_se_deriv_wrt_i;
     } else if (distfn_str.compare("euclidean") == 0) {
       this->ddfn = euclidean_se_deriv_wrt_i;
+    } else if (distfn_str.compare("lldlld") == 0){
+      this->ddfn = dist6d_se_deriv_wrt_i;
     }
 
   } else if (wfn_str.compare("matern32") == 0) {
@@ -219,10 +227,12 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     }
   }
 
-  this->root = batch_create(points, this->dfn, this->dist_params, this->dfn_extra);
-  node<point> * a = NULL;
-  set_leaves(this->root, a);
-  this->root.alloc_arms(narms);
+  if (this->n > 0) {
+    this->root = batch_create(points, this->dfn, this->dist_params, this->dfn_extra);
+    node<point> * a = NULL;
+    set_leaves(this->root, a);
+    this->root.alloc_arms(narms);
+  }
 }
 
 void VectorTree::set_dist_params(const pyublas::numpy_vector<double> &dist_params) {
@@ -256,6 +266,7 @@ pyublas::numpy_matrix<double> VectorTree::kernel_matrix(const pyublas::numpy_mat
 pyublas::numpy_matrix<double> VectorTree::sparse_training_kernel_matrix(const pyublas::numpy_matrix<double> &pts, double max_distance) {
 
   pyublas::numpy_matrix<double> K(pts.size1()*2, 3);
+
   unsigned long nzero = 0;
   for (unsigned i = 0; i < pts.size1 (); ++ i) {
     v_array<v_array<point> > res;

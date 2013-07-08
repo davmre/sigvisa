@@ -1,6 +1,6 @@
 import numpy as np
 
-from sigvisa.graph.nodes import Node, DictNode, ClusterNode
+from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DAG, DirectedGraphModel, CyclicGraphError
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
@@ -61,10 +61,10 @@ class TestGraph(unittest.TestCase):
             dm._topo_sort()
 
     def testDictNode(self):
-        n = DictNode(keys = ['A', 'B', 'C'], fixed=False)
+        n = Node(keys = ['A', 'B', 'C'], fixed=False)
         v = {'A': 1, 'B': 1, 'C': 1 }
-        n.set_value(value=v)
-        self.assertEqual(n.get_value(), v)
+        n.set_dict(value=v)
+        self.assertEqual(n.get_dict(), v)
 
         n.fix_value(key='A')
         self.assertTrue(n.mutable_dimension() == 2)
@@ -72,56 +72,22 @@ class TestGraph(unittest.TestCase):
         n.set_mutable_values(values = np.ones(2) * 2)
 
         target_value = {'A': 1, 'B': 2, 'C': 2 }
-        self.assertTrue(  (n.get_value() == target_value)  )
+        self.assertTrue(  (n.get_dict() == target_value)  )
 
         v = {'A': 3, 'B': 3, 'C': 3 }
-        n.set_value(value=v)
+        n.set_dict(value=v)
         target_value = {'A': 1, 'B': 3, 'C': 3 }
-        self.assertTrue(  (n.get_value() == target_value)  )
+        self.assertTrue(  (n.get_dict() == target_value)  )
 
         v = {'A': 4, 'B': 4, 'C': 4}
-        n.set_value(value=v, override_fixed=True)
-        self.assertTrue(  (n.get_value() == {'A': 4, 'B': 4, 'C': 4} )   )
+        n.set_dict(value=v, override_fixed=True)
+        self.assertTrue(  (n.get_dict() == {'A': 4, 'B': 4, 'C': 4} )   )
 
         n.unfix_value()
         v = {'A': 5, 'B': 5, 'C': 5}
         target_value = {'A': 5, 'B': 5, 'C': 5}
-        n.set_value(value=v, override_fixed=False)
-        self.assertTrue(  n.get_value() == target_value   )
-
-    def testClusterNode(self):
-        nodes = { k : Node() for k in ('A', 'B', 'C') }
-        n = ClusterNode(nodes=nodes)
-
-        v = {'A': 1, 'B': 1, 'C': 1 }
-        n.set_value(value=v)
-        self.assertEqual(n.get_value(), v)
-
-        n.fix_value(key='A')
-        self.assertTrue(n.mutable_dimension() == 2)
-        self.assertTrue(  (n.get_mutable_values() == np.ones(2)).all()   )
-        n.set_mutable_values(values = np.ones(2) * 2)
-
-        target_value = {'A': 1, 'B': 2, 'C': 2 }
-        self.assertTrue(  (n.get_value() == target_value)  )
-
-        v = {'A': 3, 'B': 3, 'C': 3 }
-        n.set_value(value=v)
-        target_value = {'A': 1, 'B': 3, 'C': 3 }
-        self.assertTrue(  (n.get_value() == target_value)  )
-
-        v = {'A': 4, 'B': 4, 'C': 4}
-        n.set_value(value=v, override_fixed=True)
-        self.assertTrue(  (n.get_value() == {'A': 4, 'B': 4, 'C': 4} )   )
-
-        n.unfix_value()
-        v = {'A': 5, 'B': 5, 'C': 5}
-        target_value = {'A': 5, 'B': 5, 'C': 5}
-        n.set_value(value=v, override_fixed=False)
-        self.assertTrue(  n.get_value() == target_value   )
-
-        self.assertTrue( n._value is None )
+        n.set_dict(value=v, override_fixed=False)
+        self.assertTrue(  n.get_dict() == target_value   )
 
 if __name__ == '__main__':
     unittest.main()
-

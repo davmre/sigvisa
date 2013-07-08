@@ -27,9 +27,12 @@
 #
 import numpy as np
 from time import strftime, gmtime
-from math import ceil
 import os
 import sys
+
+from sigvisa.database.sites import *
+
+from sigvisa import Sigvisa
 
 # local imports
 import db
@@ -48,9 +51,6 @@ DET_SITE_COL, DET_ARID_COL, DET_TIME_COL, DET_DELTIM_COL, DET_AZI_COL,\
     DET_PHASE_COL, DET_AMP_COL, DET_PER_COL,\
     DET_NUM_COLS = range(12 + 1)
 
-# sites
-SITE_LON_COL, SITE_LAT_COL, SITE_ELEV_COL, SITE_IS_ARRAY, \
-    SITE_NUM_COLS = range(4 + 1)
 
 
 MIN_MAGNITUDE = 2.0
@@ -61,9 +61,6 @@ MIN_LOGAMP = -25.0
 MAX_LOGAMP = +15.0
 STEP_LOGAMP = 0.1
 
-UPTIME_QUANT = 3600                     # 1 hour
-
-MAX_TRAVEL_TIME = 2000.0
 
 MAX_DEPTH = 700.0
 
@@ -250,10 +247,11 @@ def read_detections(cursor, start_time, end_time, arrival_table="idcx_arrival", 
 
 def read_event_detections(cursor, evid, stations=None, evtype="leb"):
 
+    s = Sigvisa()
+
     if stations is not None:
-        s = str(stations)
-        stalist_str = s.replace('[', '(').replace(']', ')').replace(',)', ')')
-        sta_cmd = "site.sta in " + stalist_str
+        ref_siteids = [s.ref_siteid[sta] for sta in stations]
+        sta_cmd = "site.id in (" + ','.join([str(rs) for rs in ref_siteids]) + ")"
     else:
         sta_cmd = "site.statype='ss'"
 
@@ -268,7 +266,7 @@ def read_event_detections(cursor, evid, stations=None, evtype="leb"):
 
 def read_station_detections(cursor, sta, start_time, end_time, arrival_table="idcx_arrival"):
 
-    print "reading detections... "
+    print "reading station detections... "
 
     sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s iarr, static_siteid site, static_phaseid ph where site.sta='%s' and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.time between %f and %f order by iarr.time, iarr.arid" % (
         arrival_table, sta, start_time, end_time)
@@ -322,58 +320,6 @@ def read_assoc(cursor, start_time, end_time, orid2num, arid2num, evtype,
             evlist[evnum].append((int(phaseid), int(detnum)))
 
     return evlist
-
-
-def read_uptime(cursor, start_time, end_time, arrival_table="idcx_arrival"):
-    cursor.execute("select count(*) from static_siteid")
-    numsites, = cursor.fetchone()
-
-    uptime = np.zeros((numsites,
-                       int(ceil((MAX_TRAVEL_TIME + end_time - start_time) / UPTIME_QUANT))),
-                      bool)
-
-    cursor.execute("select snum, hnum, count(*) from "
-                   "(select site.id-1 snum,trunc((arr.time-%d)/%d, 0) hnum "
-                   "from %s arr, static_siteid site "
-                   "where arr.sta = site.sta and "
-                   "arr.time between %d and %d) sitearr group by snum, hnum" %
-                   (start_time, UPTIME_QUANT, arrival_table, start_time,
-                    end_time + MAX_TRAVEL_TIME))
-
-    for (siteidx, timeidx, cnt) in cursor.fetchall():
-        uptime[siteidx, timeidx] = True
-
-    return uptime
-
-
-def read_sites_by_name(cursor):
-    sites = read_sites(cursor)
-    cursor.execute("select sta from static_siteid order by id")
-    names = [r[0] for r in cursor.fetchall()]
-
-    # returns stations, name_to_siteid_minus1, siteid_minus1_to_name
-    return dict(zip(names, sites)), dict(zip(names, range(len(names)))), names
-
-
-def read_sites(cursor):
-    cursor.execute("select lon, lat, elev, "
-                   "(case statype when 'ar' then 1 else 0 end) "
-                   "from static_siteid "
-                   "order by id")
-    return np.array(cursor.fetchall())
-
-
-def read_phases(cursor):
-    cursor.execute("select phase from static_phaseid "
-                   "order by id")
-    phasenames = np.array(cursor.fetchall())[:, 0]
-
-    cursor.execute("select (case timedef when 'd' then 1 else 0 end) "
-                   "from static_phaseid "
-                   "order by id")
-    phasetimedef = np.array(cursor.fetchall())[:, 0].astype(bool)
-
-    return phasenames, phasetimedef
 
 
 def read_data(label="training", hours=None, skip=0, verbose=1,
@@ -526,3 +472,17 @@ def read_sitenames():
     cursor.execute("select sta from static_siteid site order by id")
     sitenames = np.array(cursor.fetchall())[:, 0]
     return sitenames
+
+def has_signal_data_for_window(cursor, sta, stime, etime, chans=None):
+
+    if chans is None:
+        chan_cond = ""
+    else:
+        chan_cond=sql_multi_str("chan", chans) + " and "
+
+    MAX_SIGNAL_LEN = 3600 * 8
+    sql = "select count(wfid) from idcx_wfdisc where sta = '%s' and %s time between %f and %f and endtime between %f and %f" % (
+        sta, chan_cond, stime - MAX_SIGNAL_LEN, etime, stime, etime + MAX_SIGNAL_LEN)
+    cursor.execute(sql)
+    count = cursor.fetchone()[0]
+    return count > 0

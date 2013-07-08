@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2012, Bayesian Logic, Inc.
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
@@ -12,7 +12,7 @@
  *     * Neither the name of Bayesian Logic, Inc. nor the
  *       names of its contributors may be used to endorse or promote products
  *       derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -25,7 +25,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
+ *
  */
 
 #ifndef EARTHMODEL_H
@@ -68,18 +68,18 @@ typedef struct EarthPhaseModel_t
 {
   int numdepth;
   int numdist;
-  
+
   double * p_depths;
   double * p_dists;
-  
+
   double * p_ttsamples;                        /* numdepth x numdist */
   double * p_iasamples;                        /* numdepth x numdist */
-  
+
   double surf_vel;                           /* surface velocity */
 
   int     numddrange;                        /* number of ddranges for phase */
   DDRange p_ddranges[MAX_PHASE_DDRANGES];
-  
+
 } EarthPhaseModel_t;
 
 #define EarthPhaseModel_GetTTSample(p_phase, depthi, disti) \
@@ -91,12 +91,12 @@ typedef struct QFactorModel_t
 {
   int numdepth;
   int numdist;
-  
+
   double * p_depths;                         /* numdepth */
   double * p_dists;                          /* numdist */
 
   double * p_samples;                        /* numdepth x numdist */
-  
+
 } QFactorModel_t;
 
 #define EarthQFactorModel_GetSample(p_qfvc, depthi, disti) \
@@ -109,9 +109,10 @@ typedef struct EarthModel_t
 
   int numsites;
   struct Site_t * p_sites;
+  struct Site_t * p_siteblock; // kept around so we can free it
 
   int numtimedefphases;
-  
+
   int numphases;
 
   char ** p_phasenames;
@@ -122,7 +123,7 @@ typedef struct EarthModel_t
   QFactorModel_t qfvc;
 
   int enforce_ddrange;
-  
+
 } EarthModel_t;
 
 
@@ -136,6 +137,11 @@ typedef struct EarthModel_t
 
 #define EarthModel_NumSites(p_earth) ((p_earth)->numsites)
 
+Site_t * get_site(EarthModel_t * p_earth, const char * sta, double time);
+
+PyObject * py_EarthModel_SiteInfo(EarthModel_t * p_earth,
+				  PyObject * args);
+
 int py_EarthModel_Init(EarthModel_t * p_earth, PyObject * args);
 
 void py_EarthModel_UnInit(EarthModel_t * p_earth);
@@ -146,10 +152,10 @@ PyObject * py_EarthModel_InvertDetection(const EarthModel_t * p_earth, PyObject 
 PyObject * py_EarthModel_InRange(EarthModel_t * p_earth, PyObject * args);
 
 int EarthModel_InRange(EarthModel_t * p_earth, double lon, double lat,
-                       double depth, int phaseid, int siteid);
+                       double depth, int phaseid, const char *sitename, double time);
 
 double EarthModel_Delta(EarthModel_t * p_earth, double lon, double lat,
-                        int siteid);
+                        const char *sitename, double time);
 
 double simple_distance_deg(double lon1, double lat1, double lon2,
                            double lat2);
@@ -158,9 +164,11 @@ PyObject * py_EarthModel_Delta(EarthModel_t * p_earth, PyObject * args);
 
 PyObject * py_EarthModel_ArrivalTime(EarthModel_t * p_earth, PyObject * args);
 
+
+
 double EarthModel_ArrivalTime(EarthModel_t * p_earth, double lon, double lat,
-                              double depth, double evtime, 
-                              int phaseid, int siteid);
+                              double depth, double evtime,
+                              int phaseid, const char *sitename);
 
 PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
                                            PyObject * args);
@@ -168,48 +176,48 @@ PyObject * py_EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth,
 PyObject * py_EarthModel_TravelTime(EarthModel_t * p_earth,
                                     PyObject * args);
 
-double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon, 
-                                    double lat, double depth, double evtime, 
+double EarthModel_ArrivalTime_Coord(EarthModel_t * p_earth, double lon,
+                                    double lat, double depth, double evtime,
                                     int phaseid, double sitelon,
                                     double sitelat, double siteelev);
 
-PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_ArrivalAzimuth(EarthModel_t * p_earth,
                                         PyObject * args);
 
 double EarthModel_ArrivalAzimuth(EarthModel_t * p_earth, double lon,
-                                 double lat, int siteid);
+                                 double lat, const char *sitename, double time);
 
-PyObject * py_EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_ArrivalIncidentAngle(EarthModel_t * p_earth,
                                          PyObject * args);
 
-PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_ArrivalSlowness(EarthModel_t * p_earth,
                                          PyObject * args);
 
 double EarthModel_ArrivalSlowness(EarthModel_t * p_earth, double lon,
                                   double lat, double depth,
-                                  int phaseid, int siteid);
+                                  int phaseid, const char *sitename, double time);
 
-PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_IsTimeDefPhase(EarthModel_t * p_earth,
                                         PyObject * args);
 
-PyObject * py_EarthModel_NumTimeDefPhases(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_NumTimeDefPhases(EarthModel_t * p_earth,
                                           PyObject * args);
 
-PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_NumPhases(EarthModel_t * p_earth,
                                    PyObject * args);
 
-PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_NumSites(EarthModel_t * p_earth,
                                   PyObject * args);
 
-PyObject * py_EarthModel_DiffAzimuth(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_DiffAzimuth(EarthModel_t * p_earth,
                                      PyObject * args);
 
 double EarthModel_DiffAzimuth(double azi1, double azi2);
 
-PyObject * py_EarthModel_PhaseName(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_PhaseName(EarthModel_t * p_earth,
                                    PyObject * args);
 
-PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth, 
+PyObject * py_EarthModel_MaxTravelTime(EarthModel_t * p_earth,
                                        PyObject * args);
 
 int invert_detection(const EarthModel_t * p_earth, const Detection_t * p_det,

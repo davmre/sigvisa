@@ -1,5 +1,8 @@
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+import scipy.stats
 
 from obspy.core import Trace, Stream, UTCDateTime
 
@@ -8,6 +11,76 @@ import sigvisa.database.db
 from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
+
+def savefig(fname, fig):
+    canvas = FigureCanvasAgg(fig)
+    canvas.print_figure(fname)
+
+def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
+    """
+
+    Given a 1D array, find the min and the max excluding extreme
+    outliers. Intended to be used as min/max values in plotting, to
+    ensure that most of the data is visible on the plot.
+
+    """
+
+    # if data is a masked array, ignore the masked entries
+    try:
+        data = data.compressed()
+    except:
+        pass
+
+    min_bound = scipy.stats.scoreatpercentile(data, per=(100 - coverage) / 2.0)
+    max_bound = scipy.stats.scoreatpercentile(data, per=100 - (100 - coverage) / 2.0)
+    padding = (max_bound - min_bound) * epsilon
+
+    return min_bound - padding, max_bound + padding
+
+
+def plot_with_fit(fname, wn, show_template=True, title="", ymin=None, ymax=None, **kwargs):
+    fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    axes.set_title(title)
+    axes.set_xlabel("Time (s)", fontsize=8)
+
+    if ymin is not None and ymax is not None:
+        axes.set_ylim(ymin, ymax)
+
+    import copy
+    mutable = copy.copy(wn._mutable)
+    wave = wn.get_wave()
+    wn.unfix_value()
+    wn.parent_predict(include_wiggles=True)
+    pred = wn.get_wave()
+
+    if show_template:
+        tmpls = []
+        wn.parent_predict(include_wiggles=False)
+        tmpl = wn.get_wave()
+        for arrival in wn.arrivals():
+            wn.parent_predict(include_wiggles=False, arrivals=[arrival,])
+            tmpls.append(wn.get_wave())
+
+    subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
+    subplot_waveform(pred, axes, color="green",
+                          linewidth=3, alpha = 1,
+                          plot_dets=False, **kwargs)
+    if show_template:
+        subplot_waveform(tmpl, axes, color="red",
+                         linewidth=1, alpha = 1,
+                         plot_dets=False, **kwargs)
+        for individual_tmpl in tmpls:
+            subplot_waveform(individual_tmpl, axes, color="purple",
+                             linewidth=1, alpha = 1,
+                             plot_dets=False, **kwargs)
+
+    wn.set_value(wave.data)
+    wn._mutable = mutable
+    wn._update_mutable_cache()
+
+    savefig(fname, fig)
 
 
 def plot_det_times(wave, axes=None, logscale=False):

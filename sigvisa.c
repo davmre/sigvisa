@@ -90,6 +90,10 @@ static PyMethodDef EarthModel_methods[] = {
      "Compute the distance between an event location and a site\n"
      "Delta(lon, lat, siteid) -> distance in degrees"
     },
+    {"site_info", (PyCFunction)py_EarthModel_SiteInfo, METH_VARARGS,
+     "Return information about a site\n"
+     "site_info(sta, time) -> lon, lat, elev, isarr, ontime, offtime, ref_siteid"
+    },
     {"ArrivalTime", (PyCFunction)py_EarthModel_ArrivalTime, METH_VARARGS,
      "Compute the arrival time of an event at a site\n"
      "ArrivalTime(evlon, evlat, evdepth, evtime, phaseid, siteid) -> arrtime"
@@ -313,24 +317,32 @@ static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,
 static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
                                       PyObject * args)
 {
-  double evlon, evlat, evdepth;
-  int siteid;
+  double evlon, evlat, evdepth, evtime;
   int phaseid;
   double trvtime;
+  const char *sitename;
 
   EarthModel_t * p_earth;
 
-  if (!PyArg_ParseTuple(args, "dddii", &evlon, &evlat, &evdepth,
-                        &siteid, &phaseid))
+  if (!PyArg_ParseTuple(args, "ddddsi", &evlon, &evlat, &evdepth, &evtime,
+                        &sitename, &phaseid))
     return NULL;
 
   p_earth = p_sigmodel->p_earth;
 
   trvtime = EarthModel_ArrivalTime(p_earth, evlon, evlat, evdepth, 0, phaseid,
-                                   siteid);
+                                   sitename);
+  Site_t * p_site = get_site(p_sigmodel->p_earth, sitename, evtime);
+
+  if (trvtime == -2 || p_site == NULL) {
+    PyErr_SetString(PyExc_ValueError, "EarthModel: invalid site name, or site does not exist at specified time.");
+    return NULL;
+  }
+
+  int ref_siteid = p_site->ref_siteid;
 
   trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,
-                                           siteid, phaseid);
+                                           ref_siteid, phaseid);
 
   return Py_BuildValue("d", trvtime);
 }

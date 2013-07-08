@@ -20,8 +20,8 @@ import django.db
 import sigvisa.plotting.plot as plot
 import textwrap
 
-from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
-
+from svweb.plotting_utils import process_plot_args, view_wave
+from sigvisa.plotting.plot import bounds_without_outliers
 
 # detail view for a particular fit
 def WaveSelectView(request):

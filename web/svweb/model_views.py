@@ -14,8 +14,7 @@ import sys
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa import *
-from sigvisa.models.templates.load_by_name import load_template_model
-from sigvisa.models.wiggles import load_wiggle_node
+from sigvisa.models.wiggles import load_wiggle_generator
 from sigvisa.learn.train_param_common import load_model
 from sigvisa.learn.train_coda_models import  get_shape_training_data
 from sigvisa.learn.train_wiggle_models import  get_wiggle_training_data
@@ -241,12 +240,12 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         xy_by_phase = {}
         for phase in phases:
             if basisid:
-                wm_node = load_wiggle_node(basisid=basisid)
+                wg = load_wiggle_generator(basisid=basisid)
                 X, y, evids = get_wiggle_training_data(run_name=run.run_name, run_iter=run.iter,
                                                 site=sta, chan=chan, band=band, phases=phases,
                                                 target=param,require_human_approved=require_human_approved,
                                                 max_acost=max_acost, min_amp=min_amp,
-                                                      wm_node = wm_node, **d)
+                                                      wm_node = wg, **d)
             else:
                 X, y, evids = get_shape_training_data(run_name=run.run_name, run_iter=run.iter,
                                                 site=sta, chan=chan, band=band, phases=phases,

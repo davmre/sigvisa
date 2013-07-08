@@ -15,8 +15,8 @@ class DAG(object):
     """
 
     def __init__(self, toplevel_nodes=None, leaf_nodes=None):
-        self.toplevel_nodes = toplevel_nodes if toplevel_nodes is not None else []
-        self.leaf_nodes = leaf_nodes if leaf_nodes is not None else []
+        self.toplevel_nodes = set(toplevel_nodes) if toplevel_nodes is not None else set()
+        self.leaf_nodes = set(leaf_nodes) if leaf_nodes is not None else set()
 
         # invariant: self._topo_sorted_list should always be a topologically sorted list of nodes
         self._topo_sort()
@@ -31,9 +31,10 @@ class DAG(object):
             for pn in node.parents.values():
                 self.__ts_visit(pn)
             node.set_mark(1)
+            node._topo_sorted_list_index = len(self._topo_sorted_list)
             self._topo_sorted_list.append(node)
-    def _topo_sort(self):
 
+    def _topo_sort(self):
         # check graph invariants
         for tn in self.toplevel_nodes:
             assert(len(tn.parents) == 0)
@@ -45,7 +46,16 @@ class DAG(object):
             self.__ts_visit(leaf)
         self.clear_visited()
 
+
+    # allow fast removing of nodes by setting their entries to None
+    def _gc_topo_sorted_nodes(self):
+        tsl = [n for n in self._topo_sorted_list if n is not None]
+        for (i, n) in enumerate(tsl):
+            n._topo_sorted_list_index = i
+        self._topo_sorted_list = tsl
+
     def topo_sorted_nodes(self):
+        self._gc_topo_sorted_nodes()
         return self._topo_sorted_list
 
     def clear_visited(self):
@@ -55,6 +65,14 @@ class DAG(object):
             node.clear_mark()
             q.extendleft(node.children)
 
+
+def get_relevant_nodes(node_list):
+    # note, it's important that the nodes have a consistent order, since
+    # we represent their joint values as a vector.
+    node_list = [node for node in node_list if not node.deterministic()]
+    all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
+    relevant_nodes = set(node_list + all_stochastic_children)
+    return node_list, relevant_nodes
 
 class DirectedGraphModel(DAG):
 
@@ -66,40 +84,66 @@ class DirectedGraphModel(DAG):
     def __init__(self, **kwargs):
         super(DirectedGraphModel, self).__init__(**kwargs)
 
-    def current_log_p(self):
+        self.all_nodes = dict()
+        self.nodes_by_key = dict()
+
+
+        def add_children(n):
+            self.add_node(n)
+            for c in n.children:
+                add_children(c)
+
+        if self.toplevel_nodes is not None:
+            for n in self.toplevel_nodes:
+                add_children(n)
+
+    def current_log_p(self, verbose=False):
         logp = 0
         for node in self.topo_sorted_nodes():
+            if node.deterministic(): continue
             lp = node.log_p()
+            if verbose:
+                print "node %s has logp %.1f" % (node.label, lp)
             logp += lp
         return logp
 
-    def prior_predict_all(self):
+    def parent_predict_all(self):
         for node in self.topo_sorted_nodes():
             if not node._fixed:
-                node.prior_predict()
+                node.parent_predict()
 
-    def prior_sample_all(self):
+    def parent_sample_all(self):
         for node in self.topo_sorted_nodes():
-            node.prior_predict()
+            node.parent_predict()
 
     def get_all(self, node_list):
-        return np.concatenate([node.get_mutable_values() for node in node_list])
+        return np.concatenate([node.get_mutable_values() for node in node_list if not node.deterministic()])
 
     def set_all(self, values, node_list):
         i = 0
         for node in node_list:
+            if node.deterministic(): continue
             n = node.mutable_dimension()
             node.set_mutable_values(values[i:i+n])
             i += n
 
+            for dn in node.get_deterministic_children():
+                dn.parent_predict()
+
     def joint_prob(self, values, node_list, relevant_nodes, c=1):
-        v = self.get_all(node_list = node_list)
+        # node_list: list of nodes whose values we are interested in
+
+        # relevant_nodes: all nodes whose log_p() depends on a value
+        # from a node in node_list.
+
+        #v = self.get_all(node_list = node_list)
         self.set_all(values=values, node_list=node_list)
         ll = np.sum([node.log_p() for node in relevant_nodes])
-        self.set_all(values=v, node_list=node_list)
+        #self.set_all(values=v, node_list=node_list)
         return c * ll
 
-    def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1):
+
+    def log_p_grad(self, values, node_list, relevant_nodes, eps=1e-4, c=1.0):
         try:
             eps0 = eps[0]
         except:
@@ -114,9 +158,21 @@ class DirectedGraphModel(DAG):
             keys = node.mutable_keys()
             for (ni, key) in enumerate(keys):
                 deriv = node.deriv_log_p(key=key, eps=eps[i + ni], lp0=initial_lp[node.label])
-                for child in node.children:
-                    deriv += child.deriv_log_p(parent_name=node.label, parent_key = key,
-                                               eps=eps[i + ni], lp0=initial_lp[child.label])
+
+                # sum the derivatives of all child nodes wrt to this value, including
+                # any deterministic nodes along the way
+                child_list = node.get_stochastic_children()
+                for (child, intermediate_nodes) in child_list:
+                    current_key = key
+                    d = 1.0
+                    for inode in intermediate_nodes:
+                        d *= inode.deriv_value_wrt_parent(parent_key = current_key)
+                        current_key = inode.label
+                    d *= child.deriv_log_p(parent_key = current_key,
+                                           eps=eps[i + ni],
+                                           lp0=initial_lp[child.label])
+                    deriv += d
+
                 grad[i + ni] = deriv
             i += len(keys)
         self.set_all(values=v, node_list=node_list)
@@ -126,13 +182,7 @@ class DirectedGraphModel(DAG):
         """
         Assume that the value at each node is a 1D array.
         """
-
-        node_list = list(node_list) # it's important that the nodes have a consistent order
-        all_children = [child for node in node_list for child in node.children]
-        relevant_nodes = set(node_list + all_children)
-
-
-
+        node_list, relevant_nodes = get_relevant_nodes(node_list)
 
         start_values = self.get_all(node_list=node_list)
         low_bounds = np.concatenate([node.low_bounds() for node in node_list])
@@ -158,3 +208,49 @@ class DirectedGraphModel(DAG):
         result_vector, cost = optim_utils.minimize(f=jp, x0=start_values, fprime=g, optim_params=optim_params, bounds=bounds)
         self.set_all(values=result_vector, node_list=node_list)
         print "got optimized x", result_vector
+
+
+    def remove_node(self, node):
+        del self.all_nodes[node.label]
+        for key in node.keys():
+            del self.nodes_by_key[key]
+
+        for child in node.children:
+            child.removeParent(node)
+            if len(child.parents) == 0:
+                self.toplevel_nodes.add(child)
+
+        for parent in node.parents.values():
+            parent.removeChild(node)
+            if len(parent.children) == 0:
+                self.leaf_nodes.add(parent)
+
+
+    def add_node(self, node):
+        self.all_nodes[node.label] = node
+        for key in node.keys():
+            self.nodes_by_key[key] = node
+        if len(node.children) == 0:
+            self.leaf_nodes.add(node)
+        if len(node.parents) == 0:
+            self.toplevel_nodes.add(node)
+        for child in node.children:
+            self.toplevel_nodes.discard(child)
+        for parent in node.parents.values():
+            self.leaf_nodes.discard(parent)
+
+    def topo_sorted_nodes(self):
+        self._gc_topo_sorted_nodes()
+        assert(len(self._topo_sorted_list) == len(self.all_nodes))
+        return self._topo_sorted_list
+
+    def get_node_from_key(self, key):
+        return self.nodes_by_key[key]
+
+    def set_value(self, key, value, **kwargs):
+        n = self.nodes_by_key[key]
+        n.set_value(value=value, key=key, **kwargs)
+
+    def get_value(self, key):
+        n = self.nodes_by_key[key]
+        return n.get_value(key=key)

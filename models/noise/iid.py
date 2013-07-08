@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.ma as ma
 from scipy.stats import laplace
 
 from sigvisa.models.noise.noise_model import NoiseModel
@@ -17,8 +18,8 @@ class L1IIDModel(NoiseModel):
     def __init__(self, median, b):
         self.median = median
         self.b = b
-
         self.normalizer = np.log(.5 * self.b)
+        self.nomask = np.array([False,] * 5000, dtype=bool)
 
     def predict(self, n):
         return np.ones((n,)) * self.median
@@ -26,12 +27,26 @@ class L1IIDModel(NoiseModel):
     def sample(self, n):
         return laplace.rvs(size=n, loc=self.median, scale=self.b)
 
-    def log_p(self, x, zero_mean=False):
+    def log_p(self, x, mask=None, zero_mean=False):
         n = len(x)
         c = 0 if zero_mean else self.median
 
-        m = x.mask
-        d = x.data - c
+        if isinstance(x, ma.masked_array):
+            d = x.data - c
+            mm = x.mask
+        else:
+            d = x - c
+            mm = mask
+
+        try:
+            mm[0]
+            m = mm
+        except (TypeError,IndexError,AttributeError):
+            if len(x) > len(self.nomask):
+                self.nomask = np.array([False,] * (len(self.nomask)*2), dtype=bool)
+            m = self.nomask
+
+
 
         b = self.b
 

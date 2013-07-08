@@ -1,6 +1,8 @@
 numpy
 scipy
 scikit-learn
+cython
+scikits.sparse
 matplotlib
 -e git+http://github.com/matplotlib/basemap.git#egg=basemap
 obspy

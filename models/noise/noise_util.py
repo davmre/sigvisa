@@ -96,7 +96,7 @@ def arrivals_intersect_block(block_start, block_end, arrival_times, danger_perio
             return True
     return False
 
-def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta, chan, filter_str, srate, order, model_wave=None, model_type="ar", save_models=True):
+def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta, chan, filter_str, srate, env, order, model_wave=None, model_type="ar", save_models=True):
     s = Sigvisa()
 
     if model_wave is None:
@@ -128,9 +128,10 @@ def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta,
             ensure_dir_exists(os.path.dirname(full_fname))
             model.dump_to_file(full_fname)
 
-            nmid = model.save_to_db(dbconn=dbconn, sta=sta, chan=chan, band=band, hz=srate,
-                             window_stime=window_stime, window_len=window_len,
-                             fname=nm_fname, hour=hour)
+            nmid = model.save_to_db(dbconn=dbconn, sta=sta, chan=chan,
+                                    band=band, hz=srate, env=env,
+                                    window_stime=window_stime, window_len=window_len,
+                                    fname=nm_fname, hour=hour)
 
         if band == requested_band:
             requested_model = model
@@ -144,7 +145,7 @@ def construct_and_save_noise_models(hour, dbconn, window_stime, window_len, sta,
     else:
         return requested_model
 
-def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, srate=40, order="auto", return_details=False, model_type="ar", force_train=False):
+def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=None, env=True, srate=40, order="auto", return_details=False, model_type="ar", force_train=False):
     """
     Returns an ARModel noise model of the specified order for the
     given station/channel/filter, trained from the hour prior to
@@ -160,15 +161,15 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     # without loading/saving to the DB, there are no details to return
     assert(not (return_details and force_train))
 
-
     if waveform is not None:
         sta = waveform['sta']
         chan = waveform['chan']
         filter_str = waveform['filter_str']
         time = waveform['stime']
         srate = waveform['srate']
+        env = "env" in filter_str
     else:
-        if sta is None or chan is None or filter_str is None or time is None:
+        if sta is None or chan is None or filter_str is None or time is None or env is None:
             raise Exception("missing argument to get_noise_model!")
 
     if order=="auto":
@@ -176,7 +177,6 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
             order=int(np.ceil(srate/2))
         elif model_type == "l1":
             order = 0
-
 
     band = filter_str_extract_band(filter_str)
 
@@ -187,13 +187,13 @@ def get_noise_model(waveform=None, sta=None, chan=None, filter_str=None, time=No
     # first see if we already have an applicable noise model
     model = None
     if not force_train:
-        model, details = NoiseModel.load_from_db(dbconn=s.dbconn, sta=sta, chan=chan, band=band, hz=srate, order=order, model_type=model_type, hour=hour, return_extra=True)
+        model, details = NoiseModel.load_from_db(dbconn=s.dbconn, sta=sta, chan=chan, band=band, hz=srate, env=env, order=order, model_type=model_type, hour=hour, return_extra=True)
 
     if model is None:
         # otherwise, train a new model
         window_stime, window_etime = get_recent_safe_block(time, sta, chan)
         window_len = window_etime - window_stime
-        results = construct_and_save_noise_models(window_stime=window_stime, window_len=window_len, sta=sta, chan=chan, filter_str=filter_str, srate=srate, order=order, model_type=model_type, hour=hour, dbconn=s.dbconn, save_models=not force_train)
+        results = construct_and_save_noise_models(window_stime=window_stime, window_len=window_len, sta=sta, chan=chan, env=env, filter_str=filter_str, srate=srate, order=order, model_type=model_type, hour=hour, dbconn=s.dbconn, save_models=not force_train)
         if not force_train:
             model, nmid, nm_fname = results
         else:

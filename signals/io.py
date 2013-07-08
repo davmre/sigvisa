@@ -141,18 +141,20 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
     chan = s.canonical_channel_name[chan]
     chan_list = s.equivalent_channels(chan)
 
-    if station == "MKAR":
-        selection = "MK31"
+    close_cursor = False
+    if cursor is None:
+        cursor = s.dbconn.cursor()
+        close_cursor = True
+
+    if s.earthmodel.site_info(station, stime)[3] == 1:
+        cursor.execute("select refsta from static_site where sta='%s'" % station)
+        selection = cursor.fetchone()[0]
     else:
         selection = station
 
     # explicitly do BETWEEN queries (with generous bounds) rather than just
     # checking time < etime and endtime > stime, because the latter creates a
     # monstrous slow database join
-    close_cursor = False
-    if cursor is None:
-        cursor = s.dbconn.cursor()
-        close_cursor = True
 
     MAX_SIGNAL_LEN = 3600 * 8
     sql = "select * from idcx_wfdisc where sta = '%s' and %s and time between %f and %f and endtime between %f and %f" % (
