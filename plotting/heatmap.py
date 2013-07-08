@@ -59,7 +59,7 @@ class Heatmap(object):
         self.lat_arr = np.linspace(self.bottom_lat, self.top_lat, self.n)
 
 
-    def __init__(self, f, n=20, center=None, width=None, width_deg=None, height_deg=None, left_lon=None, right_lon=None, top_lat=None, bottom_lat=None, autobounds=None, fname=None, calc=True):
+    def __init__(self, f, n=20, center=None, width=None, width_deg=None, height_deg=None, left_lon=None, right_lon=None, top_lat=None, bottom_lat=None, autobounds=None, autobounds_quantile=0.9, fname=None, calc=True):
         """ Arguments:
 
         fn: the function to plot, with signature f(lon, lat)
@@ -88,7 +88,7 @@ class Heatmap(object):
             self.load()
         except:
             if autobounds is not None:
-                left_lon, right_lon, bottom_lat, top_lat = self.event_bounds(autobounds)
+                left_lon, right_lon, bottom_lat, top_lat = self.event_bounds(autobounds, quantile=autobounds_quantile)
             self._init_coord_bounds(center=center, width_deg=width_deg, height_deg=height_deg,
                                     left_lon=left_lon, right_lon=right_lon,
                                     bottom_lat=bottom_lat, top_lat=top_lat)
@@ -191,7 +191,6 @@ class Heatmap(object):
                        llcrnrlon=self.left_lon, llcrnrlat=self.bottom_lat,
                        urcrnrlon=self.right_lon, urcrnrlat=self.top_lat,
                        **kwargs)
-        bmap.drawmapboundary(fill_color=(.7, .7, 1, 1))
         bmap.drawcoastlines(zorder=10)
 
         if not nofillcontinents:
@@ -220,27 +219,46 @@ class Heatmap(object):
 
         self.bmap.drawmeridians(meridians, labels=[True, False, False, True], fontsize=x_fontsize, zorder=zorder)
 
-    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, **plotargs):
+    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, **plotargs):
         try:
             bmap = self.bmap
         except:
             self.init_bmap()
 
-        normed_locations = [self.normalize_lonlat(*location) for location in locations]
+        normed_locations = np.array([self.normalize_lonlat(*location) for location in locations])
+
+
+        if yvals: #HACK
+            min_yval = scipy.stats.scoreatpercentile(yvals, 10)
+            max_yval = scipy.stats.scoreatpercentile(yvals, 90)
+            yvals = np.array([min(max_yval, max(y, min_yval)) for y in yvals])
+
+            scplot = bmap.scatter(normed_locations[:, 0], normed_locations[:, 1], c=yvals, **plotargs)
+
+            from mpl_toolkits.axes_grid import make_axes_locatable
+            import matplotlib.axes as maxes
+            divider = make_axes_locatable(bmap.ax)
+            cax = divider.new_horizontal("4%", pad=.5, axes_class=maxes.Axes)
+            bmap.ax.figure.add_axes(cax)
+
+            bmap.ax.figure.colorbar(scplot, orientation="vertical", drawedges=False,
+                                    cax=cax, format="%.3f")
+            return
 
         for enum, ev in enumerate(normed_locations):
-            x, y = bmap(ev[0], ev[1])
-            bmap.plot([x], [y], zorder=zorder, **plotargs)
+            x1, x2 = bmap(ev[0], ev[1])
+            bmap.plot([x1], [x2], zorder=zorder, **plotargs)
 
 
             if offmap_arrows:
                 edge_pt, edge_arrow = self.project_to_bounds(ev[0], ev[1])
                 x, y = edge_pt
+                arrow_color = plotargs['mec']
                 if edge_arrow is not None:
                     base_scale = (self.right_lon - self.left_lon) / 200.0
                     edge_arrow *= base_scale * 10
                     bmap.ax.arrow( edge_pt[0] - edge_arrow[0], edge_pt[1] - edge_arrow[1],
-                                   edge_arrow[0], edge_arrow[1], fc="white", ec="white",
+                                   edge_arrow[0], edge_arrow[1], fc=arrow_color, ec=arrow_color,
                                    length_includes_head=True, overhang = .6,
                                    head_starts_at_zero=False, width=0.01,
                                    head_width= 3 * base_scale, head_length = 3 * base_scale, zorder=zorder)
@@ -251,13 +269,14 @@ class Heatmap(object):
                 xbounds = bmap(self.right_lon, self.top_lat)
                 x_off = 6 if x < self.right_lon else -20
                 y_off = 6 if y < self.top_lat else -20
+                label_color = plotargs['mec']
                 axes.annotate(
                     labels[enum],
                     xy=(x, y),
                     xytext=(x_off, y_off),
                     textcoords='offset points',
                     size=8,
-                    color = 'white',
+                    color = label_color,
                     zorder=zorder,
                     arrowprops = None)
 

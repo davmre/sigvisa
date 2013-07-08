@@ -122,6 +122,28 @@ def plot_gp_heatmap(request, model_record, X, y, axes):
 
     axes.set_title(model_record.param)
 
+def plot_data_heatmap(request, sta, param, xy_by_phase, axes):
+
+
+    X, y = xy_by_phase.values()[0]
+    ev_locs = X[:, 0:2]
+
+    ymin = float(request.GET.get('ymin', '-inf'))
+    ymax = float(request.GET.get('ymax', 'inf'))
+    y = np.array([max(ymin, min(ymax, yy)) for yy in y])
+
+    hm = EventHeatmap(f=None, calc=False, autobounds=ev_locs, autobounds_quantile=0.98)
+    hm.add_stations((sta,))
+    hm.add_events(locations=ev_locs, yvals=y)
+    hm.plot(axes=axes, nolines=True, smooth=True, station_labels=False, meridians=False)
+
+    for item in (axes.get_xticklabels() + axes.get_yticklabels()):
+        print item
+        item.set_fontsize(2)
+
+    axes.set_title("%s: %s" % (sta, param))
+
+
 def plot_gaussian(request, model_record, axes):
 
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
@@ -204,6 +226,8 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
             plot_empirical_histogram(request=request, xy_by_phase=xy_by_phase, axes=axes)
         elif plot_type == "distance":
             plot_empirical_distance(request=request, xy_by_phase=xy_by_phase, axes=axes)
+        elif plot_type == "heatmap" and modelid is None:
+            plot_data_heatmap(request=request, sta=sta, param=param, xy_by_phase=xy_by_phase, axes=axes)
 
     if plot_type == "histogram":
         axes.set_xlabel(param, fontsize=8)
@@ -251,3 +275,6 @@ def data_distance_plot(request, **kwargs):
 
 def data_histogram_plot(request, **kwargs):
     return plot_fit_param(request, plot_type="histogram", **kwargs)
+
+def data_heatmap_plot(request, **kwargs):
+    return plot_fit_param(request, plot_type="heatmap", **kwargs)

@@ -16,10 +16,11 @@ class EventHeatmap(Heatmap):
 
         self.event_locations = []
         self.event_labels = []
+        self.event_yvals = []
         self.stations = []
         self.true_event = None
 
-    def add_events(self, locations, labels=None):
+    def add_events(self, locations, labels=None, yvals=None):
 
         if labels is not None:
             if len(labels) != len(locations):
@@ -28,6 +29,7 @@ class EventHeatmap(Heatmap):
             labels = [None for loc in locations]
 
         self.event_locations.extend([(l[0], l[1]) for l in locations])
+        self.event_yvals.extend(yvals)
         self.event_labels.extend(labels)
 
     def add_stations(self, names):
@@ -49,16 +51,25 @@ class EventHeatmap(Heatmap):
 
         self.save(fname + ".log")
 
-    def plot(self, event_alpha=0.6, axes=None, **density_args):
+    def plot(self, event_alpha=0.6, axes=None, station_labels=True, nofillcontinents=True, meridians=True, **density_args):
 
-        self.init_bmap(axes=axes)
-        self.plot_earth()
+        self.init_bmap(axes=axes, nofillcontinents=nofillcontinents)
+
+        if meridians:
+            self.plot_earth()
 
         if self.f is not None or not np.isnan(self.fvals).all():
             self.plot_density(**density_args)
 
-        self.plot_locations(self.event_locations, labels=self.event_labels,
-                            marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=event_alpha)
+        if self.event_yvals:
+            self.plot_locations(self.event_locations,
+                                marker=".", s=6, facecolors="none",
+                                yvals=self.event_yvals, alpha=event_alpha)
+        else:
+            self.plot_locations(self.event_locations, labels=self.event_labels,
+                                marker=".", ms=6, mec="none", mew=0,
+                                yvals=self.event_yvals, alpha=event_alpha)
+
 
         if self.true_event is not None:
             (lon, lat) = self.true_event
@@ -66,8 +77,8 @@ class EventHeatmap(Heatmap):
                                 marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
 
         sta_locations = [self.sitenames[n][0:2] for n in self.stations]
-        self.plot_locations(sta_locations, labels=self.stations, offmap_arrows=True,
-                            marker="x", ms=7, mfc="none", mec="white", mew=2, alpha=1)
+        self.plot_locations(sta_locations, labels=self.stations if station_labels else None, offmap_arrows=True,
+                            marker="x", ms=4, mfc="none", mec="blue", mew=1, alpha=1)
 
     def title(self):
         peak = self.max()[0:2]
