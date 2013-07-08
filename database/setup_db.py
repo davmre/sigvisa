@@ -57,14 +57,14 @@ with open('setup_db_custom.sql', 'w') as f:
 with open('setup_db_custom.sql', 'r') as f:
     cmd = ["mysql", "-u", "root", "-p%s" % mysql_root, "--local-infile", ]
     print "running %s" % " ".join(cmd) +  " < setup_db_custom.sql"
-#    call(cmd, stdin=f)
+    call(cmd, stdin=f)
 print "removing setup_db_custom.sql..."
 os.remove('setup_db_custom.sql')
 
 with open('sigvisa.sql', 'r') as f:
     cmd = ["mysql", "-u", "root", "-p%s" % mysql_root, db_name]
     print "running %s" % " ".join(cmd) +  " < sigvisa.sql"
-#    call(cmd, stdin=f)
+    call(cmd, stdin=f)
 
 print "add the following to your login script (i.e. .bashrc, or virtualenv postactivate script):"
 print "export VISA_MYSQL_USER=%s" % db_user

@@ -187,7 +187,10 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     this->dfn = dist_euclidean;
     this->dfn_extra = malloc(sizeof(int));
     *((int *) this->dfn_extra) = pts.size2();
-  }else{
+  } else if (distfn_str.compare("lldlld") == 0) {
+    this->dfn = dist_6d_km;
+    this->dfn_extra = NULL;
+  } else {
     printf("error: unrecognized distance function %s\n", distfn_str.c_str());
     exit(1);
   }
@@ -202,6 +205,8 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
       this->ddfn = dist3d_se_deriv_wrt_i;
     } else if (distfn_str.compare("euclidean") == 0) {
       this->ddfn = euclidean_se_deriv_wrt_i;
+    } else if (distfn_str.compare("lldlld") == 0){
+      this->ddfn = dist6d_se_deriv_wrt_i;
     }
 
   } else if (wfn_str.compare("matern32") == 0) {
