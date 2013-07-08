@@ -55,10 +55,11 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                 label = create_key(param=param, sta=sta, phase=phase,
                                           eid=event_node.eid, chan=chan, band=band)
                 atn = extract_sta_node(amp_transfer_node, sta)
+                my_children = [wn for wn in children if wn.sta==sta]
                 nodes[sta] = CodaHeightNode(eid=event_node.eid, sta=sta, band=band,
                                             chan=chan, phase=phase,
                                             label = label, parents=[event_node, atn],
-                                            children=children,
+                                            children=my_children,
                                             initial_value=self.default_param_vals()['coda_height'])
                 graph.add_node(nodes[sta], template=True)
             return nodes

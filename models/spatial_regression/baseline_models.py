@@ -86,7 +86,7 @@ class ParamModel(Distribution):
             self.ev_cache[event] = a
         return a
 
-    def standardize_input_array(self, c):
+    def standardize_input_array(self, c, **kwargs):
         if isinstance(c, np.ndarray):
                 X1 = np.array(c, dtype=float, copy=False)
         elif isinstance(c, Event):

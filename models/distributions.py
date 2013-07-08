@@ -79,9 +79,9 @@ class Uniform(Distribution):
 
     def log_p(self, x,  **kwargs):
         if self.lbound <= x <= self.rbound:
-            return 1.0 / (self.rbound - self.lbound)
+            return -np.log(self.rbound - self.lbound)
         else:
-            return 0.0
+            return np.float("-inf")
 
     def predict(self, **kwargs):
         return self.lbound + (self.rbound - self.lbound) / 2
@@ -97,7 +97,7 @@ class Gaussian(Distribution):
     def log_p(self, x,  **kwargs):
         mu = self.mean
         sigma = self.std
-        lp = .5 * np.log(2*np.pi*sigma) - .5 * (x - mu)**2 / sigma**2
+        lp = -.5 * np.log(2*np.pi*sigma*sigma) - .5 * (x - mu)**2 / sigma**2
         if np.isnan(lp):
             lp = np.float("-inf")
         return lp
@@ -113,14 +113,13 @@ class Poisson(Distribution):
         self.mu = mu
 
     def log_p(self, x, **kwargs):
-        return np.exp(-self.mu) * self.mu**x / factorial(x)
+        return -self.mu  + x * np.log(self.mu) - scipy.special.gammaln(x+1)
 
     def predict(self, **kwargs):
         return self.mu
 
     def sample(self, **kwargs):
         return stats.poisson.rvs(self.mu, n=1)
-
 
 class Negate(Distribution):
     def __init__(self, dist):

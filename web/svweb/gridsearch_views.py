@@ -30,7 +30,8 @@ import hashlib
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle, SigvisaGridsearchRun, SigvisaGsrunModel, SigvisaGsrunWave, SigvisaParamModel
 
-from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
+from sigvisa.plotting.plot import bounds_without_outliers
+from svweb.plotting_utils import process_plot_args, view_wave
 from svweb.views import wave_plus_template_view
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.utils.geog import lonlatstr, dist_km

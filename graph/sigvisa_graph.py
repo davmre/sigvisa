@@ -7,7 +7,7 @@ from sigvisa import Sigvisa
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists
 
 from sigvisa.source.event import get_event
-from sigvisa.learn.train_param_common import load_model
+from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Uniform, Poisson
@@ -17,6 +17,7 @@ from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
 from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
+from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
@@ -68,7 +69,8 @@ class SigvisaGraph(DirectedGraphModel):
                  dummy_fallback=False,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0,
-                 no_prune_edges=False, assume_envelopes=True):
+                 no_prune_edges=False, assume_envelopes=True,
+                 arrays_joint=False):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -117,6 +119,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.site_elements = dict()
         self.site_bands = dict()
         self.site_chans = dict()
+        self.arrays_joint = arrays_joint
 
         self.optim_log = ""
 
@@ -183,8 +186,8 @@ class SigvisaGraph(DirectedGraphModel):
                     lp += n_template_dist.log_p(ua_templates)
         return lp
 
-    def current_log_p(self):
-        lp = super(SigvisaGraph, self).current_log_p()
+    def current_log_p(self, **kwargs):
+        lp = super(SigvisaGraph, self).current_log_p(**kwargs)
         lp += self.ntemplates_log_p()
         return lp
 
@@ -257,19 +260,6 @@ class SigvisaGraph(DirectedGraphModel):
         self._topo_sort()
         return event_node
 
-    def load_node_from_modelid(self, modelid, label, **kwargs):
-        s = Sigvisa()
-        cursor = s.dbconn.cursor()
-        sql_query = "select param, model_type, model_fname from sigvisa_param_model where modelid=%d" % (modelid)
-        cursor.execute(sql_query)
-        param, db_model_type, fname = cursor.fetchone()
-        basedir = os.getenv("SIGVISA_HOME")
-        model = load_model(os.path.join(basedir, fname), db_model_type)
-        node = Node(model=model, label=label, **kwargs)
-        node.modelid = modelid
-        cursor.close()
-        return node
-
     def destroy_unassociated_template(self, nodes, nosort=False):
         for (param, node) in nodes.items():
             self.remove_node(node)
@@ -322,7 +312,64 @@ class SigvisaGraph(DirectedGraphModel):
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
         return nodes
 
-    def setup_site_param_node(self, param, site, phase, parent,
+    def load_node_from_modelid(self, modelid, label, **kwargs):
+        model = load_modelid(modelid)
+        node = Node(model=model, label=label, **kwargs)
+        node.modelid = modelid
+        return node
+
+    def load_array_node_from_modelid(self, modelid, label, **kwargs):
+        model = load_modelid(modelid)
+        node = ArrayNode(model=model, label=label, **kwargs)
+        node.modelid = modelid
+        return node
+
+    def setup_site_param_node(self, **kwargs):
+        if self.arrays_joint:
+            return self.setup_site_param_node_joint(**kwargs)
+        else:
+            return self.setup_site_param_node_indep(**kwargs)
+
+    def setup_site_param_node_joint(self, param, site, phase, parent,
+                              chan=None, band=None, basisid=None,
+                              model_type=None, modelid=None,
+                              children=(), low_bound=None,
+                              high_bound=None, initial_value=None, **kwargs):
+
+        if model_type is None:
+            model_type = self._tm_type(param)
+
+        if model_type != "dummy" and modelid is None:
+            try:
+                modelid = get_param_model_id(runid=self.runid, sta=site,
+                                             phase=phase, model_type=model_type,
+                                             param=param, template_shape=self.template_shape,
+                                             chan=chan, band=band, basisid=basisid)
+            except ModelNotFoundError:
+                if self.dummy_fallback:
+                    print "warning: falling back to dummy model for %s, %s, %s phase %s param %s" % (site, chan, band, phase, param)
+                    model_type = "dummy"
+                else:
+                    raise
+        label = create_key(param=param, sta="%s_arr" % site,
+                           phase=phase, eid=parent.eid,
+                           chan=chan, band=band)
+        if model_type=="dummy":
+            return self.setup_site_param_indep(param=param, site=site, phase=phase, parent=parent, chan=chan, band=band, basisid=basisid, model_type="dummy", children=children, low_bound=low_bound, high_bound=high_bound, initial_value=initial_value, **kwargs)
+        else:
+            sorted_elements = sorted(self.site_elements[site])
+            sk = [create_key(param=param, eid=parent.eid, sta=sta, phase=phase, chan=chan, band=band) for sta in sorted_elements]
+            if initial_value is None:
+                initial_value = 0.0
+            if type(initial_value) != dict:
+                initial_value = dict([(k, initial_value) for k in sk])
+            node = self.load_array_node_from_modelid(modelid=modelid, parents=[parent,], children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, sorted_keys=sk, label=label)
+            self.add_node(node, **kwargs)
+            return node
+
+
+
+    def setup_site_param_node_indep(self, param, site, phase, parent,
                               chan=None, band=None, basisid=None,
                               model_type=None, modelid=None,
                               children=(), low_bound=None,
@@ -337,7 +384,7 @@ class SigvisaGraph(DirectedGraphModel):
         for sta in self.site_elements[site]:
             if model_type != "dummy" and modelid is None:
                 try:
-                    modelid = get_param_model_id(runid=self.runid, sta=site,
+                    modelid = get_param_model_id(runid=self.runid, sta=sta,
                                                  phase=phase, model_type=model_type,
                                                  param=param, template_shape=self.template_shape,
                                                  chan=chan, band=band, basisid=basisid)
@@ -350,10 +397,11 @@ class SigvisaGraph(DirectedGraphModel):
             label = create_key(param=param, sta=sta,
                                phase=phase, eid=parent.eid,
                                chan=chan, band=band)
+            my_children = [wn for wn in children if wn.sta==sta]
             if model_type=="dummy":
-                node = Node(label=label, model=DummyModel(default_value=initial_value), parents=[parent,], children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = Node(label=label, model=DummyModel(default_value=initial_value), parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
             else:
-                node = self.load_node_from_modelid(modelid, label, parents=[parent,], children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = self.load_node_from_modelid(modelid, label, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
 
             nodes[sta] = node
             self.add_node(node, **kwargs)
@@ -386,9 +434,11 @@ class SigvisaGraph(DirectedGraphModel):
         for sta in self.site_elements[site]:
             ttrn = extract_sta_node(tt_residual_node, sta)
             label = create_key(param="arrival_time", sta=sta, phase=phase, eid=event_node.eid)
+
+            my_children = [wn for wn in children if wn.sta==sta]
             arrtimenode = ArrivalTimeNode(eid=event_node.eid, sta=sta,
                                           phase=phase, parents=[event_node, ttrn],
-                                          label=label, children=children)
+                                          label=label, children=my_children)
             self.add_node(arrtimenode, template=True)
             nodes[sta] = arrtimenode
         return nodes

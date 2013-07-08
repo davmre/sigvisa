@@ -2,6 +2,8 @@ from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
+import scipy.stats
+
 from obspy.core import Trace, Stream, UTCDateTime
 
 from sigvisa.database.dataset import *
@@ -14,13 +16,40 @@ def savefig(fname, fig):
     canvas = FigureCanvasAgg(fig)
     canvas.print_figure(fname)
 
+def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
+    """
 
-def plot_with_fit(fname, wn, show_template=True, **kwargs):
+    Given a 1D array, find the min and the max excluding extreme
+    outliers. Intended to be used as min/max values in plotting, to
+    ensure that most of the data is visible on the plot.
+
+    """
+
+    # if data is a masked array, ignore the masked entries
+    try:
+        data = data.compressed()
+    except:
+        pass
+
+    min_bound = scipy.stats.scoreatpercentile(data, per=(100 - coverage) / 2.0)
+    max_bound = scipy.stats.scoreatpercentile(data, per=100 - (100 - coverage) / 2.0)
+    padding = (max_bound - min_bound) * epsilon
+
+    return min_bound - padding, max_bound + padding
+
+
+def plot_with_fit(fname, wn, show_template=True, title="", ymin=None, ymax=None, **kwargs):
     fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
+    axes.set_title(title)
     axes.set_xlabel("Time (s)", fontsize=8)
 
+    if ymin is not None and ymax is not None:
+        axes.set_ylim(ymin, ymax)
+
+    import copy
+    mutable = copy.copy(wn._mutable)
     wave = wn.get_wave()
     wn.unfix_value()
     wn.parent_predict(include_wiggles=True)
@@ -48,7 +77,8 @@ def plot_with_fit(fname, wn, show_template=True, **kwargs):
                              plot_dets=False, **kwargs)
 
     wn.set_value(wave.data)
-    wn.fix_value()
+    wn._mutable = mutable
+    wn._update_mutable_cache()
 
     savefig(fname, fig)
 

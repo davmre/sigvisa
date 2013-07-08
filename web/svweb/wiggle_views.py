@@ -27,7 +27,8 @@ import sigvisa.plotting.plot as plot
 import textwrap
 
 from svweb.models import SigvisaCodaFit, SigvisaCodaFitPhase, SigvisaCodaFittingRun, SigvisaWiggle
-from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
+from svweb.plotting_utils import process_plot_args, view_wave
+from sigvisa.plotting.plot import bounds_without_outliers
 from sigvisa.signals.common import load_waveform_from_file
 from sigvisa.signals.io import *
 from sigvisa.source.event import get_event

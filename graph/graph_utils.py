@@ -8,7 +8,7 @@ import functools32
 def extract_sta_node(node_or_dict, sta):
     try:
         return node_or_dict[sta]
-    except AttributeError:
+    except TypeError:
         return node_or_dict
 
 
@@ -59,3 +59,16 @@ def get_parent_value(eid, phase, sta, param_name, parent_values, chan=None, band
         return (k, parent_values[k])
     else:
         return parent_values[k]
+
+def parse_key(k, r=None):
+    if r is None:
+        r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
+    m = r.match(k)
+    if not m: raise ValueError("could not parse parent key %s" % k)
+    eid = int(m.group(1))
+    phase = m.group(2)
+    sta = m.group(3)
+    chan = m.group(4)
+    band = m.group(5)
+    param = m.group(6)
+    return (eid, phase, sta, chan, band, param)

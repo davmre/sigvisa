@@ -26,7 +26,8 @@ import hashlib
 
 from svweb.models import SigvisaNoiseModel
 from svweb.views import filterset_GET_string
-from svweb.plotting_utils import process_plot_args, view_wave, bounds_without_outliers
+from svweb.plotting_utils import process_plot_args, view_wave
+from sigvisa.plotting.plot import bounds_without_outliers
 
 class NMFilterSet(FilterSet):
     fields = [
@@ -200,4 +201,3 @@ def nm_crossval(request, nmid):
     fig.tight_layout()
     canvas.print_png(response)
     return response
-

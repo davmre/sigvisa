@@ -20,7 +20,8 @@ from sigvisa.utils.cover_tree import VectorTree, MatrixTree
 
 start_params_lld = {"coda_decay": [.022, .0187, 50.00, 1.0],
                     "amp_transfer": [1.1, 3.4, 100.00, 1.0],
-                    "peak_offset": [2.7, 3.4, 50.00, 1.0]
+                    "peak_offset": [2.7, 3.4, 50.00, 1.0],
+                    "tt_residual": [2.7, 3.4, 50.00, 1.0],
                     }
 
 start_params = {"lld": start_params_lld,
@@ -186,7 +187,7 @@ class SparseGP(ParamModel):
             M.eliminate_zeros()
             return M
         else:
-            return scipy.sparse.csr_matrix(np.asarray(M) * (np.abs(M) > self.sparse_threshold))
+            return scipy.sparse.csc_matrix(np.asarray(M) * (np.abs(M) > self.sparse_threshold))
 
     def sort_events(self, X, y):
         combined = np.hstack([X, np.reshape(y, (-1, 1))])
@@ -230,11 +231,24 @@ class SparseGP(ParamModel):
             self.hyperparams = np.array(hyperparams)
             self.noise_var, self.dfn_params, self.wfn_params = extract_hyperparams(dfn_str=self.dfn_str, wfn_str=self.wfn_str, hyperparams=hyperparams)
             self.sparse_threshold = sparse_threshold
-            self.X = X
-            self.y = y
-            self.n = X.shape[0]
             self.basisfns = basisfns
             self.timings = dict()
+
+            if X is not None:
+                self.X = np.matrix(X, dtype=float)
+                self.y = np.array(y, dtype=float)
+                self.n = X.shape[0]
+            else:
+                self.X = np.reshape(np.array(()), (0,0))
+                self.y = np.reshape(np.array(()), (0,))
+                self.n = 0
+
+                self.K = np.reshape(np.array(()), (0,0))
+                self.Kinv = np.reshape(np.array(()), (0,0))
+                self.alpha_r = self.y
+                self.ll = np.float('-inf')
+                return
+
             H = self.get_data_features(X)
 
             # train model
@@ -244,14 +258,14 @@ class SparseGP(ParamModel):
             self.timings['build_predict_tree'] = t1-t0
 
             if K is None:
-                if sparse_invert:
+                if sparse_invert and build_tree:
                     K = self.sparse_build_kernel_matrix(self.X)
                 else:
                     K = self.build_kernel_matrix(self.X)
             self.K = self.sparsify(K)
 
             if sparse_invert:
-                alpha, factor, L, Kinv = self.sparse_invert_kernel_matrix(K)
+                alpha, factor, L, Kinv = self.sparse_invert_kernel_matrix(self.K)
             else:
                 alpha, factor, L, Kinv = self.invert_kernel_matrix(K)
             self.Kinv = self.sparsify(Kinv)
@@ -300,6 +314,8 @@ class SparseGP(ParamModel):
             """
 
     def build_point_tree(self, HKinv, Kinv, alpha_r):
+        if self.n == 0: return
+
         self.predict_tree.set_v(0, alpha_r.astype(np.float))
 
         d = len(self.basisfns)
@@ -421,10 +437,11 @@ class SparseGP(ParamModel):
 
         Kstar = self.get_query_K_sparse(X1)
         if not parametric_only:
-            tmp = self.Kinv * Kstar
-            qf = (Kstar.T * tmp).todense()
-            k = self.kernel(X1,X1, identical=include_obs)
-            gp_cov = k - qf
+            gp_cov = self.kernel(X1,X1, identical=include_obs)
+            if self.n > 0:
+                tmp = self.Kinv * Kstar
+                qf = (Kstar.T * tmp).todense()
+                gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
 
@@ -454,10 +471,11 @@ class SparseGP(ParamModel):
 
         Kstar = self.get_query_K(X1)
         if not parametric_only:
-            tmp = self.Kinv * Kstar
-            qf = np.dot(Kstar.T, tmp)
-            k = self.kernel(X1,X1, identical=include_obs)
-            gp_cov = k - qf
+            gp_cov = self.kernel(X1,X1, identical=include_obs)
+            if self.n > 0:
+                tmp = self.Kinv * Kstar
+                qf = np.dot(Kstar.T, tmp)
+                gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
 
@@ -487,10 +505,11 @@ class SparseGP(ParamModel):
 
         Kstar = self.get_query_K(X1)
         if not parametric_only:
-            tmp = np.dot(self.Kinv_dense, Kstar)
-            qf = np.dot(Kstar.T, tmp)
-            k = self.kernel(X1,X1, identical=include_obs)
-            gp_cov = k - qf
+            gp_cov = self.kernel(X1,X1, identical=include_obs)
+            if self.n > 0:
+                tmp = np.dot(self.Kinv_dense, Kstar)
+                qf = np.dot(Kstar.T, tmp)
+                gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
 
@@ -511,9 +530,10 @@ class SparseGP(ParamModel):
         d = len(self.basisfns)
 
         if not parametric_only:
-            k = self.kernel(X1, X1, identical=include_obs)
-            qf = self.double_tree.quadratic_form(X1, X1, eps, eps_abs)
-            gp_cov = k - qf
+            gp_cov = self.kernel(X1, X1, identical=include_obs)
+            if self.n > 0:
+                qf = self.double_tree.quadratic_form(X1, X1, eps, eps_abs)
+                gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
 
@@ -572,7 +592,6 @@ class SparseGP(ParamModel):
         samples = np.reshape(self.beta_bar, (1, -1)) + np.dot(self.invc.T, samples).T
         return samples
 
-
     def log_p(self, x, cond, **kwargs):
         """
         The log probability of the observations (X1, y) under the posterior distribution.
@@ -599,9 +618,6 @@ class SparseGP(ParamModel):
         alpha = scipy.linalg.cho_solve((L, True), y)
         ll =  -.5 * ( np.dot(y.T, alpha) + n * np.log(2*np.pi)) - ld2
         return ll
-
-
-
 
     def pack_npz(self):
         d = dict()
@@ -641,7 +657,6 @@ class SparseGP(ParamModel):
     def unpack_npz(self, npzfile):
         self.X = npzfile['X'][0]
         self.y = npzfile['y'][0]
-        self.alpha_r = npzfile['alpha_r'][0]
         self.hyperparams = npzfile['hyperparams']
         self.dfn_str  = npzfile['dfn_str'].item()
         self.wfn_str  = npzfile['wfn_str'].item()
@@ -671,8 +686,8 @@ class SparseGP(ParamModel):
         self.predict_tree = VectorTree(self.X, 1, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
         if build_tree:
             self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r)
-
-        self.Kinv_dense = self.Kinv.todense()
+        if self.n > 0:
+            self.Kinv_dense = self.Kinv.todense()
 
     def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv):
 
@@ -824,11 +839,14 @@ def sparsegp_ll_grad(**kwargs):
     """
 
     try:
+        print "hyperparams", kwargs['hyperparams']
         gp = SparseGP(compute_ll=True, compute_grad=True, **kwargs)
-
-        ll = gp.ll
-        grad = gp.ll_grad
-
+        nll = -1 * gp.ll
+        ngrad = -1 * gp.ll_grad
+    except FloatingPointError as e:
+        print "warning: floating point error (%s) in likelihood computation, returning likelihood -inf" % str(e)
+        nll = np.float("inf")
+        ngrad = None
     except np.linalg.linalg.LinAlgError as e:
         print "warning: lin alg error (%s) in likelihood computation, returning likelihood -inf" % str(e)
         ll = np.float("inf")
