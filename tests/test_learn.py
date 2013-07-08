@@ -10,7 +10,7 @@ from sigvisa.source.event import get_event
 from sigvisa.signals.common import Waveform, Segment
 from sigvisa.signals.io import load_event_station
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
-
+from sigvisa.graph.dag import get_relevant_nodes
 
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.optimize.gradient_descent import approx_gradient
@@ -39,8 +39,9 @@ class TestFit(unittest.TestCase):
         self.wave = self.seg['BHZ']
 
         self.sg = SigvisaGraph(phases = ['P', 'S'])
-        self.sg.add_event(self.event)
         self.sg.add_wave(self.wave)
+        self.sg.add_event(self.event)
+
 
         self.optim_params = construct_optim_params("'method': 'none'")
 
@@ -48,16 +49,16 @@ class TestFit(unittest.TestCase):
         wave_node = self.sg.get_wave_node(wave=self.wave)
         wave_node.set_noise_model(nm_type='l1')
 
-        node_list = list(self.sg.template_nodes)
-        all_children = [child for node in node_list for child in node.children]
-        relevant_nodes = set(node_list + all_children)
+        node_list, relevant_nodes = get_relevant_nodes(self.sg.template_nodes)
 
         vals = np.concatenate([node.get_mutable_values() for node in node_list])
         jp = lambda v: self.sg.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)
 
         grad1 = approx_gradient(jp, vals, eps=1e-4)
-        grad2 = self.sg.log_p_grad(values=vals, node_list = list(self.sg.template_nodes), relevant_nodes=relevant_nodes)
+        grad2 = self.sg.log_p_grad(values=vals, node_list = node_list, relevant_nodes=relevant_nodes)
 
+        print grad1
+        print grad2
         self.assertTrue( (np.abs(grad1-grad2) < 0.001 ).all()  )
 
 

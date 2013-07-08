@@ -1,5 +1,6 @@
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 from obspy.core import Trace, Stream, UTCDateTime
 
@@ -8,6 +9,48 @@ import sigvisa.database.db
 from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
+
+def savefig(fname, fig):
+    canvas = FigureCanvasAgg(fig)
+    canvas.print_figure(fname)
+
+
+def plot_with_fit(fname, wn, show_template=True, **kwargs):
+    fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    axes.set_xlabel("Time (s)", fontsize=8)
+
+    wave = wn.get_wave()
+    wn.unfix_value()
+    wn.parent_predict(include_wiggles=True)
+    pred = wn.get_wave()
+
+    if show_template:
+        tmpls = []
+        wn.parent_predict(include_wiggles=False)
+        tmpl = wn.get_wave()
+        for arrival in wn.arrivals():
+            wn.parent_predict(include_wiggles=False, arrivals=[arrival,])
+            tmpls.append(wn.get_wave())
+
+    subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
+    subplot_waveform(pred, axes, color="green",
+                          linewidth=3, alpha = 1,
+                          plot_dets=False, **kwargs)
+    if show_template:
+        subplot_waveform(tmpl, axes, color="red",
+                         linewidth=1, alpha = 1,
+                         plot_dets=False, **kwargs)
+        for individual_tmpl in tmpls:
+            subplot_waveform(individual_tmpl, axes, color="purple",
+                             linewidth=1, alpha = 1,
+                             plot_dets=False, **kwargs)
+
+    wn.set_value(wave.data)
+    wn.fix_value()
+
+    savefig(fname, fig)
 
 
 def plot_det_times(wave, axes=None, logscale=False):

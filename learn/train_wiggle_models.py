@@ -16,7 +16,7 @@ from optparse import OptionParser
 
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname
 
-from sigvisa.models.wiggles import load_wiggle_node
+from sigvisa.models.wiggles import load_wiggle_generator
 
 def get_wiggle_training_data(run_name, run_iter, wm_node, target, **kwargs):
     s = Sigvisa()

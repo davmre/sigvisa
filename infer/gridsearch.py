@@ -11,7 +11,6 @@ from sigvisa import *
 from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.source.event import *
-from sigvisa.models.templates.load_by_name import load_template_model
 from sigvisa.signals.io import load_segments
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.models.ttime import tt_predict

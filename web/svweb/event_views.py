@@ -2,6 +2,8 @@ import numpy as np
 
 from django.shortcuts import render_to_response, get_object_or_404
 from django.template import RequestContext
+from django.core.cache import cache
+from django.views.decorators.cache import cache_page
 import django
 
 
@@ -19,10 +21,11 @@ from sigvisa.signals.io import fetch_waveform
 from sigvisa.source.event import get_event
 from sigvisa.graph.sigvisa_graph import predict_phases
 from sigvisa.models.ttime import tt_predict
+import hashlib
 
 def event_view(request, evid):
 
-    ss_only = request.GET.get('ss_only', 'true').lower().startswith('t')
+    ss_only = request.GET.get('ss_only', 'false').lower().startswith('t')
 
     ev = LebOrigin.objects.get(evid=evid)
     s = Sigvisa()
@@ -41,7 +44,8 @@ def event_view(request, evid):
             sta = rd[0]
 
             try:
-                site_ll = tuple(s.earthmodel.site_info(sta, 0)[0:2])
+                a = s.earthmodel.site_info(sta, 0)
+                site_ll = tuple(a[0:2])
             except KeyError:
                 continue
 
@@ -84,7 +88,7 @@ def event_context_img_view(request, evid):
 
     hm = EventHeatmap(f=None, calc=False, center=(ev.lon, ev.lat), width=100)
 
-    hm.add_stations(s.stations.keys())
+    hm.add_stations(s.sitenames)
     hm.set_true_event(ev.lon, ev.lat)
 
     fig = Figure(figsize=(6, 6), dpi=144)
@@ -113,3 +117,87 @@ def event_wave_view(request, evid):
     wave = fetch_waveform(station=sta, chan=chan, stime=stime, etime=etime).filter(filter_str)
 
     return view_wave(request=request, wave=wave, color='black', linewidth=1.0, plot_predictions=phase_atimes)
+
+
+def events_in_region(left_lon, right_lon, top_lat, bottom_lat, start_time, end_time, min_mb, max_mb, min_depth, max_depth):
+    s = Sigvisa()
+
+    # get all events arriving at this station in an arbitrary three-month
+    # period (which happens to be March-May 2009)
+    cursor = s.dbconn.cursor()
+    if left_lon < right_lon:
+        lon_cond = "lon between %f and %f" % (left_lon, right_lon)
+    else:
+        lon_cond = "( (lon > %f) or (lon < %f) )" % (left_lon, right_lon)
+    lat_cond = "lat between %f and %f" % (bottom_lat, top_lat)
+    sql_query = "select lon, lat, depth, time, mb, evid  from leb_origin where time between %f and %f and %s and %s and mb between %f and %f and depth between %f and %f" % (start_time, end_time, lon_cond, lat_cond, min_mb, max_mb, min_depth, max_depth)
+    cache_key = hashlib.sha1(sql_query).hexdigest()
+    evs = cache.get(cache_key)
+    if not evs:
+        cursor.execute(sql_query)
+        evs = cursor.fetchall()
+        cache.set(cache_key, evs, 60 * 60 * 24 * 365)
+    cursor.close()
+
+    return evs
+
+def regional_event_view(request):
+    left_lon = float(request.GET.get('left_lon', -180))
+    right_lon = float(request.GET.get('right_lon', 180))
+    top_lat = float(request.GET.get('top_lat', 90))
+    bottom_lat = float(request.GET.get('bottom_lat', -90))
+    start_time = float(request.GET.get('start_time', 1238889600))
+    end_time = float(request.GET.get('end_time', 1245456000))
+    min_mb = float(request.GET.get('min_mb', 2.5))
+    max_mb = float(request.GET.get('max_mb', 99))
+    min_depth = float(request.GET.get('min_depth', 0))
+    max_depth = float(request.GET.get('max_depth', 999))
+    evs = events_in_region(left_lon, right_lon, top_lat, bottom_lat, start_time, end_time, min_mb, max_mb, min_depth, max_depth)
+
+    print left_lon, right_lon, top_lat
+
+    return render_to_response('svweb/event_region.html', {
+        'evs': evs,
+        'left_lon': left_lon,
+        'right_lon': right_lon,
+        'top_lat': top_lat,
+        'bottom_lat': bottom_lat,
+        'start_time': start_time,
+        'end_time': end_time,
+        'min_mb': min_mb,
+        'max_mb': max_mb,
+        'min_depth': min_depth,
+        'max_depth': max_depth,
+        'n_evs': len(evs),
+    }, context_instance=RequestContext(request))
+
+
+@cache_page(60 * 60)
+def regional_event_image_view(request):
+    left_lon = float(request.GET.get('left_lon', -180))
+    right_lon = float(request.GET.get('right_lon', 180))
+    top_lat = float(request.GET.get('top_lat', 90))
+    bottom_lat = float(request.GET.get('bottom_lat', -90))
+    start_time = float(request.GET.get('start_time', 1238889600))
+    end_time = float(request.GET.get('end_time', 1245456000))
+    min_mb = float(request.GET.get('min_mb', 2.5))
+    max_mb = float(request.GET.get('max_mb', 99))
+    min_depth = float(request.GET.get('min_depth', 0))
+    max_depth = float(request.GET.get('max_depth', 999))
+
+    s = Sigvisa()
+
+    hm = EventHeatmap(f=None, calc=False, top_lat=top_lat, bottom_lat=bottom_lat, left_lon=left_lon, right_lon=right_lon)
+    hm.add_stations(s.sitenames)
+    evs = events_in_region(left_lon, right_lon, top_lat, bottom_lat, start_time, end_time, min_mb, max_mb, min_depth, max_depth)
+    hm.add_events(evs)
+
+    fig = Figure(dpi=288)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(1, 1, 1)
+    hm.plot(axes=axes, event_alpha=0.2, colorbar=False, offmap_station_arrows=False, label_stations=False)
+    fig.subplots_adjust(bottom=0.05, top=1, left=0, right=0.9)
+    canvas = FigureCanvas(fig)
+    response = django.http.HttpResponse(content_type='image/png')
+    canvas.print_png(response, bbox_inches="tight")
+    return response

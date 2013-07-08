@@ -573,12 +573,12 @@ class SparseGP(ParamModel):
         return samples
 
 
-    def log_p(self, x, cond):
+    def log_p(self, x, cond, **kwargs):
         """
         The log probability of the observations (X1, y) under the posterior distribution.
         """
 
-        X1 = self.standardize_input_array(cond)
+        X1 = self.standardize_input_array(cond, **kwargs)
         y = x if isinstance(x, collections.Iterable) else (x,)
 
         y = np.array(y)

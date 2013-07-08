@@ -7,9 +7,6 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import load_event_station_chan
 
-from sigvisa.models.templates.load_by_name import load_template_model
-from sigvisa.models.wiggles import load_wiggle_node, load_wiggle_node_by_family
-
 def load_sg_from_db_fit(fitid, load_wiggles=True):
 
     s = Sigvisa()
@@ -55,17 +52,24 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
         basisids = None
 
     sg = SigvisaGraph(template_model_type="dummy", wiggle_model_type="dummy",
-                      template_shape=None, wiggle_family=wiggle_family,
-                      nm_type = nm_type, runid=runid, phases=phases)
+                      template_shape=tmshapes, wiggle_family=wiggle_family,
+                      nm_type = nm_type, runid=runid, phases=phases,
+                      wiggle_basisids=basisids, base_srate=wave['srate'])
+    wave_node = sg.add_wave(wave)
     sg.add_event(ev)
-    wave_node = sg.add_wave(wave, basisids=basisids, tmshapes=tmshapes)
+
 
     for phase in phases:
-        tm_node = sg.get_template_node(ev=ev, phase=phase, wave=wave)
-        wm_node = sg.get_wiggle_node(ev=ev, phase=phase, wave=wave)
+        sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
+                        chan=wave['chan'], phase=phase,
+                        values = templates[phase])
 
-        tm_node.set_value(templates[phase])
         if load_wiggles:
-            wm_node.set_encoded_params(wiggles[phase])
+            wg = sg.wiggle_generator(phase=phase, srate=wave['srate'])
+            param_array = wg.decode_params(wiggles[phase])
+            sg.set_template(eid=ev.eid, sta=wave['sta'], band=wave['band'],
+                            chan=wave['chan'], phase=phase,
+                            values = wg.array_to_param_dict(param_array))
+
 
     return sg

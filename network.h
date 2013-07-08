@@ -75,7 +75,7 @@ typedef struct Event_t
 
 typedef struct Site_t
 {
-  char sta[10];
+  char sta[7];
   double sitelon;
   double sitelat;
   double siteelev;

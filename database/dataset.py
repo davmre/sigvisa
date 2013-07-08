@@ -266,7 +266,7 @@ def read_event_detections(cursor, evid, stations=None, evtype="leb"):
 
 def read_station_detections(cursor, sta, start_time, end_time, arrival_table="idcx_arrival"):
 
-    print "reading detections... "
+    print "reading station detections... "
 
     sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s iarr, static_siteid site, static_phaseid ph where site.sta='%s' and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iarr.iphase=ph.phase and ascii(iarr.iphase) = ascii(ph.phase) and iarr.time between %f and %f order by iarr.time, iarr.arid" % (
         arrival_table, sta, start_time, end_time)

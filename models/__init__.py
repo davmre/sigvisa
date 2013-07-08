@@ -11,13 +11,13 @@ class Distribution(object):
     def predict(self, cond=None):
         raise NotImplementedError('abstract base class')
 
-    def sample(self, cond=None):
+    def sample(self, cond=None, key_prefix=""):
         raise NotImplementedError('abstract base class')
 
-    def log_p(self, x, cond=None):
+    def log_p(self, x, cond=None, key_prefix=""):
         raise NotImplementedError('abstract base class')
 
-    def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4):
+    def deriv_log_p(self, x, idx=None, cond=None, cond_key=None, cond_idx=None, lp0=None, eps=1e-4, **kwargs):
         """
 
         Derivative of log P(X = x | cond = cond) with
@@ -31,16 +31,16 @@ class Distribution(object):
 
         """
 
-        lp0 = lp0 if lp0 else self.log_p(x=x, cond=cond)
+        lp0 = lp0 if lp0 else self.log_p(x=x, cond=cond, **kwargs)
         if cond_key is None:
             # we're computing df/dx
 
             if idx is None:
                 # assume x is scalar
-                deriv = ( self.log_p(x = x + eps, cond=cond) - lp0 ) / eps
+                deriv = ( self.log_p(x = x + eps, cond=cond, **kwargs) - lp0 ) / eps
             else:
                 x[idx] += eps
-                deriv = ( self.log_p(x = x, cond=cond) - lp0 ) / eps
+                deriv = ( self.log_p(x = x, cond=cond, **kwargs) - lp0 ) / eps
                 x[idx] -= eps
 
         else:
@@ -48,11 +48,11 @@ class Distribution(object):
 
             if cond_idx is None:
                 cond[cond_key] += eps
-                deriv = ( self.log_p(x = x, cond=cond) - lp0 ) / eps
+                deriv = ( self.log_p(x = x, cond=cond, **kwargs) - lp0 ) / eps
                 cond[cond_key] -= eps
             else:
                 cond[cond_key][cond_idx] += eps
-                deriv = ( self.log_p(x = x, cond=cond) - lp0 ) / eps
+                deriv = ( self.log_p(x = x, cond=cond, **kwargs) - lp0 ) / eps
                 cond[cond_key][cond_idx] -= eps
 
         return deriv
@@ -85,13 +85,12 @@ class TimeSeriesDist(Distribution):
 
 class DummyModel(Distribution):
 
-    def __init__(self, default_value = 0, **kwargs):
+    def __init__(self, default_value = None, **kwargs):
         super(DummyModel, self).__init__(**kwargs)
-        self.default_value = default_value
-
+        self.default_value = default_value if default_value is not None else 0.0
 
     def log_p(self, x, **kwargs):
-        return 0
+        return 0.0
 
     def sample(self, **kwargs):
         return self.default_value

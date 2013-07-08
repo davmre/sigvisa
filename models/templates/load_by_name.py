@@ -1,8 +1,10 @@
-from sigvisa.models.templates.paired_exp import *
+from sigvisa.models.templates.paired_exp import PairedExpTemplateGenerator
+from sigvisa.models.templates.new_exp import NewExpTemplateGenerator
 
-
-def load_template_model(template_shape, **kwargs):
-
+def load_template_generator(template_shape, **kwargs):
     if template_shape == "paired_exp":
-
-        return PairedExpTemplateNode(**kwargs)
+        return PairedExpTemplateGenerator(**kwargs)
+    elif template_shape == "new_exp":
+        return NewExpTemplateGenerator(**kwargs)
+    else:
+        raise KeyError("unknown template shape %s" % template_shape)

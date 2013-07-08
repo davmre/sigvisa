@@ -162,7 +162,6 @@ class Waveform(object):
             return self.segment_stats[key]
         elif key in self.my_stats:
             return self.my_stats[key]
-
         # if we don't have arrivals for this waveform, look them up and cache them
         elif key == "event_arrivals":
             event_arrivals = read_event_detections(

@@ -257,7 +257,7 @@ def load_shape_data(cursor, **kwargs):
 
         if shape_data.shape[0] > 0:
             s = Sigvisa()
-            shape_data[:, FIT_SITEID] = np.asarray([s.name_to_siteid_minus1[sta] + 1 for sta in shape_data[:, FIT_SITEID]])
+            shape_data[:, FIT_SITEID] = -1 #np.asarray([s.name_to_siteid_minus1[sta] + 1 for sta in shape_data[:, FIT_SITEID]])
             shape_data[:, FIT_PHASEID] = np.asarray([s.phaseids[phase] for phase in shape_data[:, FIT_PHASEID]])
             shape_data[:, FIT_LOWBAND] = [b.split('_')[1] for b in shape_data[:, FIT_LOWBAND]]
             shape_data = np.array(shape_data, dtype=float)
@@ -297,7 +297,3 @@ def read_wiggle(cursor, wiggleid):
     sql_query = "select * from sigvisa_wiggle where wiggleid=%d" % (wiggleid)
     cursor.execute(sql_query)
     return cursor.fetchone()
-
-
-
-

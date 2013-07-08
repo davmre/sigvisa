@@ -12,8 +12,6 @@ class EventHeatmap(Heatmap):
     def __init__(self, f, **args):
         Heatmap.__init__(self, f=f, **args)
 
-        self.sitenames = Sigvisa().stations
-
         self.event_locations = []
         self.event_labels = []
         self.stations = []
@@ -49,10 +47,12 @@ class EventHeatmap(Heatmap):
 
         self.save(fname + ".log")
 
-    def plot(self, event_alpha=0.6, axes=None, offmap_station_arrows=True, **density_args):
+    def plot(self, event_alpha=0.6, axes=None, offmap_station_arrows=True, label_stations=True, **density_args):
 
         self.init_bmap(axes=axes)
         self.plot_earth()
+
+        s = Sigvisa()
 
         if self.f is not None or not np.isnan(self.fvals).all():
             self.plot_density(**density_args)
@@ -65,9 +65,10 @@ class EventHeatmap(Heatmap):
             self.plot_locations(((lon, lat),), labels=None,
                                 marker="*", ms=16, mfc="none", mec="#44FF44", mew=2, alpha=1)
 
-        sta_locations = [self.sitenames[n][0:2] for n in self.stations]
-        self.plot_locations(sta_locations, labels=self.stations, offmap_arrows=offmap_station_arrows,
-                            marker="x", ms=7, mfc="none", mec="white", mew=2, alpha=1)
+        sta_locations = [s.earthmodel.site_info(n, 0)[0:2] for n in self.stations]
+        self.plot_locations(sta_locations, labels=self.stations if label_stations else None,
+                            offmap_arrows=offmap_station_arrows,
+                            marker="x", ms=4, mfc="none", mec="blue", mew=1, alpha=1)
 
     def title(self):
         peak = self.max()[0:2]

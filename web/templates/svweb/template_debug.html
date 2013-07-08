@@ -27,7 +27,7 @@
 
     <img id="residual" src="{% url template_residual fitid=fitid %}?{{ phase_GET_string }}" width=400 height=250 border=1>
       {% for phase in phases %}
-    <br/><img id="residual" src="{% url template_residual fitid=fitid %}?{{ phase_GET_string }};xmin={{phase.param1|add:-2}};xmax={{phase.param1|add:7}}" width=400 height=250 border=1>
+    <br/><img id="residual" src="{% url template_residual fitid=fitid %}?{{ phase_GET_string }};xmin={{phase.arrival_time|add:-2}};xmax={{phase.arrival_time|add:7}}" width=400 height=250 border=1>
     {% endfor %}
 </td></tr></table>
   <br/>
@@ -66,12 +66,12 @@
       </tr>
       {% for phase in phases %}
       <tr>
-	<td><input name="p{{ forloop.counter|add:-1 }}_phase" type="text" width=5 value="{{ phase.phase }}"></td>
-	<td><input name="p{{ forloop.counter|add:-1}}_1" type="text" width=10 value="{{ phase.param1 }}"></td>
-	<td><input name="p{{ forloop.counter|add:-1}}_2" type="text" width=10 value="{{ phase.param2 }}"></td>
-	<td><input name="p{{ forloop.counter|add:-1}}_3" type="text" width=10 value="{{ phase.param3 }}"></td>
-	<td><input name="p{{ forloop.counter|add:-1}}_4" type="text" width=10 value="{{ phase.param4 }}"></td>
-	<td><input type="submit" name="action" value="delete_{{ forloop.counter|add:-1}}"></td>
+	<td><input name="{{ phase.phase }}__newname" type="text" width=5 value="{{ phase.phase }}"></td>
+	<td><input name="{{ phase.phase }}__arrival_time" type="text" width=10 value="{{ phase.arrival_time }}"></td>
+	<td><input name="{{ phase.phase }}__peak_offset" type="text" width=10 value="{{ phase.peak_offset }}"></td>
+	<td><input name="{{ phase.phase }}__coda_height" type="text" width=10 value="{{ phase.coda_height }}"></td>
+	<td><input name="{{ phase.phase }}__coda_decay" type="text" width=10 value="{{ phase.coda_decay }}"></td>
+	<td><input type="submit" name="action" value="delete_{{ phase.phase}}"></td>
       </tr>
       {% endfor %}
     </table>

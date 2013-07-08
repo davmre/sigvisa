@@ -28,7 +28,7 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
                                    require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
         print str(fit_data.shape[0]) + " entries loaded"
     except:
-        raise NoDataException()
+        raise
 
     try:
         if target == "coda_decay":

@@ -25,17 +25,21 @@ def mb_to_M0(mb):
     return M0
 
 
-def source_freq_logamp(event, f, phase):
+def source_freq_logamp(mb, f, phase):
 
     # notation roughly follows eqn (2) in Fisk, and most constants are from Fisk as well
 
     P_phases = ['P', 'Pn']
     S_phases = ['S', 'Sn', 'Lg']
 
-    M0 = mb_to_M0(event.mb)
+    M0 = mb_to_M0(mb)
 
     rho_s = 2700  # source density, kg/m^3
     rho_r = 2500  # receiver density, kg/m^3
+
+    if phase not in P_phases and phase not in S_phases:
+        print "WARNING: don't know how to compute source amplitude for phase %s, treating as P" % (phase)
+        phase = "P"
 
     # choose velocities and other coefficients according to P vs S phase
     if phase in P_phases:
@@ -57,8 +61,7 @@ def source_freq_logamp(event, f, phase):
         sq = 103111374869011.25
         K = 0.33
         cp = 0.49
-    else:
-        raise Exception("don't know how to compute source amplitude for phase %s" % (phase))
+
     # Fisk version of corner frequency calculation:
 #    c = 0.41 if phase in P_phases else 0.49
 #    sigma = 10 # assume stress drop of 10 bars
@@ -80,9 +83,9 @@ def source_freq_logamp(event, f, phase):
     return logamp, f_0, M0
 
 
-def source_logamp(event, band, phase):
+def source_logamp(mb, band, phase):
     f = band_to_hz(band)
-    amp, corner, M0 = source_freq_logamp(event, f, phase)
+    amp, corner, M0 = source_freq_logamp(mb, f, phase)
     return amp
 
 

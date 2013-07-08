@@ -14,7 +14,6 @@ class NestedDict(dict):
             return self.get(key)
         return self.setdefault(key, NestedDict())
 
-
 class BadParamTreeException(Exception):
     pass
 
@@ -75,9 +74,11 @@ class Sigvisa(threading.local):
 
         sites = db_sites.read_sites(cursor)
         sitenames, allsites = db_sites.read_all_sites(cursor)
+        self.sitenames = sitenames
         self.ref_siteid = dict(zip(sitenames, [int(rsi) for rsi in allsites[:,6]]))
         #self.sitedata = dict(zip(sitenames, allsites))
         #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = sites.read_sites_by_name(cursor)
+        _, _, self.siteid_minus1_to_name = db_sites.read_sites_by_name(cursor)
         site_up = db_sites.read_uptime(cursor, st, et)
         self.phasenames, self.phasetimedef = db_sites.read_phases(cursor)
         self.phaseids = dict(
@@ -109,7 +110,7 @@ class Sigvisa(threading.local):
 
     def arriving_phases(self, event, sta):
         phases = [p for p in self.phases if self.sigmodel.mean_travel_time(
-            event.lon, event.lat, event.depth, siteid - 1, self.phaseids[p] - 1) > 0]
+            event.lon, event.lat, event.depth, event.time, sta, self.phaseids[p] - 1) > 0]
         return phases
 
     def equivalent_channels(self, chan):

@@ -27,8 +27,6 @@ double sqdist_euclidean(const double * p1, const double * p2, double BOUND_IGNOR
 }
 
 
-
-
 double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims) {
   int d = *(int *)dims;
   double sqd = sqdist_euclidean(p1, p2, -1, scales, (const void*)dims);
@@ -43,8 +41,6 @@ double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, con
     return 0;
   }
 }
-
-
 
 
 double pair_dist_euclidean(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void *dims) {
