@@ -83,16 +83,11 @@ double dist_km(const double *p1, const double *p2) {
 }
 
 double dist_3d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void * extra) {
-  double distkm = dist_km(p1.p, p2.p) / scales[0];
-  double dist_d = (p2.p[2] - p1.p[2]) / scales[1];
-  //printf("dist3d returning sqrt(%f^2 + %f^2) = %f\n", distkm, dist_d, sqrt(pow(distkm, 2) + pow(dist_d, 2)));
-  return sqrt(pow(distkm, 2) + pow(dist_d, 2));
+  return sqrt(distsq_3d_km(p1.p, p2.p, BOUND_IGNORED, scales, extra));
 }
 
 double dist_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, const void * extra) {
-  double distkm = dist_km(p1, p2) / scales[0];
-  double dist_d = (p2[2] - p1[2]) / scales[1];
-  return sqrt(pow(distkm, 2) + pow(dist_d, 2));
+  return sqrt(distsq_3d_km(p1, p2, BOUND_IGNORED, scales, extra));
 }
 
 double distsq_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, const void * extra) {
@@ -103,6 +98,27 @@ double distsq_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, 
 }
 
 
+
+double dist_6d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *extra) {
+  return sqrt(distsq_6d_km(p1.p, p2.p, BOUND_IGNORED, scales, extra));  
+}
+
+double dist_6d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *extra) {
+  return sqrt(distsq_6d_km(p1, p2, BOUND_IGNORED, scales, extra));
+}
+
+double distsq_6d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, void *extra) {
+  double sta_distkm = dist_km(p1, p2) / scales[0];
+  double sta_dist_d = (p2[2] - p1[2]) / scales[1];
+  double ev_distkm = dist_km(p1+3, p2+3) / scales[2];
+  double ev_dist_d = (p2[5] - p1[5]) / scales[3];
+
+  return pow(sta_distkm, 2) + pow(sta_dist_d, 2) + pow(ev_distkm, 2) + pow(ev_dist_d, 2);
+}
+
+
+
+
 double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNORED, const double *scales, void  * extra) {
   double distkm1 = dist_km(p1.pt1, p2.pt1) / scales[0];
   double distkm2 = dist_km(p1.pt2, p2.pt2) / scales[0];
@@ -111,6 +127,7 @@ double pair_dist_3d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNO
   double dist_d2 = (p2.pt2[2] - p1.pt2[2]) / scales[1];
   return sqrt(pow(distkm1, 2) + pow(distkm2, 2) + pow(dist_d1, 2) + pow(dist_d2,2));
 }
+
 
 
 double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *variance, const double *scales, const double *EXTRA_IGNORED) {
@@ -132,7 +149,29 @@ double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const
   }
 }
 
+double dist6d_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double * variance, const double *scales, const double *EXTRA_IGNORED) {
+  double sta_distkm = dist_km(p1, p2) / scales[0];
+  double sta_dist_d = (p2[2] - p1[2]) / scales[1];
+  double ev_distkm = dist_km(p1+3, p2+3) / scales[2];
+  double ev_dist_d = (p2[5] - p1[5]) / scales[3];
 
+  double sqd =  pow(sta_distkm, 2) + pow(sta_dist_d, 2) + pow(ev_distkm, 2) + pow(ev_dist_d, 2);
+
+  if (i==0) {
+    return exp(-1*sqd);
+  } else if (i == 1) {
+    return variance[0] * exp(-1 * sqd) * 2 * (sta_distkm*sta_distkm / scales[0]); 
+  } else if (i == 2) {
+    return variance[0] * exp(-1 * sqd) * 2 * (sta_dist_d*sta_dist_d / scales[1]);
+  } else if (i == 3) {
+    return variance[0] * exp(-1 * sqd) * 2 * (ev_distkm*ev_distkm / scales[2]);
+  } else if (i == 4) {
+    return variance[0] * exp(-1 * sqd) * 2 * (ev_dist_d*ev_dist_d / scales[3]);
+  } else{
+    printf("taking derivative wrt unrecognized parameter %d!\n", i);
+    return 0;
+  }
+}
 
 
 
