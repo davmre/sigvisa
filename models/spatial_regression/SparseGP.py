@@ -830,9 +830,13 @@ class SparseGP(ParamModel):
     def log_likelihood(self):
         return self.ll
 
+def sparsegp_nll_ngrad(**kwargs):
+    ll, grad = sparsegp_ll_grad(**kwargs)
+    return -ll, -grad
+
 def sparsegp_ll_grad(**kwargs):
     """
-    Get both the negative log-likelihood and its gradient
+    Get both the log-likelihood and its gradient
     simultaneously (more efficient than doing it separately since we
     only create one new GP object, which only constructs the kernel
     matrix once, etc.).
@@ -841,19 +845,19 @@ def sparsegp_ll_grad(**kwargs):
     try:
         print "hyperparams", kwargs['hyperparams']
         gp = SparseGP(compute_ll=True, compute_grad=True, **kwargs)
-        nll = -1 * gp.ll
-        ngrad = -1 * gp.ll_grad
+        ll = gp.ll
+        grad = gp.ll_grad
     except FloatingPointError as e:
         print "warning: floating point error (%s) in likelihood computation, returning likelihood -inf" % str(e)
-        nll = np.float("inf")
-        ngrad = None
+        ll = np.float("-inf")
+        grad = None
     except np.linalg.linalg.LinAlgError as e:
         print "warning: lin alg error (%s) in likelihood computation, returning likelihood -inf" % str(e)
-        ll = np.float("inf")
+        ll = np.float("-inf")
         grad = None
     except ValueError as e:
         print "warning: value error (%s) in likelihood computation, returning likelihood -inf" % str(e)
-        ll = np.float("inf")
+        ll = np.float("-inf")
         grad = None
 
     return ll, grad
