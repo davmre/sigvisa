@@ -21,7 +21,7 @@ double weighted_sum_node(node<point> &n, int v_select,
 			 double &weight_sofar,
 			 int &fcalls,
 			 wfn w,
-			 typename distfn<point>::Type dist,
+			 distfn<point>::Type dist,
 			 const double * dist_params,
 			 void * dist_extra,
 			 const double* weight_params) {

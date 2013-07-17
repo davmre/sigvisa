@@ -69,7 +69,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
 
     @staticmethod
-    def abstract_logenv_raw(vals, min_logenv=-7, idx_offset=0, srate=40):
+    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0):
         arr_time, peak_offset, coda_height, coda_decay = \
             vals['arrival_time'], vals['peak_offset'], vals['coda_height'], vals['coda_decay']
 
