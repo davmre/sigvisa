@@ -12,9 +12,11 @@ import numpy as np
 import scipy.linalg
 import hashlib
 
-from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params, sparsegp_nll_ngrad
+from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params, sparsegp_nll_ngrad, gp_priors
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 import sigvisa.infer.optimize.optim_utils as optim_utils
+
+from functools32 import lru_cache
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
@@ -46,7 +48,7 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, target=None, **kwargs):
+def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True ):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
         kernel_str = s[1]
@@ -54,16 +56,18 @@ def learn_model(X, y, model_type, sta, target=None, **kwargs):
         model = learn_gp(X=X, y=y, sta=sta,
                          basisfn_str=basisfn_str,
                          kernel_str=kernel_str,
-                         target=target, **kwargs)
+                         target=target, build_tree=gp_build_tree,
+                         optim_params=optim_params)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
         model = learn_gp(X=X, y=y, sta=sta,
                          kernel_str=kernel_str,
-                         target=target, **kwargs)
+                         target=target, build_tree=gp_build_tree,
+                         optim_params=optim_params)
     elif model_type == "constant_gaussian":
-        model = learn_constant_gaussian(sta=sta, X=X, y=y, **kwargs)
+        model = learn_constant_gaussian(sta=sta, X=X, y=y)
     elif model_type == "linear_distance":
-        model = learn_linear(sta=sta, X=X, y=y, **kwargs)
+        model = learn_linear(sta=sta, X=X, y=y)
     elif model_type.startswith('param_dist'):
         basisfn_str = model_type[6:]
         model = learn_parametric(X=X, y=y, sta=sta, basisfn_str=basisfn_str)
@@ -132,7 +136,7 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, optimize=True, optim_params=None, param_var=100000):
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True):
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
@@ -141,19 +145,26 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, target=None, 
         b = np.array(())
         B = np.array(((),))
 
+    if params is None:
         params = start_params[kernel_str][target]
+
+    if priors is None:
+        priors = gp_priors[kernel_str][target]
 
     if optimize:
         sX, sy = subsample_data(X=X, y=y, k=500)
         print "learning hyperparams on", len(sy), "examples"
-        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False)
+        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors)
 
         bounds = [(1e-20,None),] * len(params)
 
         params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
 
-    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True)
+
+    if len(y) > 10000:
+        X, y = subsample_data(X=X, y=y, k=10000)
+    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True, build_tree=build_tree)
     return gp
 
 
@@ -164,17 +175,19 @@ def learn_linear(X, y, sta, optim_params=None):
 def learn_constant_gaussian(X, y, sta, optim_params=None):
     return baseline_models.ConstGaussianModel(X=X, y=y, sta=sta)
 
-def load_modelid(modelid):
+
+def load_modelid(modelid, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     cursor.execute("select model_fname, model_type from sigvisa_param_model where modelid=%d" % modelid)
     fname, model_type = cursor.fetchone()
     cursor.close()
-    return load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type)
+    return load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
 
-def load_model(fname, model_type):
+@lru_cache(maxsize=1024)
+def load_model(fname, model_type, gpmodel_build_trees=True):
     if model_type.startswith("gp"):
-        model = SparseGP(fname=fname)
+        model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):
         model = baseline_models.LinearBasisModel(fname=fname)
     elif model_type == "constant_gaussian":

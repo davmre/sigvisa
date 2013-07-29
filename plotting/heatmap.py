@@ -267,12 +267,12 @@ class Heatmap(object):
             if labels is not None and labels[enum] is not None:
                 axes = bmap.ax
                 xbounds = bmap(self.right_lon, self.top_lat)
-                x_off = 6 if x < self.right_lon else -20
-                y_off = 6 if y < self.top_lat else -20
+                x_off = 6 if x1 < self.right_lon else -20
+                y_off = 6 if x2 < self.top_lat else -20
                 #label_color = plotargs['mec']
                 axes.annotate(
                     labels[enum],
-                    xy=(x, y),
+                    xy=(x1, x2),
                     xytext=(x_off, y_off),
                     textcoords='offset points',
                     size=8,

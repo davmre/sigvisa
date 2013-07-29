@@ -180,11 +180,13 @@ def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[],
         phase_condition = ""
 
 
-# ev_condition = "and l.time between %f and %f and lebo.mb between %f and
-# %f and l.snr > 5" % (start_time, end_time, min_mb, max_mb)
+    ev_condition = ""
     if max_snr > 99999:
         max_snr = 99999  # avoid trouble with inf
-    ev_condition = "and lebo.mb between %f and %f and l.snr between %f and %f" % (min_mb, max_mb, min_snr, max_snr)
+    if min_mb > 0 or max_mb < 10:
+        ev_condition += "and lebo.mb between %f and %f " % (min_mb, max_mb)
+    if min_snr > 0 or max_snr < 99999:
+        ev_condition += "and l.snr between %f and %f " % (min_snr, max_snr)
 
     sql_query = "SELECT lebo.evid, l.time FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s" % (
         phase_condition, sta, ev_condition)

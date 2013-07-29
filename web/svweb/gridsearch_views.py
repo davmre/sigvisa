@@ -121,7 +121,7 @@ def gridsearch_detail_view(request, gsid):
                            'graph_%.3f_%.3f.pickle' % (query_lon, query_lat)),
               'rb') as f:
         query_sg = pickle.load(f)
-    query_ev = query_sg.toplevel_nodes[0].get_event()
+    query_ev = list(query_sg.toplevel_nodes)[0].get_event()
     assert(np.abs(query_ev.lon - query_lon) < 0.001)
 
     ws = [w for w in gs.sigvisagsrunwave_set.all()]
@@ -133,11 +133,11 @@ def gridsearch_detail_view(request, gsid):
     ll_diffs = dict([(key, true_wave_lls[key] - query_wave_lls[key]) for key in wave_dict.keys() ])
     true_ll = true_sg.current_log_p()
     query_ll = query_sg.current_log_p()
-    wave_phases = dict([(key, predict_phases(ev=true_sg.toplevel_nodes[0].get_event(), sta=w.sta, phases=true_sg.phases)) for (key,w) in wave_dict.items()])
+    wave_phases = dict([(key, predict_phases(ev=list(true_sg.toplevel_nodes)[0].get_event(), sta=w.sta, phases=true_sg.phases)) for (key,w) in wave_dict.items()])
 
     query_distances = dict([(key, geog.dist_km((query_ev.lon, query_ev.lat), tuple(s.earthmodel.site_info(wave_dict[key].sta, ev.time)[0:2]))) for key in wave_dict.keys()])
 
-    query_origin_time_proposals = sorted(propose_origin_times(ev=query_sg.toplevel_nodes[0].get_event(),
+    query_origin_time_proposals = sorted(propose_origin_times(ev=list(query_sg.toplevel_nodes)[0].get_event(),
                                                        segments=[wn.get_wave() for wn in query_sg.leaf_nodes],
                                                        phases=query_sg.phases,
                                                        max_proposals=gs.max_evtime_proposals))
@@ -249,7 +249,7 @@ def gs_pickled_env_view(request, gswid):
     wave_node = sg.all_nodes[wave_key]
     obs_env = wave_node.get_wave()
     wave_node.unfix_value()
-    wave_node.prior_predict()
+    wave_node.parent_predict()
     template_env = wave_node.get_wave()
     template_env.data.mask = obs_env.data.mask
 

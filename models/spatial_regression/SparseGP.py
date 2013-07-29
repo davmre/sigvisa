@@ -14,7 +14,7 @@ import marshal
 
 
 from sigvisa.models.spatial_regression.baseline_models import ParamModel
-
+from sigvisa.models.distributions import InvGamma, LogNormal
 from sigvisa.utils.cover_tree import VectorTree, MatrixTree
 
 
@@ -24,9 +24,18 @@ start_params_lld = {"coda_decay": [.022, .0187, 50.00, 1.0],
                     "tt_residual": [2.7, 3.4, 50.00, 1.0],
                     }
 
+gp_priors_lld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.0004, alpha=1), LogNormal(mu=4, sigma=1), LogNormal(mu=4, sigma=1)],
+                 "amp_transfer": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=4, sigma=1), LogNormal(mu=4, sigma=1)],
+                 "peak_offset": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=4, sigma=1), LogNormal(mu=4, sigma=1)],
+                 "tt_residual": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=4, sigma=1), LogNormal(mu=4, sigma=1)],
+}
+
+
 start_params = {"lld": start_params_lld,
                 }
 
+gp_priors = {"lld": gp_priors_lld,
+         }
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
@@ -216,7 +225,7 @@ class SparseGP(ParamModel):
         except KeyError:
             pass
 
-
+        self.double_tree = None
         if fname is not None:
             self.load_trained_model(fname, build_tree=build_tree)
         else:
@@ -314,6 +323,7 @@ class SparseGP(ParamModel):
             """
 
     def build_point_tree(self, HKinv, Kinv, alpha_r):
+        import pdb; pdb.set_trace()
         if self.n == 0: return
 
         self.predict_tree.set_v(0, alpha_r.astype(np.float))
@@ -332,6 +342,7 @@ class SparseGP(ParamModel):
         self.double_tree.set_m_sparse(nzr, nzc, vals)
 
     def predict(self, cond, parametric_only=False, eps=1e-8):
+        if not self.double_tree: return self.predict_naive(cond, parametric_only)
         X1 = self.standardize_input_array(cond).astype(np.float)
 
         if parametric_only:
@@ -455,7 +466,7 @@ class SparseGP(ParamModel):
 
         return gp_cov
 
-    def covariance(self, cond, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
+    def covariance(self, cond, include_obs=False, parametric_only=False, pad=1e-8):
         """
         Compute the posterior covariance matrix at a set of points given by the rows of X1.
 
@@ -488,41 +499,6 @@ class SparseGP(ParamModel):
         gp_cov += pad * np.eye(gp_cov.shape[0])
 
         return gp_cov
-
-    def covariance_dense(self, cond, include_obs=False, parametric_only=False, pad=1e-8, spkernel=False):
-        """
-        Compute the posterior covariance matrix at a set of points given by the rows of X1.
-
-        Default is to compute the covariance of f, the latent function values. If obs_covar
-        is True, we instead compute the covariance of y, the observed values.
-
-        By default, we add a tiny bit of padding to the diagonal to counteract any potential
-        loss of positive definiteness from numerical issues. Setting pad=0 disables this.
-
-        """
-        X1 = self.standardize_input_array(cond)
-        m = X1.shape[0]
-
-        Kstar = self.get_query_K(X1)
-        if not parametric_only:
-            gp_cov = self.kernel(X1,X1, identical=include_obs)
-            if self.n > 0:
-                tmp = np.dot(self.Kinv_dense, Kstar)
-                qf = np.dot(Kstar.T, tmp)
-                gp_cov -= qf
-        else:
-            gp_cov = np.zeros((m,m))
-
-        if len(self.basisfns) > 0:
-            R = self.query_R
-            tmp = np.dot(self.invc, R)
-            mean_cov = np.dot(tmp.T, tmp)
-            gp_cov += mean_cov
-
-        gp_cov += pad * np.eye(gp_cov.shape[0])
-
-        return gp_cov
-
 
     def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4):
         X1 = self.standardize_input_array(cond)
@@ -675,7 +651,7 @@ class SparseGP(ParamModel):
             self.HKinv = None
         self.alpha_r = npzfile['alpha_r']
 
-    def load_trained_model(self, filename, build_tree=True):
+    def load_trained_model(self, filename, build_tree=True, cache_dense=False):
         npzfile = np.load(filename)
         self.unpack_npz(npzfile)
         if len(str(npzfile['base_str'])) > 0:
@@ -683,10 +659,10 @@ class SparseGP(ParamModel):
         del npzfile.f
         npzfile.close()
         self.n = self.X.shape[0]
-        self.predict_tree = VectorTree(self.X, 1, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
+        self.predict_tree = VectorTree(self.X[0:2,:], 1, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
         if build_tree:
             self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r)
-        if self.n > 0:
+        if cache_dense and self.n > 0:
             self.Kinv_dense = self.Kinv.todense()
 
     def _compute_marginal_likelihood(self, L, z, B, H, K, Kinv):
@@ -830,11 +806,25 @@ class SparseGP(ParamModel):
     def log_likelihood(self):
         return self.ll
 
+
+def prior_ll(params, priors):
+    ll = 0
+    for (param, prior) in zip(params, priors):
+        ll += prior.log_p(param)
+    return ll
+
+def prior_grad(params, priors):
+    n = len(params)
+    grad = np.zeros((n,))
+    for (i, param, prior) in zip(range(n), params, priors):
+        grad[i] = prior.deriv_log_p(param)
+    return grad
+
 def sparsegp_nll_ngrad(**kwargs):
     ll, grad = sparsegp_ll_grad(**kwargs)
-    return -ll, -grad
+    return -ll, (-grad if grad is not None else np.zeros((len(kwargs['hyperparams']),)))
 
-def sparsegp_ll_grad(**kwargs):
+def sparsegp_ll_grad(priors=None, **kwargs):
     """
     Get both the log-likelihood and its gradient
     simultaneously (more efficient than doing it separately since we
@@ -847,12 +837,22 @@ def sparsegp_ll_grad(**kwargs):
         gp = SparseGP(compute_ll=True, compute_grad=True, **kwargs)
         ll = gp.ll
         grad = gp.ll_grad
+
+        if "priors" is not None:
+            params = kwargs['hyperparams']
+            ll += prior_ll(params, priors)
+            grad += prior_grad(params, priors)
+
     except FloatingPointError as e:
         print "warning: floating point error (%s) in likelihood computation, returning likelihood -inf" % str(e)
         ll = np.float("-inf")
         grad = None
     except np.linalg.linalg.LinAlgError as e:
         print "warning: lin alg error (%s) in likelihood computation, returning likelihood -inf" % str(e)
+        ll = np.float("-inf")
+        grad = None
+    except scikits.sparse.cholmod.CholmodError as e:
+        print "warning: cholmod error (%s) in likelihood computation, returning likelihood -inf" % str(e)
         ll = np.float("-inf")
         grad = None
     except ValueError as e:

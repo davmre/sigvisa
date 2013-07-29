@@ -46,7 +46,7 @@ def lonlatstr(lon, lat):
 # strip away any trailing errors which can cause arccos to return nan
 # if mat is -1.0000000000000002 for example
 def safe_acos(mat):
-    mat = np.where(mat >= 1, 1.0, np.where(mat <= -1, np.pi, mat) )
+    mat = np.where(mat >= 1, 1.0, np.where(mat <= -1, -1, mat) )
     return np.arccos(mat)
 
 

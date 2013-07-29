@@ -60,7 +60,7 @@ class LogNormal(Distribution):
     def log_p(self, x):
         mu = self.mu
         sigma = self.sigma
-        lp = -1 * np.log(x) - .5 * np.log(2*np.pi*sigma) - .5 * (np.log(x) - mu)**2 / sigma**2
+        lp = -1 * np.log(x) - .5 * np.log(2*np.pi) - np.log(sigma) - .5 * (np.log(x) - mu)**2 / sigma**2
         if np.isnan(lp):
             lp = np.float("-inf")
         return lp

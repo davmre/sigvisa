@@ -26,6 +26,14 @@ vdec_db = {
         'HOST': '127.0.0.1',                      # Set to empty string for localhost. Not used with sqlite3.
         'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
     }
+vdec_db_pool = {
+        'ENGINE': 'oraclepool', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
+        'NAME': '',                      # Or path to database file if using sqlite3.
+        'USER': os.getenv('VISA_ORA_USER'),     # Not used with sqlite3.
+        'PASSWORD': os.getenv('VISA_ORA_PASS'),  # Not used with sqlite3.
+        'HOST': '127.0.0.1',                      # Set to empty string for localhost. Not used with sqlite3.
+        'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
+    }
 
 
 a =  os.getenv('VISA_ORA_USER')
@@ -33,6 +41,12 @@ if a is None:
     default_db = patmos_db
 else:
     default_db = vdec_db
+    """
+    DATABASE_HOST="127.0.0.1"
+    DATABASE_USER=os.getenv('VISA_ORA_USER')
+    DATABASE_PASSWORD=os.getenv('VISA_ORA_PASS')
+    DATABASE_PORT="1521"
+    DATABASE_NAME="""""
 
 DATABASES = {
    'default': default_db
@@ -197,3 +211,21 @@ LOGGING = {
         },
     }
 }
+
+"""
+EXTRAS = {'min':4,        # starting number of pooled connections
+...           'max':8,         # maximum number of connections in the pool
+...           'increment':1,   # increase by this amount when more are needed
+...           'threaded':True, # server platform optimisation
+...           'timeout':600,   # connection timeout, 600 = 10 mins
+...           'log':0,         # extra logging functionality turned on
+...           'logfile':'',    # file system path to log file
+...           'existing':''    # Type modifications for existing database and flag for tests
+...           'session':[]     # Add session optimisations applied to each fresh connection, eg.
+...                            #   alter session set cursor_sharing = similar;
+...                            #   Enables use of bind variables assuming it isnt set at a system level
+...                            #   alter session set session_cached_cursors = 20;
+...                            #   Allows cursor reuse between queries
+...            'like':'LIKE'   # Option instead of LIKEC default which can stop indexes being used
+...            }
+"""

@@ -314,7 +314,7 @@ class Node(object):
             if state['modelid'] is None:
                 state['model'] = DummyModel()
             else:
-                state["model"] = load_modelid(modelid=state['modelid'])
+                state["model"] = load_modelid(modelid=state['modelid'], gpmodel_build_trees=False)
         self.__dict__.update(state)
 
     def mutable_dimension(self):
