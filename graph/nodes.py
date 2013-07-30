@@ -177,6 +177,12 @@ class Node(object):
         for child in self.children:
             child.parent_keys_changed.add((key, self))
 
+    def get_local_value(self, key):
+        return self.get_value(self.key_prefix + key)
+
+    def set_local_value(self, value, key):
+        return self.set_value(key=self.key_prefix + key, value=value)
+
     def get_dict(self):
         return self._dict
 

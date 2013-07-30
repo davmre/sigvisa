@@ -5,85 +5,136 @@ import traceback
 import pickle
 import copy
 
-from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from optparse import OptionParser
+from sigvisa.database.signal_data import *
+from sigvisa.database.dataset import *
+import itertools
+
+from sigvisa.models.ttime import tt_predict
+from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
-from sigvisa.signals.io import load_event_station_chan
+from sigvisa.signals.io import load_segments
 from sigvisa.source.event import Event
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, preprocess_signal_for_sampling, indep_offset_move, improve_offset_move, indep_peak_move
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure
 
 
+def ev_lonlat_move(sg, ev_node, std):
+    # jointly propose a new event location along with new tt_residual values,
+    # such that the event arrival times remain constant.
 
-def run_event_MH(sg, en, wn_list, burnin=0, skip=40, steps=10000, wiggles=False):
+    def set_ev_loc(ev_node, lat, lon, atimes, atime_nodes):
+        ev_node.set_local_value(key="lat", value=lat)
+        ev_node.set_local_value(key="lon", value=lon)
+        for (at, atn) in zip(atimes, atime_nodes):
+            atn.set_value(at)
+
+    current_lon = ev_node.get_local_value("lon")
+    current_lat = ev_node.get_local_value("lat")
+    current_latlon = np.array((current_lat, current_lon))
+
+    sorted_children = sorted(ev_node.children, key = lambda n: n.label)
+    atime_nodes = [child for child in sorted_children if child.label.endswith("arrival_time")]
+    ttr_nodes = [child for child in sorted_children if child.label.endswith("tt_residual")]
+    current_atimes = [atn.get_value() for atn in atime_nodes]
+
+    gsample = np.random.normal(0, std, 2)
+    move = gsample * std
+    new_latlon = current_latlon + move
+
+    node_list, relevant_nodes = get_relevant_nodes([ev_node,] + ttr_nodes)
+
+    lp_old = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+
+    set_ev_loc(ev_node, new_latlon[0], new_latlon[1], current_atimes, atime_nodes)
+    lp_new = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+
+    u = np.random.rand()
+    if lp_new - lp_old > np.log(u):
+        return True
+    else:
+        set_ev_loc(ev_node, current_latlon[0], current_latlon[1], current_atimes, atime_nodes)
+        return False
+
+
+
+def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
 
     n_accepted = dict()
-    moves = ('birth', 'death', 'indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
+    n_tried = dict()
+    moves = ( 'indep_peak', 'peak_offset', 'tt_residual', 'amp_transfer', 'coda_decay', 'evloc', 'evloc_big')
     for move in moves:
         n_accepted[move] = 0
+        n_tried[move] = 0
 
-    stds = {'peak_offset': .1, 'arrival_time': .1, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .5}
+    stds = {'peak_offset': .1, 'tt_residual': .1, 'amp_transfer': .1, 'coda_decay': 0.01, 'evloc': 0.01, 'evloc_big': 0.5}
 
+    templates = dict()
+    params_over_time = dict()
 
     for wn in wn_list:
         wave_env = wn.get_value() if wn.env else wn.get_wave().filter('env').data
         wn.cdf = preprocess_signal_for_sampling(wave_env)
 
-    templates = dict()
-    params_over_time = dict()
+        arrivals = wn.arrivals()
+        eid, phase = list(arrivals)[0]
+        templates[wn.sta] = dict([(param, node) for (param, (key, node)) in sg.get_template_nodes(eid=eid, phase=phase, sta=wn.sta, band=wn.band, chan=wn.chan).items()])
+
+        for param in templates[wn.sta].keys():
+            params_over_time["%s_%s" % (wn.sta, param)] = []
+    params_over_time["evloc"] = []
+
 
     for step in range(steps):
-
         for wn in wn_list:
-
             arrivals = wn.arrivals()
-            for (eid, phase) in arrivals:
-                wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
-                tmplid = -eid
-                tmnodes = templates[tmplid]
+            eid, phase = list(arrivals)[0]
 
-                n_accepted['indep_peak'] += indep_peak_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                             offset_node=tmnodes["peak_offset"],
-                                                             wave_node=wn)
-                n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                               offset_node=tmnodes["peak_offset"],
-                                                                 wave_node=wn, std=stds['peak_offset'])
-                for param in ("arrival_time", "coda_height", "coda_decay"):
-                    n = tmnodes[param]
-                    n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
+            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
+            tmnodes = templates[wn.sta]
 
-            if wiggles:
-                for param in wg.params():
-                    n = tmnodes[param]
-                    if param.startswith("amp"):
-                        phase_wraparound = False
-                        move = 'wiggle_amp'
-                    else:
-                        phase_wraparound = True
-                        move = 'wiggle_phase'
-                    n_accepted[move] += float(gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[move], phase_wraparound=phase_wraparound)) / (wg.dimension()/2.0)
+            n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["tt_residual"],
+                                                           offset_node=tmnodes["peak_offset"],
+                                                             wave_node=wn, std=stds['peak_offset'])
+            n_tried["peak_offset"] += 1
+
+            for param in ("tt_residual","amp_transfer","coda_decay"):
+                n = tmnodes[param]
+                n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
+                n_tried[param] += 1
+
             for (param, n) in tmnodes.items():
-                params_over_time["%d_%s" % (tmplid, param)].append(n.get_value())
+                params_over_time["%s_%s" % (wn.sta, param)].append(n.get_value())
 
+        n_accepted["evloc"] += ev_lonlat_move(sg, ev_node, std=stds['evloc'])
+        n_tried["evloc"] += 1
+
+        n_accepted["evloc_big"] += ev_lonlat_move(sg, ev_node, std=stds['evloc_big'])
+        n_tried["evloc_big"] += 1
+
+        params_over_time["evloc"].append( ev_node.get_mutable_values())
 
         if step > 0 and ((step % skip == 0) or (step < 15)):
             lp = sg.current_log_p()
-
             print "step %d: lp %.2f, %d templates, accepted " % (step, lp, len(arrivals)),
             for move in moves:
                 if (move == "birth") or (move == "death"):
                     print "%s: %d, " % (move, n_accepted[move]),
                 else:
-                    accepted_percent = float(n_accepted[move]) / (step * len(templates)) * 100 if (step * len(templates)) > 0 else 0
+                    accepted_percent = float(n_accepted[move]) / n_tried[move] *100 if n_tried[move] > 0 else 0
                     print "%s: %d%%, " % (move, accepted_percent),
             print
-            plot_with_fit("unass_step%06d.png" % step, wn)
+            print " ev loc", ev_node.get_mutable_values()
+            for wn in wn_list:
+                plot_with_fit("ev_%s_step%06d.png" % (wn.sta, step), wn)
 
-
+        if step % 200 == 10:
+            np.savez('ev_vals.npz', **params_over_time)
     """
     for (param, vals) in params_over_time.items():
         fig = Figure(figsize=(8, 5), dpi=144)
@@ -190,20 +241,22 @@ def main():
                 wave = filtered_seg[chan]
                 wave_nodes.append(sg.add_wave(wave))
     ev_node = sg.add_event(ev_true)
+    ev_node.fix_value()
+    ev_node.unfix_value(key = "%d;lon" % ev_node.eid)
+    ev_node.unfix_value(key = "%d;lat" % ev_node.eid)
+    ev_node.set_value(key = "%d;lon" % ev_node.eid, value=124.3)
+    ev_node.set_value(key = "%d;lat" % ev_node.eid, value=44.5)
 
-    for fname in os.listdir('.'):
-        if fname.startswith("unass_step") or fname.startswith("mcmc_unass"):
-            os.remove(fname)
+    #for fname in os.listdir('.'):
+    #    if fname.startswith("unass_step") or fname.startswith("mcmc_unass"):
+    #        os.remove(fname)
 
     np.random.seed(0)
-    run_event_MH(sg, wn, wiggles=True)
+    run_event_MH(sg, ev_node, wave_nodes)
     #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
-
-
-    ll = wn.log_p()
     print ll
 
-    plot_with_fit("unass.png", wn)
+    #plot_with_fit("unass.png", wn)
 
 if __name__ == "__main__":
     try:

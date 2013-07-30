@@ -25,6 +25,8 @@ class EventPriorModel(Distribution):
 
 class EventNode(Node):
 
+
+
     def __init__(self, event, fixed = True, **kwargs):
 
         self.eid = event.eid

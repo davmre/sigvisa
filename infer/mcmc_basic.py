@@ -53,7 +53,7 @@ def indep_peak_move(sg, arrival_node, offset_node, wave_node):
     return MH_accept(sg, oldvalues = (current_atime,),
                      newvalues = (proposed_arrival_time,),
                      node_list = (arrival_node,),
-                     relevant_nodes = (arrival_node, wave_node))
+                     relevant_nodes = [arrival_node, wave_node,])
 
 
 ######################################################################
@@ -66,7 +66,7 @@ def indep_offset_move(sg, arrival_node, offset_node, wave_node):
     accepted = MH_accept(sg=sg, oldvalues=(atime, current_offset),
                          newvalues = (new_atime, proposed_offset),
                          node_list = (arrival_node, offset_node),
-                         relevant_nodes=(arrival_node, offset_node, wave_node))
+                         relevant_nodes=[arrival_node, offset_node, wave_node])
     return accepted
 
 def improve_offset_move(sg, arrival_node, offset_node, wave_node, **kwargs):
@@ -81,7 +81,7 @@ def improve_offset_move(sg, arrival_node, offset_node, wave_node, **kwargs):
     accepted = MH_accept(sg=sg, oldvalues=(atime, current_offset),
                          newvalues = (new_atime, proposed_offset),
                          node_list = (arrival_node, offset_node),
-                         relevant_nodes=(arrival_node, offset_node, wave_node))
+                         relevant_nodes=[arrival_node, offset_node, wave_node])
     return accepted
 
 #######################################################################
@@ -95,8 +95,8 @@ def get_node_scales(node_list):
     return scales
 
 def gaussian_propose(sg, node_list, values=None, scales=None, std=0.01, phase_wraparound=False):
-    scales = scales if scales else get_node_scales(node_list)
-    values = values if values else sg.get_all(node_list = node_list)
+    scales = scales if scales is not None else get_node_scales(node_list)
+    values = values if values is not None else sg.get_all(node_list = node_list)
     n = len(values)
 
     gsample = np.random.normal(0, std, n)
