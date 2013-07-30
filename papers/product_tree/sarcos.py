@@ -5,7 +5,9 @@ import scipy.io
 import time
 
 from synth_dataset import mkdir_p, eval_gp
+from real_dataset import train_realdata_gp, test_predict
 from sigvisa.models.spatial_regression.SparseGP import SparseGP
+
 
 def load_sarcos(sdir, train_n=4096):
     sarcos_train = scipy.io.loadmat(os.path.join(sdir, 'sarcos_inv.mat'))['sarcos_inv'].byteswap().newbyteorder()
@@ -48,34 +50,6 @@ def load_sarcos(sdir, train_n=4096):
 
     return sarcos_train_X, sarcos_train_y, sarcos_test_X, sarcos_test_y, hyperparams
 
-def test_predict(sdir, sgp=None):
-    sgp = SparseGP(fname=os.path.join(sdir, "trained.gp"), build_tree=False) if sgp is None else sgp
-    testX = np.load(os.path.join(sdir, "testX.npy"))
-    testy = np.load(os.path.join(sdir, "testy.npy"))
-    pred_y = sgp.predict_naive(testX)
-    r = pred_y - testy
-
-    meanTest = np.mean(testy)
-    varTest = np.var(testy)
-    mse = np.mean(r **2)
-    smse = mse/(varTest+meanTest**2)
-    mean_ad = np.mean(np.abs(r))
-    median_ad = np.median(np.abs(r))
-
-    with open(os.path.join(sdir, "accuracy.txt"), "w") as f:
-        f.write("mse: %f\n" % mse)
-        f.write("smse: %f\n" % smse)
-        f.write("mean_ad: %f\n" % mean_ad)
-        f.write("median_ad: %f\n" % median_ad)
-    import pdb; pdb.set_trace()
-
-def train_sarcos(sarcos_dir, X, y, hyperparams):
-
-    hyperparams = np.array(hyperparams, copy=True, dtype=float, order="C")
-
-    sgp = SparseGP(X=X, y=y, hyperparams=hyperparams, basisfns=[], dfn_str="euclidean", wfn_str="se", build_tree=False, sparse_threshold=1e-8)
-    sgp.save_trained_model(os.path.join(sarcos_dir, "trained.gp"))
-    np.save("K.npy", sgp.K)
 
 def main():
 
@@ -87,7 +61,7 @@ def main():
     np.save(os.path.join(sarcos_dir, "hyperparams.npy"), hyperparams)
     print "loaded sarcos data and converted to numpy format"
 
-    train_sarcos(sarcos_dir, sarcos_train_X, sarcos_train_y, hyperparams)
+    train_realdata_gp(sarcos_dir, sarcos_train_X, sarcos_train_y, hyperparams)
     print "trained model"
     test_predict(sarcos_dir)
     print "evaluated predictions"

@@ -17,11 +17,12 @@ Showing {{ n_evs }} events.<br>
 <strong>Depth:</strong> <input type="text" name="min_depth" size="5" value={{ min_depth }}> to <input type="text" name="max_depth" size="5" value={{max_depth}}>.<br>
 <strong>Time:</strong> <input type="text" name="start_time" size="14" value={{ start_time }}> to <input type="text" name="end_time" size="14" value={{end_time}}>.<br>
 <strong>mb:</strong> <input type="text" name="min_mb" size="5" value={{ min_mb }}> to <input type="text" name="max_mb" size="5" value={{max_mb}}>.<br>
+<strong>station:</strong> <input type="text" name="detected_at_station" size="5" value={{detected_at_station}}><br>
 <input type="submit" name="submit" value="Update">
 </form>
 </td>
 <td>
-<img src="{% url event_region_image %}?left_lon={{ left_lon }};right_lon={{ right_lon }};bottom_lat={{bottom_lat}};top_lat={{ top_lat }};start_time={{ start_time }};end_time={{ end_time }};min_mb={{min_mb}};max_mb={{max_mb}};min_depth={{min_depth}};max_depth={{max_depth}}" width=700>
+<img src="{% url event_region_image %}?left_lon={{ left_lon }};right_lon={{ right_lon }};bottom_lat={{bottom_lat}};top_lat={{ top_lat }};start_time={{ start_time }};end_time={{ end_time }};min_mb={{min_mb}};max_mb={{max_mb}};min_depth={{min_depth}};max_depth={{max_depth}};detected_at_station={{detected_at_station}}" width=700>
 </tr>
 </table>
 

@@ -186,12 +186,13 @@ class Heatmap(object):
                 self.fvals[loni, lati] = fvals[i]
                 i += 1
 
-    def init_bmap(self, nofillcontinents=True, resolution="l", projection="cyl", axes=None, **kwargs):
+    def init_bmap(self, coastlines = True, nofillcontinents=True, resolution="l", projection="cyl", axes=None, **kwargs):
         bmap = Basemap(resolution = resolution, projection = projection, ax=axes,
                        llcrnrlon=self.left_lon, llcrnrlat=self.bottom_lat,
                        urcrnrlon=self.right_lon, urcrnrlat=self.top_lat,
                        **kwargs)
-        bmap.drawcoastlines(zorder=10)
+        if coastlines:
+            bmap.drawcoastlines(zorder=10)
 
         if not nofillcontinents:
             # fill the continents with a greenish color
@@ -219,7 +220,7 @@ class Heatmap(object):
 
         self.bmap.drawmeridians(meridians, labels=[True, False, False, True], fontsize=x_fontsize, zorder=zorder)
 
-    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, **plotargs):
+    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, **plotargs):
         try:
             bmap = self.bmap
         except:
@@ -228,22 +229,23 @@ class Heatmap(object):
         normed_locations = np.array([self.normalize_lonlat(*location) for location in locations])
 
 
-        if yvals: #HACK
+        if yvals is not None and len(yvals) > 0: #HACK
             min_yval = scipy.stats.scoreatpercentile(yvals, 10)
             max_yval = scipy.stats.scoreatpercentile(yvals, 90)
             yvals = np.array([min(max_yval, max(y, min_yval)) for y in yvals])
 
             scplot = bmap.scatter(normed_locations[:, 0], normed_locations[:, 1], c=yvals, **plotargs)
 
-            from mpl_toolkits.axes_grid import make_axes_locatable
-            import matplotlib.axes as maxes
-            divider = make_axes_locatable(bmap.ax)
-            cax = divider.new_horizontal("4%", pad=.5, axes_class=maxes.Axes)
-            bmap.ax.figure.add_axes(cax)
+            if yval_colorbar:
+                from mpl_toolkits.axes_grid import make_axes_locatable
+                import matplotlib.axes as maxes
+                divider = make_axes_locatable(bmap.ax)
+                cax = divider.new_horizontal("4%", pad=.5, axes_class=maxes.Axes)
+                bmap.ax.figure.add_axes(cax)
 
-            bmap.ax.figure.colorbar(scplot, orientation="vertical", drawedges=False,
-                                    cax=cax, format="%.3f")
-            return
+                bmap.ax.figure.colorbar(scplot, orientation="vertical", drawedges=False,
+                                        cax=cax, format="%.3f")
+            return scplot
 
         for enum, ev in enumerate(normed_locations):
             x1, x2 = bmap(ev[0], ev[1])
@@ -282,7 +284,7 @@ class Heatmap(object):
 
     def plot_density(self, f_preprocess=None, colorbar=True, nolines=False,
                      colorbar_orientation="vertical", colorbar_shrink=0.9, colorbar_format='%.1f',
-                     smooth=False, vmin=None, vmax=None):
+                     smooth=False, vmin=None, vmax=None, cm=None):
         try:
             bmap = self.bmap
         except:
@@ -310,7 +312,8 @@ class Heatmap(object):
         lon_arr, lat_arr, x_arr, y_arr = bmap.makegrid(nx = self.n, ny = self.n, returnxy=True)
 
 
-        cm = matplotlib.cm.get_cmap('jet')
+        if cm is None:
+            cm = matplotlib.cm.get_cmap('jet')
         if not smooth:
             cs1 = bmap.contour(x_arr, y_arr, fv, levels, linewidths=.5, colors="k",
                                zorder=6 - int(nolines))

@@ -103,12 +103,16 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
         sparse_covar_spkernel_times[i] = t51-t41
 
 
-    if gp.has_dense:
+    has_dense = True
+    try:
         for i in range(100):
             t42 = time.time()
             dense_covar[i] = gp.covariance_dense(testX[i:i+1,:])
             t52 = time.time()
             dense_covar_times[i] = t52-t42
+    except:
+        has_dense=False
+
 
     def strstats(v):
         if v.dtype == float:
@@ -159,7 +163,7 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
     f.write("tree predict errors: %s\n" % strstats(np.abs(tree_predict - naive_predict)))
     f.write("\n")
 
-    if gp.has_dense:
+    if has_dense:
         f.write("dense covar times: %s\n" % strstats(dense_covar_times))
     f.write("sparse covar times: %s\n" % strstats(sparse_covar_times))
     f.write("sparse covar spkernel times: %s\n" % strstats(sparse_covar_spkernel_times))
@@ -323,6 +327,7 @@ def build_highd_benchmark():
         bdir = os.path.join(basedir, "highd_%d_%s_base%f_%d" % (dim, wfn_str,points_within_lscale,npts))
         if not os.path.exists(bdir):
             create_bench(bdir=bdir, dim=dim, test_n=1000, npts=npts, lengthscale=lengthscale, sigma2_n=sigma2_n, sigma2_f=sigma2_f)
+
 
 
 def main():

@@ -152,7 +152,7 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
 
             if fprime is not None:
                 # we want to take approximate gradients in the normalized scale
-                half_width = (high_bounds - low_bounds) / 2
+                half_width = (high_bounds - low_bounds) / 2.0
                 bounded = np.isfinite(half_width)
                 normalized_eps = eps * np.ones(len(x0))
                 if bounded.any():
@@ -167,11 +167,8 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
                 approx_grad = 1
 
             if fprime == "grad_included":
-                f1 = lambda params: (f(scale_unnormalize(params, low_bounds, high_bounds)),
-                                     fprime(scale_unnormalize(params, low_bounds, high_bounds),
-                                            eps=normalized_eps) * normalized_eps/eps )
-                fp1 = "grad_included"
-
+                f1 = lambda params: f(scale_unnormalize(params, low_bounds, high_bounds))
+                fp1 = None
     else:
         f1 = f
         fp1 = fprime if fprime != "grad_included" else None

@@ -13,12 +13,15 @@ from sigvisa.plotting.plot import plot_with_fit
 
 BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "demos", "template_mcmc_070513")
 
-def sample_template(seed=None, name="", env=True):
+def sample_template(seed=None, name="", env=True, wiggles = True):
     if len(name) > 0:
         name += "_"
 
     if env:
-        wiggle_family = "dummy"
+        if wiggles:
+            wiggle_family = "fourier_0.8"
+        else:
+            wiggle_family = "dummy"
     else:
         wiggle_family = "fourier_2.5"
     sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
@@ -39,11 +42,14 @@ def sample_template(seed=None, name="", env=True):
             print "template %d param %s: %.3f" % (i, param, node.get_value())
 
     plot_with_fit(os.path.join(BASE_DIR, "%ssampled.png" % name), wn)
+    lp = sg.current_log_p()
+    with open(os.path.join(BASE_DIR, "%ssampled_logp.txt" % name), 'w') as f:
+        f.write("%f\n" % lp)
     with open(os.path.join(BASE_DIR, "%ssampled_templates.pkl" % name), 'w') as f:
         pickle.dump(templates, f)
     np.save(os.path.join(BASE_DIR, "%ssampled_wave.npy" % name), wn.get_value().data)
 
-    lp = sg.current_log_p()
+
     print "sampled lp", lp
 
     #wn.parent_predict()
@@ -55,7 +61,12 @@ def sample_template(seed=None, name="", env=True):
 
 if __name__ == "__main__":
     try:
-        sample_template(name="nowiggle", seed=3, env=True)
+        #sample_template(name="nowiggle", seed=3, env=True, wiggles=False)
+        #sample_template(name="wiggle_noenv", seed=5, env=False, wiggles=False)
+        #sample_template(name="nowiggle_birthdeath", seed=3, env=True, wiggles=False)
+        #sample_template(name="nowiggle_splitmerge1", seed=3, env=True, wiggles=False)
+        sample_template(name="nowiggle_splitmerge2", seed=3, env=True, wiggles=False)
+        #sample_template(name="wiggle", seed=3, env=True, wiggles=True)
     except KeyboardInterrupt:
         raise
     except Exception as e:

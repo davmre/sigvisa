@@ -34,6 +34,15 @@ def sample_template(env=True):
     with open("sampled_templates.pkl", 'w') as f:
         pickle.dump(templates, f)
     np.save("sampled_wave.npy", wn.get_value().data)
+
+    lp = sg.current_log_p()
+    print "sampled lp", lp
+
+    #wn.parent_predict()
+    #lp = sg.current_log_p()
+    #print "predicted lp", lp
+
+
     sys.exit(0)
 
 if __name__ == "__main__":
