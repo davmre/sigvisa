@@ -66,7 +66,7 @@ def main():
         "-s", "--sites", dest="sites", default=None, type="str", help="comma-separated list of sites for which to train models")
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run_name")
     parser.add_option("--run_iter", dest="run_iter", default="latest", type="str", help="run iteration (latest)")
-    parser.add_option("-c", "--channel", dest="chan", default="BHZ", type="str", help="name of channel to examine (BHZ)")
+    parser.add_option("-c", "--channel", dest="chan", default="vertical", type="str", help="name of channel to examine (vertical)")
     parser.add_option(
         "-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
     parser.add_option("-p", "--phases", dest="phases", default=",".join(s.phases), type="str",
@@ -86,7 +86,7 @@ def main():
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
     parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
                       help="train models even if a model of the same type already appears in the DB")
-    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 10", type="str", help="fitting param string")
+    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
     parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
                       help="don't explode array stations into their individual elements (False)")
 
@@ -122,6 +122,11 @@ def main():
                 allsites.append(site)
 
     for site in allsites:
+
+        if chan=="vertical":
+            chan = s.default_vertical_channel[site]
+
+
         for target in targets:
 
             if target == "amp_transfer":
@@ -159,7 +164,7 @@ def main():
 
                 distfn = model_type[3:]
                 st = time.time()
-                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params)
+                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False)
 
                 et = time.time()
 

@@ -8,7 +8,7 @@ from sigvisa import Sigvisa
 from sigvisa.utils.geog import lonlatstr
 import functools32
 
-KNOWN_EXPLOSIONS = (5393637,)  # 2009 DPRK event
+KNOWN_EXPLOSIONS = (3872107, 5393637, 9481117)  # 2006, 2009, 2013 DPRK events
 
 
 class EventNotFound(Exception):

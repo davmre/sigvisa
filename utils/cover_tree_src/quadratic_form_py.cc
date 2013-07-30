@@ -147,7 +147,7 @@
 			wfn w_point,
 			const double* wp_pair,
 			const double* wp_point,
-			typename distfn<pairpoint>::Type dist,
+			distfn<pairpoint>::Type dist,
 			const double * dist_params,
 			pair_dfn_extra * dist_extra) {
    double d = n.distance_to_query; // avoid duplicate distance

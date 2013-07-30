@@ -137,7 +137,8 @@ class DirectedGraphModel(DAG):
         # from a node in node_list.
 
         #v = self.get_all(node_list = node_list)
-        self.set_all(values=values, node_list=node_list)
+        if values is not None:
+            self.set_all(values=values, node_list=node_list)
         ll = np.sum([node.log_p() for node in relevant_nodes])
         #self.set_all(values=v, node_list=node_list)
         return c * ll

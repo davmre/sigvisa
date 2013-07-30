@@ -107,7 +107,7 @@ def main():
     parser.add_option(
         "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
     parser.add_option(
-        "--template_model_types", dest="tm_types", default="peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian",
+        "--template_model_types", dest="tm_types", default="tt_residual:constant_gaussian,peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian",
         help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)")
     parser.add_option("--wiggle_model_type", dest="wm_type", default="dummy", help = "")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", help = "")
@@ -122,7 +122,7 @@ def main():
                       help="don't use the true magnitude of the event being searched for (True)")
     parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true",
                       help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
-    parser.add_option("--chans", dest="chans", default="BHZ", type="str",
+    parser.add_option("--chans", dest="chans", default="BHZ,SHZ", type="str",
                       help="comma-separated list of channel names to use for inference (BHZ)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
                       help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
@@ -185,23 +185,23 @@ def main():
         sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
                           wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
                           dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
-                          runid=runid, phases=phases)
-        ev_node = sg.add_event(ev_true)
+                          runid=runid, phases=phases, gpmodel_build_trees=False)
         for seg in segments:
             for band in bands:
                 filtered_seg = seg.with_filter(band)
                 for chan in filtered_seg.get_chans():
                     wave = filtered_seg[chan]
                     sg.add_wave(wave)
-        return sg
+        ev_node = sg.add_event(ev_true)
+        return sg, ev_node
 
     def f_optimize_templates(sg):
-        sg.prior_predict_all()
+        sg.parent_predict_all()
         nodes = list(sg.template_nodes) + list(sg.toplevel_nodes)
         sg.joint_optimize_nodes(node_list = nodes, optim_params = construct_optim_params(options.optim_params))
 
     def f_optimize_templates_split(sg):
-        sg.prior_predict_all()
+        sg.parent_predict_all()
         for wave in sg.leaf_nodes:
             template_parents = list([n for l,n in wave.parents.items() if l.startswith('template')])
             sg.joint_optimize_nodes(node_list = template_parents, optim_params = construct_optim_params(options.optim_params))
@@ -209,30 +209,29 @@ def main():
         sg.joint_optimize_nodes(node_list = nodes, optim_params = construct_optim_params(options.optim_params))
 
     def f_optimize_all(sg):
-        sg.prior_predict_all()
+        sg.parent_predict_all()
         nodes = list(sg.template_nodes) + list(sg.toplevel_nodes) + list(sg.wiggle_nodes)
         sg.joint_optimize_nodes(node_list = nodes, optim_params = construct_optim_params(options.optim_params))
 
     def f_predict(sg):
-        sg.prior_predict_all()
+        sg.parent_predict_all()
 
     def create_graph(lon, lat, f_propose, true_depth=False, true_mb=False, true_time=False, f_update_graph=None):
-        sg = build_gridsearch_graph()
+        sg, event_node = build_gridsearch_graph()
 
-        event_node = sg.toplevel_nodes[0]
         event_node.unfix_value()
-        event_node.set_key(key='lon', value=lon)
-        event_node.set_key(key='lat', value=lat)
-        event_node.fix_value(key='lon')
-        event_node.fix_value(key='lat')
-        event_node.fix_value(key='natural_source')
+        event_node.set_value(key='0;lon', value=lon)
+        event_node.set_value(key='0;lat', value=lat)
+        event_node.fix_value(key='0;lon')
+        event_node.fix_value(key='0;lat')
+        event_node.fix_value(key='0;natural_source')
 
         if true_mb:
-            event_node.fix_value(key='mb')
+            event_node.fix_value(key='0;mb')
         if true_time:
-            event_node.fix_value(key='time')
+            event_node.fix_value(key='0;time')
         if true_depth:
-            event_node.fix_value(key='depth')
+            event_node.fix_value(key='0;depth')
 
         best_ll = np.float("-inf")
         best_graph = None
@@ -261,9 +260,10 @@ def main():
 
         sg = pickle.loads(best_graph)
 
+
         print "built graph for (%.2f, %.2f), ll = %.2f" % (lon, lat, sg.current_log_p())
 
-        assert(abs(sg.toplevel_nodes[0].get_event().lon - lon) < 0.001)
+        assert(abs(list(sg.toplevel_nodes)[0].get_event().lon - lon) < 0.001)
 
         return sg
 
@@ -310,8 +310,9 @@ def main():
         ll = sg.current_log_p()
         overall_lls.append(ll)
 
+
         f = open(os.path.join(heatmap_dir, "graph_%.3f_%.3f.pickle" % (lon, lat)), 'wb')
-        assert(np.abs(sg.toplevel_nodes[0].get_event().lon - lon) < 0.001)
+        assert(np.abs(list(sg.toplevel_nodes)[0].get_event().lon - lon) < 0.001)
         pickle.dump(sg, f, protocol=pickle.HIGHEST_PROTOCOL)
         f.close()
 

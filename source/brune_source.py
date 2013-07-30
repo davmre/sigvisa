@@ -11,8 +11,6 @@ from sigvisa.source.common import *
 # from sigvisa import Sigvisa
 
 
-def short_band_to_hz(short_band):
-    return np.median([float(x) for x in short_band.split('_')[1:]])
 
 
 def mb_to_M0(mb):

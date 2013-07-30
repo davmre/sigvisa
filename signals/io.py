@@ -138,9 +138,6 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
     global_stime = stime
     global_etime = etime
 
-    chan = s.canonical_channel_name[chan]
-    chan_list = s.equivalent_channels(chan)
-
     close_cursor = False
     if cursor is None:
         cursor = s.dbconn.cursor()
@@ -151,6 +148,13 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
         selection = cursor.fetchone()[0]
     else:
         selection = station
+
+    if chan == "auto":
+        chan = s.default_vertical_channel[selection]
+    else:
+        chan = s.canonical_channel_name[chan]
+    chan_list = s.equivalent_channels(chan)
+
 
     # explicitly do BETWEEN queries (with generous bounds) rather than just
     # checking time < etime and endtime > stime, because the latter creates a
@@ -225,7 +229,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
 
 
 
-    return Waveform(data=masked_data, sta=station, stime=global_stime, srate=samprate, chan=chan)
+    return Waveform(data=masked_data, sta=selection, stime=global_stime, srate=samprate, chan=chan)
 
     # return samprate, np.array(data)
 

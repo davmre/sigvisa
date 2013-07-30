@@ -6,7 +6,7 @@ from sigvisa.source.common import *
 
 
 def source_logamp(mb, band, phase):
-    f = short_band_to_hz(band)
+    f = band_to_hz(band)
 
     amp, corner = source_freq_logamp(mb, f, phase)
 

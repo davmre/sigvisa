@@ -123,7 +123,10 @@ def main():
                       help="template model type to fit parameters under (paired_exp)")
     parser.add_option("--template_model", dest="template_model", default=None, type="str", help="")
     parser.add_option("--optim_params", dest="optim_params", default=None, type="str", help="fitting parameters to use")
+    parser.add_option("--processes", dest="processes", default=-1, type="int", help="number of concurrent processes to run (default: one per cpu)")
     parser.add_option("--dummy", dest="dummy", default=False, action="store_true", help="don't actually do any fitting; just print out the commands to run")
+    parser.add_option("--per_station_limit", dest="per_station_limit", default=None, type="int", help="max number of evids to fit per station (none)")
+
 
     (options, args) = parser.parse_args()
 
@@ -176,9 +179,17 @@ def main():
     print "hello", runid
     cmds = []
 
+    sta_evids = {}
     with open(options.evidfile, 'r') as f:
         for line in f:
             (sta, evid) = [i.strip() for i in line.split(' ')]
+
+            if not sta in sta_evids:
+                sta_evids[sta] = set()
+            sta_evids[sta].add(evid)
+
+            if options.per_station_limit and len(sta_evids[sta]) > options.per_station_limit:
+                continue
 
             cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s %s" % (
                 int(evid), sta, "--fit_wiggles" if options.fit_wiggles else "",
@@ -197,7 +208,10 @@ def main():
         for cmd in cmds:
             print cmd[0]
     else:
-        count = multiprocessing.cpu_count()
+        if options.processes > 0:
+            count = options.processes
+        else:
+            count = multiprocessing.cpu_count()
         print "starting thread pool with %d concurrent processes..." % count
         pool = multiprocessing.Pool(processes=count)
         r = pool.map_async(run_fit_and_rename_output, cmds)

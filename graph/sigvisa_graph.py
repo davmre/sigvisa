@@ -10,7 +10,7 @@ from sigvisa.source.event import get_event
 from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Uniform, Poisson
+from sigvisa.models.distributions import Uniform, Poisson, Gaussian
 from sigvisa.models.ev_prior import EventNode
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
@@ -70,7 +70,7 @@ class SigvisaGraph(DirectedGraphModel):
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0,
                  no_prune_edges=False, assume_envelopes=True,
-                 arrays_joint=False):
+                 arrays_joint=False, gpmodel_build_trees=True):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -80,6 +80,8 @@ class SigvisaGraph(DirectedGraphModel):
         """
 
         super(SigvisaGraph, self).__init__()
+
+        self.gpmodel_build_trees = gpmodel_build_trees
 
         self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -313,13 +315,13 @@ class SigvisaGraph(DirectedGraphModel):
         return nodes
 
     def load_node_from_modelid(self, modelid, label, **kwargs):
-        model = load_modelid(modelid)
+        model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
         node = Node(model=model, label=label, **kwargs)
         node.modelid = modelid
         return node
 
     def load_array_node_from_modelid(self, modelid, label, **kwargs):
-        model = load_modelid(modelid)
+        model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
         node = ArrayNode(model=model, label=label, **kwargs)
         node.modelid = modelid
         return node
@@ -399,7 +401,11 @@ class SigvisaGraph(DirectedGraphModel):
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
             if model_type=="dummy":
-                node = Node(label=label, model=DummyModel(default_value=initial_value), parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                if "tt_residual" in label:
+                    model = Gaussian(mean=0.0, std=10.0)
+                else:
+                    model = DummyModel(default_value=initial_value)
+                node = Node(label=label, model=model, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
             else:
                 node = self.load_node_from_modelid(modelid, label, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
 
@@ -556,7 +562,11 @@ class SigvisaGraph(DirectedGraphModel):
         log_p = 0
         parents = wave_node.parents.values()
         for p in parents:
-            log_p += p.log_p()
+            if p.deterministic():
+                for pp in p.parents.values():
+                    log_p = pp.log_p()
+            else:
+                log_p += p.log_p()
         log_p += wave_node.log_p()
         return log_p
 

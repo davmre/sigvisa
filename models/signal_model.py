@@ -114,7 +114,7 @@ class ObservedSignalNode(Node):
 
         arrivals = list(arrivals)
         n = len(arrivals)
-        sidxs = np.empty((n,))
+        sidxs = np.empty((n,), dtype=int)
         logenvs = [None] * n
         wiggles = [None] * n
         empty_array = np.reshape(np.array((), dtype=float), (0,))
@@ -129,7 +129,7 @@ class ObservedSignalNode(Node):
                 wiggles[i] = empty_array
                 continue
 
-            offset = start - start_idx
+            offset = float(start - start_idx)
             logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
             logenvs[i] = logenv
 
@@ -141,7 +141,7 @@ class ObservedSignalNode(Node):
 
         npts = self.npts
         n = len(arrivals)
-        envelope = self.env or (not include_wiggles)
+        envelope = int(self.env or (not include_wiggles))
         signal = self.pred_signal
         code = """
       for(int i=0; i < npts; ++i) signal(i) = 0;
@@ -206,7 +206,7 @@ class ObservedSignalNode(Node):
             self._tmpl_params[(eid,phase)] = dict()
             for p in tg.params() + ('arrival_time',):
                 k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
-                self._tmpl_params[(eid,phase)][p] = v
+                self._tmpl_params[(eid,phase)][p] = float(v)
                 self._keymap[k] = (True, eid, phase, p)
 
             wg = self.graph.wiggle_generator(phase=phase, srate=self.srate)
@@ -214,7 +214,7 @@ class ObservedSignalNode(Node):
             for (i, p) in enumerate(wg.params()):
                 try:
                     k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
-                    self._wiggle_params[(eid,phase)][i] = v
+                    self._wiggle_params[(eid,phase)][i] = float(v)
                     self._keymap[k] = (False, eid, phase, i)
                 except KeyError:
                     #print "WARNING: no wiggles for arrival (%d, %s) at (%s, %s, %s)" % (eid, phase, self.sta, self.band, self.chan)
@@ -235,9 +235,9 @@ class ObservedSignalNode(Node):
             try:
                 tmpl, eid, phase, p = self._keymap[key]
                 if tmpl:
-                    self._tmpl_params[(eid,phase)][p] = pv[key]
+                    self._tmpl_params[(eid,phase)][p] = float(pv[key])
                 else:
-                    self._wiggle_params[(eid,phase)][p] = pv[key]
+                    self._wiggle_params[(eid,phase)][p] = float(pv[key])
             except KeyError:
                 continue
 

@@ -72,8 +72,10 @@ def fit_list_view(request, runid):
     fits = SigvisaCodaFit.objects.filter(runid=runid)
     fits_filter = FitsFilterSet(fits, request.GET)
 
-    mean_acost = np.mean([fit.acost for fit in fits_filter.qs])
-    mean_time = np.mean([fit.elapsed for fit in fits_filter.qs])
+    #mean_acost = np.mean([fit.acost for fit in fits_filter.qs])
+    #mean_time = np.mean([fit.elapsed for fit in fits_filter.qs])
+    mean_acost = -1
+    mean_time = -1
     total_fits = fits_filter.qs.count
 
     filter_GET_params, filter_args = filterset_GET_string(fits_filter)

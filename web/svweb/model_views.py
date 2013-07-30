@@ -66,7 +66,8 @@ def plot_empirical_distance(request, xy_by_phase, axes):
     xmax = np.float('inf')
     for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
         X, y = xy_by_phase[phase]
-        axes.scatter(X[:, 3], y, alpha=min(1, 4 / np.log(len(y))), c=colors[i], s=10, marker='.', edgecolors="none")
+        alpha = float(request.GET.get('alpha', min(1, 4 / np.log(len(y)))))
+        axes.scatter(X[:, 3], y, alpha=alpha, c=colors[i], s=10, marker='.', edgecolors="none")
         xmin = max(xmin, np.min(X[:, 3]))
         xmax = min(xmax, np.max(X[:, 3]))
     r = xmax - xmin
@@ -98,7 +99,7 @@ def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
     full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
     model = load_model(full_fname, model_record.model_type)
 
-    site_loc = Sigvisa().stations[model_record.site][:2]
+    site_loc = Sigvisa().earthmodel.site_info(str(model_record.site), 0)[:2]
     distances = np.linspace(0, 10000, 40)
     pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
 
@@ -130,7 +131,7 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
     if draw_azi:
         azi = float(draw_azi)
         distances = np.linspace(0, 15000, 200)
-        site_loc = Sigvisa().stations[model_record.site][:2]
+        site_loc = Sigvisa().earthmodel.site_info(str(model_record.site), 0)
         pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
 
     ev_locs = X[:, 0:2]

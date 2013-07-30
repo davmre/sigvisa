@@ -282,7 +282,8 @@ class TestSemiParametric(unittest.TestCase):
                            dfn_str="euclidean",
                            compute_ll=True,
                            compute_grad=True,
-                           sparse_threshold=0,)
+                           sparse_threshold=0,
+                           build_tree=False)
 
 
     def test_param_recovery(self):
@@ -337,13 +338,14 @@ class TestSemiParametric(unittest.TestCase):
     def test_load_save(self):
         gp1 = self.gp
         gp1.save_trained_model("test_semi.npz")
-        gp2 = SparseGP(fname="test_semi.npz")
+        gp2 = SparseGP(fname="test_semi.npz", build_tree=False)
 
         pts = np.reshape(np.linspace(-5, 5, 20), (-1, 1))
         p1 = gp1.predict(pts)
         v1 = gp1.variance(pts)
         p2 = gp2.predict(pts)
         v2 = gp2.variance(pts)
+        print p1, p2
         self.assertTrue((p1 == p2).all())
         self.assertTrue((v1 == v2).all())
 

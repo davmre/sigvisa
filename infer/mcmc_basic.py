@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def get_node_scales(node_list):
     low_bounds = np.concatenate([node.low_bounds() for node in node_list])
     high_bounds = np.concatenate([node.high_bounds() for node in node_list])
@@ -10,8 +9,8 @@ def get_node_scales(node_list):
     return scales
 
 def gaussian_propose(sg, node_list, values=None, scales=None, std=0.01, phase_wraparound=False):
-    scales = scales if scales else get_node_scales(node_list)
-    values = values if values else sg.get_all(node_list = node_list)
+    scales = scales if scales is not None else get_node_scales(node_list)
+    values = values if values is not None else sg.get_all(node_list = node_list)
     n = len(values)
 
     gsample = np.random.normal(0, std, n)

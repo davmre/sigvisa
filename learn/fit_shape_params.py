@@ -48,7 +48,22 @@ def e_step(sigvisa_graph,  fit_hz, tmpl_optim_params, wiggle_optim_params, fit_w
     s = Sigvisa()
 
     st = time.time()
+
+    v1 = np.array([ 0., 3.41092045, 1., -0.03])
+    v2 = np.array([ 0., 0.0, 1.0, -0.1])
+
+    sigvisa_graph.set_all(values=v1, node_list=sigvisa_graph.template_nodes)
     sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
+    v1_result = sigvisa_graph.get_all(sigvisa_graph.template_nodes)
+    v1_p = sigvisa_graph.current_log_p()
+
+    sigvisa_graph.set_all(values=v2, node_list=sigvisa_graph.template_nodes)
+    sigvisa_graph.optimize_templates(optim_params=tmpl_optim_params)
+    v2_result = sigvisa_graph.get_all(sigvisa_graph.template_nodes)
+    v2_p = sigvisa_graph.current_log_p()
+
+    if v1_p > v2_p:
+        sigvisa_graph.set_all(values=v1_result, node_list=sigvisa_graph.template_nodes)
 
     if fit_wiggles:
         sigvisa_graph.init_wiggles_from_template()
@@ -96,7 +111,7 @@ def main():
     parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
-    parser.add_option("--chan", dest="chan", default="BHZ", type="str", help="")
+    parser.add_option("--chan", dest="chan", default="auto", type="str", help="")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")

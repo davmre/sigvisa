@@ -7,6 +7,7 @@ from sigvisa.load_c_components import load_sigvisa, load_earth
 import sigvisa.sigvisa_c
 
 import threading
+#from sigvisa.lockfile_pool import get_lock_from_pool
 
 class NestedDict(dict):
     def __getitem__(self, key):
@@ -22,21 +23,17 @@ class Sigvisa(threading.local):
 
     # some channels are referred to by multiple names, i.e. the
     # north-south channel can be BHN or BH2.  here we define a
-    # canonical name for each channel. the sigvisa.equivalent_channels(chan)
-    # method (defined below) returns a list of all channel names
-    # equivalent to a particular channel.
-    canonical_channel_name = {"BHZ": "BHZ", "BHN": "BHN", "BHE": "BHE",
-                              "BH1": "BHE", "BH2": "BHN",
-                              "SHZ": "SHZ", "sz": "SHZ",
-                              "SHN": "SHN", "sn": "SHN",
-                              "SHE": "SHE", "se": "SHE",}
-
-    # defined only for canonical channels
-    __equivalent_channels = {"BHZ": ["BHZ"], "BHE": ["BHE", "BH1"],
-                             "BHN": ["BHN", "BH2"],
-                             "SHZ": ["SHZ", "sz"],
+    # canonical name for each channel.
+    __equivalent_channels = {"BHZ": ["BHZ", "bz"], "BHE": ["BHE", "BH1", "be"],
+                             "BHN": ["BHN", "BH2", "bn"],
+                             "SHZ": ["SHZ", "sz", "szl"],
                              "SHE": ["SHE", "se"],
-                             "SHN": ["SHN", "sn"],}
+                             "SHN": ["SHN", "sn"],
+                             "HHN": ["HHN",], "HHZ": ["HHZ",], "HHE": ["HHE",],
+                             "MHZ": ["MHZ", 'mz'], "MHE": ["MHE", "me"], "MHN": ["MHN", "mn"],
+                             "EHZ": ["EHZ", 'ez'], "EHE": ["EHE", "ee"], "EHN": ["EHN", "en"],
+                             "LHZ": ["LHZ", 'lz'], "LHE": ["LHE", "le"], "LHN": ["LHN", "ln"],
+}
 
     # singleton pattern -- only initialize once
     _instance = None
@@ -60,17 +57,25 @@ class Sigvisa(threading.local):
         st = 1237680000
         et = st + 24 * 3600
 
-        while True:
-            try:
-                self.dbconn = db.connect()
-                cursor = self.dbconn.cursor()
-                break
-            except Exception as e:
-                if "SESSIONS_PER_USER" in str(e):
-                    print "too many DB sessions, trying again in 1s..."
-                    time.sleep(1)
-                else:
-                    raise
+        #self.lock = get_lock_from_pool(os.getenv("SIGVISA_HOME") + "/.db_lock", pool_size=3)
+        try:
+            self.dbconn = db.connect()
+            cursor = self.dbconn.cursor()
+        except Exception as e:
+            #self.lock.release()
+            if "SESSIONS_PER_USER" in str(e):
+                raise
+                print "too many DB sessions, trying again in 1s..."
+                time.sleep(1)
+            else:
+                raise
+
+        self.canonical_channel_name = dict()
+        for chan in self.__equivalent_channels.keys():
+            for equiv in self.__equivalent_channels[chan]:
+                self.canonical_channel_name[equiv] = chan
+
+        vertical_canonical_channels = ('BHZ', 'SHZ', 'MHZ', 'HHZ', 'EHZ', 'LHZ')
 
         sites = db_sites.read_sites(cursor)
         sitenames, allsites = db_sites.read_all_sites(cursor)
@@ -79,6 +84,20 @@ class Sigvisa(threading.local):
         #self.sitedata = dict(zip(sitenames, allsites))
         #self.stations, self.name_to_siteid_minus1, self.siteid_minus1_to_name = sites.read_sites_by_name(cursor)
         _, _, self.siteid_minus1_to_name = db_sites.read_sites_by_name(cursor)
+
+        # load or create the list of default vertical channels at each station
+        dfc_cache_file = os.path.join(os.getenv("SIGVISA_HOME"), "db_cache", "vertical_channels")
+        try:
+            with open(dfc_cache_file, 'r') as f:
+                self.default_vertical_channel = eval(f.read())
+        except IOError:
+            default_vertical_channel = [(sta, get_sta_default_channel(cursor, sta, vertical_canonical_channels, self.__equivalent_channels)) for sta in sitenames]
+            self.default_vertical_channel = dict([(sta, chan) for (sta,chan) in default_vertical_channel if chan is not None])
+            with open(dfc_cache_file, 'w') as f:
+                f.write(repr(self.default_vertical_channel))
+
+
+
         site_up = db_sites.read_uptime(cursor, st, et)
         self.phasenames, self.phasetimedef = db_sites.read_phases(cursor)
         self.phaseids = dict(
@@ -104,6 +123,7 @@ class Sigvisa(threading.local):
 
     def __del__(self):
         self.dbconn.close()
+        #self.lock.release()
 
     def phasenames(self, phase_id_minus1_list):
         return [self.phasenames[pid] for pid in phase_id_minus1_list]
@@ -143,3 +163,15 @@ class Sigvisa(threading.local):
             elements = cursor.fetchall()
             return [s[0] for s in elements]
             cursor.close()
+
+
+def get_sta_default_channel(cursor, sta, canonical_choices, equivalent_channels):
+
+    sql_query = "select chan from static_sitechan where sta='%s'" % sta
+    cursor.execute(sql_query)
+    chans = [c[0] for c in cursor.fetchall()]
+    for canonical in canonical_choices:
+        for c in equivalent_channels[canonical]:
+            if c in chans:
+                return c
+    return None
