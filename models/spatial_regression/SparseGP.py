@@ -24,14 +24,22 @@ start_params_lld = {"coda_decay": [.022, .0187, 10.00, 1.0],
                     "tt_residual": [2.7, 3.4, 10.00, 1.0],
                     }
 
+
 gp_priors_lld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.0004, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "amp_transfer": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "peak_offset": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "tt_residual": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
 }
 
+start_params_lldlld = {"coda_decay": [0.1, 1, 2, 2, 2, 2],
+                       "amp_transfer": [0.1, 1, 2, 2, 2, 2],
+                       "peak_offset": [0.1, 1, 2, 2, 2, 2],
+                       "tt_residual": [0.1, 1, 2, 2, 2, 2],
+                       }
+
 
 start_params = {"lld": start_params_lld,
+                "lldlld": start_params_lldlld,
                 }
 
 gp_priors = {"lld": gp_priors_lld,
@@ -208,7 +216,7 @@ class SparseGP(ParamModel):
     def __init__(self, X=None, y=None,
                  fname=None, basisfns=(),
                  hyperparams=None,
-                 param_mean=None, param_cov=None,
+               param_mean=None, param_cov=None,
                  compute_ll=False,
                  compute_grad=False,
                  sparse_threshold=1e-10,
@@ -805,7 +813,6 @@ class SparseGP(ParamModel):
     def log_likelihood(self):
         return self.ll
 
-
 def prior_ll(params, priors):
     ll = 0
     for (param, prior) in zip(params, priors):
@@ -824,6 +831,7 @@ def sparsegp_nll_ngrad(**kwargs):
     return -ll, (-grad if grad is not None else np.zeros((len(kwargs['hyperparams']),)))
 
 def sparsegp_ll_grad(priors=None, **kwargs):
+
     """
     Get both the log-likelihood and its gradient
     simultaneously (more efficient than doing it separately since we

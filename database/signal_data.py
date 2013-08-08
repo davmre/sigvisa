@@ -248,8 +248,10 @@ def load_shape_data(cursor, **kwargs):
 
     ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
     fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
+    fname_sta = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s_sta.txt" % str(hashlib.md5(sql_query).hexdigest()))
     try:
         shape_data = np.loadtxt(fname, dtype=float)
+        sta_data = np.loadtxt(fname_sta, dtype=str)
     except:
         cursor.execute(sql_query)
         shape_data = np.array(cursor.fetchall(), dtype=object)
@@ -257,14 +259,16 @@ def load_shape_data(cursor, **kwargs):
 
         if shape_data.shape[0] > 0:
             s = Sigvisa()
+            sta_data = np.array(shape_data[:, FIT_SITEID], dtype=str)
             shape_data[:, FIT_SITEID] = -1 #np.asarray([s.name_to_siteid_minus1[sta] + 1 for sta in shape_data[:, FIT_SITEID]])
             shape_data[:, FIT_PHASEID] = np.asarray([s.phaseids[phase] for phase in shape_data[:, FIT_PHASEID]])
             shape_data[:, FIT_LOWBAND] = [b.split('_')[1] for b in shape_data[:, FIT_LOWBAND]]
             shape_data = np.array(shape_data, dtype=float)
             np.savetxt(fname, shape_data)
+            np.savetxt(fname_sta, sta_data, "%s")
         else:
             raise NoDataException("found no shape data matching query %s" % sql_query)
-    return shape_data
+    return shape_data, sta_data
 
 
 def insert_wiggle(dbconn, p):
