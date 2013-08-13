@@ -527,8 +527,8 @@ class SparseGP(ParamModel):
         gp_cov += pad * np.eye(m)
         return gp_cov
 
-    def variance(self, X1, **kwargs):
-        return np.diag(self.covariance(X1, **kwargs))
+    def variance(self,cond, **kwargs):
+        return np.diag(self.covariance(cond, **kwargs))
 
     def sample(self, cond, include_obs=False):
         """

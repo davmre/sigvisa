@@ -220,7 +220,7 @@ class Heatmap(object):
 
         self.bmap.drawmeridians(meridians, labels=[True, False, False, True], fontsize=x_fontsize, zorder=zorder)
 
-    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, **plotargs):
+    def plot_locations(self, locations, labels=None, zorder = 10, offmap_arrows=False, yvals=None, yval_colorbar=True, alpha=1.0, **plotargs):
         try:
             bmap = self.bmap
         except:
@@ -234,7 +234,7 @@ class Heatmap(object):
             max_yval = scipy.stats.scoreatpercentile(yvals, 90)
             yvals = np.array([min(max_yval, max(y, min_yval)) for y in yvals])
 
-            scplot = bmap.scatter(normed_locations[:, 0], normed_locations[:, 1], c=yvals, **plotargs)
+            scplot = bmap.scatter(normed_locations[:, 0], normed_locations[:, 1], c=yvals, alpha=alpha, **plotargs)
 
             if yval_colorbar:
                 from mpl_toolkits.axes_grid import make_axes_locatable
@@ -249,7 +249,11 @@ class Heatmap(object):
 
         for enum, ev in enumerate(normed_locations):
             x1, x2 = bmap(ev[0], ev[1])
-            bmap.plot([x1], [x2], zorder=zorder, **plotargs)
+            try:
+                my_alpha = alpha[enum]
+            except:
+                my_alpha = alpha
+            bmap.plot([x1], [x2], zorder=zorder, alpha=my_alpha, **plotargs)
 
 
             if offmap_arrows:

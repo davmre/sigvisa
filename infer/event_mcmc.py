@@ -17,12 +17,58 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.source.event import Event
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept, preprocess_signal_for_sampling, indep_offset_move, improve_offset_move, indep_peak_move
+from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
+from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, indep_offset_move, improve_offset_move, indep_peak_move
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure
 
+
+def ev_lonlat_density(frame=None, fname="ev_viz.png"):
+
+    d = np.load("ev_vals.npz")
+    latlons = d['evloc']
+    lonlats = np.array([(a,b) for (b,a) in latlons])
+
+    if frame is not None:
+        if frame > len(lonlats):
+            raise ValueError("no more frames!")
+        lonlats_plot = lonlats[:frame]
+    else:
+        lonlats_plot = lonlats
+
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from sigvisa.plotting.event_heatmap import EventHeatmap
+
+    f = Figure((11,8))
+    ax = f.add_subplot(111)
+    hm = EventHeatmap(f=None, autobounds=lonlats, autobounds_quantile=0.9995, calc=False)
+    hm.init_bmap(axes=ax)
+    hm.plot_earth(y_fontsize=16, x_fontsize=16)
+
+    ev = get_event(evid=5393637)
+
+    baseline_alpha = 0.008
+    alpha_fade_time = 500
+    if frame is not None:
+        alpha = np.ones((frame,)) * baseline_alpha
+        t = min(frame,alpha_fade_time)
+        alpha[-t:] = np.linspace(baseline_alpha, 0.2, alpha_fade_time)[-t:]
+    else:
+        alpha = baseline_alpha
+
+    #hm.plot_locations(X, marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=0.2)
+    scplot = hm.plot_locations(lonlats_plot, marker=".", ms=8, mfc="red", mew=0, mec="none", alpha=alpha)
+    hm.plot_locations(np.array(((ev.lon, ev.lat),)), marker="x", ms=5, mfc="blue", mec="blue", mew=3, alpha=1.0)
+    canvas = FigureCanvasAgg(f)
+    canvas.draw()
+    f.savefig(fname, bbox_inches="tight", dpi=300, transparent=True, )
+
+def ev_lonlat_frames():
+    for i in range(40, 10000, 40):
+        ev_lonlat_density(frame=i, fname='ev_viz_step%06d.png' % i)
 
 def ev_lonlat_move(sg, ev_node, std):
     # jointly propose a new event location along with new tt_residual values,

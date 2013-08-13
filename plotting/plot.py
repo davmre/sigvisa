@@ -12,9 +12,9 @@ from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
 
-def savefig(fname, fig):
+def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
-    canvas.print_figure(fname)
+    canvas.print_figure(fname, **kwargs)
 
 def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
     """
@@ -81,7 +81,6 @@ def plot_with_fit(fname, wn, show_template=True, title="", ymin=None, ymax=None,
     wn._update_mutable_cache()
 
     savefig(fname, fig)
-
 
 def plot_det_times(wave, axes=None, logscale=False):
     if wave is None:
