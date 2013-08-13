@@ -17,7 +17,7 @@ from sigvisa.models.ttime import tt_predict
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname, model_params
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
-def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, **kwargs):
+def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, array=False, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
@@ -25,15 +25,16 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
 
     try:
         print "loading %s fit data... " % (phases),
-        fit_data = load_shape_data(cursor, chan=chan, band=band, site=site, runids=[runid, ], phases=phases,
-                                   require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
+        fit_data, sta_data = load_shape_data(cursor, chan=chan, band=band, site=site, runids=[runid, ], phases=phases, require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
+        #import pdb; pdb.set_trace()
         print str(fit_data.shape[0]) + " entries loaded"
     except:
         raise
 
     try:
         if target == "tt_residual":
-            y = fit_data[:, FIT_ATIME]
+#            import pdb; pdb.set_trace()
+            y = np.array(fit_data[:, FIT_ATIME])
             for (i, row) in enumerate(fit_data):
                 ev = get_event(evid=row[FIT_EVID])
                 pred = tt_predict(ev, site, phaseid=int(row[FIT_PHASEID]))
@@ -49,11 +50,25 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
     except IndexError as e:
         raise NoDataException()
 
-    X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
+
+    if array:
+        sta_pos = np.empty((0, 3))
+        for i in range(len(sta_data)):
+#            import pdb; pdb.set_trace()
+            sta_pos = np.append(sta_pos, np.array([list(s.earthmodel.site_info(sta_data[i], fit_data[i][FIT_ATIME]))[:3]]), axis = 0)
+        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
+        X = np.concatenate((sta_pos, X), axis = 1)
+    else:
+        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
 
     evids = fit_data[:, FIT_EVID]
 
     return X, y, evids
+
+
+
+
+
 
 
 def main():
@@ -113,6 +128,7 @@ def main():
     allsites = []
     if options.array_joint:
         allsites = sites
+        
     else: # explode array sites into their individual elements
         for site in sites:
             try:
@@ -135,7 +151,7 @@ def main():
                 min_amp = options.min_amp
 
             for phase in phases:
-
+                
 
                 # check for duplicate model
                 sql_query = "select modelid from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' " % (
@@ -149,22 +165,29 @@ def main():
 
 
                 try:
-                    X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site,
-                                                    chan=chan, band=band, phases=[phase, ], target=target,
-                                                    require_human_approved=options.require_human_approved,
-                                                    max_acost=options.max_acost, min_amp=min_amp)
+                    try:
+                        import pdb; pdb.set_trace()
+                        elems = s.get_array_elements(site)
+                        X, y, evids = np.empty((0, 6)), np.empty((0, )), np.empty((0, ))
+                        for array_elem in elems:
+                            X_part, y_part, evids_part = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=array_elem, chan=chan, band=band, phases=[phase, ], target=target,require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
+                            X = np.append(X, X_part, axis = 0)
+                            y = np.append(y, y_part)
+                            evids = np.append(evids, evids_part)
+                    except:
+                        X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
 
-                model_fname = get_model_fname(
-                    run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
+#                
+                model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
                 evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
                 np.savetxt(evid_fname, evids, fmt='%d')
 
                 distfn = model_type[3:]
                 st = time.time()
-                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False)
+                model = learn_model(X, y, model_type, target=target, array=options.array_joint, sta=site, optim_params=optim_params, gp_build_tree=False)
 
                 et = time.time()
 
@@ -173,10 +196,7 @@ def main():
                     continue
 
                 model.save_trained_model(model_fname)
-                modelid = insert_model(
-                    s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(
-                    ),
-                    require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None)
+                modelid = insert_model(s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None)
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
 if __name__ == "__main__":
