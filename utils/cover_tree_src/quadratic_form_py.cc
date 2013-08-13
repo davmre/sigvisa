@@ -482,7 +482,11 @@
     p->dfn_extra = malloc(sizeof(int));
     *((int *) p->dfn_extra) = pts.size2();
     this->raw_pair_dfn = pair_dist_euclidean;
-  } else{
+  } else if (distfn_str.compare("lldlld") == 0) {
+    p->dfn_orig = dist_6d_km;
+    p->dfn_sq = distsq_6d_km;
+    this->raw_pair_dfn = pair_dist_6d_km;
+  }else{
     printf("error: unrecognized distance function %s\n", distfn_str.c_str());
     exit(1);
   }

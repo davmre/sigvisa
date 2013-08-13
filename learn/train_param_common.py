@@ -16,7 +16,9 @@ from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params, s
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
+
 from functools32 import lru_cache
+from sigvisa.learn.grad_ascend import *
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
@@ -136,7 +138,8 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True):
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False):
+
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
@@ -154,17 +157,19 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
     if optimize:
         sX, sy = subsample_data(X=X, y=y, k=500)
         print "learning hyperparams on", len(sy), "examples"
-        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors)
+        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors, dfn_str=kernel_str)
 
         bounds = [(1e-20,None),] * len(params)
-
-        params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
+        import pdb; pdb.set_trace();
+        if array:
+            params, ll = grad_ascend(llgrad, precision=0.01, step=0.001, initial_guess=[100, 100, 1, 1, 1, 1])
+        else:
+            params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
-
 
     if len(y) > 10000:
         X, y = subsample_data(X=X, y=y, k=10000)
-    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True, build_tree=build_tree)
+    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True, build_tree=build_tree, dfn_str=kernel_str)
     return gp
 
 

@@ -21,9 +21,76 @@ from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, indep_offset_move, improve_offset_move, indep_peak_move
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.graph.dag import get_relevant_nodes
-from sigvisa.plotting.plot import savefig, plot_with_fit
+from sigvisa.plotting.plot import savefig, plot_with_fit_hack_for_DTRA
 from matplotlib.figure import Figure
 
+#def visualize_ev_locations(lonlats)
+
+def regen_station_templates(sg, ev_node, wn_list, skip=40, steps=10000):
+
+    moves = ( 'indep_peak', 'peak_offset', 'tt_residual', 'amp_transfer', 'coda_decay', 'evloc', 'evloc_big')
+    templates = dict()
+
+    params_over_time = np.load('ev_vals.npz')
+
+    for wn in wn_list:
+
+        arrivals = wn.arrivals()
+        eid, phase = list(arrivals)[0]
+        templates[wn.sta] = dict([(param, node) for (param, (key, node)) in sg.get_template_nodes(eid=eid, phase=phase, sta=wn.sta, band=wn.band, chan=wn.chan).items()])
+
+
+    for step in range(0, steps, skip):
+        for wn in wn_list:
+            arrivals = wn.arrivals()
+            eid, phase = list(arrivals)[0]
+
+            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
+            tmnodes = templates[wn.sta]
+
+            for (param, n) in tmnodes.items():
+                n.set_value(params_over_time["%s_%s" % (wn.sta, param)][step])
+
+        #latlon = params_over_time["evloc"][step]
+        #ev_node.set_local_value(key="lat", value=latlon[0])
+        #ev_node.set_local_value(key="lon", value=latlon[1])
+
+        for wn in wn_list:
+            plot_with_fit_hack_for_DTRA("ev_%s_step%06d.png" % (wn.sta, step), wn, show_template=False)
+
+def ev_move(sg, ev_node, std, param):
+    # jointly propose a new event location along with new tt_residual values,
+    # such that the event arrival times remain constant.
+
+    def set_ev(ev_node, v, atimes, atime_nodes):
+        ev_node.set_local_value(key=param, value=v)
+        for (at, atn) in zip(atimes, atime_nodes):
+            atn.set_value(at)
+
+    current_v = ev_node.get_local_value(param)
+
+    sorted_children = sorted(ev_node.children, key = lambda n: n.label)
+    atime_nodes = [child for child in sorted_children if child.label.endswith("arrival_time")]
+    ttr_nodes = [child for child in sorted_children if child.label.endswith("tt_residual")]
+    current_atimes = [atn.get_value() for atn in atime_nodes]
+
+    gsample = np.random.normal(0, std, 1)
+    move = gsample * std
+    new_v = current_v + move
+
+    node_list, relevant_nodes = get_relevant_nodes([ev_node,] + ttr_nodes)
+
+    lp_old = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+
+    set_ev(ev_node, new_v, current_atimes, atime_nodes)
+    lp_new = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+
+    u = np.random.rand()
+    if lp_new - lp_old > np.log(u):
+        return True
+    else:
+        set_ev(ev_node, current_v, current_atimes, atime_nodes)
+        return False
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):
 
@@ -113,12 +180,12 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
 
     n_accepted = dict()
     n_tried = dict()
-    moves = ( 'indep_peak', 'peak_offset', 'tt_residual', 'amp_transfer', 'coda_decay', 'evloc', 'evloc_big')
+    moves = ( 'indep_peak', 'peak_offset', 'tt_residual', 'amp_transfer', 'coda_decay', 'evloc', 'evloc_big', 'evtime', 'evdepth', 'evmb')
     for move in moves:
         n_accepted[move] = 0
         n_tried[move] = 0
 
-    stds = {'peak_offset': .1, 'tt_residual': .1, 'amp_transfer': .1, 'coda_decay': 0.01, 'evloc': 0.01, 'evloc_big': 0.5}
+    stds = {'peak_offset': .1, 'tt_residual': .1, 'amp_transfer': .1, 'coda_decay': 0.01, 'evloc': 0.01, 'evloc_big': 0.5, 'evtime': 2.0, "evmb": 0.5, "evdepth": 5.0}
 
     templates = dict()
     params_over_time = dict()
@@ -163,7 +230,19 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
         n_accepted["evloc_big"] += ev_lonlat_move(sg, ev_node, std=stds['evloc_big'])
         n_tried["evloc_big"] += 1
 
+        n_accepted["evtime"] += ev_move(sg, ev_node, std=stds['evtime'], param="time")
+        n_tried["evtime"] += 1
+
+        n_accepted["evdepth"] += ev_move(sg, ev_node, std=stds['evdepth'], param="depth")
+        n_tried["evdepth"] += 1
+
+        n_accepted["evmb"] += ev_move(sg, ev_node, std=stds['evmb'], param="mb")
+        n_tried["evmb"] += 1
+
         params_over_time["evloc"].append( ev_node.get_mutable_values())
+        params_over_time["evtime"].append( ev_node.get_mutable_values())
+        params_over_time["evdepth"].append( ev_node.get_mutable_values())
+        params_over_time["evmb"].append( ev_node.get_mutable_values())
 
         if step > 0 and ((step % skip == 0) or (step < 15)):
             lp = sg.current_log_p()
@@ -176,8 +255,8 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
                     print "%s: %d%%, " % (move, accepted_percent),
             print
             print " ev loc", ev_node.get_mutable_values()
-            for wn in wn_list:
-                plot_with_fit("ev_%s_step%06d.png" % (wn.sta, step), wn)
+            #for wn in wn_list:
+            #    plot_with_fit("ev_%s_step%06d.png" % (wn.sta, step), wn)
 
         if step % 200 == 10:
             np.savez('ev_vals.npz', **params_over_time)
@@ -290,8 +369,14 @@ def main():
     ev_node.fix_value()
     ev_node.unfix_value(key = "%d;lon" % ev_node.eid)
     ev_node.unfix_value(key = "%d;lat" % ev_node.eid)
+    ev_node.unfix_value(key = "%d;time" % ev_node.eid)
+    ev_node.unfix_value(key = "%d;depth" % ev_node.eid)
+    ev_node.unfix_value(key = "%d;mb" % ev_node.eid)
     ev_node.set_value(key = "%d;lon" % ev_node.eid, value=124.3)
     ev_node.set_value(key = "%d;lat" % ev_node.eid, value=44.5)
+    ev_node.set_value(key = "%d;time" % ev_node.eid, value=ev_true.time + 5)
+    ev_node.set_value(key = "%d;depth" % ev_node.eid, value=10)
+    ev_node.set_value(key = "%d;mb" % ev_node.eid, value=3.0)
 
     #for fname in os.listdir('.'):
     #    if fname.startswith("unass_step") or fname.startswith("mcmc_unass"):
@@ -299,6 +384,7 @@ def main():
 
     np.random.seed(0)
     run_event_MH(sg, ev_node, wave_nodes)
+    #regen_station_templates(sg, ev_node, wave_nodes)
     #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
     print ll
 
