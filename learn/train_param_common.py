@@ -160,7 +160,6 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
         llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors, dfn_str=kernel_str)
 
         bounds = [(1e-20,None),] * len(params)
-        import pdb; pdb.set_trace();
         if array:
             params, ll = grad_ascend(llgrad, precision=0.01, step=0.001, initial_guess=[100, 100, 1, 1, 1, 1])
         else:
