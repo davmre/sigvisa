@@ -18,10 +18,10 @@ from sigvisa.models.distributions import InvGamma, LogNormal
 from sigvisa.utils.cover_tree import VectorTree, MatrixTree
 
 
-start_params_lld = {"coda_decay": [.022, .0187, 10.00, 1.0],
-                    "amp_transfer": [1.1, 3.4, 10.00, 1.0],
-                    "peak_offset": [2.7, 3.4, 10.00, 1.0],
-                    "tt_residual": [2.7, 3.4, 10.00, 1.0],
+start_params_lld = {"coda_decay": [.022, .0187, 9.00, 1.0],
+                    "amp_transfer": [1.1, 3.4, 9.00, 1.0],
+                    "peak_offset": [2.7, 3.4, 9.00, 1.0],
+                    "tt_residual": [2.7, 3.4, 9.00, 1.0],
                     }
 
 gp_priors_lld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.0004, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
