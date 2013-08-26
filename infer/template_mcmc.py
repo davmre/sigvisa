@@ -9,7 +9,6 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_event_station_chan
-from sigvisa.source.event import Event
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.signal_model import extract_arrival_from_key
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
@@ -424,91 +423,97 @@ def death_move(sg, wave_node, dummy=False):
 
 #####################################################################
 
-def run_open_world_MH(sg, wn, burnin=0, skip=40, steps=10000, wiggles=False):
+def run_open_world_MH(sg, wns, burnin=0, skip=40, steps=10000, wiggles=False):
     n_accepted = dict()
     moves = ('birth', 'death', 'split', 'merge', 'indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
 
     for move in moves:
         n_accepted[move] = 0
+    n_attempted = 0
 
     stds = {'peak_offset': .1, 'arrival_time': .1, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .5}
 
-
-    templates = dict()
     params_over_time = dict()
 
     for step in range(steps):
-        new_nodes = birth_move(sg, wn, wiggles=wiggles)
-        if new_nodes:
-            tmplid = new_nodes['arrival_time'].unassociated_templateid
-            templates[tmplid] = new_nodes
-            for param in new_nodes.keys():
-                params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
-            n_accepted['birth'] += 1
+        for wn in wns:
+            new_nodes = birth_move(sg, wn, wiggles=wiggles)
+            if new_nodes:
+                tmplid = new_nodes['arrival_time'].unassociated_templateid
+                for param in new_nodes.keys():
+                    params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
+                n_accepted['birth'] += 1
 
-        arrivals = wn.arrivals()
-        if len(arrivals) >= 1:
-            n_accepted['death'] += death_move(sg, wn)
-
-        """
-        split_nodes = try_split(sg, wn)
-        if split_nodes:
-            tmplid = split_nodes['arrival_time'].unassociated_templateid
-            templates[tmplid] = split_nodes
-            for param in split_nodes.keys():
-                params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
-            n_accepted['split'] += 1
-        arrivals = wn.arrivals()
-        if len(arrivals) >= 1:
-            n_accepted['merge'] += try_merge(sg, wn)
-        """
-
-        for (eid, phase) in arrivals:
-            l3 = len(arrivals)
-            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
-            tmplid = -eid
-            tmnodes = templates[tmplid]
-
-            n_accepted['indep_peak'] += indep_peak_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                         offset_node=tmnodes["peak_offset"],
-                                                         wave_node=wn)
-            n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                           offset_node=tmnodes["peak_offset"],
-                                                             wave_node=wn, std=stds['peak_offset'])
-            for param in ("arrival_time", "coda_height", "coda_decay"):
-                n = tmnodes[param]
-                n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
-
-            if wiggles:
-                for param in wg.params():
-                    n = tmnodes[param]
-                    if param.startswith("amp"):
-                        phase_wraparound = False
-                        move = 'wiggle_amp'
-                    else:
-                        phase_wraparound = True
-                        move = 'wiggle_phase'
-                    n_accepted[move] += float(gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[move], phase_wraparound=phase_wraparound)) / (wg.dimension()/2.0)
-            for (param, n) in tmnodes.items():
-                params_over_time["%d_%s" % (tmplid, param)].append(n.get_value())
+            uaids = sg.uatemplate_ids[(wn.sta,wn.chan,wn.band)]
+            if len(uaids) >= 1:
+                n_accepted['death'] += death_move(sg, wn)
 
 
-        if step > 0 and ((step % skip == 0) or (step < 15)):
-            lp = sg.current_log_p()
+            arrivals = wn.arrivals()
+            if len(arrivals) >= 1:
+                split_nodes = try_split(sg, wn)
+                if split_nodes:
+                    tmplid = split_nodes['arrival_time'].unassociated_templateid
+                    for param in split_nodes.keys():
+                        params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
+                    n_accepted['split'] += 1
 
-            print "step %d: lp %.2f, %d templates, accepted " % (step, lp, len(arrivals)),
-            for move in moves:
-                if move in ("split", "merge", "birth", "death"):
-                    print "%s: %d, " % (move, n_accepted[move]),
+            arrivals = wn.arrivals()
+            if len(arrivals) >= 1:
+                n_accepted['merge'] += try_merge(sg, wn)
+
+
+            arrivals = wn.arrivals()
+            for (eid, phase) in arrivals:
+                l3 = len(arrivals)
+                wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
+
+                if eid < 0:
+                    uaid = -eid
+                    tmnodes = sg.uatemplates[uaid]
                 else:
-                    accepted_percent = float(n_accepted[move]) / (step * len(templates)) * 100 if (step * len(templates)) > 0 else 0
-                    print "%s: %d%%, " % (move, accepted_percent),
-            print
-            plot_with_fit("unass_step%06d.png" % step, wn)
-            signal_diff_pos = get_signal_diff_positive_part(wn, wn.arrivals())
-            w = wn.get_wave()
-            w.data = signal_diff_pos
-            savefig(fname="unass_diff%06d.png" % step, fig=plot_waveform(w))
+                    tmnodes = sg.get_template_nodes(eid=eid, sta=wn.sta, phase=phase, band=wn.band, chan=wn.chan)
+
+                n_accepted['indep_peak'] += indep_peak_move(sg, arrival_node=tmnodes["arrival_time"],
+                                                             offset_node=tmnodes["peak_offset"],
+                                                             wave_node=wn)
+                n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["arrival_time"],
+                                                               offset_node=tmnodes["peak_offset"],
+                                                                 wave_node=wn, std=stds['peak_offset'])
+                for param in ("arrival_time", "coda_height", "coda_decay"):
+                    n = tmnodes[param]
+                    n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
+                n_attempted += 1
+
+                if wiggles:
+                    for param in wg.params():
+                        n = tmnodes[param]
+                        if param.startswith("amp"):
+                            phase_wraparound = False
+                            move = 'wiggle_amp'
+                        else:
+                            phase_wraparound = True
+                            move = 'wiggle_phase'
+                        n_accepted[move] += float(gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[move], phase_wraparound=phase_wraparound)) / (wg.dimension()/2.0)
+                for (param, n) in tmnodes.items():
+                    params_over_time["%d_%s" % (tmplid, param)].append(n.get_value())
+
+            if step > 0 and ((step % skip == 0) or (step < 15)):
+                lp = sg.current_log_p()
+
+                print "step %d: lp %.2f, %d templates, accepted " % (step, lp, len(arrivals)),
+                for move in moves:
+                    if move in ("split", "merge", "birth", "death"):
+                        print "%s: %d, " % (move, n_accepted[move]),
+                    else:
+                        accepted_percent = (float(n_accepted[move]) / n_attempted *100.0 if n_accepted[move] > 0 else 0)
+                        print "%s: %d%%, " % (move, accepted_percent),
+                print
+                plot_with_fit("unass_%s_step%06d.png" % (wn.sta, step), wn)
+                #signal_diff_pos = get_signal_diff_positive_part(wn, wn.arrivals())
+                #w = wn.get_wave()
+                #w.data = signal_diff_pos
+                #savefig(fname="unass_diff%06d.png" % step, fig=plot_waveform(w))
 
 
     """

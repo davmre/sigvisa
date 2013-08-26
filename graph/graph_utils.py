@@ -60,9 +60,10 @@ def get_parent_value(eid, phase, sta, param_name, parent_values, chan=None, band
     else:
         return parent_values[k]
 
+default_r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
 def parse_key(k, r=None):
     if r is None:
-        r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
+        r = default_r
     m = r.match(k)
     if not m: raise ValueError("could not parse parent key %s" % k)
     eid = int(m.group(1))

@@ -2,6 +2,7 @@ import time
 import numpy as np
 import os
 import re
+from collections import defaultdict
 from sigvisa import Sigvisa
 
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists
@@ -15,7 +16,7 @@ from sigvisa.models.ev_prior import EventNode
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
-from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value
+from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value, parse_key
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
@@ -127,7 +128,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.next_uatemplateid = 1
         self.uatemplate_rate = .02
-
+        self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
+        self.uatemplates = dict() # keys are ids, vals are param:node dicts.
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -263,6 +265,11 @@ class SigvisaGraph(DirectedGraphModel):
         return event_node
 
     def destroy_unassociated_template(self, nodes, nosort=False):
+        eid, phase, sta, chan, band, param = parse_key(nodes.values()[0].label)
+        uaid = -eid
+        del self.uatemplates[uaid]
+        self.uatemplate_ids[(sta,chan,band)].remove(uaid)
+
         for (param, node) in nodes.items():
             self.remove_node(node)
         if not nosort:
@@ -309,6 +316,10 @@ class SigvisaGraph(DirectedGraphModel):
         for node in nodes.values():
             node.unassociated_templateid = unassociated_templateid
             node.parent_sample()
+
+        self.uatemplates[unassociated_templateid] = nodes
+        self.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].add(unassociated_templateid)
+
 
         if not nosort:
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
