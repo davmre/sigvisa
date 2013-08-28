@@ -294,6 +294,11 @@ def merge_move(sg, tmpl1_nodes, tmpl2_nodes, wave_node, post_merge_atime_diff):
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
         print "merged template %d into %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (tmpl1_nodes["arrival_time"].unassociated_templateid, tmpl2_nodes["arrival_time"].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
+
+        uaid = tmpl2_nodes['arrival_time'].unassociated_templateid
+        del sg.uatemplates[uaid]
+        sg.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].remove(uaid)
+
         return True
     else:
         for (param, node) in tmpl2_nodes.items():
@@ -408,6 +413,12 @@ def death_move(sg, wave_node, dummy=False):
     if move_accepted or dummy:
         print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:
+
+        uaid = -tmpl_to_destroy[0]
+        del sg.uatemplates[uaid]
+        sg.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].remove(uaid)
+
+
         return True
     else:
         for (param, (label, node)) in tnodes.items() + wnodes.items():
@@ -501,7 +512,7 @@ def run_open_world_MH(sg, wns, burnin=0, skip=40, steps=10000, wiggles=False):
             if step > 0 and ((step % skip == 0) or (step < 15)):
                 lp = sg.current_log_p()
 
-                print "step %d: lp %.2f, %d templates, accepted " % (step, lp, len(arrivals)),
+                print "step %d, %s: lp %.2f, %d templates, accepted " % (step, wn.sta, lp, len(arrivals)),
                 for move in moves:
                     if move in ("split", "merge", "birth", "death"):
                         print "%s: %d, " % (move, n_accepted[move]),

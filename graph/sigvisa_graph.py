@@ -127,7 +127,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.optim_log = ""
 
         self.next_uatemplateid = 1
-        self.uatemplate_rate = .02
+        self.uatemplate_rate = .0002
         self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
 
@@ -297,7 +297,7 @@ class SigvisaGraph(DirectedGraphModel):
             label = create_key(param=param, sta=wave_node.sta,
                                phase=phase, eid=eid,
                                chan=wave_node.chan, band=wave_node.band)
-            model = tg.unassociated_model(param)
+            model = tg.unassociated_model(param, nm=wave_node.nm)
             lb = tg.low_bounds()[param]
             hb = tg.high_bounds()[param]
 

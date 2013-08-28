@@ -135,5 +135,10 @@ if (l > 0) {
 
         return bounds
 
-    def unassociated_model(self, param):
-        return self.uamodels[param]
+    def unassociated_model(self, param, nm=None):
+        if nm is not None and param=="coda_height":
+            mu = np.log(nm.c * 10)
+            std = 1.0
+            return Gaussian(mu, std)
+        else:
+            return self.uamodels[param]
