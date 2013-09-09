@@ -3,6 +3,8 @@ import numpy as np
 import os
 import re
 from collections import defaultdict
+from functools32 import lru_cache
+
 from sigvisa import Sigvisa
 
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists
@@ -29,7 +31,7 @@ class ModelNotFoundError(Exception):
     pass
 
 
-
+@lru_cache(max_size=1024)
 def get_param_model_id(runid, sta, phase, model_type, param,
                        template_shape, basisid=None, chan=None, band=None):
     # get a DB modelid for a previously-trained parameter model
@@ -58,11 +60,20 @@ class SigvisaGraph(DirectedGraphModel):
 
     """
 
-    def _tm_type(self, param):
+    def _tm_type(self, param, site=None):
+
         try:
-            return self.template_model_type[param]
+            tmtype = self.template_model_type[param]
         except TypeError:
-            return self.template_model_type
+            tmtype = self.template_model_type
+
+        if site is None: return tmtype
+
+        s = Sigvisa()
+        if s.is_array_station(site):
+            return tmtype.replace('lld', 'lldlld')
+        else:
+            return tmtype
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
@@ -118,8 +129,8 @@ class SigvisaGraph(DirectedGraphModel):
         self.template_nodes = []
         self.wiggle_nodes = []
 
-        self.station_waves = dict()
-        self.site_elements = dict()
+        self.station_waves = dict() # (sta)
+        self.site_elements = dict() # site (str) -> list of elements (strs)
         self.site_bands = dict()
         self.site_chans = dict()
         self.arrays_joint = arrays_joint
@@ -130,6 +141,8 @@ class SigvisaGraph(DirectedGraphModel):
         self.uatemplate_rate = .0002
         self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
+
+        self.evnodes = dict() # keys are eids, vals are attribute:node dicts
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -184,11 +197,18 @@ class SigvisaGraph(DirectedGraphModel):
         lp = 0
         for (site, elements) in self.site_elements.items():
             for sta in elements:
-                for wn in self.station_waves[sta]:
-                    n_template_dist = Poisson(self.uatemplate_rate * (wn.et-wn.st))
-                    ua_templates = len([1 for (eid, phase) in wn.arrivals() if eid < 0])
-                    lp += n_template_dist.log_p(ua_templates)
+                lp += self.ntemplates_sta_log_p(sta)
         return lp
+
+    def ntemplates_sta_log_p(self, sta, n=None):
+        lp = 0
+        if n is None:
+            n = len(self.uatemplates[sta])
+
+        assert(len(self.station_waves[sta] == 1))
+        wn  = self.station_waves[sta][0]
+        n_template_dist = Poisson(self.uatemplate_rate * wn.valid_len)
+        return n_template_dist.log_p(n)
 
     def current_log_p(self, **kwargs):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
@@ -253,6 +273,7 @@ class SigvisaGraph(DirectedGraphModel):
         """
 
         event_node = EventNode(event=ev, label='ev_%d' % ev.eid, fixed=True)
+        self.evnodes[ev.eid] = event_node
         self.add_node(event_node)
 
         for (site, element_list) in self.site_elements.iteritems():

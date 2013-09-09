@@ -149,6 +149,11 @@ class Sigvisa(threading.local):
     def is_array_station(self, sta):
         return self.earthmodel.site_info(sta, 0)[3] == 1
 
+    def get_array_site(self, sta):
+        _, _, _, isarr, _, _, ref_site_id = self.earthmodel.site_info(sta, 0)
+        ref_site_name = self.siteid_minus1_to_name[ref_site_id-1]
+        return ref_site_name
+
     def get_array_elements(self, sta):
         if not self.is_array_station(sta):
             raise Exception("cannot get elements of non-array station %s" % sta)

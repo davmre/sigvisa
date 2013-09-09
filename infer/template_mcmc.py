@@ -348,7 +348,7 @@ def birth_move(sg, wave_node, dummy=False, **kwargs):
     # reverse (death) probability is just the probability of killing a
     # random template
     ntemplates = len([1 for (eid, phase) in wave_node.arrivals() if eid < 0])
-    log_qbackward = np.log(1.0/ntemplates)
+    log_qbackward = 0 #np.log(1.0/ntemplates)
 
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
@@ -382,7 +382,7 @@ def death_move(sg, wave_node, dummy=False):
 
     lp_old = sg.current_log_p()
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
-    log_qforward = np.log(1.0/len(templates))
+    log_qforward = 0 #np.log(1.0/len(templates))
 
     tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
     wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)

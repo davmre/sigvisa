@@ -72,6 +72,7 @@ class ObservedSignalNode(Node):
         self.st = model_waveform['stime']
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
+        self.valid_len = model_waveform['valid_len']
         self.env = 'env' in self.filter_str
 
         self.signal_diff = np.empty((self.npts,))

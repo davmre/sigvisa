@@ -179,7 +179,6 @@ def learn_linear(X, y, sta, optim_params=None):
 def learn_constant_gaussian(X, y, sta, optim_params=None):
     return baseline_models.ConstGaussianModel(X=X, y=y, sta=sta)
 
-
 def load_modelid(modelid, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -188,7 +187,7 @@ def load_modelid(modelid, **kwargs):
     cursor.close()
     return load_model(fname=os.path.join(os.getenv("SIGVISA_HOME"), fname), model_type=model_type, **kwargs)
 
-@lru_cache(maxsize=1024)
+@lru_cache(maxsize=None)
 def load_model(fname, model_type, gpmodel_build_trees=True):
     if model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
