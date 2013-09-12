@@ -5,7 +5,7 @@ from sigvisa import Sigvisa
 from sigvisa.graph.graph_utils import parse_key
 from sigvisa.graph.nodes import Node
 
-import sigvisa.util.geog as geog
+import sigvisa.utils.geog as geog
 
 from bisect import bisect_left
 
@@ -48,7 +48,7 @@ class ArrayNode(Node):
             self.X[i, 3:6] = (evlon, evlat, evdepth)
             self.X[i, 0:3] = self.s.earthmodel.site_info(sta, evtime)[0:3]
             self.X[i, 7] = geog.dist_km((evlon, evlat), self.X[i, 0:2])
-            self.X[i, 8] = geog.azimuth(self.X[i, 0:2], evlon, evlat))
+            self.X[i, 8] = geog.azimuth(self.X[i, 0:2], evlon, evlat)
 
 
     def _parent_values(self):

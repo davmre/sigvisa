@@ -266,13 +266,13 @@ class ObservedSignalNode(Node):
         for child in self.children:
             child.parent_keys_changed.add((self.single_key), self)
 
-    def log_p(self, parent_values=None):
+    def log_p(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
         v = self.get_value()
         value = v.data
         mask = v.mask
 
-        pred_signal = self.assem_signal()
+        pred_signal = self.assem_signal(**kwargs)
         signal_diff = self.signal_diff
         npts = self.npts
         code = """

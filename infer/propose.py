@@ -90,7 +90,6 @@ def add_template_to_sta_hough(sta_hough_array, template_times, template_snr, sti
 
     """
 
-
     lonbins, latbins, timebins = sta_hough_array.shape
     time_radius = time_tick_s / 2.0
 
@@ -108,6 +107,7 @@ def add_template_to_sta_hough(sta_hough_array, template_times, template_snr, sti
         for j in range(latbins):
             origin_time = template_times[i,j]
             time_offset = (origin_time-stime) % time_tick_s
+            timebin = int(np.floor((origin_time-stime) / time_tick_s))
 
             # if the inverted time is near the edge of a time bin, we spread the vote over both bins.
 
@@ -241,7 +241,7 @@ def visualize_hough_array(hough_array, sites, fname, timeslice=None):
                       size=6,color = 'blue',zorder=10)
 
 
-    savefig(fname, fig, dpi=300)
+    savefig(fname, fig, dpi=300, bbox_inches='tight')
 
 
 
@@ -316,7 +316,7 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, exclude_sites=None, de
                 sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True)
 
                 if debug_ev is not None:
-                    pred_atime = ev.time + tt_predict(event=ev, sta=sta, phase='P')
+                    pred_atime = debug_ev.time + tt_predict(event=debug_ev, sta=sta, phase='P')
                     print "%s pred: %.1f" % (sta, pred_atime)
                 for uaid in sg.uatemplate_ids[(sta,chan,band)]:
                     atime = sg.uatemplates[uaid]['arrival_time'].get_value()
@@ -348,7 +348,7 @@ def main():
     sig_stime = np.min(statimes) - 60
     sig_etime = np.max(statimes) + 240
 
-    infer_stime = ev.time - 632
+    infer_stime = ev.time - 700
     infer_etime = sig_etime
 
     """
@@ -378,10 +378,12 @@ def main():
     f = open('cached_templates2.sg', 'rb')
     sg = pickle.load(f)
     f.close()
+
     #"""
 
-    exclude_sites = ['ASAR', 'STKA']
-    hough_array = generate_hough_array(ev, sg, stime=infer_stime, etime=infer_etime, bin_width_deg=4.0, exclude_sites=exclude_sites)
+    exclude_sites = ['STKA']
+    #exclude_sites = []
+    hough_array = generate_hough_array(sg, stime=infer_stime, etime=infer_etime, bin_width_deg=4.0, exclude_sites=exclude_sites, debug_ev=ev)
 
     #stas = ['AKBB', 'FITZ', 'JNU']
     #hough_array = synthetic_hough_array(ev, stas=stas, stime=infer_stime, etime=infer_etime, bin_width_deg=5)

@@ -218,7 +218,7 @@ def split_move(sg, tmpl, wave_node, atime_diff):
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
-        print "split template %d from %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (new_tmpl["arrival_time"].unassociated_templateid, tmpl["arrival_time"].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
+        print "split template %d from %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (new_tmpl["arrival_time"].tmid, tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
         return new_tmpl
     else:
         sg.destroy_unassociated_template(new_tmpl, nosort=True)
@@ -293,9 +293,9 @@ def merge_move(sg, tmpl1_nodes, tmpl2_nodes, wave_node, post_merge_atime_diff):
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
-        print "merged template %d into %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (tmpl1_nodes["arrival_time"].unassociated_templateid, tmpl2_nodes["arrival_time"].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
+        print "merged template %d into %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (tmpl1_nodes["arrival_time"].tmid, tmpl2_nodes["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
 
-        uaid = tmpl2_nodes['arrival_time'].unassociated_templateid
+        uaid = tmpl2_nodes['arrival_time'].tmid
         del sg.uatemplates[uaid]
         sg.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].remove(uaid)
 
@@ -353,7 +353,7 @@ def birth_move(sg, wave_node, dummy=False, **kwargs):
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
     if move_accepted or dummy:
-        print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
+        print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:
         return tmpl
     else:
@@ -411,7 +411,7 @@ def death_move(sg, wave_node, dummy=False):
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
     if move_accepted or dummy:
-        print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
+        print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:
 
         uaid = -tmpl_to_destroy[0]
@@ -450,7 +450,7 @@ def run_open_world_MH(sg, wns, burnin=0, skip=40, steps=10000, wiggles=False):
         for wn in wns:
             new_nodes = birth_move(sg, wn, wiggles=wiggles)
             if new_nodes:
-                tmplid = new_nodes['arrival_time'].unassociated_templateid
+                tmplid = new_nodes['arrival_time'].tmid
                 for param in new_nodes.keys():
                     params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
                 n_accepted['birth'] += 1
@@ -464,7 +464,7 @@ def run_open_world_MH(sg, wns, burnin=0, skip=40, steps=10000, wiggles=False):
             if len(arrivals) >= 1:
                 split_nodes = try_split(sg, wn)
                 if split_nodes:
-                    tmplid = split_nodes['arrival_time'].unassociated_templateid
+                    tmplid = split_nodes['arrival_time'].tmid
                     for param in split_nodes.keys():
                         params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
                     n_accepted['split'] += 1
