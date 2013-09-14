@@ -90,7 +90,7 @@ def main():
                       help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
     parser.add_option(
-        "-m", "--model_type", dest="model_type", default="gp_dad_log", type="str", help="type of model to train (gp_dad_log)")
+        "-m", "--model_type", dest="model_type", default="gp_lld", type="str", help="type of model to train (gp_lld)")
     parser.add_option("--require_human_approved", dest="require_human_approved", default=False, action="store_true",
                       help="only train on human-approved good fits")
     parser.add_option(
@@ -128,7 +128,7 @@ def main():
     allsites = []
     if options.array_joint:
         allsites = sites
-        
+
     else: # explode array sites into their individual elements
         for site in sites:
             try:
@@ -141,7 +141,7 @@ def main():
 
         if chan=="vertical":
             chan = s.default_vertical_channel[site]
-
+        chan = s.canonical_channel_name[chan]
 
         for target in targets:
 
@@ -151,7 +151,7 @@ def main():
                 min_amp = options.min_amp
 
             for phase in phases:
-                
+
 
                 # check for duplicate model
                 sql_query = "select modelid from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' " % (
@@ -166,7 +166,6 @@ def main():
 
                 try:
                     try:
-                        import pdb; pdb.set_trace()
                         elems = s.get_array_elements(site)
                         X, y, evids = np.empty((0, 6)), np.empty((0, )), np.empty((0, ))
                         for array_elem in elems:
@@ -180,7 +179,7 @@ def main():
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
 
-#                
+#
                 model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
                 evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
                 np.savetxt(evid_fname, evids, fmt='%d')

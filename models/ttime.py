@@ -120,5 +120,5 @@ def tt_log_p(x, event, sta, phase):
     return ll
 
 def tt_residual(event, sta, atime, phase=None, phaseid=None):
-    pred_atime = ev.time + tt_predict(ev, sta, phase=phase, phaseid=phaseid)
+    pred_atime = event.time + tt_predict(event, sta, phase=phase, phaseid=phaseid)
     return atime - pred_atime

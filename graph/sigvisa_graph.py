@@ -39,14 +39,14 @@ def get_param_model_id(runid, sta, phase, model_type, param,
     cursor = s.dbconn.cursor()
     chan_cond = "and chan='%s'" % chan if chan else ""
     band_cond = "and band='%s'" % band if band else ""
-    basisid_cond = "and wiggle_basisid='%d'" if basisid else ""
+    basisid_cond = "and wiggle_basisid=%d" % (basisid) if basisid is not None else ""
 
     sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond)
     try:
         cursor.execute(sql_query)
         modelid = cursor.fetchone()[0]
     except:
-        raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param))
+        raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond))
     finally:
         cursor.close()
     return modelid
@@ -70,7 +70,7 @@ class SigvisaGraph(DirectedGraphModel):
         if site is None: return tmtype
 
         s = Sigvisa()
-        if s.is_array_station(site):
+        if s.is_array_station(site) and self.arrays_joint:
             return tmtype.replace('lld', 'lldlld')
         else:
             return tmtype
@@ -182,13 +182,13 @@ class SigvisaGraph(DirectedGraphModel):
         return nodes
 
     def get_template_vals(self, eid, sta, phase, band, chan):
-        nodes = get_template_nodes(eid, sta, phase, band, chan)
+        nodes = self.get_template_nodes(eid, sta, phase, band, chan)
         vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
         return vals
 
     def set_template(self, eid, sta, phase, band, chan, values):
         for (param, value) in values.items():
-            if param == "arrival_time":
+            if param in ("arrival_time", 'amp_transfer', 'tt_residual'):
                 b = None
                 c = None
             else:
@@ -210,7 +210,15 @@ class SigvisaGraph(DirectedGraphModel):
     def ntemplates_sta_log_p(self, sta, n=None):
         lp = 0
         if n is None:
-            n = len(self.uatemplate_ids[sta])
+
+            s = Sigvisa()
+            site = s.get_array_site(sta)
+            assert (len(list(self.site_bands[site])) == 1)
+            band = list(self.site_bands[site])[0]
+            assert (len(list(self.site_chans[site])) == 1)
+            chan = list(self.site_chans[site])[0]
+
+            n = len(self.uatemplate_ids[(sta, chan, band)])
 
         assert(len(self.station_waves[sta]) == 1)
         wn  = self.station_waves[sta][0]
@@ -566,7 +574,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                                 band=band, chan=chan, basisid=wg.basisid,
                                                                 children=child_wave_nodes, wiggle=True)
 
-        for (band_chan_param_key, ni) in nodes.items():
+        for ni in [tt_residual_node, amp_transfer_node] + nodes.values():
             for n in extract_sta_node_list(ni):
                 if sample_templates:
                     n.parent_sample()

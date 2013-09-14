@@ -118,10 +118,10 @@ class Counter(dict):
         keys = self.sortedKeys()
         total = 0
         for k in keys:
-            total += self[key]
+            total += self[k]
             if choice <= total:
                 return k
-        raise Exception("illegal code path!")
+        raise Exception("trying to sample from an unnormalized counter!")
 
     def divideAll(self, divisor):
         """

@@ -5,13 +5,16 @@ import traceback
 import pdb
 import pickle
 
-from sigvisa.infer.propose import propose_event_from_hough
+
 from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
+from sigvisa.graph.sigvisa_graph import get_param_model_id
 from sigvisa.models.distributions import Gaussian
-
+from sigvisa.models.ttime import tt_residual
+from sigvisa.models.templates.coda_height import amp_transfer
+from sigvisa.utils.counter import Counter
 from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough
-
+from sigvisa.learn.train_param_common import load_modelid
 
 def unass_template_logprob(sg, sta, template_dict):
     """
@@ -26,7 +29,7 @@ def unass_template_logprob(sg, sta, template_dict):
     wn = sg.station_waves[sta][0]
 
     tg = sg.template_generator(phase="UA")
-    wg = sg.wiggle_generator(phase="UA")
+    wg = sg.wiggle_generator(phase="UA", srate=wn.srate)
 
 
     lp = 0
@@ -53,18 +56,23 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None
     """
 
     model_type = sg._tm_type(param, site=site)
-    modelid = get_param_model_id(runid=sg.runid, sta=site,
-                                 phase=phase, model_type=model_type,
-                                 param=param, template_shape=sg.template_shape,
-                                 chan=chan, band=band, basisid=basisid)
-    model = load_modelid(modelid)
 
-    if s.is_array_station(site):
+    s = Sigvisa()
+    if s.is_array_station(site) and sg.arrays_joint:
+        modelid = get_param_model_id(runid=sg.runid, sta=site,
+                                     phase=phase, model_type=model_type,
+                                     param=param, template_shape=sg.template_shape,
+                                     chan=chan, band=band, basisid=basisid)
         cond = lldlld_X(ev, sta)
     else:
+        modelid = get_param_model_id(runid=sg.runid, sta=sta,
+                                     phase=phase, model_type=model_type,
+                                     param=param, template_shape=sg.template_shape,
+                                     chan=chan, band=band, basisid=basisid)
         cond = ev
 
-    return model.log_p(x = param, cond = cond)
+    model = load_modelid(modelid)
+    return model.log_p(x = val, cond = cond)
 
 def ev_phase_template_logprob(sg, sta, eid, phase, template_dict):
 
@@ -74,7 +82,7 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict):
 
     """
 
-    ev = event_from_nodes(sg.evnodes[eid])
+    ev = event_from_evnodes(sg.evnodes[eid])
 
     s = Sigvisa()
     site = s.get_array_site(sta)
@@ -82,32 +90,38 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict):
     # HACK
     assert(len(sg.station_waves[sta]) == 1)
     wn = sg.station_waves[sta][0]
-    basisid = sg.wiggle_generator(phase=phase, srate=wn.srate).basisid
+    wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
+    wiggle_params = set(wg.params())
 
     if 'tt_residual' not in template_dict:
         template_dict['tt_residual'] = tt_residual(ev, sta, template_dict['arrival_time'], phase=phase)
-        del template_dict['arrival_time']
 
     # TODO: implement multiple bands/chans
-    assert (len(sg.site_bands[site]) == 1)
-    band = sg.site_bands[site][0]
+    assert (len(list(sg.site_bands[site])) == 1)
+    band = list(sg.site_bands[site])[0]
     if 'amp_transfer' not in template_dict:
         template_dict['amp_transfer'] = amp_transfer(ev, band, phase, template_dict['coda_height'])
-        del template_dict['coda_height']
 
-    assert (len(sg.site_chans[site]) == 1)
-    chan = sg.site_chans[site][0]
+    assert (len(list(sg.site_chans[site])) == 1)
+    chan = list(sg.site_chans[site])[0]
 
     lp = 0
-    for param in template_dict.keys():
-        lp += param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=basisid)
+    for (param, val) in template_dict.items():
+        if param in ('arrival_time', 'coda_height'): continue
+        if param in wiggle_params:
+            basisid = wg.basisid
+        else:
+            basisid = None
+        lp_param = param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=basisid)
+        lp += lp_param
+        print sta, phase, param, val, lp_param
     return lp
 
 
 def template_association_logodds(sg, sta, tmid, eid, phase):
 
     tmnodes = sg.uatemplates[tmid]
-    param_values = dict([(k, n.get_value()) for (k,n) in tmnodes])
+    param_values = dict([(k, n.get_value()) for (k,n) in tmnodes.items()])
 
     lp_unass = unass_template_logprob(sg, sta, param_values)
     lp_ev = ev_phase_template_logprob(sg, sta, eid, phase, param_values)
@@ -131,13 +145,26 @@ def sample_template_to_associate(sg, sta, eid, phase):
 
     """
 
+    s = Sigvisa()
+    site = s.get_array_site(sta)
+
+    assert (len(list(sg.site_bands[site])) == 1)
+    band = list(sg.site_bands[site])[0]
+    assert (len(list(sg.site_chans[site])) == 1)
+    chan = list(sg.site_chans[site])[0]
+
     c = Counter()
-    for tmid in sg.uatemplate_ids[sta]:
+    for tmid in sg.uatemplate_ids[(sta,chan,band)]:
         c[tmid] += np.exp(template_association_logodds(sg, sta, tmid, eid, phase))
 
-    n_u = len(sg.uatemplate_ids[sta])
-    c[None] = np.exp(sg.ntemplates_sta_log_p(sta, n=n_u) - sg.ntemplates_sta_log_p(sta, n=n_u-1))
+    # if there are no unassociated templates, there's nothing to sample.
+    n_u = len(sg.uatemplate_ids[(sta, chan, band)])
+    print sta, n_u
+    if n_u == 0:
+        return None, 0.0
 
+    c[None] = np.exp(sg.ntemplates_sta_log_p(sta, n=n_u) - sg.ntemplates_sta_log_p(sta, n=n_u-1))
+    c.normalize()
     tmid = c.sample()
     assoc_logprob = np.log(c[tmid])
 
@@ -150,15 +177,15 @@ def associate_template(sg, sta, tmid, eid, phase):
 
     """
 
-    tmnodes = sg.ua_templates[tmid]
+    tmnodes = sg.uatemplates[tmid]
 
     s = Sigvisa()
     site = s.get_array_site(sta)
 
-    assert (len(sg.site_bands[site]) == 1)
-    band = sg.site_bands[site][0]
-    assert (len(sg.site_chans[site]) == 1)
-    band = sg.site_chans[site][0]
+    assert (len(list(sg.site_bands[site])) == 1)
+    band = list(sg.site_bands[site])[0]
+    assert (len(list(sg.site_chans[site])) == 1)
+    chan = list(sg.site_chans[site])[0]
     values = dict([(k, n.get_value()) for (k, n) in tmnodes.items()])
     sg.set_template(eid, sta, phase, band, chan, values)
     destroy_unassociated_template(self, tmnodes, nosort=True)
@@ -169,10 +196,10 @@ def unassociate_template(sg, sta, eid, phase, tmid):
     s = Sigvisa()
     site = s.get_array_site(sta)
 
-    assert (len(sg.site_bands[site]) == 1)
-    band = sg.site_bands[site][0]
-    assert (len(sg.site_chans[site]) == 1)
-    band = sg.site_chans[site][0]
+    assert (len(list(sg.site_bands[site])) == 1)
+    band = list(sg.site_bands[site])[0]
+    assert (len(list(sg.site_chans[site])) == 1)
+    chan = list(sg.site_chans[site])[0]
     ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
 
     wave_node = sg.station_waves[sta][0]
@@ -182,19 +209,23 @@ def unassociate_template(sg, sta, eid, phase, tmid):
 
     return
 
-def deassociation_logprob(sg, sta, eid, phase):
+def deassociation_prob(sg, sta, eid, phase):
 
-    # return logprob of deassociating (vs deleting).
+    # return prob of deassociating (vs deleting).
 
-    assert (len(sg.site_bands[site]) == 1)
-    band = sg.site_bands[site][0]
-    assert (len(sg.site_chans[site]) == 1)
-    band = sg.site_chans[site][0]
+    s = Sigvisa()
+    site = s.get_array_site(sta)
+
+
+    assert (len(list(sg.site_bands[site])) == 1)
+    band = list(sg.site_bands[site])[0]
+    assert (len(list(sg.site_chans[site])) == 1)
+    chan = list(sg.site_chans[site])[0]
     ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
 
     unass_lp = unass_template_logprob(sg, sta, ev_tmvals)
 
-    n_u = len(sg.uatemplate_ids[sta])
+    n_u = len(sg.uatemplate_ids[(sta,chan,band)])
     ntemplates_ratio_log = sg.ntemplates_sta_log_p(sta, n=n_u+1) - sg.ntemplates_sta_log_p(sta, n=n_u)
 
 
@@ -214,12 +245,12 @@ def deassociation_logprob(sg, sta, eid, phase):
 def get_signal_based_amplitude_distribution(sg, sta, tmvals, peak_period_s = 1.0):
     wn = sg.station_waves[sta][0]
     peak_time = tmvals['arrival_time'] + tmvals['peak_offset']
-    peak_idx = int((peak_time - wn.stime) * wn.srate)
+    peak_idx = int((peak_time - wn.st) * wn.srate)
     peak_period_samples = int(peak_period_s * wn.srate)
-    peak_data=wn.data[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
+    peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
 
     peak_height = np.mean(peak_data)
-    env_height = peak_height - wn.nm.c
+    env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
 
     return Gaussian(mean=np.log(env_height), std = 1.0)
 
@@ -227,13 +258,17 @@ def propose_phase_template(sg, sta, eid, phase):
     # sample a set of params for a phase template from an appropriate distribution (as described above).
     # return as an array.
 
+    s = Sigvisa()
+    site = s.get_array_site(sta)
+
     # we assume that add_event already sampled all the params parent-conditionally
-    assert (len(sg.site_bands[site]) == 1)
-    band = sg.site_bands[site][0]
-    assert (len(sg.site_chans[site]) == 1)
-    band = sg.site_chans[site][0]
+    assert (len(list(sg.site_bands[site])) == 1)
+    band = list(sg.site_bands[site])[0]
+    assert (len(list(sg.site_chans[site])) == 1)
+    chan = list(sg.site_chans[site])[0]
     tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
     del tmvals['coda_height']
+
 
     # compute log-prob of non-amplitude parameters
     lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
@@ -279,6 +314,7 @@ def ev_birth_move(sg):
     # we need to replace these values before computing any signal-based probabilities.
     # luckily,
     evnodes = sg.add_event(proposed_ev, sample_templates=True)
+    eid = evnodes.eid
     print "added proposed event to graph"
 
     # loop over phase arrivals at each station and propose either
@@ -288,23 +324,34 @@ def ev_birth_move(sg):
     # to execute the forward and reverse moves
     for elements in sg.site_elements.values():
         for sta in elements:
+
+            s = Sigvisa()
+            site = s.get_array_site(sta)
+            assert (len(list(sg.site_bands[site])) == 1)
+            band = list(sg.site_bands[site])[0]
+            assert (len(list(sg.site_chans[site])) == 1)
+            chan = list(sg.site_chans[site])[0]
+
             for phase in sg.phases:
                 tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase)
                 if tmid is not None:
                     forward_fns.append(lambda : associate_template(sg, sta, tmid, eid, phase))
                     inverse_fns.append(lambda : unassociate_template(sg, sta, eid, phase))
                     associations.append((sta, phase, True))
-                    print "proposing to associate template %d at %s,%p" % (tmid, sta, phase)
-                    tmpl_lp  = 1.0
+                    print "proposing to associate template %d at %s,%s with assoc lp %.1f" % (tmid, sta, phase, assoc_logprob)
+                    tmpl_lp  = 0.0
                 else:
                     template_param_array, tmpl_lp = propose_phase_template(sg, sta, eid, phase)
-                    forward_fns.append(lambda : set_template_vals(sg, sta, eid, phase, template_param_array))
+                    forward_fns.append(lambda : sg.set_template(eid,sta, phase, band, chan, template_param_array))
                     inverse_fns.append(lambda : delete_template(sg, sta, eid, phase))
                     associations.append((sta, phase, False))
-                    print "proposing to create template at %s,%p" % (sta, phase)
+                    print "proposing to create template at %s,%s with assoc lp %.1f" % (sta, phase, assoc_logprob)
+
                 sta_phase_logprob = assoc_logprob + tmpl_lp
                 move_logprob += sta_phase_logprob
-
+                print "LOGPROBS: ", assoc_logprob, tmpl_lp, sta_phase_logprob, move_logprob
+                if np.isinf(move_logprob):
+                    import pdb; pdb.set_trace()
 
     # execute all the forward moves
     for fn in forward_fns:
@@ -323,14 +370,18 @@ def ev_birth_move(sg):
             reverse_logprob += np.log(1 - deassociation_prob(sg, sta, eid, phase))
 
 
-    new_lp = sg.current_log_p()
+    lp_new = sg.current_log_p()
     u = np.random.rand()
-    move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob) (lp_new + log_qbackward)  > np.log(u)
+    move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
+        print "move accepted"
+        import pdb; pdb.set_trace()
         return new_ev_node
     else:
+        print "move rejected"
         for fn in inverse_fns:
             fn()
+        print "changes reverted"
         return None
 
 def main():
@@ -338,6 +389,8 @@ def main():
     f = open('cached_templates2.sg', 'rb')
     sg = pickle.load(f)
     f.close()
+
+    sg.runid = 17
 
     print ev_birth_move(sg)
 

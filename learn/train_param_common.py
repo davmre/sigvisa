@@ -50,7 +50,7 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True ):
+def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, array=False ):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
         kernel_str = s[1]
