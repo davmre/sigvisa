@@ -1,10 +1,10 @@
 import re
 import numpy as np
-
+import copy
 from sigvisa import Sigvisa
 from sigvisa.graph.graph_utils import parse_key
 from sigvisa.graph.nodes import Node
-
+from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 
 from bisect import bisect_left
@@ -44,11 +44,12 @@ class ArrayNode(Node):
             evlon = parent_values["%d;lon" % eid]
             evlat = parent_values["%d;lat" % eid]
             evdepth = parent_values["%d;depth" % eid]
-            evdtime = parent_values["%d;time" % eid]
+            evtime = parent_values["%d;time" % eid]
             self.X[i, 3:6] = (evlon, evlat, evdepth)
             self.X[i, 0:3] = self.s.earthmodel.site_info(sta, evtime)[0:3]
-            self.X[i, 7] = geog.dist_km((evlon, evlat), self.X[i, 0:2])
-            self.X[i, 8] = geog.azimuth(self.X[i, 0:2], evlon, evlat)
+            stalon, stalat = self.X[i, 0:2]
+            self.X[i, 6] = geog.dist_km((evlon, evlat), (stalon, stalat))
+            self.X[i, 7] = geog.azimuth((stalon, stalat), (evlon, evlat))
 
 
     def _parent_values(self):
@@ -117,3 +118,29 @@ class ArrayNode(Node):
         for (i, k) in enumerate(self.sorted_keys):
             v = self.model.predict(cond = self.X[i:i+1, :])
             self.set_value(value=v, key=k)
+
+
+
+    # use custom getstate() and setstate() methods to avoid pickling
+    # param models when we pickle a graph object (since these models
+    # can be large, and GP models can't be directly pickled anyway).
+
+    # use custom getstate() and setstate() methods to avoid pickling
+    # param models when we pickle a graph object (since these models
+    # can be large, and GP models can't be directly pickled anyway).
+    def __getstate__(self):
+        d = copy.copy(self.__dict__)
+        del d['model']
+        del d['s']
+        return d
+
+    def __setstate__(self, state):
+        if "model" not in state:
+            if state['modelid'] is None:
+                state['model'] = DummyModel()
+            else:
+                state["model"] = load_modelid(modelid=state['modelid'], gpmodel_build_trees=False)
+        if "s" not in state:
+            state["s"] = Sigvisa()
+        self.__dict__.update(state)
+

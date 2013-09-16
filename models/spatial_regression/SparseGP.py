@@ -584,7 +584,7 @@ class SparseGP(ParamModel):
         samples = np.reshape(self.beta_bar, (1, -1)) + np.dot(self.invc.T, samples).T
         return samples
 
-    def deriv_log_p(self, x, cond=None,lp0=None, eps=1e-4, **kwargs):
+    def deriv_log_p(self, x, cond=None,lp0=None, eps=1e-4, include_obs=True, **kwargs):
 
         X1 = self.standardize_input_array(cond, **kwargs)
         y = x if isinstance(x, collections.Iterable) else (x,)
@@ -595,7 +595,7 @@ class SparseGP(ParamModel):
         else:
             n = len(y)
 
-        K = self.covariance(X1)
+        K = self.covariance(X1, include_obs=True)
         y = y-self.predict(X1)    
 
 
@@ -610,7 +610,7 @@ class SparseGP(ParamModel):
         # return k-dimensional vector
         # d log_p() / dy
 
-    def log_p(self, x, cond, **kwargs):
+    def log_p(self, x, cond, include_obs=True, **kwargs):
         """
         The log probability of the observations (X1, y) under the posterior distribution.
         """
@@ -624,7 +624,7 @@ class SparseGP(ParamModel):
         else:
             n = len(y)
 
-        K = self.covariance(X1)
+        K = self.covariance(X1, include_obs=include_obs)
         y = y-self.predict(X1)
 
         if n==1:
