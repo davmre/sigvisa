@@ -45,7 +45,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
 
     def create_param_node(self, graph, site, phase, band, chan, param,
-                          event_node, tt_node=None, amp_transfer_node=None, children=(), **kwargs):
+                          event_node, atime_node=None, amp_transfer_node=None, children=(), **kwargs):
         nodes = dict()
         if param == "coda_height":
             # we want to create a coda height node for each station under the current site.

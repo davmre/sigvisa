@@ -9,12 +9,14 @@ import pickle
 from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.sigvisa_graph import get_param_model_id
+from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough
+from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.distributions import Gaussian
 from sigvisa.models.ttime import tt_residual
 from sigvisa.models.templates.coda_height import amp_transfer
 from sigvisa.utils.counter import Counter
-from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough
-from sigvisa.learn.train_param_common import load_modelid
+from sigvisa.source.event import get_event
+
 
 def unass_template_logprob(sg, sta, template_dict):
     """
@@ -32,7 +34,8 @@ def unass_template_logprob(sg, sta, template_dict):
     wg = sg.wiggle_generator(phase="UA", srate=wn.srate)
 
 
-    lp = 0
+    lp = 0.0
+    lp += -np.log(float(wn.npts)/wn.srate) # arrival time
     for param in tg.params():
         model = tg.unassociated_model(param, nm=wn.nm)
         lp += model.log_p(template_dict[param])
@@ -114,7 +117,7 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict):
             basisid = None
         lp_param = param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=basisid)
         lp += lp_param
-        print sta, phase, param, val, lp_param
+        #print sta, phase, param, val, lp_param
     return lp
 
 
@@ -159,7 +162,7 @@ def sample_template_to_associate(sg, sta, eid, phase):
 
     # if there are no unassociated templates, there's nothing to sample.
     n_u = len(sg.uatemplate_ids[(sta, chan, band)])
-    print sta, n_u
+    #print sta, n_u
     if n_u == 0:
         return None, 0.0
 
@@ -188,7 +191,7 @@ def associate_template(sg, sta, tmid, eid, phase):
     chan = list(sg.site_chans[site])[0]
     values = dict([(k, n.get_value()) for (k, n) in tmnodes.items()])
     sg.set_template(eid, sta, phase, band, chan, values)
-    destroy_unassociated_template(self, tmnodes, nosort=True)
+    sg.destroy_unassociated_template(tmnodes, nosort=True)
     return
 
 def unassociate_template(sg, sta, eid, phase, tmid):
@@ -249,7 +252,7 @@ def get_signal_based_amplitude_distribution(sg, sta, tmvals, peak_period_s = 1.0
     peak_period_samples = int(peak_period_s * wn.srate)
     peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
 
-    peak_height = np.mean(peak_data)
+    peak_height = peak_data.mean()
     env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
 
     return Gaussian(mean=np.log(env_height), std = 1.0)
@@ -294,6 +297,54 @@ def phase_template_proposal_logp(sg, sta, eid, phase, tmvals):
     lp += amp_dist.log_p(amplitude)
     return lp
 
+def death_proposal_log_ratio(sg, eid):
+
+    lp_unass = 0
+    lp_ev = 0
+
+    evnodes = sg.evnodes[eid]
+    ev = event_from_evnodes(evnodes)
+    eid = ev.eid
+
+    for (site, elements) in sg.site_elements.items():
+        assert (len(list(sg.site_bands[site])) == 1)
+        assert (len(list(sg.site_chans[site])) == 1)
+        for sta in elements:
+            for phase in sg.phases:
+                for chan in sg.site_chans[site]:
+                    for band in sg.site_bands[site]:
+                        tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
+
+                        lp_unass_tmpl = unass_template_logprob(sg, sta, tmvals)
+                        lp_ev_tmpl = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
+                        lp_unass += lp_unass_tmpl
+                        lp_ev += lp_ev_tmpl
+                        print "death of", eid, sta, phase, lp_unass_tmpl, lp_ev_tmpl, lp_unass, lp_ev
+
+    return lp_unass - lp_ev
+
+def death_proposal_distribution(sg):
+    c = Counter()
+    for eid in sg.evnodes.keys():
+        c[eid] = death_proposal_log_ratio(sg, eid)
+
+    #
+    v = np.max(c.values())
+    for eid in c.keys():
+        c[eid] = np.exp(c[eid] - v)
+    c.normalize()
+
+    return c
+
+def sample_death_proposal(sg):
+    c = death_proposal_distribution(sg)
+    eid = c.sample()
+    return eid, c[eid]
+
+def death_proposal_prob(sg, eid):
+    c = death_proposal_distribution(sg)
+    return c[eid]
+
 def ev_birth_move(sg):
     lp_old = sg.current_log_p()
 
@@ -302,8 +353,10 @@ def ev_birth_move(sg):
 
     exclude_sites = ['STKA']
     hough_array = generate_hough_array(sg, stime=infer_stime, etime=infer_etime, bin_width_deg=4.0, exclude_sites=exclude_sites)
-    proposed_ev, ev_prob = propose_event_from_hough(hough_array, infer_stime, infer_etime)
-    print "proposed ev", proposed_ev
+    #proposed_ev, ev_prob = propose_event_from_hough(hough_array, infer_stime, infer_etime)
+    #print "proposed ev", proposed_ev
+    proposed_ev = get_event(evid=5393637)
+    ev_prob = 1.0
 
     forward_fns = []
     inverse_fns = []
@@ -335,15 +388,15 @@ def ev_birth_move(sg):
             for phase in sg.phases:
                 tmid, assoc_logprob = sample_template_to_associate(sg, sta, eid, phase)
                 if tmid is not None:
-                    forward_fns.append(lambda : associate_template(sg, sta, tmid, eid, phase))
-                    inverse_fns.append(lambda : unassociate_template(sg, sta, eid, phase))
+                    forward_fns.append(lambda sta=sta,phase=phase,tmid=tmid: associate_template(sg, sta, tmid, eid, phase))
+                    inverse_fns.append(lambda sta=sta,phase=phase: unassociate_template(sg, sta, eid, phase))
                     associations.append((sta, phase, True))
                     print "proposing to associate template %d at %s,%s with assoc lp %.1f" % (tmid, sta, phase, assoc_logprob)
                     tmpl_lp  = 0.0
                 else:
                     template_param_array, tmpl_lp = propose_phase_template(sg, sta, eid, phase)
-                    forward_fns.append(lambda : sg.set_template(eid,sta, phase, band, chan, template_param_array))
-                    inverse_fns.append(lambda : delete_template(sg, sta, eid, phase))
+                    forward_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
+                    #inverse_fns.append(lambda : delete_template(sg, sta, eid, phase))
                     associations.append((sta, phase, False))
                     print "proposing to create template at %s,%s with assoc lp %.1f" % (sta, phase, assoc_logprob)
 
@@ -353,6 +406,8 @@ def ev_birth_move(sg):
                 if np.isinf(move_logprob):
                     import pdb; pdb.set_trace()
 
+    inverse_fns.append(lambda : sg.remove_event(eid))
+
     # execute all the forward moves
     for fn in forward_fns:
         fn()
@@ -361,8 +416,8 @@ def ev_birth_move(sg):
     # compute log probability of the reverse move.
     # we have to do this in a separate loop so that
     # we can execute all the forward moves first.
-    reverse_logprob = 0
-    print "WARNING: NEED TO COMPUTE GLOBAL REVERSE LOGPROB"
+    reverse_logprob = np.log(death_proposal_prob(sg, eid))
+    print "reverse logprob", reverse_logprob
     for (sta, phase, associated) in associations:
         if associated:
             reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase))
@@ -373,6 +428,7 @@ def ev_birth_move(sg):
     lp_new = sg.current_log_p()
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
+    import pdb; pdb.set_trace()
     if move_accepted:
         print "move accepted"
         import pdb; pdb.set_trace()
@@ -391,6 +447,8 @@ def main():
     f.close()
 
     sg.runid = 17
+    from collections import defaultdict
+    sg.extended_evnodes = defaultdict(list)
 
     print ev_birth_move(sg)
 

@@ -27,6 +27,8 @@ from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_by_family
 from sigvisa.signals.common import Waveform
 
+from sigvisa.utils.fileutils import mkdir_p
+
 class ModelNotFoundError(Exception):
     pass
 
@@ -145,6 +147,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
 
         self.evnodes = dict() # keys are eids, vals are attribute:node dicts
+        self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -276,6 +279,15 @@ class SigvisaGraph(DirectedGraphModel):
             self.wiggle_nodes.remove(node)
         super(SigvisaGraph, self).remove_node(node)
 
+    def remove_event(self, eid):
+
+        del self.evnodes[eid]
+        for node in self.extended_evnodes[eid]:
+            self.remove_node(node)
+        del self.extended_evnodes[eid]
+
+        self._topo_sort()
+
     def add_event(self, ev, basisids=None, tmshapes=None, sample_templates=False):
         """
 
@@ -289,6 +301,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         event_node = EventNode(event=ev, label='ev_%d' % ev.eid, fixed=True)
         self.evnodes[ev.eid] = event_node
+        self.extended_evnodes[ev.eid].append(event_node)
         self.add_node(event_node)
 
         for (site, element_list) in self.site_elements.iteritems():
@@ -523,6 +536,8 @@ class SigvisaGraph(DirectedGraphModel):
             except AttributeError:
                 return [n,]
 
+        eid = event_node.eid
+
         child_wave_nodes = set()
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
@@ -537,7 +552,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                 event_node=event_node,
                                                 low_bound = -15,
                                                 high_bound = 15)
-        tt_node = self.setup_tt(site, phase, event_node=event_node,
+        arrival_time_node = self.setup_tt(site, phase, event_node=event_node,
                                 tt_residual_node=tt_residual_node,
                                 children=child_wave_nodes)
         amp_transfer_node = tg.create_param_node(self, site, phase,
@@ -545,15 +560,8 @@ class SigvisaGraph(DirectedGraphModel):
                                                  event_node=event_node,
                                                  low_bound=-4.0, high_bound=10.0)
 
-        for n in extract_sta_node_list(tt_residual_node):
-            n.parent_predict()
-        for n in extract_sta_node_list(tt_node):
-            n.parent_predict()
-        for n in extract_sta_node_list(amp_transfer_node):
-            n.parent_predict()
-
         nodes = dict()
-        nodes["arrival_time"] = tt_node
+        nodes["arrival_time"] = arrival_time_node
 
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
@@ -562,7 +570,7 @@ class SigvisaGraph(DirectedGraphModel):
                     nodes[(band, chan, param)] = tg.create_param_node(self, site, phase, band,
                                                                       chan, param=param,
                                                                       event_node=event_node,
-                                                                      tt_node=tt_node,
+                                                                      atime_node=arrival_time_node,
                                                                       amp_transfer_node=amp_transfer_node,
                                                                       children=child_wave_nodes,
                                                                       low_bound = tg.low_bounds()[param],
@@ -578,8 +586,19 @@ class SigvisaGraph(DirectedGraphModel):
             for n in extract_sta_node_list(ni):
                 if sample_templates:
                     n.parent_sample()
+                    # hacks to deal with Gaussians occasionally being negative
+                    if "peak_offset" in n.label:
+                        v = n.get_value()
+                        invalid_offsets = (v <= 0)
+                        v[invalid_offsets] = 0.5
+                    if "coda_decay" in n.label:
+                        v = n.get_value()
+                        invalid_offsets = (v >= 0)
+                        v[invalid_offsets] = -0.01
+
                 else:
                     n.parent_predict()
+                self.extended_evnodes[eid].append(n)
 
     def add_wave(self, wave):
         """
@@ -723,6 +742,40 @@ class SigvisaGraph(DirectedGraphModel):
         wn.parent_sample()
         wn.fix_value()
         return templates
+
+    def debug_dump(dump_dirname):
+        dump_path = os.path.join('logs', 'dumps', dump_dirname)
+        mkdir_p(dump_path)
+        print "saving debug dump to %s..."
+
+
+        with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
+            pickled = pickle.dump(self, f)
+        print "saved pickled graph"
+
+        for wn in self.wave_nodes:
+            plot_with_fit(os.path.join(dump_path, "%s.png" % (wn.label)), wn, bbox_inches="tight", dpi=300)
+
+            with open(os.path.join(dump_path, "%s_arrivals.txt" % (wn.label)), 'w') as f:
+                for (eid, phase) in sorted(wn.arrivals()):
+                    v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
+                    f.write("eid %d, phase %s:\n" % (eid, phase))
+                    for (key, val) in v.items():
+                        f.write(" %s: %s\n" % (key, val))
+                    f.write("\n")
+            print "saved plot and arrival info for %s" % (wn.label)
+
+        with open(os.path.join(dump_path, "nodes.txt"), 'w') as f:
+            for (k, n) in self.allnodes.items():
+                if n.deterministic():
+                    f.write("%s: deterministic\n" % k)
+                else:
+                    f.write("%s: lp %.1f\n" % (k, n.log_p()))
+                for key in sorted(node.keys()):
+                    f.write(" %s: %s\n" % (key, node.get_value(key)))
+                f.write("\n")
+        print "saved node values and probabilities"
+
 
     def save_wiggle_params(self):
         """
