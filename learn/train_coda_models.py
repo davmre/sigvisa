@@ -165,20 +165,18 @@ def main():
 
 
                 try:
-                    try:
-                        import pdb; pdb.set_trace()
-                        elems = s.get_array_elements(site)
-                        X, y, evids = np.empty((0, 6)), np.empty((0, )), np.empty((0, ))
-                        for array_elem in elems:
-                            X_part, y_part, evids_part = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=array_elem, chan=chan, band=band, phases=[phase, ], target=target,require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
-                            X = np.append(X, X_part, axis = 0)
-                            y = np.append(y, y_part)
-                            evids = np.append(evids, evids_part)
-                    except:
-                        X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
+                    elems = s.get_array_elements(site)
+                    X, y, evids = np.empty((0, 6)), np.empty((0, )), np.empty((0, ))
+                    for array_elem in elems:
+                        X_part, y_part, evids_part = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=array_elem, chan=chan, band=band, phases=[phase, ], target=target,require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
+                        X = np.append(X, X_part, axis = 0)
+                        y = np.append(y, y_part)
+                        evids = np.append(evids, evids_part)
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
+                except:
+                    X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
 
 #                
                 model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
@@ -187,7 +185,7 @@ def main():
 
                 distfn = model_type[3:]
                 st = time.time()
-                model = learn_model(X, y, model_type, target=target, array=options.array_joint, sta=site, optim_params=optim_params, gp_build_tree=False)
+                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False)
 
                 et = time.time()
 

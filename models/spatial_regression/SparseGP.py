@@ -31,6 +31,14 @@ gp_priors_lld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.00
                  "tt_residual": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
 }
 
+
+gp_priors_lldlld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.0004, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "amp_transfer": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "peak_offset": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "tt_residual": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+}
+
+
 start_params_lldlld = {"coda_decay": [0.1, 1, 2, 2, 2, 2],
                        "amp_transfer": [0.1, 1, 2, 2, 2, 2],
                        "peak_offset": [0.1, 1, 2, 2, 2, 2],
@@ -43,6 +51,7 @@ start_params = {"lld": start_params_lld,
                 }
 
 gp_priors = {"lld": gp_priors_lld,
+             "lldlld": gp_priors_lldlld,
          }
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
