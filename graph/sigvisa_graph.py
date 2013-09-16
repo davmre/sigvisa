@@ -747,6 +747,10 @@ class SigvisaGraph(DirectedGraphModel):
 
     def debug_dump(self, dump_dirname):
         dump_path = os.path.join('logs', 'dumps', dump_dirname)
+        try:
+            os.removedirs(dump_path)
+        except OSError:
+            pass
         mkdir_p(dump_path)
         print "saving debug dump to %s..." % dump_path
 
