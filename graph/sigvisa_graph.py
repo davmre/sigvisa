@@ -2,6 +2,7 @@ import time
 import numpy as np
 import os
 import re
+import pickle
 from collections import defaultdict
 from functools32 import lru_cache
 
@@ -25,6 +26,7 @@ from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_by_family
+from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
 
 from sigvisa.utils.fileutils import mkdir_p
@@ -765,39 +767,46 @@ class SigvisaGraph(DirectedGraphModel):
         wn.fix_value()
         return templates
 
-    def debug_dump(dump_dirname):
+    def debug_dump(self, dump_dirname):
         dump_path = os.path.join('logs', 'dumps', dump_dirname)
+        try:
+            os.removedirs(dump_path)
+        except OSError:
+            pass
         mkdir_p(dump_path)
-        print "saving debug dump to %s..."
+        print "saving debug dump to %s..." % dump_path
 
 
         with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
-            pickled = pickle.dump(self, f)
+            pickle.dump(self, f, 2)
         print "saved pickled graph"
 
-        for wn in self.wave_nodes:
-            plot_with_fit(os.path.join(dump_path, "%s.png" % (wn.label)), wn, bbox_inches="tight", dpi=300)
+        for (sta, waves) in self.station_waves.items():
+            for wn in waves:
+                plot_with_fit(os.path.join(dump_path, "%s.png" % (wn.label)), wn)
 
-            with open(os.path.join(dump_path, "%s_arrivals.txt" % (wn.label)), 'w') as f:
-                for (eid, phase) in sorted(wn.arrivals()):
-                    v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
-                    f.write("eid %d, phase %s:\n" % (eid, phase))
-                    for (key, val) in v.items():
-                        f.write(" %s: %s\n" % (key, val))
-                    f.write("\n")
-            print "saved plot and arrival info for %s" % (wn.label)
+                with open(os.path.join(dump_path, "%s_arrivals.txt" % (wn.label)), 'w') as f:
+                    for (eid, phase) in sorted(wn.arrivals()):
+                        v, tg = wn.get_template_params_for_arrival(eid=eid, phase=phase)
+                        f.write("eid %d, phase %s:\n" % (eid, phase))
+                        for (key, val) in v.items():
+                            f.write(" %s: %s\n" % (key, val))
+                        f.write("\n")
+                print "saved plot and arrival info for %s" % (wn.label)
 
         with open(os.path.join(dump_path, "nodes.txt"), 'w') as f:
-            for (k, n) in self.allnodes.items():
+            for (k, n) in sorted(self.all_nodes.items()):
                 if n.deterministic():
                     f.write("%s: deterministic\n" % k)
                 else:
                     f.write("%s: lp %.1f\n" % (k, n.log_p()))
-                for key in sorted(node.keys()):
-                    f.write(" %s: %s\n" % (key, node.get_value(key)))
+                for key in sorted(n.keys()):
+                    f.write(" %s: %s\n" % (key, n.get_value(key)))
                 f.write("\n")
         print "saved node values and probabilities"
 
+        os.system("tar cvfz %s.tgz %s/*" % (dump_path, dump_path))
+        print "generated tarball"
 
     def save_wiggle_params(self):
         """

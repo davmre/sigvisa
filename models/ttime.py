@@ -86,6 +86,8 @@ class ArrivalTimeNode(DeterministicNode):
             return 1.0
         elif parent_key == self.tt_residual_key:
             return 1.0
+        elif parent_key.endswith("tt_residual"):
+            return 0.0
         else:
             raise AttributeError("don't know how to compute arrival time derivative with respect to parent %s" % parent_key)
 

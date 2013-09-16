@@ -29,7 +29,7 @@ def main():
     ev = get_event(evid=5326226)
     sg.add_event(ev)
 
-    #sg.optimize_templates(construct_optim_params("'disp': True, 'method': 'bfgs'"))
+    #sg.optimize_templates(construct_optim_params("'disp': True, 'method': 'bfgscoord'"))
     print "overall log prob", sg.current_log_p(verbose=True)
 
 if __name__ == "__main__":
