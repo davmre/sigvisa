@@ -64,6 +64,6 @@ class Event(object):
         return {'lon': self.lon, 'lat': self.lat, 'depth': self.depth, 'time': self.time, 'mb': self.mb, 'natural_source': self.natural_source }
 
     def __str__(self):
-        s = "evid %d, loc %s, depth %.1fkm, time %.1f, mb %.1f, %s source" % (self.evid, lonlatstr(
+        s = "evid %s, loc %s, depth %.1fkm, time %.1f, mb %.1f, %s source" % (self.evid, lonlatstr(
             self.lon, self.lat), self.depth, self.time, self.mb, "natural" if self.natural_source else "explosion")
         return s

@@ -15,7 +15,6 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
 from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
-from sigvisa.source.event import Event
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, indep_offset_move, improve_offset_move, indep_peak_move
@@ -24,39 +23,30 @@ from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit_hack_for_DTRA
 from matplotlib.figure import Figure
 
-#def visualize_ev_locations(lonlats)
 
-def regen_station_templates(sg, ev_node, wn_list, skip=40, steps=10000):
+from sigvisa.infer.propose import propose_event_from_hough
 
-    moves = ( 'indep_peak', 'peak_offset', 'tt_residual', 'amp_transfer', 'coda_decay', 'evloc', 'evloc_big')
-    templates = dict()
+def ev_birth_move(sg):
 
-    params_over_time = np.load('ev_vals.npz')
+    proposed_ev, ev_prob = propose_event_from_hough(sg.hough_array, sg.stime, sg.etime)
 
-    for wn in wn_list:
+    # loop over phase arrivals at each station. if there is an
+    # unassociated template sufficiently close to the predicted phase
+    # arrival, convert it to an event template. otherwise, add a new
+    # event template.
+    for elements in sg.site_elements.values():
+        for sta in elements:
 
-        arrivals = wn.arrivals()
-        eid, phase = list(arrivals)[0]
-        templates[wn.sta] = dict([(param, node) for (param, (key, node)) in sg.get_template_nodes(eid=eid, phase=phase, sta=wn.sta, band=wn.band, chan=wn.chan).items()])
+            for phase in sg.phases:
 
+                pred_atime = proposed_ev.time + tt_predict(proposed_ev, sta, phase=phase)
 
-    for step in range(0, steps, skip):
-        for wn in wn_list:
-            arrivals = wn.arrivals()
-            eid, phase = list(arrivals)[0]
+                uatemplate_nodes = sg.uatemplates[sta]
+                uatemplate_times = [n['arrival_time'].get_value() for n in uatemplate_nodes]
+                perm = sorted(range(len(uatemplate_times)), key = lambda k : uatemplate_times[k])
+                uatemplate_times = uatemplate_times[perm]
 
-            wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
-            tmnodes = templates[wn.sta]
-
-            for (param, n) in tmnodes.items():
-                n.set_value(params_over_time["%s_%s" % (wn.sta, param)][step])
-
-        #latlon = params_over_time["evloc"][step]
-        #ev_node.set_local_value(key="lat", value=latlon[0])
-        #ev_node.set_local_value(key="lon", value=latlon[1])
-
-        for wn in wn_list:
-            plot_with_fit_hack_for_DTRA("ev_%s_step%06d.png" % (wn.sta, step), wn, show_template=False)
+                time_idx = np.searchsorted(uatemplate_times, pred_atime)
 
 def ev_move(sg, ev_node, std, param):
     # jointly propose a new event location along with new tt_residual values,

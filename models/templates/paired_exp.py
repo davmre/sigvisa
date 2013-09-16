@@ -45,7 +45,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
 
     def create_param_node(self, graph, site, phase, band, chan, param,
-                          event_node, tt_node=None, amp_transfer_node=None, children=(), **kwargs):
+                          event_node, atime_node=None, amp_transfer_node=None, children=(), **kwargs):
         nodes = dict()
         if param == "coda_height":
             # we want to create a coda height node for each station under the current site.
@@ -135,5 +135,10 @@ if (l > 0) {
 
         return bounds
 
-    def unassociated_model(self, param):
-        return self.uamodels[param]
+    def unassociated_model(self, param, nm=None):
+        if nm is not None and param=="coda_height":
+            mu = np.log(nm.c * 10)
+            std = 1.0
+            return Gaussian(mu, std)
+        else:
+            return self.uamodels[param]

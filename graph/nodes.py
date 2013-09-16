@@ -173,6 +173,8 @@ class Node(object):
 
         for child in self.children:
             child.parent_keys_changed.add((key, self))
+        for child in self.get_deterministic_children():
+            child.parent_predict()
 
     def get_local_value(self, key):
         return self.get_value(self.key_prefix + key)
