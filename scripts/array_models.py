@@ -14,10 +14,10 @@ from sigvisa.source.event import get_event
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 def main():
-    sg = SigvisaGraph(template_model_type="gp_lld", template_shape="paired_exp",
+    sg = SigvisaGraph(template_model_type="gp_lldlld", template_shape="paired_exp",
                       wiggle_model_type="dummy", wiggle_family="dummy",
                       phases=["P",], nm_type = "ar", assume_envelopes=True,
-                      wiggle_len_s = 60.0, arrays_joint=False, runid=1, iteration=1, base_srate=5.0)
+                      wiggle_len_s = 60.0, arrays_joint=True, runid=1, iteration=1, base_srate=5.0)
     s = Sigvisa()
     elements = [el for el in s.get_array_elements("FINES")]
 

@@ -50,6 +50,16 @@ class ArrayNode(Node):
         y = self._transform_values_for_model(values = self.get_dict(), parent_values=parent_values)
         return self.model.log_p(x = y, cond=self.X)
 
+
+    def deriv_log_p(self, key=None, parent_values=None, parent_key=None, parent_idx=None, **kwargs):
+        if parent_values is None:
+            parent_values = self._parent_values()
+        y = self._transform_values_for_model(values = self.get_dict(), parent_values=parent_values)
+        import pdb; pdb.set_trace()
+        return self.model.deriv_log_p(x = y, cond=parent_values, idx=key, cond_key=parent_key, cond_idx=parent_idx, key_prefix=self.key_prefix, **kwargs)
+
+
+
     def deriv_log_p(self, key=None, parent_values=None, parent_key=None, lp0=None,  eps=1e-4, **kwargs):
         # derivative of the log probability at this node, with respect
         # to a key at this node, or with respect to a key provided by
@@ -60,8 +70,8 @@ class ArrayNode(Node):
         y = self._transform_values_for_model(values = self.get_dict(), parent_values=parent_values)
 
         if key is not None:
-            idx = index(self.sorted_keys)
-            return self.model.deriv_log_p(x = y[idx], cond=self.X[idx,:],  **kwargs)
+            idx = index(self.sorted_keys, key)
+            return self.model.deriv_log_p(x = y[idx], cond=self.X[idx:idx+1,:],  **kwargs)
         elif parent_key is not None:
             print "warning: inefficient numerical derivative of arraynode wrt parents"
             lp0 = lp0 if lp0 is not None else self.model.log_p(x = y, cond=self.X)
@@ -75,6 +85,7 @@ class ArrayNode(Node):
         else:
             return self.model.deriv_log_p(x = y, cond=self.X, **kwargs)
 
+    #turns dictionary into array and sort it
     def _transform_values_for_model(self, values, parent_values):
         y = np.zeros((len(self.sorted_keys),))
         for (i, k) in enumerate(self.sorted_keys):

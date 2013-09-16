@@ -575,6 +575,32 @@ class SparseGP(ParamModel):
         samples = np.reshape(self.beta_bar, (1, -1)) + np.dot(self.invc.T, samples).T
         return samples
 
+    def deriv_log_p(self, x, cond=None,lp0=None, eps=1e-4, **kwargs):
+
+        X1 = self.standardize_input_array(cond, **kwargs)
+        y = x if isinstance(x, collections.Iterable) else (x,)
+        
+        y = np.array(y);
+        if len(y.shape) == 0:
+            n = 1
+        else:
+            n = len(y)
+
+        K = self.covariance(X1)
+        y = y-self.predict(X1)    
+
+
+        L =  scipy.linalg.cholesky(K, lower=True)
+        return -scipy.linalg.cho_solve((L, True), y)
+        
+        # X1: kx6 array w/ station and event locations
+        # y: k-dimensional vector
+        # ignore idx, cond_key, cond_idx
+
+
+        # return k-dimensional vector
+        # d log_p() / dy
+
     def log_p(self, x, cond, **kwargs):
         """
         The log probability of the observations (X1, y) under the posterior distribution.
@@ -601,6 +627,8 @@ class SparseGP(ParamModel):
         alpha = scipy.linalg.cho_solve((L, True), y)
         ll =  -.5 * ( np.dot(y.T, alpha) + n * np.log(2*np.pi)) - ld2
         return ll
+
+
 
     def pack_npz(self):
         d = dict()
