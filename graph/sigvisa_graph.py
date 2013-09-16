@@ -211,6 +211,19 @@ class SigvisaGraph(DirectedGraphModel):
         return lp
 
     def ntemplates_sta_log_p(self, sta, n=None):
+        """
+
+        Return the log probability of having n unassociated templates
+        at station sta. If n is unspecified, use the current
+        value. The probability incorporates the Poisson rate as well
+        as the arrival time probabilities. (arrival times in a Poisson
+        process are uniformly distributed but exchangeable, so rather
+        than just having a uniform distribution for each template, we
+        have to multiply in a factor of n!/T^n to account for the
+        exchangeability)
+
+        """
+
         lp = 0
         if n is None:
 
@@ -225,8 +238,17 @@ class SigvisaGraph(DirectedGraphModel):
 
         assert(len(self.station_waves[sta]) == 1)
         wn  = self.station_waves[sta][0]
-        n_template_dist = Poisson(self.uatemplate_rate * wn.valid_len)
-        return n_template_dist.log_p(n)
+
+        #n_template_dist = Poisson(self.uatemplate_rate * wn.valid_len)
+        #poisson_lp = n_template_dist.log_p(n)
+        #atimes_lp = scipy.special.gammaln(n+1) -n * np.log(wn.valid_len)
+        #lp = poisson_lp + atimes_lp
+
+        # we can cancel out a lot of terms from Poisson(n) * n!/T^n
+        lp = -(self.uatemplate_rate * wn.valid_len)  + n * np.log(self.uatemplate_rate)
+
+        return lp
+
 
     def current_log_p(self, **kwargs):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
