@@ -97,7 +97,10 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time
 
-def indep_peak_move(sg, arrival_node, offset_node, wave_node):
+def indep_peak_move(sg, wave_node, tmnodes):
+    arrival_node = tmnodes['arrival_time']
+    offset_node = tmnodes['peak_offset']
+
     arr = extract_arrival_from_key(arrival_node.label, wave_node.r)
     other_arrs = wave_node.arrivals() - set(arr)
 
@@ -122,7 +125,10 @@ def indep_peak_move(sg, arrival_node, offset_node, wave_node):
 
 ######################################################################
 
-def indep_offset_move(sg, arrival_node, offset_node, wave_node):
+def indep_offset_move(sg, wave_node, tmnodes):
+    arrival_node = tmnodes['arrival_time']
+    offset_node = tmnodes['peak_offset']
+
     current_offset = offset_node.get_value()
     atime = arrival_node.get_value()
     proposed_offset = np.random.rand() * 40
@@ -133,11 +139,14 @@ def indep_offset_move(sg, arrival_node, offset_node, wave_node):
                          relevant_nodes=(arrival_node, offset_node, wave_node))
     return accepted
 
-def improve_offset_move(sg, arrival_node, offset_node, wave_node, **kwargs):
+def improve_offset_move(sg, wave_node, tmnodes, **kwargs):
     """
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
     """
+    arrival_node = tmnodes['arrival_time']
+    offset_node = tmnodes['peak_offset']
+
     current_offset = offset_node.get_value()
     atime = arrival_node.get_value()
     proposed_offset = gaussian_propose(sg, node_list=(offset_node,), values=(current_offset,), **kwargs)[0]
@@ -160,6 +169,8 @@ def get_sorted_arrivals(wave_node):
 
 def try_split(sg, wave_node):
     sorted_arrs = get_sorted_arrivals(wave_node)
+    if len(sorted_arrs) < 1:
+        return False
     n = len(sorted_arrs)
     k = np.random.randint(0, n)
     arr_to_split = sorted_arrs[k]

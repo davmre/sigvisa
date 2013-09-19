@@ -45,26 +45,27 @@ class PairedExpTemplateGenerator(TemplateGenerator):
 
 
     def create_param_node(self, graph, site, phase, band, chan, param,
-                          event_node, atime_node=None, amp_transfer_node=None, children=(), **kwargs):
+                          evnodes, atime_node=None, amp_transfer_node=None, children=(), **kwargs):
         nodes = dict()
         if param == "coda_height":
             # we want to create a coda height node for each station under the current site.
             # each of these nodes will depend on the approprite amp_transfer parent
             nodes = dict()
+            eid = evnodes['mb'].eid
             for sta in graph.site_elements[site]:
                 label = create_key(param=param, sta=sta, phase=phase,
-                                          eid=event_node.eid, chan=chan, band=band)
+                                          eid=eid, chan=chan, band=band)
                 atn = extract_sta_node(amp_transfer_node, sta)
                 my_children = [wn for wn in children if wn.sta==sta]
-                nodes[sta] = CodaHeightNode(eid=event_node.eid, sta=sta, band=band,
+                nodes[sta] = CodaHeightNode(eid=eid, sta=sta, band=band,
                                             chan=chan, phase=phase,
-                                            label = label, parents=[event_node, atn],
+                                            label = label, parents=[evnodes['mb'], evnodes['natural_source'], atn],
                                             children=my_children,
                                             initial_value=self.default_param_vals()['coda_height'])
                 graph.add_node(nodes[sta], template=True)
             return nodes
         else:
-            return graph.setup_site_param_node(param=param, site=site, phase=phase, parent=event_node,
+            return graph.setup_site_param_node(param=param, site=site, phase=phase, parent=evnodes['loc'],
                                                chan=chan, band=band, template=True, children=children, **kwargs)
 
 

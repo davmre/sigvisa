@@ -149,6 +149,20 @@ def categorical_prob(a, idx):
     s = np.sum(a)
     return a[idx]/s
 
+def event_prob_from_hough(ev, hough_array, stime, etime):
+    lonbins, latbins, timebins = hough_array.shape
+    latbin_deg = 180.0/latbins
+    lonbin_deg = 360.0/lonbins
+    time_tick_s = float(etime-stime)/timebins
+
+    timeidx = int(np.floor((ev.time-stime) / time_tick_s))
+    lonidx = int(np.floor((ev.lon+180)) / lonbin_deg)
+    latidx = int(np.floor((ev.lat+90)) / latbin_deg)
+    ev_prob = categorical_prob(hough_array, (lonidx, latidx, timeidx))
+    ev_prob /= (lonbin_deg * latbin_deg * time_tick_s)
+
+    return ev_prob
+
 def propose_event_from_hough(hough_array, stime, etime):
     """
 
@@ -373,11 +387,15 @@ def main():
     f = open('cached_templates2.sg', 'wb')
     pickle.dump(sg, f, protocol=pickle.HIGHEST_PROTOCOL)
     f.close()
+
+    sg.debug_dump("templates")
     """
 
     f = open('cached_templates2.sg', 'rb')
     sg = pickle.load(f)
     f.close()
+
+
 
     #"""
 

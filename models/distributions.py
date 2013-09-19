@@ -121,6 +121,24 @@ class Poisson(Distribution):
     def sample(self, **kwargs):
         return stats.poisson.rvs(self.mu, n=1)
 
+class Bernoulli(Distribution):
+
+    def __init__(self, p):
+        self.p = p
+
+    def log_p(self, x, **kwargs):
+        if x:
+            return np.log(self.p)
+        else:
+            return np.log(1-self.p)
+
+    def predict(self, **kwargs):
+        return self.p >= .5
+
+    def sample(self, **kwargs):
+        u = np.random.rand()
+        return u < self.p
+
 class Negate(Distribution):
     def __init__(self, dist):
         self.dist = dist
