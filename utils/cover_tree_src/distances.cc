@@ -72,7 +72,7 @@ double dist_km(const double *p1, const double *p2) {
 			* cos(rlon2 - rlon1));
 			*/
 
-  double dist_rad = asin(sqrt(
+  double dist_rad = 2*asin(sqrt(
 			     pow(sin((rlat1-rlat2)/2.0),2) +
 			     cos(rlat1)*cos(rlat2)*
 			     pow(sin((rlon1-rlon2)/2.0),2)
@@ -100,7 +100,7 @@ double distsq_3d_km(const double * p1, const double * p2, double BOUND_IGNORED, 
 
 
 double dist_6d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *extra) {
-  return sqrt(distsq_6d_km(p1.p, p2.p, BOUND_IGNORED, scales, extra));  
+  return sqrt(distsq_6d_km(p1.p, p2.p, BOUND_IGNORED, scales, extra));
 }
 
 double dist_6d_km(const double * p1, const double * p2, double BOUND_IGNORED, const double *scales, const void *extra) {
@@ -120,7 +120,7 @@ double pair_dist_6d_km(const pairpoint p1, const pairpoint p2, double BOUND_IGNO
   double sta_distkm1 = dist_km(p1.pt1, p2.pt1) / scales[0];
   double sta_distkm2 = dist_km(p1.pt2, p2.pt2) / scales[0];
   double ev_distkm1 = dist_km(p1.pt1, p2.pt1) / scales[2];
-  double ev_distkm2 = dist_km(p1.pt2, p2.pt2) / scales[2];  
+  double ev_distkm2 = dist_km(p1.pt2, p2.pt2) / scales[2];
 
   double sta_dist_d1 = (p2.pt1[2] - p1.pt1[2]) / scales[1];
   double sta_dist_d2 = (p2.pt2[2] - p1.pt2[2]) / scales[1];
@@ -173,7 +173,7 @@ double dist6d_se_deriv_wrt_i(int i, const double * p1, const double * p2, const 
   if (i==0) {
     return exp(-1*sqd);
   } else if (i == 1) {
-    return variance[0] * exp(-1 * sqd) * 2 * (sta_distkm*sta_distkm / scales[0]); 
+    return variance[0] * exp(-1 * sqd) * 2 * (sta_distkm*sta_distkm / scales[0]);
   } else if (i == 2) {
     return variance[0] * exp(-1 * sqd) * 2 * (sta_dist_d*sta_dist_d / scales[1]);
   } else if (i == 3) {
