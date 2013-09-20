@@ -222,117 +222,22 @@ def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
 def main():
 
     parser = OptionParser()
-
-    parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
-    parser.add_option("-s", "--sites", dest="sites", default=None, type="str",
-                      help="comma-separated list of stations with which to locate the event")
-    parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str",
-                      help="name of training run specifying the set of models to use")
-    parser.add_option(
-        "--template_shape", dest="template_shape", default="paired_exp", type="str", help="template model type (paired_exp)")
-    parser.add_option(
-        "-m", "--model", dest="model", default=None, type="str", help="name of training run specifying the set of models to use")
-    parser.add_option(
-        "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
-    parser.add_option(
-        "--template_model_types", dest="tm_types", default="tt_residual:constant_gaussian,peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian",
-        help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)")
-    parser.add_option("--wiggle_model_type", dest="wm_type", default="dummy", help = "")
-    parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", help = "")
-    parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
-    parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true",
-                      help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
-    parser.add_option("--chans", dest="chans", default="BHZ,SHZ", type="str",
-                      help="comma-separated list of channel names to use for inference (BHZ)")
-    parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
-                      help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
-    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
-                      help="type of noise model to use (ar)")
-
-
+    register_svgraph_cmdline(parser)
+    register_svgraph_event_based_signal_cmdline(parser)
     (options, args) = parser.parse_args()
 
-    evid = options.evid
-    sites = options.sites.split(',')
+    sg = setup_svgraph_from_cmdline(options, args)
 
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-
-    # train / load coda models
-    run_name = options.run_name
-    iters = np.array(sorted(list(read_fitting_run_iterations(cursor, run_name))))
-    run_iter, runid = iters[-1, :]
-
-    tm_types = {}
-    if ',' in options.tm_types:
-        for p in options.tm_types.split(','):
-            (param, model_type) = p.strip().split(':')
-            tm_types[param] = model_type
-    else:
-        tm_types = options.tm_types
-
-    if options.phases in ("auto", "leb"):
-        phases = options.phases
-    else:
-        phases = options.phases.split(',')
-
-    if options.bands == "all":
-        bands = s.bands
-    else:
-        bands = options.bands.split(',')
-
-    if options.chans == "all":
-        chans = s.chans
-    else:
-        chans = options.chans.split(',')
-
-    ev_true = get_event(evid=evid)
-
-    # inference is based on segments from all specified stations,
-    # starting at the min predicted arrival time (for the true event)
-    # minus 60s, and ending at the max predicted arrival time plus
-    # 240s
-    statimes = [ev_true.time + tt_predict(event=ev_true, sta=sta, phase=phase) for (sta, phase) in itertools.product(sites, s.phases)]
-    stime = np.min(statimes) - 60
-    etime = np.max(statimes) + 240
-    segments = load_segments(cursor, sites, stime, etime, chans = chans)
-    segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
-
-    sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
-                      wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
-                      dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
-                      runid=runid, phases=phases, gpmodel_build_trees=False)
-
-
-    wave_nodes = []
-    for seg in segments:
-        for band in bands:
-            filtered_seg = seg.with_filter(band)
-            for chan in filtered_seg.get_chans():
-                wave = filtered_seg[chan]
-                wave_nodes.append(sg.add_wave(wave))
-    evnodes = sg.add_event(ev_true)
-    for n in evnodes.values():
-        n.fix_value()
-
+    evnodes = load_event_based_signals_from_cmdline(sg, options, args)
 
     key_prefix = "%d;" % (evnodes['mb'].eid)
 
-    evnodes['lon'].unfix_value(key = key_prefix + "lon")
-    evnodes['lat'].unfix_value(key = key_prefix + "lat")
-    evnodes['depth'].unfix_value(key = key_prefix + "depth")
-    evnodes['time'].unfix_value(key = key_prefix + "time")
-    evnodes['mb'].unfix_value(key = key_prefix + "mb")
-
+    evnodes['natural_source'].fix_value(key = key_prefix + "natural_source")
     evnodes['lon'].set_value(key = key_prefix + "lon", value=124.3)
     evnodes['lat'].set_value(key = key_prefix + "lat", value=44.5)
     evnodes['depth'].set_value(key = key_prefix + "depth", value = 10.0)
     evnodes['time'].set_value(key = key_prefix + "time", value=ev_true.time+5.0)
     evnodes['mb'].set_value(key = key_prefix + "mb", value=3.0)
-
-    #for fname in os.listdir('.'):
-    #    if fname.startswith("unass_step") or fname.startswith("mcmc_unass"):
-    #        os.remove(fname)
 
     np.random.seed(1)
     run_event_MH(sg, evnodes, wave_nodes)

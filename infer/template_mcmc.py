@@ -116,7 +116,8 @@ def indep_peak_move(sg, wave_node, tmnodes):
                                      peak_time = current_atime + peak_offset)
 
     proposed_arrival_time = proposed_peak_time - peak_offset
-    return MH_accept(sg, oldvalues = (current_atime,),
+    return MH_accept(sg, keys=(arrival_node.single_key,),
+                     oldvalues = (current_atime,),
                      newvalues = (proposed_arrival_time,),
                      log_qforward = proposal_lp,
                      log_qbackward = backward_propose_lp,
@@ -133,7 +134,9 @@ def indep_offset_move(sg, wave_node, tmnodes):
     atime = arrival_node.get_value()
     proposed_offset = np.random.rand() * 40
     new_atime = atime + (current_offset - proposed_offset)
-    accepted = MH_accept(sg=sg, oldvalues=(atime, current_offset),
+    accepted = MH_accept(sg=sg,
+                         keys=(arrival_node.single_key,offset_node.single_key),
+                         oldvalues=(atime, current_offset),
                          newvalues = (new_atime, proposed_offset),
                          node_list = (arrival_node, offset_node),
                          relevant_nodes=(arrival_node, offset_node, wave_node))
@@ -149,9 +152,11 @@ def improve_offset_move(sg, wave_node, tmnodes, **kwargs):
 
     current_offset = offset_node.get_value()
     atime = arrival_node.get_value()
-    proposed_offset = gaussian_propose(sg, node_list=(offset_node,), values=(current_offset,), **kwargs)[0]
+    proposed_offset = gaussian_propose(sg, keys=(arrival_node.single_key,),
+                                       node_list=(offset_node,), values=(current_offset,), **kwargs)[0]
     new_atime = atime + (current_offset - proposed_offset)
-    accepted = MH_accept(sg=sg, oldvalues=(atime, current_offset),
+    accepted = MH_accept(sg=sg, keys=(arrival_node.single_key,offset_node.single_key),
+                         oldvalues=(atime, current_offset),
                          newvalues = (new_atime, proposed_offset),
                          node_list = (arrival_node, offset_node),
                          relevant_nodes=(arrival_node, offset_node, wave_node))
@@ -168,7 +173,7 @@ def get_sorted_arrivals(wave_node):
     return sorted_arrs
 
 def try_split(sg, wave_node):
-    sorted_arrs = get_sorted_arrivals(wave_node)
+    sorted_arrs = [(vals, eid, phase) for (vals, eid, phase) in get_sorted_arrivals(wave_node) if eid < 0]
     if len(sorted_arrs) < 1:
         return False
     n = len(sorted_arrs)
@@ -230,7 +235,7 @@ def split_move(sg, tmpl, wave_node, atime_diff):
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
         print "split template %d from %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (new_tmpl["arrival_time"].tmid, tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
-        return new_tmpl
+        return True
     else:
         sg.destroy_unassociated_template(new_tmpl, nosort=True)
 
@@ -249,7 +254,7 @@ def split_move(sg, tmpl, wave_node, atime_diff):
         return False
 
 def try_merge(sg, wave_node):
-    sorted_arrs = get_sorted_arrivals(wave_node)
+    sorted_arrs = [(vals, eid, phase) for (vals, eid, phase) in get_sorted_arrivals(wave_node) if eid < 0]
     n = len(sorted_arrs)
     if n < 2:
         return False
@@ -333,7 +338,6 @@ def merge_move(sg, tmpl1_nodes, tmpl2_nodes, wave_node, post_merge_atime_diff):
 
 def birth_move(sg, wave_node, dummy=False, **kwargs):
     lp_old = sg.current_log_p()
-    ntlp_old = sg.ntemplates_log_p()
 
     cdf = get_current_conditional_cdf(wave_node, arrival_set=wave_node.arrivals())
     peak_time, proposal_lp =  sample_peak_time_from_signal(cdf, wave_node.st,
@@ -347,7 +351,6 @@ def birth_move(sg, wave_node, dummy=False, **kwargs):
 
 
     lp_new = sg.current_log_p()
-    ntlp_new = sg.ntemplates_log_p()
 
     # probability of this birth move is the product of probabilities
     # of all sampled params (including arrival time)
@@ -366,7 +369,8 @@ def birth_move(sg, wave_node, dummy=False, **kwargs):
     if move_accepted or dummy:
         print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:
-        return tmpl
+        return True
+
     else:
         sg.destroy_unassociated_template(tmpl, nosort=True)
 

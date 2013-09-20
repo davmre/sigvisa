@@ -547,12 +547,12 @@ class SparseGP(ParamModel):
     def variance(self,cond, **kwargs):
         return np.diag(self.covariance(cond, **kwargs))
 
-    def sample(self, cond, include_obs=False):
+    def sample(self, cond, include_obs=True):
         """
         Sample from the GP posterior at a set of points given by the rows of X1.
 
-        Default is to sample values of the latent function f. If obs=True, we instead
-        sample observed values (i.e. we include observation noise)
+        Default is to sample observed values (i.e. we include observation noise). If obs=False, we instead
+        sample values of the latent function f.
         """
 
         X1 = self.standardize_input_array(cond)
@@ -588,7 +588,7 @@ class SparseGP(ParamModel):
 
         X1 = self.standardize_input_array(cond, **kwargs)
         y = x if isinstance(x, collections.Iterable) else (x,)
-        
+
         y = np.array(y);
         if len(y.shape) == 0:
             n = 1
@@ -596,12 +596,12 @@ class SparseGP(ParamModel):
             n = len(y)
 
         K = self.covariance(X1, include_obs=True)
-        y = y-self.predict(X1)    
+        y = y-self.predict(X1)
 
 
         L =  scipy.linalg.cholesky(K, lower=True)
         return -scipy.linalg.cho_solve((L, True), y)
-        
+
         # X1: kx6 array w/ station and event locations
         # y: k-dimensional vector
         # ignore idx, cond_key, cond_idx

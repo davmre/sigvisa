@@ -264,8 +264,13 @@ def get_signal_based_amplitude_distribution(sg, sta, tmvals, peak_period_s = 1.0
     peak_period_samples = int(peak_period_s * wn.srate)
     peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
 
+    if len(peak_data) == 0:
+        return None
+
     peak_height = peak_data.mean()
     env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
+
+
 
     return Gaussian(mean=np.log(env_height), std = 1.0)
 
@@ -282,18 +287,23 @@ def propose_phase_template(sg, sta, eid, phase):
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
     tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
-    del tmvals['coda_height']
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
-    # compute log-prob of non-amplitude parameters
-    lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
-
-    # now we just sample an amplitude dependent on the signal
     amp_dist = get_signal_based_amplitude_distribution(sg, sta, tmvals)
-    amplitude = amp_dist.sample()
-    tmvals['coda_height'] = amplitude
-    lp += amp_dist.log_p(amplitude)
+    if amp_dist is not None:
+
+        amplitude = amp_dist.sample()
+
+        del tmvals['coda_height']
+
+        # compute log-prob of non-amplitude parameters
+        lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
+        tmvals['coda_height'] = amplitude
+        lp += amp_dist.log_p(amplitude)
+
+    else:
+        lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
 
     return tmvals, lp
 
@@ -301,15 +311,18 @@ def phase_template_proposal_logp(sg, sta, eid, phase, tmvals):
     # return the logprob of params from the proposal distribution
 
     tmvals = copy.copy(tmvals)
-    amplitude = tmvals['coda_height']
-    del tmvals['coda_height']
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
-    lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
-
+    amplitude = tmvals['coda_height']
     amp_dist = get_signal_based_amplitude_distribution(sg, sta, tmvals)
-    lp += amp_dist.log_p(amplitude)
+
+    if amp_dist is not None:
+        del tmvals['coda_height']
+        lp = amp_dist.log_p(amplitude)
+    else:
+        lp = 0.0
+    lp += ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
 
     return lp
 
@@ -344,20 +357,25 @@ def death_proposal_distribution(sg):
         c[eid] = death_proposal_log_ratio(sg, eid)
 
     #
-    v = np.max(c.values())
-    for eid in c.keys():
-        c[eid] = np.exp(c[eid] - v)
-    c.normalize()
+    if len(c) > 0:
+        v = np.max(c.values())
+        for eid in c.keys():
+            c[eid] = np.exp(c[eid] - v)
+        c.normalize()
 
     return c
 
 def sample_death_proposal(sg):
     c = death_proposal_distribution(sg)
+    if len(c) == 0:
+        return None, 1.0
     eid = c.sample()
     return eid, c[eid]
 
 def death_proposal_prob(sg, eid):
     c = death_proposal_distribution(sg)
+    if len(c) == 0:
+        return 1.0
     return c[eid]
 
 def ev_death_move(sg):
@@ -365,10 +383,13 @@ def ev_death_move(sg):
     lp_old = sg.current_log_p()
 
     eid, eid_prob = sample_death_proposal(sg)
+    if eid is None:
+        return False
     ev = event_from_evnodes(sg.evnodes[eid])
 
     move_logprob = np.log(eid_prob)
-    reverse_logprob = 0.0
+    n_current_events = len(sg.evnodes)
+    reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
 
     forward_fns = []
     inverse_fns = []
@@ -439,7 +460,7 @@ def ev_death_move(sg):
 
     lp_new = sg.current_log_p()
 
-    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, bin_width_deg=4.0, exclude_sites=exclude_sites)
+    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, bin_width_deg=4.0)
     ev_logprob = np.log(event_prob_from_hough(ev, hough_array, sg.event_start_time, sg.end_time))
     reverse_logprob += ev_logprob
 
@@ -466,7 +487,7 @@ def ev_death_move(sg):
 def ev_birth_move(sg):
     lp_old = sg.current_log_p()
 
-    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, bin_width_deg=4.0, exclude_sites=exclude_sites)
+    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, bin_width_deg=4.0)
     proposed_ev, ev_prob = propose_event_from_hough(hough_array, sg.event_start_time, sg.end_time)
     print "proposed ev", proposed_ev
     #proposed_ev = get_event(evid=5393637)
@@ -475,7 +496,10 @@ def ev_birth_move(sg):
     forward_fns = []
     inverse_fns = []
     associations = []
-    move_logprob = np.log(ev_prob)
+
+    n_current_events = len(sg.evnodes)
+    move_logprob = -np.log(n_current_events+1) # we imagine there are n+1 "positions" we can birth an event into
+    move_logprob += np.log(ev_prob)
 
     # add an event, WITH all its template nodes initialized to parent-sampled values.
     # we need to replace these values before computing any signal-based probabilities.
@@ -537,7 +561,7 @@ def ev_birth_move(sg):
         else:
             print "deassociation:", sta, deassociation_prob(sg, sta, eid, phase)
             reverse_logprob += np.log(1 - deassociation_prob(sg, sta, eid, phase))
-
+        print sta, phase, associated, reverse_logprob
 
     lp_new = sg.current_log_p()
 
@@ -547,11 +571,14 @@ def ev_birth_move(sg):
     print "old lp", lp_old
     print "MH acceptance ratio", (lp_new + reverse_logprob) - (lp_old + move_logprob)
 
+    if np.isnan(move_logprob) or np.isnan(reverse_logprob):
+        import pdb; pdb.set_trace()
+
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
         print "move accepted"
-        return evnodes
+        return True
     else:
         print "move rejected"
         for fn in inverse_fns:
@@ -559,7 +586,7 @@ def ev_birth_move(sg):
         # no need to topo sort here since remove_event does it for us
 
         print "changes reverted"
-        return None
+        return True
 
 def main():
 

@@ -3,9 +3,11 @@ import numpy as np
 import os
 from sigvisa import Sigvisa
 
+from sigvisa.database.dataset import read_timerange
+from sigvisa.database.signal_data import read_fitting_run_iterations
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.source.event import get_event
-from sigvisa.signals.io import load_event_station_chan
+from sigvisa.signals.io import load_event_station_chan, load_segments
 
 def load_sg_from_db_fit(fitid, load_wiggles=True):
 
@@ -73,3 +75,199 @@ def load_sg_from_db_fit(fitid, load_wiggles=True):
 
 
     return sg
+
+
+
+def register_svgraph_cmdline(parser):
+    parser.add_option("-s", "--sites", dest="sites", default=None, type="str",
+                      help="comma-separated list of stations with which to locate the event")
+    parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str",
+                      help="name of training run specifying the set of models to use")
+    parser.add_option("--runid", dest="runid", default=None, type="int",
+                      help="runid of training run specifying the set of models to use")
+    parser.add_option(
+        "--template_shape", dest="template_shape", default="paired_exp", type="str", help="template model type (paired_exp)")
+    parser.add_option(
+        "-m", "--model", dest="model", default=None, type="str", help="")
+    parser.add_option(
+        "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
+    parser.add_option(
+        "--template_model_types", dest="tm_types", default="tt_residual:constant_gaussian,peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian",
+        help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)")
+    parser.add_option("--wiggle_model_type", dest="wm_type", default="dummy", help = "")
+    parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", help = "")
+    parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true",
+                      help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
+    parser.add_option("--arrays_joint", dest="arrays_joint", default=False, action="store_true",
+                      help="model array stations with joint nodes (False)")
+    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
+                      help="type of noise model to use (ar)")
+
+
+def register_svgraph_signal_cmdline(parser):
+    parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
+    parser.add_option("--chans", dest="chans", default="BHZ,SHZ", type="str",
+                      help="comma-separated list of channel names to use for inference (BHZ)")
+    parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
+                      help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
+    parser.add_option("--array_refsta_only", dest="refsta_only", default=True, action="store_false",
+                      help="load only the reference station for each array site (True)")
+    parser.add_option("--start_time", dest="start_time", default=None, type="float",
+                      help="load signals beginning at this UNIX time (None)")
+    parser.add_option("--end_time", dest="end_time", default=None, type="float",
+                      help="load signals end at this UNIX time (None)")
+    parser.add_option("--dataset", dest="dataset", default="training", type="str",
+                      help="if start_time and end_time not specified, load signals from the time period of the specified dataset (training)")
+    parser.add_option("--hour", dest="hour", default=0, type="float",
+                      help="use a particular hour of the given dataset (0)")
+
+def register_svgraph_event_based_signal_cmdline(parser):
+    parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
+    parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
+    parser.add_option("--chans", dest="chans", default="BHZ,SHZ", type="str",
+                      help="comma-separated list of channel names to use for inference (BHZ)")
+    parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
+                      help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
+    parser.add_option("--array_refsta_only", dest="refsta_only", default=True, action="store_false",
+                      help="load only the reference station for each array site (True)")
+
+def setup_svgraph_from_cmdline(options, args):
+
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    if options.runid is None:
+        run_name = options.run_name
+        iters = np.array(sorted(list(read_fitting_run_iterations(cursor, run_name))))
+        run_iter, runid = iters[-1, :]
+    else:
+        runid = options.runid
+
+    tm_types = {}
+    if ',' in options.tm_types:
+        for p in options.tm_types.split(','):
+            (param, model_type) = p.strip().split(':')
+            tm_types[param] = model_type
+    else:
+        tm_types = options.tm_types
+
+    if options.phases in ("auto", "leb"):
+        phases = options.phases
+    else:
+        phases = options.phases.split(',')
+
+    cursor.close()
+
+    sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
+                      wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
+                      dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
+                      runid=runid, phases=phases, gpmodel_build_trees=False, arrays_joint=options.arrays_joint)
+
+
+    return sg
+
+def load_signals_from_cmdline(sg, options, args):
+
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    sites = options.sites.split(',')
+
+    stas = []
+    if options.refsta_only:
+       stas = sites
+    else:
+        stas = []
+        for site in sites:
+            if s.is_array_station(site):
+                stas += s.get_array_elements(site)
+            else:
+                stas.append(site)
+
+    if options.start_time is not None and options.end_time is not None:
+        stime = options.start_time
+        etime = options.end_time
+    else:
+        print "loading signals from dataset %s" % options.dataset
+        (stime, etime) = read_timerange(cursor, options.dataset, hours=None, skip=0)
+        stime += options.hour * 3600
+        etime = stime + 3600
+
+    print "loading signals from stime %.1f through etime %.1f" % (stime, etime)
+
+    if options.bands == "all":
+        bands = s.bands
+    else:
+        bands = options.bands.split(',')
+
+    if options.chans == "all":
+        chans = s.chans
+    else:
+        chans = options.chans.split(',')
+
+
+    segments = load_segments(cursor, stas, stime, etime, chans = chans)
+    segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
+
+    for seg in segments:
+        for band in bands:
+            filtered_seg = seg.with_filter(band)
+            for chan in filtered_seg.get_chans():
+                wave = filtered_seg[chan]
+                sg.add_wave(wave)
+
+    cursor.close()
+
+def load_event_based_signals_from_cmdline(sg, options, args):
+
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    evid = options.evid
+    ev_true = get_event(evid=evid)
+
+    sites = options.sites.split(',')
+
+    stas = []
+    if options.refsta_only:
+       stas = sites
+    else:
+        stas = []
+        for site in sites:
+            if s.is_array_station(site):
+                stas += s.get_array_elements(site)
+            else:
+                stas.append(site)
+
+    if options.bands == "all":
+        bands = s.bands
+    else:
+        bands = options.bands.split(',')
+
+    if options.chans == "all":
+        chans = s.chans
+    else:
+        chans = options.chans.split(',')
+
+    # inference is based on segments from all specified stations,
+    # starting at the min predicted arrival time (for the true event)
+    # minus 60s, and ending at the max predicted arrival time plus
+    # 240s
+    statimes = [ev_true.time + tt_predict(event=ev_true, sta=sta, phase=phase) for (sta, phase) in itertools.product(sites, s.phases)]
+    stime = np.min(statimes) - 60
+    etime = np.max(statimes) + 240
+    segments = load_segments(cursor, stas, stime, etime, chans = chans)
+    segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
+
+    for seg in segments:
+        for band in bands:
+            filtered_seg = seg.with_filter(band)
+            for chan in filtered_seg.get_chans():
+                wave = filtered_seg[chan]
+                sg.add_wave(wave)
+
+    evnodes = sg.add_event(ev_true)
+
+    cursor.close()
+
+    return evnodes

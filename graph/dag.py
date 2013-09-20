@@ -65,13 +65,16 @@ class DAG(object):
             node.clear_mark()
             q.extendleft(node.children)
 
-
 def get_relevant_nodes(node_list):
     # note, it's important that the nodes have a consistent order, since
     # we represent their joint values as a vector.
+
+    parents_of_deterministic = [node.parents[node.default_parent_key()] for node in node_list if node.deterministic()]
     node_list = [node for node in node_list if not node.deterministic()]
-    all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
-    relevant_nodes = set(node_list + all_stochastic_children)
+
+    nlset = set(node_list + parents_of_deterministic)
+    all_stochastic_children = [child for node in nlset for (child, intermediates) in node.get_stochastic_children()]
+    relevant_nodes = set(node_list + all_stochastic_children + parents_of_deterministic)
     return node_list, relevant_nodes
 
 class DirectedGraphModel(DAG):
@@ -141,6 +144,17 @@ class DirectedGraphModel(DAG):
             self.set_all(values=values, node_list=node_list)
         ll = np.sum([node.log_p() for node in relevant_nodes])
         #self.set_all(values=v, node_list=node_list)
+        return c * ll
+
+    def joint_prob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, c=1):
+        # same as joint_prob, but we specify values only for a
+        # specific set of keys.
+        # here, node_list contains one entry for each key (so will
+        # have duplicates if we have multiple keys from the same node)
+        if keys is not None:
+            for (key, val, n) in zip(keys, values, node_list):
+                n.set_value(key=key, value=val)
+        ll = np.sum([node.log_p() for node in relevant_nodes])
         return c * ll
 
 
