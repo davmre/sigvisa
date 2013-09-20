@@ -583,6 +583,7 @@ def ev_birth_move(sg):
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
         print "move accepted"
+        assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
         return True
     else:
         #print "move rejected"

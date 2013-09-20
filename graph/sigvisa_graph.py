@@ -31,7 +31,7 @@ from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
 
-from sigvisa.utils.fileutils import mkdir_p
+from sigvisa.utils.fileutils import clear_directory
 
 class ModelNotFoundError(Exception):
     pass
@@ -295,7 +295,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         self._topo_sort()
 
-    def add_event(self, ev, basisids=None, tmshapes=None, sample_templates=False):
+    def add_event(self, ev, basisids=None, tmshapes=None, sample_templates=False, fixed=False):
         """
 
         Add an event node to the graph and connect it to all waves
@@ -306,8 +306,11 @@ class SigvisaGraph(DirectedGraphModel):
 
         """
 
-        evnodes = setup_event(ev, fixed=True)
+        evnodes = setup_event(ev, fixed=fixed)
         self.evnodes[ev.eid] = evnodes
+
+        assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
+
 
         # use a set here to ensure we don't add the 'loc' node
         # multiple times, since it has multiple keys
@@ -754,15 +757,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def debug_dump(self, dump_dirname):
         dump_path = os.path.join('logs', 'dumps', dump_dirname)
-        try:
-            shutil.rmtree(dump_path)
-        except OSError as e:
-            if e.errno == errno.ENOENT:
-                pass
-            else:
-                raise
-
-        mkdir_p(dump_path)
+        clear_directory(dump_path)
         print "saving debug dump to %s..." % dump_path
 
 

@@ -38,7 +38,12 @@ def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
     return min_bound - padding, max_bound + padding
 
 
-def plot_with_fit(fname, wn, show_template=True, title="", ymin=None, ymax=None, **kwargs):
+def plot_with_fit(fname, wn, title="", ymin=None, ymax=None,
+                  unass_lw = 1,
+                  ev_lw=2,
+                  model_lw = 1,
+                  tmpl_lw = None,
+                  **kwargs):
     fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
@@ -55,32 +60,43 @@ def plot_with_fit(fname, wn, show_template=True, title="", ymin=None, ymax=None,
     wn.parent_predict(include_wiggles=True)
     pred = wn.get_wave()
 
-    if show_template:
-        tmpls = []
-        wn.parent_predict(include_wiggles=False)
-        tmpl = wn.get_wave()
-        for arrival in wn.arrivals():
-            wn.parent_predict(include_wiggles=False, arrivals=[arrival,])
-            tmpls.append(wn.get_wave())
+    unass_tmpls = []
+    ev_tmpls = []
+    wn.parent_predict(include_wiggles=False)
+    tmpl = wn.get_wave()
+
+    for arrival in wn.arrivals():
+        wn.parent_predict(include_wiggles=False, arrivals=[arrival,])
+        if arrival[0] < 0:
+            unass_tmpls.append(wn.get_wave())
+        else:
+            ev_tmpls.append(wn.get_wave())
 
     subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
-    subplot_waveform(pred, axes, color="green",
-                          linewidth=3, alpha = 1,
-                          plot_dets=False, **kwargs)
-    if show_template:
+    if model_lw is not None:
+        subplot_waveform(pred, axes, color="green",
+                              linewidth=model_lw, alpha = 1,
+                              plot_dets=False, **kwargs)
+    if tmpl_lw is not None:
         subplot_waveform(tmpl, axes, color="red",
-                         linewidth=1, alpha = 1,
+                         linewidth=tmpl_lw, alpha = 1,
                          plot_dets=False, **kwargs)
-        for individual_tmpl in tmpls:
-            subplot_waveform(individual_tmpl, axes, color="purple",
-                             linewidth=1, alpha = 1,
+    if unass_lw is not None:
+        for unass_tmpl in unass_tmpls:
+            subplot_waveform(unass_tmpl, axes, color="purple",
+                             linewidth=unass_lw, alpha = 1,
+                             plot_dets=False, **kwargs)
+    if ev_lw is not None:
+        for ev_tmpl in ev_tmpls:
+            subplot_waveform(ev_tmpl, axes, color="blue",
+                             linewidth=ev_lw, alpha = 1,
                              plot_dets=False, **kwargs)
 
     wn.set_value(wave.data)
     wn._mutable = mutable
     wn._update_mutable_cache()
 
-    savefig(fname, fig)
+    savefig(fname, fig, bbox_inches="tight", dpi=300)
 
 def plot_det_times(wave, axes=None, logscale=False):
     if wave is None:

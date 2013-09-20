@@ -11,18 +11,12 @@ from optparse import OptionParser
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
-from sigvisa.signals.common import Waveform
-from sigvisa.signals.io import load_event_station_chan
-from sigvisa.infer.optimize.optim_utils import construct_optim_params
-from sigvisa.models.signal_model import extract_arrival_from_key
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move
 from sigvisa.infer.event_mcmc import ev_move
 from sigvisa.infer.template_mcmc import try_split, try_merge, birth_move, death_move, indep_peak_move, improve_offset_move
-from sigvisa.graph.graph_utils import create_key
-from sigvisa.graph.dag import get_relevant_nodes
-from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
-from matplotlib.figure import Figure
+from sigvisa.plotting.plot import plot_with_fit
+from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
 def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attempted, n_accepted):
     for param in tg.params() + ('arrival_time',):
@@ -64,28 +58,59 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attemp
         n_attempted[move] += 1
         n_accepted[move] += gaussian_MH_move(sg, keys=(k,), node_list=(n,), relevant_nodes=(n, wn), std=template_moves_gaussian[move], phase_wraparound=phase_wraparound)
 
-def log_mcmc(sg, step, n_accepted, n_attempted):
+
+
+def print_mcmc_acceptances(sg, step, n_accepted, n_attempted):
     lp = sg.current_log_p()
 
     print "step %d: lp %.2f, accepted " % (step, lp),
     for key in sorted(n_accepted.keys()):
         print "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key]),
     print
-        #plot_with_fit("unass_%s_step%06d.png" % (wn.sta, step), wn)
-        #signal_diff_pos = get_signal_diff_positive_part(wn, wn.arrivals())
-        #w = wn.get_wave()
-        #w.data = signal_diff_pos
-        #savefig(fname="unass_diff%06d.png" % step, fig=plot_waveform(w))
+
+def setup_mcmc_logging():
+    base_path = os.path.join("logs", "mcmc")
+    mkdir_p(base_path)
+    run_dir = os.path.join(base_path, "%05d" % next_unused_int_in_dir(base_path))
+    mkdir_p(run_dir)
+
+    log_handles = dict()
+    log_handles['dir'] = run_dir
+    return log_handles
+
+def cleanup_mcmc(log_handles):
+    for v in log_handles.values():
+        if type(v) == file:
+            v.close()
+
+def log_mcmc(sg, step, n_accepted, n_attempted, log_handles):
+    run_dir = log_handles['dir']
+
+    if 'lp' not in log_handles:
+        log_handles['lp'] = open(os.path.join(run_dir, 'lp.txt'), 'a')
+    lp = sg.current_log_p()
+    log_handles['lp'].write('%f\n' % lp)
+
+    for (eid, evnodes) in sg.evnodes.items():
+        if eid not in log_handles:
+            log_handles[eid] = open(os.path.join(run_dir, 'ev_%05d.txt' % eid), 'a')
+        evlon = evnodes['loc'].get_local_value('lon')
+        evlat = evnodes['loc'].get_local_value('lat')
+        evdepth = evnodes['loc'].get_local_value('depth')
+        evtime = evnodes['time'].get_local_value('time')
+        evmb = evnodes['mb'].get_local_value('mb')
+        evsource = evnodes['natural_source'].get_local_value('natural_source')
+        log_handles[eid].write('%06d\t%3.4f\t%3.4f\t%4.4f\t%10.2f\t%2.3f\t%d\n' % (step, evlon, evlat, evdepth, evtime, evmb, evsource))
 
 
 def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
     global_moves = {'event_birth': ev_birth_move,
                     'event_death': ev_death_move}
-    event_moves_gaussian = {'loc': ('loc', ('lon', 'lat'), 0.01),
-                            'loc_big': ('loc', ('lon', 'lat'), 0.5),
-                            'time': ('time', ('time',), 2.0),
-                            'mb': ('mb', ('mb',), 0.5),
-                            'depth': ('depth', ('depth',), 5.0)}
+    event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat'), 0.05),
+                            'evloc_big': ('loc', ('lon', 'lat'), 0.9),
+                            'evtime': ('time', ('time',), 2.0),
+                            'evmb': ('mb', ('mb',), 0.5),
+                            'evdepth': ('depth', ('depth',), 5.0)}
     event_moves_special = {}
     sta_moves = {'tmpl_birth': birth_move,
                  'tmpl_death': death_move,
@@ -103,6 +128,8 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
     n_attempted = defaultdict(int)
 
     params_over_time = dict()
+
+    log_handles = setup_mcmc_logging()
 
     for step in range(steps):
 
@@ -157,9 +184,10 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
             n_attempted[move] += 1
             n_accepted[move] += fn(sg)
 
+        log_mcmc(sg, step, n_accepted, n_attempted, log_handles)
         if step > 0 and ((step % skip == 0) or (step < 15)):
-            log_mcmc(sg, step, n_accepted, n_attempted)
-
+            print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
+    cleanup_mcmc(log_handles)
 
 def main():
 
