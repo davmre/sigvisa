@@ -218,9 +218,9 @@ def unassociate_template(sg, sta, eid, phase, tmid=None):
 
     return tmid
 
-def deassociation_prob(sg, sta, eid, phase):
+def deassociation_prob(sg, sta, eid, phase, deletion_prob=False):
 
-    # return prob of deassociating (vs deleting).
+    # return prob of deassociating (or of deleting, if deletion_prob=True).
 
     s = Sigvisa()
     site = s.get_array_site(sta)
@@ -238,18 +238,21 @@ def deassociation_prob(sg, sta, eid, phase):
     ntemplates_ratio_log = sg.ntemplates_sta_log_p(sta, n=n_u+1) - sg.ntemplates_sta_log_p(sta, n=n_u)
 
 
-    deassociation_ratio = np.exp( unass_lp + ntemplates_ratio_log)
+    deassociation_ratio_log = unass_lp + ntemplates_ratio_log
 
     wave_node = sg.station_waves[sta][0]
     signal_lp_with_template = wave_node.log_p()
     arrivals = copy.copy(wave_node.arrivals())
     arrivals.remove((eid, phase))
     signal_lp_without_template = wave_node.log_p(arrivals=arrivals)
-    deletion_ratio = np.exp(signal_lp_without_template - signal_lp_with_template)
+    deletion_ratio_log = signal_lp_without_template - signal_lp_with_template
 
-    normalizer = deassociation_ratio + deletion_ratio
+    log_normalizer = np.logaddexp(deassociation_ratio_log, deletion_ratio_log)
 
-    return deassociation_ratio / normalizer
+    if deletion_prob:
+        return np.exp(deletion_ratio_log - log_normalizer)
+    else:
+        return np.exp(deassociation_ratio_log - log_normalizer)
 
 def sample_deassociation_proposal(sg, sta, eid, phase):
     p = deassociation_prob(sg, sta, eid, phase)
@@ -562,7 +565,7 @@ def ev_birth_move(sg):
         if associated:
             reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase))
         else:
-            reverse_logprob += np.log(1 - deassociation_prob(sg, sta, eid, phase))
+            reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase, deletion_prob=True))
 
     lp_new = sg.current_log_p()
 
@@ -580,7 +583,6 @@ def ev_birth_move(sg):
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
         print "move accepted"
-        import pdb; pdb.set_trace()
         return True
     else:
         #print "move rejected"

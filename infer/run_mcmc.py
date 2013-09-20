@@ -162,6 +162,10 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
 
 
 def main():
+
+    # to locate DPRK event:
+    # python infer/run_mcmc.py -s ILAR,WRA,FINES,YKA,JNU,ASAR,NVAR,AKASG,STKA -r dprk_limited  --template_model_types=gp_lld --phases=P --start_time=1243212800 --end_time=1243215800
+
     parser = OptionParser()
 
     parser.add_option("--steps", dest="steps", default=100, type="int",
