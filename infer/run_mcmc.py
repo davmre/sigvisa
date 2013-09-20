@@ -151,6 +151,9 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
                         do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attempted, n_accepted)
 
         for (move, fn) in global_moves.items():
+            u = np.random.rand()
+            if u < .8: continue
+
             n_attempted[move] += 1
             n_accepted[move] += fn(sg)
 

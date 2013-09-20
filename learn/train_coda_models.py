@@ -108,7 +108,6 @@ def main():
     (options, args) = parser.parse_args()
 
     sites = options.sites.split(',')
-    chan = options.chan
     phases = options.phases.split(',')
     targets = options.targets.split(',')
     model_type = options.model_type
@@ -139,8 +138,11 @@ def main():
 
     for site in allsites:
 
-        if chan=="vertical":
+        if options.chan=="vertical":
             chan = s.default_vertical_channel[site]
+        else:
+            chan = options.chan
+
         chan = s.canonical_channel_name[chan]
 
         for target in targets:

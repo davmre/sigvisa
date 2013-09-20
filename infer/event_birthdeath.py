@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.ma as ma
 import copy
 import sys
 import traceback
@@ -264,10 +265,13 @@ def get_signal_based_amplitude_distribution(sg, sta, tmvals, peak_period_s = 1.0
     peak_period_samples = int(peak_period_s * wn.srate)
     peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
 
-    if len(peak_data) == 0:
+    # if we land outside of the signal window, or during an unobserved (masked) portion,
+    # we'll just sample from the event-conditional prior instead
+    if ma.count(peak_data) == 0:
         return None
 
     peak_height = peak_data.mean()
+
     env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
 
 
@@ -427,14 +431,14 @@ def ev_death_move(sg):
                     forward_fns.append(lambda sta=sta,phase=phase: tmids.append(unassociate_template(sg, sta, eid, phase)))
                     inverse_fns.append(lambda sta=sta,phase=phase,tmid_i=tmid_i: associate_template(sg, sta, tmids[tmid_i], eid, phase))
                     tmid_i += 1
-                    print "proposing to deassociate at %s (lp %.1f)" % (sta, deassociate_logprob)
+                    #print "proposing to deassociate at %s (lp %.1f)" % (sta, deassociate_logprob)
 
                 else:
                     template_param_array = sg.get_template_vals(eid, sta, phase, band, chan)
                     inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
                     tmp = phase_template_proposal_logp(sg, sta, eid, phase, template_param_array)
                     reverse_logprob += tmp
-                    print "proposing to delete at %s (lp %f)"% (sta, deassociate_logprob)
+                    #print "proposing to delete at %s (lp %f)"% (sta, deassociate_logprob)
 
                 move_logprob += deassociate_logprob
 
@@ -464,23 +468,25 @@ def ev_death_move(sg):
     ev_logprob = np.log(event_prob_from_hough(ev, hough_array, sg.event_start_time, sg.end_time))
     reverse_logprob += ev_logprob
 
+    """
     print "move lp", move_logprob
     print "reverse lp", reverse_logprob
     print "new lp", lp_new
     print "old lp", lp_old
     print "MH acceptance ratio", (lp_new + reverse_logprob) - (lp_old + move_logprob)
-
+    """
+    assert(np.isfinite((lp_new + reverse_logprob) - (lp_old + move_logprob)))
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
         print "move accepted"
         return True
     else:
-        print "move rejected"
+        #print "move rejected"
         for fn in inverse_fns:
             fn()
         sg._topo_sort()
-        print "changes reverted"
+        #print "changes reverted"
         return False
 
 
@@ -506,7 +512,7 @@ def ev_birth_move(sg):
     # luckily,
     evnodes = sg.add_event(proposed_ev, sample_templates=True)
     eid = evnodes['mb'].eid
-    print "added proposed event to graph"
+    #print "added proposed event to graph"
 
     # loop over phase arrivals at each station and propose either
     # associating an existing unass. template with the new event, or
@@ -529,7 +535,7 @@ def ev_birth_move(sg):
                     forward_fns.append(lambda sta=sta,phase=phase,tmid=tmid: associate_template(sg, sta, tmid, eid, phase))
                     inverse_fns.append(lambda sta=sta,phase=phase: unassociate_template(sg, sta, eid, phase))
                     associations.append((sta, phase, True))
-                    print "proposing to associate template %d at %s,%s with assoc lp %.1f" % (tmid, sta, phase, assoc_logprob)
+                    #print "proposing to associate template %d at %s,%s with assoc lp %.1f" % (tmid, sta, phase, assoc_logprob)
                     tmpl_lp  = 0.0
                 else:
                     template_param_array, tmpl_lp = propose_phase_template(sg, sta, eid, phase)
@@ -539,9 +545,6 @@ def ev_birth_move(sg):
 
                 sta_phase_logprob = assoc_logprob + tmpl_lp
                 move_logprob += sta_phase_logprob
-                if np.isinf(move_logprob):
-                    import pdb; pdb.set_trace()
-
 
 
     inverse_fns.append(lambda : sg.remove_event(eid))
@@ -559,34 +562,34 @@ def ev_birth_move(sg):
         if associated:
             reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase))
         else:
-            print "deassociation:", sta, deassociation_prob(sg, sta, eid, phase)
             reverse_logprob += np.log(1 - deassociation_prob(sg, sta, eid, phase))
-        print sta, phase, associated, reverse_logprob
 
     lp_new = sg.current_log_p()
 
+    """
     print "move lp", move_logprob
     print "reverse lp", reverse_logprob
     print "new lp", lp_new
     print "old lp", lp_old
     print "MH acceptance ratio", (lp_new + reverse_logprob) - (lp_old + move_logprob)
+    """
 
-    if np.isnan(move_logprob) or np.isnan(reverse_logprob):
-        import pdb; pdb.set_trace()
+    assert(np.isfinite((lp_new + reverse_logprob) - (lp_old + move_logprob)))
 
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
         print "move accepted"
+        import pdb; pdb.set_trace()
         return True
     else:
-        print "move rejected"
+        #print "move rejected"
         for fn in inverse_fns:
             fn()
         # no need to topo sort here since remove_event does it for us
 
-        print "changes reverted"
-        return True
+        #print "changes reverted"
+        return False
 
 def main():
 

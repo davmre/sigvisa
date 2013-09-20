@@ -55,7 +55,7 @@ def peak_log_p(cdf, stime, srate, peak_time):
 
     # we add one here since we created cdf with an initial
     # 0, so that the subtraction below works properly
-    idx = np.floor((peak_time - stime) * srate) + 1
+    idx = int(np.floor((peak_time - stime) * srate)) + 1
 
     """"in principle, we shouldn't be allowed to kill things outside of
     the signal window, but in practice it helps a lot.

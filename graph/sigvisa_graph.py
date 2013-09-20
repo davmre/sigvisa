@@ -1,6 +1,8 @@
 import time
 import numpy as np
 import os
+import shutil
+import errno
 import re
 import pickle
 from collections import defaultdict
@@ -753,9 +755,13 @@ class SigvisaGraph(DirectedGraphModel):
     def debug_dump(self, dump_dirname):
         dump_path = os.path.join('logs', 'dumps', dump_dirname)
         try:
-            os.removedirs(dump_path)
-        except OSError:
-            pass
+            shutil.rmtree(dump_path)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                pass
+            else:
+                raise
+
         mkdir_p(dump_path)
         print "saving debug dump to %s..." % dump_path
 
@@ -788,7 +794,7 @@ class SigvisaGraph(DirectedGraphModel):
                 f.write("\n")
         print "saved node values and probabilities"
 
-        os.system("tar cvfz %s.tgz %s/*" % (dump_path, dump_path))
+        os.system("tar cfz %s.tgz %s/*" % (dump_path, dump_path))
         print "generated tarball"
 
     def save_wiggle_params(self):
