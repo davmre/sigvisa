@@ -92,7 +92,8 @@ class DirectedGraphModel(DAG):
 
 
         def add_children(n):
-            self.add_node(n)
+            if n.label not in self.all_nodes:
+                self.add_node(n)
             for c in n.children:
                 add_children(c)
 
@@ -242,6 +243,8 @@ class DirectedGraphModel(DAG):
 
 
     def add_node(self, node):
+        if node.label in self.all_nodes:
+            raise ValueError("adding node '%s' to the graph, but a node with this label already exists!" % node.label)
         self.all_nodes[node.label] = node
         for key in node.keys():
             self.nodes_by_key[key] = node

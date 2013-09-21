@@ -91,6 +91,13 @@ def log_mcmc(sg, step, n_accepted, n_attempted, log_handles):
     lp = sg.current_log_p()
     log_handles['lp'].write('%f\n' % lp)
 
+    if (step % 100 == 20):
+        sg.debug_dump(dump_path = os.path.join(run_dir, 'step_%06d' % step))
+        for f in log_handles.values():
+            if type(f) == file:
+                f.flush()
+
+
     for (eid, evnodes) in sg.evnodes.items():
         if eid not in log_handles:
             log_handles[eid] = open(os.path.join(run_dir, 'ev_%05d.txt' % eid), 'a')
@@ -187,6 +194,8 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
         log_mcmc(sg, step, n_accepted, n_attempted, log_handles)
         if step > 0 and ((step % skip == 0) or (step < 15)):
             print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
+
+
     cleanup_mcmc(log_handles)
 
 def main():
@@ -202,18 +211,24 @@ def main():
                       help="burnin steps (0)")
     parser.add_option("--skip", dest="skip", default=10, type="int",
                       help="how often to print/save MCMC state, in steps (10)")
+    parser.add_option("--startfrom", dest="startfrom", default=None, type="str",
+                      help="file name of pickled graph from previous run. starts a new run, initialized with the state from that graph. (None)")
 
 
     register_svgraph_cmdline(parser)
     register_svgraph_signal_cmdline(parser)
     (options, args) = parser.parse_args()
 
-    sg = setup_svgraph_from_cmdline(options, args)
-    load_signals_from_cmdline(sg, options, args)
+    if options.startfrom is None:
+        sg = setup_svgraph_from_cmdline(options, args)
+        load_signals_from_cmdline(sg, options, args)
+    else:
+        with open(options.startfrom, 'rb') as f:
+            sg = pickle.load(f)
 
     np.random.seed(0)
     run_open_world_MH(sg, burnin=options.burnin, skip=options.skip, steps=options.steps)
-    sg.debug_dump("mcmc_run")
+
 if __name__ == "__main__":
     try:
         main()

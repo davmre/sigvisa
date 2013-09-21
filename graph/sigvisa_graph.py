@@ -148,6 +148,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.optim_log = ""
 
         self.event_rate = 0.00126599049
+        self.next_eid = 1
 
         self.next_uatemplateid = 1
         self.uatemplate_rate = .0002
@@ -295,7 +296,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         self._topo_sort()
 
-    def add_event(self, ev, basisids=None, tmshapes=None, sample_templates=False, fixed=False):
+    def add_event(self, ev, basisids=None, tmshapes=None, sample_templates=False, fixed=False, eid=None):
         """
 
         Add an event node to the graph and connect it to all waves
@@ -305,17 +306,18 @@ class SigvisaGraph(DirectedGraphModel):
         tmshapes: optional dictionary of template shapes (strings), keyed on phase name.
 
         """
-
+        if eid is None:
+            eid = self.next_eid
+            self.next_eid += 1
+        ev.eid = eid
         evnodes = setup_event(ev, fixed=fixed)
-        self.evnodes[ev.eid] = evnodes
-
+        self.evnodes[eid] = evnodes
         assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
-
 
         # use a set here to ensure we don't add the 'loc' node
         # multiple times, since it has multiple keys
         for n in set(evnodes.itervalues()):
-            self.extended_evnodes[ev.eid].append(n)
+            self.extended_evnodes[eid].append(n)
             self.add_node(n)
 
         for (site, element_list) in self.site_elements.iteritems():
@@ -755,8 +757,12 @@ class SigvisaGraph(DirectedGraphModel):
         wn.fix_value()
         return templates
 
-    def debug_dump(self, dump_dirname):
-        dump_path = os.path.join('logs', 'dumps', dump_dirname)
+    def debug_dump(self, dump_dirname=None, dump_path=None):
+
+        if dump_path is None:
+            assert(dump_dirname is not None)
+            dump_path = os.path.join('logs', 'dumps', dump_dirname)
+
         clear_directory(dump_path)
         print "saving debug dump to %s..." % dump_path
 

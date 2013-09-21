@@ -364,43 +364,51 @@ def death_proposal_distribution(sg):
         c[eid] = death_proposal_log_ratio(sg, eid)
 
     #
+    c_log = copy.copy(c)
     if len(c) > 0:
+
+        log_normalizer=np.float('-inf')
+        for v in c_log.values():
+            log_normalizer = np.logaddexp(v, log_normalizer)
+        for k in c_log.keys():
+            c_log[k] -= log_normalizer
+
         v = np.max(c.values())
         for eid in c.keys():
             c[eid] = np.exp(c[eid] - v)
         c.normalize()
 
-    return c
+    return c, c_log
 
 def sample_death_proposal(sg):
-    c = death_proposal_distribution(sg)
+    c, c_log = death_proposal_distribution(sg)
     if len(c) == 0:
         return None, 1.0
     eid = c.sample()
-    return eid, c[eid]
+    return eid, c_log[eid]
 
-def death_proposal_prob(sg, eid):
-    c = death_proposal_distribution(sg)
+def death_proposal_logprob(sg, eid):
+    c, c_log = death_proposal_distribution(sg)
     if len(c) == 0:
         return 1.0
-    return c[eid]
+    return c_log[eid]
 
 def ev_death_move(sg):
 
     lp_old = sg.current_log_p()
 
-    eid, eid_prob = sample_death_proposal(sg)
+    eid, eid_logprob = sample_death_proposal(sg)
     if eid is None:
         return False
     ev = event_from_evnodes(sg.evnodes[eid])
 
-    move_logprob = np.log(eid_prob)
+    move_logprob = eid_logprob
     n_current_events = len(sg.evnodes)
     reverse_logprob = -np.log(n_current_events) # this accounts for the different "positions" we can birth an event into
 
     forward_fns = []
     inverse_fns = []
-    inverse_fns.append(lambda : sg.add_event(ev))
+    inverse_fns.append(lambda : sg.add_event(ev, eid=eid))
 
     tmids = []
     tmid_i = 0
@@ -560,12 +568,9 @@ def ev_birth_move(sg):
     # compute log probability of the reverse move.
     # we have to do this in a separate loop so that
     # we can execute all the forward moves first.
-    reverse_logprob = np.log(death_proposal_prob(sg, eid))
+    reverse_logprob = death_proposal_logprob(sg, eid)
     for (sta, phase, associated) in associations:
-        if associated:
-            reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase))
-        else:
-            reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase, deletion_prob=True))
+        reverse_logprob += np.log(deassociation_prob(sg, sta, eid, phase, deletion_prob=not associated))
 
     lp_new = sg.current_log_p()
 

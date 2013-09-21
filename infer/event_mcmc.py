@@ -64,8 +64,11 @@ def ev_move(sg, ev_node, std, params):
     move = gsample * std
     new_v = current_v + move
 
-    if params[0] == "depth" and new_v[0] < 0:
-        new_v[0] = 0.0
+    if params[0] == "depth":
+        if new_v[0] < 0:
+            new_v[0] = 0.0
+        if new_v[0] > 700:
+            new_v[0] = 700.0
 
     lp_old = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
     set_ev(ev_node, new_v, fixed_vals, fixed_nodes)

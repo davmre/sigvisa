@@ -24,7 +24,6 @@ def get_event(*args, **kwargs):
 class Event(object):
 
     __slots__ = ['lon', 'lat', 'depth', 'time', 'mb', 'orid', 'evid', 'natural_source', 'eid']
-    __id_counter__ = 0
 
     def __init__(self, evid=None, evtype="leb", mb=None, depth=None, lon=None, lat=None, time=None, natural_source=True, orid=None, eid=None, autoload=True):
 
@@ -50,9 +49,6 @@ class Event(object):
 
         if eid is not None:
             self.eid = eid
-        else:
-            self.eid = Event.__id_counter__
-            Event.__id_counter__ += 1
 
     def source_logamp(self, band, phase):
         if self.natural_source:

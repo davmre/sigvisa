@@ -54,6 +54,7 @@ class TestSignalLikelihood(unittest.TestCase):
 
         wave_data = wave_node.get_value()
         wave_data[50:5000] = ma.masked
+        wave_node.unfix_value()
         wave_node.set_value(wave_data)
         ll_missing = wave_node.log_p()
         print "missing ll", ll_missing
