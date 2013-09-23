@@ -196,10 +196,14 @@ def try_split(sg, wave_node):
     tmpl = dict([(p, n) for (p, (k, n)) in tnodes.items()])
     return split_move(sg, tmpl, wave_node, atime_diff)
 
+def tmpl_move_logp(sg, sta, relevant_nodes):
+    return sg.ntemplates_sta_log_p(sta) + sg.joint_logprob_keys(relevant_nodes)
+
 
 def split_move(sg, tmpl, wave_node, atime_diff):
 
-    lp_old = sg.current_log_p()
+    #lp_old1 = sg.current_log_p()
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + tmpl.values())
 
     arrival_time, peak_offset, coda_height, coda_decay = tmpl['arrival_time'].get_value(), tmpl['peak_offset'].get_value(), tmpl['coda_height'].get_value(), tmpl['coda_decay'].get_value()
 
@@ -226,7 +230,9 @@ def split_move(sg, tmpl, wave_node, atime_diff):
     new_tmpl['coda_height'].set_value(new_logheight)
     tmpl['coda_height'].set_value( np.log(np.exp(coda_height) - np.exp(new_logheight)) )
 
-    lp_new = sg.current_log_p()
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + tmpl.values() + new_tmpl.values())
+    #lp_new1 = sg.current_log_p()
+    #assert(np.abs((lp_new - lp_old) - (lp_new1-lp_old1)) < .00001)
 
     log_qforward = -np.log(2*np.abs(coda_decay)) - np.log(2*peak_offset) - np.log(atime_diff) - np.log(np.exp(coda_height))
     jacobian_determinant = 2.07944 ## log(8)
@@ -281,7 +287,8 @@ def try_merge(sg, wave_node):
 
 def merge_move(sg, tmpl1_nodes, tmpl2_nodes, wave_node, post_merge_atime_diff):
 
-    lp_old = sg.current_log_p()
+    #lp_old1 = sg.current_log_p()
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + tmpl1_nodes.values() + tmpl2_nodes.values())
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
 
     tmpl1_values = dict((k, n.get_value()) for (k,n) in tmpl1_nodes.items())
@@ -301,7 +308,9 @@ def merge_move(sg, tmpl1_nodes, tmpl2_nodes, wave_node, post_merge_atime_diff):
     tmpl1_nodes['coda_decay'].set_value(merged_decay)
     tmpl1_nodes['coda_height'].set_value(merged_amp)
 
-    lp_new = sg.current_log_p()
+    #lp_new1 = sg.current_log_p()
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + tmpl1_nodes.values())
+    #assert(np.abs((lp_new - lp_old) - (lp_new1-lp_old1)) < .00001)
 
     log_qforward = 0
     jacobian_determinant = -2.07944 ## log(1/8)
@@ -337,7 +346,8 @@ def merge_move(sg, tmpl1_nodes, tmpl2_nodes, wave_node, post_merge_atime_diff):
 
 
 def birth_move(sg, wave_node, dummy=False, **kwargs):
-    lp_old = sg.current_log_p()
+    #lp_old1 = sg.current_log_p()
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,])
 
     cdf = get_current_conditional_cdf(wave_node, arrival_set=wave_node.arrivals())
     peak_time, proposal_lp =  sample_peak_time_from_signal(cdf, wave_node.st,
@@ -349,8 +359,9 @@ def birth_move(sg, wave_node, dummy=False, **kwargs):
     sg._gc_topo_sorted_nodes()
     tmpl["arrival_time"].set_value(peak_time - tmpl["peak_offset"].get_value())
 
-
-    lp_new = sg.current_log_p()
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + tmpl.values())
+    #lp_new1 = sg.current_log_p()
+    #assert(np.abs((lp_new - lp_old) - (lp_new1-lp_old1)) < .00001)
 
     # probability of this birth move is the product of probabilities
     # of all sampled params (including arrival time)
@@ -395,12 +406,15 @@ def death_move(sg, wave_node, dummy=False):
             tmpl_to_destroy = templates[i]
             break
 
-    lp_old = sg.current_log_p()
+    tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+
+
+    #lp_old1 = sg.current_log_p()
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + [n for (k, n) in tnodes.values() + wnodes.values()])
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
     log_qforward = 0 #np.log(1.0/len(templates))
 
-    tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
 
     current_peak = tnodes['arrival_time'][1].get_value() + tnodes['peak_offset'][1].get_value()
     log_qbackward = 0
@@ -421,7 +435,9 @@ def death_move(sg, wave_node, dummy=False):
                                 peak_time = current_peak)
 
 
-    lp_new = sg.current_log_p()
+    #lp_new1 = sg.current_log_p()
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] )
+    #assert(np.abs((lp_new - lp_old) - (lp_new1-lp_old1)) < .00001)
 
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
