@@ -31,10 +31,8 @@ def gaussian_MH_move(sg, keys, node_list, relevant_nodes, scales=None, **kwargs)
     return MH_accept(sg, keys, values, proposal, node_list, relevant_nodes)
 
 def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes, log_qforward=0.0, log_qbackward=0.0):
-    lp_old = sg.joint_prob_keys(relevant_nodes) # assume oldvalues are still set
-    lp_new = sg.joint_prob_keys(keys=keys, values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
-    #lp_new = sg.joint_prob_keys(keys=keys, values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
-    #lp_old = sg.joint_prob(keys=keys, values=oldvalues, node_list=node_list, relevant_nodes=relevant_nodes)
+    lp_old = sg.joint_logprob_keys(relevant_nodes) # assume oldvalues are still set
+    lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):

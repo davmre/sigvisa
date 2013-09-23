@@ -225,6 +225,7 @@ def main():
     else:
         with open(options.startfrom, 'rb') as f:
             sg = pickle.load(f)
+            #sg.next_eid = 200
 
     np.random.seed(0)
     run_open_world_MH(sg, burnin=options.burnin, skip=options.skip, steps=options.steps)

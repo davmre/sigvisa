@@ -52,7 +52,7 @@ class TestFit(unittest.TestCase):
         node_list, relevant_nodes = get_relevant_nodes(self.sg.template_nodes)
 
         vals = np.concatenate([node.get_mutable_values() for node in node_list])
-        jp = lambda v: self.sg.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)
+        jp = lambda v: self.sg.joint_logprob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)
 
         grad1 = approx_gradient(jp, vals, eps=1e-4)
         grad2 = self.sg.log_p_grad(values=vals, node_list = node_list, relevant_nodes=relevant_nodes)

@@ -70,9 +70,9 @@ def ev_move(sg, ev_node, std, params):
         if new_v[0] > 700:
             new_v[0] = 700.0
 
-    lp_old = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    lp_old = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
     set_ev(ev_node, new_v, fixed_vals, fixed_nodes)
-    lp_new = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
 
     u = np.random.rand()
     if lp_new - lp_old > np.log(u):

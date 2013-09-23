@@ -17,7 +17,7 @@ def main():
 
     t0 = time.time()
     for i in range(5000):
-        prob = sg.joint_prob(values=values, relevant_nodes=relevant_nodes, node_list=node_list, c=-1)
+        prob = sg.joint_logprob(values=values, relevant_nodes=relevant_nodes, node_list=node_list, c=-1)
         #grad = sg.log_p_grad(values=values, relevant_nodes=relevant_nodes, node_list=node_list, c=-1)
     t1 = time.time()
     #print grad
