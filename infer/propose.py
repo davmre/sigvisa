@@ -12,7 +12,6 @@ from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.source.event import Event, get_event
-from sigvisa.infer.template_mcmc import run_open_world_MH
 
 from matplotlib.figure import Figure
 from mpl_toolkits.basemap import Basemap

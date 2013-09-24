@@ -18,9 +18,8 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, indep_offset_move, improve_offset_move, indep_peak_move
+from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move
 from sigvisa.graph.graph_utils import create_key
-from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure
 
@@ -29,6 +28,21 @@ from sigvisa.infer.propose import propose_event_from_hough
 
 fixed_node_cache = dict()
 relevant_node_cache = dict()
+
+def ev_move_relevant_nodes(node_list, fixed_nodes):
+
+    # loc: children are basically all the stochastic nodes, and arrival_time
+    #      we want the stochastic nodes, and arrival_time's default parent
+
+    # mb: children are coda_height, and that's maybe it? we want amp_transfer
+
+    # time: children are arrival_time. we want tt_residual
+
+    # depth: same as loc
+
+    direct_stochastic_children = [c for n in node_list for c in n.children if not c.deterministic()]
+    inlaws = [n.parents[n.default_parent_key()] for n in fixed_nodes]
+    return set(node_list + direct_stochastic_children + inlaws)
 
 def ev_move(sg, ev_node, std, params):
     # jointly propose a new event location along with new tt_residual values,
@@ -55,7 +69,8 @@ def ev_move(sg, ev_node, std, params):
     fixed_vals = [n.get_value() for n in fixed_nodes]
 
     if ev_node not in relevant_node_cache:
-        node_list, relevant_nodes = get_relevant_nodes([ev_node,])
+        node_list = [ev_node,]
+        relevant_nodes = ev_move_relevant_nodes(node_list, fixed_nodes)
         relevant_node_cache[ev_node] = (node_list, relevant_nodes)
     else:
         (node_list, relevant_nodes) = relevant_node_cache[ev_node]

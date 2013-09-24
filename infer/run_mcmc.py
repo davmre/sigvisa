@@ -14,17 +14,17 @@ from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move
 from sigvisa.infer.event_mcmc import ev_move
-from sigvisa.infer.template_mcmc import try_split, try_merge, birth_move, death_move, indep_peak_move, improve_offset_move
+from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, swap_association_move
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
 def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attempted, n_accepted):
+
+    # special case when template moves are disabled
+    if len(template_moves_gaussian) == 0: return
+
     for param in tg.params() + ('arrival_time',):
-        try:
-            k, n = tmnodes[param]
-        except TypeError:
-            n = tmnodes[param]
-            k = n.single_key
+        k, n = tmnodes[param]
 
         # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
         relevant_nodes = [wn,]
@@ -42,11 +42,7 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attemp
             continue
 
     for param in wg.params():
-        try:
-            k, n = tmnodes[param]
-        except ValueError:
-            n = tmnodes[param]
-            k = n.single_key
+        k, n = tmnodes[param]
 
         if param.startswith("amp"):
             phase_wraparound = False
@@ -68,10 +64,11 @@ def print_mcmc_acceptances(sg, step, n_accepted, n_attempted):
         print "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key]),
     print
 
-def setup_mcmc_logging():
-    base_path = os.path.join("logs", "mcmc")
-    mkdir_p(base_path)
-    run_dir = os.path.join(base_path, "%05d" % next_unused_int_in_dir(base_path))
+def setup_mcmc_logging(run_dir=None):
+    if run_dir is None:
+        base_path = os.path.join("logs", "mcmc")
+        mkdir_p(base_path)
+        run_dir = os.path.join(base_path, "%05d" % next_unused_int_in_dir(base_path))
     mkdir_p(run_dir)
 
     log_handles = dict()
@@ -110,35 +107,41 @@ def log_mcmc(sg, step, n_accepted, n_attempted, log_handles):
         log_handles[eid].write('%06d\t%3.4f\t%3.4f\t%4.4f\t%10.2f\t%2.3f\t%d\n' % (step, evlon, evlat, evdepth, evtime, evmb, evsource))
 
 
-def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
+def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
+                      enable_event_openworld=True,
+                      enable_event_moves=True,
+                      enable_template_openworld=True,
+                      enable_template_moves=True,
+                      run_dir=None):
     global_moves = {'event_birth': ev_birth_move,
-                    'event_death': ev_death_move}
+                    'event_death': ev_death_move} if enable_event_openworld else {}
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat'), 0.05),
                             'evloc_big': ('loc', ('lon', 'lat'), 0.9),
                             'evtime': ('time', ('time',), 2.0),
                             'evmb': ('mb', ('mb',), 0.5),
-                            'evdepth': ('depth', ('depth',), 5.0)}
+                            'evdepth': ('depth', ('depth',), 5.0)} if enable_event_moves else {}
     event_moves_special = {}
     sta_moves = {'tmpl_birth': birth_move,
                  'tmpl_death': death_move,
-                 'tmpl_split': try_split,
-                 'tmpl_merge': try_merge}
+                 'tmpl_split': split_move,
+                 'tmpl_merge': merge_move} if enable_template_openworld else {}
     template_moves_special = {'indep_peak': indep_peak_move,
-                              'peak_offset': improve_offset_move}
+                              'peak_offset': improve_offset_move} if enable_template_moves else {}
     template_moves_gaussian = {'arrival_time': .1,
                                'coda_height': .02,
                                'coda_decay': .05,
                                'wiggle_amp': .25,
-                               'wiggle_phase': .5}
+                               'wiggle_phase': .5} if enable_template_moves else {}
 
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
 
     params_over_time = dict()
 
-    log_handles = setup_mcmc_logging()
+    log_handles = setup_mcmc_logging(run_dir=run_dir)
 
     for step in range(steps):
+
 
         # moves to adjust existing events
         for (eid, evnodes) in sg.evnodes.items():
@@ -156,18 +159,24 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
                 assert(len(sg.station_waves[sta]) == 1)
                 wn = list(sg.station_waves[sta])[0]
 
+
+
                 # moves to birth/death/split/merge new unassociated templates
                 for (move_name, fn) in sta_moves.items():
+                    u = np.random.rand()
+                    if u < .9: continue
                     n_attempted[move_name] += 1
                     n_accepted[move_name] += fn(sg, wn)
+
+
 
                 # moves to adjust existing unass. templates
                 tg = sg.template_generator('UA')
                 wg = sg.wiggle_generator('UA', wn.srate)
                 for tmid in sg.uatemplate_ids[(sta, wn.chan, wn.band)]:
-                    tmnodes = sg.uatemplates[tmid]
+                    tmnodes = dict([(p, (n.single_key, n)) for (p, n) in sg.uatemplates[tmid].items()])
 
-                    # special moves only for unass templates
+                    # special moves
                     for (move_name, fn) in template_moves_special.iteritems():
                         n_attempted[move_name] += 1
                         n_accepted[move_name] = fn(sg, wn, tmnodes)
@@ -182,14 +191,22 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000):
                         wg = sg.wiggle_generator(phase, wn.srate)
 
                         tmnodes = sg.get_template_nodes(eid, sta, phase, wn.band, wn.chan)
+
+                        for (move_name, fn) in template_moves_special.iteritems():
+                            n_attempted[move_name] += 1
+                            n_accepted[move_name] = fn(sg, wn, tmnodes)
+
+
                         do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attempted, n_accepted)
+
 
         for (move, fn) in global_moves.items():
             u = np.random.rand()
-            if u < .8: continue
+            if u < .9: continue
 
             n_attempted[move] += 1
             n_accepted[move] += fn(sg)
+
 
         log_mcmc(sg, step, n_accepted, n_attempted, log_handles)
         if step > 0 and ((step % skip == 0) or (step < 15)):

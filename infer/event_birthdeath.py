@@ -396,6 +396,8 @@ def death_proposal_logprob(sg, eid):
 def ev_death_move(sg):
 
     lp_old = sg.current_log_p()
+    #if lp_old < -120000:
+    #    import pdb; pdb.set_trace()
 
     eid, eid_logprob = sample_death_proposal(sg)
     if eid is None:
@@ -486,11 +488,16 @@ def ev_death_move(sg):
     print "old lp", lp_old
     print "MH acceptance ratio", (lp_new + reverse_logprob) - (lp_old + move_logprob)
     """
-    assert(np.isfinite((lp_new + reverse_logprob) - (lp_old + move_logprob)))
+    #assert(np.isfinite((lp_new + reverse_logprob) - (lp_old + move_logprob)))
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
         print "move accepted"
+
+        if (lp_new - lp_old) < -100:
+            raise Exception("event death makes things worse")
+
+
         return True
     else:
         #print "move rejected"
@@ -582,13 +589,17 @@ def ev_birth_move(sg):
     print "MH acceptance ratio", (lp_new + reverse_logprob) - (lp_old + move_logprob)
     """
 
-    assert(np.isfinite((lp_new + reverse_logprob) - (lp_old + move_logprob)))
+    #assert(np.isfinite((lp_new + reverse_logprob) - (lp_old + move_logprob)))
 
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
     if move_accepted:
         print "move accepted"
         assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
+
+        if (lp_new - lp_old) < -100:
+            raise Exception("event death makes things worse")
+
         return True
     else:
         #print "move rejected"

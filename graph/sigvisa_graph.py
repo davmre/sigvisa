@@ -151,7 +151,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.next_eid = 1
 
         self.next_uatemplateid = 1
-        self.uatemplate_rate = .0002
+        self.uatemplate_rate = .001
         self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
 
