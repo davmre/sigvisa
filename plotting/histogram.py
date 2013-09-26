@@ -5,10 +5,13 @@ import scipy.stats
 
 def plot_density(data, axes, title=None, draw_stats=True):
 
-    density = scipy.stats.kde.gaussian_kde(data)
-    minb, maxb = bounds_without_outliers(data)
-    x = np.linspace(minb, maxb, 100)
-    axes.plot(x, density(x))
+    if np.std(data) > 0.0:
+        density = scipy.stats.kde.gaussian_kde(data)
+        minb, maxb = bounds_without_outliers(data)
+        x = np.linspace(minb, maxb, 100)
+        axes.plot(x, density(x))
+    else:
+        axes.plot(data[0], 1.0)
 
     if title is not None:
         axes.set_title(title)

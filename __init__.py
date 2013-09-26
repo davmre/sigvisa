@@ -169,6 +169,18 @@ class Sigvisa(threading.local):
             return [s[0] for s in elements]
             cursor.close()
 
+    def sites_to_stas(self, sites, refsta_only=False):
+        stas = []
+        if refsta_only:
+           stas = sites
+        else:
+            stas = []
+            for site in sites:
+                if self.is_array_station(site):
+                    stas += self.get_array_elements(site)
+                else:
+                    stas.append(site)
+        return stas
 
 def get_sta_default_channel(cursor, sta, canonical_choices, equivalent_channels):
 

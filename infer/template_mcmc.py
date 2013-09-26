@@ -598,10 +598,9 @@ def get_pair_prob(sg, wave_node, first_atime):
 
 def swap_params(t1nodes, t2nodes):
     for (p, (k1, n1)) in t1nodes.items():
-        try:
-            k2, n2 = t2nodes[p]
-        except KeyError:
+        if p=="amp_transfer" or p=="tt_residual":
             continue
+        k2, n2 = t2nodes[p]
         v1 = n1.get_value(key=k1)
         v2 = n2.get_value(key=k2)
         n1.set_value(key=k1, value=v2)
@@ -636,8 +635,8 @@ def swap_association_move(sg, wave_node):
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
+        print "successful swap"
         return True
     else:
         atime1, atime2 = swap_params(t1nodes, t2nodes)
-
         return False

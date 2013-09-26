@@ -12,7 +12,7 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa.graph.load_sigvisa_graph import register_svgraph_cmdline, register_svgraph_signal_cmdline, setup_svgraph_from_cmdline, load_signals_from_cmdline
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move
+from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move
 from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, swap_association_move
 from sigvisa.plotting.plot import plot_with_fit
@@ -124,7 +124,8 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
     sta_moves = {'tmpl_birth': birth_move,
                  'tmpl_death': death_move,
                  'tmpl_split': split_move,
-                 'tmpl_merge': merge_move} if enable_template_openworld else {}
+                 'tmpl_merge': merge_move,
+                 'swap_association': swap_association_move} if enable_template_openworld else {}
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move} if enable_template_moves else {}
     template_moves_gaussian = {'arrival_time': .1,
@@ -133,15 +134,19 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                                'wiggle_amp': .25,
                                'wiggle_phase': .5} if enable_template_moves else {}
 
+    tmpl_openworld_move_probability = .05
+    ev_openworld_move_probability = .05
+
+
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
 
     params_over_time = dict()
 
     log_handles = setup_mcmc_logging(run_dir=run_dir)
+    run_dir = log_handles['dir']
 
     for step in range(steps):
-
 
         # moves to adjust existing events
         for (eid, evnodes) in sg.evnodes.items():
@@ -154,21 +159,18 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                 n_attempted[move_name] += 1
                 n_accepted[move_name] += fn(sg, eid)
 
+
         for (site, elements) in sg.site_elements.items():
             for sta in elements:
                 assert(len(sg.station_waves[sta]) == 1)
                 wn = list(sg.station_waves[sta])[0]
 
-
-
                 # moves to birth/death/split/merge new unassociated templates
                 for (move_name, fn) in sta_moves.items():
                     u = np.random.rand()
-                    if u < .9: continue
+                    if u > tmpl_openworld_move_probability: continue
                     n_attempted[move_name] += 1
                     n_accepted[move_name] += fn(sg, wn)
-
-
 
                 # moves to adjust existing unass. templates
                 tg = sg.template_generator('UA')
@@ -202,10 +204,14 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
 
         for (move, fn) in global_moves.items():
             u = np.random.rand()
-            if u < .9: continue
+            if u > ev_openworld_move_probability: continue
 
             n_attempted[move] += 1
-            n_accepted[move] += fn(sg)
+
+            if move=="event_birth":
+                n_accepted[move] += fn(sg, log_to_run_dir=run_dir)
+            else:
+                n_accepted[move] += fn(sg)
 
 
         log_mcmc(sg, step, n_accepted, n_attempted, log_handles)
@@ -222,6 +228,10 @@ def main():
 
     parser = OptionParser()
 
+    parser.add_option("--smoothbins", dest="smoothbins", default=False, action="store_true",
+                      help="use small bins with smoothing (really slow) (False)")
+    parser.add_option("--dprk", dest="dprk", default=False, action="store_true",
+                      help="initialize with 2009 dprk event (False)")
     parser.add_option("--steps", dest="steps", default=100, type="int",
                       help="MCMC steps to take (1000)")
     parser.add_option("--burnin", dest="burnin", default=0, type="int",
@@ -243,6 +253,15 @@ def main():
         with open(options.startfrom, 'rb') as f:
             sg = pickle.load(f)
             #sg.next_eid = 200
+
+    if options.dprk:
+        from sigvisa.source.event import get_event
+        ev = get_event(evid=5393637)
+        ev.natural_source=True
+        sg.add_event(ev)
+
+    if options.smoothbins:
+        set_hough_options({'bin_width_deg': 1.0, 'time_tick_s': 10, 'smoothbins': True})
 
     np.random.seed(0)
     run_open_world_MH(sg, burnin=options.burnin, skip=options.skip, steps=options.steps)

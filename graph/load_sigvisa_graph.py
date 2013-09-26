@@ -166,23 +166,14 @@ def setup_svgraph_from_cmdline(options, args):
 
     return sg
 
+
 def load_signals_from_cmdline(sg, options, args):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
     sites = options.sites.split(',')
-
-    stas = []
-    if options.refsta_only:
-       stas = sites
-    else:
-        stas = []
-        for site in sites:
-            if s.is_array_station(site):
-                stas += s.get_array_elements(site)
-            else:
-                stas.append(site)
+    stas = s.sites_to_stas(sites, refsta_only=options.refsta_only)
 
     if options.start_time is not None and options.end_time is not None:
         stime = options.start_time
@@ -227,17 +218,7 @@ def load_event_based_signals_from_cmdline(sg, options, args):
     ev_true = get_event(evid=evid)
 
     sites = options.sites.split(',')
-
-    stas = []
-    if options.refsta_only:
-       stas = sites
-    else:
-        stas = []
-        for site in sites:
-            if s.is_array_station(site):
-                stas += s.get_array_elements(site)
-            else:
-                stas.append(site)
+    stas = s.sites_to_stas(sites, options.refsta_only)
 
     if options.bands == "all":
         bands = s.bands

@@ -5,20 +5,27 @@ import sys
 import traceback
 import pdb
 import pickle
-
+import os
 
 from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.sigvisa_graph import get_param_model_id
-from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough
+from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.distributions import Gaussian
 from sigvisa.models.ev_prior import event_from_evnodes
 from sigvisa.models.ttime import tt_residual
 from sigvisa.models.templates.coda_height import amp_transfer
 from sigvisa.utils.counter import Counter
+from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.source.event import get_event
 
+
+hough_options = {'bin_width_deg':4.0}
+
+def set_hough_options(ho):
+    global hough_options
+    hough_options = ho
 
 def unass_template_logprob(sg, sta, template_dict):
     """
@@ -477,7 +484,7 @@ def ev_death_move(sg):
 
     lp_new = sg.current_log_p()
 
-    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, bin_width_deg=4.0)
+    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, **hough_options)
     ev_logprob = np.log(event_prob_from_hough(ev, hough_array, sg.event_start_time, sg.end_time))
     reverse_logprob += ev_logprob
 
@@ -494,10 +501,6 @@ def ev_death_move(sg):
     if move_accepted:
         print "move accepted"
 
-        if (lp_new - lp_old) < -100:
-            raise Exception("event death makes things worse")
-
-
         return True
     else:
         #print "move rejected"
@@ -508,10 +511,10 @@ def ev_death_move(sg):
         return False
 
 
-def ev_birth_move(sg):
+def ev_birth_move(sg, log_to_run_dir=None):
     lp_old = sg.current_log_p()
 
-    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, bin_width_deg=4.0)
+    hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, **hough_options)
     proposed_ev, ev_prob = propose_event_from_hough(hough_array, sg.event_start_time, sg.end_time)
     print "proposed ev", proposed_ev
     #proposed_ev = get_event(evid=5393637)
@@ -597,8 +600,11 @@ def ev_birth_move(sg):
         print "move accepted"
         assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
 
-        if (lp_new - lp_old) < -100:
-            raise Exception("event death makes things worse")
+
+        if log_to_run_dir is not None:
+            log_event_birth(sg, hough_array, log_to_run_dir, eid, associations)
+        else:
+            raise Exception("why are we not logging?")
 
         return True
     else:
@@ -609,6 +615,24 @@ def ev_birth_move(sg):
 
         #print "changes reverted"
         return False
+
+##############################################################
+
+def log_event_birth(sg, hough_array, run_dir, eid, associations):
+
+    log_dir = os.path.join(run_dir, "ev_%05d" % eid)
+    mkdir_p(log_dir)
+
+    # save post-birth signals and general state
+    sg.debug_dump(dump_path=log_dir)
+
+    with open(os.path.join(log_dir, 'associations.txt'), 'w') as f:
+        for (sta, phase, associated) in associations:
+            f.write('%s %s %s\n' % (sta, phase, associated))
+
+    # save Hough transform
+    sites = sg.site_elements.keys()
+    visualize_hough_array(hough_array, sites, os.path.join(log_dir, 'hough.png'))
 
 def main():
 
