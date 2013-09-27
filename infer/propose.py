@@ -58,7 +58,11 @@ def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False):
     lonbins = latbins * 2
     timebins = int((etime-stime)/time_tick_s)
     init_val = -.7 if sta_array else 0.0
-    return np.ones((lonbins, latbins, timebins)) * init_val
+
+    hough_array = np.empty((lonbins, latbins, timebins))
+    hough_array.fill(init_val)
+
+    return hough_array
 
 def precompute_travel_times(sta, phaseid=1, latbins=18):
     s = Sigvisa()
@@ -388,6 +392,7 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, time_tick_s=None, excl
         for sta in sg.site_elements[site]:
             for wn in sg.station_waves[sta]:
                 chan, band = wn.chan, wn.band
+
                 sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True)
 
                 if debug_ev is not None:
@@ -404,8 +409,9 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, time_tick_s=None, excl
                         add_template_to_sta_hough_smooth(sta_hough_array, template_times, stime=stime, template_snr=snr, time_tick_s = time_tick_s)
                     else:
                         add_template_to_sta_hough(sta_hough_array, template_times, stime=stime, template_snr=snr, time_tick_s = time_tick_s)
-                    print
+
                 hough_array += sta_hough_array
+
     hough_array = np.exp(hough_array)
     return hough_array
 
