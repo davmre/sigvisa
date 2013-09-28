@@ -40,7 +40,7 @@ P_WAVE_VELOCITY_KM_PER_S = 6.0
 travel_time_cache = dict()
 
 
-def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False):
+def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False, prev_array=None):
     """
 
     Initialize a new Hough accumulator array.
@@ -57,9 +57,13 @@ def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False):
 
     lonbins = latbins * 2
     timebins = int((etime-stime)/time_tick_s)
-    init_val = -.7 if sta_array else 0.0
+    #init_val = -.7 if sta_array else 0.0
+    init_val = np.exp(-.7) if sta_array else 1.0
 
-    hough_array = np.empty((lonbins, latbins, timebins))
+    if prev_array is None:
+        hough_array = np.empty((lonbins, latbins, timebins))
+    else:
+        hough_array=prev_array
     hough_array.fill(init_val)
 
     return hough_array
@@ -173,7 +177,9 @@ def add_template_to_sta_hough_smooth(sta_hough_array, template_times, template_s
 
     stime = float(stime)
     time_tick_s = float(time_tick_s)
-    lp =float(lp)
+    lp =float(np.exp(lp))
+
+
 
     code = """
 
@@ -203,13 +209,38 @@ def categorical_sample_array(a):
 
     """
 
-    s = np.sum(a)
-    cdf = np.cumsum(a)/s
+    lonbins, latbins, timebins = a.shape
+    s = float(np.sum(a))
+    u = float(np.random.rand())
 
-    u = np.random.rand()
-    idx = np.searchsorted(cdf, u)
+    t0 = time.time()
+    code = """
+double accum = 0;
+double goal = u*s;
+int done = 0;
+for (int i=0; i < lonbins; ++i) {
+    for (int j=0; j < latbins; ++j) {
+        for (int k=0; k < timebins; ++k)  {
+            accum += a(i,j,k);
+            if (accum >= goal) {
+               return_val = timebins*latbins*i+timebins*j+k;
+               done = 1;
+               break;
+            }
+        }
+        if (done) { break; }
+    }
+    if (done) { break; }
+}
+    """
+    v = weave.inline(code,['latbins', 'lonbins', 'timebins', 'a', 'u', 's'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-    return np.unravel_index(idx, a.shape)
+    k = v % timebins
+    v1 = (v-k)/timebins
+    j = v1 % latbins
+    i = (v1-j) / latbins
+
+    return (i,j,k)
 
 def categorical_prob(a, idx):
     s = np.sum(a)
@@ -241,14 +272,16 @@ def propose_event_from_hough(hough_array, stime, etime):
 
     """
 
-
     lonbins, latbins, timebins = hough_array.shape
     latbin_deg = 180.0/latbins
     lonbin_deg = 360.0/lonbins
     time_tick_s = float(etime-stime)/timebins
 
+    t0 = time.time()
     lonidx, latidx, timeidx = categorical_sample_array(hough_array)
+    t1 = time.time()
     ev_prob = categorical_prob(hough_array, (lonidx, latidx, timeidx))
+    t2 = time.time()
 
     # sample an event location uniformly within each bin
     lonidx += np.random.rand()
@@ -258,9 +291,11 @@ def propose_event_from_hough(hough_array, stime, etime):
 
     lon = -180.0 + lonidx * lonbin_deg
     lat = -90.0 + latidx * latbin_deg
-    time = stime + timeidx * time_tick_s
+    t = stime + timeidx * time_tick_s
 
-    ev = Event(lon=lon, lat=lat, time=time, depth=0, mb=3.5, natural_source=True)
+    print "proposal time", t1-t0, t2-t1
+
+    ev = Event(lon=lon, lat=lat, time=t, depth=0, mb=3.5, natural_source=True)
     return ev, ev_prob
 
 def visualize_hough_array(hough_array, sites, fname, timeslice=None):
@@ -387,13 +422,17 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, time_tick_s=None, excl
     # probs.
     exclude_sites = [] if exclude_sites is None else exclude_sites
     hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=False)
+    sta_hough_array=None
+
+    t0 = time.time()
     for site in sg.site_elements.keys():
         if site in exclude_sites: continue
         for sta in sg.site_elements[site]:
+            t1 = time.time()
             for wn in sg.station_waves[sta]:
                 chan, band = wn.chan, wn.band
 
-                sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True)
+                sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True, prev_array=sta_hough_array)
 
                 if debug_ev is not None:
                     pred_atime = debug_ev.time + tt_predict(event=debug_ev, sta=sta, phase='P')
@@ -410,10 +449,31 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, time_tick_s=None, excl
                     else:
                         add_template_to_sta_hough(sta_hough_array, template_times, stime=stime, template_snr=snr, time_tick_s = time_tick_s)
 
-                hough_array += sta_hough_array
+                hough_array *= sta_hough_array
+            t2 = time.time()
+            print "station %s time %f" % (sta, t2-t1)
 
-    hough_array = np.exp(hough_array)
+    #t2 = time.time()
+    #exp_in_place(hough_array)
+    #t3 = time.time()
+
+    print "total hough time", t2-t0 #, 'exp time', t3-t2, 'shape', hough_array.shape
     return hough_array
+
+
+def exp_in_place(hough_array):
+    lonbins, latbins, timebins = hough_array.shape
+    code = """
+
+for (int i=0; i < lonbins; ++i) {
+    for (int j=0; j < latbins; ++j) {
+        for (int k=0; k < timebins; ++k)  {
+hough_array(i,j,k) = exp(hough_array(i,j,k));
+        }
+    }
+}
+    """
+    weave.inline(code,['latbins', 'lonbins', 'timebins', 'hough_array'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
 def main():
     """
