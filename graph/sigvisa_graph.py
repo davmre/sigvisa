@@ -757,7 +757,7 @@ class SigvisaGraph(DirectedGraphModel):
         wn.fix_value()
         return templates
 
-    def debug_dump(self, dump_dirname=None, dump_path=None):
+    def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True):
 
         if dump_path is None:
             assert(dump_dirname is not None)
@@ -767,9 +767,10 @@ class SigvisaGraph(DirectedGraphModel):
         print "saving debug dump to %s..." % dump_path
 
 
-        with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
-            pickle.dump(self, f, 2)
-        print "saved pickled graph"
+        if pickle_graph:
+            with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
+                pickle.dump(self, f, 2)
+            print "saved pickled graph"
 
         for (sta, waves) in self.station_waves.items():
             for wn in waves:

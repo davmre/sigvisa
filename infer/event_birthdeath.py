@@ -400,7 +400,7 @@ def death_proposal_logprob(sg, eid):
         return 1.0
     return c_log[eid]
 
-def ev_death_move(sg):
+def ev_death_move(sg, log_to_run_dir=None):
 
     lp_old = sg.current_log_p()
     #if lp_old < -120000:
@@ -512,6 +512,7 @@ def ev_death_move(sg):
 
 
 def ev_birth_move(sg, log_to_run_dir=None):
+
     lp_old = sg.current_log_p()
 
     hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, **hough_options)
@@ -624,7 +625,7 @@ def log_event_birth(sg, hough_array, run_dir, eid, associations):
     mkdir_p(log_dir)
 
     # save post-birth signals and general state
-    sg.debug_dump(dump_path=log_dir)
+    sg.debug_dump(dump_path=log_dir, pickle_graph=False)
 
     with open(os.path.join(log_dir, 'associations.txt'), 'w') as f:
         for (sta, phase, associated) in associations:

@@ -4,6 +4,7 @@ import os
 import traceback
 import pickle
 import copy
+import time
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa import Sigvisa
@@ -135,6 +136,7 @@ def improve_offset_move(sg, wave_node, tmnodes, **kwargs):
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
     """
+
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
     relevant_nodes = [wave_node,]

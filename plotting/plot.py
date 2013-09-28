@@ -16,6 +16,33 @@ def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
     canvas.print_figure(fname, **kwargs)
 
+def basic_plot_to_file(fname, data, xvals=None, title=None, xlabel=None, ylabel=None, xlim=None, ylim=None, **kwargs):
+
+    fig = Figure(figsize=(8, 5), dpi=300)
+    axes = fig.add_subplot(111)
+
+    if xvals is None:
+        axes.plot(data, **kwargs)
+    else:
+        axes.plot(xvals, data, **kwargs)
+
+    if title is not None:
+        axes.set_title(title)
+
+    if xlabel is not None:
+        axes.set_xlabel(xlabel)
+
+    if ylabel is not None:
+        axes.set_ylabel(ylabel)
+
+    if xlim is not None:
+        axes.set_xlim(xlim)
+
+    if ylim is not None:
+        axes.set_ylim(ylim)
+
+    savefig(fname, fig, bbox_inches="tight", dpi=300)
+
 def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
     """
 
