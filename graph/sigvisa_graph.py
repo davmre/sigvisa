@@ -31,7 +31,7 @@ from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
 
-from sigvisa.utils.fileutils import clear_directory
+from sigvisa.utils.fileutils import clear_directory, mkdir_p
 
 class ModelNotFoundError(Exception):
     pass
@@ -756,6 +756,21 @@ class SigvisaGraph(DirectedGraphModel):
         wn.parent_sample()
         wn.fix_value()
         return templates
+
+    def dump_event_signals(self, eid, dump_path):
+        mkdir_p(dump_path)
+
+        for (sta, waves) in self.station_waves.items():
+            for wn in waves:
+                for (aeid, phase) in wn.arrivals():
+                    if eid != aeid: continue
+                    params, tg = wn.get_template_params_for_arrival(eid, phase)
+                    atime = params['arrival_time']
+                    stime = atime-10.0
+                    etime = atime + 100.0
+                    plot_with_fit(os.path.join(dump_path, "%s_%d_%s.png" % (sta, eid, phase)), wn,
+                                  highlight_eid=eid, stime=stime, etime=etime)
+
 
     def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True):
 

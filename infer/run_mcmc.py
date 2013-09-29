@@ -258,8 +258,6 @@ def main():
 
     parser = OptionParser()
 
-    parser.add_option("--smoothbins", dest="smoothbins", default=False, action="store_true",
-                      help="use small bins with smoothing (really slow) (False)")
     parser.add_option("--dprk", dest="dprk", default=False, action="store_true",
                       help="initialize with 2009 dprk event (False)")
     parser.add_option("--steps", dest="steps", default=100, type="int",
@@ -290,8 +288,7 @@ def main():
         ev.natural_source=True
         sg.add_event(ev)
 
-    if options.smoothbins:
-        set_hough_options({'bin_width_deg': 1.0, 'time_tick_s': 10, 'smoothbins': True})
+    set_hough_options({'bin_width_deg': 1.0, 'time_tick_s': 10, 'smoothbins': True})
 
     np.random.seed(0)
     run_open_world_MH(sg, burnin=options.burnin, skip=options.skip, steps=options.steps)

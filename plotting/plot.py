@@ -65,11 +65,13 @@ def bounds_without_outliers(data, coverage=99.99, epsilon=0.05):
     return min_bound - padding, max_bound + padding
 
 
-def plot_with_fit(fname, wn, title="", ymin=None, ymax=None,
+def plot_with_fit(fname, wn, title="",
+                  ymin=None, ymax=None,
                   unass_lw = 1,
                   ev_lw=2,
                   model_lw = 1,
                   tmpl_lw = None,
+                  highlight_eid=None,
                   **kwargs):
     fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')
@@ -89,6 +91,7 @@ def plot_with_fit(fname, wn, title="", ymin=None, ymax=None,
 
     unass_tmpls = []
     ev_tmpls = []
+    highlight_tmpl = None
     wn.parent_predict(include_wiggles=False)
     tmpl = wn.get_wave()
 
@@ -96,8 +99,10 @@ def plot_with_fit(fname, wn, title="", ymin=None, ymax=None,
         wn.parent_predict(include_wiggles=False, arrivals=[arrival,])
         if arrival[0] < 0:
             unass_tmpls.append(wn.get_wave())
-        else:
+        elif arrival[0] != highlight_eid:
             ev_tmpls.append(wn.get_wave())
+        else:
+            highlight_tmpl = wn.get_wave()
 
     subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
     if model_lw is not None:
@@ -118,6 +123,10 @@ def plot_with_fit(fname, wn, title="", ymin=None, ymax=None,
             subplot_waveform(ev_tmpl, axes, color="blue",
                              linewidth=ev_lw, alpha = 1,
                              plot_dets=False, **kwargs)
+    if highlight_tmpl is not None:
+        subplot_waveform(highlight_tmpl, axes, color="orange",
+                         linewidth=2, alpha = 1,
+                         plot_dets=False, **kwargs)
 
     wn.set_value(wave.data)
     wn._mutable = mutable
@@ -125,7 +134,7 @@ def plot_with_fit(fname, wn, title="", ymin=None, ymax=None,
 
     savefig(fname, fig, bbox_inches="tight", dpi=300)
 
-def plot_det_times(wave, axes=None, logscale=False):
+def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None):
     if wave is None:
         return
 
@@ -143,6 +152,12 @@ def plot_det_times(wave, axes=None, logscale=False):
     all_det_times = arrivals[:, DET_TIME_COL]
     all_det_labels = [Sigvisa().phasenames[arrivals[i, DET_PHASE_COL]] for i in range(arrivals.shape[0])]
 
+    if etime is not None:
+        adt = [all_det_times[i] for i in range(len(all_det_times)) if stime <= all_det_times[i] <= etime]
+        adl = [all_det_labels[i] for i in range(len(all_det_times)) if stime <= all_det_times[i] <= etime]
+        all_det_times = adt
+        all_det_labels = adl
+
     if all_det_times is not None:
 
         maxwave, minwave = float(np.max(wave.data)), float(np.min(wave.data))
@@ -157,12 +172,15 @@ def plot_det_times(wave, axes=None, logscale=False):
 
 # does not save for you - you need to call savefig() yourself!
 
-def plot_pred_atimes(predictions, wave, axes=None, logscale=False):
+def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None):
     if predictions is None or wave is None:
         return
 
     if axes is None:
         axes = plt.subplot(1, 1, 1)
+
+    if etime is not None:
+        predictions = [p for p in predictions if stime <= p[1] <= etime]
 
     pred_labels, pred_times = zip(*predictions.items())
 
@@ -233,21 +251,29 @@ def plot_waveform(wave, title=None, logscale=False):
     return fig
 
 
-def subplot_waveform(wave, axes, logscale=False, plot_dets=True, plot_predictions=None, **kwargs):
+def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_dets=True, plot_predictions=None, **kwargs):
     srate = wave['srate']
-    npts = wave['npts']
-    stime = wave['stime']
-    timevals = np.arange(stime, stime + npts / srate, 1.0 / srate)[0:npts]
-
     wave_data = np.log(wave.data) if logscale else wave.data
+    if stime is None:
+        npts = wave['npts']
+        stime = wave['stime']
+        timevals = np.arange(stime, stime + npts / srate, 1.0 / srate)[0:npts]
+    else:
+        sidx = max(0, int((stime - wave['stime']) * srate))
+        eidx = max(0, int((etime - wave['stime']) * srate))
+        npts = eidx-sidx
+        timevals = np.arange(stime, etime, 1.0 / srate)[0:npts]
+        wave_data=wave_data[sidx:eidx]
 
     axes.set_ylabel(wave['chan'])
     axes.plot(timevals, wave_data, **kwargs)
     if plot_dets:
-        plot_det_times(wave, axes=axes, logscale=logscale)
+        plot_det_times(wave, axes=axes, logscale=logscale, stime=stime, etime=etime)
 
     if plot_predictions:
-        plot_pred_atimes(predictions=plot_predictions, wave=wave, axes=axes, logscale=logscale)
+        plot_pred_atimes(predictions=plot_predictions, wave=wave,
+                         axes=axes, logscale=logscale,
+                         stime=stime, etime=etime)
 
 # does not save for you - you need to call savefig() yourself!
 def plot_bands(wave, bands=None, title=None):
