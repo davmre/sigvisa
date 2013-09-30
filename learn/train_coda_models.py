@@ -16,6 +16,36 @@ from optparse import OptionParser
 from sigvisa.models.ttime import tt_predict
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname, model_params
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
+from sigvisa.models.wiggles import load_wiggle_generator
+
+def get_wiggle_training_data(run_name, run_iter, wg, target_num, array=False, **kwargs):
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
+
+    wiggle_data, sta_data = load_wiggle_data(cursor, runids=[runid, ], basisid=wg.basisid, **kwargs)
+    print str(wiggle_data.shape[0]) + " entries loaded"
+
+    try:
+        y = wiggle_data[:, WIGGLE_PARAM0 + target_num]
+    except IndexError as e:
+        print "nd2"
+        raise NoDataException()
+
+    if array:
+        sta_pos = np.empty((0, 3))
+        for i in range(len(sta_data)):
+            sta_pos = np.append(sta_pos, np.array([list(s.earthmodel.site_info(sta_data[i], wiggle_data[i][FIT_ATIME]))[:3]]), axis = 0)
+        X = wiggle_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
+        X = np.concatenate((sta_pos, X), axis = 1)
+    else:
+        X = wiggle_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
+
+    evids = wiggle_data[:, FIT_EVID]
+
+    return X, y, evids
+
 
 def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, array=False, **kwargs):
     s = Sigvisa()
@@ -54,7 +84,6 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
     if array:
         sta_pos = np.empty((0, 3))
         for i in range(len(sta_data)):
-#            import pdb; pdb.set_trace()
             sta_pos = np.append(sta_pos, np.array([list(s.earthmodel.site_info(sta_data[i], fit_data[i][FIT_ATIME]))[:3]]), axis = 0)
         X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
         X = np.concatenate((sta_pos, X), axis = 1)
@@ -67,8 +96,30 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
 
 
 
+def chan_for_site(site, options):
+    s = Sigvisa()
+    if options.chan=="vertical":
+        chan = s.default_vertical_channel[site]
+    else:
+        chan = options.chan
+    chan = s.canonical_channel_name[chan]
+    return chan
 
+def explode_sites(options):
+    sites = options.sites.split(',')
+    s = Sigvisa()
+    allsites = []
+    if options.array_joint:
+        allsites = sites
 
+    else: # explode array sites into their individual elements
+        for site in sites:
+            try:
+                elems = s.get_array_elements(site)
+                allsites.extend(elems)
+            except:
+                allsites.append(site)
+    return allsites
 
 
 def main():
@@ -88,6 +139,7 @@ def main():
                       help="comma-separated list of phases for which to train models)")
     parser.add_option("-t", "--targets", dest="targets", default="coda_decay,amp_transfer,peak_offset", type="str",
                       help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
+    parser.add_option("-b", "--basisid", dest="basisid", default=None, type="int", help="basisid (from the sigvisa_wiggle_basis DB table) for which to train wiggle param models")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
     parser.add_option(
         "-m", "--model_type", dest="model_type", default="gp_lld", type="str", help="type of model to train (gp_lld)")
@@ -107,11 +159,20 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    sites = options.sites.split(',')
     phases = options.phases.split(',')
-    targets = options.targets.split(',')
     model_type = options.model_type
     band = options.band
+
+    if options.basisid is None:
+        wiggles = False
+        basisid = None
+        targets = options.targets.split(',')
+    else:
+        wiggles = True
+        basisid = options.basisid
+        wg = load_wiggle_generator(basisid=basisid)
+        targets = wg.params()
+
 
     optim_params = construct_optim_params(options.optim_params)
 
@@ -123,41 +184,26 @@ def main():
         run_iter = int(options.run_iter)
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
-
-    allsites = []
-    if options.array_joint:
-        allsites = sites
-
-    else: # explode array sites into their individual elements
-        for site in sites:
-            try:
-                elems = s.get_array_elements(site)
-                allsites.extend(elems)
-            except:
-                allsites.append(site)
+    allsites = explode_sites(options)
 
     for site in allsites:
+        chan = chan_for_site(site, options)
 
-        if options.chan=="vertical":
-            chan = s.default_vertical_channel[site]
-        else:
-            chan = options.chan
-
-        chan = s.canonical_channel_name[chan]
-
-        for target in targets:
-
+        for (param_num, target) in enumerate(targets):
             if target == "amp_transfer":
                 min_amp = options.min_amp_for_at
             else:
                 min_amp = options.min_amp
 
             for phase in phases:
-
+                if wiggles:
+                    basisid_cond = 'and wiggle_basisid=%d' % basisid
+                else:
+                    basisid_cond = ''
 
                 # check for duplicate model
-                sql_query = "select modelid from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' " % (
-                    model_type, site, chan, band, phase, runid, target)
+                sql_query = "select modelid from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' %s" % (
+                    model_type, site, chan, band, phase, runid, target, basisid_cond)
                 cursor.execute(sql_query)
                 dups = cursor.fetchall()
                 if len(dups) > 0 and not options.enable_dupes:
@@ -168,20 +214,28 @@ def main():
 
                 try:
                     elems = s.get_array_elements(site)
-                    X, y, evids = np.empty((0, 6)), np.empty((0, )), np.empty((0, ))
+                except:
+                    elems = [site,]
+                try:
+                    X, y, evids = None, None, None
                     for array_elem in elems:
-                        X_part, y_part, evids_part = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=array_elem, chan=chan, band=band, phases=[phase, ], target=target,require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
-                        X = np.append(X, X_part, axis = 0)
-                        y = np.append(y, y_part)
-                        evids = np.append(evids, evids_part)
+                        if wiggles:
+                            X_part, y_part, evids_part = get_wiggle_training_data(run_name=run_name, run_iter=run_iter, wg=wg, site=array_elem, chan=chan, band=band, phases=[phase, ], target_num=param_num, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
+                        else:
+                            X_part, y_part, evids_part = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=array_elem, chan=chan, band=band, phases=[phase, ], target=target,require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
+                        X = np.append(X, X_part, axis = 0) if X is not None else X_part
+                        y = np.append(y, y_part) if y is not None else y_part
+                        evids = np.append(evids, evids_part) if evids is not None else evids_part
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
-                except:
-                    X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
+                #except:
+                #    X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
 
-#
-                model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
+                if wiggles:
+                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
+                else:
+                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=options.basisid, unique=True)
                 evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
                 np.savetxt(evid_fname, evids, fmt='%d')
 
@@ -196,7 +250,10 @@ def main():
                     continue
 
                 model.save_trained_model(model_fname)
-                modelid = insert_model(s.dbconn, fitting_runid=runid, template_shape=options.template_shape, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None)
+                wiggle_options = {'wiggle_basisid': basisid,}
+                template_options = {'template_shape': options.template_shape, }
+                insert_options = wiggle_options if wiggles else template_options
+                modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, **insert_options)
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
 if __name__ == "__main__":

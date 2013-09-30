@@ -72,8 +72,11 @@ def plot_with_fit(fname, wn, title="",
                   model_lw = 1,
                   tmpl_lw = None,
                   highlight_eid=None,
+                  fig=None,
                   **kwargs):
-    fig = Figure(figsize=(8, 5), dpi=144)
+
+    if fig is None:
+        fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
     axes.set_title(title)
@@ -132,7 +135,10 @@ def plot_with_fit(fname, wn, title="",
     wn._mutable = mutable
     wn._update_mutable_cache()
 
-    savefig(fname, fig, bbox_inches="tight", dpi=300)
+    if fname is None:
+        return fig
+    else:
+        savefig(fname, fig, bbox_inches="tight", dpi=300)
 
 def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None):
     if wave is None:

@@ -68,12 +68,18 @@ class SigvisaGraph(DirectedGraphModel):
 
     """
 
-    def _tm_type(self, param, site=None):
+    def _tm_type(self, param, site=None, wiggle_param=True):
 
-        try:
-            tmtype = self.template_model_type[param]
-        except TypeError:
-            tmtype = self.template_model_type
+        if wiggle_param:
+            try:
+                tmtype = self.wiggle_model_type[param]
+            except TypeError:
+                tmtype = self.wiggle_model_type
+        else:
+            try:
+                tmtype = self.template_model_type[param]
+            except TypeError:
+                tmtype = self.template_model_type
 
         if site is None: return tmtype
 
@@ -197,6 +203,17 @@ class SigvisaGraph(DirectedGraphModel):
         nodes = self.get_template_nodes(eid, sta, phase, band, chan)
         vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
         return vals
+
+    def get_arrival_nodes(self, eid, sta, phase, band, chan):
+        nodes = self.get_template_nodes(eid, sta, phase, band, chan)
+        nodes.update(self.get_wiggle_nodes(eid, sta, phase, band, chan))
+        return nodes
+
+    def get_arrival_vals(self, eid, sta, phase, band, chan):
+        nodes = self.get_arrival_nodes(eid, sta, phase, band, chan)
+        vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
+        return vals
+
 
     def set_template(self, eid, sta, phase, band, chan, values):
         for (param, value) in values.items():
@@ -362,15 +379,16 @@ class SigvisaGraph(DirectedGraphModel):
         tg = self.template_generator(phase=phase)
         wg = self.wiggle_generator(phase=phase, srate=wave_node.srate)
 
-        nodes = dict()
+        tnodes = dict()
+        wnodes = dict()
         at_label = create_key(param="arrival_time", sta=wave_node.sta,
                            phase=phase, eid=eid,
                            chan=wave_node.chan, band=wave_node.band)
 
-        nodes['arrival_time'] = Node(label=at_label, model=DummyModel(default_value=atime),
+        tnodes['arrival_time'] = Node(label=at_label, model=DummyModel(default_value=atime),
                                      initial_value=atime, children=(wave_node,),
                                      low_bound=atime-15, high_bound=atime+15)
-        self.add_node(nodes['arrival_time'], template=True)
+        self.add_node(tnodes['arrival_time'], template=True)
         for param in tg.params():
             label = create_key(param=param, sta=wave_node.sta,
                                phase=phase, eid=eid,
@@ -379,8 +397,8 @@ class SigvisaGraph(DirectedGraphModel):
             lb = tg.low_bounds()[param]
             hb = tg.high_bounds()[param]
 
-            nodes[param] = Node(label=label, model=model, children=(wave_node,), low_bound=lb, high_bound=hb)
-            self.add_node(nodes[param], template=True)
+            tnodes[param] = Node(label=label, model=model, children=(wave_node,), low_bound=lb, high_bound=hb)
+            self.add_node(tnodes[param], template=True)
 
         if wiggles:
             for param in wg.params():
@@ -388,19 +406,27 @@ class SigvisaGraph(DirectedGraphModel):
                                    phase=phase, eid=eid,
                                    chan=wave_node.chan, band=wave_node.band)
                 model = wg.unassociated_model(param)
-                nodes[param] = Node(label=label, model=model, children=(wave_node,))
-                self.add_node(nodes[param], wiggle=True)
+                wnodes[param] = Node(label=label, model=model, children=(wave_node,))
+                self.add_node(wnodes[param], wiggle=True)
 
-        for (param, node) in nodes.items():
+        for (param, node) in tnodes.items():
             node.tmid = tmid
             if initial_vals is None:
                 node.parent_sample()
             else:
                 node.set_value(initial_vals[param])
 
+        for (param, node) in wnodes.items():
+            if initial_vals is not None:
+                node.set_value(initial_vals[param])
+            else:
+                node.parent_predict()
+
+        nodes = tnodes
+        nodes.extend(wnodes)
+
         self.uatemplates[tmid] = nodes
         self.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].add(tmid)
-
 
         if not nosort:
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
@@ -424,14 +450,11 @@ class SigvisaGraph(DirectedGraphModel):
         else:
             return self.setup_site_param_node_indep(**kwargs)
 
-    def setup_site_param_node_joint(self, param, site, phase, parent,
+    def setup_site_param_node_joint(self, param, site, phase, parent, model_type,
                               chan=None, band=None, basisid=None,
-                              model_type=None, modelid=None,
+                              modelid=None,
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
-
-        if model_type is None:
-            model_type = self._tm_type(param)
 
         if model_type != "dummy" and modelid is None:
             try:
@@ -463,14 +486,12 @@ class SigvisaGraph(DirectedGraphModel):
 
 
 
-    def setup_site_param_node_indep(self, param, site, phase, parent,
+    def setup_site_param_node_indep(self, param, site, phase, parent, model_type,
                               chan=None, band=None, basisid=None,
-                              model_type=None, modelid=None,
+                              modelid=None,
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
 
-        if model_type is None:
-            model_type = self._tm_type(param)
 
         # for each station at this site, create a node with the
         # appropriate parameter model.
@@ -560,16 +581,20 @@ class SigvisaGraph(DirectedGraphModel):
             for wave_node in self.station_waves[sta]:
                 child_wave_nodes.add(wave_node)
 
+        tt_model_type = self._tm_type(param="tt_residual", site=site, wiggle_param=False)
         tt_residual_node = tg.create_param_node(self, site, phase,
                                                 band=None, chan=None, param="tt_residual",
+                                                model_type=tt_model_type,
                                                 evnodes=evnodes,
                                                 low_bound = -15,
                                                 high_bound = 15)
         arrival_time_node = self.setup_tt(site, phase, evnodes=evnodes,
                                 tt_residual_node=tt_residual_node,
                                 children=child_wave_nodes)
+        ampt_model_type = self._tm_type(param="amp_transfer", site=site, wiggle_param=False)
         amp_transfer_node = tg.create_param_node(self, site, phase,
                                                  band=None, chan=None, param="amp_transfer",
+                                                 model_type=ampt_model_type,
                                                  evnodes=evnodes,
                                                  low_bound=-4.0, high_bound=10.0)
 
@@ -579,9 +604,10 @@ class SigvisaGraph(DirectedGraphModel):
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
                 for param in tg.params():
+                    model_type = self._tm_type(param, site, wiggle_param=False)
                     # here the "create param node" creates, potentially, a single node or a dict of nodes
                     nodes[(band, chan, param)] = tg.create_param_node(self, site, phase, band,
-                                                                      chan, param=param,
+                                                                      chan, model_type=model_type, param=param,
                                                                       evnodes=evnodes,
                                                                       atime_node=arrival_time_node,
                                                                       amp_transfer_node=amp_transfer_node,
@@ -590,7 +616,9 @@ class SigvisaGraph(DirectedGraphModel):
                                                                       high_bound = tg.high_bounds()[param],
                                                                       initial_value = tg.default_param_vals()[param])
                 for param in wg.params():
+                    model_type = self._tm_type(param, site, wiggle_param=True)
                     nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
+                                                                            model_type=model_type,
                                                                             phase=phase, parent=evnodes['loc'],
                                                                             band=band, chan=chan, basisid=wg.basisid,
                                                                             children=child_wave_nodes, wiggle=True)

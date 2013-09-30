@@ -323,5 +323,6 @@ signal_diff(i) =value(i) - pred_signal(i);
             return np.ones((wg.npts,))
 
     def get_template_params_for_arrival(self, eid, phase, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg

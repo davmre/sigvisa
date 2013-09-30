@@ -22,13 +22,18 @@ start_params_lld = {"coda_decay": [.022, .0187, 9.00, 1.0],
                     "amp_transfer": [1.1, 3.4, 9.00, 1.0],
                     "peak_offset": [2.7, 3.4, 9.00, 1.0],
                     "tt_residual": [2.7, 3.4, 9.00, 1.0],
+                    "amp": [.1, .1, 9.00, 1.0],
+                    "phase": [1.0, 1.0, 9.00, 1.0],
                     }
+
 
 
 gp_priors_lld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.0004, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "amp_transfer": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "peak_offset": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "tt_residual": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "amp": [InvGamma(beta=.1, alpha=1), InvGamma(beta=.1, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "phase": [InvGamma(beta=1.0, alpha=1), InvGamma(beta=1.0, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
 }
 
 

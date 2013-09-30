@@ -13,7 +13,7 @@ from sigvisa.signals.io import load_event_station_chan
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.signal_model import extract_arrival_from_key
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.graph.graph_utils import create_key
+from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
 from sigvisa.utils.counter import Counter
@@ -154,6 +154,68 @@ def improve_offset_move(sg, wave_node, tmnodes, **kwargs):
                          node_list = (arrival_node, offset_node),
                          relevant_nodes=relevant_nodes)
     return accepted
+
+def improve_atime_move(sg, wave_node, tmnodes, std=.1, **kwargs):
+    # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
+    k_atime, n_atime = tmnodes['arrival_time']
+    eid, phase, sta, chan, band, param = parse_key(k_atime)
+
+    # propose a new arrival time
+    relevant_nodes = [wave_node,]
+    parent = n_atime.parents[n_atime.default_parent_key()]
+    relevant_nodes.append(parent)
+    old_atime = n_atime.get_value(k_atime)
+    values = (old_atime,)
+    atime_proposal = gaussian_propose(sg, keys=(k_atime,), node_list=(n_atime,), values=(values), **kwargs)
+
+    # adjust wiggles for that new time
+    wg = sg.wiggle_generator(phase, wave_node.srate)
+    wnodes = [(p, tmnodes[p]) for p in wg.params()]
+    wiggle_vals = [n.get_value(k) for (p, (k,n)) in wnodes]
+    wiggle_vals_new = np.array(wiggle_vals, copy=True)
+    wg.timeshift_param_array(wiggle_vals_new, atime_proposal-old_atime)
+
+    # consider the proposed arrival time along with new adjusted wiggles.
+    # HACK note: we hard-code the assumption of fourier wiggles, where we
+    # know that a timeshift will only change the phase parameters (the latter
+    # half of the param array).
+    d2 = wg.dimension()/2
+    phase_wnodes = wnodes[d2:]
+    phase_nodes = [n for (p,(k, n)) in phase_wnodes]
+    phase_keys = [k for (p,(k, n)) in phase_wnodes]
+    relevant_nodes += phase_nodes
+    node_list = [n_atime,] + phase_nodes
+    keys = [k_atime,] + phase_keys
+    oldvalues = [atime,] + wiggle_vals[d2:]
+    newvalues = [atime_proposal,] + wiggle_vals_new[d2:]
+
+    return MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes)
+
+#just for debugging
+"""
+def do_atime_move(sg, wave_node, tmnodes, atime_offset):
+    k_atime, n_atime = tmnodes['arrival_time']
+    eid, phase, sta, chan, band, param = parse_key(k_atime)
+
+    # propose a new arrival time
+    relevant_nodes = [wave_node,]
+    parent = n_atime.parents[n_atime.default_parent_key()]
+    relevant_nodes.append(parent)
+    old_atime = n_atime.get_value(k_atime)
+    values = (old_atime,)
+    atime_proposal = old_atime + atime_offset
+
+    # adjust wiggles for that new time
+    wg = sg.wiggle_generator(phase, wave_node.srate)
+    wnodes = [(p, tmnodes[p]) for p in wg.params()]
+    wiggle_vals = [n.get_value(k) for (p, (k,n)) in wnodes]
+    wiggle_vals_new = np.array(wiggle_vals, copy=True)
+    wg.timeshift_param_array(wiggle_vals_new, atime_offset)
+
+    for (i, (p, (k, n))) in enumerate(wnodes):
+        n.set_value(key=k, value=wiggle_vals_new[i])
+    n_atime.set_value(key=k_atime, value=atime_proposal)
+"""
 #######################################################################
 
 def get_sorted_arrivals(wave_node):
@@ -434,6 +496,17 @@ def merge_move(sg, wave_node, return_probs=False):
 
 #######################################################################
 
+def get_wiggles_from_signal()
+            # initialize wiggles from signal
+            arrivals = wave_node.arrivals()
+            arr = (eid, 'UA')
+            signal_data, st, et = extract_phase_wiggle(arr, arrivals, wave_node)
+            features = wg.features_from_signal(signal, return_array=True)
+            dim = wg.dimension()
+            features += np.random.randn(dim) * 0.1
+            features[dim/2:] = features[dim/2:] % (2*np.pi)
+            for (i,param) in enumerate(wg.params()):
+                wnodes[param].set_value(features[i])
 
 
 def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):

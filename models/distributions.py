@@ -34,6 +34,10 @@ class Gamma(Distribution):
         return stats.gamma.rvs(self.alpha, scale=1.0/self.beta, loc=0., n=1)
 
 class InvGamma(Distribution):
+    # mean: beta/(alpha-1)
+    # mode: beta/(alpha+1)
+    # variance: beta^2 / ( (alpha-1)^2 (alpha-2) )
+
     def __init__(self, alpha, beta):
         self.alpha = alpha
         self.beta = beta

@@ -140,7 +140,6 @@ def subsample_data(X, y, k=250):
 
 def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False):
 
-
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
     else:
@@ -148,8 +147,16 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
         b = np.array(())
         B = np.array(((),))
 
+    try:
+        st = target.split('_')
+        float(st[1])
+        target = st[0]
+    except ValueError:
+        pass
+
     if params is None:
         params = start_params[kernel_str][target]
+
 
     if priors is None:
         priors = gp_priors[kernel_str][target]

@@ -24,7 +24,7 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attemp
     # special case when template moves are disabled
     if len(template_moves_gaussian) == 0: return
 
-    for param in tg.params() + ('arrival_time',):
+    for param in tg.params():
         k, n = tmnodes[param]
 
         # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
@@ -154,8 +154,9 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                  'tmpl_merge': merge_move,
                  'swap_association': swap_association_move} if enable_template_openworld else {}
     template_moves_special = {'indep_peak': indep_peak_move,
-                              'peak_offset': improve_offset_move} if enable_template_moves else {}
-    template_moves_gaussian = {'arrival_time': .1,
+                              'peak_offset': improve_offset_move,
+                              'arrival_time': improve_atime_move} if enable_template_moves else {}
+    template_moves_gaussian = {
                                'coda_height': .02,
                                'coda_decay': .05,
                                'wiggle_amp': .25,
@@ -225,7 +226,7 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                         tg = sg.template_generator(phase)
                         wg = sg.wiggle_generator(phase, wn.srate)
 
-                        tmnodes = sg.get_template_nodes(eid, sta, phase, wn.band, wn.chan)
+                        tmnodes = sg.get_arrival_nodes(eid, sta, phase, wn.band, wn.chan)
 
                         for (move_name, fn) in template_moves_special.iteritems():
                             run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,

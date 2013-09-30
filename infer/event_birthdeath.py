@@ -53,7 +53,7 @@ def unass_template_logprob(sg, sta, template_dict):
         lp += model.log_p(template_dict[param])
     return lp
 
-def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None):
+def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None, wiggle=False):
 
     """
 
@@ -63,7 +63,9 @@ def param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=None
 
     """
 
-    model_type = sg._tm_type(param, site=site)
+    model_type = sg._tm_type(param, site=site, wiggle_param=wiggle)
+    if model_type == "dummy":
+        return 0.0
 
     s = Sigvisa()
     if s.is_array_station(site) and sg.arrays_joint:
@@ -122,9 +124,11 @@ def ev_phase_template_logprob(sg, sta, eid, phase, template_dict):
         if param in ('arrival_time', 'coda_height'): continue
         if param in wiggle_params:
             basisid = wg.basisid
+            wiggle = True
         else:
             basisid = None
-        lp_param = param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=basisid)
+            wiggle=False
+        lp_param = param_logprob(sg, site, sta, ev, phase, chan, band, param, val, basisid=basisid, wiggle=wiggle)
         lp += lp_param
     return lp
 
@@ -215,7 +219,7 @@ def unassociate_template(sg, sta, eid, phase, tmid=None):
     band = list(sg.site_bands[site])[0]
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
-    ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
+    ev_tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
 
     wave_node = sg.station_waves[sta][0]
     atime = ev_tmvals['arrival_time']
@@ -237,7 +241,7 @@ def deassociation_prob(sg, sta, eid, phase, deletion_prob=False):
     band = list(sg.site_bands[site])[0]
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
-    ev_tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
+    ev_tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
 
     unass_lp = unass_template_logprob(sg, sta, ev_tmvals)
 
@@ -300,7 +304,7 @@ def propose_phase_template(sg, sta, eid, phase):
     band = list(sg.site_bands[site])[0]
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
-    tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
+    tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
@@ -356,7 +360,7 @@ def death_proposal_log_ratio(sg, eid):
             for phase in sg.phases:
                 for chan in sg.site_chans[site]:
                     for band in sg.site_bands[site]:
-                        tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
+                        tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
 
                         lp_unass_tmpl = unass_template_logprob(sg, sta, tmvals)
                         lp_ev_tmpl = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
@@ -454,7 +458,7 @@ def ev_death_move(sg, log_to_run_dir=None):
                     #print "proposing to deassociate at %s (lp %.1f)" % (sta, deassociate_logprob)
 
                 else:
-                    template_param_array = sg.get_template_vals(eid, sta, phase, band, chan)
+                    template_param_array = sg.get_arrival_vals(eid, sta, phase, band, chan)
                     inverse_fns.append(lambda sta=sta,phase=phase,band=band,chan=chan,template_param_array=template_param_array : sg.set_template(eid,sta, phase, band, chan, template_param_array))
                     tmp = phase_template_proposal_logp(sg, sta, eid, phase, template_param_array)
                     reverse_logprob += tmp

@@ -51,12 +51,10 @@ def extract_phase_wiggle(arrival, arrivals, wave_node, skip_initial_s=1.0):
             (template_with_phase[start_idx:i] - template_without_phase[start_idx:i])
         #wiggle_data[: skipped_idx - start_idx] = ma.masked
 
-        np.savetxt('wave_data.txt', wave.data[start_idx:i])
-        np.savetxt('tmpl_without_phase.txt', template_without_phase[start_idx:i])
-        np.savetxt('tmpl_with_phase.txt', template_with_phase[start_idx:i])
-        np.savetxt('wiggle_data.txt', wiggle_data)
-
-
+        #np.savetxt('wave_data.txt', wave.data[start_idx:i])
+        #np.savetxt('tmpl_without_phase.txt', template_without_phase[start_idx:i])
+        #np.savetxt('tmpl_with_phase.txt', template_with_phase[start_idx:i])
+        #np.savetxt('wiggle_data.txt', wiggle_data)
         st = wiggle_stime
         et = st + i / wave['srate']
 
