@@ -188,12 +188,27 @@ def plot_gaussian(request, model_record, axes):
     pdf = scipy.stats.norm.pdf(x, loc=model.mean, scale=model.std)
     axes.plot(x, pdf, 'k-')
 
+def plot_adhoc_gaussian(request, xy_by_phase, axes):
+
+    for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
+        y = xy_by_phase[phase][1]
+
+        mean = np.mean(y)
+        std = np.std(y)
+
+        xmin = mean - 4 * std
+        xmax = mean + 4 * std
+        x = np.linspace(xmin, xmax, 200)
+        pdf = scipy.stats.norm.pdf(x, loc=mean, scale=std)
+        axes.plot(x, pdf, 'k-')
+
 
 def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
     fig = Figure(figsize=(8, 5), dpi=144)
     fig.patch.set_facecolor('white')
     axes = fig.add_subplot(111)
 
+    log_transform = bool(request.GET.get("log", False))
     d = {}
     if modelid is not None:
         model = SigvisaParamModel.objects.get(modelid=modelid)
@@ -252,11 +267,16 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
                                                 site=sta, chan=chan, band=band, phases=phases,
                                                 target=param,require_human_approved=require_human_approved,
                                                 max_acost=max_acost, min_amp=min_amp, **d)
+            if log_transform:
+                y = np.log(np.abs(y))
             xy_by_phase[phase] = (X, y)
 
     if modelid is not None:
         if plot_type == "histogram":
-            plot_gaussian(request, model, axes=axes)
+            if log_transform:
+                plot_adhoc_gaussian(request, xy_by_phase, axes=axes)
+            else:
+                plot_gaussian(request, model, axes=axes)
         elif plot_type == "distance":
             if model.model_type == "linear_distance":
                 plot_linear_model_distance(request, model_record=model, axes=axes)

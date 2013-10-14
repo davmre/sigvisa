@@ -33,7 +33,7 @@ import sys
 from sigvisa.database.sites import *
 
 from sigvisa import Sigvisa
-
+import sigvisa.utils.geog as geog
 # local imports
 import db
 from az_slow_corr import load_az_slow_corr
@@ -170,7 +170,7 @@ def read_isc_events(cursor, start_time, end_time, author):
     return events
 
 
-def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[], min_mb=0, max_mb=99999, min_snr=0, max_snr=99999, only_phases=[]):
+def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[], min_mb=0, max_mb=99999, min_snr=0, max_snr=99999, only_phases=[], min_distance=0, max_distance=999999, time_filter_direct=False):
 
     cursor = dbconn.cursor()
 
@@ -188,24 +188,42 @@ def read_evids_detected_at_station(dbconn, sta, start_time, end_time, phases=[],
     if min_snr > 0 or max_snr < 99999:
         ev_condition += "and l.snr between %f and %f " % (min_snr, max_snr)
 
-    sql_query = "SELECT lebo.evid, l.time FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s" % (
-        phase_condition, sta, ev_condition)
-    print sql_query, "ADDITIONALLY FILTERING FOR l.time between %f and %f" % (start_time, end_time)
+    time_condition= ""
+    if time_filter_direct:
+        time_condition = "and lebo.time between %f and %f" % (start_time, end_time)
+
+    sql_query = "SELECT lebo.evid, l.time, lebo.lon, lebo.lat FROM leb_arrival l, leb_origin lebo, leb_assoc leba, dataset d where leba.arid=l.arid and lebo.orid=leba.orid %s and l.sta='%s' %s %s" % (
+    phase_condition, sta, ev_condition, time_condition)
+
+    print sql_query,
+    if not time_filter_direct:
+        "ADDITIONALLY FILTERING FOR l.time between %f and %f" % (start_time, end_time),
+    print
     cursor.execute(sql_query)
 
     def test_only_phase_condition(cursor, evid):
+        if len(only_phases) == 0:
+            return True
         only_phase_condition = " and ".join(["leba.phase != '%s'" % p for p in only_phases])
         sql_query = "select count(leba.phase) from leb_origin lebo, leb_assoc leba, leb_arrival l where l.sta='%s' and lebo.evid='%d' and %s and l.arid=leba.arid and lebo.orid=leba.orid" % (sta, evid, only_phase_condition)
         cursor.execute(sql_query)
         a = cursor.fetchone()[0]
         return a == 0
 
+    s = Sigvisa()
+    sta_lon, sta_lat = s.earthmodel.site_info(sta, 0)[:2]
+    def test_distance_condition(evlon, evlat):
+        if min_distance < 1 and max_distance > 20000:
+            return True
+        dist = geog.dist_km((sta_lon, sta_lat), (evlon, evlat))
+        return min_distance <= dist <= max_distance
+
     cursor2 = dbconn.cursor()
     evids = set()
     for (i, row) in enumerate(cursor):
         t = row[1]
         if t > start_time and t < end_time:
-            if test_only_phase_condition(cursor = cursor2, evid=row[0]):
+            if test_distance_condition(row[2], row[3]) and test_only_phase_condition(cursor = cursor2, evid=row[0]):
                 evids.add(row[0])
         if i % 1000 == 0:
             print ".",
