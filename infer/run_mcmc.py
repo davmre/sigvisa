@@ -15,7 +15,7 @@ from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move
-from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, swap_association_move
+from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, improve_atime_move, swap_association_move
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -99,7 +99,7 @@ def cleanup_mcmc(log_handles):
         if type(v) == file:
             v.close()
 
-def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles):
+def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps=False):
     run_dir = log_handles['dir']
 
     if 'lp' not in log_handles:
@@ -132,6 +132,14 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles):
             log_handles[move_name].write('%d %f\n' % (step, t));
         del move_times[move_name]
 
+    if dumpsteps:
+        # dump images for each station at each step
+        print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
+        for (sta, waves) in sg.station_waves.items():
+            for wn in waves:
+                plot_with_fit(os.path.join(run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
+
+
 ############################################################################
 
 def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
@@ -139,7 +147,8 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                       enable_event_moves=True,
                       enable_template_openworld=True,
                       enable_template_moves=True,
-                      run_dir=None):
+                      run_dir=None,
+                      dumpsteps=False):
     global_moves = {'event_birth': ev_birth_move,
                     'event_death': ev_death_move} if enable_event_openworld else {}
     event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat'), 0.1),
@@ -159,8 +168,8 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
     template_moves_gaussian = {
                                'coda_height': .02,
                                'coda_decay': .05,
-                               'wiggle_amp': .25,
-                               'wiggle_phase': .5} if enable_template_moves else {}
+                               'wiggle_amp': .1,
+                               'wiggle_phase': .1} if enable_template_moves else {}
 
     tmpl_openworld_move_probability = .10
     ev_openworld_move_probability = .05
@@ -245,7 +254,7 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                      sg=sg, log_to_run_dir=run_dir)
 
 
-        log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles)
+        log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps)
         if step > 0 and ((step % skip == 0) or (step < 15)):
             print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
 

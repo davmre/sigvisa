@@ -342,7 +342,7 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
   int ref_siteid = p_site->ref_siteid;
 
   trvtime += ArrivalTimePrior_MeanResidual(&p_sigmodel->arr_time_joint_prior.single_prior,
-                                           ref_siteid, phaseid);
+                                           ref_siteid-1, phaseid);
 
   return Py_BuildValue("d", trvtime);
 }

@@ -1,5 +1,4 @@
 import numpy as np
-import numpy.ma as ma
 import copy
 import sys
 import traceback
@@ -11,8 +10,8 @@ from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.sigvisa_graph import get_param_model_id
 from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
+from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution
 from sigvisa.learn.train_param_common import load_modelid
-from sigvisa.models.distributions import Gaussian
 from sigvisa.models.ev_prior import event_from_evnodes
 from sigvisa.models.ttime import tt_residual
 from sigvisa.models.templates.coda_height import amp_transfer
@@ -272,26 +271,6 @@ def sample_deassociation_proposal(sg, sta, eid, phase):
     deassociate_lp = np.log(p) if deassociate else np.log(1-p)
     return deassociate, deassociate_lp
 
-def get_signal_based_amplitude_distribution(sg, sta, tmvals, peak_period_s = 1.0):
-    wn = sg.station_waves[sta][0]
-    peak_time = tmvals['arrival_time'] + tmvals['peak_offset']
-    peak_idx = int((peak_time - wn.st) * wn.srate)
-    peak_period_samples = int(peak_period_s * wn.srate)
-    peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
-
-    # if we land outside of the signal window, or during an unobserved (masked) portion,
-    # we'll just sample from the event-conditional prior instead
-    if ma.count(peak_data) == 0:
-        return None
-
-    peak_height = peak_data.mean()
-
-    env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
-
-
-
-    return Gaussian(mean=np.log(env_height), std = 1.0)
-
 def propose_phase_template(sg, sta, eid, phase):
     # sample a set of params for a phase template from an appropriate distribution (as described above).
     # return as an array.
@@ -304,7 +283,7 @@ def propose_phase_template(sg, sta, eid, phase):
     band = list(sg.site_bands[site])[0]
     assert (len(list(sg.site_chans[site])) == 1)
     chan = list(sg.site_chans[site])[0]
-    tmvals = sg.get_arrival_vals(eid, sta, phase, band, chan)
+    tmvals = sg.get_template_vals(eid, sta, phase, band, chan)
     if 'amp_transfer' in tmvals:
         del tmvals['amp_transfer']
 
@@ -323,6 +302,15 @@ def propose_phase_template(sg, sta, eid, phase):
     else:
         lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
 
+    # wiggles!
+    wg = sg.wiggle_generator(phase=phase, srate=wave_node.srate)
+    wnodes = sg.get_wiggle_nodes(eid, sta, phase, band, chan)
+    wave_node = sg.station_waves[sta][0]
+    wiggle_proposal_lp = propose_wiggles_from_signal(eid, phase, wave_node, wg, wnodes)
+    lp += wiggle_proposal_lp
+    wvals = sg.get_wiggle_vals(eid, sta, phase, band, chan)
+    tmvals.update(wvals)
+
     return tmvals, lp
 
 def phase_template_proposal_logp(sg, sta, eid, phase, tmvals):
@@ -334,6 +322,16 @@ def phase_template_proposal_logp(sg, sta, eid, phase, tmvals):
 
     amplitude = tmvals['coda_height']
     amp_dist = get_signal_based_amplitude_distribution(sg, sta, tmvals)
+
+    # wiggles!
+    wg = sg.wiggle_generator(phase=phase, srate=wave_node.srate)
+    wave_node = sg.station_waves[sta][0]
+    wiggle_proposal_lp = wiggle_proposal_lprob_from_signal(eid, phase, wave_node, wg, wvals=tmvals)
+    lp += wiggle_proposal_lp
+    tmvals.update(wvals)
+
+    wiggle_param_set = set(wg.params())
+    tmvals = dict([(p,v) for (p,v) in tmvals.items() if not p in wiggle_param_set])
 
     if amp_dist is not None:
         del tmvals['coda_height']

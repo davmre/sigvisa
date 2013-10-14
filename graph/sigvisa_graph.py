@@ -143,7 +143,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_nodes = []
 
         self.station_waves = dict() # (sta)
-        self.site_elements = dict() # site (str) -> list of elements (strs)
+        self.site_elements = dict() # site (str) -> set of elements (strs)
         self.site_bands = dict()
         self.site_chans = dict()
         self.arrays_joint = arrays_joint
@@ -181,6 +181,11 @@ class SigvisaGraph(DirectedGraphModel):
             k, node = get_parent_value(eid=eid, sta=sta, phase=phase, param_name=param, chan=chan, band=band, parent_values=self.nodes_by_key, return_key=True)
             nodes[param]=(k, node)
         return nodes
+
+    def get_wiggle_vals(self, eid, sta, phase, band, chan):
+        nodes = self.get_wiggle_nodes(eid, sta, phase, band, chan)
+        vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
+        return vals
 
     def get_template_nodes(self, eid, sta, phase, band, chan):
         tg = self.template_generator(phase)
@@ -357,7 +362,7 @@ class SigvisaGraph(DirectedGraphModel):
         if not nosort:
             self._topo_sort()
 
-    def create_unassociated_template(self, wave_node, atime, wiggles=True, nosort=False, tmid=None, initial_vals=None):
+    def create_unassociated_template(self, wave_node, atime, wiggles=True, nosort=False, tmid=None, initial_vals=None, sample_wiggles=False):
 
         """
 
@@ -417,19 +422,23 @@ class SigvisaGraph(DirectedGraphModel):
                 node.set_value(initial_vals[param])
 
         for (param, node) in wnodes.items():
-            if initial_vals is not None:
+            if initial_vals is not None and param in initial_vals:
                 node.set_value(initial_vals[param])
             else:
-                node.parent_predict()
+                if sample_wiggles:
+                    node.parent_sample()
+                else:
+                    node.parent_predict()
 
         nodes = tnodes
-        nodes.extend(wnodes)
+        nodes.update(wnodes)
 
         self.uatemplates[tmid] = nodes
         self.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].add(tmid)
 
         if not nosort:
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
+            sg._gc_topo_sorted_nodes()
         return nodes
 
     def load_node_from_modelid(self, modelid, label, **kwargs):
@@ -516,6 +525,8 @@ class SigvisaGraph(DirectedGraphModel):
             if model_type=="dummy":
                 if "tt_residual" in label:
                     model = Gaussian(mean=0.0, std=10.0)
+                if "amp" in label:
+                    model = Gaussian(mean=0.0, std=0.25)
                 else:
                     model = DummyModel(default_value=initial_value)
                 node = Node(label=label, model=model, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
@@ -776,10 +787,11 @@ class SigvisaGraph(DirectedGraphModel):
         templates = []
         for i in range(n_templates):
             atime = template_time_dist.sample()
-            tnodes = self.create_unassociated_template(wave_node=wn, atime=atime, **kwargs)
+            tnodes = self.create_unassociated_template(wave_node=wn, atime=atime, nosort=True, **kwargs)
             for node in tnodes.values():
                 node.parent_sample()
             templates.append(tnodes)
+        self._topo_sort()
         wn.unfix_value()
         wn.parent_sample()
         wn.fix_value()

@@ -247,7 +247,7 @@ def read_detections(cursor, start_time, end_time, arrival_table="idcx_arrival", 
     return detections, arid2num
 
 
-def read_event_detections(cursor, evid, stations=None, evtype="leb"):
+def read_event_detections(cursor, evid, stations=None, evtype="leb", min_snr=0):
 
     s = Sigvisa()
 
@@ -257,8 +257,8 @@ def read_event_detections(cursor, evid, stations=None, evtype="leb"):
     else:
         sta_cmd = "site.statype='ss'"
 
-    sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > 0 and iarr.sta=site.sta and iass.phase=ph.phase and ascii(iass.phase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" % (
-        evtype, evtype, evtype, int(evid), sta_cmd)
+    sql_query = "select site.id-1, iarr.arid, iarr.time, iarr.deltim, iarr.azimuth, iarr.delaz, iarr.slow, iarr.delslo, iarr.snr, ph.id-1, iarr.amp, iarr.per from %s_origin ior, %s_assoc iass, %s_arrival iarr, static_siteid site, static_phaseid ph where ior.evid=%d and iass.orid=ior.orid and iarr.arid=iass.arid and iarr.delaz > 0 and iarr.delslo > 0 and iarr.snr > %d and iarr.sta=site.sta and iass.phase=ph.phase and ascii(iass.phase) = ascii(ph.phase) and %s order by iarr.time, iarr.arid" % (
+        evtype, evtype, evtype, int(evid), min_snr, sta_cmd)
 
     cursor.execute(sql_query)
     detections = np.array(cursor.fetchall())

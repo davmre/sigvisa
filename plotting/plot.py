@@ -16,15 +16,22 @@ def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
     canvas.print_figure(fname, **kwargs)
 
-def basic_plot_to_file(fname, data, xvals=None, title=None, xlabel=None, ylabel=None, xlim=None, ylim=None, **kwargs):
+def basic_plot_to_file(fname, data, data2=None, data3=None, xvals=None, title=None, xlabel=None, ylabel=None, xlim=None, ylim=None, **kwargs):
 
     fig = Figure(figsize=(8, 5), dpi=300)
     axes = fig.add_subplot(111)
 
-    if xvals is None:
-        axes.plot(data, **kwargs)
-    else:
-        axes.plot(xvals, data, **kwargs)
+    def plotdata(d):
+        if xvals is None:
+            axes.plot(d, **kwargs)
+        else:
+            axes.plot(xvals, d, **kwargs)
+
+    plotdata(data)
+    if data2 is not None:
+        plotdata(data2)
+    if data3 is not None:
+        plotdata(data3)
 
     if title is not None:
         axes.set_title(title)

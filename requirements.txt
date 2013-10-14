@@ -1,7 +1,7 @@
 numpy
 scipy
-scikit-learn
 cython
+scikit-learn
 scikits.sparse
 matplotlib
 -e git+http://github.com/matplotlib/basemap.git#egg=basemap

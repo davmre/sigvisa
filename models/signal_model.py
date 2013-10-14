@@ -188,6 +188,7 @@ class ObservedSignalNode(Node):
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
+
         return signal
 
     def _parent_values(self):

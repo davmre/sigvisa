@@ -11,6 +11,11 @@ from scipy.weave import converters
 
 class FourierFeatureGenerator(WiggleGenerator):
 
+    # features are:
+    # fourier basis vectors in increasing order of frequency, from the fundamental up to the maximum
+    # first n/2 entries: amplitudes, real-valued
+    # second n/2 entries: phases, normalized between 0 and 1 (i.e. in radians / (2*pi)).
+
     def __init__(self, npts, srate, envelope, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
 
         self.srate = srate
@@ -41,7 +46,7 @@ class FourierFeatureGenerator(WiggleGenerator):
             self.save_to_db(s.dbconn)
 
         self.uamodel_amp = Gaussian(0, 0.1)
-        self.uamodel_phase = Uniform(0, 2*np.pi)
+        self.uamodel_phase = Uniform(0, 1.0)
 
         freqs = [ ( n % (self.nparams/2) + 1) * self.fundamental for n in range(self.nparams)]
         self._params = ["amp_%.3f" % freq if i < self.nparams/2 else "phase_%.3f" % freq for (i, freq) in enumerate(freqs)]
@@ -82,16 +87,17 @@ class FourierFeatureGenerator(WiggleGenerator):
         nparams = int(self.nparams)
         npts = int(self.npts)
         padded_coeffs = np.zeros((npts/2 + 1,), dtype=complex)
+        twopi = 2*np.pi
         code =  """
 int n2 = nparams/2;
 padded_coeffs(0) = 0;
 for (int i=0; i < n2; ++i) {
     double amp = features(i) * (npts/2);
-    double phase = features(i+n2);
+    double phase = features(i+n2) *twopi;
     padded_coeffs(i+1) = std::complex<double>(amp * cos(phase), amp * sin(phase));
 }
 """
-        weave.inline(code,['nparams', 'npts', 'features', 'padded_coeffs'],type_converters =
+        weave.inline(code,['twopi', 'nparams', 'npts', 'features', 'padded_coeffs'],type_converters =
                converters.blitz,verbose=2,compiler='gcc')
 
         signal = np.fft.irfft(padded_coeffs)
@@ -116,7 +122,7 @@ for (int i=0; i < n2; ++i) {
         coeffs = coeffs[1:self.nparams/2+1]
 
         amps = np.abs(coeffs)[: self.nparams/2]
-        phases = np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)
+        phases = (np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)) % 1.0
         if return_array:
             return np.concatenate([amps, phases])
         else:
@@ -148,7 +154,7 @@ for (int i=0; i < n2; ++i) {
 
             c = complex(c1, c2)
 
-            (amp, phase) = (np.abs(c), np.angle(c) / (2 * np.pi))
+            (amp, phase) = (np.abs(c), (np.angle(c) / (2 * np.pi)  ) % 1.0)
             amps.append(amp)
             phases.append(phase)
 
@@ -168,10 +174,9 @@ for (int i=0; i < n2; ++i) {
         dim = self.dimension()
         d2 = dim/2
         params = self.params()
-        twopi = 2 * np.pi
         for i in range(d2):
             freq = self.fundamental * (i+1)
-            a[i+d2] = (a[i+d2] + t_shift * freq * twopi) % twopi
+            a[i+d2] = (a[i+d2] + t_shift * freq) % 1.0
 
     def param_dict_to_array(self, d):
         a = np.asarray([ d[k] for k in self.params() ])
