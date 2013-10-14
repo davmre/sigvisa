@@ -270,7 +270,11 @@ class SparseGP(ParamModel):
 
             # train model
             t0 = time.time()
-            self.predict_tree = VectorTree(pyublas.why_not(self.X), 1, self.dfn_str, pyublas.why_not(self.dfn_params), self.wfn_str, pyublas.why_not(self.wfn_params))
+            if build_tree:
+                tree_X = pyublas.why_not(self.X)
+            else:
+                tree_X = np.array([[0.0,],], dtype=float)
+            self.predict_tree = VectorTree(tree_X, 1, self.dfn_str, pyublas.why_not(self.dfn_params), self.wfn_str, pyublas.why_not(self.wfn_params))
             t1 = time.time()
             self.timings['build_predict_tree'] = t1-t0
 
