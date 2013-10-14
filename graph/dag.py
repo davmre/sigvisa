@@ -65,13 +65,16 @@ class DAG(object):
             node.clear_mark()
             q.extendleft(node.children)
 
-
 def get_relevant_nodes(node_list):
     # note, it's important that the nodes have a consistent order, since
     # we represent their joint values as a vector.
+
+    parents_of_deterministic = [node.parents[node.default_parent_key()] for node in node_list if node.deterministic()]
     node_list = [node for node in node_list if not node.deterministic()]
-    all_stochastic_children = [child for node in node_list for (child, intermediates) in node.get_stochastic_children()]
-    relevant_nodes = set(node_list + all_stochastic_children)
+
+    nlset = set(node_list + parents_of_deterministic)
+    all_stochastic_children = [child for node in nlset for (child, intermediates) in node.get_stochastic_children()]
+    relevant_nodes = set(node_list + all_stochastic_children + parents_of_deterministic)
     return node_list, relevant_nodes
 
 class DirectedGraphModel(DAG):
@@ -89,7 +92,8 @@ class DirectedGraphModel(DAG):
 
 
         def add_children(n):
-            self.add_node(n)
+            if n.label not in self.all_nodes:
+                self.add_node(n)
             for c in n.children:
                 add_children(c)
 
@@ -130,7 +134,7 @@ class DirectedGraphModel(DAG):
             for dn in node.get_deterministic_children():
                 dn.parent_predict()
 
-    def joint_prob(self, values, node_list, relevant_nodes, c=1):
+    def joint_logprob(self, values, node_list, relevant_nodes, c=1):
         # node_list: list of nodes whose values we are interested in
 
         # relevant_nodes: all nodes whose log_p() depends on a value
@@ -141,6 +145,17 @@ class DirectedGraphModel(DAG):
             self.set_all(values=values, node_list=node_list)
         ll = np.sum([node.log_p() for node in relevant_nodes])
         #self.set_all(values=v, node_list=node_list)
+        return c * ll
+
+    def joint_logprob_keys(self, relevant_nodes, keys=None, values=None, node_list=None, c=1):
+        # same as joint_logprob, but we specify values only for a
+        # specific set of keys.
+        # here, node_list contains one entry for each key (so will
+        # have duplicates if we have multiple keys from the same node)
+        if keys is not None:
+            for (key, val, n) in zip(keys, values, node_list):
+                n.set_value(key=key, value=val)
+        ll = np.sum([node.log_p() for node in relevant_nodes])
         return c * ll
 
 
@@ -190,14 +205,14 @@ class DirectedGraphModel(DAG):
         high_bounds = np.concatenate([node.high_bounds() for node in node_list])
         bounds = zip(low_bounds, high_bounds)
 
-        jp = lambda v: self.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list, c=-1)
+        jp = lambda v: self.joint_logprob(values=v, relevant_nodes=relevant_nodes, node_list=node_list, c=-1)
 
         # this is included for profiling / debugging -- not real code
-        def time_joint_prob():
+        def time_joint_logprob():
             import time
             st = time.time()
             for i in range(500):
-                joint_prob(start_values, relevant_nodes=relevant_nodes)
+                joint_logprob(start_values, relevant_nodes=relevant_nodes)
             et = time.time()
             print "joint prob took %.3fs on average" % ((et-st)/500.0)
 
@@ -228,6 +243,8 @@ class DirectedGraphModel(DAG):
 
 
     def add_node(self, node):
+        if node.label in self.all_nodes:
+            raise ValueError("adding node '%s' to the graph, but a node with this label already exists!" % node.label)
         self.all_nodes[node.label] = node
         for key in node.keys():
             self.nodes_by_key[key] = node

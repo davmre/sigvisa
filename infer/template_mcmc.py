@@ -4,6 +4,7 @@ import os
 import traceback
 import pickle
 import copy
+import time
 
 from sigvisa.graph.sigvisa_graph import SigvisaGraph
 from sigvisa import Sigvisa
@@ -12,9 +13,10 @@ from sigvisa.signals.io import load_event_station_chan
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.signal_model import extract_arrival_from_key
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.graph.graph_utils import create_key
+from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
+from sigvisa.utils.counter import Counter
 from matplotlib.figure import Figure
 
 import scipy.weave as weave
@@ -54,8 +56,10 @@ def peak_log_p(cdf, stime, srate, peak_time):
     # just force an integer and hope that's okay.
 
     # we add one here since we created cdf with an initial
-    # 0, so that the subtraction below works properly
-    idx = np.floor((peak_time - stime) * srate) + 1
+    # 0, so that the subtraction below works properly.
+    # we add the .000001 to fix numerical issues, so that floor()
+    # doesn't round down if we get .99999995103... or similar.
+    idx = int(np.floor((peak_time - stime) * srate +.00001)) + 1
 
     """"in principle, we shouldn't be allowed to kill things outside of
     the signal window, but in practice it helps a lot.
@@ -90,19 +94,23 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
     u = np.random.rand()
     idx = np.searchsorted(cdf, u)
     peak_time = stime + float(idx-1)/srate
-    #peak_time = u * (len(cdf)-1)/float(srate) + stime
 
     if return_lp:
         return peak_time, np.log(cdf[idx]-cdf[idx-1])
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time
 
-def indep_peak_move(sg, arrival_node, offset_node, wave_node):
-    arr = extract_arrival_from_key(arrival_node.label, wave_node.r)
+def indep_peak_move(sg, wave_node, tmnodes):
+    arrival_key, arrival_node = tmnodes['arrival_time']
+    offset_key, offset_node = tmnodes['peak_offset']
+    relevant_nodes = [wave_node,]
+    relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
+
+    arr = extract_arrival_from_key(arrival_key, wave_node.r)
     other_arrs = wave_node.arrivals() - set(arr)
 
-    current_atime = arrival_node.get_value()
-    peak_offset = offset_node.get_value()
+    current_atime = arrival_node.get_value(key=arrival_key)
+    peak_offset = offset_node.get_value(key=offset_key)
 
     cdf = get_current_conditional_cdf(wave_node, arrival_set=other_arrs)
     proposed_peak_time, proposal_lp =  sample_peak_time_from_signal(cdf, wave_node.st,
@@ -113,40 +121,101 @@ def indep_peak_move(sg, arrival_node, offset_node, wave_node):
                                      peak_time = current_atime + peak_offset)
 
     proposed_arrival_time = proposed_peak_time - peak_offset
-    return MH_accept(sg, oldvalues = (current_atime,),
+    return MH_accept(sg, keys=(arrival_key,),
+                     oldvalues = (current_atime,),
                      newvalues = (proposed_arrival_time,),
                      log_qforward = proposal_lp,
                      log_qbackward = backward_propose_lp,
                      node_list = (arrival_node,),
-                     relevant_nodes = (arrival_node, wave_node))
+                     relevant_nodes = relevant_nodes)
 
 ######################################################################
 
-def indep_offset_move(sg, arrival_node, offset_node, wave_node):
-    current_offset = offset_node.get_value()
-    atime = arrival_node.get_value()
-    proposed_offset = np.random.rand() * 40
-    new_atime = atime + (current_offset - proposed_offset)
-    accepted = MH_accept(sg=sg, oldvalues=(atime, current_offset),
-                         newvalues = (new_atime, proposed_offset),
-                         node_list = (arrival_node, offset_node),
-                         relevant_nodes=(arrival_node, offset_node, wave_node))
-    return accepted
-
-def improve_offset_move(sg, arrival_node, offset_node, wave_node, **kwargs):
+def improve_offset_move(sg, wave_node, tmnodes, **kwargs):
     """
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
     """
-    current_offset = offset_node.get_value()
-    atime = arrival_node.get_value()
-    proposed_offset = gaussian_propose(sg, node_list=(offset_node,), values=(current_offset,), **kwargs)[0]
+
+    arrival_key, arrival_node = tmnodes['arrival_time']
+    offset_key, offset_node = tmnodes['peak_offset']
+    relevant_nodes = [wave_node,]
+    relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
+    relevant_nodes += [offset_node.parents[offset_node.default_parent_key()],] if offset_node.deterministic() else [offset_node,]
+
+    current_offset = offset_node.get_value(key=offset_key)
+    atime = arrival_node.get_value(key=arrival_key)
+    proposed_offset = gaussian_propose(sg, keys=(offset_key,),
+                                       node_list=(offset_node,), values=(current_offset,), **kwargs)[0]
     new_atime = atime + (current_offset - proposed_offset)
-    accepted = MH_accept(sg=sg, oldvalues=(atime, current_offset),
+    accepted = MH_accept(sg=sg, keys=(arrival_key,offset_key),
+                         oldvalues=(atime, current_offset),
                          newvalues = (new_atime, proposed_offset),
                          node_list = (arrival_node, offset_node),
-                         relevant_nodes=(arrival_node, offset_node, wave_node))
+                         relevant_nodes=relevant_nodes)
     return accepted
+
+def improve_atime_move(sg, wave_node, tmnodes, std=.1, **kwargs):
+    # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
+    k_atime, n_atime = tmnodes['arrival_time']
+    eid, phase, sta, chan, band, param = parse_key(k_atime)
+
+    # propose a new arrival time
+    relevant_nodes = [wave_node,]
+    parent = n_atime.parents[n_atime.default_parent_key()]
+    relevant_nodes.append(parent)
+    old_atime = n_atime.get_value(k_atime)
+    values = (old_atime,)
+    atime_proposal = gaussian_propose(sg, keys=(k_atime,), node_list=(n_atime,), values=(values), **kwargs)
+
+    # adjust wiggles for that new time
+    wg = sg.wiggle_generator(phase, wave_node.srate)
+    wnodes = [(p, tmnodes[p]) for p in wg.params()]
+    wiggle_vals = [n.get_value(k) for (p, (k,n)) in wnodes]
+    wiggle_vals_new = np.array(wiggle_vals, copy=True)
+    wg.timeshift_param_array(wiggle_vals_new, atime_proposal-old_atime)
+
+    # consider the proposed arrival time along with new adjusted wiggles.
+    # HACK note: we hard-code the assumption of fourier wiggles, where we
+    # know that a timeshift will only change the phase parameters (the latter
+    # half of the param array).
+    d2 = wg.dimension()/2
+    phase_wnodes = wnodes[d2:]
+    phase_nodes = [n for (p,(k, n)) in phase_wnodes]
+    phase_keys = [k for (p,(k, n)) in phase_wnodes]
+    relevant_nodes += phase_nodes
+    node_list = [n_atime,] + phase_nodes
+    keys = [k_atime,] + phase_keys
+    oldvalues = [atime,] + wiggle_vals[d2:]
+    newvalues = [atime_proposal,] + wiggle_vals_new[d2:]
+
+    return MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes)
+
+#just for debugging
+"""
+def do_atime_move(sg, wave_node, tmnodes, atime_offset):
+    k_atime, n_atime = tmnodes['arrival_time']
+    eid, phase, sta, chan, band, param = parse_key(k_atime)
+
+    # propose a new arrival time
+    relevant_nodes = [wave_node,]
+    parent = n_atime.parents[n_atime.default_parent_key()]
+    relevant_nodes.append(parent)
+    old_atime = n_atime.get_value(k_atime)
+    values = (old_atime,)
+    atime_proposal = old_atime + atime_offset
+
+    # adjust wiggles for that new time
+    wg = sg.wiggle_generator(phase, wave_node.srate)
+    wnodes = [(p, tmnodes[p]) for p in wg.params()]
+    wiggle_vals = [n.get_value(k) for (p, (k,n)) in wnodes]
+    wiggle_vals_new = np.array(wiggle_vals, copy=True)
+    wg.timeshift_param_array(wiggle_vals_new, atime_offset)
+
+    for (i, (p, (k, n))) in enumerate(wnodes):
+        n.set_value(key=k, value=wiggle_vals_new[i])
+    n_atime.set_value(key=k_atime, value=atime_proposal)
+"""
 #######################################################################
 
 def get_sorted_arrivals(wave_node):
@@ -158,75 +227,110 @@ def get_sorted_arrivals(wave_node):
     sorted_arrs = sorted(arr_params, key = lambda x : x[0]['arrival_time'])
     return sorted_arrs
 
-def try_split(sg, wave_node):
+def atime_window(wave_node, sorted_arrs, k):
+    n = len(sorted_arrs)
+    atime_diff = np.float('inf')
+    atime_window_start = wave_node.st
+    atime_window_end = wave_node.et
+    if k < n-1:
+        atime_window_end = min(atime_window_end, sorted_arrs[k+1][0]['arrival_time'])
+    if k > 0:
+        atime_window_start = max(atime_window_start, sorted_arrs[k-1][0]['arrival_time'])
+    atime_window_len = atime_window_end - atime_window_start
+
+    return atime_window_start, atime_window_len
+
+def sample_arr_to_split(sg, wave_node):
     sorted_arrs = get_sorted_arrivals(wave_node)
+    if len(sorted_arrs) < 1:
+        return None, None, None
     n = len(sorted_arrs)
     k = np.random.randint(0, n)
     arr_to_split = sorted_arrs[k]
-    atime = arr_to_split[0]['arrival_time']
 
-    # the arrival times for the split templates are sampled such that
-    # the two new templates are still adjacent (no other template
-    # arrives between them). This makes the move reversible, since the
-    # merge move combines adjacent templates.
-    atime_diff = MERGE_MAX_ATIME_DIFFERENCE_S/2.0
-    if k < n-1:
-        atime_diff = min(atime_diff, sorted_arrs[k+1][0]['arrival_time'] - atime)
-    if k > 0:
-        atime_diff = min(atime_diff, atime - sorted_arrs[k-1][0]['arrival_time'])
+    return arr_to_split, k, sorted_arrs
 
-    # TODO: figure out what to do with wiggles
-    tnodes = sg.get_template_nodes(eid=arr_to_split[1], phase=arr_to_split[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    tmpl = dict([(p, n) for (p, (k, n)) in tnodes.items()])
-    return split_move(sg, tmpl, wave_node, atime_diff)
+def get_atime_index(sorted_arrs, atime):
+    for k in range(len(sorted_arrs)):
+        if sorted_arrs[k][0]['arrival_time'] == atime:
+            break
+    return k
 
+def tmpl_move_logp(sg, sta, relevant_nodes, n=None):
+    return sg.ntemplates_sta_log_p(sta, n=n) + sg.joint_logprob_keys(relevant_nodes)
 
-def split_move(sg, tmpl, wave_node, atime_diff):
+def split_move(sg, wave_node, return_probs=False, force_accept=False):
 
-    lp_old = sg.current_log_p()
+    # figure out which arrival to split
+    arr, k, sorted_arrs = sample_arr_to_split(sg, wave_node)
+    if arr is None:
+        return False
+    atime_window_start, atime_window_len = atime_window(wave_node, sorted_arrs, k)
+    n_arrs = len(sorted_arrs)
+    tnodes = sg.get_template_nodes(eid=arr[1], phase=arr[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
 
-    arrival_time, peak_offset, coda_height, coda_decay = tmpl['arrival_time'].get_value(), tmpl['peak_offset'].get_value(), tmpl['coda_height'].get_value(), tmpl['coda_decay'].get_value()
+    # account for possibly setting the coda_height of an event, or an unass template
+    k,n = tnodes['coda_height']
+    if n.deterministic():
+        relevant_parent = [n.parents[n.default_parent_key()],]
+    else:
+        relevant_parent = [n,]
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + relevant_parent)
 
-    new_tmpl = sg.create_unassociated_template(wave_node, atime=arrival_time, nosort=True)
+    # create the new uatemplate, with arrival time sampled uniformly
+    eps_atime = np.random.rand()*atime_window_len
+    new_atime = atime_window_start + eps_atime
+    new_tmpl = sg.create_unassociated_template(wave_node, atime=new_atime, nosort=True)
     sg._topo_sorted_list = new_tmpl.values() + sg._topo_sorted_list
     sg._gc_topo_sorted_nodes()
 
-    # WLOG give the earlier arrival time to the current template, and
-    # the later one to the new template we create. For all other params,
-    # decide at random which template gets which.
-    eps_atime = np.random.rand()*atime_diff
-    tmpl['arrival_time'].set_value(arrival_time - eps_atime)
-    new_tmpl['arrival_time'].set_value(arrival_time + eps_atime)
-
-    new_offset = np.random.rand() * peak_offset  * 2
+    # sample offset and decay from the prior
+    new_offset = new_tmpl['peak_offset'].model.sample()
     new_tmpl['peak_offset'].set_value(new_offset)
-    tmpl['peak_offset'].set_value(2*peak_offset - new_offset)
 
-    new_decay = np.random.rand() * coda_decay  * 2
+    new_decay = new_tmpl['coda_decay'].model.sample()
     new_tmpl['coda_decay'].set_value(new_decay)
-    tmpl['coda_decay'].set_value(2*coda_decay - new_decay)
 
-    new_logheight = np.log(np.random.rand()) + coda_height
+    # split off some fraction of the amplitude to the new node
+    k,n = tnodes['coda_height']
+    coda_height = n.get_value(key=k)
+    u = np.random.rand()
+    new_logheight = np.log(u) + coda_height
     new_tmpl['coda_height'].set_value(new_logheight)
-    tmpl['coda_height'].set_value( np.log(np.exp(coda_height) - np.exp(new_logheight)) )
+    n.set_value( key=k, value=np.log(1-u) + coda_height)
 
-    lp_new = sg.current_log_p()
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + relevant_parent + new_tmpl.values())
 
-    log_qforward = -np.log(2*np.abs(coda_decay)) - np.log(2*peak_offset) - np.log(atime_diff) - np.log(np.exp(coda_height))
-    jacobian_determinant = 2.07944 ## log(8)
-    log_qbackward = 0 ## merge move is deterministic
+    log_qforward = new_tmpl['peak_offset'].model.log_p(new_offset) + new_tmpl['coda_decay'].model.log_p(new_decay) - np.log(atime_window_len) - np.log(n_arrs)
+    jacobian_determinant = 1.0/ (u * (1-u))
+
+    # the reverse probability is the prob that we would have chosen to merge these two templates
+    new_sorted_arrs = get_sorted_arrivals(wave_node)
+    k,n = tnodes['arrival_time']
+    old_atime = n.get_value(key=k)
+    first_atime = min(old_atime, new_atime)
+    log_qbackward = np.log(arrival_merge_prob(sg, wave_node.sta,
+                                              get_atime_index(new_sorted_arrs, first_atime),
+                                              sorted_arrs=new_sorted_arrs))
+    # if we are splitting an unass template, the reverse merge move
+    # would have had to decide to merge into *this* template rather
+    # than the other one
+    if not tnodes['coda_height'][1].deterministic():
+        log_qbackward += np.log(.5)
 
     u = np.random.rand()
-    if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
-        print "split template %d from %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (new_tmpl["arrival_time"].unassociated_templateid, tmpl["arrival_time"].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
-        return new_tmpl
+    if force_accept or ((lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u)):
+        print "split template %d from %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (-new_tmpl["arrival_time"].tmid, arr[1], lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
+
+        if return_probs:
+            return True, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
+        else:
+            return True
     else:
         sg.destroy_unassociated_template(new_tmpl, nosort=True)
 
-        tmpl['arrival_time'].set_value(arrival_time)
-        tmpl['peak_offset'].set_value(peak_offset)
-        tmpl['coda_decay'].set_value(coda_decay)
-        tmpl['coda_height'].set_value(coda_height)
+        k,n = tnodes['coda_height']
+        n.set_value(key=k, value=coda_height)
 
         # WARNING: this assumes the list hasn't been re-sorted by any
         # of our intermediate calls.
@@ -235,108 +339,196 @@ def split_move(sg, tmpl, wave_node, atime_diff):
         sg.next_uatemplateid -= 1
         #lp = sg.current_log_p()
         #assert(np.abs(lp - lp_old) < 1e-10)
-        return False
 
-def try_merge(sg, wave_node):
-    sorted_arrs = get_sorted_arrivals(wave_node)
+        if return_probs:
+            return False, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
+        else:
+            return False
+
+def arrivals_merge_distribution(sg, sta, sorted_arrs=None):
+    assert(len(sg.station_waves[sta]) == 1)
+    wave_node = list(sg.station_waves[sta])[0]
+
+    if sorted_arrs is None:
+        sorted_arrs = get_sorted_arrivals(wave_node)
     n = len(sorted_arrs)
     if n < 2:
+        return None, sorted_arrs
+
+    c = Counter()
+    for k in range(n-1):
+        if sorted_arrs[k][1] >= 0 and sorted_arrs[k+1][1] >= 0:
+            # can't merge two event arrivals
+            continue
+        c[k] = 1.0 / (sorted_arrs[k+1][0]['arrival_time'] - sorted_arrs[k][0]['arrival_time'] + 1.0/wave_node.srate)
+    c.normalize()
+    return c, sorted_arrs
+
+def sample_arrivals_to_merge(sg, sta, **kwargs):
+    c, sorted_arrs = arrivals_merge_distribution(sg, sta, **kwargs)
+    if c is None or len(c) == 0:
+        return None, None, None
+
+    k = c.sample()
+    return sorted_arrs[k], sorted_arrs[k+1], c[k]
+
+def arrival_merge_prob(sg, sta, k, **kwargs):
+    c, sorted_arrs = arrivals_merge_distribution(sg, sta, **kwargs)
+    if c is None:
+        return None
+    return c[k]
+
+def relevant_nodes(tnodes):
+    return [n if not n.deterministic() else n.parents[n.default_parent_key()] for (k,n) in tnodes.values()]
+
+
+def merge_move(sg, wave_node, return_probs=False):
+
+    #lp1 = sg.current_log_p()
+
+    # sample which two arrivals to merge
+    n_arrs = len(wave_node.arrivals())
+    arr1, arr2, merge_choice_prob = sample_arrivals_to_merge(sg, wave_node.sta)
+    if arr1 is None:
         return False
-    k = np.random.randint(0, n-1)
-    arr1 = sorted_arrs[k]
-    arr2 = sorted_arrs[k+1]
-    if arr2[0]['arrival_time'] - arr1[0]['arrival_time'] > MERGE_MAX_ATIME_DIFFERENCE_S:
-        return False
 
-    tnodes1 = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    tmpl1 = dict([(param, node) for (param, (key, node)) in tnodes1.items()])
+    # get all relevant nodes for the arrivals we sampled
+    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
 
-    tnodes2 = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    tmpl2 = dict([(param, node) for (param, (key, node)) in tnodes2.items()])
-
-    merged_atime = (tmpl1['arrival_time'].get_value() + tmpl2['arrival_time'].get_value())/2.0
-    post_merge_atime_diff = MERGE_MAX_ATIME_DIFFERENCE_S
-    if k+2 < n:
-        post_merge_atime_diff = min(post_merge_atime_diff, sorted_arrs[k+2][0]['arrival_time'] - merged_atime)
-    if k > 0:
-        post_merge_atime_diff = min(post_merge_atime_diff, merged_atime - sorted_arrs[k-1][0]['arrival_time'])
-
-    return merge_move(sg, tmpl1, tmpl2, wave_node, post_merge_atime_diff)
-
-def merge_move(sg, tmpl1_nodes, tmpl2_nodes, wave_node, post_merge_atime_diff):
-
-    lp_old = sg.current_log_p()
+    # save the probability before we actually make the move
+    log_qforward = 0.0
+    ntemplates = len(sg.uatemplate_ids[(wave_node.sta, wave_node.chan, wave_node.band)])
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + relevant_nodes(t1nodes) + relevant_nodes(t2nodes), n=ntemplates)
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
 
-    tmpl1_values = dict((k, n.get_value()) for (k,n) in tmpl1_nodes.items())
-    tmpl2_values = dict((k, n.get_value()) for (k,n) in tmpl2_nodes.items())
+    # combine the amplitudes of the two arrivals
+    vals1, eid1, phase1 = arr1
+    vals2, eid2, phase2 = arr2
+    amp1 = np.exp(vals1['coda_height'])
+    amp2 = np.exp(vals2['coda_height'])
+    merged_logamp = np.log(amp1 + amp2)
 
-    merged_atime = (tmpl1_values['arrival_time'] + tmpl2_values['arrival_time'])/2.0
-    merged_offset = (tmpl1_values['peak_offset'] + tmpl2_values['peak_offset'])/2.0
-    merged_decay = (tmpl1_values['coda_decay'] + tmpl2_values['coda_decay'])/2.0
-    merged_amp = np.log(np.exp(tmpl1_values['coda_height']) + np.exp(tmpl2_values['coda_height']))
+    # if one arrival is an event arrival, we always keep it. otherwise, choose at random which to keep.
+    if phase1 != "UA":
+        keep1 = True
+    elif phase2 != "UA":
+        keep1 = False
+    else:
+        keep1 = (np.random.rand() < .5)
+        log_qforward = np.log(.5)
+    if keep1:
+        keep_nodes = t1nodes
+        lost_nodes = t2nodes
+        keep_vals = copy.copy(vals1)
+        lost_vals = copy.copy(vals2)
+    else:
+        keep_nodes = t2nodes
+        lost_nodes = t1nodes
+        keep_vals = copy.copy(vals2)
+        lost_vals = copy.copy(vals1)
 
-    for (param, node) in tmpl2_nodes.items():
+    k,n = keep_nodes['coda_height']
+    n.set_value(key=k, value=merged_logamp)
+
+    # remove all nodes from the deleted arrival
+    for (key, node) in lost_nodes.values():
         sg.remove_node(node)
         sg._topo_sorted_list[node._topo_sorted_list_index] = None
 
-    tmpl1_nodes['arrival_time'].set_value(merged_atime)
-    tmpl1_nodes['peak_offset'].set_value(merged_offset)
-    tmpl1_nodes['coda_decay'].set_value(merged_decay)
-    tmpl1_nodes['coda_height'].set_value(merged_amp)
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + relevant_nodes(keep_nodes), n=ntemplates-1)
 
-    lp_new = sg.current_log_p()
+    log_qforward += np.log(merge_choice_prob)
+    u = amp1/(amp1+amp2)
+    jacobian_determinant = 1.0/(u * (1-u))
 
-    log_qforward = 0
-    jacobian_determinant = -2.07944 ## log(1/8)
-    log_qbackward = -np.log(2*np.abs(merged_decay)) - np.log(2*merged_offset) - np.log(post_merge_atime_diff/2.0) - np.log(np.exp(merged_amp))
+    # compute arrival time window for reverse (split) move
+    k,n = keep_nodes['arrival_time']
+    merged_atime = n.get_value(key=k)
+    sorted_arrs = get_sorted_arrivals(wave_node)
+    idx = get_atime_index(sorted_arrs, merged_atime)
+    atime_window_start, atime_window_len = atime_window(wave_node, sorted_arrs, idx)
+
+    # we can ignore keys and just take the node log_p because we know
+    # the lost node is always going to be a single uatemplate (not an event, etc)
+    log_qbackward = lost_nodes['peak_offset'][1].log_p() + lost_nodes['coda_decay'][1].log_p() - np.log(atime_window_len) - np.log(n_arrs-1)
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
-        print "merged template %d into %d: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (tmpl1_nodes["arrival_time"].unassociated_templateid, tmpl2_nodes["arrival_time"].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
+        print "merged templates: %.1f + %.5f - (%.1f + %.5f) + %f = %.1f vs %.1f" % (lp_new, log_qbackward, lp_old, log_qforward, jacobian_determinant, (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant, np.log(u))
 
-        uaid = tmpl2_nodes['arrival_time'].unassociated_templateid
+        uaid = lost_nodes['arrival_time'][1].tmid
         del sg.uatemplates[uaid]
         sg.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].remove(uaid)
 
-        return True
+
+        if return_probs:
+            return True, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
+        else:
+            return True
     else:
-        for (param, node) in tmpl2_nodes.items():
+
+
+        for (param, (key, node)) in lost_nodes.items():
             sg.add_node(node)
             node.addChild(wave_node)
-        for (param, node) in tmpl1_nodes.items():
-            node.set_value(tmpl1_values[param])
+        for (param, (key, node)) in keep_nodes.items():
+            if param in keep_vals:
+                node.set_value(key=key, value=keep_vals[param])
         wave_node.arrivals()
         sg._topo_sorted_list = orig_topo_sorted
         sg._gc_topo_sorted_nodes()
+
+
+        #lp2 = sg.current_log_p()
+        #assert(lp1 == lp2)
+
         #lp = sg.current_log_p()
         #assert(np.abs(lp - lp_old) < 1e-10)
-        return False
+
+        if return_probs:
+            return False, lp_new, lp_old, log_qforward, log_qbackward, jacobian_determinant
+        else:
+            return False
 
 
 
 
 #######################################################################
 
+def get_wiggles_from_signal()
+            # initialize wiggles from signal
+            arrivals = wave_node.arrivals()
+            arr = (eid, 'UA')
+            signal_data, st, et = extract_phase_wiggle(arr, arrivals, wave_node)
+            features = wg.features_from_signal(signal, return_array=True)
+            dim = wg.dimension()
+            features += np.random.randn(dim) * 0.1
+            features[dim/2:] = features[dim/2:] % (2*np.pi)
+            for (i,param) in enumerate(wg.params()):
+                wnodes[param].set_value(features[i])
 
 
-def birth_move(sg, wave_node, dummy=False, **kwargs):
-    lp_old = sg.current_log_p()
-    ntlp_old = sg.ntemplates_log_p()
+def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
+    #lp_old1 = sg.current_log_p()
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,])
 
     cdf = get_current_conditional_cdf(wave_node, arrival_set=wave_node.arrivals())
     peak_time, proposal_lp =  sample_peak_time_from_signal(cdf, wave_node.st,
                                                            wave_node.srate,
                                                            return_lp=True)
+    plp = peak_log_p(cdf, wave_node.st,
+                     wave_node.srate,
+                     peak_time = peak_time)
 
     tmpl = sg.create_unassociated_template(wave_node, peak_time, nosort=True, **kwargs)
     sg._topo_sorted_list = tmpl.values() + sg._topo_sorted_list
     sg._gc_topo_sorted_nodes()
     tmpl["arrival_time"].set_value(peak_time - tmpl["peak_offset"].get_value())
 
-
-    lp_new = sg.current_log_p()
-    ntlp_new = sg.ntemplates_log_p()
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + tmpl.values())
+    #lp_new1 = sg.current_log_p()
+    #assert(np.abs((lp_new - lp_old) - (lp_new1-lp_old1)) < .00001)
 
     # probability of this birth move is the product of probabilities
     # of all sampled params (including arrival time)
@@ -348,17 +540,21 @@ def birth_move(sg, wave_node, dummy=False, **kwargs):
     # reverse (death) probability is just the probability of killing a
     # random template
     ntemplates = len([1 for (eid, phase) in wave_node.arrivals() if eid < 0])
-    log_qbackward = np.log(1.0/ntemplates)
+    log_qbackward = 0 #np.log(1.0/ntemplates)
 
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
     if move_accepted or dummy:
-        print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
+        print "birth template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tmpl["arrival_time"].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:
-        return tmpl
+
+        if return_probs:
+            return True, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
+        else:
+            return True
+
     else:
         sg.destroy_unassociated_template(tmpl, nosort=True)
-
         # WARNING: this assumes the list hasn't been re-sorted by any
         # of our intermediate calls.
         sg._topo_sorted_list = sg._topo_sorted_list[len(tmpl):]
@@ -366,10 +562,14 @@ def birth_move(sg, wave_node, dummy=False, **kwargs):
         sg.next_uatemplateid -= 1
         #lp = sg.current_log_p()
         #assert(np.abs(lp - lp_old) < 1e-10)
-        return False
+
+        if return_probs:
+            return False, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
+        else:
+            return False
 
 
-def death_move(sg, wave_node, dummy=False):
+def death_move(sg, wave_node, dummy=False, return_probs=False):
     templates = [(eid, phase) for (eid, phase) in wave_node.arrivals() if eid < 0]
     if len(templates) < 1:
         return False
@@ -380,12 +580,15 @@ def death_move(sg, wave_node, dummy=False):
             tmpl_to_destroy = templates[i]
             break
 
-    lp_old = sg.current_log_p()
-    orig_topo_sorted = copy.copy(sg._topo_sorted_list)
-    log_qforward = np.log(1.0/len(templates))
-
     tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
     wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+
+
+    ntemplates = len(sg.uatemplate_ids[(wave_node.sta, wave_node.chan, wave_node.band)])
+    lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + [n for (k, n) in tnodes.values() + wnodes.values()], n=ntemplates)
+    orig_topo_sorted = copy.copy(sg._topo_sorted_list)
+    log_qforward = 0
+
 
     current_peak = tnodes['arrival_time'][1].get_value() + tnodes['peak_offset'][1].get_value()
     log_qbackward = 0
@@ -406,20 +609,23 @@ def death_move(sg, wave_node, dummy=False):
                                 peak_time = current_peak)
 
 
-    lp_new = sg.current_log_p()
+    lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,], n=ntemplates-1)
+
 
     u = np.random.rand()
     move_accepted = (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u)
     if move_accepted or dummy:
-        print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].unassociated_templateid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
+        print "death of template %d: %.1f + %.1f - (%.1f + %.1f) = %.1f vs %.1f" % (tnodes["arrival_time"][1].tmid, lp_new, log_qbackward, lp_old, log_qforward, (lp_new + log_qbackward) - (lp_old + log_qforward), np.log(u))
     if move_accepted and not dummy:
 
         uaid = -tmpl_to_destroy[0]
         del sg.uatemplates[uaid]
         sg.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].remove(uaid)
 
-
-        return True
+        if return_probs:
+            return True, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
+        else:
+            return True
     else:
         for (param, (label, node)) in tnodes.items() + wnodes.items():
             sg.add_node(node)
@@ -429,206 +635,83 @@ def death_move(sg, wave_node, dummy=False):
         sg._gc_topo_sorted_nodes()
         #lp = sg.current_log_p()
         #assert(np.abs(lp - lp_old) < 1e-10)
-        return False
+
+        if return_probs:
+            return False, lp_new, lp_old, log_qforward, log_qbackward, np.log(u)
+        else:
+            return False
 
 
 #####################################################################
 
-def run_open_world_MH(sg, wns, burnin=0, skip=40, steps=10000, wiggles=False):
-    n_accepted = dict()
-    moves = ('birth', 'death', 'split', 'merge', 'indep_peak', 'peak_offset', 'arrival_time', 'coda_height', 'coda_decay', 'wiggle_amp', 'wiggle_phase')
+def adjacent_pair_distribution(sg, wave_node):
+    sorted_arrs = get_sorted_arrivals(wave_node)
+    n = len(sorted_arrs)
+    if n < 2:
+        return None, sorted_arrs
 
-    for move in moves:
-        n_accepted[move] = 0
-    n_attempted = 0
+    c = Counter()
+    for k in range(n-1):
+        if sorted_arrs[k][1] < 0 and sorted_arrs[k+1][1] < 0:
+            # no point in swapping two uatemplates
+            continue
+        c[k] = 1.0 / (sorted_arrs[k+1][0]['arrival_time'] - sorted_arrs[k][0]['arrival_time'] + 1.0/wave_node.srate)
+    c.normalize()
+    return c, sorted_arrs
 
-    stds = {'peak_offset': .1, 'arrival_time': .1, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .5}
+def sample_adjacent_pair_to_swap(sg, wave_node):
+    c, sorted_arrs = adjacent_pair_distribution(sg, wave_node)
+    if c is None or len(c) == 0:
+        return None, None, None, None
+    k = c.sample()
+    return sorted_arrs[k], sorted_arrs[k+1], k, c[k]
 
-    params_over_time = dict()
+def get_pair_prob(sg, wave_node, first_atime):
+    c, sorted_arrs = adjacent_pair_distribution(sg, wave_node)
+    k = get_atime_index(sorted_arrs, first_atime)
+    return c[k]
 
-    for step in range(steps):
-        for wn in wns:
-            new_nodes = birth_move(sg, wn, wiggles=wiggles)
-            if new_nodes:
-                tmplid = new_nodes['arrival_time'].unassociated_templateid
-                for param in new_nodes.keys():
-                    params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
-                n_accepted['birth'] += 1
+def swap_params(t1nodes, t2nodes):
+    for (p, (k1, n1)) in t1nodes.items():
+        if p=="amp_transfer" or p=="tt_residual":
+            continue
+        k2, n2 = t2nodes[p]
+        v1 = n1.get_value(key=k1)
+        v2 = n2.get_value(key=k2)
+        n1.set_value(key=k1, value=v2)
+        n2.set_value(key=k2, value=v1)
 
-            uaids = sg.uatemplate_ids[(wn.sta,wn.chan,wn.band)]
-            if len(uaids) >= 1:
-                n_accepted['death'] += death_move(sg, wn)
+        if p == "arrival_time":
+            atime1, atime2 = v1, v2
+    return atime1, atime2
 
+# empirically, this seems to never be accepted. not sure why.
+def swap_association_move(sg, wave_node):
 
-            arrivals = wn.arrivals()
-            if len(arrivals) >= 1:
-                split_nodes = try_split(sg, wn)
-                if split_nodes:
-                    tmplid = split_nodes['arrival_time'].unassociated_templateid
-                    for param in split_nodes.keys():
-                        params_over_time["%d_%s" % (tmplid, param)] = [np.float('nan')] * step
-                    n_accepted['split'] += 1
+    # sample from all pairs of adjacent templates in which not both are uatemplates
+    arr1, arr2, k, pair_prob = sample_adjacent_pair_to_swap(sg, wave_node)
+    if arr1 is None:
+        return False
 
-            arrivals = wn.arrivals()
-            if len(arrivals) >= 1:
-                n_accepted['merge'] += try_merge(sg, wn)
+    # get all relevant nodes for the arrivals we sampled
+    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    rn = list(set(relevant_nodes(t1nodes) + relevant_nodes(t2nodes)))
+    lp_old = sg.joint_logprob_keys(rn)
 
+    log_qforward = np.log(pair_prob)
 
-            arrivals = wn.arrivals()
-            for (eid, phase) in arrivals:
-                l3 = len(arrivals)
-                wg = sg.wiggle_generator(phase=phase, srate=wn.srate)
+    # switch their parameters
+    atime1, atime2 = swap_params(t1nodes, t2nodes)
+    min_atime = min(atime1, atime2)
 
-                if eid < 0:
-                    uaid = -eid
-                    tmnodes = sg.uatemplates[uaid]
-                else:
-                    tmnodes = sg.get_template_nodes(eid=eid, sta=wn.sta, phase=phase, band=wn.band, chan=wn.chan)
+    lp_new = sg.joint_logprob_keys(rn)
+    log_qbackward = np.log(get_pair_prob(sg, wave_node, min_atime))
 
-                n_accepted['indep_peak'] += indep_peak_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                             offset_node=tmnodes["peak_offset"],
-                                                             wave_node=wn)
-                n_accepted['peak_offset'] += improve_offset_move(sg, arrival_node=tmnodes["arrival_time"],
-                                                               offset_node=tmnodes["peak_offset"],
-                                                                 wave_node=wn, std=stds['peak_offset'])
-                for param in ("arrival_time", "coda_height", "coda_decay"):
-                    n = tmnodes[param]
-                    n_accepted[param] += gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[param])
-                n_attempted += 1
-
-                if wiggles:
-                    for param in wg.params():
-                        n = tmnodes[param]
-                        if param.startswith("amp"):
-                            phase_wraparound = False
-                            move = 'wiggle_amp'
-                        else:
-                            phase_wraparound = True
-                            move = 'wiggle_phase'
-                        n_accepted[move] += float(gaussian_MH_move(sg, node_list=(n,), relevant_nodes=(n, wn), std=stds[move], phase_wraparound=phase_wraparound)) / (wg.dimension()/2.0)
-                for (param, n) in tmnodes.items():
-                    params_over_time["%d_%s" % (tmplid, param)].append(n.get_value())
-
-            if step > 0 and ((step % skip == 0) or (step < 15)):
-                lp = sg.current_log_p()
-
-                print "step %d, %s: lp %.2f, %d templates, accepted " % (step, wn.sta, lp, len(arrivals)),
-                for move in moves:
-                    if move in ("split", "merge", "birth", "death"):
-                        print "%s: %d, " % (move, n_accepted[move]),
-                    else:
-                        accepted_percent = (float(n_accepted[move]) / n_attempted *100.0 if n_accepted[move] > 0 else 0)
-                        print "%s: %d%%, " % (move, accepted_percent),
-                print
-                plot_with_fit("unass_%s_step%06d.png" % (wn.sta, step), wn)
-                #signal_diff_pos = get_signal_diff_positive_part(wn, wn.arrivals())
-                #w = wn.get_wave()
-                #w.data = signal_diff_pos
-                #savefig(fname="unass_diff%06d.png" % step, fig=plot_waveform(w))
-
-
-    """
-    for (param, vals) in params_over_time.items():
-        fig = Figure(figsize=(8, 5), dpi=144)
-        axes = fig.add_subplot(111)
-        axes.set_xlabel("Steps", fontsize=8)
-        axes.set_ylabel(param, fontsize=8)
-        axes.plot(vals)
-        savefig("mcmc_unass_%s.png" % param, fig)
-
-    np.savez('mcmc_unass_vals.npz', **params_over_time)
-    """
-
-
-def test_moves(sg, wn):
-    stds = {'peak_offset': .1, 'arrival_time': .1, 'coda_height': .02, 'coda_decay': 0.05, 'wiggle_amp': .25, 'wiggle_phase': .5}
-    #tmnodes = sg.create_unassociated_template(wave_node=wn, atime=1239915963.891)
-    #tmnodes["peak_offset"].set_value(4.804)
-    #tmnodes["coda_height"].set_value(-1.786)
-    #tmnodes["coda_decay"].set_value(-0.030)
-
-    print sg.current_log_p()
-
-    births = 0
-    deaths = 0
-    merges = 0
-    splits = 0
-    for i in range(1000):
-        new_nodes = birth_move(sg, wn)
-        if new_nodes:
-            births += 1
-        deaths += death_move(sg, wn)
-        split_nodes = try_split(sg, wn)
-        if split_nodes:
-            splits += 1
-        merges += try_merge(sg, wn)
-
-        if (i % 10) == 0:
-            print "%d templates:" % len(wn.arrivals()), births, "births, ", deaths, "deaths, ", merges, "merges", splits, 'splits'
-
-    print sg.current_log_p()
-
-    plot_with_fit("tmpl.png", wn)
-
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-    death_move(sg, wn, dummy=True)
-
-
-def main():
-
-    """
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
-    wave = load_event_station_chan(evid=5326226, sta="FIA3", chan="SHZ", cursor=cursor).filter("%s;env" % "freq_2.0_3.0").filter('hz_5.0')
-    cursor.close()
-    """
-    sg = SigvisaGraph(template_model_type="dummy", template_shape="paired_exp",
-                      wiggle_model_type="dummy", wiggle_family="dummy",
-                      phases="leb", nm_type = "ar", wiggle_len_s = 60.0,
-                      assume_envelopes=True)
-
-    wave = Waveform(data = np.load("sampled_wave.npy"),
-                    srate=5.0, stime=1239915900.0,
-                    sta="FIA3", chan="SHZ", arrivals=np.array(()),
-                    filter_str="freq_2.0_3.0;env;hz_5.0")
-    wn = sg.add_wave(wave)
-    env = wn.get_value().data if wn.env else wn.get_wave().filter("env").data.data
-    wn.cdf = preprocess_signal_for_sampling(env)
-    #sg.create_unassociated_template(wave_node=wn, atime=1239915940.253)
-    #sg.create_unassociated_template(wave_node=wn, atime=1239915969.623)
-
-    for fname in os.listdir('.'):
-        if fname.startswith("unass_step") or fname.startswith("mcmc_unass"):
-            os.remove(fname)
-
-    np.random.seed(0)
-    #test_moves(sg, wn)
-    run_open_world_MH(sg, wn, wiggles=True)
-    #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
-
-
-    ll = wn.log_p()
-    print ll
-
-    plot_with_fit("unass.png", wn)
-
-if __name__ == "__main__":
-    try:
-        #sample_template()
-        main()
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        print e
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        import pdb
-        pdb.post_mortem(tb)
+    u = np.random.rand()
+    if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
+        print "successful swap"
+        return True
+    else:
+        atime1, atime2 = swap_params(t1nodes, t2nodes)
+        return False

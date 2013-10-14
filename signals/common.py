@@ -65,7 +65,8 @@ class Waveform(object):
                 fraction_valid = 1
 
             self.my_stats.update({"filter_str": "",
-                                  "fraction_valid": fraction_valid})
+                                  "fraction_valid": fraction_valid,
+                                  "valid_len": fraction_valid * npts/float(srate)})
 
             self.my_stats.update(my_stats_entries)
 

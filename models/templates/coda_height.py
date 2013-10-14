@@ -5,6 +5,15 @@ from sigvisa.graph.graph_utils import get_parent_value
 import sigvisa.source.brune_source as brune
 import sigvisa.source.mm_source as mm
 
+def amp_transfer(ev, band, phase, coda_height):
+    return coda_height - ev_source_amp(ev, band, phase)
+
+def ev_source_amp(ev, band, phase):
+    if ev.natural_source:
+        return brune.source_logamp(mb=ev.mb, band=band, phase=phase)
+    else:
+        return mm.source_logamp(mb=ev.mb, band=band, phase=phase)
+
 
 class CodaHeightNode(DeterministicNode):
     # a codaHeightNode is the descendent of an amp_transfer node.
@@ -36,11 +45,13 @@ class CodaHeightNode(DeterministicNode):
 
         if key != self.single_key:
             raise AttributeError("don't know how to compute derivative of %s at coda height node" % key)
-        if parent_key != self.parent_amp_transfer_key:
-            raise AttributeError("don't know how to compute coda height derivative with respect to parent %s" % parent_key)
-
-        return 1.0
-
+        elif parent_key == self.parent_amp_transfer_key:
+            return 1.0
+        elif parent_key.endswith("amp_transfer"):
+            return 0.0
+        else:
+            return 1.0
+        
     def _ev_source_amp(self, parent_values):
         if parent_values[self.parent_naturalsource_key]:
             return brune.source_logamp(mb=parent_values[self.parent_mb_key], band=self.band, phase=self.phase)

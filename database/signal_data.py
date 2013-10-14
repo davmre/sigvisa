@@ -211,7 +211,7 @@ def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=Non
 
 def load_wiggle_data(cursor, basisid, **kwargs):
 
-    from sigvisa.models.wiggles.wiggle_models import WiggleModelNode
+    from sigvisa.models.wiggles.wiggle_models import WiggleGenerator
 
     cond = sql_param_condition(**kwargs)
 
@@ -219,8 +219,10 @@ def load_wiggle_data(cursor, basisid, **kwargs):
 
     ensure_dir_exists(os.path.join(os.getenv('SIGVISA_HOME'), "db_cache"))
     fname = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s.txt" % str(hashlib.md5(sql_query).hexdigest()))
+    fname_sta = os.path.join(os.getenv('SIGVISA_HOME'), "db_cache", "%s_sta.txt" % str(hashlib.md5(sql_query).hexdigest()))
     try:
         wiggle_data = np.loadtxt(fname, dtype=float)
+        sta_data = np.loadtxt(fname_sta, dtype=str)
     except:
         cursor.execute(sql_query)
         wiggle_data = np.array(cursor.fetchall(), dtype=object)
@@ -228,17 +230,19 @@ def load_wiggle_data(cursor, basisid, **kwargs):
 
         if wiggle_data.shape[0] > 0:
             s = Sigvisa()
-            wiggle_data[:, FIT_SITEID] = np.asarray([s.name_to_siteid_minus1[sta] + 1 for sta in wiggle_data[:, FIT_SITEID]])
+            sta_data = np.array(wiggle_data[:, FIT_SITEID], dtype=str)
+            wiggle_data[:, FIT_SITEID] = -1
             wiggle_data[:, FIT_PHASEID] = np.asarray([s.phaseids[phase] for phase in wiggle_data[:, FIT_PHASEID]])
             wiggle_data[:, FIT_LOWBAND] = [b.split('_')[1] for b in wiggle_data[:, FIT_LOWBAND]]
 
-            wiggle_params = np.array([WiggleModelNode.decode_params(encoded = p) for p in wiggle_data[:, -1] ])
+            wiggle_params = np.array([WiggleGenerator.decode_params(encoded = p) for p in wiggle_data[:, -1] ])
             wiggle_data = np.array(wiggle_data[:, :-1], dtype=float)
             wiggle_data = np.hstack([wiggle_data, wiggle_params])
             np.savetxt(fname, wiggle_data)
+            np.savetxt(fname_sta, sta_data, "%s")
         else:
             raise NoDataException("found no wiggle data matching query %s" % sql_query)
-    return wiggle_data
+    return wiggle_data, sta_data
 
 def load_shape_data(cursor, **kwargs):
 

@@ -136,8 +136,9 @@ def template_wiggle_view(request, fpid):
 
     sg = load_sg_from_db_fit(fit.fitid)
     wave_node = list(sg.leaf_nodes)[0]
-    wiggled = create_wiggled_phase(arrival=(ev.eid, phase.phase), wave_node=wave_node,
+    wiggled = create_wiggled_phase(arrival=(int(ev.eid), str(phase.phase)), wave_node=wave_node,
                                    wiggle_data=wiggle.data)
+    wave_node.unfix_value()
     wave_node.set_value(wiggled)
     wiggled_wave = wave_node.get_wave()
 

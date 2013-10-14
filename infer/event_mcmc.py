@@ -5,6 +5,7 @@ import traceback
 import pickle
 import copy
 
+from collections import defaultdict
 from optparse import OptionParser
 from sigvisa.database.signal_data import *
 from sigvisa.database.dataset import *
@@ -17,69 +18,93 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, indep_offset_move, improve_offset_move, indep_peak_move
+from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move
 from sigvisa.graph.graph_utils import create_key
-from sigvisa.graph.dag import get_relevant_nodes
-from sigvisa.plotting.plot import savefig, plot_with_fit_hack_for_DTRA
+from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure
 
 
 from sigvisa.infer.propose import propose_event_from_hough
 
-def ev_birth_move(sg):
+fixed_node_cache = dict()
+relevant_node_cache = dict()
 
-    proposed_ev, ev_prob = propose_event_from_hough(sg.hough_array, sg.stime, sg.etime)
+def ev_move_relevant_nodes(node_list, fixed_nodes):
 
-    # loop over phase arrivals at each station. if there is an
-    # unassociated template sufficiently close to the predicted phase
-    # arrival, convert it to an event template. otherwise, add a new
-    # event template.
-    for elements in sg.site_elements.values():
-        for sta in elements:
+    # loc: children are basically all the stochastic nodes, and arrival_time
+    #      we want the stochastic nodes, and arrival_time's default parent
 
-            for phase in sg.phases:
+    # mb: children are coda_height, and that's maybe it? we want amp_transfer
 
-                pred_atime = proposed_ev.time + tt_predict(proposed_ev, sta, phase=phase)
+    # time: children are arrival_time. we want tt_residual
 
-                uatemplate_nodes = sg.uatemplates[sta]
-                uatemplate_times = [n['arrival_time'].get_value() for n in uatemplate_nodes]
-                perm = sorted(range(len(uatemplate_times)), key = lambda k : uatemplate_times[k])
-                uatemplate_times = uatemplate_times[perm]
+    # depth: same as loc
 
-                time_idx = np.searchsorted(uatemplate_times, pred_atime)
+    direct_stochastic_children = [c for n in node_list for c in n.children if not c.deterministic()]
+    inlaws = [n.parents[n.default_parent_key()] for n in fixed_nodes]
+    return set(node_list + direct_stochastic_children + inlaws)
 
-def ev_move(sg, ev_node, std, param):
+def ev_move(sg, ev_node, std, params):
     # jointly propose a new event location along with new tt_residual values,
     # such that the event arrival times remain constant.
 
-    def set_ev(ev_node, v, atimes, atime_nodes):
-        ev_node.set_local_value(key=param, value=v)
-        for (at, atn) in zip(atimes, atime_nodes):
-            atn.set_value(at)
+    d = len(params)
 
-    current_v = ev_node.get_local_value(param)
+    def set_ev(ev_node, v, fixed_vals, fixed_nodes):
+        for (key, val) in zip(params, v):
+            ev_node.set_local_value(key=key, value=val)
+        for (val, n) in zip(fixed_vals, fixed_nodes):
+            n.set_value(val)
 
-    sorted_children = sorted(ev_node.children, key = lambda n: n.label)
-    atime_nodes = [child for child in sorted_children if child.label.endswith("arrival_time")]
-    ttr_nodes = [child for child in sorted_children if child.label.endswith("tt_residual")]
-    current_atimes = [atn.get_value() for atn in atime_nodes]
+    current_v = np.zeros((d,))
+    for i in range(d):
+        current_v[i] = ev_node.get_local_value(params[i])
 
-    gsample = np.random.normal(0, std, 1)
+    if ev_node not in fixed_node_cache:
+        sorted_children = sorted(ev_node.children, key = lambda n: n.label)
+        fixed_nodes = [child for child in sorted_children if child.label.endswith("arrival_time") or child.label.endswith("coda_height")]
+        fixed_node_cache[ev_node] = fixed_nodes
+    else:
+        fixed_nodes = fixed_node_cache[ev_node]
+    fixed_vals = [n.get_value() for n in fixed_nodes]
+
+    if ev_node not in relevant_node_cache:
+        node_list = [ev_node,]
+        relevant_nodes = ev_move_relevant_nodes(node_list, fixed_nodes)
+        relevant_node_cache[ev_node] = (node_list, relevant_nodes)
+    else:
+        (node_list, relevant_nodes) = relevant_node_cache[ev_node]
+
+    gsample = np.random.normal(0, std, d)
     move = gsample * std
     new_v = current_v + move
 
-    node_list, relevant_nodes = get_relevant_nodes([ev_node,] + ttr_nodes)
+    if params[0] == "depth":
+        if new_v[0] < 0:
+            new_v[0] = 0.0
+        if new_v[0] > 700:
+            new_v[0] = 700.0
 
-    lp_old = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    if "lon" in params:
+        if new_v[0] < -180:
+            new_v[0] += 360
+        if new_v[0] > 180:
+            new_v[0] -= 180
+        if new_v[1] < -90:
+            new_v[1] = -180 - new_v[1]
+        if new_v[1] > 90:
+            new_v[1] = 180 - new_v[1]
 
-    set_ev(ev_node, new_v, current_atimes, atime_nodes)
-    lp_new = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+
+    lp_old = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
+    set_ev(ev_node, new_v, fixed_vals, fixed_nodes)
+    lp_new = sg.joint_logprob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
 
     u = np.random.rand()
     if lp_new - lp_old > np.log(u):
         return True
     else:
-        set_ev(ev_node, current_v, current_atimes, atime_nodes)
+        set_ev(ev_node, current_v, fixed_vals, fixed_nodes)
         return False
 
 def ev_lonlat_density(frame=None, fname="ev_viz.png"):
@@ -127,46 +152,7 @@ def ev_lonlat_frames():
     for i in range(40, 10000, 40):
         ev_lonlat_density(frame=i, fname='ev_viz_step%06d.png' % i)
 
-def ev_lonlat_move(sg, ev_node, std):
-    # jointly propose a new event location along with new tt_residual values,
-    # such that the event arrival times remain constant.
-
-    def set_ev_loc(ev_node, lat, lon, atimes, atime_nodes):
-        ev_node.set_local_value(key="lat", value=lat)
-        ev_node.set_local_value(key="lon", value=lon)
-        for (at, atn) in zip(atimes, atime_nodes):
-            atn.set_value(at)
-
-    current_lon = ev_node.get_local_value("lon")
-    current_lat = ev_node.get_local_value("lat")
-    current_latlon = np.array((current_lat, current_lon))
-
-    sorted_children = sorted(ev_node.children, key = lambda n: n.label)
-    atime_nodes = [child for child in sorted_children if child.label.endswith("arrival_time")]
-    ttr_nodes = [child for child in sorted_children if child.label.endswith("tt_residual")]
-    current_atimes = [atn.get_value() for atn in atime_nodes]
-
-    gsample = np.random.normal(0, std, 2)
-    move = gsample * std
-    new_latlon = current_latlon + move
-
-    node_list, relevant_nodes = get_relevant_nodes([ev_node,] + ttr_nodes)
-
-    lp_old = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
-
-    set_ev_loc(ev_node, new_latlon[0], new_latlon[1], current_atimes, atime_nodes)
-    lp_new = sg.joint_prob(node_list=node_list, relevant_nodes=relevant_nodes, values=None)
-
-    u = np.random.rand()
-    if lp_new - lp_old > np.log(u):
-        return True
-    else:
-        set_ev_loc(ev_node, current_latlon[0], current_latlon[1], current_atimes, atime_nodes)
-        return False
-
-
-
-def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
+def run_event_MH(sg, evnodes, wn_list, burnin=0, skip=40, steps=10000):
 
     n_accepted = dict()
     n_tried = dict()
@@ -178,7 +164,7 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
     stds = {'peak_offset': .1, 'tt_residual': .1, 'amp_transfer': .1, 'coda_decay': 0.01, 'evloc': 0.01, 'evloc_big': 0.5, 'evtime': 2.0, "evmb": 0.5, "evdepth": 5.0}
 
     templates = dict()
-    params_over_time = dict()
+    params_over_time = defaultdict(list)
 
     for wn in wn_list:
         wave_env = wn.get_value() if wn.env else wn.get_wave().filter('env').data
@@ -187,11 +173,6 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
         arrivals = wn.arrivals()
         eid, phase = list(arrivals)[0]
         templates[wn.sta] = dict([(param, node) for (param, (key, node)) in sg.get_template_nodes(eid=eid, phase=phase, sta=wn.sta, band=wn.band, chan=wn.chan).items()])
-
-        for param in templates[wn.sta].keys():
-            params_over_time["%s_%s" % (wn.sta, param)] = []
-    params_over_time["evloc"] = []
-
 
     for step in range(steps):
         for wn in wn_list:
@@ -214,25 +195,29 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
             for (param, n) in tmnodes.items():
                 params_over_time["%s_%s" % (wn.sta, param)].append(n.get_value())
 
-        n_accepted["evloc"] += ev_lonlat_move(sg, ev_node, std=stds['evloc'])
+        n_accepted["evloc"] += ev_move(sg, evnodes['loc'], std=stds['evloc'], params=('lon', 'lat'))
         n_tried["evloc"] += 1
 
-        n_accepted["evloc_big"] += ev_lonlat_move(sg, ev_node, std=stds['evloc_big'])
+        n_accepted["evloc_big"] += ev_move(sg, evnodes['loc'], std=stds['evloc_big'], params=('lon', 'lat'))
         n_tried["evloc_big"] += 1
 
-        n_accepted["evtime"] += ev_move(sg, ev_node, std=stds['evtime'], param="time")
+        n_accepted["evtime"] += ev_move(sg, evnodes['time'], std=stds['evtime'], params=("time",))
         n_tried["evtime"] += 1
 
-        n_accepted["evdepth"] += ev_move(sg, ev_node, std=stds['evdepth'], param="depth")
+        print evnodes['loc'].get_local_value(key="depth")
+
+        n_accepted["evdepth"] += ev_move(sg, evnodes['loc'], std=stds['evdepth'], params=("depth",))
         n_tried["evdepth"] += 1
 
-        n_accepted["evmb"] += ev_move(sg, ev_node, std=stds['evmb'], param="mb")
+        print evnodes['loc'].get_local_value(key="depth")
+
+        n_accepted["evmb"] += ev_move(sg, evnodes['mb'], std=stds['evmb'], params=("mb",))
         n_tried["evmb"] += 1
 
-        params_over_time["evloc"].append( ev_node.get_mutable_values())
-        params_over_time["evtime"].append( ev_node.get_mutable_values())
-        params_over_time["evdepth"].append( ev_node.get_mutable_values())
-        params_over_time["evmb"].append( ev_node.get_mutable_values())
+        params_over_time["evloc"].append( evnodes['loc'].get_mutable_values())
+        params_over_time["evtime"].append( evnodes['time'].get_mutable_values())
+        params_over_time["evdepth"].append( evnodes['loc'].get_mutable_values())
+        params_over_time["evmb"].append( evnodes['mb'].get_mutable_values())
 
         if step > 0 and ((step % skip == 0) or (step < 15)):
             lp = sg.current_log_p()
@@ -244,7 +229,7 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
                     accepted_percent = float(n_accepted[move]) / n_tried[move] *100 if n_tried[move] > 0 else 0
                     print "%s: %d%%, " % (move, accepted_percent),
             print
-            print " ev loc", ev_node.get_mutable_values()
+            print " ev loc", evnodes['loc'].get_mutable_values()
             #for wn in wn_list:
             #    plot_with_fit("ev_%s_step%06d.png" % (wn.sta, step), wn)
 
@@ -266,115 +251,26 @@ def run_event_MH(sg, ev_node, wn_list, burnin=0, skip=40, steps=10000):
 def main():
 
     parser = OptionParser()
-
-    parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
-    parser.add_option("-s", "--sites", dest="sites", default=None, type="str",
-                      help="comma-separated list of stations with which to locate the event")
-    parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str",
-                      help="name of training run specifying the set of models to use")
-    parser.add_option(
-        "--template_shape", dest="template_shape", default="paired_exp", type="str", help="template model type (paired_exp)")
-    parser.add_option(
-        "-m", "--model", dest="model", default=None, type="str", help="name of training run specifying the set of models to use")
-    parser.add_option(
-        "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
-    parser.add_option(
-        "--template_model_types", dest="tm_types", default="tt_residual:constant_gaussian,peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian",
-        help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)")
-    parser.add_option("--wiggle_model_type", dest="wm_type", default="dummy", help = "")
-    parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", help = "")
-    parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
-    parser.add_option("--dummy_fallback", dest="dummy_fallback", default=False, action="store_true",
-                      help="fall back to a dummy model instead of throwing an error if no model for the parameter exists in the database (False)")
-    parser.add_option("--chans", dest="chans", default="BHZ,SHZ", type="str",
-                      help="comma-separated list of channel names to use for inference (BHZ)")
-    parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
-                      help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
-    parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
-                      help="type of noise model to use (ar)")
-
-
+    register_svgraph_cmdline(parser)
+    register_svgraph_event_based_signal_cmdline(parser)
     (options, args) = parser.parse_args()
 
-    evid = options.evid
-    sites = options.sites.split(',')
+    sg = setup_svgraph_from_cmdline(options, args)
 
-    s = Sigvisa()
-    cursor = s.dbconn.cursor()
+    evnodes = load_event_based_signals_from_cmdline(sg, options, args)
 
-    # train / load coda models
-    run_name = options.run_name
-    iters = np.array(sorted(list(read_fitting_run_iterations(cursor, run_name))))
-    run_iter, runid = iters[-1, :]
+    key_prefix = "%d;" % (evnodes['mb'].eid)
 
-    tm_types = {}
-    if ',' in options.tm_types:
-        for p in options.tm_types.split(','):
-            (param, model_type) = p.strip().split(':')
-            tm_types[param] = model_type
-    else:
-        tm_types = options.tm_types
+    evnodes['natural_source'].fix_value(key = key_prefix + "natural_source")
+    evnodes['lon'].set_value(key = key_prefix + "lon", value=124.3)
+    evnodes['lat'].set_value(key = key_prefix + "lat", value=44.5)
+    evnodes['depth'].set_value(key = key_prefix + "depth", value = 10.0)
+    evnodes['time'].set_value(key = key_prefix + "time", value=ev_true.time+5.0)
+    evnodes['mb'].set_value(key = key_prefix + "mb", value=3.0)
 
-    if options.phases in ("auto", "leb"):
-        phases = options.phases
-    else:
-        phases = options.phases.split(',')
+    np.random.seed(1)
+    run_event_MH(sg, evnodes, wave_nodes)
 
-    if options.bands == "all":
-        bands = s.bands
-    else:
-        bands = options.bands.split(',')
-
-    if options.chans == "all":
-        chans = s.chans
-    else:
-        chans = options.chans.split(',')
-
-    ev_true = get_event(evid=evid)
-
-    # inference is based on segments from all specified stations,
-    # starting at the min predicted arrival time (for the true event)
-    # minus 60s, and ending at the max predicted arrival time plus
-    # 240s
-    statimes = [ev_true.time + tt_predict(event=ev_true, sta=sta, phase=phase) for (sta, phase) in itertools.product(sites, s.phases)]
-    stime = np.min(statimes) - 60
-    etime = np.max(statimes) + 240
-    segments = load_segments(cursor, sites, stime, etime, chans = chans)
-    segments = [seg.with_filter('env;hz_%.3f' % options.hz) for seg in segments]
-
-    sg = SigvisaGraph(template_shape = options.template_shape, template_model_type = tm_types,
-                      wiggle_family = options.wiggle_family, wiggle_model_type = options.wm_type,
-                      dummy_fallback = options.dummy_fallback, nm_type = options.nm_type,
-                      runid=runid, phases=phases, gpmodel_build_trees=False)
-
-
-    wave_nodes = []
-    for seg in segments:
-        for band in bands:
-            filtered_seg = seg.with_filter(band)
-            for chan in filtered_seg.get_chans():
-                wave = filtered_seg[chan]
-                wave_nodes.append(sg.add_wave(wave))
-    ev_node = sg.add_event(ev_true)
-    ev_node.fix_value()
-    ev_node.unfix_value(key = "%d;lon" % ev_node.eid)
-    ev_node.unfix_value(key = "%d;lat" % ev_node.eid)
-    ev_node.unfix_value(key = "%d;time" % ev_node.eid)
-    ev_node.unfix_value(key = "%d;depth" % ev_node.eid)
-    ev_node.unfix_value(key = "%d;mb" % ev_node.eid)
-    ev_node.set_value(key = "%d;lon" % ev_node.eid, value=124.3)
-    ev_node.set_value(key = "%d;lat" % ev_node.eid, value=44.5)
-    ev_node.set_value(key = "%d;time" % ev_node.eid, value=ev_true.time + 5)
-    ev_node.set_value(key = "%d;depth" % ev_node.eid, value=10)
-    ev_node.set_value(key = "%d;mb" % ev_node.eid, value=3.0)
-
-    #for fname in os.listdir('.'):
-    #    if fname.startswith("unass_step") or fname.startswith("mcmc_unass"):
-    #        os.remove(fname)
-
-    np.random.seed(0)
-    run_event_MH(sg, ev_node, wave_nodes)
-    #regen_station_templates(sg, ev_node, wave_nodes)
     #print "atime", sg.get_value(key=create_key(param="arrival_time", eid=en.eid, sta="FIA3", phase="P"))
     print ll
 

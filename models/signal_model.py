@@ -72,6 +72,7 @@ class ObservedSignalNode(Node):
         self.st = model_waveform['stime']
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
+        self.valid_len = model_waveform['valid_len']
         self.env = 'env' in self.filter_str
 
         self.signal_diff = np.empty((self.npts,))
@@ -265,13 +266,13 @@ class ObservedSignalNode(Node):
         for child in self.children:
             child.parent_keys_changed.add((self.single_key), self)
 
-    def log_p(self, parent_values=None):
+    def log_p(self, parent_values=None, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
         v = self.get_value()
         value = v.data
         mask = v.mask
 
-        pred_signal = self.assem_signal()
+        pred_signal = self.assem_signal(**kwargs)
         signal_diff = self.signal_diff
         npts = self.npts
         code = """
@@ -322,5 +323,6 @@ signal_diff(i) =value(i) - pred_signal(i);
             return np.ones((wg.npts,))
 
     def get_template_params_for_arrival(self, eid, phase, parent_values=None):
+        parent_values = parent_values if parent_values else self._parent_values()
         tg = self.graph.template_generator(phase)
         return self._tmpl_params[(eid, phase)], tg

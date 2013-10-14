@@ -51,7 +51,7 @@ def benchmark_derivs():
     relevant_nodes = set(node_list + all_children)
 
     vals = np.concatenate([node.get_mutable_values() for node in node_list])
-    jp = lambda v: sg.joint_prob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)
+    jp = lambda v: sg.joint_logprob(values=v, relevant_nodes=relevant_nodes, node_list=node_list)
 
     N = 20
     st = time.time()
@@ -94,4 +94,3 @@ def benchmark_deriv_optimization():
 
 if __name__ == "__main__":
     benchmark_deriv_optimization()
-

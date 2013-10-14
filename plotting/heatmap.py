@@ -395,8 +395,8 @@ class Heatmap(object):
         center = find_center(X)
         lon_distances = sorted(np.abs([geog.degdiff(pt[0], center[0]) for pt in X]))
         lat_distances = sorted(np.abs([geog.degdiff(pt[1], center[1]) for pt in X]))
-        lon_width = lon_distances[int(np.ceil(len(lon_distances) * float(quantile)))] * 2
-        lat_width = lat_distances[int(np.ceil(len(lat_distances) * float(quantile)))] * 2
+        lon_width = lon_distances[int(np.floor(len(lon_distances) * float(quantile)))] * 2
+        lat_width = lat_distances[int(np.floor(len(lat_distances) * float(quantile)))] * 2
 
         left_lon = center[0] - lon_width/2.0
         right_lon = center[0] + lon_width/2.0

@@ -2,30 +2,66 @@ import numpy as np
 
 from sigvisa import Sigvisa
 from sigvisa.graph.nodes import Node
-from sigvisa.models import Distribution
+from sigvisa.models import Distribution, DummyModel
+from sigvisa.models.distributions import Bernoulli
 from sigvisa.source.event import Event
 
 
-class EventPriorModel(Distribution):
+class EventLocationPrior(Distribution):
 
     def log_p(self, x, cond=None, key_prefix=""):
         s = Sigvisa()
-        #        if x[key_prefix + 'natural_source']:
-        source_lp = 0 # eventually I should have a real model for event source type
         loc_lp = s.sigmodel.event_location_prior_logprob(x[key_prefix + 'lon'],
                                                              x[key_prefix + 'lat'],
                                                              x[key_prefix + 'depth'])
-#        else:
-#            raise NotImplementedError("prior for artificial-source events is not currently implemented")
+        return loc_lp
 
-        mb_lp = s.sigmodel.event_mag_prior_logprob(x[key_prefix + 'mb'])
+class EventMagPrior(Distribution):
 
-        return loc_lp + mb_lp + source_lp
+    def log_p(self, x, cond=None, key_prefix=""):
+        s = Sigvisa()
+        mb_lp = s.sigmodel.event_mag_prior_logprob(x)
+        return mb_lp
+
+def event_from_evnodes(evnodes):
+    # TEMP: evnodes will return a single node, until I get around to splitting it up.
+    #return evnodes.get_event()
+
+    evdict = {}
+    for k in ('lon', 'lat', 'depth', 'time', 'mb', 'natural_source'):
+        evdict[k] = evnodes[k].get_local_value(key=k)
+    n = evnodes['mb']
+
+    return Event(autoload=False, eid=n.eid, evid=n.evid, orid=n.orid, **evdict)
 
 
-class EventNode(Node):
+def setup_event(event, fixed=True, **kwargs):
+
+    key_prefix = '%d;' % event.eid
 
 
+    loc_node = EventLocationNode(event, fixed=fixed, label=key_prefix + 'loc', **kwargs)
+    mb_node = Node(model=EventMagPrior(), initial_value=event.mb, keys=(key_prefix + "mb",), low_bound=0.0, high_bound=10.0, fixed=fixed, label=key_prefix + 'mb', **kwargs)
+    source_node = Node(model=Bernoulli(.999), initial_value=event.natural_source, keys=(key_prefix + "natural_source",), fixed=fixed, label=key_prefix + 'source', **kwargs)
+    time_node = Node(model=DummyModel(default_value=event.time), initial_value=event.time, keys=(key_prefix + "time",), fixed=fixed, label=key_prefix + 'time', **kwargs)
+
+    evnodes = {"loc": loc_node,
+               "lon": loc_node,
+               "lat": loc_node,
+               "depth": loc_node,
+               "mb": mb_node,
+               "natural_source": source_node,
+               "time": time_node,
+           }
+    for n in evnodes.values():
+        n.eid = event.eid
+        n.evid = event.evid
+        n.orid = event.orid
+        n.key_prefix = key_prefix
+
+    return evnodes
+
+class EventLocationNode(Node):
 
     def __init__(self, event, fixed = True, **kwargs):
 
@@ -34,20 +70,13 @@ class EventNode(Node):
         self.orid = event.orid
         key_prefix = '%d;' % self.eid
         initial_value=dict()
-        for (k,v) in event.to_dict().iteritems():
-            initial_value[key_prefix + k] = v
+        d = event.to_dict()
+        for k  in ("lon", "lat", "depth"):
+            initial_value[key_prefix + k] = d[k]
 
-        super(EventNode, self).__init__(model = EventPriorModel(), initial_value=initial_value,
+        super(EventLocationNode, self).__init__(model = EventLocationPrior(), initial_value=initial_value,
                                         fixed=fixed, **kwargs)
         self.key_prefix = key_prefix
-
-    def get_event(self):
-        evdict = {}
-        for (k,v) in self._dict.iteritems():
-            evkey = k.split(';')[1]
-            evdict[evkey] = v
-
-        return Event(autoload=False, eid=self.eid, evid=self.evid, orid=self.orid, **evdict)
 
     def prior_predict(self, parent_values=None):
         pass
@@ -56,10 +85,7 @@ class EventNode(Node):
         bounds = { k: -np.inf for k in self.keys() }
         bounds['lon'] = -185
         bounds['lat'] = -95
-        #bounds['time'] = np.float('-inf')
         bounds['depth'] = 0
-        bounds['mb'] = 0
-        bounds['natural_source'] = None
 
         # only return bounds for the mutable params, since these are what we're optimizing over
         bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
@@ -70,11 +96,12 @@ class EventNode(Node):
         bounds = { k: np.inf for k in self.keys() }
         bounds['lon'] = 185
         bounds['lat'] = 95
-        #bounds['time'] = np.float('-inf')
-        bounds['depth'] = 400
-        bounds['mb'] = 10
-        bounds['natural_source'] = None
+        bounds['depth'] = 700
 
+        # only return bounds for the mutable params, since these are what we're optimizing over
+        bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
+
+        return bounds
         # only return bounds for the mutable params, since these are what we're optimizing over
         bounds = np.array([bounds[k] for k in self.keys() if self._mutable[k]])
 

@@ -132,9 +132,6 @@ class Node(object):
         # such stochastic child, also include the chain of
         # deterministic nodes connecting it to the given node.
 
-        if self.label == "0;P;FIC2;:;:;tt_residual":
-            import pdb; pdb.set_trace()
-
         def traverse_child(n, intermediates):
             if not n.deterministic():
                 self._stochastic_children.append((n, intermediates))
@@ -174,8 +171,12 @@ class Node(object):
         if self._mutable[key]:
             self._dict[key] = value
 
-        for child in self.children:
-            child.parent_keys_changed.add((key, self))
+            for child in self.children:
+                child.parent_keys_changed.add((key, self))
+            for child in self.get_deterministic_children():
+                child.parent_predict()
+        else:
+            raise Exception('trying to set fixed value %s at node %s' % (key, self.label))
 
     def get_local_value(self, key):
         return self.get_value(self.key_prefix + key)

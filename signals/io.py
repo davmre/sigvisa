@@ -151,8 +151,7 @@ def fetch_waveform(station, chan, stime, etime, pad_seconds=20, cursor=None):
 
     if chan == "auto":
         chan = s.default_vertical_channel[selection]
-    else:
-        chan = s.canonical_channel_name[chan]
+    chan = s.canonical_channel_name[chan]
     chan_list = s.equivalent_channels(chan)
 
 

@@ -86,6 +86,8 @@ class ArrivalTimeNode(DeterministicNode):
             return 1.0
         elif parent_key == self.tt_residual_key:
             return 1.0
+        elif parent_key.endswith("tt_residual"):
+            return 0.0
         else:
             raise AttributeError("don't know how to compute arrival time derivative with respect to parent %s" % parent_key)
 
@@ -118,3 +120,7 @@ def tt_log_p(x, event, sta, phase):
     meantt = s.sigmodel.mean_travel_time(event.lon, event.lat, event.depth, event.time, sta, phaseid - 1)
     ll = s.sigmodel.arrtime_logprob(x, meantt, 0, ref_siteid-1, phaseid - 1)
     return ll
+
+def tt_residual(event, sta, atime, phase=None, phaseid=None):
+    pred_atime = event.time + tt_predict(event, sta, phase=phase, phaseid=phaseid)
+    return atime - pred_atime

@@ -74,7 +74,7 @@ def dist_deg(loc1, loc2):
     rlon2 = np.radians(lon2)
     rlat2 = np.radians(lat2)
 
-    dist_rad = np.arcsin( \
+    dist_rad = 2*np.arcsin( \
         np.sqrt( \
             np.sin((rlat1-rlat2)/2.0)**2 + \
             np.cos(rlat1)*np.cos(rlat2)*   \

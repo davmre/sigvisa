@@ -4,7 +4,7 @@ import os
 import traceback
 import itertools
 import pickle
-
+import time
 
 from sigvisa.models.ttime import tt_predict
 from sigvisa.graph.sigvisa_graph import SigvisaGraph, predict_phases
@@ -12,12 +12,15 @@ from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.source.event import Event, get_event
-from sigvisa.infer.template_mcmc import run_open_world_MH
 
 from matplotlib.figure import Figure
 from mpl_toolkits.basemap import Basemap
 from matplotlib.patches import Polygon
 from sigvisa.plotting.plot import savefig
+
+import scipy.weave as weave
+from scipy.weave import converters
+
 
 """
 
@@ -31,8 +34,13 @@ The main logic is in generate_hough_array, which then calls the other methods.
 
 """
 
+DEG_WIDTH_KM = 111.32
+P_WAVE_VELOCITY_KM_PER_S = 6.0
 
-def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False):
+travel_time_cache = dict()
+
+
+def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False, prev_array=None):
     """
 
     Initialize a new Hough accumulator array.
@@ -49,20 +57,18 @@ def init_hough_array(stime, etime, time_tick_s=20, latbins=18, sta_array=False):
 
     lonbins = latbins * 2
     timebins = int((etime-stime)/time_tick_s)
-    init_val = -.7 if sta_array else 0.0
-    return np.ones((lonbins, latbins, timebins)) * init_val
+    #init_val = -.7 if sta_array else 0.0
+    init_val = np.exp(-.7) if sta_array else 1.0
 
-def template_origin_times(sta, time, phaseid=1, latbins=18):
+    if prev_array is None:
+        hough_array = np.empty((lonbins, latbins, timebins))
+    else:
+        hough_array=prev_array
+    hough_array.fill(init_val)
 
-    """
+    return hough_array
 
-    Return, for each spatial bin, the inverted origin time
-    corresponding to the center of that bin. This is used below (in
-    add_template_to_sta_hough) to determine which time bin(s) this
-    template should "vote" for at each point in space.
-
-    """
-
+def precompute_travel_times(sta, phaseid=1, latbins=18):
     s = Sigvisa()
 
     lonbins = latbins * 2
@@ -76,11 +82,26 @@ def template_origin_times(sta, time, phaseid=1, latbins=18):
         for j in range(latbins):
             lat = -90.0 + (j+.5) * latbin_deg
 
-            meantt = s.sigmodel.mean_travel_time(lon, lat, 0.0, time, sta, phaseid - 1)
-            origin_time = time - meantt
-            times[i,j] = origin_time
+            meantt = s.sigmodel.mean_travel_time(lon, lat, 0.0, 0.0, sta, phaseid - 1)
+            times[i,j] = meantt
 
     return times
+
+
+def template_origin_times(sta, time, phaseid=1, latbins=18):
+    """
+
+    Return, for each spatial bin, the inverted origin time
+    corresponding to the center of that bin. This is used below (in
+    add_template_to_sta_hough) to determine which time bin(s) this
+    template should "vote" for at each point in space.
+
+    """
+
+    if (sta, phaseid, latbins) not in travel_time_cache:
+        travel_time_cache[(sta, phaseid, latbins)]= precompute_travel_times(sta, phaseid=phaseid, latbins=latbins)
+    ttimes = travel_time_cache[(sta, phaseid, latbins)]
+    return time - ttimes
 
 def add_template_to_sta_hough(sta_hough_array, template_times, template_snr, stime, time_tick_s=20, tt_sharpness = 5.0):
     """
@@ -89,7 +110,6 @@ def add_template_to_sta_hough(sta_hough_array, template_times, template_snr, sti
     station, using the 2D array returned by template_origin_times.
 
     """
-
 
     lonbins, latbins, timebins = sta_hough_array.shape
     time_radius = time_tick_s / 2.0
@@ -108,6 +128,7 @@ def add_template_to_sta_hough(sta_hough_array, template_times, template_snr, sti
         for j in range(latbins):
             origin_time = template_times[i,j]
             time_offset = (origin_time-stime) % time_tick_s
+            timebin = int(np.floor((origin_time-stime) / time_tick_s))
 
             # if the inverted time is near the edge of a time bin, we spread the vote over both bins.
 
@@ -128,6 +149,57 @@ def add_template_to_sta_hough(sta_hough_array, template_times, template_snr, sti
                 sta_hough_array[i, j, bin2] = max(lp2, sta_hough_array[i, j, bin2])
 
 
+def add_template_to_sta_hough_smooth(sta_hough_array, template_times, template_snr, stime, time_tick_s=20, tt_sharpness = 5.0):
+    """
+
+    Incorporate a template into the Hough accumulator for a particular
+    station, using the 2D array returned by template_origin_times.
+
+    This one spreads the probability mass over as many bins as seems warrented.
+
+    """
+
+    lonbins, latbins, timebins = sta_hough_array.shape
+    time_radius = time_tick_s / 2.0
+    lonbin_deg = 360.0/lonbins
+
+    # log-"probability" that this is a "genuine" detection.
+    # this is taken to be a logistic function of snr
+    det_logprob = - np.log(1 + np.exp(-2.0*(template_snr-4.0)))
+
+    # log-"probability" that the travel-time model is correct in
+    # assigning this particular time-cell for the detected template
+    tt_logprob = tt_sharpness
+
+    lp = tt_logprob + det_logprob
+    plausible_error_s=5.0
+    bin_width_s = 1.41 * lonbin_deg * DEG_WIDTH_KM / P_WAVE_VELOCITY_KM_PER_S
+
+    stime = float(stime)
+    time_tick_s = float(time_tick_s)
+    lp =float(np.exp(lp))
+
+
+
+    code = """
+
+for (int i=0; i < lonbins; ++i) {
+    for (int j=0; j < latbins; ++j) {
+        double origin_time = template_times(i,j);
+        double min_plausible= origin_time - bin_width_s-plausible_error_s;
+        int min_plausible_bin = std::max(0, int((min_plausible-stime) / time_tick_s));
+        double max_plausible = origin_time + bin_width_s + plausible_error_s;
+        int max_plausible_bin = std::min(timebins-1, int((max_plausible-stime) / time_tick_s));
+
+        for (int timebin=min_plausible_bin; timebin <= max_plausible_bin; timebin++) {
+            double oldval = sta_hough_array(i, j, timebin);
+            sta_hough_array(i,j,timebin) = std::max(lp, oldval);
+        }
+    }
+}
+    """
+    weave.inline(code,['stime', 'latbins', 'lonbins', 'timebins', 'bin_width_s', 'plausible_error_s', 'time_tick_s', 'template_times', 'sta_hough_array', 'lp'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+
 def categorical_sample_array(a):
     """
 
@@ -137,17 +209,56 @@ def categorical_sample_array(a):
 
     """
 
-    s = np.sum(a)
-    cdf = np.cumsum(a)/s
+    lonbins, latbins, timebins = a.shape
+    s = float(np.sum(a))
+    u = float(np.random.rand())
 
-    u = np.random.rand()
-    idx = np.searchsorted(cdf, u)
+    t0 = time.time()
+    code = """
+double accum = 0;
+double goal = u*s;
+int done = 0;
+for (int i=0; i < lonbins; ++i) {
+    for (int j=0; j < latbins; ++j) {
+        for (int k=0; k < timebins; ++k)  {
+            accum += a(i,j,k);
+            if (accum >= goal) {
+               return_val = timebins*latbins*i+timebins*j+k;
+               done = 1;
+               break;
+            }
+        }
+        if (done) { break; }
+    }
+    if (done) { break; }
+}
+    """
+    v = weave.inline(code,['latbins', 'lonbins', 'timebins', 'a', 'u', 's'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
-    return np.unravel_index(idx, a.shape)
+    k = v % timebins
+    v1 = (v-k)/timebins
+    j = v1 % latbins
+    i = (v1-j) / latbins
+
+    return (i,j,k)
 
 def categorical_prob(a, idx):
     s = np.sum(a)
     return a[idx]/s
+
+def event_prob_from_hough(ev, hough_array, stime, etime):
+    lonbins, latbins, timebins = hough_array.shape
+    latbin_deg = 180.0/latbins
+    lonbin_deg = 360.0/lonbins
+    time_tick_s = float(etime-stime)/timebins
+
+    timeidx = int(np.floor((ev.time-stime) / time_tick_s))
+    lonidx = int(np.floor((ev.lon+180)) / lonbin_deg)
+    latidx = int(np.floor((ev.lat+90)) / latbin_deg)
+    ev_prob = categorical_prob(hough_array, (lonidx, latidx, timeidx))
+    ev_prob /= (lonbin_deg * latbin_deg * time_tick_s)
+
+    return ev_prob
 
 def propose_event_from_hough(hough_array, stime, etime):
     """
@@ -161,14 +272,16 @@ def propose_event_from_hough(hough_array, stime, etime):
 
     """
 
-
     lonbins, latbins, timebins = hough_array.shape
     latbin_deg = 180.0/latbins
     lonbin_deg = 360.0/lonbins
     time_tick_s = float(etime-stime)/timebins
 
+    t0 = time.time()
     lonidx, latidx, timeidx = categorical_sample_array(hough_array)
+    t1 = time.time()
     ev_prob = categorical_prob(hough_array, (lonidx, latidx, timeidx))
+    t2 = time.time()
 
     # sample an event location uniformly within each bin
     lonidx += np.random.rand()
@@ -178,9 +291,11 @@ def propose_event_from_hough(hough_array, stime, etime):
 
     lon = -180.0 + lonidx * lonbin_deg
     lat = -90.0 + latidx * latbin_deg
-    time = stime + timeidx * time_tick_s
+    t = stime + timeidx * time_tick_s
 
-    ev = Event(lon=lon, lat=lat, time=time, depth=0, mb=3.5, natural_source=True)
+    print "proposal time", t1-t0, t2-t1
+
+    ev = Event(lon=lon, lat=lat, time=t, depth=0, mb=3.5, natural_source=True)
     return ev, ev_prob
 
 def visualize_hough_array(hough_array, sites, fname, timeslice=None):
@@ -241,7 +356,7 @@ def visualize_hough_array(hough_array, sites, fname, timeslice=None):
                       size=6,color = 'blue',zorder=10)
 
 
-    savefig(fname, fig, dpi=300)
+    savefig(fname, fig, dpi=300, bbox_inches='tight')
 
 
 
@@ -272,7 +387,7 @@ def synthetic_hough_array(ev, stas, stime, etime, bin_width_deg):
     return hough_array
 
 
-def generate_hough_array(sg, stime, etime, bin_width_deg, exclude_sites=None, debug_ev=None):
+def generate_hough_array(sg, stime, etime, bin_width_deg, time_tick_s=None, exclude_sites=None, smoothbins=False, debug_ev=None):
     """
 
     Generate a Hough array from a graph containing unassociated templates.
@@ -295,9 +410,8 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, exclude_sites=None, de
     # to the spatial bin center (since by the triangle equality this
     # is the largest possible discrepancy in arrival times), i.e. at
     # most sqrt(2) * bin_width.
-    DEG_WIDTH_KM = 111.32
-    P_WAVE_VELOCITY_KM_PER_S = 6.0
-    time_tick_s = 1.41 * bin_width_deg * DEG_WIDTH_KM / P_WAVE_VELOCITY_KM_PER_S
+    if time_tick_s is None:
+        time_tick_s = 1.41 * bin_width_deg * DEG_WIDTH_KM / P_WAVE_VELOCITY_KM_PER_S
     latbins = int(180.0 / bin_width_deg)
 
     # For each site, loop over its unassociated template and add each
@@ -308,15 +422,20 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, exclude_sites=None, de
     # probs.
     exclude_sites = [] if exclude_sites is None else exclude_sites
     hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=False)
+    sta_hough_array=None
+
+    t0 = time.time()
     for site in sg.site_elements.keys():
         if site in exclude_sites: continue
         for sta in sg.site_elements[site]:
+            t1 = time.time()
             for wn in sg.station_waves[sta]:
                 chan, band = wn.chan, wn.band
-                sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True)
+
+                sta_hough_array = init_hough_array(stime=stime, etime=etime, latbins=latbins, time_tick_s = time_tick_s, sta_array=True, prev_array=sta_hough_array)
 
                 if debug_ev is not None:
-                    pred_atime = ev.time + tt_predict(event=ev, sta=sta, phase='P')
+                    pred_atime = debug_ev.time + tt_predict(event=debug_ev, sta=sta, phase='P')
                     print "%s pred: %.1f" % (sta, pred_atime)
                 for uaid in sg.uatemplate_ids[(sta,chan,band)]:
                     atime = sg.uatemplates[uaid]['arrival_time'].get_value()
@@ -325,10 +444,36 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, exclude_sites=None, de
                     if debug_ev is not None:
                         print wn.sta, ":", uaid, ':', np.exp(amp), wn.nm.c, snr, ";", atime
                     template_times = template_origin_times(sta, atime, latbins=latbins)
-                    add_template_to_sta_hough(sta_hough_array, template_times, stime=stime, template_snr=snr, time_tick_s = time_tick_s)
-                hough_array += sta_hough_array
-    hough_array = np.exp(hough_array)
+                    if smoothbins:
+                        add_template_to_sta_hough_smooth(sta_hough_array, template_times, stime=stime, template_snr=snr, time_tick_s = time_tick_s)
+                    else:
+                        add_template_to_sta_hough(sta_hough_array, template_times, stime=stime, template_snr=snr, time_tick_s = time_tick_s)
+
+                hough_array *= sta_hough_array
+            t2 = time.time()
+            print "station %s time %f" % (sta, t2-t1)
+
+    #t2 = time.time()
+    #exp_in_place(hough_array)
+    #t3 = time.time()
+
+    print "total hough time", t2-t0 #, 'exp time', t3-t2, 'shape', hough_array.shape
     return hough_array
+
+
+def exp_in_place(hough_array):
+    lonbins, latbins, timebins = hough_array.shape
+    code = """
+
+for (int i=0; i < lonbins; ++i) {
+    for (int j=0; j < latbins; ++j) {
+        for (int k=0; k < timebins; ++k)  {
+hough_array(i,j,k) = exp(hough_array(i,j,k));
+        }
+    }
+}
+    """
+    weave.inline(code,['latbins', 'lonbins', 'timebins', 'hough_array'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
 def main():
     """
@@ -346,9 +491,9 @@ def main():
     sites = ['AKASG', 'YKA', 'JNU', 'ILAR', 'WRA', 'FINES', 'ASAR', 'NVAR', 'STKA']
     statimes = [ev.time + tt_predict(event=ev, sta=sta, phase=phase) for (sta, phase) in itertools.product(sites, ['P',])]
     sig_stime = np.min(statimes) - 60
-    sig_etime = np.max(statimes) + 240
+    sig_etime = np.max(statimes) + 640
 
-    infer_stime = ev.time - 632
+    infer_stime = ev.time - 700
     infer_etime = sig_etime
 
     """
@@ -373,15 +518,19 @@ def main():
     f = open('cached_templates2.sg', 'wb')
     pickle.dump(sg, f, protocol=pickle.HIGHEST_PROTOCOL)
     f.close()
+
+    sg.debug_dump("templates")
     """
 
     f = open('cached_templates2.sg', 'rb')
     sg = pickle.load(f)
     f.close()
+
     #"""
 
-    exclude_sites = ['ASAR', 'STKA']
-    hough_array = generate_hough_array(ev, sg, stime=infer_stime, etime=infer_etime, bin_width_deg=4.0, exclude_sites=exclude_sites)
+    exclude_sites = ['STKA']
+    #exclude_sites = []
+    hough_array = generate_hough_array(sg, stime=infer_stime, etime=infer_etime, bin_width_deg=1.0, exclude_sites=exclude_sites, time_tick_s=10, debug_ev=ev, smoothbins=True)
 
     #stas = ['AKBB', 'FITZ', 'JNU']
     #hough_array = synthetic_hough_array(ev, stas=stas, stime=infer_stime, etime=infer_etime, bin_width_deg=5)

@@ -22,14 +22,27 @@ start_params_lld = {"coda_decay": [.022, .0187, 9.00, 1.0],
                     "amp_transfer": [1.1, 3.4, 9.00, 1.0],
                     "peak_offset": [2.7, 3.4, 9.00, 1.0],
                     "tt_residual": [2.7, 3.4, 9.00, 1.0],
+                    "amp": [.1, .1, 9.00, 1.0],
+                    "phase": [1.0, 1.0, 9.00, 1.0],
                     }
+
 
 
 gp_priors_lld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.0004, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "amp_transfer": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "peak_offset": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
                  "tt_residual": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "amp": [InvGamma(beta=.1, alpha=1), InvGamma(beta=.1, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "phase": [InvGamma(beta=1.0, alpha=1), InvGamma(beta=1.0, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
 }
+
+
+gp_priors_lldlld = {"coda_decay": [InvGamma(beta=.0004, alpha=1), InvGamma(beta=.0004, alpha=1), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "amp_transfer": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "peak_offset": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+                 "tt_residual": [InvGamma(beta=5.0, alpha=.5), InvGamma(beta=5.0, alpha=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)],
+}
+
 
 start_params_lldlld = {"coda_decay": [0.1, 1, 2, 2, 2, 2],
                        "amp_transfer": [0.1, 1, 2, 2, 2, 2],
@@ -43,6 +56,7 @@ start_params = {"lld": start_params_lld,
                 }
 
 gp_priors = {"lld": gp_priors_lld,
+             "lldlld": gp_priors_lldlld,
          }
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
@@ -542,12 +556,12 @@ class SparseGP(ParamModel):
     def variance(self,cond, **kwargs):
         return np.diag(self.covariance(cond, **kwargs))
 
-    def sample(self, cond, include_obs=False):
+    def sample(self, cond, include_obs=True):
         """
         Sample from the GP posterior at a set of points given by the rows of X1.
 
-        Default is to sample values of the latent function f. If obs=True, we instead
-        sample observed values (i.e. we include observation noise)
+        Default is to sample observed values (i.e. we include observation noise). If obs=False, we instead
+        sample values of the latent function f.
         """
 
         X1 = self.standardize_input_array(cond)
@@ -579,7 +593,33 @@ class SparseGP(ParamModel):
         samples = np.reshape(self.beta_bar, (1, -1)) + np.dot(self.invc.T, samples).T
         return samples
 
-    def log_p(self, x, cond, **kwargs):
+    def deriv_log_p(self, x, cond=None,lp0=None, eps=1e-4, include_obs=True, **kwargs):
+
+        X1 = self.standardize_input_array(cond, **kwargs)
+        y = x if isinstance(x, collections.Iterable) else (x,)
+
+        y = np.array(y);
+        if len(y.shape) == 0:
+            n = 1
+        else:
+            n = len(y)
+
+        K = self.covariance(X1, include_obs=True)
+        y = y-self.predict(X1)
+
+
+        L =  scipy.linalg.cholesky(K, lower=True)
+        return -scipy.linalg.cho_solve((L, True), y)
+
+        # X1: kx6 array w/ station and event locations
+        # y: k-dimensional vector
+        # ignore idx, cond_key, cond_idx
+
+
+        # return k-dimensional vector
+        # d log_p() / dy
+
+    def log_p(self, x, cond, include_obs=True, **kwargs):
         """
         The log probability of the observations (X1, y) under the posterior distribution.
         """
@@ -593,7 +633,7 @@ class SparseGP(ParamModel):
         else:
             n = len(y)
 
-        K = self.covariance(X1)
+        K = self.covariance(X1, include_obs=include_obs)
         y = y-self.predict(X1)
 
         if n==1:
@@ -605,6 +645,8 @@ class SparseGP(ParamModel):
         alpha = scipy.linalg.cho_solve((L, True), y)
         ll =  -.5 * ( np.dot(y.T, alpha) + n * np.log(2*np.pi)) - ld2
         return ll
+
+
 
     def pack_npz(self):
         d = dict()

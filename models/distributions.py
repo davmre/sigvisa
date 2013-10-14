@@ -34,6 +34,10 @@ class Gamma(Distribution):
         return stats.gamma.rvs(self.alpha, scale=1.0/self.beta, loc=0., n=1)
 
 class InvGamma(Distribution):
+    # mean: beta/(alpha-1)
+    # mode: beta/(alpha+1)
+    # variance: beta^2 / ( (alpha-1)^2 (alpha-2) )
+
     def __init__(self, alpha, beta):
         self.alpha = alpha
         self.beta = beta
@@ -120,6 +124,24 @@ class Poisson(Distribution):
 
     def sample(self, **kwargs):
         return stats.poisson.rvs(self.mu, n=1)
+
+class Bernoulli(Distribution):
+
+    def __init__(self, p):
+        self.p = p
+
+    def log_p(self, x, **kwargs):
+        if x:
+            return np.log(self.p)
+        else:
+            return np.log(1-self.p)
+
+    def predict(self, **kwargs):
+        return self.p >= .5
+
+    def sample(self, **kwargs):
+        u = np.random.rand()
+        return u < self.p
 
 class Negate(Distribution):
     def __init__(self, dist):

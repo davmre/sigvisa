@@ -106,7 +106,7 @@ for (int i=0; i < n2; ++i) {
 
 
 
-    def features_from_signal(self, signal):
+    def features_from_signal(self, signal, return_array=False):
         assert(len(signal) == self.npts)
 
         if self.logscale:
@@ -117,7 +117,10 @@ for (int i=0; i < n2; ++i) {
 
         amps = np.abs(coeffs)[: self.nparams/2]
         phases = np.angle(coeffs)[: self.nparams/2] / (2.0* np.pi)
-        return self.array_to_param_dict(np.concatenate([amps, phases]))
+        if return_array:
+            return np.concatenate([amps, phases])
+        else:
+            return self.array_to_param_dict(np.concatenate([amps, phases]))
 
     def features_from_signal_naive(self, signal):
         assert(len(signal) == self.npts)
@@ -160,6 +163,16 @@ for (int i=0; i < n2; ++i) {
     def params(self):
         return self._params
 
+    def timeshift_param_array(self, a, t_shift):
+        # loop over phase params
+        dim = self.dimension()
+        d2 = dim/2
+        params = self.params()
+        twopi = 2 * np.pi
+        for i in range(d2):
+            freq = self.fundamental * (i+1)
+            a[i+d2] = (a[i+d2] + t_shift * freq * twopi) % twopi
+
     def param_dict_to_array(self, d):
         a = np.asarray([ d[k] for k in self.params() ])
         return a
@@ -174,7 +187,7 @@ for (int i=0; i < n2; ++i) {
         self.basisid = execute_and_return_id(dbconn, sql_query, "basisid")
         return self.basisid
 
-    def unassociated_model(self, param):
+    def unassociated_model(self, param, nm=None):
         if param.startswith("amp"):
             return self.uamodel_amp
         elif param.startswith("phase"):

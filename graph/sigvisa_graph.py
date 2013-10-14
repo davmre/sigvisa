@@ -1,8 +1,13 @@
 import time
 import numpy as np
 import os
+import shutil
+import errno
 import re
+import pickle
 from collections import defaultdict
+from functools32 import lru_cache
+
 from sigvisa import Sigvisa
 
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists
@@ -12,7 +17,7 @@ from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Uniform, Poisson, Gaussian
-from sigvisa.models.ev_prior import EventNode
+from sigvisa.models.ev_prior import setup_event
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
@@ -23,13 +28,18 @@ from sigvisa.models.templates.load_by_name import load_template_generator
 from sigvisa.database.signal_data import execute_and_return_id
 from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
 from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_by_family
+from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.signals.common import Waveform
+
+from sigvisa.utils.fileutils import clear_directory, mkdir_p
 
 class ModelNotFoundError(Exception):
     pass
 
 
+MAX_TRAVEL_TIME = 2000.0
 
+@lru_cache(maxsize=1024)
 def get_param_model_id(runid, sta, phase, model_type, param,
                        template_shape, basisid=None, chan=None, band=None):
     # get a DB modelid for a previously-trained parameter model
@@ -37,14 +47,14 @@ def get_param_model_id(runid, sta, phase, model_type, param,
     cursor = s.dbconn.cursor()
     chan_cond = "and chan='%s'" % chan if chan else ""
     band_cond = "and band='%s'" % band if band else ""
-    basisid_cond = "and wiggle_basisid='%d'" if basisid else ""
+    basisid_cond = "and wiggle_basisid=%d" % (basisid) if basisid is not None else ""
 
     sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond)
     try:
         cursor.execute(sql_query)
         modelid = cursor.fetchone()[0]
     except:
-        raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s'" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param))
+        raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond))
     finally:
         cursor.close()
     return modelid
@@ -58,11 +68,26 @@ class SigvisaGraph(DirectedGraphModel):
 
     """
 
-    def _tm_type(self, param):
-        try:
-            return self.template_model_type[param]
-        except TypeError:
-            return self.template_model_type
+    def _tm_type(self, param, site=None, wiggle_param=True):
+
+        if wiggle_param:
+            try:
+                tmtype = self.wiggle_model_type[param]
+            except TypeError:
+                tmtype = self.wiggle_model_type
+        else:
+            try:
+                tmtype = self.template_model_type[param]
+            except TypeError:
+                tmtype = self.template_model_type
+
+        if site is None: return tmtype
+
+        s = Sigvisa()
+        if s.is_array_station(site) and self.arrays_joint:
+            return tmtype.replace('lld', 'lldlld')
+        else:
+            return tmtype
 
     def __init__(self, template_model_type="dummy", template_shape="paired_exp",
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
@@ -70,7 +95,7 @@ class SigvisaGraph(DirectedGraphModel):
                  dummy_fallback=False,
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0,
-                 no_prune_edges=False, assume_envelopes=True,
+                 assume_envelopes=True,
                  arrays_joint=False, gpmodel_build_trees=True):
         """
 
@@ -104,7 +129,6 @@ class SigvisaGraph(DirectedGraphModel):
                 self.wgs[(phase, wg.srate)] = wg
 
         self.dummy_fallback = dummy_fallback
-        self.no_prune_edges = no_prune_edges
 
         self.nm_type = nm_type
         self.phases = phases
@@ -118,18 +142,27 @@ class SigvisaGraph(DirectedGraphModel):
         self.template_nodes = []
         self.wiggle_nodes = []
 
-        self.station_waves = dict()
-        self.site_elements = dict()
+        self.station_waves = dict() # (sta)
+        self.site_elements = dict() # site (str) -> list of elements (strs)
         self.site_bands = dict()
         self.site_chans = dict()
         self.arrays_joint = arrays_joint
+        self.start_time = np.float('inf')
+        self.event_start_time = np.float('inf')
+        self.end_time = np.float('-inf')
 
         self.optim_log = ""
 
+        self.event_rate = 0.00126599049
+        self.next_eid = 1
+
         self.next_uatemplateid = 1
-        self.uatemplate_rate = .0002
+        self.uatemplate_rate = .001
         self.uatemplate_ids = defaultdict(set) # keys are (sta,chan,band) tuples, vals are sets of ids
         self.uatemplates = dict() # keys are ids, vals are param:node dicts.
+
+        self.evnodes = dict() # keys are eids, vals are attribute:node dicts
+        self.extended_evnodes = defaultdict(list) # keys are eids, vals are list of all nodes for an event, including templates.
 
     def template_generator(self, phase):
         if phase not in self.tg and type(self.template_shape) == str:
@@ -166,9 +199,25 @@ class SigvisaGraph(DirectedGraphModel):
 
         return nodes
 
+    def get_template_vals(self, eid, sta, phase, band, chan):
+        nodes = self.get_template_nodes(eid, sta, phase, band, chan)
+        vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
+        return vals
+
+    def get_arrival_nodes(self, eid, sta, phase, band, chan):
+        nodes = self.get_template_nodes(eid, sta, phase, band, chan)
+        nodes.update(self.get_wiggle_nodes(eid, sta, phase, band, chan))
+        return nodes
+
+    def get_arrival_vals(self, eid, sta, phase, band, chan):
+        nodes = self.get_arrival_nodes(eid, sta, phase, band, chan)
+        vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
+        return vals
+
+
     def set_template(self, eid, sta, phase, band, chan, values):
         for (param, value) in values.items():
-            if param == "arrival_time":
+            if param in ("arrival_time", 'amp_transfer', 'tt_residual'):
                 b = None
                 c = None
             else:
@@ -180,52 +229,66 @@ class SigvisaGraph(DirectedGraphModel):
                            value=value)
 
 
+    def nevents_log_p(self, n=None):
+        if n is None:
+            n = len(self.evnodes)
+
+        # Poisson cancellation here works similarly to in the
+        # uatemplate case (described below in ntemplates_sta_log_p)
+        lp = -(self.event_rate * (self.end_time - self.event_start_time))  + n * np.log(self.event_rate)
+        return lp
+
     def ntemplates_log_p(self):
         lp = 0
         for (site, elements) in self.site_elements.items():
             for sta in elements:
-                for wn in self.station_waves[sta]:
-                    n_template_dist = Poisson(self.uatemplate_rate * (wn.et-wn.st))
-                    ua_templates = len([1 for (eid, phase) in wn.arrivals() if eid < 0])
-                    lp += n_template_dist.log_p(ua_templates)
+                lp += self.ntemplates_sta_log_p(sta)
         return lp
+
+    def ntemplates_sta_log_p(self, sta, n=None):
+        """
+
+        Return the log probability of having n unassociated templates
+        at station sta. If n is unspecified, use the current
+        value. The probability incorporates the Poisson rate as well
+        as the arrival time probabilities. (arrival times in a Poisson
+        process are uniformly distributed but exchangeable, so rather
+        than just having a uniform distribution for each template, we
+        have to multiply in a factor of n!/T^n to account for the
+        exchangeability)
+
+        """
+
+        if n is None:
+
+            s = Sigvisa()
+            site = s.get_array_site(sta)
+            assert (len(list(self.site_bands[site])) == 1)
+            band = list(self.site_bands[site])[0]
+            assert (len(list(self.site_chans[site])) == 1)
+            chan = list(self.site_chans[site])[0]
+
+            n = len(self.uatemplate_ids[(sta, chan, band)])
+
+        assert(len(self.station_waves[sta]) == 1)
+        wn  = self.station_waves[sta][0]
+
+        #n_template_dist = Poisson(self.uatemplate_rate * wn.valid_len)
+        #poisson_lp = n_template_dist.log_p(n)
+        #atimes_lp = scipy.special.gammaln(n+1) -n * np.log(wn.valid_len)
+        #lp = poisson_lp + atimes_lp
+
+        # we can cancel out a lot of terms from Poisson(n) * n!/T^n
+        lp = -(self.uatemplate_rate * wn.valid_len)  + n * np.log(self.uatemplate_rate)
+
+        return lp
+
 
     def current_log_p(self, **kwargs):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
         lp += self.ntemplates_log_p()
+        lp += self.nevents_log_p()
         return lp
-
-    def wave_captures_event(self, ev, sta, stime, etime):
-        for phase in predict_phases(ev=ev, sta=sta, phases=self.phases):
-            if self.wave_captures_event_phase(ev, sta, stime, etime, phase):
-                return True
-        return False
-
-    def wave_captures_event_phase(self, ev, sta, stime, etime, phase):
-        """
-        Check whether a particular waveform might be expected to contain a signal from a particular event.
-        """
-
-        TT_PROB_THRESHOLD = 1e-5
-        MAX_DECAY_LEN_S = 400
-
-        captures = True
-        predicted_atime = ev.time + tt_predict(event=ev, sta=sta, phase=phase)
-
-        # if the predicted arrival time precedes the waveform start by
-        # more than the maximum decay length, and the tail probability
-        # is small, then we can confidently say no.
-        if predicted_atime + MAX_DECAY_LEN_S < stime and tt_log_p(x = stime - MAX_DECAY_LEN_S - ev.time,
-                                                          event=ev, sta=sta, phase=phase) < TT_PROB_THRESHOLD:
-            captures = False
-
-        # similarly if the predicted arrival time is after the
-        # waveform end time, and the tail probability is small.
-        elif predicted_atime > etime and tt_log_p(x = etime-ev.time,
-                                                  event=ev, sta=sta, phase=phase) < TT_PROB_THRESHOLD:
-            captures = False
-
-        return captures
 
     def add_node(self, node, template=False, wiggle=False):
         if template:
@@ -241,7 +304,16 @@ class SigvisaGraph(DirectedGraphModel):
             self.wiggle_nodes.remove(node)
         super(SigvisaGraph, self).remove_node(node)
 
-    def add_event(self, ev, basisids=None, tmshapes=None):
+    def remove_event(self, eid):
+
+        del self.evnodes[eid]
+        for node in self.extended_evnodes[eid]:
+            self.remove_node(node)
+        del self.extended_evnodes[eid]
+
+        self._topo_sort()
+
+    def add_event(self, ev, basisids=None, tmshapes=None, sample_templates=False, fixed=False, eid=None):
         """
 
         Add an event node to the graph and connect it to all waves
@@ -251,18 +323,28 @@ class SigvisaGraph(DirectedGraphModel):
         tmshapes: optional dictionary of template shapes (strings), keyed on phase name.
 
         """
+        if eid is None:
+            eid = self.next_eid
+            self.next_eid += 1
+        ev.eid = eid
+        evnodes = setup_event(ev, fixed=fixed)
+        self.evnodes[eid] = evnodes
+        assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
 
-        event_node = EventNode(event=ev, label='ev_%d' % ev.eid, fixed=True)
-        self.add_node(event_node)
+        # use a set here to ensure we don't add the 'loc' node
+        # multiple times, since it has multiple keys
+        for n in set(evnodes.itervalues()):
+            self.extended_evnodes[eid].append(n)
+            self.add_node(n)
 
         for (site, element_list) in self.site_elements.iteritems():
             for phase in predict_phases(ev=ev, sta=site, phases=self.phases):
                 tg = self.template_generator(phase)
                 wg = self.wiggle_generator(phase, self.base_srate)
-                self.add_event_site_phase(tg, wg, site, phase, event_node)
+                self.add_event_site_phase(tg, wg, site, phase, evnodes, sample_templates=sample_templates)
 
         self._topo_sort()
-        return event_node
+        return evnodes
 
     def destroy_unassociated_template(self, nodes, nosort=False):
         eid, phase, sta, chan, band, param = parse_key(nodes.values()[0].label)
@@ -275,24 +357,38 @@ class SigvisaGraph(DirectedGraphModel):
         if not nosort:
             self._topo_sort()
 
-    def create_unassociated_template(self, wave_node, atime, wiggles=True, nosort=False):
-        unassociated_templateid = self.next_uatemplateid
-        self.next_uatemplateid += 1
+    def create_unassociated_template(self, wave_node, atime, wiggles=True, nosort=False, tmid=None, initial_vals=None):
+
+        """
+
+        Add a new unassociated template to a particular wave node
+        (TODO: generalize this to multiple wave nodes, across
+        bands/chans).
+
+        Optional: nosort, tmid, and initial_vals are used by MCMC
+        moves that need to temporarily remove/reconstruct a template.
+
+        """
+
+        if tmid is None:
+            tmid = self.next_uatemplateid
+            self.next_uatemplateid += 1
 
         phase="UA"
-        eid=-unassociated_templateid
+        eid=-tmid
         tg = self.template_generator(phase=phase)
         wg = self.wiggle_generator(phase=phase, srate=wave_node.srate)
 
-        nodes = dict()
+        tnodes = dict()
+        wnodes = dict()
         at_label = create_key(param="arrival_time", sta=wave_node.sta,
                            phase=phase, eid=eid,
                            chan=wave_node.chan, band=wave_node.band)
 
-        nodes['arrival_time'] = Node(label=at_label, model=DummyModel(default_value=atime),
+        tnodes['arrival_time'] = Node(label=at_label, model=DummyModel(default_value=atime),
                                      initial_value=atime, children=(wave_node,),
                                      low_bound=atime-15, high_bound=atime+15)
-        self.add_node(nodes['arrival_time'], template=True)
+        self.add_node(tnodes['arrival_time'], template=True)
         for param in tg.params():
             label = create_key(param=param, sta=wave_node.sta,
                                phase=phase, eid=eid,
@@ -301,8 +397,8 @@ class SigvisaGraph(DirectedGraphModel):
             lb = tg.low_bounds()[param]
             hb = tg.high_bounds()[param]
 
-            nodes[param] = Node(label=label, model=model, children=(wave_node,), low_bound=lb, high_bound=hb)
-            self.add_node(nodes[param], template=True)
+            tnodes[param] = Node(label=label, model=model, children=(wave_node,), low_bound=lb, high_bound=hb)
+            self.add_node(tnodes[param], template=True)
 
         if wiggles:
             for param in wg.params():
@@ -310,16 +406,27 @@ class SigvisaGraph(DirectedGraphModel):
                                    phase=phase, eid=eid,
                                    chan=wave_node.chan, band=wave_node.band)
                 model = wg.unassociated_model(param)
-                nodes[param] = Node(label=label, model=model, children=(wave_node,))
-                self.add_node(nodes[param], wiggle=True)
+                wnodes[param] = Node(label=label, model=model, children=(wave_node,))
+                self.add_node(wnodes[param], wiggle=True)
 
-        for node in nodes.values():
-            node.unassociated_templateid = unassociated_templateid
-            node.parent_sample()
+        for (param, node) in tnodes.items():
+            node.tmid = tmid
+            if initial_vals is None:
+                node.parent_sample()
+            else:
+                node.set_value(initial_vals[param])
 
-        self.uatemplates[unassociated_templateid] = nodes
-        self.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].add(unassociated_templateid)
+        for (param, node) in wnodes.items():
+            if initial_vals is not None:
+                node.set_value(initial_vals[param])
+            else:
+                node.parent_predict()
 
+        nodes = tnodes
+        nodes.extend(wnodes)
+
+        self.uatemplates[tmid] = nodes
+        self.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].add(tmid)
 
         if not nosort:
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
@@ -343,14 +450,11 @@ class SigvisaGraph(DirectedGraphModel):
         else:
             return self.setup_site_param_node_indep(**kwargs)
 
-    def setup_site_param_node_joint(self, param, site, phase, parent,
+    def setup_site_param_node_joint(self, param, site, phase, parent, model_type,
                               chan=None, band=None, basisid=None,
-                              model_type=None, modelid=None,
+                              modelid=None,
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
-
-        if model_type is None:
-            model_type = self._tm_type(param)
 
         if model_type != "dummy" and modelid is None:
             try:
@@ -382,14 +486,12 @@ class SigvisaGraph(DirectedGraphModel):
 
 
 
-    def setup_site_param_node_indep(self, param, site, phase, parent,
+    def setup_site_param_node_indep(self, param, site, phase, parent, model_type,
                               chan=None, band=None, basisid=None,
-                              model_type=None, modelid=None,
+                              modelid=None,
                               children=(), low_bound=None,
                               high_bound=None, initial_value=None, **kwargs):
 
-        if model_type is None:
-            model_type = self._tm_type(param)
 
         # for each station at this site, create a node with the
         # appropriate parameter model.
@@ -446,21 +548,22 @@ class SigvisaGraph(DirectedGraphModel):
 
     """
 
-    def setup_tt(self, site, phase, event_node, tt_residual_node, children):
+    def setup_tt(self, site, phase, evnodes, tt_residual_node, children):
         nodes = dict()
+        eid = evnodes['mb'].eid
         for sta in self.site_elements[site]:
             ttrn = extract_sta_node(tt_residual_node, sta)
-            label = create_key(param="arrival_time", sta=sta, phase=phase, eid=event_node.eid)
+            label = create_key(param="arrival_time", sta=sta, phase=phase, eid=eid)
 
             my_children = [wn for wn in children if wn.sta==sta]
-            arrtimenode = ArrivalTimeNode(eid=event_node.eid, sta=sta,
-                                          phase=phase, parents=[event_node, ttrn],
+            arrtimenode = ArrivalTimeNode(eid=eid, sta=sta,
+                                          phase=phase, parents=[evnodes['loc'], evnodes['time'], ttrn],
                                           label=label, children=my_children)
             self.add_node(arrtimenode, template=True)
             nodes[sta] = arrtimenode
         return nodes
 
-    def add_event_site_phase(self, tg, wg, site, phase, event_node):
+    def add_event_site_phase(self, tg, wg, site, phase, evnodes, sample_templates=False):
         # the "nodes" we create here can either be
         # actual nodes (if we are modeling these quantities
         # jointly across an array) or sta:node dictionaries (if we
@@ -471,60 +574,72 @@ class SigvisaGraph(DirectedGraphModel):
             except AttributeError:
                 return [n,]
 
+        eid = evnodes['mb'].eid
+
         child_wave_nodes = set()
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
-                if self.no_prune_edges or \
-                   self.wave_captures_event_phase(ev=event_node.get_event(),
-                                                  sta=sta, stime=wave_node.st,
-                                                  etime=wave_node.et, phase=phase):
-                    child_wave_nodes.add(wave_node)
+                child_wave_nodes.add(wave_node)
 
+        tt_model_type = self._tm_type(param="tt_residual", site=site, wiggle_param=False)
         tt_residual_node = tg.create_param_node(self, site, phase,
                                                 band=None, chan=None, param="tt_residual",
-                                                event_node=event_node,
+                                                model_type=tt_model_type,
+                                                evnodes=evnodes,
                                                 low_bound = -15,
                                                 high_bound = 15)
-        tt_node = self.setup_tt(site, phase, event_node=event_node,
+        arrival_time_node = self.setup_tt(site, phase, evnodes=evnodes,
                                 tt_residual_node=tt_residual_node,
                                 children=child_wave_nodes)
+        ampt_model_type = self._tm_type(param="amp_transfer", site=site, wiggle_param=False)
         amp_transfer_node = tg.create_param_node(self, site, phase,
                                                  band=None, chan=None, param="amp_transfer",
-                                                 event_node=event_node,
+                                                 model_type=ampt_model_type,
+                                                 evnodes=evnodes,
                                                  low_bound=-4.0, high_bound=10.0)
 
-        for n in extract_sta_node_list(tt_residual_node):
-            n.parent_predict()
-        for n in extract_sta_node_list(tt_node):
-            n.parent_predict()
-        for n in extract_sta_node_list(amp_transfer_node):
-            n.parent_predict()
-
         nodes = dict()
-        nodes["arrival_time"] = tt_node
+        nodes["arrival_time"] = arrival_time_node
 
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
                 for param in tg.params():
+                    model_type = self._tm_type(param, site, wiggle_param=False)
                     # here the "create param node" creates, potentially, a single node or a dict of nodes
                     nodes[(band, chan, param)] = tg.create_param_node(self, site, phase, band,
-                                                                      chan, param=param,
-                                                                      event_node=event_node,
-                                                                      tt_node=tt_node,
+                                                                      chan, model_type=model_type, param=param,
+                                                                      evnodes=evnodes,
+                                                                      atime_node=arrival_time_node,
                                                                       amp_transfer_node=amp_transfer_node,
                                                                       children=child_wave_nodes,
                                                                       low_bound = tg.low_bounds()[param],
                                                                       high_bound = tg.high_bounds()[param],
                                                                       initial_value = tg.default_param_vals()[param])
                 for param in wg.params():
+                    model_type = self._tm_type(param, site, wiggle_param=True)
                     nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
-                                                                phase=phase, parent=event_node,
-                                                                band=band, chan=chan, basisid=wg.basisid,
-                                                                children=child_wave_nodes, wiggle=True)
+                                                                            model_type=model_type,
+                                                                            phase=phase, parent=evnodes['loc'],
+                                                                            band=band, chan=chan, basisid=wg.basisid,
+                                                                            children=child_wave_nodes, wiggle=True)
 
-        for (band_chan_param_key, ni) in nodes.items():
+        for ni in [tt_residual_node, amp_transfer_node] + nodes.values():
             for n in extract_sta_node_list(ni):
-                n.parent_predict()
+                if sample_templates:
+                    n.parent_sample()
+                    # hacks to deal with Gaussians occasionally being negative
+                    if "peak_offset" in n.label:
+                        v = n.get_value()
+                        invalid_offsets = (v <= 0)
+                        v[invalid_offsets] = 0.5
+                    if "coda_decay" in n.label:
+                        v = n.get_value()
+                        invalid_offsets = (v >= 0)
+                        v[invalid_offsets] = -0.01
+
+                else:
+                    n.parent_predict()
+                self.extended_evnodes[eid].append(n)
 
     def add_wave(self, wave):
         """
@@ -548,6 +663,10 @@ class SigvisaGraph(DirectedGraphModel):
         if sta not in self.station_waves:
             self.station_waves[sta] = []
         self.station_waves[sta].append(wave_node)
+
+        self.start_time = min(self.start_time, wave_node.st)
+        self.event_start_time = self.start_time - MAX_TRAVEL_TIME
+        self.end_time = max(self.end_time, wave_node.et)
 
         self.add_node(wave_node)
         self._topo_sort()
@@ -665,6 +784,63 @@ class SigvisaGraph(DirectedGraphModel):
         wn.parent_sample()
         wn.fix_value()
         return templates
+
+    def dump_event_signals(self, eid, dump_path):
+        mkdir_p(dump_path)
+
+        for (sta, waves) in self.station_waves.items():
+            for wn in waves:
+                for (aeid, phase) in wn.arrivals():
+                    if eid != aeid: continue
+                    params, tg = wn.get_template_params_for_arrival(eid, phase)
+                    atime = params['arrival_time']
+                    stime = atime-10.0
+                    etime = atime + 100.0
+                    plot_with_fit(os.path.join(dump_path, "%s_%d_%s.png" % (sta, eid, phase)), wn,
+                                  highlight_eid=eid, stime=stime, etime=etime)
+
+
+    def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True):
+
+        if dump_path is None:
+            assert(dump_dirname is not None)
+            dump_path = os.path.join('logs', 'dumps', dump_dirname)
+
+        clear_directory(dump_path)
+        print "saving debug dump to %s..." % dump_path
+
+
+        if pickle_graph:
+            with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
+                pickle.dump(self, f, 2)
+            print "saved pickled graph"
+
+        for (sta, waves) in self.station_waves.items():
+            for wn in waves:
+                plot_with_fit(os.path.join(dump_path, "%s.png" % (wn.label)), wn)
+
+                with open(os.path.join(dump_path, "%s_arrivals.txt" % (wn.label)), 'w') as f:
+                    for (eid, phase) in sorted(wn.arrivals()):
+                        v, tg = wn.get_template_params_for_arrival(eid=eid, phase=phase)
+                        f.write("eid %d, phase %s:\n" % (eid, phase))
+                        for (key, val) in v.items():
+                            f.write(" %s: %s\n" % (key, val))
+                        f.write("\n")
+                print "saved plot and arrival info for %s" % (wn.label)
+
+        with open(os.path.join(dump_path, "nodes.txt"), 'w') as f:
+            for (k, n) in sorted(self.all_nodes.items()):
+                if n.deterministic():
+                    f.write("%s: deterministic\n" % k)
+                else:
+                    f.write("%s: lp %.1f\n" % (k, n.log_p()))
+                for key in sorted(n.keys()):
+                    f.write(" %s: %s\n" % (key, n.get_value(key)))
+                f.write("\n")
+        print "saved node values and probabilities"
+
+        os.system("tar cfz %s.tgz %s/*" % (dump_path, dump_path))
+        print "generated tarball"
 
     def save_wiggle_params(self):
         """

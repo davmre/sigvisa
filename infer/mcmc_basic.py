@@ -1,5 +1,7 @@
 import numpy as np
+from functools32 import lru_cache
 
+@lru_cache(maxsize=2048)
 def get_node_scales(node_list):
     low_bounds = np.concatenate([node.low_bounds() for node in node_list])
     high_bounds = np.concatenate([node.high_bounds() for node in node_list])
@@ -8,9 +10,9 @@ def get_node_scales(node_list):
     scales[~scaled] = 1.0
     return scales
 
-def gaussian_propose(sg, node_list, values=None, scales=None, std=0.01, phase_wraparound=False):
+def gaussian_propose(sg, keys, node_list, values=None, scales=None, std=0.01, phase_wraparound=False):
     scales = scales if scales is not None else get_node_scales(node_list)
-    values = values if values is not None else sg.get_all(node_list = node_list)
+    values = values if values is not None else np.array([n.get_value(k) for (n,k) in zip(node_list, keys)])
     n = len(values)
 
     gsample = np.random.normal(0, std, n)
@@ -20,18 +22,22 @@ def gaussian_propose(sg, node_list, values=None, scales=None, std=0.01, phase_wr
     else:
         return values + move
 
-def gaussian_MH_move(sg, node_list, relevant_nodes, scales=None, **kwargs):
-    values = sg.get_all(node_list = node_list)
-    proposal = gaussian_propose(sg, node_list, values=values, scales=scales, **kwargs)
-    return MH_accept(sg, values, proposal, node_list, relevant_nodes)
+def gaussian_MH_move(sg, keys, node_list, relevant_nodes, scales=None, **kwargs):
+    #node_list = [sg.nodes_by_key(k) for k in keys]
+    #_, relevant_nodes = get_relevant_nodes(node_list)
 
-def MH_accept(sg, oldvalues, newvalues, node_list, relevant_nodes, log_qforward=0.0, log_qbackward=0.0):
-    lp_new = sg.joint_prob(values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
-    lp_old = sg.joint_prob(values=oldvalues, node_list=node_list, relevant_nodes=relevant_nodes)
+    values = np.array([n.get_value(k) for (n,k) in zip(node_list, keys)])
+    proposal = gaussian_propose(sg, keys, node_list, values=values, scales=scales, **kwargs)
+    return MH_accept(sg, keys, values, proposal, node_list, relevant_nodes)
+
+def MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes, log_qforward=0.0, log_qbackward=0.0):
+    lp_old = sg.joint_logprob_keys(relevant_nodes) # assume oldvalues are still set
+    lp_new = sg.joint_logprob_keys(keys=keys, values=newvalues, node_list=node_list, relevant_nodes=relevant_nodes)
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) > np.log(u):
-        sg.set_all(newvalues, node_list)
         return True
     else:
+        for (key, val, n) in zip(keys, oldvalues, node_list):
+            n.set_value(key=key, value=val)
         return False
