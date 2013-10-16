@@ -18,11 +18,9 @@ from sigvisa.learn.train_param_common import insert_model, learn_model, load_mod
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.wiggles import load_wiggle_generator
 
-def get_wiggle_training_data(run_name, run_iter, wg, target_num, array=False, **kwargs):
+def get_wiggle_training_data(runid, wg, target_num, array=False, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-
-    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
     wiggle_data, sta_data = load_wiggle_data(cursor, runids=[runid, ], basisid=wg.basisid, **kwargs)
     print str(wiggle_data.shape[0]) + " entries loaded"
@@ -47,39 +45,19 @@ def get_wiggle_training_data(run_name, run_iter, wg, target_num, array=False, **
     return X, y, evids
 
 
-def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, array=False, **kwargs):
+def get_shape_training_data(runid, site, chan, band, phases, target, require_human_approved=False, max_acost=200, min_amp=-10, array=False, HACK_FAKE_POINTS=False, **kwargs):
     s = Sigvisa()
-    cursor = s.dbconn.cursor()
 
-    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
 
     try:
         print "loading %s fit data... " % (phases),
+        cursor = s.dbconn.cursor()
         fit_data, sta_data = load_shape_data(cursor, chan=chan, band=band, site=site, runids=[runid, ], phases=phases, require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, **kwargs)
         #import pdb; pdb.set_trace()
+        cursor.close()
         print str(fit_data.shape[0]) + " entries loaded"
     except:
         raise
-
-    try:
-        if target == "tt_residual":
-#            import pdb; pdb.set_trace()
-            y = np.array(fit_data[:, FIT_ATIME])
-            for (i, row) in enumerate(fit_data):
-                ev = get_event(evid=row[FIT_EVID])
-                pred = tt_predict(ev, site, phaseid=int(row[FIT_PHASEID]))
-                y[i] -= (ev.time + pred)
-        elif target == "coda_decay":
-            y = fit_data[:, FIT_CODA_DECAY]
-        elif target == "amp_transfer":
-            y = fit_data[:, FIT_AMP_TRANSFER]
-        elif target == "peak_offset":
-            y = fit_data[:, FIT_PEAK_DELAY]
-        else:
-            raise KeyError("invalid target param %s" % (target))
-    except IndexError as e:
-        raise NoDataException()
-
 
     if array:
         sta_pos = np.empty((0, 3))
@@ -90,7 +68,53 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
     else:
         X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
 
-    evids = fit_data[:, FIT_EVID]
+    try:
+        evids = fit_data[:, FIT_EVID]
+    except IndexError as e:
+        raise NoDataException()
+
+
+    try:
+
+        if HACK_FAKE_POINTS:
+            short_distance_X = np.array([[0.0, 0.0, 0.0, 1, 0.0],])
+
+            ld1 = np.array([[0.0, 0.0, 0.0, 13000, 0.0],])
+            ld2 = np.array([[0.0, 0.0, 0.0, 16000, 0.0],])
+            ld3 = np.array([[0.0, 0.0, 0.0, 20000, 0.0],])
+            long_distance_X = np.vstack([ld1, ld1, ld1, ld2, ld2, ld2, ld3, ld3, ld3])
+            new_evids = [0,0,0,0,0,0,0,0,0]
+
+        if target == "tt_residual":
+#            import pdb; pdb.set_trace()
+            y = np.array(fit_data[:, FIT_ATIME])
+            for (i, row) in enumerate(fit_data):
+                ev = get_event(evid=row[FIT_EVID])
+                pred = tt_predict(ev, site, phaseid=int(row[FIT_PHASEID]))
+                y[i] -= (ev.time + pred)
+        elif target == "coda_decay":
+            y = fit_data[:, FIT_CODA_DECAY]
+
+            if HACK_FAKE_POINTS:
+                maxy = np.max(y)
+                y = np.concatenate([y, [-.25, -.25, -.25, -.3, -.3, -.3, -.5, -.5, -.5, maxy]])
+                X = np.vstack([X, long_distance_X, short_distance_X])
+                evids = np.concatenate([evids, new_evids])
+        elif target == "amp_transfer":
+            y = fit_data[:, FIT_AMP_TRANSFER]
+
+            if HACK_FAKE_POINTS:
+                miny = np.min(y)
+                maxy = np.max(y)
+                y = np.concatenate([y, [miny-.1, miny-.4, miny-.2, miny-.4, miny-.6, miny-.8, miny-1, miny-.8, miny-1.5, maxy+2]])
+                X = np.vstack([X, long_distance_X, short_distance_X])
+                evids = np.concatenate([evids, new_evids])
+        elif target == "peak_offset":
+            y = fit_data[:, FIT_PEAK_DELAY]
+        else:
+            raise KeyError("invalid target param %s" % (target))
+    except IndexError as e:
+        raise NoDataException()
 
     return X, y, evids
 
@@ -98,8 +122,9 @@ def get_shape_training_data(run_name, run_iter, site, chan, band, phases, target
 
 def chan_for_site(site, options):
     s = Sigvisa()
+    sta = s.get_default_sta(site)
     if options.chan=="vertical":
-        chan = s.default_vertical_channel[site]
+        chan = s.default_vertical_channel[sta]
     else:
         chan = options.chan
     chan = s.canonical_channel_name[chan]
@@ -121,6 +146,18 @@ def explode_sites(options):
                 allsites.append(site)
     return allsites
 
+
+def load_site_data(elems, wiggles, target, param_num, wg=None, **kwargs):
+    X, y, evids = None, None, None
+    for array_elem in elems:
+        if wiggles:
+            X_part, y_part, evids_part = get_wiggle_training_data(wg=wg, site=array_elem,target_num=param_num, **kwargs)
+        else:
+            X_part, y_part, evids_part = get_shape_training_data(site=array_elem, target=target, **kwargs)
+        X = np.append(X, X_part, axis = 0) if X is not None else X_part
+        y = np.append(y, y_part) if y is not None else y_part
+        evids = np.append(evids, evids_part) if evids is not None else evids_part
+    return X, y, evids
 
 def main():
     parser = OptionParser()
@@ -156,6 +193,8 @@ def main():
     parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
     parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
                       help="don't explode array stations into their individual elements (False)")
+    parser.add_option("--fake_points", dest="fake_points", default=False, action="store_true",
+                      help="add some fake points at long and short distances to help condition the polynomials (False)")
 
     (options, args) = parser.parse_args()
 
@@ -187,7 +226,10 @@ def main():
     allsites = explode_sites(options)
 
     for site in allsites:
-        chan = chan_for_site(site, options)
+        try:
+            chan = chan_for_site(site, options)
+        except KeyError:
+            continue
 
         for (param_num, target) in enumerate(targets):
             if target == "amp_transfer":
@@ -210,22 +252,12 @@ def main():
                     print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dups[0][0])
                     continue
 
-
-
                 try:
                     elems = s.get_array_elements(site)
                 except:
                     elems = [site,]
                 try:
-                    X, y, evids = None, None, None
-                    for array_elem in elems:
-                        if wiggles:
-                            X_part, y_part, evids_part = get_wiggle_training_data(run_name=run_name, run_iter=run_iter, wg=wg, site=array_elem, chan=chan, band=band, phases=[phase, ], target_num=param_num, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
-                        else:
-                            X_part, y_part, evids_part = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=array_elem, chan=chan, band=band, phases=[phase, ], target=target,require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
-                        X = np.append(X, X_part, axis = 0) if X is not None else X_part
-                        y = np.append(y, y_part) if y is not None else y_part
-                        evids = np.append(evids, evids_part) if evids is not None else evids_part
+                    X, y, evids = load_site_data(elems, wiggles, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = not options.array_joint, HACK_FAKE_POINTS=options.fake_points)
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
@@ -241,7 +273,10 @@ def main():
 
                 distfn = model_type[3:]
                 st = time.time()
-                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False)
+                try:
+                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False)
+                except:
+                    continue
 
                 et = time.time()
 

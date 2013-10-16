@@ -146,7 +146,7 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time
 
-def indep_peak_move(sg, wave_node, tmnodes):
+def indep_peak_move(sg, wave_node, tmnodes, std=None):
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
     relevant_nodes = [wave_node,]
@@ -210,7 +210,7 @@ def update_wiggle_submove(sg, wave_node, tmnodes, atime_key,
 
     return relevant_nodes, node_list, keys, oldvalues, newvalues
 
-def improve_offset_move(sg, wave_node, tmnodes, std=0.01, **kwargs):
+def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
     """
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
@@ -246,7 +246,7 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.01, **kwargs):
                          relevant_nodes=relevant_nodes)
     return accepted
 
-def improve_atime_move(sg, wave_node, tmnodes, std=.001, **kwargs):
+def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
     # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
     k_atime, n_atime = tmnodes['arrival_time']
     eid, phase, sta, chan, band, param = parse_key(k_atime)

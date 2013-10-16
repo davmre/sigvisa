@@ -61,6 +61,9 @@ class DummyFeatureGenerator(WiggleGenerator):
     def array_to_param_dict(self, a):
         return {}
 
+    def timeshift_param_array(self, a, t_shift):
+        return
+
     def save_to_db(self, dbconn):
         assert(self.basisid is None)
         sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, envelope) values (%f, '%s', '%s', '%s', %d, %d, '%s')" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), 't' if self.envelope else 'f')

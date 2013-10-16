@@ -16,7 +16,7 @@ from sigvisa.source.event import get_event
 from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Uniform, Poisson, Gaussian
+from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential
 from sigvisa.models.ev_prior import setup_event
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
@@ -96,7 +96,7 @@ class SigvisaGraph(DirectedGraphModel):
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0,
                  assume_envelopes=True,
-                 arrays_joint=False, gpmodel_build_trees=True):
+                 arrays_joint=False, gpmodel_build_trees=False):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -615,7 +615,11 @@ class SigvisaGraph(DirectedGraphModel):
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
                 for param in tg.params():
-                    model_type = self._tm_type(param, site, wiggle_param=False)
+
+                    if param == "coda_height":
+                        model_type = None
+                    else:
+                        model_type = self._tm_type(param, site, wiggle_param=False)
                     # here the "create param node" creates, potentially, a single node or a dict of nodes
                     nodes[(band, chan, param)] = tg.create_param_node(self, site, phase, band,
                                                                       chan, model_type=model_type, param=param,
@@ -641,12 +645,19 @@ class SigvisaGraph(DirectedGraphModel):
                     # hacks to deal with Gaussians occasionally being negative
                     if "peak_offset" in n.label:
                         v = n.get_value()
-                        invalid_offsets = (v <= 0)
-                        v[invalid_offsets] = 0.5
+                        if type(v) == float:
+                            v = 0.5 if v <= 0 else v
+                        else:
+                            invalid_offsets = (v <= 0)
+                            v[invalid_offsets] = 0.5
                     if "coda_decay" in n.label:
                         v = n.get_value()
-                        invalid_offsets = (v >= 0)
-                        v[invalid_offsets] = -0.01
+                        if type(v) == float:
+                            v = 0.01 if v >= 0 else v
+                        else:
+                            invalid_offsets = (v >= 0)
+                            v[invalid_offsets] = -0.01
+
 
                 else:
                     n.parent_predict()
@@ -780,6 +791,33 @@ class SigvisaGraph(DirectedGraphModel):
 
         # TODO: optimize
 
+    def prior_sample_events(self, min_mb=3.5, stime=None, etime=None):
+        # assume a fresh graph, i.e. no events already exist
+
+        s = Sigvisa()
+
+        stime = self.event_start_time if stime is None else stime
+        etime = self.end_time if etime is None else etime
+
+        n_event_dist = Poisson(self.event_rate * (etime - stime))
+        n_events = n_event_dist.sample()
+        event_time_dist = Uniform(stime, etime)
+
+        event_mag_dist = Exponential(rate=10.0, min_value=min_mb)
+
+        evs = []
+
+        for i in range(n_events):
+            origin_time = event_time_dist.sample()
+            lon, lat, depth = s.sigmodel.event_location_prior_sample()
+            mb = event_mag_dist.sample()
+            natural_source = True # TODO : sample from source prior
+
+            ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+            self.add_event(ev, sample_templates=True)
+            evs.append(ev)
+        return evs
+
     def prior_sample_uatemplates(self, wn, **kwargs):
         n_template_dist = Poisson(self.uatemplate_rate * (wn.et-wn.st))
         n_templates = n_template_dist.sample()
@@ -812,7 +850,7 @@ class SigvisaGraph(DirectedGraphModel):
                                   highlight_eid=eid, stime=stime, etime=etime)
 
 
-    def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True):
+    def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True, pickle_only=False):
 
         if dump_path is None:
             assert(dump_dirname is not None)
@@ -826,6 +864,8 @@ class SigvisaGraph(DirectedGraphModel):
             with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
                 pickle.dump(self, f, 2)
             print "saved pickled graph"
+        if pickle_only:
+            return
 
         for (sta, waves) in self.station_waves.items():
             for wn in waves:

@@ -32,7 +32,7 @@ def plot_density(data, axes, title=None, draw_stats=True):
         axes.text(0, 1, htext, horizontalalignment='left', verticalalignment='top', transform=axes.transAxes)
 
 
-def plot_histogram(data, axes=None, draw_stats=True, **kwargs):
+def plot_histogram(data, axes=None, draw_stats=True, n_bins=None,  **kwargs):
     data = sorted(data)
     n = len(data)
     mean = np.mean(data)
@@ -48,9 +48,10 @@ def plot_histogram(data, axes=None, draw_stats=True, **kwargs):
         fig = plt.Figure()
         axes = fig.add_subplot(111)
 
-    # freedman / diaconis rule
-    bin_size = 2 * iqr / float(n) ** (1.0 / 3.0)
-    n_bins = int(np.ceil((np.max(data) - np.min(data)) / bin_size))
+    if n_bins is None:
+        # freedman / diaconis rule
+        bin_size = 2 * iqr / float(n) ** (1.0 / 3.0)
+        n_bins = int(np.ceil((np.max(data) - np.min(data)) / bin_size))
     axes.hist(x=data, bins=n_bins, **kwargs)
 
     if draw_stats:

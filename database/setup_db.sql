@@ -161,6 +161,9 @@ create table leb_origin (
 
 load data local infile 'leb_origin.csv' into table leb_origin fields terminated
 by ', ' optionally enclosed by '"' ignore 1 lines;
+
+create index evid on on leb_origin evid;
+
 /* static_site */
 
 create table static_site (

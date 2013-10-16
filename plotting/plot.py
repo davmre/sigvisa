@@ -264,7 +264,7 @@ def plot_waveform(wave, title=None, logscale=False):
     return fig
 
 
-def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_dets=True, plot_predictions=None, **kwargs):
+def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_dets=True, plot_predictions=None, fill_y2=None,  **kwargs):
     srate = wave['srate']
     wave_data = np.log(wave.data) if logscale else wave.data
     if stime is None:
@@ -279,7 +279,10 @@ def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_de
         wave_data=wave_data[sidx:eidx]
 
     axes.set_ylabel(wave['chan'])
-    axes.plot(timevals, wave_data, **kwargs)
+    if fill_y2 is None:
+        axes.plot(timevals, wave_data, **kwargs)
+    else:
+        axes.fill_between(timevals, wave_data, y2=fill_y2, **kwargs)
     if plot_dets:
         plot_det_times(wave, axes=axes, logscale=logscale, stime=stime, etime=etime)
 

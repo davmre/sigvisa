@@ -27,8 +27,6 @@
 #
 import numpy as np
 
-from sigvisa.database.dataset import *
-import sigvisa.database.db
 import functools32
 
 AVG_EARTH_RADIUS_KM = 6371.0

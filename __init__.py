@@ -169,6 +169,16 @@ class Sigvisa(threading.local):
             return [s[0] for s in elements]
             cursor.close()
 
+    def get_default_sta(self, site):
+        if self.earthmodel.site_info(site, 0.0)[3] == 1:
+            cursor = self.dbconn.cursor()
+            cursor.execute("select refsta from static_site where sta='%s'" % site)
+            sta = cursor.fetchone()[0]
+            cursor.close()
+        else:
+            sta = site
+        return sta
+
     def sites_to_stas(self, sites, refsta_only=False):
         stas = []
         if refsta_only:

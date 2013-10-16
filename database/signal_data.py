@@ -257,9 +257,11 @@ def load_shape_data(cursor, **kwargs):
         shape_data = np.loadtxt(fname, dtype=float)
         sta_data = np.loadtxt(fname_sta, dtype=str)
     except:
+        print sql_query
         cursor.execute(sql_query)
+        print "sql done"
         shape_data = np.array(cursor.fetchall(), dtype=object)
-        print shape_data.size
+        print shape_data.shape
 
         if shape_data.shape[0] > 0:
             s = Sigvisa()
