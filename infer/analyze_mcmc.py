@@ -115,9 +115,16 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin):
     print plot_stime, plot_etime, wn.st, wn.et
 
     n = trace.shape[0]
-    alpha = 0.2/np.log(n+5)
+    max_idxs = 2000
+    if n > max_idxs:
+        idxs = np.array(np.linspace(0, n-1, max_idxs), dtype=int)
+        n = max_idxs
+    else:
+        idxs = np.arange(n)
 
-    for row in trace:
+    alpha = 0.4/np.sqrt(n+5)
+
+    for row in trace[idxs,:]:
         v = {'arrival_time': row[0], 'peak_offset': row[1], 'coda_height': row[2], 'coda_decay': row[3]}
         sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, v)
         tmpl_stime = v['arrival_time']
@@ -208,7 +215,7 @@ def summarize_times(run_dir):
 
 def analyze_run(run_dir, burnin):
 
-    #plot_lp_trend(run_dir)
+    plot_lp_trend(run_dir)
     #summarize_times(run_dir)
 
     with open(os.path.join(run_dir, 'step_000099/pickle.sg'), 'rb') as f:
@@ -223,8 +230,8 @@ def analyze_run(run_dir, burnin):
             eids.append(eid)
     print eids
     for eid in eids:
-        #analyze_event(run_dir, eid, burnin)
         plot_ev_template_posteriors(run_dir, sg, eid, burnin)
+        analyze_event(run_dir, eid, burnin)
     #combine_steps(run_dir)
 
 

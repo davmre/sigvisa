@@ -176,12 +176,12 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                               'peak_offset': improve_offset_move,
                               'arrival_time': improve_atime_move} if enable_template_moves else {}
 
-    stds = {'coda_height': .8,
+    stds = {'coda_height': .5,
             'coda_decay': .1,
             'wiggle_amp': .1,
             'wiggle_phase': .1,
             'peak_offset': 0.5,
-            'arrival_time': 10.0,
+            'arrival_time': 7.0,
             'evloc': 0.20,
             'evloc_big': 0.8,
             'evtime': 2.0,
@@ -300,6 +300,8 @@ def main():
                       help="how often to print/save MCMC state, in steps (500)")
     parser.add_option("--startfrom", dest="startfrom", default=None, type="str",
                       help="file name of pickled graph from previous run. starts a new run, initialized with the state from that graph. (None)")
+    parser.add_option("--run_dir", dest="run_dir", default=None, type="str",
+                      help="directory to save results  (auto)")
 
 
     register_svgraph_cmdline(parser)
@@ -313,6 +315,7 @@ def main():
         with open(options.startfrom, 'rb') as f:
             sg = pickle.load(f)
             #sg.next_eid = 200
+        sg.current_log_p_breakdown()
 
     if options.dprk:
         from sigvisa.source.event import get_event

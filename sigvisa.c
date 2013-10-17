@@ -13,6 +13,7 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_mean_travel_time_coord(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_arrtime_logprob(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,PyObject *args);
+static PyObject * py_srand(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_location_prior_sample(SigModel_t * p_sigmodel,PyObject *args);
 static PyObject * py_event_mag_prior_logprob(SigModel_t * p_sigmodel, PyObject *args);
 static PyObject * py_event_mag_prior_distribution(SigModel_t * p_sigmodel, PyObject *args);
@@ -30,6 +31,9 @@ static PyMethodDef SigModel_methods[] = {
   {"event_location_prior_logprob", (PyCFunction)py_event_location_prior_logprob, METH_VARARGS,
    "event_location_prior_logprob(evlon, evlat, evdepth)"
    " -> log prior probability of event location"},
+  {"srand", (PyCFunction)py_srand, METH_VARARGS,
+   "srand(int)"
+   " -> seed the C rng"},
   {"event_location_prior_sample", (PyCFunction)py_event_location_prior_sample, METH_VARARGS,
    "event_location_prior_sample()"
    " -> sample an event location from the prior"},
@@ -353,6 +357,18 @@ static PyObject * py_mean_travel_time(SigModel_t * p_sigmodel,
                                            ref_siteid-1, phaseid);
 
   return Py_BuildValue("d", trvtime);
+}
+
+static PyObject * py_srand(SigModel_t * p_sigmodel,
+			   PyObject * args)
+{
+  double seed;
+
+  if (!PyArg_ParseTuple(args, "d", &seed))
+    return NULL;
+
+  srand(seed);
+  return Py_BuildValue("d", seed);
 }
 
 static PyObject * py_event_location_prior_logprob(SigModel_t * p_sigmodel,

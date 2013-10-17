@@ -289,6 +289,78 @@ class SigvisaGraph(DirectedGraphModel):
         return lp
 
 
+    def current_log_p_breakdown(self):
+        nt_lp = self.ntemplates_log_p()
+        ne_lp = self.nevents_log_p()
+
+        ua_peak_offset_lp = 0.0
+        ua_coda_height_lp = 0.0
+        ua_coda_decay_lp = 0.0
+        ua_wiggle_lp = 0.0
+        for ((sta, band, chan), tmid_set) in self.uatemplate_ids.items():
+            for tmid in tmid_set:
+                uanodes = self.uatemplates[tmid]
+                ua_peak_offset_lp += uanodes['peak_offset'].log_p()
+                ua_coda_height_lp += uanodes['coda_height'].log_p()
+                ua_coda_decay_lp += uanodes['coda_decay'].log_p()
+                for key in uanodes.keys():
+                    if (key != "amp_transfer" and "amp_" in key) or "phase_" in key:
+                        ua_wiggle_lp += uanodes[key].log_p()
+
+        ev_prior_lp = 0.0
+        ev_tt_lp = 0.0
+        ev_amp_transfer_lp = 0.0
+        ev_peak_offset_lp = 0.0
+        ev_coda_decay_lp = 0.0
+        ev_wiggle_lp = 0.0
+        for (eid, evdict) in self.evnodes.items():
+            evnode_set = set(evdict.values())
+            for node in evnode_set:
+                ev_prior_lp += node.log_p()
+
+            for node in self.extended_evnodes[eid]:
+                if node in evnode_set:
+                    continue
+                if node.deterministic():
+                    continue
+                if "tt_residual" in node.label:
+                    ev_tt_lp += node.log_p()
+                elif  "amp_transfer" in node.label:
+                    ev_amp_transfer_lp += node.log_p()
+                elif  "coda_decay" in node.label:
+                    ev_coda_decay_lp += node.log_p()
+                elif  "peak_offset" in node.label:
+                    ev_peak_offset_lp += node.log_p()
+                elif "amp_" in node.label or "phase_" in node.label:
+                    ev_wiggle_lp += node.log_p()
+                else:
+                    raise Exception('unexpected node %s' % node.label)
+
+        signal_lp = 0.0
+        for (sta_, wave_list) in self.station_waves.items():
+            for wn in wave_list:
+                signal_lp += wn.log_p()
+
+
+        print "n_uatemplate: %.1f" % nt_lp
+        print "n_event: %.1f" % ne_lp
+        print "ev priors: ev %.1f" % (ev_prior_lp)
+        print "tt_residual: ev %.1f" % (ev_tt_lp)
+        print "ev global cost (n + priors + tt): %.1f" % (ev_prior_lp + ev_tt_lp + ne_lp,)
+        print "coda_decay: ev %.1f ua %.1f total %.1f" % (ev_coda_decay_lp, ua_coda_decay_lp, ev_coda_decay_lp+ua_coda_decay_lp)
+        print "peak_offset: ev %.1f ua %.1f total %.1f" % (ev_peak_offset_lp, ua_peak_offset_lp, ev_peak_offset_lp+ua_peak_offset_lp)
+        print "coda_height: ev %.1f ua %.1f total %.1f" % (ev_amp_transfer_lp, ua_coda_height_lp, ev_amp_transfer_lp+ua_coda_height_lp)
+        print "wiggles: ev %.1f ua %.1f total %.1f" % (ev_wiggle_lp, ua_wiggle_lp, ev_wiggle_lp+ua_wiggle_lp)
+        ev_total = ev_coda_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp + ev_wiggle_lp
+        ua_total = ua_coda_decay_lp + ua_peak_offset_lp + ua_coda_height_lp + ua_wiggle_lp
+        print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
+        ev_total += ev_prior_lp + ev_tt_lp + ne_lp
+        ua_total += nt_lp
+        print "non signals: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total + ua_total)
+        print "signals: %.1f" % (signal_lp)
+        print "overall: %.1f" % (ev_total + ua_total + signal_lp)
+        print "official: %.1f" % self.current_log_p()
+
     def current_log_p(self, **kwargs):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
         lp += self.ntemplates_log_p()
@@ -390,9 +462,9 @@ class SigvisaGraph(DirectedGraphModel):
                            phase=phase, eid=eid,
                            chan=wave_node.chan, band=wave_node.band)
 
-        tnodes['arrival_time'] = Node(label=at_label, model=DummyModel(default_value=atime),
-                                     initial_value=atime, children=(wave_node,),
-                                     low_bound=atime-15, high_bound=atime+15)
+        tnodes['arrival_time'] = Node(label=at_label, model=DummyModel(atime),
+                                      initial_value=atime, children=(wave_node,),
+                                      low_bound=wave_node.st, high_bound=wave_node.et)
         self.add_node(tnodes['arrival_time'], template=True)
         for param in tg.params():
             label = create_key(param=param, sta=wave_node.sta,
@@ -791,29 +863,35 @@ class SigvisaGraph(DirectedGraphModel):
 
         # TODO: optimize
 
-    def prior_sample_events(self, min_mb=3.5, stime=None, etime=None):
-        # assume a fresh graph, i.e. no events already exist
-
+    def prior_sample_event(self, min_mb=3.5, stime=None, etime=None):
         s = Sigvisa()
 
         stime = self.event_start_time if stime is None else stime
         etime = self.end_time if etime is None else etime
 
-        n_event_dist = Poisson(self.event_rate * (etime - stime))
-        n_events = n_event_dist.sample()
         event_time_dist = Uniform(stime, etime)
-
         event_mag_dist = Exponential(rate=10.0, min_value=min_mb)
+
+        origin_time = event_time_dist.sample()
+        lon, lat, depth = s.sigmodel.event_location_prior_sample()
+        mb = event_mag_dist.sample()
+        natural_source = True # TODO : sample from source prior
+
+        ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+
+        return ev
+
+    def prior_sample_events(self, min_mb=3.5, stime=None, etime=None, n_events=None):
+        # assume a fresh graph, i.e. no events already exist
+
+        if n_events is None:
+            n_event_dist = Poisson(self.event_rate * (etime - stime))
+            n_events = n_event_dist.sample()
 
         evs = []
 
         for i in range(n_events):
-            origin_time = event_time_dist.sample()
-            lon, lat, depth = s.sigmodel.event_location_prior_sample()
-            mb = event_mag_dist.sample()
-            natural_source = True # TODO : sample from source prior
-
-            ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+            ev = self.prior_sample_event(min_mb, stime, etime)
             self.add_event(ev, sample_templates=True)
             evs.append(ev)
         return evs

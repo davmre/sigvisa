@@ -10,7 +10,7 @@ from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.sigvisa_graph import get_param_model_id
 from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
-from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution
+from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ev_prior import event_from_evnodes
 from sigvisa.models.ttime import tt_residual
@@ -20,7 +20,7 @@ from sigvisa.utils.fileutils import mkdir_p
 from sigvisa.source.event import get_event
 
 
-hough_options = {'bin_width_deg':4.0}
+hough_options = {'bin_width_deg':1.0, 'time_tick_s': 10.0, 'smoothbins': True}
 
 def set_hough_options(ho):
     global hough_options
@@ -303,9 +303,9 @@ def propose_phase_template(sg, sta, eid, phase):
         lp = ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
 
     # wiggles!
+    wave_node = sg.station_waves[sta][0]
     wg = sg.wiggle_generator(phase=phase, srate=wave_node.srate)
     wnodes = sg.get_wiggle_nodes(eid, sta, phase, band, chan)
-    wave_node = sg.station_waves[sta][0]
     wiggle_proposal_lp = propose_wiggles_from_signal(eid, phase, wave_node, wg, wnodes)
     lp += wiggle_proposal_lp
     wvals = sg.get_wiggle_vals(eid, sta, phase, band, chan)
@@ -323,21 +323,20 @@ def phase_template_proposal_logp(sg, sta, eid, phase, tmvals):
     amplitude = tmvals['coda_height']
     amp_dist = get_signal_based_amplitude_distribution(sg, sta, tmvals)
 
+    lp = 0.0
+
     # wiggles!
-    wg = sg.wiggle_generator(phase=phase, srate=wave_node.srate)
     wave_node = sg.station_waves[sta][0]
+    wg = sg.wiggle_generator(phase=phase, srate=wave_node.srate)
     wiggle_proposal_lp = wiggle_proposal_lprob_from_signal(eid, phase, wave_node, wg, wvals=tmvals)
     lp += wiggle_proposal_lp
-    tmvals.update(wvals)
 
     wiggle_param_set = set(wg.params())
     tmvals = dict([(p,v) for (p,v) in tmvals.items() if not p in wiggle_param_set])
 
     if amp_dist is not None:
         del tmvals['coda_height']
-        lp = amp_dist.log_p(amplitude)
-    else:
-        lp = 0.0
+        lp += amp_dist.log_p(amplitude)
     lp += ev_phase_template_logprob(sg, sta, eid, phase, tmvals)
 
     return lp
@@ -519,6 +518,8 @@ def ev_birth_move(sg, log_to_run_dir=None):
 
     hough_array = generate_hough_array(sg, stime=sg.event_start_time, etime=sg.end_time, **hough_options)
     proposed_ev, ev_prob = propose_event_from_hough(hough_array, sg.event_start_time, sg.end_time)
+
+    #proposed_ev = get_event(lon=176.162483, lat=-38.466647, depth=380.493129, time=1239915950.797903, mb=4.5345, natural_source=True)
     print "proposed ev", proposed_ev
     #proposed_ev = get_event(evid=5393637)
     #ev_prob = 1.0
@@ -599,6 +600,7 @@ def ev_birth_move(sg, log_to_run_dir=None):
 
     u = np.random.rand()
     move_accepted = (lp_new + reverse_logprob) - (lp_old + move_logprob)  > np.log(u)
+    #import pdb; pdb.set_trace()
     if move_accepted:
         print "move accepted"
         assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
@@ -612,6 +614,11 @@ def ev_birth_move(sg, log_to_run_dir=None):
         return True
     else:
         #print "move rejected"
+
+        if np.random.rand() < 0.05:
+            sites = sg.site_elements.keys()
+            visualize_hough_array(hough_array, sites, os.path.join(log_to_run_dir, 'last_hough.png'))
+
         for fn in inverse_fns:
             fn()
         # no need to topo sort here since remove_event does it for us

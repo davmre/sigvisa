@@ -295,7 +295,7 @@ def propose_event_from_hough(hough_array, stime, etime):
 
     print "proposal time", t1-t0, t2-t1
 
-    ev = Event(lon=lon, lat=lat, time=t, depth=0, mb=3.5, natural_source=True)
+    ev = Event(lon=lon, lat=lat, time=t, depth=0, mb=4.5, natural_source=True)
     return ev, ev_prob
 
 def visualize_hough_array(hough_array, sites, fname, timeslice=None):
@@ -387,7 +387,8 @@ def synthetic_hough_array(ev, stas, stime, etime, bin_width_deg):
     return hough_array
 
 
-def generate_hough_array(sg, stime, etime, bin_width_deg, time_tick_s=None, exclude_sites=None, smoothbins=False, debug_ev=None):
+def generate_hough_array(sg, stime, etime, bin_width_deg=1.0, time_tick_s=10.0, exclude_sites=None, smoothbins=True, debug_ev=None):
+
     """
 
     Generate a Hough array from a graph containing unassociated templates.
@@ -451,7 +452,7 @@ def generate_hough_array(sg, stime, etime, bin_width_deg, time_tick_s=None, excl
 
                 hough_array *= sta_hough_array
             t2 = time.time()
-            print "station %s time %f" % (sta, t2-t1)
+            #print "station %s time %f" % (sta, t2-t1)
 
     #t2 = time.time()
     #exp_in_place(hough_array)
