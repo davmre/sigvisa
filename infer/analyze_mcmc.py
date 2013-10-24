@@ -14,16 +14,19 @@ import matplotlib.gridspec as gridspec
 
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.histogram import plot_density
-from sigvisa.plotting.plot import basic_plot_to_file, subplot_waveform
+from sigvisa.plotting.plot import basic_plot_to_file, subplot_waveform, savefig
+import sigvisa.utils.geog as geog
 
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
-def ev_lonlat_density(trace, ax, true_evid=None, frame=None):
+def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=True):
 
     lonlats = trace[:, 0:2]
     n = lonlats.shape[0]
 
-    hm = EventHeatmap(f=None, autobounds=lonlats, autobounds_quantile=0.9995, calc=False)
+    if bounds is None:
+        bounds = {'autobounds': lonlats, 'autobounds_quantile': .9995}
+    hm = EventHeatmap(f=None, calc=False, **bounds)
     hm.init_bmap(axes=ax)
     hm.plot_earth(y_fontsize=16, x_fontsize=16)
 
@@ -37,18 +40,52 @@ def ev_lonlat_density(trace, ax, true_evid=None, frame=None):
         alpha = baseline_alpha
 
     #hm.plot_locations(X, marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=0.2)
-
-
     scplot = hm.plot_locations(lonlats, marker=".", ms=8, mfc="red", mew=0, mec="none", alpha=alpha)
 
-    if true_evid is not None:
-        ev = get_event(evid=true_evid)
-        hm.plot_locations(np.array(((ev.lon, ev.lat),)), marker="x", ms=5, mfc="blue", mec="blue", mew=3, alpha=1.0)
+    mean_lon = np.mean(trace[:, 0])
+    mean_lat = np.mean(trace[:, 1])
+    lon_std =  np.std(trace[:, 0])
+    lat_std =  np.std(trace[:, 1])
+    lon_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon+lon_std, mean_lat))
+    lat_std_km = geog.dist_km((mean_lon, mean_lat), (mean_lon, mean_lat+lat_std))
+    txt = "mean: %.2f, %.2f\nstd: %.2f, %.2f\nstd_km: %.1f, %.1f" % (mean_lon, mean_lat, lon_std, lat_std, lon_std_km, lat_std_km)
 
+    true_ev = None
+    best_distance = np.float('inf')
+    for ev in true_evs:
+        dist = geog.dist_km((mean_lon, mean_lat), (ev.lon, ev.lat))
+        if dist < best_distance:
+            best_distance = dist
+            true_ev = ev
+
+    if true_ev is not None:
+        txt += '\ntrue: %.2f, %.2f\n' % (true_ev.lon, true_ev.lat)
+        txt += 'd(mean, true) = %.2f\n' % geog.dist_km((mean_lon, mean_lat), (true_ev.lon, true_ev.lat))
+        txt += 'd(proposal, true) = %.2f' % geog.dist_km((trace[0, 0], trace[0, 1]), (true_ev.lon, true_ev.lat))
+
+    if text:
+        ax.text(0, 1, txt, horizontalalignment='left', verticalalignment='top', transform=ax.transAxes, color='purple')
+
+
+    if true_ev is not None:
+        hm.plot_locations(np.array(((true_ev.lon, true_ev.lat),)), marker="x", ms=5, mfc="blue", mec="blue", mew=3, alpha=1.0)
+
+    return true_ev, txt
 
 def load_trace(logfile, burnin):
-    trace = np.loadtxt(logfile)
-    trace = trace[burnin:, :]
+    try:
+        trace = np.loadtxt(logfile)
+    except:
+        print "fixing file", logfile
+        with open(logfile, 'r') as f:
+            lines = f.readlines()
+        with open(logfile, 'w') as f:
+            f.write(''.join(lines[:-1]))
+        trace = np.loadtxt(logfile)
+
+    trace = np.array([row for row in trace if row[0] > burnin])
+    if len(trace) == 0:
+        return trace, 0, 0
     min_step = np.min(trace[:, 0])
     max_step = np.max(trace[:, 0])
 
@@ -56,34 +93,75 @@ def load_trace(logfile, burnin):
     return trace, min_step, max_step
 
 
-def analyze_event(run_dir, eid, burnin):
+def analyze_event(run_dir, eid, burnin, true_evs=None):
     ev_trace_file = os.path.join(run_dir, 'ev_%05d.txt' % eid)
     ev_img_file = os.path.join(run_dir, 'ev_%05d.png' % eid)
+    ev_txt = os.path.join(run_dir, 'ev_%05d_results.txt' % eid)
+    ev_dir = os.path.join(run_dir, 'ev_%05d' % eid)
 
     trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
+    if len(trace) == 0:
+        return
     print "loaded"
 
+    # save big event image
     f = Figure((11,8))
     gs = gridspec.GridSpec(2, 4)
     lonlat_ax = f.add_subplot(gs[0:2, 0:2])
-    ev_lonlat_density(trace, lonlat_ax)
+    true_ev, txt = ev_lonlat_density(trace, lonlat_ax, true_evs=true_evs)
     print "plotted density"
+    with open(ev_txt, 'w') as fi:
+        fi.write(txt + '\n')
 
     # also plot: depth, time, mb histograms
     depth_ax = f.add_subplot(gs[0, 2])
-    plot_density(trace[:, EVTRACE_DEPTH], depth_ax, "depth")
+    plot_density(trace[:, EVTRACE_DEPTH], depth_ax, "depth", true_value = true_ev.depth if true_ev is not None else None)
     time_ax = f.add_subplot(gs[1, 2])
-    plot_density(trace[:, EVTRACE_TIME], time_ax , "time")
+    plot_density(trace[:, EVTRACE_TIME], time_ax , "time", true_value = true_ev.time if true_ev is not None else None)
     mb_ax = f.add_subplot(gs[0, 3])
-    plot_density(trace[:, EVTRACE_MB], mb_ax, "mb")
+    plot_density(trace[:, EVTRACE_MB], mb_ax, "mb", true_value = true_ev.mb if true_ev is not None else None)
     print "plotted others"
-
     f.suptitle('eid %d (%d samples)' % (eid,trace.shape[0]))
-
     f.tight_layout()
     canvas = FigureCanvasAgg(f)
     canvas.draw()
     f.savefig(ev_img_file, bbox_inches="tight", dpi=300)
+
+
+    # also save individual images
+    f = Figure((8,8))
+    ax = f.add_subplot(1,1,1)
+    true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False)
+    savefig(os.path.join(ev_dir, 'posterior_loc.png'), f, bbox_inches="tight", dpi=300)
+
+    if true_ev is not None:
+        f = Figure((8,8))
+        ax = f.add_subplot(1,1,1)
+        bounds = {'center': (true_ev.lon, true_ev.lat), 'width_deg': 5.0, 'height_deg': 5.0}
+        true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, bounds=bounds)
+        savefig(os.path.join(ev_dir, 'posterior_loc_big.png'), f, bbox_inches="tight", dpi=300)
+
+        f = Figure((8,8))
+        ax = f.add_subplot(1,1,1)
+        bounds = {'center': (true_ev.lon, true_ev.lat), 'width_deg': 30.0, 'height_deg': 30.0}
+        true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, bounds=bounds)
+        savefig(os.path.join(ev_dir, 'posterior_loc_reallybig.png'), f, bbox_inches="tight", dpi=300)
+
+    f = Figure((8,8))
+    ax = f.add_subplot(1,1,1)
+    plot_density(trace[:, EVTRACE_MB], ax, "mb", draw_stats=False)
+    savefig(os.path.join(ev_dir, 'posterior_mb.png'), f, bbox_inches="tight", dpi=300)
+
+    f = Figure((8,8))
+    ax = f.add_subplot(1,1,1)
+    plot_density(trace[:, EVTRACE_TIME], ax, "time", draw_stats=False)
+    savefig(os.path.join(ev_dir, 'posterior_time.png'), f, bbox_inches="tight", dpi=300)
+
+    f = Figure((8,8))
+    ax = f.add_subplot(1,1,1)
+    plot_density(trace[:, EVTRACE_DEPTH], ax, "depth", draw_stats=False)
+    savefig(os.path.join(ev_dir, 'posterior_depth.png'), f, bbox_inches="tight", dpi=300)
+
 
 def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin):
 
@@ -99,6 +177,8 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin):
     wn.unfix_value()
 
     trace, min_step, max_step = load_trace(tmpl_trace_file, burnin=burnin)
+    if len(trace) == 0:
+        return
 
     atimes = trace[:, 0]
     min_atime = np.min(atimes)
@@ -213,9 +293,13 @@ def summarize_times(run_dir):
     f.write('average time per step %.4f\n' % (total_time/max_step))
     f.close()
 
-def analyze_run(run_dir, burnin):
+def analyze_run(run_dir, burnin, true_evs):
 
-    plot_lp_trend(run_dir)
+    try:
+        plot_lp_trend(run_dir)
+    except:
+        pass
+
     #summarize_times(run_dir)
 
     with open(os.path.join(run_dir, 'step_000099/pickle.sg'), 'rb') as f:
@@ -231,7 +315,7 @@ def analyze_run(run_dir, burnin):
     print eids
     for eid in eids:
         plot_ev_template_posteriors(run_dir, sg, eid, burnin)
-        analyze_event(run_dir, eid, burnin)
+        analyze_event(run_dir, eid, burnin, true_evs)
     #combine_steps(run_dir)
 
 
@@ -239,12 +323,19 @@ def analyze_run(run_dir, burnin):
 if __name__ == "__main__":
     try:
         burnin = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+
+        if len(sys.argv) > 3:
+            with open(sys.argv[3], 'rb') as f:
+                evs = pickle.load(f)
+        else:
+            evs = []
+
         try:
             mcmc_run = int(sys.argv[1])
             run_dir = os.path.join("logs", "mcmc", "%05d" % mcmc_run)
         except ValueError:
             run_dir = sys.argv[1]
-        analyze_run(run_dir, burnin=burnin)
+        analyze_run(run_dir, burnin=burnin, true_evs=evs)
     except KeyboardInterrupt:
         raise
     except Exception as e:

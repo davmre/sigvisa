@@ -112,6 +112,8 @@ def peak_log_p(cdf, stime, srate, peak_time):
     """
     #if (idx < 1) or (idx >= len(cdf)): return np.float('-inf')
     if (idx < 1) or (idx >= len(cdf)): return np.log(1.0/len(cdf))
+    if (cdf[idx] - cdf[idx-1]) < .0000001:
+        return np.log(1.0/len(cdf))
 
     #return np.log(1.0/len(cdf))
     return np.log(cdf[idx] - cdf[idx-1])

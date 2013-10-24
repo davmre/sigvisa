@@ -19,6 +19,7 @@ database/*.csv
 *.csv
 *.npz
 *.png
+*.gif
 *.txt2
 *.out
 *.heatmap
@@ -68,4 +69,7 @@ test_gp_model
 test_linear_model
 *_list
 *.pkl
-cp
+*.gp
+demos/*/*.html
+*.dot
+*.sg
