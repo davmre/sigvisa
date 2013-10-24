@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.ma as ma
 import sys
 import os
 import traceback
@@ -11,7 +12,9 @@ from sigvisa import Sigvisa
 from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_event_station_chan
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
+from sigvisa.models.distributions import Gaussian
 from sigvisa.models.signal_model import extract_arrival_from_key
+from sigvisa.models.wiggles.wiggle import extract_phase_wiggle_for_proposal
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
@@ -22,7 +25,50 @@ from matplotlib.figure import Figure
 import scipy.weave as weave
 from scipy.weave import converters
 
-MERGE_MAX_ATIME_DIFFERENCE_S = 50
+
+
+def node_get_value(nodes, param):
+    try:
+        k, n = nodes[param]
+    except TypeError as e:
+        n = nodes[param]
+        k = n.single_key
+    return n.get_value(key=k)
+
+def node_set_value(nodes, param, value):
+    try:
+        k, n = nodes[param]
+    except TypeError as e:
+        n = nodes[param]
+        k = n.single_key
+    n.set_value(key=k, value=value)
+
+
+######################################################################
+
+def get_signal_based_amplitude_distribution(sg, sta, tmvals=None, peak_time=None, peak_period_s = 1.0):
+    wn = sg.station_waves[sta][0]
+
+    if peak_time is None:
+        peak_time = tmvals['arrival_time'] + tmvals['peak_offset']
+    peak_idx = int((peak_time - wn.st) * wn.srate)
+    peak_period_samples = int(peak_period_s * wn.srate)
+    peak_data=wn.get_value()[peak_idx - peak_period_samples:peak_idx + peak_period_samples]
+
+    # if we land outside of the signal window, or during an unobserved (masked) portion,
+    # we'll just sample from the event-conditional prior instead
+    if ma.count(peak_data) == 0:
+        return None
+
+    peak_height = peak_data.mean()
+
+    env_height = max(peak_height - wn.nm.c, wn.nm.c/100.0)
+
+
+
+    return Gaussian(mean=np.log(env_height), std = 0.1)
+
+
 
 #######################################################################
 
@@ -100,7 +146,7 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
         #return peak_time, np.log(1.0/len(cdf))
     return peak_time
 
-def indep_peak_move(sg, wave_node, tmnodes):
+def indep_peak_move(sg, wave_node, tmnodes, std=None):
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
     relevant_nodes = [wave_node,]
@@ -131,7 +177,40 @@ def indep_peak_move(sg, wave_node, tmnodes):
 
 ######################################################################
 
-def improve_offset_move(sg, wave_node, tmnodes, **kwargs):
+def update_wiggle_submove(sg, wave_node, tmnodes, atime_key,
+                          atime_node, old_atime, new_atime):
+    # this function factors out the common bit of improve_offset_move
+    # and improve_atime_move, which shifts the wiggles in time to
+    # correspond for the new template arrival time
+
+    eid, phase, sta, chan, band, param = parse_key(atime_key)
+
+    # adjust wiggles for that new time
+    wg = sg.wiggle_generator(phase, wave_node.srate)
+    wnodes = [(p, tmnodes[p]) for p in wg.params()]
+    wiggle_vals = [n.get_value(k) for (p, (k,n)) in wnodes]
+    wiggle_vals_new = np.array(wiggle_vals, copy=True)
+    wg.timeshift_param_array(wiggle_vals_new, new_atime-old_atime)
+    wiggle_vals_new = list(wiggle_vals_new)
+
+    # consider the proposed arrival time along with new adjusted wiggles.
+    # HACK note: we hard-code the assumption of fourier wiggles, where we
+    # know that a timeshift will only change the phase parameters (the latter
+    # half of the param array).
+    d2 = wg.dimension()/2
+    phase_wnodes = wnodes[d2:]
+    phase_nodes = [n for (p,(k, n)) in phase_wnodes]
+    phase_keys = [k for (p,(k, n)) in phase_wnodes]
+
+    relevant_nodes = phase_nodes
+    node_list = [atime_node,] + phase_nodes
+    keys = [atime_key,] + phase_keys
+    oldvalues = [old_atime,] + wiggle_vals[d2:]
+    newvalues = [new_atime,] + wiggle_vals_new[d2:]
+
+    return relevant_nodes, node_list, keys, oldvalues, newvalues
+
+def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
     """
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
@@ -146,50 +225,50 @@ def improve_offset_move(sg, wave_node, tmnodes, **kwargs):
     current_offset = offset_node.get_value(key=offset_key)
     atime = arrival_node.get_value(key=arrival_key)
     proposed_offset = gaussian_propose(sg, keys=(offset_key,),
-                                       node_list=(offset_node,), values=(current_offset,), **kwargs)[0]
+                                       node_list=(offset_node,),
+                                       values=(current_offset,),
+                                       std=std, **kwargs)[0]
     new_atime = atime + (current_offset - proposed_offset)
-    accepted = MH_accept(sg=sg, keys=(arrival_key,offset_key),
-                         oldvalues=(atime, current_offset),
-                         newvalues = (new_atime, proposed_offset),
-                         node_list = (arrival_node, offset_node),
+
+    rn_tmp, node_list, keys, oldvalues, newvalues = update_wiggle_submove(sg, wave_node, tmnodes,
+                                                                          arrival_key, arrival_node,
+                                                                          atime, new_atime)
+    relevant_nodes += rn_tmp
+    node_list.append(offset_node)
+    newvalues.append(proposed_offset)
+    oldvalues.append(current_offset)
+    keys.append(offset_key)
+
+    accepted = MH_accept(sg=sg, keys=keys,
+                         oldvalues=oldvalues,
+                         newvalues = newvalues,
+                         node_list = node_list,
                          relevant_nodes=relevant_nodes)
     return accepted
 
-def improve_atime_move(sg, wave_node, tmnodes, std=.1, **kwargs):
+def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
     # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
     k_atime, n_atime = tmnodes['arrival_time']
     eid, phase, sta, chan, band, param = parse_key(k_atime)
 
     # propose a new arrival time
     relevant_nodes = [wave_node,]
-    parent = n_atime.parents[n_atime.default_parent_key()]
-    relevant_nodes.append(parent)
+    relevant_nodes += [n_atime.parents[n_atime.default_parent_key()],] if n_atime.deterministic() else [n_atime,]
+
     old_atime = n_atime.get_value(k_atime)
     values = (old_atime,)
-    atime_proposal = gaussian_propose(sg, keys=(k_atime,), node_list=(n_atime,), values=(values), **kwargs)
+    atime_proposal = float(gaussian_propose(sg, keys=(k_atime,),
+                                            node_list=(n_atime,),
+                                            values=(values), std=std,
+                                            **kwargs))
 
-    # adjust wiggles for that new time
-    wg = sg.wiggle_generator(phase, wave_node.srate)
-    wnodes = [(p, tmnodes[p]) for p in wg.params()]
-    wiggle_vals = [n.get_value(k) for (p, (k,n)) in wnodes]
-    wiggle_vals_new = np.array(wiggle_vals, copy=True)
-    wg.timeshift_param_array(wiggle_vals_new, atime_proposal-old_atime)
+    rn_tmp, node_list, keys, oldvalues, newvalues = update_wiggle_submove(sg, wave_node, tmnodes,
+                                                                          k_atime, n_atime,
+                                                                          old_atime, atime_proposal)
+    relevant_nodes += rn_tmp
 
-    # consider the proposed arrival time along with new adjusted wiggles.
-    # HACK note: we hard-code the assumption of fourier wiggles, where we
-    # know that a timeshift will only change the phase parameters (the latter
-    # half of the param array).
-    d2 = wg.dimension()/2
-    phase_wnodes = wnodes[d2:]
-    phase_nodes = [n for (p,(k, n)) in phase_wnodes]
-    phase_keys = [k for (p,(k, n)) in phase_wnodes]
-    relevant_nodes += phase_nodes
-    node_list = [n_atime,] + phase_nodes
-    keys = [k_atime,] + phase_keys
-    oldvalues = [atime,] + wiggle_vals[d2:]
-    newvalues = [atime_proposal,] + wiggle_vals_new[d2:]
-
-    return MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes)
+    accepted = MH_accept(sg, keys, oldvalues, newvalues, node_list, relevant_nodes)
+    return accepted
 
 #just for debugging
 """
@@ -280,16 +359,9 @@ def split_move(sg, wave_node, return_probs=False, force_accept=False):
     # create the new uatemplate, with arrival time sampled uniformly
     eps_atime = np.random.rand()*atime_window_len
     new_atime = atime_window_start + eps_atime
-    new_tmpl = sg.create_unassociated_template(wave_node, atime=new_atime, nosort=True)
+    new_tmpl = sg.create_unassociated_template(wave_node, atime=new_atime, nosort=True, sample_wiggles=True)
     sg._topo_sorted_list = new_tmpl.values() + sg._topo_sorted_list
     sg._gc_topo_sorted_nodes()
-
-    # sample offset and decay from the prior
-    new_offset = new_tmpl['peak_offset'].model.sample()
-    new_tmpl['peak_offset'].set_value(new_offset)
-
-    new_decay = new_tmpl['coda_decay'].model.sample()
-    new_tmpl['coda_decay'].set_value(new_decay)
 
     # split off some fraction of the amplitude to the new node
     k,n = tnodes['coda_height']
@@ -301,7 +373,8 @@ def split_move(sg, wave_node, return_probs=False, force_accept=False):
 
     lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + relevant_parent + new_tmpl.values())
 
-    log_qforward = new_tmpl['peak_offset'].model.log_p(new_offset) + new_tmpl['coda_decay'].model.log_p(new_decay) - np.log(atime_window_len) - np.log(n_arrs)
+    new_tmpl_priorsampled = [n for (p, n) in new_tmpl.items() if p not in ['coda_height', 'arrival_time']]
+    log_qforward = sg.joint_logprob_keys(new_tmpl_priorsampled) - np.log(atime_window_len) - np.log(n_arrs)
     jacobian_determinant = 1.0/ (u * (1-u))
 
     # the reverse probability is the prob that we would have chosen to merge these two templates
@@ -393,8 +466,8 @@ def merge_move(sg, wave_node, return_probs=False):
         return False
 
     # get all relevant nodes for the arrivals we sampled
-    t1nodes = sg.get_template_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
-    t2nodes = sg.get_template_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    t1nodes = sg.get_arrival_nodes(eid=arr1[1], phase=arr1[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
+    t2nodes = sg.get_arrival_nodes(eid=arr2[1], phase=arr2[2], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
 
     # save the probability before we actually make the move
     log_qforward = 0.0
@@ -451,7 +524,8 @@ def merge_move(sg, wave_node, return_probs=False):
 
     # we can ignore keys and just take the node log_p because we know
     # the lost node is always going to be a single uatemplate (not an event, etc)
-    log_qbackward = lost_nodes['peak_offset'][1].log_p() + lost_nodes['coda_decay'][1].log_p() - np.log(atime_window_len) - np.log(n_arrs-1)
+    new_tmpl_priorsampled = [n for (p, (k,n)) in lost_nodes.items() if p not in ['coda_height', 'arrival_time']]
+    log_qbackward = sg.joint_logprob_keys(new_tmpl_priorsampled) - np.log(atime_window_len) - np.log(n_arrs-1)
 
     u = np.random.rand()
     if (lp_new + log_qbackward) - (lp_old + log_qforward) + jacobian_determinant > np.log(u):
@@ -496,45 +570,106 @@ def merge_move(sg, wave_node, return_probs=False):
 
 #######################################################################
 
-def get_wiggles_from_signal()
-            # initialize wiggles from signal
-            arrivals = wave_node.arrivals()
-            arr = (eid, 'UA')
-            signal_data, st, et = extract_phase_wiggle(arr, arrivals, wave_node)
-            features = wg.features_from_signal(signal, return_array=True)
-            dim = wg.dimension()
-            features += np.random.randn(dim) * 0.1
-            features[dim/2:] = features[dim/2:] % (2*np.pi)
-            for (i,param) in enumerate(wg.params()):
-                wnodes[param].set_value(features[i])
+def get_wiggles_from_signal(eid, phase, wave_node, wg, peak_offset):
+    arrivals = wave_node.arrivals()
+    arr = (eid, phase)
+    signal_data = extract_phase_wiggle_for_proposal(arr, arrivals, wave_node, wg)
+    features = wg.features_from_signal(signal_data, return_array=True)
+    new_signal = wg.signal_from_features(features)
 
+    return features
+
+def propose_wiggles_from_signal(eid, phase, wave_node, wg, nodes, amp_std=0.02, phase_std=0.02):
+    # the proposal distribution for wiggles is a Gaussian centered around an FFT of the current
+    # unexplained signal
+
+    if wg.basis_type() == "dummy":
+        return 0.0
+
+    features = get_wiggles_from_signal(eid, phase, wave_node, wg, peak_offset=node_get_value(nodes, 'peak_offset'))
+    assert(wg.basis_type() == "fourier")
+    dim = wg.dimension()
+
+    amp_residuals = np.random.randn(dim/2) * amp_std
+    phase_residuals = np.random.randn(dim/2) * phase_std
+    residuals = np.concatenate([amp_residuals, phase_residuals])
+    features += residuals
+    features[dim/2:] = features[dim/2:] % (1.0)
+    for (i,param) in enumerate(wg.params()):
+        node_set_value(nodes, param, value=features[i])
+
+    lp = -.5 * np.log(2*np.pi*amp_std**2) +  - .5 * np.sum( (amp_residuals)**2 ) / amp_std**2
+    lp += -.5 * np.log(2*np.pi*phase_std**2) - .5 * np.sum( (phase_residuals)**2 ) / phase_std**2
+
+    return lp
+
+
+def wiggle_proposal_lprob_from_signal(eid, phase, wave_node, wg, wnodes=None, wvals=None, amp_std=0.02, phase_std=0.02):
+    if wg.basis_type() == "dummy":
+        return 0.0
+
+    features = np.empty((wg.dimension(),))
+    for (i,param) in enumerate(wg.params()):
+        if wvals is not None:
+            features[i] = wvals[param]
+        else:
+            features[i] = node_get_value(wnodes, param)
+
+    assert(wg.basis_type() == "fourier")
+    dim = wg.dimension()
+
+    peak_offset = wvals['peak_offset'] if wvals is not None else node_get_value(wnodes, 'peak_offset')
+
+    signal_features = get_wiggles_from_signal(eid, phase, wave_node, wg, peak_offset=peak_offset)
+    residuals = signal_features - features
+    amp_residuals = residuals[:dim/2]
+
+    # compute distances wrapping around the unit circle
+    phase_residuals = residuals[dim/2:] % 1
+    phase_wraparound = (phase_residuals > .5)
+    phase_residuals[phase_wraparound] = 1 - phase_residuals[phase_wraparound]
+
+    lp = -.5 * np.log(2*np.pi*amp_std**2) - .5 * np.sum((amp_residuals)**2) / amp_std**2
+    lp += -.5 * np.log(2*np.pi*phase_std**2) - .5 * np.sum((phase_residuals)**2) / phase_std**2
+    return lp
 
 def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
     #lp_old1 = sg.current_log_p()
     lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,])
 
     cdf = get_current_conditional_cdf(wave_node, arrival_set=wave_node.arrivals())
-    peak_time, proposal_lp =  sample_peak_time_from_signal(cdf, wave_node.st,
+    peak_time, atime_proposal_lp =  sample_peak_time_from_signal(cdf, wave_node.st,
                                                            wave_node.srate,
                                                            return_lp=True)
     plp = peak_log_p(cdf, wave_node.st,
                      wave_node.srate,
                      peak_time = peak_time)
 
+
+    logamplitude_proposal_dist = get_signal_based_amplitude_distribution(sg, wave_node.sta, peak_time=peak_time)
+    if logamplitude_proposal_dist is None:
+        tg = sg.template_generator(phase="UA")
+        logamplitude_proposal_dist = tg.unassociated_model('coda_height')
+    proposed_logamp = logamplitude_proposal_dist.sample()
+    proposed_logamp_lp = logamplitude_proposal_dist.log_p(proposed_logamp)
+
     tmpl = sg.create_unassociated_template(wave_node, peak_time, nosort=True, **kwargs)
     sg._topo_sorted_list = tmpl.values() + sg._topo_sorted_list
     sg._gc_topo_sorted_nodes()
     tmpl["arrival_time"].set_value(peak_time - tmpl["peak_offset"].get_value())
+    tmpl["coda_height"].set_value(proposed_logamp)
 
+    eid = -tmpl["arrival_time"].tmid
+    wg = sg.wiggle_generator(phase="UA", srate=wave_node.srate)
+    wiggle_proposal_lp = propose_wiggles_from_signal(eid, 'UA', wave_node, wg, tmpl)
     lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + tmpl.values())
-    #lp_new1 = sg.current_log_p()
-    #assert(np.abs((lp_new - lp_old) - (lp_new1-lp_old1)) < .00001)
 
     # probability of this birth move is the product of probabilities
     # of all sampled params (including arrival time)
-    log_qforward = proposal_lp
+    log_qforward = atime_proposal_lp + proposed_logamp_lp + wiggle_proposal_lp
     for (key, node) in tmpl.items():
-        if key == "arrival_time": continue
+        if key == "arrival_time" or key=="coda_height": continue
+        if key.startswith('phase') or key.startswith('amp'): continue
         log_qforward += node.log_p()
 
     # reverse (death) probability is just the probability of killing a
@@ -583,22 +718,31 @@ def death_move(sg, wave_node, dummy=False, return_probs=False):
     tnodes = sg.get_template_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
     wnodes = sg.get_wiggle_nodes(eid=tmpl_to_destroy[0], phase=tmpl_to_destroy[1], sta=wave_node.sta, band=wave_node.band, chan=wave_node.chan)
 
-
     ntemplates = len(sg.uatemplate_ids[(wave_node.sta, wave_node.chan, wave_node.band)])
     lp_old = tmpl_move_logp(sg, wave_node.sta, [wave_node,] + [n for (k, n) in tnodes.values() + wnodes.values()], n=ntemplates)
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
     log_qforward = 0
 
-
     current_peak = tnodes['arrival_time'][1].get_value() + tnodes['peak_offset'][1].get_value()
-    log_qbackward = 0
+    eid = -tnodes["arrival_time"][1].tmid
+    wg = sg.wiggle_generator(phase="UA", srate=wave_node.srate)
+    allnodes = dict([(p, (k,n)) for (p, (k,n)) in tnodes.items() + wnodes.items()])
+    wiggle_proposal_lp = wiggle_proposal_lprob_from_signal(eid, 'UA', wave_node, wg, allnodes)
+
+    logamplitude_proposal_dist = get_signal_based_amplitude_distribution(sg, wave_node.sta, peak_time=current_peak)
+    if logamplitude_proposal_dist is None:
+        tg = sg.template_generator(phase="UA")
+        logamplitude_proposal_dist = tg.unassociated_model('coda_height')
+    current_logamp = tnodes['coda_height'][1].get_value()
+    proposed_logamp_lp = logamplitude_proposal_dist.log_p(current_logamp)
+
+    log_qbackward = wiggle_proposal_lp + proposed_logamp_lp
     for (param, (label, node)) in tnodes.items():
-        if param != "arrival_time":
+        if param != "arrival_time" and param != "coda_height":
             log_qbackward += node.log_p()
         sg.remove_node(node)
         sg._topo_sorted_list[node._topo_sorted_list_index] = None
     for (param, (label, node)) in wnodes.items():
-        log_qbackward += node.log_p()
         sg.remove_node(node)
         sg._topo_sorted_list[node._topo_sorted_list_index] = None
 
@@ -607,7 +751,6 @@ def death_move(sg, wave_node, dummy=False, return_probs=False):
     log_qbackward += peak_log_p(cdf, wave_node.st,
                                 wave_node.srate,
                                 peak_time = current_peak)
-
 
     lp_new = tmpl_move_logp(sg, wave_node.sta, [wave_node,], n=ntemplates-1)
 

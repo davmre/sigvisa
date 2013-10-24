@@ -112,6 +112,30 @@ class Gaussian(Distribution):
     def sample(self, **kwargs):
         return self.mean + np.random.randn() * self.std
 
+class Exponential(Distribution):
+    def __init__(self, rate, min_value=0.0):
+        self.rate = float(rate)
+        self.min_value = min_value
+
+    def log_p(self, x,  **kwargs):
+        rate = self.rate
+        x = x - self.min_value
+        if x < 0:
+            lp = np.float("-inf")
+
+        lp = np.log(rate) - rate * x
+
+        return lp
+
+    def predict(self, **kwargs):
+        return 1.0/self.rate + self.min_value
+
+    def sample(self, **kwargs):
+        u = np.random.rand()
+        return -np.log(u) / self.rate + self.min_value
+
+
+
 class Poisson(Distribution):
     def __init__(self, mu):
         self.mu = mu

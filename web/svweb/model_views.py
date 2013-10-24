@@ -16,8 +16,7 @@ from sigvisa.database.signal_data import *
 from sigvisa import *
 from sigvisa.models.wiggles import load_wiggle_generator
 from sigvisa.learn.train_param_common import load_model
-from sigvisa.learn.train_coda_models import  get_shape_training_data
-from sigvisa.learn.train_wiggle_models import  get_wiggle_training_data
+from sigvisa.learn.train_coda_models import  get_shape_training_data, get_wiggle_training_data
 
 
 from matplotlib.figure import Figure
@@ -91,6 +90,8 @@ def plot_linear_model_distance(request, model_record, axes):
 
 def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
 
+    xmax = float(request.GET.get('xmax', 10000))
+
     kwargs = {}
     parametric_only = request.GET.get('parametric_only', 'f').lower().startswith('t')
     if parametric_only:
@@ -100,7 +101,7 @@ def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
     model = load_model(full_fname, model_record.model_type)
 
     site_loc = Sigvisa().earthmodel.site_info(str(model_record.site), 0)[:2]
-    distances = np.linspace(0, 10000, 40)
+    distances = np.linspace(0, xmax, 40)
     pts = [geog.pointRadialDistance(site_loc[0], site_loc[1], azi, d) for d in distances]
 
     pred = np.array([model.predict(np.array(((pt[0], pt[1], depth, d, azi),)), **kwargs) for (pt, d) in zip(pts, distances)]).flatten()
@@ -257,13 +258,14 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         for phase in phases:
             if basisid:
                 wg = load_wiggle_generator(basisid=basisid)
-                X, y, evids = get_wiggle_training_data(run_name=run.run_name, run_iter=run.iter,
+                param_num = wg.params().index(param)
+                X, y, evids = get_wiggle_training_data(runid=runid,
                                                 site=sta, chan=chan, band=band, phases=phases,
-                                                target=param,require_human_approved=require_human_approved,
+                                                target_num=param_num,require_human_approved=require_human_approved,
                                                 max_acost=max_acost, min_amp=min_amp,
-                                                      wm_node = wg, **d)
+                                                      wg = wg, **d)
             else:
-                X, y, evids = get_shape_training_data(run_name=run.run_name, run_iter=run.iter,
+                X, y, evids = get_shape_training_data(runid=runid,
                                                 site=sta, chan=chan, band=band, phases=phases,
                                                 target=param,require_human_approved=require_human_approved,
                                                 max_acost=max_acost, min_amp=min_amp, **d)
@@ -324,9 +326,13 @@ def plot_empirical_histogram(request, xy_by_phase, axes):
 
     # get the fit corresponding to the given pageid for this run
 
+
+    n_bins = int(request.GET.get("bins", -1))
+    if n_bins ==-1: n_bins = None
+
     for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
         y = xy_by_phase[phase][1]
-        histogram.plot_histogram(y, axes=axes, normed=True)
+        histogram.plot_histogram(y, axes=axes, n_bins=n_bins, normed=True)
 
 
 @cache_page(60 * 60 * 24 * 365)

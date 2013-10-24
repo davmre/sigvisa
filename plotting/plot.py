@@ -16,15 +16,22 @@ def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
     canvas.print_figure(fname, **kwargs)
 
-def basic_plot_to_file(fname, data, xvals=None, title=None, xlabel=None, ylabel=None, xlim=None, ylim=None, **kwargs):
+def basic_plot_to_file(fname, data, data2=None, data3=None, xvals=None, title=None, xlabel=None, ylabel=None, xlim=None, ylim=None, **kwargs):
 
     fig = Figure(figsize=(8, 5), dpi=300)
     axes = fig.add_subplot(111)
 
-    if xvals is None:
-        axes.plot(data, **kwargs)
-    else:
-        axes.plot(xvals, data, **kwargs)
+    def plotdata(d):
+        if xvals is None:
+            axes.plot(d, **kwargs)
+        else:
+            axes.plot(xvals, d, **kwargs)
+
+    plotdata(data)
+    if data2 is not None:
+        plotdata(data2)
+    if data3 is not None:
+        plotdata(data3)
 
     if title is not None:
         axes.set_title(title)
@@ -257,7 +264,7 @@ def plot_waveform(wave, title=None, logscale=False):
     return fig
 
 
-def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_dets=True, plot_predictions=None, **kwargs):
+def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_dets=True, plot_predictions=None, fill_y2=None,  **kwargs):
     srate = wave['srate']
     wave_data = np.log(wave.data) if logscale else wave.data
     if stime is None:
@@ -272,7 +279,10 @@ def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_de
         wave_data=wave_data[sidx:eidx]
 
     axes.set_ylabel(wave['chan'])
-    axes.plot(timevals, wave_data, **kwargs)
+    if fill_y2 is None:
+        axes.plot(timevals, wave_data, **kwargs)
+    else:
+        axes.fill_between(timevals, wave_data, y2=fill_y2, **kwargs)
     if plot_dets:
         plot_det_times(wave, axes=axes, logscale=logscale, stime=stime, etime=etime)
 

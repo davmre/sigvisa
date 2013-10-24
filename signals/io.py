@@ -30,22 +30,24 @@ except:
 class MissingWaveform(Exception):
     pass
 
+class EventNotDetected(Exception):
+    pass
 
-def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None):
+def load_event_station_chan(evid, sta, chan, evtype="leb", cursor=None, pre_s = 10, post_s=200):
     close_cursor = False
     if cursor is None:
         cursor = Sigvisa().dbconn.cursor()
         close_cursor = True
 
-    try:
-        arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
-        arrival_times = arrivals[:, DET_TIME_COL]
 
-        wave = fetch_waveform(sta, chan, np.min(arrival_times) - 10, np.max(arrival_times) + 200)
-        wave.segment_stats['evid'] = evid
-        wave.segment_stats['event_arrivals'] = arrivals
-    except:
-        raise
+    arrivals = read_event_detections(cursor, evid, (sta,), evtype=evtype)
+    if len(arrivals) == 0:
+        raise EventNotDetected('no arrivals found for evid %d at station %s' % (evid, sta))
+    arrival_times = arrivals[:, DET_TIME_COL]
+
+    wave = fetch_waveform(sta, chan, np.min(arrival_times) - pre_s, np.max(arrival_times) + post_s)
+    wave.segment_stats['evid'] = evid
+    wave.segment_stats['event_arrivals'] = arrivals
 
 
 

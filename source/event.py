@@ -63,3 +63,17 @@ class Event(object):
         s = "evid %s, loc %s, depth %.1fkm, time %.1f, mb %.1f, %s source" % (self.evid, lonlatstr(
             self.lon, self.lat), self.depth, self.time, self.mb, "natural" if self.natural_source else "explosion")
         return s
+
+    def __getstate__(self):
+        return {'lon': self.lon, 'lat': self.lat, 'depth': self.depth, 'time': self.time, 'mb': self.mb, 'natural_source': self.natural_source, 'eid': self.eid, 'evid': self.evid, 'orid': self.orid }
+
+    def __setstate__(self, state):
+        self.lon = state['lon']
+        self.lat = state['lat']
+        self.depth = state['depth']
+        self.time = state['time']
+        self.mb = state['mb']
+        self.natural_source = state['natural_source']
+        self.eid = state['eid']
+        self.evid = state['evid']
+        self.orid = state['orid']

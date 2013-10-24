@@ -15,14 +15,11 @@ from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move
-from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, swap_association_move
+from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, improve_atime_move, swap_association_move
 from sigvisa.plotting.plot import plot_with_fit
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
-def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attempted, n_accepted, move_times, step):
-
-    # special case when template moves are disabled
-    if len(template_moves_gaussian) == 0: return
+def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step):
 
     for param in tg.params():
         k, n = tmnodes[param]
@@ -41,7 +38,7 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attemp
                      step=step, n_accepted=n_accepted,
                      n_attempted=n_attempted, move_times=move_times,
                      sg=sg, keys=(k,), node_list=(n,),
-                     relevant_nodes=relevant_nodes, std=template_moves_gaussian[param])
+                     relevant_nodes=relevant_nodes, std=stds[param])
         except KeyError:
             continue
 
@@ -59,7 +56,7 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian, n_attemp
                  n_accepted=n_accepted, n_attempted=n_attempted,
                  move_times=move_times,
                  sg=sg, keys=(k,), node_list=(n,), relevant_nodes=(n, wn),
-                 std=template_moves_gaussian[move], phase_wraparound=phase_wraparound)
+                 std=stds[move], phase_wraparound=phase_wraparound)
 
 def run_move(move_name, fn, step, n_accepted, n_attempted, move_times, move_prob=None, **kwargs):
 
@@ -99,7 +96,7 @@ def cleanup_mcmc(log_handles):
         if type(v) == file:
             v.close()
 
-def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles):
+def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps=False, dump_interval=500):
     run_dir = log_handles['dir']
 
     if 'lp' not in log_handles:
@@ -107,8 +104,8 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles):
     lp = sg.current_log_p()
     log_handles['lp'].write('%f\n' % lp)
 
-    if (step % 100 == 20):
-        sg.debug_dump(dump_path = os.path.join(run_dir, 'step_%06d' % step))
+    if (step % 100 == dump_interval-1):
+        sg.debug_dump(dump_path = os.path.join(run_dir, 'step_%06d' % step), pickle_only=True)
         for f in log_handles.values():
             if type(f) == file:
                 f.flush()
@@ -124,6 +121,19 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles):
         evmb = evnodes['mb'].get_local_value('mb')
         evsource = evnodes['natural_source'].get_local_value('natural_source')
         log_handles[eid].write('%06d\t%3.4f\t%3.4f\t%4.4f\t%10.2f\t%2.3f\t%d\n' % (step, evlon, evlat, evdepth, evtime, evmb, evsource))
+        for (sta,wns) in sg.station_waves.items():
+            for wn in wns:
+                for phase in sg.phases:
+                    lbl = "%d_%s_%s" % (eid, wn.label, phase)
+                    if lbl not in log_handles:
+                        mkdir_p(os.path.join(run_dir, 'ev_%05d' % eid))
+                        log_handles[lbl] = open(os.path.join(run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
+                    tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
+                    log_handles[lbl].write('%06d %f %f %f %f\n' % (step,
+                                                                   tmvals['arrival_time'],
+                                                                   tmvals['peak_offset'],
+                                                                   tmvals['coda_height'],
+                                                                   tmvals['coda_decay']))
 
     for move_name in move_times.keys():
         if move_name not in log_handles:
@@ -132,21 +142,30 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles):
             log_handles[move_name].write('%d %f\n' % (step, t));
         del move_times[move_name]
 
+    if dumpsteps:
+        # dump images for each station at each step
+        print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
+        for (sta, waves) in sg.station_waves.items():
+            for wn in waves:
+                plot_with_fit(os.path.join(run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
+
+
 ############################################################################
 
-def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
+def run_open_world_MH(sg, skip=40, steps=10000,
                       enable_event_openworld=True,
                       enable_event_moves=True,
                       enable_template_openworld=True,
                       enable_template_moves=True,
-                      run_dir=None):
+                      run_dir=None,
+                      dumpsteps=False):
     global_moves = {'event_birth': ev_birth_move,
                     'event_death': ev_death_move} if enable_event_openworld else {}
-    event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat'), 0.1),
-                            'evloc_big': ('loc', ('lon', 'lat'), 0.9),
-                            'evtime': ('time', ('time',), 2.0),
-                            'evmb': ('mb', ('mb',), 0.8),
-                            'evdepth': ('depth', ('depth',), 8.0)} if enable_event_moves else {}
+    event_moves_gaussian = {'evloc': ('loc', ('lon', 'lat')),
+                            'evloc_big': ('loc', ('lon', 'lat')),
+                            'evtime': ('time', ('time',)),
+                            'evmb': ('mb', ('mb',)),
+                            'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
     event_moves_special = {}
     sta_moves = {'tmpl_birth': birth_move,
                  'tmpl_death': death_move,
@@ -156,15 +175,21 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move,
                               'arrival_time': improve_atime_move} if enable_template_moves else {}
-    template_moves_gaussian = {
-                               'coda_height': .02,
-                               'coda_decay': .05,
-                               'wiggle_amp': .25,
-                               'wiggle_phase': .5} if enable_template_moves else {}
+
+    stds = {'coda_height': .5,
+            'coda_decay': .1,
+            'wiggle_amp': .1,
+            'wiggle_phase': .1,
+            'peak_offset': 0.5,
+            'arrival_time': 7.0,
+            'evloc': 0.20,
+            'evloc_big': 0.8,
+            'evtime': 2.0,
+            'evmb': 0.8,
+            'evdepth': 8.0}
 
     tmpl_openworld_move_probability = .10
     ev_openworld_move_probability = .05
-
 
     n_accepted = defaultdict(int)
     n_attempted = defaultdict(int)
@@ -180,10 +205,10 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
         # moves to adjust existing events
         for (eid, evnodes) in sg.evnodes.items():
 
-            for (move_name, (node_name, params, std)) in event_moves_gaussian.items():
+            for (move_name, (node_name, params)) in event_moves_gaussian.items():
                 run_move(move_name=move_name, fn=ev_move, step=step, n_attempted=n_attempted,
                          n_accepted=n_accepted, move_times=move_times,
-                         sg=sg, ev_node=evnodes[node_name], std=std, params=params)
+                         sg=sg, ev_node=evnodes[node_name], std=stds[move_name], params=params)
 
             for (move_name, fn) in event_moves_special.items():
                 n_attempted[move_name] += 1
@@ -212,13 +237,21 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
 
                     # special moves
                     for (move_name, fn) in template_moves_special.iteritems():
-                        run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
-                                 n_accepted=n_accepted, move_times=move_times,
-                                 sg=sg, wave_node=wn, tmnodes=tmnodes)
+                        try:
+                            run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
+                                     n_accepted=n_accepted, move_times=move_times,
+                                     sg=sg, wave_node=wn, tmnodes=tmnodes, std=stds[move_name])
+                        except KeyError as e:
+                            # some moves don't have a std param
+                            run_move(move_name=move_name, fn=fn, step=step, n_attempted=n_attempted,
+                                     n_accepted=n_accepted, move_times=move_times,
+                                     sg=sg, wave_node=wn, tmnodes=tmnodes)
+
 
                     # also do basic wiggling-around of all template params
-                    do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian,
-                                      n_attempted, n_accepted, move_times, step)
+                    if enable_template_moves:
+                        do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                                          n_attempted, n_accepted, move_times, step)
 
                 # also wiggle every event arrival at this station
                 for (eid,evnodes) in sg.evnodes.iteritems():
@@ -233,9 +266,9 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                                      n_accepted=n_accepted, move_times=move_times,
                                      sg=sg, wave_node=wn, tmnodes=tmnodes)
 
-                        do_template_moves(sg, wn, tmnodes, tg, wg, template_moves_gaussian,
-                                          n_attempted, n_accepted, move_times, step)
-
+                        if enable_template_moves:
+                            do_template_moves(sg, wn, tmnodes, tg, wg, stds,
+                                              n_attempted, n_accepted, move_times, step)
 
         for (move, fn) in global_moves.items():
 
@@ -245,8 +278,8 @@ def run_open_world_MH(sg, burnin=0, skip=40, steps=10000,
                      sg=sg, log_to_run_dir=run_dir)
 
 
-        log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles)
-        if step > 0 and ((step % skip == 0) or (step < 15)):
+        log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps, dump_interval=skip)
+        if step > 0 and ((step % 10 == 0) or (step < 15)):
             print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
 
 
@@ -261,14 +294,14 @@ def main():
 
     parser.add_option("--dprk", dest="dprk", default=False, action="store_true",
                       help="initialize with 2009 dprk event (False)")
-    parser.add_option("--steps", dest="steps", default=100, type="int",
+    parser.add_option("--steps", dest="steps", default=1000, type="int",
                       help="MCMC steps to take (1000)")
-    parser.add_option("--burnin", dest="burnin", default=0, type="int",
-                      help="burnin steps (0)")
-    parser.add_option("--skip", dest="skip", default=10, type="int",
-                      help="how often to print/save MCMC state, in steps (10)")
+    parser.add_option("--skip", dest="skip", default=500, type="int",
+                      help="how often to print/save MCMC state, in steps (500)")
     parser.add_option("--startfrom", dest="startfrom", default=None, type="str",
                       help="file name of pickled graph from previous run. starts a new run, initialized with the state from that graph. (None)")
+    parser.add_option("--run_dir", dest="run_dir", default=None, type="str",
+                      help="directory to save results  (auto)")
 
 
     register_svgraph_cmdline(parser)
@@ -282,6 +315,7 @@ def main():
         with open(options.startfrom, 'rb') as f:
             sg = pickle.load(f)
             #sg.next_eid = 200
+        sg.current_log_p_breakdown()
 
     if options.dprk:
         from sigvisa.source.event import get_event
@@ -292,7 +326,7 @@ def main():
     set_hough_options({'bin_width_deg': 1.0, 'time_tick_s': 10, 'smoothbins': True})
 
     np.random.seed(0)
-    run_open_world_MH(sg, burnin=options.burnin, skip=options.skip, steps=options.steps)
+    run_open_world_MH(sg, skip=options.skip, steps=options.steps)
 
 if __name__ == "__main__":
     try:

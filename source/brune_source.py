@@ -36,7 +36,7 @@ def source_freq_logamp(mb, f, phase):
     rho_r = 2500  # receiver density, kg/m^3
 
     if phase not in P_phases and phase not in S_phases:
-        print "WARNING: don't know how to compute source amplitude for phase %s, treating as P" % (phase)
+        #print "WARNING: don't know how to compute source amplitude for phase %s, treating as P" % (phase)
         phase = "P"
 
     # choose velocities and other coefficients according to P vs S phase

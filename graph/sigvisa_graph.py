@@ -16,7 +16,7 @@ from sigvisa.source.event import get_event
 from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Uniform, Poisson, Gaussian
+from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential
 from sigvisa.models.ev_prior import setup_event
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
@@ -96,7 +96,7 @@ class SigvisaGraph(DirectedGraphModel):
                  nm_type="ar", run_name=None, iteration=None,
                  runid = None, phases="auto", base_srate=40.0,
                  assume_envelopes=True,
-                 arrays_joint=False, gpmodel_build_trees=True):
+                 arrays_joint=False, gpmodel_build_trees=False):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -143,7 +143,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.wiggle_nodes = []
 
         self.station_waves = dict() # (sta)
-        self.site_elements = dict() # site (str) -> list of elements (strs)
+        self.site_elements = dict() # site (str) -> set of elements (strs)
         self.site_bands = dict()
         self.site_chans = dict()
         self.arrays_joint = arrays_joint
@@ -181,6 +181,11 @@ class SigvisaGraph(DirectedGraphModel):
             k, node = get_parent_value(eid=eid, sta=sta, phase=phase, param_name=param, chan=chan, band=band, parent_values=self.nodes_by_key, return_key=True)
             nodes[param]=(k, node)
         return nodes
+
+    def get_wiggle_vals(self, eid, sta, phase, band, chan):
+        nodes = self.get_wiggle_nodes(eid, sta, phase, band, chan)
+        vals = dict([(p, n.get_value(k)) for (p,(k, n)) in nodes.iteritems()])
+        return vals
 
     def get_template_nodes(self, eid, sta, phase, band, chan):
         tg = self.template_generator(phase)
@@ -284,6 +289,78 @@ class SigvisaGraph(DirectedGraphModel):
         return lp
 
 
+    def current_log_p_breakdown(self):
+        nt_lp = self.ntemplates_log_p()
+        ne_lp = self.nevents_log_p()
+
+        ua_peak_offset_lp = 0.0
+        ua_coda_height_lp = 0.0
+        ua_coda_decay_lp = 0.0
+        ua_wiggle_lp = 0.0
+        for ((sta, band, chan), tmid_set) in self.uatemplate_ids.items():
+            for tmid in tmid_set:
+                uanodes = self.uatemplates[tmid]
+                ua_peak_offset_lp += uanodes['peak_offset'].log_p()
+                ua_coda_height_lp += uanodes['coda_height'].log_p()
+                ua_coda_decay_lp += uanodes['coda_decay'].log_p()
+                for key in uanodes.keys():
+                    if (key != "amp_transfer" and "amp_" in key) or "phase_" in key:
+                        ua_wiggle_lp += uanodes[key].log_p()
+
+        ev_prior_lp = 0.0
+        ev_tt_lp = 0.0
+        ev_amp_transfer_lp = 0.0
+        ev_peak_offset_lp = 0.0
+        ev_coda_decay_lp = 0.0
+        ev_wiggle_lp = 0.0
+        for (eid, evdict) in self.evnodes.items():
+            evnode_set = set(evdict.values())
+            for node in evnode_set:
+                ev_prior_lp += node.log_p()
+
+            for node in self.extended_evnodes[eid]:
+                if node in evnode_set:
+                    continue
+                if node.deterministic():
+                    continue
+                if "tt_residual" in node.label:
+                    ev_tt_lp += node.log_p()
+                elif  "amp_transfer" in node.label:
+                    ev_amp_transfer_lp += node.log_p()
+                elif  "coda_decay" in node.label:
+                    ev_coda_decay_lp += node.log_p()
+                elif  "peak_offset" in node.label:
+                    ev_peak_offset_lp += node.log_p()
+                elif "amp_" in node.label or "phase_" in node.label:
+                    ev_wiggle_lp += node.log_p()
+                else:
+                    raise Exception('unexpected node %s' % node.label)
+
+        signal_lp = 0.0
+        for (sta_, wave_list) in self.station_waves.items():
+            for wn in wave_list:
+                signal_lp += wn.log_p()
+
+
+        print "n_uatemplate: %.1f" % nt_lp
+        print "n_event: %.1f" % ne_lp
+        print "ev priors: ev %.1f" % (ev_prior_lp)
+        print "tt_residual: ev %.1f" % (ev_tt_lp)
+        print "ev global cost (n + priors + tt): %.1f" % (ev_prior_lp + ev_tt_lp + ne_lp,)
+        print "coda_decay: ev %.1f ua %.1f total %.1f" % (ev_coda_decay_lp, ua_coda_decay_lp, ev_coda_decay_lp+ua_coda_decay_lp)
+        print "peak_offset: ev %.1f ua %.1f total %.1f" % (ev_peak_offset_lp, ua_peak_offset_lp, ev_peak_offset_lp+ua_peak_offset_lp)
+        print "coda_height: ev %.1f ua %.1f total %.1f" % (ev_amp_transfer_lp, ua_coda_height_lp, ev_amp_transfer_lp+ua_coda_height_lp)
+        print "wiggles: ev %.1f ua %.1f total %.1f" % (ev_wiggle_lp, ua_wiggle_lp, ev_wiggle_lp+ua_wiggle_lp)
+        ev_total = ev_coda_decay_lp + ev_peak_offset_lp + ev_amp_transfer_lp + ev_wiggle_lp
+        ua_total = ua_coda_decay_lp + ua_peak_offset_lp + ua_coda_height_lp + ua_wiggle_lp
+        print "total param: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total+ua_total)
+        ev_total += ev_prior_lp + ev_tt_lp + ne_lp
+        ua_total += nt_lp
+        print "non signals: ev %.1f ua %.1f total %.1f" % (ev_total, ua_total, ev_total + ua_total)
+        print "signals: %.1f" % (signal_lp)
+        print "overall: %.1f" % (ev_total + ua_total + signal_lp)
+        print "official: %.1f" % self.current_log_p()
+
     def current_log_p(self, **kwargs):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
         lp += self.ntemplates_log_p()
@@ -357,7 +434,7 @@ class SigvisaGraph(DirectedGraphModel):
         if not nosort:
             self._topo_sort()
 
-    def create_unassociated_template(self, wave_node, atime, wiggles=True, nosort=False, tmid=None, initial_vals=None):
+    def create_unassociated_template(self, wave_node, atime, wiggles=True, nosort=False, tmid=None, initial_vals=None, sample_wiggles=False):
 
         """
 
@@ -385,9 +462,9 @@ class SigvisaGraph(DirectedGraphModel):
                            phase=phase, eid=eid,
                            chan=wave_node.chan, band=wave_node.band)
 
-        tnodes['arrival_time'] = Node(label=at_label, model=DummyModel(default_value=atime),
-                                     initial_value=atime, children=(wave_node,),
-                                     low_bound=atime-15, high_bound=atime+15)
+        tnodes['arrival_time'] = Node(label=at_label, model=DummyModel(atime),
+                                      initial_value=atime, children=(wave_node,),
+                                      low_bound=wave_node.st, high_bound=wave_node.et)
         self.add_node(tnodes['arrival_time'], template=True)
         for param in tg.params():
             label = create_key(param=param, sta=wave_node.sta,
@@ -417,19 +494,23 @@ class SigvisaGraph(DirectedGraphModel):
                 node.set_value(initial_vals[param])
 
         for (param, node) in wnodes.items():
-            if initial_vals is not None:
+            if initial_vals is not None and param in initial_vals:
                 node.set_value(initial_vals[param])
             else:
-                node.parent_predict()
+                if sample_wiggles:
+                    node.parent_sample()
+                else:
+                    node.parent_predict()
 
         nodes = tnodes
-        nodes.extend(wnodes)
+        nodes.update(wnodes)
 
         self.uatemplates[tmid] = nodes
         self.uatemplate_ids[(wave_node.sta,wave_node.chan,wave_node.band)].add(tmid)
 
         if not nosort:
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
+            sg._gc_topo_sorted_nodes()
         return nodes
 
     def load_node_from_modelid(self, modelid, label, **kwargs):
@@ -516,6 +597,8 @@ class SigvisaGraph(DirectedGraphModel):
             if model_type=="dummy":
                 if "tt_residual" in label:
                     model = Gaussian(mean=0.0, std=10.0)
+                if "amp" in label:
+                    model = Gaussian(mean=0.0, std=0.25)
                 else:
                     model = DummyModel(default_value=initial_value)
                 node = Node(label=label, model=model, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
@@ -604,7 +687,11 @@ class SigvisaGraph(DirectedGraphModel):
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
                 for param in tg.params():
-                    model_type = self._tm_type(param, site, wiggle_param=False)
+
+                    if param == "coda_height":
+                        model_type = None
+                    else:
+                        model_type = self._tm_type(param, site, wiggle_param=False)
                     # here the "create param node" creates, potentially, a single node or a dict of nodes
                     nodes[(band, chan, param)] = tg.create_param_node(self, site, phase, band,
                                                                       chan, model_type=model_type, param=param,
@@ -630,12 +717,19 @@ class SigvisaGraph(DirectedGraphModel):
                     # hacks to deal with Gaussians occasionally being negative
                     if "peak_offset" in n.label:
                         v = n.get_value()
-                        invalid_offsets = (v <= 0)
-                        v[invalid_offsets] = 0.5
+                        if type(v) == float:
+                            v = 0.5 if v <= 0 else v
+                        else:
+                            invalid_offsets = (v <= 0)
+                            v[invalid_offsets] = 0.5
                     if "coda_decay" in n.label:
                         v = n.get_value()
-                        invalid_offsets = (v >= 0)
-                        v[invalid_offsets] = -0.01
+                        if type(v) == float:
+                            v = 0.01 if v >= 0 else v
+                        else:
+                            invalid_offsets = (v >= 0)
+                            v[invalid_offsets] = -0.01
+
 
                 else:
                     n.parent_predict()
@@ -769,6 +863,39 @@ class SigvisaGraph(DirectedGraphModel):
 
         # TODO: optimize
 
+    def prior_sample_event(self, min_mb=3.5, stime=None, etime=None):
+        s = Sigvisa()
+
+        stime = self.event_start_time if stime is None else stime
+        etime = self.end_time if etime is None else etime
+
+        event_time_dist = Uniform(stime, etime)
+        event_mag_dist = Exponential(rate=10.0, min_value=min_mb)
+
+        origin_time = event_time_dist.sample()
+        lon, lat, depth = s.sigmodel.event_location_prior_sample()
+        mb = event_mag_dist.sample()
+        natural_source = True # TODO : sample from source prior
+
+        ev = get_event(lon=lon, lat=lat, depth=depth, time=origin_time, mb=mb, natural_source=natural_source)
+
+        return ev
+
+    def prior_sample_events(self, min_mb=3.5, stime=None, etime=None, n_events=None):
+        # assume a fresh graph, i.e. no events already exist
+
+        if n_events is None:
+            n_event_dist = Poisson(self.event_rate * (etime - stime))
+            n_events = n_event_dist.sample()
+
+        evs = []
+
+        for i in range(n_events):
+            ev = self.prior_sample_event(min_mb, stime, etime)
+            self.add_event(ev, sample_templates=True)
+            evs.append(ev)
+        return evs
+
     def prior_sample_uatemplates(self, wn, **kwargs):
         n_template_dist = Poisson(self.uatemplate_rate * (wn.et-wn.st))
         n_templates = n_template_dist.sample()
@@ -776,10 +903,11 @@ class SigvisaGraph(DirectedGraphModel):
         templates = []
         for i in range(n_templates):
             atime = template_time_dist.sample()
-            tnodes = self.create_unassociated_template(wave_node=wn, atime=atime, **kwargs)
+            tnodes = self.create_unassociated_template(wave_node=wn, atime=atime, nosort=True, **kwargs)
             for node in tnodes.values():
                 node.parent_sample()
             templates.append(tnodes)
+        self._topo_sort()
         wn.unfix_value()
         wn.parent_sample()
         wn.fix_value()
@@ -800,7 +928,7 @@ class SigvisaGraph(DirectedGraphModel):
                                   highlight_eid=eid, stime=stime, etime=etime)
 
 
-    def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True):
+    def debug_dump(self, dump_dirname=None, dump_path=None, pickle_graph=True, pickle_only=False):
 
         if dump_path is None:
             assert(dump_dirname is not None)
@@ -814,6 +942,8 @@ class SigvisaGraph(DirectedGraphModel):
             with open(os.path.join(dump_path, 'pickle.sg'), 'wb') as f:
                 pickle.dump(self, f, 2)
             print "saved pickled graph"
+        if pickle_only:
+            return
 
         for (sta, waves) in self.station_waves.items():
             for wn in waves:

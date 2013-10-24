@@ -77,9 +77,9 @@ def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_
         raise Exception("invalid model type %s" % (model_type))
     return model
 
-def basisfns_from_str(basisfn_str, param_var=10000):
+def basisfns_from_str(basisfn_str, param_var=1000):
     def distance_poly_basisfns(order):
-        basisfn_strs = ["lambda x : " + ("1" if d==0 else "x[3]**%d" % d)   for d in range(order+1)]
+        basisfn_strs = ["lambda x : " + ("1" if d==0 else "(x[3]/100.0)**%d" % d)   for d in range(order+1)]
         return [eval(s) for s in basisfn_strs]
 
     basisfns = []
@@ -90,7 +90,8 @@ def basisfns_from_str(basisfn_str, param_var=10000):
     k = len(basisfns)
     b = np.zeros((k,))
     B = np.eye(k) * param_var
-    B[0,0] = (1000000)**2 # be very accomodating in estimating the constant term
+#    B[0,0] = (1000000)**2 # be very accomodating in estimating the constant term
+    B[0,0] = (10)**2 # don't let the constant term get too big: note the constant term is the value at distance=0
 
     return basisfns, b, B
 
@@ -138,11 +139,11 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False):
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None):
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
-    else:
+    elif basisfns is None:
         basisfns = ()
         b = np.array(())
         B = np.array(((),))
@@ -156,7 +157,6 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
 
     if params is None:
         params = start_params[kernel_str][target]
-
 
     if priors is None:
         priors = gp_priors[kernel_str][target]

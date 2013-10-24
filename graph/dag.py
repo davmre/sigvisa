@@ -272,3 +272,15 @@ class DirectedGraphModel(DAG):
     def get_value(self, key):
         n = self.nodes_by_key[key]
         return n.get_value(key=key)
+
+    def save_graphviz(self, fname):
+        f = open(fname, 'w')
+        f.write("digraph G {\n")
+        f.write("size =\"10,10\";")
+
+        for node in self.topo_sorted_nodes():
+            for child in node.children:
+                f.write("\"%s\" -> \"%s\";\n" % (node.label, child.label))
+
+        f.write("}\n")
+        f.close()

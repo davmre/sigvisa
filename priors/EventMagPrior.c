@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2012, Bayesian Logic, Inc.
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
@@ -12,7 +12,7 @@
  *     * Neither the name of Bayesian Logic, Inc. nor the
  *       names of its contributors may be used to endorse or promote products
  *       derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
@@ -25,7 +25,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- * 
+ *
  */
 
 #include <math.h>
@@ -40,20 +40,20 @@ void EventMagPrior_Init_Params(EventMagPrior_t * prior, int nparams,
                                const char * filename)
 {
   FILE * fp;
-  
+
   assert(1 == nparams);
 
   fp = fopen(filename, "r");
-  
+
   if (!fp)
   {
     fprintf(stderr, "Unable to open %s\n", filename);
     exit(1);
   }
-  
+
   if (2 != fscanf(fp, "%lf %lf\n", &prior->min_mag, &prior->mag_rate))
   {
-    fprintf(stderr, "Unable to read min magnitude and magrate in %s\n", 
+    fprintf(stderr, "Unable to read min magnitude and magrate in %s\n",
             filename);
     exit(1);
   }
@@ -69,7 +69,6 @@ double EventMagPrior_LogProb(const EventMagPrior_t * dist, double val,
 
   if (val < dist->min_mag)
     return -HUGE_VAL;
- 
+
   return log(dist->mag_rate) - dist->mag_rate * (val - dist->min_mag);
 }
-

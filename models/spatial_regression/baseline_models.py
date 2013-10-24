@@ -401,16 +401,16 @@ class LinearBasisModel(ParamModel):
         del npzfile.f
         npzfile.close()
 
-    def predict(self, cond):
-        X1 = self.standardize_input_array(cond)
+    def predict(self, cond, **kwargs):
+        X1 = self.standardize_input_array(cond, **kwargs)
         X2 = np.array([[f(x) for f in self.basisfns] for x in X1])
         return np.dot(X2, self.mean)
 
     def log_likelihood(self):
         return self.ll
 
-    def covariance(self, cond, return_sqrt=False, include_obs=False):
-        X1 = self.standardize_input_array(cond)
+    def covariance(self, cond, return_sqrt=False, include_obs=False, **kwargs):
+        X1 = self.standardize_input_array(cond, **kwargs)
         X2 = np.array([[f(x) for f in self.basisfns] for x in X1], dtype=float)
         tmp = np.dot(self.sqrt_covar, X2.T)
 
@@ -427,6 +427,7 @@ class LinearBasisModel(ParamModel):
         return np.diag(self.covariance(cond=cond, include_obs=include_obs))
 
     def log_p(self, x, cond, **kwargs):
+        cond = self.standardize_input_array(cond, **kwargs)
         mean = self.predict(cond, **kwargs)
         n = len(mean)
         covar = self.covariance(cond, include_obs=True)

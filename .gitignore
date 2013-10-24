@@ -59,7 +59,6 @@ database/*.csv
 database/setup_db_custom.sql
 *prof
 *npy
-*ipynb
 *mtx
 evid*
 *ps
