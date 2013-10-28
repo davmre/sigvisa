@@ -508,9 +508,16 @@
    */
   this->wp_point = NULL;
   this->wp_pair = NULL;
-  if (weight_params.size() > 0) {
-    this->wp_point = new double[weight_params.size()];
-    this->wp_pair = new double[weight_params.size()];
+
+  int n_wp = 0;
+  n_wp += weight_params.size();
+  if (wfn_str.compare(0, 7, "compact") == 0) {
+    n_wp += 1;
+  }
+  if (n_wp > 0) {
+    this->wp_point = new double[n_wp];
+    this->wp_pair = new double[n_wp];
+
     this->wp_pair[0] = weight_params(0)*weight_params(0);
     this->wp_point[0] = weight_params(0);
     for (unsigned i = 1; i < weight_params.size(); ++i) {
@@ -518,9 +525,19 @@
       this->wp_point[i] = weight_params[i];
       this->wp_pair[i] = weight_params[i];
     }
+
+    if (wfn_str.compare(0, 7, "compact") == 0) {
+      int D = pts.size2();
+      int q = atoi(wfn_str.c_str()+7);
+      double j = floor(D/2) + q+ 1.0;
+      printf("compact weight, D=%d, q=%d, j=%f\n", D, q, j);
+      this->wp_point[n_wp-1] = j;
+      this->wp_pair[n_wp-1] = j;
+    }
   }
+
   if (wfn_str.compare("se") == 0) {
-    this->w_point = w_e;
+    this->w_point = w_se;
     this->w_upper = w_se;
     this->w_lower = w_se;
 
@@ -534,6 +551,22 @@
     this->w_point = w_matern32;
     this->w_upper = w_matern32_upper;
     this->w_lower = w_matern32_lower;
+
+    p->dfn = p->dfn_orig;
+    this->factored_build_dist = factored_build_distance_l1;
+    this->factored_query_dist = factored_query_distance_l1;
+  } else  if (wfn_str.compare("compact0") == 0) {
+    this->w_point = w_compact_q0;
+    this->w_upper = w_compact_q0_upper;
+    this->w_lower = w_compact_q0_lower;
+
+    p->dfn = p->dfn_orig;
+    this->factored_build_dist = factored_build_distance_l1;
+    this->factored_query_dist = factored_query_distance_l1;
+  } else  if (wfn_str.compare("compact2") == 0) {
+    this->w_point = w_compact_q2;
+    this->w_upper = w_compact_q2_upper;
+    this->w_lower = w_compact_q2_lower;
 
     p->dfn = p->dfn_orig;
     this->factored_build_dist = factored_build_distance_l1;
@@ -582,6 +615,45 @@ void MatrixTree::set_dist_params(const pyublas::numpy_vector<double> &dist_param
   this->dist_params[dist_params.size()] = (double) this->n;
 }
 
+void MatrixTree::test_bounds(double max_d, int n_d) {
+
+  int n = 0;
+  double lgap_sum = 0;
+  double ugap_sum = 0;
+  double gap_percent = 0;
+  double k_percent = 0;
+  for (double d1 = 0; d1 <= max_d; d1 += max_d/n_d) {
+    for (double d2 = 0; d2 <= max_d; d2 += max_d/n_d) {
+	  double delta = d1 + d2;
+
+	  double true_kernel = this->w_point(d1, this->wp_point) * this->w_point(d2, this->wp_point);
+	  double lbound = this->w_lower(delta, this->wp_pair);
+	  double ubound = this->w_upper(delta, this->wp_pair);
+
+	  double lgap = true_kernel - lbound;
+	  double ugap = ubound - true_kernel;
+
+	  lgap_sum += lgap;
+	  ugap_sum += ugap;
+	  if (ubound > 0) {
+	    gap_percent += (ubound-lbound)/ubound;
+	    k_percent += true_kernel/ubound;
+	  } else {
+	    k_percent += 1.0;
+	  }
+	  n += 1;
+
+	  if ((lgap < -1e-8) || ugap < -1e-8) {
+	    printf("bound error! d1 %f d2 %f delta %f k %f lbound %f ubound %f lgap %f ugap %f\n", d1, d2, delta, true_kernel, lbound, ubound, lgap, ugap);
+	  }
+	  if (ugap > 10000) {
+	    printf("massive gap! d1 %f d2 %f delta %f k %f lbound %f ubound %f lgap %f ugap %f\n", d1, d2, delta, true_kernel, lbound, ubound, lgap, ugap);
+	  }
+    }
+  }
+  printf("finished bounds test for %d distance pairs. average lgap %f, ugap %f, avg gap is %f of ubound, avg k is %f of ubound\n", n, lgap_sum/n, ugap_sum/n, gap_percent/n, k_percent/n);
+
+}
 
 MatrixTree::~MatrixTree() {
   if (this->dist_params != NULL) {

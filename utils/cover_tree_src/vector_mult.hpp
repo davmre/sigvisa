@@ -193,5 +193,7 @@ public:
 
   void print_hierarchy(const pyublas::numpy_matrix<double> &query_pt1, const pyublas::numpy_matrix<double> &query_pt2);
 
+  void test_bounds(double max_d, int n_d);
+
   ~MatrixTree();
 };

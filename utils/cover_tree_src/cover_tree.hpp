@@ -52,6 +52,13 @@ double w_e(double d, const double * variance);
 double w_matern32(double d, const double * variance);
 double w_matern32_upper(double d, const double * variance);
 double w_matern32_lower(double d, const double * variance);
+double w_compact_q0(double d, const double * extra);
+double w_compact_q0_upper(double d, const double * extra);
+double w_compact_q0_lower(double d, const double * extra);
+double w_compact_q2(double d, const double * extra);
+double w_compact_q2_upper(double d, const double * extra);
+double w_compact_q2_lower(double d, const double * extra);
+
 double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *variance, const double *scales, const double *EXTRA_IGNORED);
 double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims);
 typedef double (*wfn)(double, const double *);
