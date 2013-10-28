@@ -139,7 +139,7 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None, k=500):
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None, k=500, **kwargs):
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
@@ -163,11 +163,11 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
 
     if optimize:
         if k is not None:
-            sX, sy = subsample_data(X=X, y=y, k=500)
+            sX, sy = subsample_data(X=X, y=y, k=k)
         else:
             sX, sy = X, y
         print "learning hyperparams on", len(sy), "examples"
-        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors, dfn_str=kernel_str)
+        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors, dfn_str=kernel_str, **kwargs)
 
         bounds = [(1e-20,None),] * len(params)
         if array:
@@ -178,7 +178,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
 
     if len(y) > 10000:
         X, y = subsample_data(X=X, y=y, k=10000)
-    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True, build_tree=build_tree, dfn_str=kernel_str)
+    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True, build_tree=build_tree, dfn_str=kernel_str, **kwargs)
     return gp
 
 

@@ -24,15 +24,15 @@ def preprocess():
     X_clean = X[clean_rows, :]
     Y_clean = Y[clean_rows, :]
 
-    n, m = Y_clean.shape
+    X_sorted, Y_sorted = sort_events(X_clean, Y_clean)
 
-    for i in range(m):
-        Y_clean[i,:] /= np.linalg.norm(Y_clean[i,:], 2)
+    n, m = Y_sorted.shape
 
-    Y_normalized = Y_clean - np.mean(Y_clean, axis=0)
+    for i in range(n):
+        Y_sorted[i,:] /= np.linalg.norm(Y_sorted[i,:], 2)
+
+    Y_normalized = Y_sorted - np.mean(Y_sorted, axis=0)
     Y_normalized = Y_normalized / np.std(Y_normalized, axis=0)
-
-    X_sorted, Y_sorted = sort_events(X_clean, Y_normalized)
 
     np.savetxt('wiggle_X_good.txt', X_sorted)
     np.savetxt('wiggle_Y_good.txt', Y_sorted)
@@ -93,7 +93,7 @@ def learn(X, Y):
         continue
         """
 
-        model = learn_gp(X=X, y=Y[:,i], sta='ASAR', kernel_str='lld', params=[.5, 10.0,], priors=[Uniform(0, 2), Uniform(0, 1000),], optim_params = optim_params, k=None)
+        model = learn_gp(X=X, y=Y[:,i], sta='ASAR', kernel_str='lld', params=[.01, .01, 10.0,], priors=[Uniform(0, 10.0), Uniform(0, 10.0), LogNormal(2,2.0),], optim_params = optim_params, k=None, center_mean=True)
         models.append(model)
         model.save_trained_model('param_%d.gp' % i)
         f.write('amp %d params %s\n' % (i, model.hyperparams))
@@ -106,15 +106,16 @@ def eval_predict(X, Y, i, train_idx, test_idx):
 
     base_model = SparseGP(fname='param_%d.gp' % i)
 
-    trained_model = SparseGP(X=X_train, y=y_train, sta='ASAR', hyperparams=base_model.hyperparams)
+    trained_model = SparseGP(X=X_train, y=y_train, sta='ASAR', hyperparams=base_model.hyperparams, sparse_invert=False, center_mean=True, build_tree=False)
     trained_model.save_trained_model('param_%d_%d.gp' % (i, len(train_idx)))
+    print "trained model, evaluating log_p"
 
     X_test = np.array(X[test_idx, :], copy=True)
     y_test = np.array(Y[test_idx, i], copy=True)
 
     baseline_mean = np.mean(y_train)
     baseline_std = np.std(y_train)
-    baseline_model = Gaussian(mean=0.0, std=baseline_std)
+    baseline_model = Gaussian(mean=baseline_mean, std=baseline_std)
 
     #trained_model = SparseGP(X=X_train, y=y_train, sta='ASAR', hyperparams=[.001, 10.0])
 
@@ -124,10 +125,10 @@ def eval_predict(X, Y, i, train_idx, test_idx):
 
     #print y_pred
     #print y_test
-
+    print "evaluated log_p, predicting..."
     y_pred = [trained_model.predict(cond=np.reshape(x, (1, -1))) for x in X_test]
     pred_mad = np.mean(np.abs(y_test-y_pred))
-    baseline_mad = np.mean(np.abs(y_test))
+    baseline_mad = np.mean(np.abs(y_test-baseline_mean))
 
     result_str =  "param %d params %s baseline_lp %.4f pred_lp %.4f baseline_mad %.4f pred_mad %.4f" % (i, trained_model.hyperparams, np.sum(baseline_lp), np.sum(y_lp), baseline_mad, pred_mad)
     print result_str
@@ -140,14 +141,15 @@ Y = np.loadtxt('wiggle_Y_good.txt')
 
 #debug(X, Y)
 
-"""
-k = 7000
+
+k = 1200
 smallX = np.array(X[:k,:], copy=True)
 smallY = np.array(Y[:k,:], copy=True)
 learn(smallX,smallY)
-"""
+
 
 #preprocess()
+
 
 np.random.seed(0)
 n_train = 7000
@@ -155,5 +157,5 @@ n_test = 2000
 p = np.random.permutation(n_train+n_test)
 train_idx = p[:n_train]
 test_idx = p[n_train:]
-for i in range(13):
+for i in range(60):
     eval_predict(X, Y, i, train_idx, test_idx)

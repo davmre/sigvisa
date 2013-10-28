@@ -255,7 +255,8 @@ class SparseGP(ParamModel):
                  wfn_str = "se",
                  sort_events=False,
                  build_tree=True,
-                 sparse_invert=True):
+                 sparse_invert=True,
+                 center_mean=False):
 
         try:
             ParamModel.__init__(self, sta=sta)
@@ -285,12 +286,17 @@ class SparseGP(ParamModel):
             if X is not None:
                 self.X = np.matrix(X, dtype=float)
                 self.y = np.array(y, dtype=float)
+                if center_mean:
+                    self.ymean = np.mean(y)
+                    self.y -= self.ymean
+                else:
+                    self.ymean = 0.0
                 self.n = X.shape[0]
             else:
                 self.X = np.reshape(np.array(()), (0,0))
                 self.y = np.reshape(np.array(()), (0,))
                 self.n = 0
-
+                self.ymean = 0.0
                 self.K = np.reshape(np.array(()), (0,0))
                 self.Kinv = np.reshape(np.array(()), (0,0))
                 self.alpha_r = self.y
@@ -400,6 +406,7 @@ class SparseGP(ParamModel):
         if len(gp_pred) == 1:
             gp_pred = gp_pred[0]
 
+        gp_pred += self.ymean
         return gp_pred
 
     def predict_naive(self, cond, parametric_only=False, eps=1e-8):
@@ -419,6 +426,7 @@ class SparseGP(ParamModel):
         if len(gp_pred) == 1:
             gp_pred = gp_pred[0]
 
+        gp_pred += self.ymean
         return gp_pred
 
 
@@ -677,6 +685,7 @@ class SparseGP(ParamModel):
             d['basisfns'] = np.empty(0)
         d['X']  = self.X,
         d['y'] =self.y,
+        d['ymean'] = self.ymean,
         d['alpha_r'] =self.alpha_r,
         d['hyperparams'] = self.hyperparams
         d['Kinv'] =self.Kinv,
@@ -703,6 +712,10 @@ class SparseGP(ParamModel):
     def unpack_npz(self, npzfile):
         self.X = npzfile['X'][0]
         self.y = npzfile['y'][0]
+        if 'ymean' in npzfile:
+            self.ymean = npzfile['ymean']
+        else:
+            self.ymean = 0.0
         self.hyperparams = npzfile['hyperparams']
         self.compressed_hyperparams = self.hyperparams
         self.dfn_str  = npzfile['dfn_str'].item()
