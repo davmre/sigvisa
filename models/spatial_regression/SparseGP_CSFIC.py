@@ -187,6 +187,7 @@ class SparseGP_CSFIC(ParamModel):
 
             self.predict_tree_fic = VectorTree(tree_X, 1, self.dfn_str, pyublas.why_not(self.dfn_params_fic), self.wfn_str_fic, pyublas.why_not(self.wfn_params_fic))
             self.predict_tree_cs = VectorTree(X, 1, self.dfn_str, pyublas.why_not(self.dfn_params_cs), self.wfn_str_cs, pyublas.why_not(self.wfn_params_cs))
+
             self.predict_tree = self.predict_tree_cs
             t1 = time.time()
             self.timings['build_predict_tree'] = t1-t0
@@ -215,7 +216,7 @@ class SparseGP_CSFIC(ParamModel):
             self.K = K_cs
             alpha, factor, L, Kinv = self.sparse_invert_kernel_matrix(K_cs)
             self.Kinv = self.sparsify(Kinv)
-            print "Kinv is ", len(self.Kinv.nonzero()[0]) / float(self.Kinv.shape[0]**2), "sparse"
+            print "Kinv is ", len(self.Kinv.nonzero()[0]) / float(self.Kinv.shape[0]**2), "full (vs diag at", 1.0/self.Kinv.shape[0], ")"
 
             self.c,self.beta_bar, self.invc, self.HKinv = self.build_FITC_model(alpha,
                                                                                 self.Kinv,

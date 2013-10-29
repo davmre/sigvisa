@@ -12,37 +12,38 @@ from sigvisa.infer.optimize.optim_utils import minimize, construct_optim_params
 
 from optparse import OptionParser
 
-def test_predict(sdir, sgp=None):
+def test_predict(sdir, sgp=None, testX=None, testy=None):
     sgp = SparseGP(fname=os.path.join(sdir, "trained.gp"), build_tree=False) if sgp is None else sgp
-    import pdb; pdb.set_trace()
-    testX = np.load(os.path.join(sdir, "testX.npy"))
-    testy = np.load(os.path.join(sdir, "testy.npy"))
+    testX = np.load(os.path.join(sdir, "testX.npy")) if testX is None else testX
+    testy = np.load(os.path.join(sdir, "testy.npy")) if testy is None else testy
     pred_y = sgp.predict_naive(testX)
     r = pred_y - testy
 
-    test_lp = np.sum([sgp.log_p(x=y, cond=np.reshape(x, (1, -1))) for (x,y) in zip(testX, testy)])
+    test_lps = np.array([sgp.log_p(x=y, cond=np.reshape(x, (1, -1))) for (x,y) in zip(testX, testy)])
 
     meanTest = np.mean(testy)
     varTest = np.var(testy)
     stdTest = np.std(testy)
     baseline_model = Gaussian(mean=0.0, std=stdTest)
-    baseline_lp = np.sum([baseline_model.log_p(x=y) for y in testy])
+    baseline_lps = np.array([baseline_model.log_p(x=y) for y in testy])
 
     mse = np.mean(r **2)
     smse = mse/(varTest+meanTest**2)
     mean_ad = np.mean(np.abs(r))
     median_ad = np.median(np.abs(r))
 
+    msll = np.mean(test_lps - baseline_lps)
+
     with open(os.path.join(sdir, "accuracy.txt"), "w") as f:
-        f.write("mse: %f\n" % mse)
+        f.write("msll %f\n" % msll)
         f.write("smse: %f\n" % smse)
-        f.write("mean_ad: %f\n" % mean_ad)
-        f.write("median_ad: %f\n" % median_ad)
 
         f.write("\n")
-        f.write("baseline lp %f\n" % (baseline_lp))
-        f.write("model lp %f\n" % (test_lp))
-        f.write("delta_logp: %f\n" % (test_lp - baseline_lp))
+        f.write("mse: %f\n" % mse)
+        f.write("mean_ad: %f\n" % mean_ad)
+        f.write("median_ad: %f\n" % median_ad)
+        f.write("model lp %f\n" % np.sum(test_lps))
+
 
 def learn_hyperparams(sdir, X, y, hyperparams, dfn_str="euclidean", wfn_str="se", k=500, **kwargs):
 
