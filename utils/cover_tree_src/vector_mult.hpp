@@ -172,6 +172,7 @@ class MatrixTree {
 
 public:
   unsigned int n;
+  unsigned int nzero;
   unsigned int use_offdiag;
   int fcalls;
   int dfn_evals;
@@ -189,7 +190,7 @@ public:
 
   double quadratic_form(const pyublas::numpy_matrix<double> &query_pt1,
 			const pyublas::numpy_matrix<double> &query_pt2,
-			double eps_rel, double eps_abs);
+			double eps_rel, double eps_abs, int cutoff_rule);
 
   void print_hierarchy(const pyublas::numpy_matrix<double> &query_pt1, const pyublas::numpy_matrix<double> &query_pt2);
 

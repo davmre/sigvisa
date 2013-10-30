@@ -417,15 +417,16 @@ class SparseGP_CSFIC(ParamModel):
 
         return gp_cov
 
-    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4):
+    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4, cutoff_rule=1):
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
         d = len(self.basisfns)
+        cutoff_rule = int(cutoff_rule)
 
         if not parametric_only:
             gp_cov = self.kernel(X1, X1, identical=include_obs)
             if self.n > 0:
-                qf = self.double_tree.quadratic_form(X1, X1, eps, eps_abs)
+                qf = self.double_tree.quadratic_form(X1, X1, eps, eps_abs, cutoff_rule)
                 gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
@@ -540,6 +541,7 @@ class SparseGP_CSFIC(ParamModel):
         if n==1:
             var = K[0,0]
             ll1 = - .5 * ((y)**2 / var + np.log(2*np.pi*var) )
+            return ll1
 
         L = scipy.linalg.cholesky(K, lower=True)
         ld2 = np.log(np.diag(L)).sum() # this computes .5 * log(det(K))

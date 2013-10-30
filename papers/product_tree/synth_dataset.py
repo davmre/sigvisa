@@ -18,9 +18,9 @@ lscales = (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1, 0.5, 10)
 #cluster_ns = (8000,)
 
 #Ns = (1000, 2000, 4000, 8000, 20000, 40000, 80000, 160000) #,50000, 60000, 80000, 160000)#
-Ns = (1000, 2000, 4000, 8000,16000, 24000, 32000, 48000, 64000,) #,50000, 60000, 80000, 160000)
+#Ns = (1000, 2000, 4000, 8000,16000, 24000, 32000, 48000, 64000,) #,50000, 60000, 80000, 160000)
 #Ns = (20000, 40000, 60000, 80000)
-#Ns = (4000,)
+Ns = (8000,)
 
 wfn_str = "se"
 
@@ -38,12 +38,12 @@ def genX(dim, npts):
     return pts
 
 
-def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, test_n=None):
+def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, test_n=None, cutoff_rule=1):
     import scipy.stats
 
     gp = SparseGP(fname=os.path.join(bdir, 'trained.gp')) if gp is None else gp
     testX = np.load(os.path.join(bdir, "testX.npy")) if testX is None else testX
-    resultfile = os.path.join(bdir, 'results.txt') if resultfile is None else resultfile
+    resultfile = os.path.join(bdir, 'results_cutoff%d.txt' % cutoff_rule) if resultfile is None else resultfile
     errorfile = os.path.join(bdir, "error.npz") if errorfile is None else errorfile
 
 
@@ -65,14 +65,6 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
 
     sparse_covar_spkernel = np.zeros(test_n)
     sparse_covar_spkernel_times = np.zeros(test_n)
-
-    eps_rels =  (2,4,8,16)
-    eps_abses = (4,5,6,8)
-
-    tree_covar = np.zeros((len(eps_rels), len(eps_abses), test_n))
-    tree_covar_terms = np.zeros((len(eps_rels), len(eps_abses), test_n), dtype=int)
-    tree_covar_distevals = np.zeros((len(eps_rels), len(eps_abses), test_n), dtype=int)
-    tree_covar_times = np.zeros((len(eps_rels), len(eps_abses), test_n))
 
     for i in range(test_n):
         t0 = time.time()
@@ -130,15 +122,33 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
     best_mean_time = np.float("inf")
     best_ei = -1
     best_ej = -1
+
+
+    if cutoff_rule == 0:
+        eps_rels =  (2,4,8,16)
+        eps_abses = (1,)
+    elif cutoff_rule == 1:
+        eps_rels =  (2,4,8,16)
+        eps_abses = (4,5,6,8)
+    elif cutoff_rule == 2:
+        eps_rels = (4,)
+        eps_abses = (1,2,3,)
+
+    tree_covar = np.zeros((len(eps_rels), len(eps_abses), test_n))
+    tree_covar_terms = np.zeros((len(eps_rels), len(eps_abses), test_n), dtype=int)
+    tree_covar_distevals = np.zeros((len(eps_rels), len(eps_abses), test_n), dtype=int)
+    tree_covar_times = np.zeros((len(eps_rels), len(eps_abses), test_n))
     for (e_i, epsm) in enumerate(eps_rels):
         for (e_j, eps_abs) in enumerate(eps_abses):
             for i in range(test_n):
                 t6 = time.time()
-                tree_covar[e_i, e_j, i] = gp.covariance_double_tree(testX[i:i+1,:], eps=10**(-epsm), eps_abs=10**(-eps_abs))
+                tree_covar[e_i, e_j, i] = gp.covariance_double_tree(testX[i:i+1,:], eps=10**(-epsm), eps_abs=10**(-eps_abs), cutoff_rule=cutoff_rule)
                 t7 = time.time()
                 tree_covar_terms[e_i, e_j, i] = gp.double_tree.fcalls
                 tree_covar_distevals[e_i, e_j, i] = gp.double_tree.dfn_evals
                 tree_covar_times[e_i, e_j, i] = t7-t6
+                #print
+                #print
 
             if np.mean(np.abs((tree_covar[e_i, e_j, :] - sparse_covar_spkernel)/sparse_covar_spkernel)) < 0.001:
                 mean_time = np.mean(tree_covar_times)
@@ -154,7 +164,7 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
             f.write("tree covar%d_%d var-rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar_spkernel)/sparse_covar_spkernel))))
             f.write("tree covar%d_%d abs errors: %s \n" %  (epsm, eps_abs, strstats(np.abs(tree_covar[e_i, e_j, :] - sparse_covar_spkernel))))
             f.write("\n")
-
+            f.flush()
 
     f.write("naive predict times: %s\n" % strstats(naive_predict_times))
     f.write("\n")

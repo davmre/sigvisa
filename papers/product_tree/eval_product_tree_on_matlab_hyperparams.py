@@ -84,9 +84,14 @@ def main():
         gp_csfic = load_matlab_csmodel(basename, X_train, y_train)
         gp_csfic.save_trained_model(csgp)
 
-    test_predict(csmodel_dir, sgp=gp_csfic, testX=X_test, testy=y_test)
-    eval_gp(bdir=csmodel_dir, testX=X_test, gp=gp_csfic)
+    #test_predict(csmodel_dir, sgp=gp_csfic, testX=X_test, testy=y_test)
+    eval_gp(bdir=csmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=0)
+    eval_gp(bdir=csmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=1)
+    eval_gp(bdir=csmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=2)
 
+    return
+
+    """
     semodel_dir = basename + "_py_se"
     segp = os.path.join(semodel_dir, 'trained.gp')
     mkdir_p(semodel_dir)
@@ -97,8 +102,8 @@ def main():
         gp_se.save_trained_model(segp)
 
     test_predict(semodel_dir, sgp=gp_se, testX=X_test, testy=y_test)
-    eval_gp(bdir=semodel_dir, testX=X_test, gp=gp_se)
-
+    eval_gp(bdir=semodel_dir, testX=X_test, test_n=500, gp=gp_se)
+    """
 
 if __name__ == "__main__":
 
