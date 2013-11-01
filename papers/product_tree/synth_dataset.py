@@ -20,8 +20,8 @@ lscales = (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1, 0.5, 10)
 #Ns = (1000, 2000, 4000, 8000, 20000, 40000, 80000, 160000) #,50000, 60000, 80000, 160000)#
 #Ns = (1000, 2000, 4000, 8000,16000, 24000, 32000, 48000, 64000,) #,50000, 60000, 80000, 160000)
 #Ns = (20000, 40000, 60000, 80000)
-Ns = (32000,64000,)
-
+#Ns = (32000,64000,)
+Ns = (80000,100000,120000,140000,160000)
 wfn_str = "se"
 
 def genX_clusters(dim, n_clusters, cluster_pts, cluster_width):
@@ -38,12 +38,12 @@ def genX(dim, npts):
     return pts
 
 
-def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, test_n=None, cutoff_rule=1):
+def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, test_n=None, cutoff_rule=2, flag="", **kwargs):
     import scipy.stats
 
-    gp = SparseGP(fname=os.path.join(bdir, 'trained.gp')) if gp is None else gp
+    gp = SparseGP(fname=os.path.join(bdir, 'trained.gp'), **kwargs) if gp is None else gp
     testX = np.load(os.path.join(bdir, "testX.npy")) if testX is None else testX
-    resultfile = os.path.join(bdir, 'results_cutoff%d.txt' % cutoff_rule) if resultfile is None else resultfile
+    resultfile = os.path.join(bdir, 'results_cutoff%d%s.txt' % (cutoff_rule, flag)) if resultfile is None else resultfile
     errorfile = os.path.join(bdir, "error.npz") if errorfile is None else errorfile
 
 
@@ -326,7 +326,7 @@ def build_size_benchmark():
     #extra_nc = test_n / cluster_size
 
     for npts in Ns:
-        for points_within_lscale in (.25, 1.0, 5.0,):
+        for points_within_lscale in (.25,):
             lengthscale = np.sqrt(points_within_lscale/npts) / np.sqrt(np.pi)
             bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
             if not os.path.exists(os.path.join(bdir, "trained.gp")):
@@ -346,7 +346,13 @@ def run_size_benchmark():
         
         bdir = os.path.join(basedir, d)
         print bdir
-        eval_gp(bdir)
+        try:
+            eval_gp(bdir, leaf_bin_size=0)
+            eval_gp(bdir, leaf_bin_size=15, flag='_bin15')
+            eval_gp(bdir, leaf_bin_size=50, flag='_bin50')
+        except IOError as e:
+            print e
+            continue
 
 def build_highd_benchmark():
     sigma2_n = 1.0
