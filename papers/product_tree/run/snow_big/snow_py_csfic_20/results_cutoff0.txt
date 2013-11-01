@@ -1,0 +1,50 @@
+tree covar2_1 times: mean 0.001491 std 0.000374 min 0.000749 10th 0.001044 50th 0.001500 90th 0.001763 max 0.003515
+tree covar2_1 terms: mean 593 std 192 min 200 10th 355 50th 594 90th 766 max 1689
+tree covar2_1 dfnevals: mean 150 std 56 min 59 10th 90 50th 142 90th 213 max 398
+tree covar2_1 rel errors: mean 421.289983 std 700.129526 min 1.028620 10th 28.729222 50th 274.672576 90th 892.948739 max 8746.592095 
+tree covar2_1 var-rel errors: mean 10917.199808 std 14491.268839 min 2.032264 10th 237.323387 50th 5923.772638 90th 29609.374064 max 81838.679447 
+tree covar2_1 abs errors: mean 357.999632 std 364.395691 min 0.961512 10th 24.139141 50th 246.396660 90th 828.687290 max 1872.706110 
+
+tree covar4_1 times: mean 0.002521 std 0.000876 min 0.000928 10th 0.001480 50th 0.002493 90th 0.003073 max 0.007772
+tree covar4_1 terms: mean 1328 std 582 min 356 10th 626 50th 1320 90th 1723 max 5100
+tree covar4_1 dfnevals: mean 163 std 60 min 65 10th 100 50th 153 90th 227 max 431
+tree covar4_1 rel errors: mean 3.592723 std 8.904165 min 0.000038 10th 0.275754 50th 2.005637 90th 6.746501 max 117.914622 
+tree covar4_1 var-rel errors: mean 85.505271 std 128.976663 min 0.000500 10th 2.584151 50th 40.694037 90th 218.266250 max 1146.512341 
+tree covar4_1 abs errors: mean 2.846645 std 3.553720 min 0.000035 10th 0.246630 50th 1.839170 90th 6.116871 max 29.621124 
+
+tree covar8_1 times: mean 0.003959 std 0.001983 min 0.000941 10th 0.001992 50th 0.003800 90th 0.004946 max 0.017497
+tree covar8_1 terms: mean 2452 std 1495 min 356 10th 972 50th 2339 90th 3163 max 13002
+tree covar8_1 dfnevals: mean 176 std 66 min 71 10th 110 50th 165 90th 243 max 477
+tree covar8_1 rel errors: mean 0.000438 std 0.002314 min 0.000000 10th 0.000032 50th 0.000171 90th 0.000625 max 0.032691 
+tree covar8_1 var-rel errors: mean 0.008206 std 0.015239 min 0.000000 10th 0.000330 50th 0.002972 90th 0.020399 max 0.121097 
+tree covar8_1 abs errors: mean 0.000260 std 0.000342 min 0.000000 10th 0.000030 50th 0.000155 90th 0.000580 max 0.002231 
+
+tree covar16_1 times: mean 0.005037 std 0.003027 min 0.000950 10th 0.002343 50th 0.004779 90th 0.006271 max 0.026345
+tree covar16_1 terms: mean 3407 std 2421 min 360 10th 1281 50th 3174 90th 4349 max 20740
+tree covar16_1 dfnevals: mean 186 std 70 min 72 10th 116 50th 173 90th 257 max 505
+tree covar16_1 rel errors: mean 0.000000 std 0.000000 min 0.000000 10th 0.000000 50th 0.000000 90th 0.000000 max 0.000000 
+tree covar16_1 var-rel errors: mean 0.000000 std 0.000000 min 0.000000 10th 0.000000 50th 0.000000 90th 0.000000 max 0.000000 
+tree covar16_1 abs errors: mean 0.000000 std 0.000000 min 0.000000 10th 0.000000 50th 0.000000 90th 0.000000 max 0.000000 
+
+naive predict times: mean 0.005849 std 0.000141 min 0.005266 10th 0.005729 50th 0.005818 90th 0.006056 max 0.006226
+
+tree predict times: mean 0.000094 std 0.000015 min 0.000066 10th 0.000077 50th 0.000092 90th 0.000107 max 0.000181
+tree predict terms:  mean 139 std 41 min 55 10th 95 50th 134 90th 181 max 339
+tree predict errors: mean 0.008764 std 0.017198 min 0.000000 10th 0.000132 50th 0.002908 90th 0.023768 max 0.168417
+
+sparse covar times: mean 0.015351 std 0.000870 min 0.014304 10th 0.014618 50th 0.015059 90th 0.017109 max 0.017690
+sparse covar spkernel times: mean 0.004437 std 0.000145 min 0.004238 10th 0.004307 50th 0.004383 90th 0.004604 max 0.005200
+sparse covar spkernel error: 0.000000
+sparse covar spkernel_solve times: mean 0.006555 std 0.000142 min 0.006366 10th 0.006446 50th 0.006517 90th 0.006672 max 0.007443
+sparse covar spkernel_solve error: 0.000000
+
+actual vars: mean 0.106822 std 0.372831 min 0.018420 10th 0.020693 50th 0.041874 90th 0.130389 max 3.692898
+actual qfs: mean 0.893178 std 0.372831 min -2.692898 10th 0.869611 50th 0.958126 90th 0.979307 max 0.981580
+
+best tree: covar16_1 times: mean 0.005037 std 0.003027 min 0.000950 10th 0.002343 50th 0.004779 90th 0.006271 max 0.026345
+best tree: covar16_1 terms: mean 3407 std 2421 min 360 10th 1281 50th 3174 90th 4349 max 20740
+best tree: covar16_1 dfnevals: mean 186 std 70 min 72 10th 116 50th 173 90th 257 max 505
+best tree: covar16_1 rel errors: mean 0.000000 std 0.000000 min 0.000000 10th 0.000000 50th 0.000000 90th 0.000000 max 0.000000 
+best tree: covar16_1 var-rel errors: mean 0.000000 std 0.000000 min 0.000000 10th 0.000000 50th 0.000000 90th 0.000000 max 0.000000 
+best tree: covar16_1 abs errors: mean 0.000000 std 0.000000 min 0.000000 10th 0.000000 50th 0.000000 90th 0.000000 max 0.000000 
+
