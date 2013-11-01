@@ -71,7 +71,7 @@ class SparseGP_CSFIC(ParamModel):
         alpha = factor(self.y)
         t2 = time.time()
         self.timings['solve_alpha'] = t2-t1
-        Kinv = factor(scipy.sparse.eye(K.shape[0]).tocsc())
+        Kinv = factor(scipy.sparse.eye(K.shape[0], K.shape[0]).tocsc())
         t3 = time.time()
         self.timings['solve_Kinv'] = t3-t2
 
@@ -330,7 +330,7 @@ class SparseGP_CSFIC(ParamModel):
         entries = predict_tree.sparse_training_kernel_matrix(X, max_distance)
         spK = scipy.sparse.coo_matrix((entries[:,2], (entries[:,1], entries[:,0])), shape=(self.n, len(X)), dtype=float)
         if identical:
-            spK = spK + self.noise_var * scipy.sparse.eye(spK.shape[0])
+            spK = spK + self.noise_var * scipy.sparse.eye(spK.shape[0], spK.shape[0])
         return spK
 
 

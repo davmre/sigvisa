@@ -40,7 +40,7 @@ def load_matlab_csficmodel(csficbase, X_train, y_train):
         p = np.random.permutation(X_train.shape[0])
         Xu = np.array(X_train[p[:90], :], copy=True)
 
-    gp_csfic = SparseGP_CSFIC(X=X_sorted, y=y_sorted,
+    gp_csfic = SparseGP_CSFIC(X=X_train, y=y_train,
                               dfn_str=dfn_str, dfn_params_fic=dfn_params_fic, dfn_params_cs=dfn_params_cs,
                               wfn_str_fic = wfn_str_fic, wfn_params_fic=wfn_params_fic,
                               wfn_str_cs = wfn_str_cs, wfn_params_cs=wfn_params_cs,
