@@ -265,12 +265,13 @@ def mkdir_p(path):
         else: raise
 
 def build_lscale_benchmark():
-    sigma2_n = 0.000001
+    sigma2_n = 1.0
     sigma2_f = 1.0
-    npts=1000
+    npts=5000
 
-    for lengthscale in lscales:
-        bdir = os.path.join(basedir, "%s_%f_%d" % (wfn_str,lengthscale,npts))
+    for points_within_lscale in (1.0, 5.0, 10.0, 20.0, 40.0, 60.0, 100.0, 200.0, 500.0, 1000.0):
+        lengthscale = np.sqrt(points_within_lscale/npts) / np.sqrt(np.pi)
+        bdir = os.path.join(basedir, "%s_%f_%d" % (wfn_str,points_within_lscale,npts))
         create_bench(bdir=bdir, dim=2, test_n=1000, npts=npts, lengthscale=lengthscale, sigma2_n=sigma2_n, sigma2_f=sigma2_f)
 
 def run_lscale_benchmark():
@@ -402,9 +403,9 @@ def main():
     print "covar", gp.covariance(X[0:1, :])
 
 if __name__ == "__main__":
-    #build_lscale_benchmark()
+    build_lscale_benchmark()
     #run_lscale_benchmark()
     #build_size_benchmark()
-    run_size_benchmark()
+    #run_size_benchmark()
     #build_highd_benchmark()
     #main()
