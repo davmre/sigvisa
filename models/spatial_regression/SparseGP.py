@@ -116,8 +116,8 @@ def sparse_kernel_from_tree(tree, X, sparse_threshold, identical, noise_var):
     print "sparse kernel", t1-t0
 
     if identical:
-        spK = spK + noise_var * scipy.sparse.eye(spK.shape[0])
-    spK = spK + 1e-8 * scipy.sparse.eye(spK.shape[0])
+        spK = spK + noise_var * scipy.sparse.eye(spK.shape[0], spK.shape[0])
+    spK = spK + 1e-8 * scipy.sparse.eye(spK.shape[0], spK.shape[0])
     return spK.tocsc()
 
 
@@ -148,9 +148,9 @@ class SparseGP(ParamModel):
 
     def sparse_build_kernel_matrix(self, X):
         K = self.sparse_kernel(X, identical=True)
-        K = K + scipy.sparse.eye(K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
-                                       # positive-definiteness
-                                       # to numeric issues
+        K = K + scipy.sparse.eye(K.shape[0], K.shape[0], dtype=np.float64) * 1e-8 # try to avoid losing
+        # positive-definiteness
+        # to numeric issues
         return K.tocsc()
 
     def invert_kernel_matrix(self, K):
@@ -189,7 +189,7 @@ class SparseGP(ParamModel):
         alpha = factor(self.y)
         t2 = time.time()
         self.timings['solve_alpha'] = t2-t1
-        Kinv = factor(scipy.sparse.eye(K.shape[0]).tocsc())
+        Kinv = factor(scipy.sparse.eye(K.shape[0], K.shape[0]).tocsc())
         t3 = time.time()
         self.timings['solve_Kinv'] = t3-t2
 
@@ -452,7 +452,7 @@ class SparseGP(ParamModel):
         entries = self.predict_tree.sparse_training_kernel_matrix(X, max_distance)
         spK = scipy.sparse.coo_matrix((entries[:,2], (entries[:,1], entries[:,0])), shape=(self.n, len(X)), dtype=float)
         if identical:
-            spK = spK + self.noise_var * scipy.sparse.eye(spK.shape[0])
+            spK = spK + self.noise_var * scipy.sparse.eye(spK.shape[0], spK.shape[0])
         return spK
 
     def get_query_K_sparse(self, X1):
@@ -882,7 +882,7 @@ class SparseGP(ParamModel):
             return dKdi
         def get_dKdi_sparse(X, i, M):
             if (i == 0):
-                dKdi = scipy.sparse.eye(self.n)
+                dKdi = scipy.sparse.eye(self.n, self.n)
             else:
                 nzr, nzc = M.nonzero()
                 entries = self.predict_tree.sparse_kernel_deriv_wrt_i(self.X, self.X, nzr, nzc, i-1)
