@@ -20,7 +20,7 @@ lscales = (0.0001, 0.0005, 0.001, 0.005, 0.01, 0.1, 0.5, 10)
 #Ns = (1000, 2000, 4000, 8000, 20000, 40000, 80000, 160000) #,50000, 60000, 80000, 160000)#
 #Ns = (1000, 2000, 4000, 8000,16000, 24000, 32000, 48000, 64000,) #,50000, 60000, 80000, 160000)
 #Ns = (20000, 40000, 60000, 80000)
-Ns = (8000,)
+Ns = (32000,64000,)
 
 wfn_str = "se"
 
@@ -326,7 +326,7 @@ def build_size_benchmark():
     #extra_nc = test_n / cluster_size
 
     for npts in Ns:
-        for points_within_lscale in (0.25, 1.0, 5.0, ):
+        for points_within_lscale in (.25, 1.0, 5.0,):
             lengthscale = np.sqrt(points_within_lscale/npts) / np.sqrt(np.pi)
             bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
             if not os.path.exists(os.path.join(bdir, "trained.gp")):
@@ -335,11 +335,18 @@ def build_size_benchmark():
                 create_bench(bdir=bdir, dim=2, test_n=1000, npts=npts, lengthscale=lengthscale, sigma2_n=sigma2_n, sigma2_f=sigma2_f)
 
 def run_size_benchmark():
-    for npts in Ns:
-        for points_within_lscale in (1.0,5.0):
-            bdir = os.path.join(basedir, "%s_%.2fpts_%d" % (wfn_str,points_within_lscale,npts))
-            print bdir
-            eval_gp(bdir)
+    import re
+    r = re.compile(r"(.+)_(.+)pts_(.+)")
+    magic_str = sys.argv[1]
+    for d in os.listdir(basedir):
+        m = r.match(d)
+        if m is None or (magic_str not in d): 
+            print "skipping", d
+            continue
+        
+        bdir = os.path.join(basedir, d)
+        print bdir
+        eval_gp(bdir)
 
 def build_highd_benchmark():
     sigma2_n = 1.0
@@ -391,7 +398,7 @@ def main():
 if __name__ == "__main__":
     #build_lscale_benchmark()
     #run_lscale_benchmark()
-    build_size_benchmark()
-    #run_size_benchmark()
+    #build_size_benchmark()
+    run_size_benchmark()
     #build_highd_benchmark()
     #main()
