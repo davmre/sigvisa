@@ -96,7 +96,7 @@ def extract_hyperparams(dfn_str, wfn_str, hyperparams, train_std=None):
 
         dfn_params = np.array((ll_scale, d_scale), dtype=np.float)
         wfn_params = np.array((signal_var,), copy=True, dtype=np.float)
-    elif dfn_str == "euclidean" and (wfn_str == "se" or wfn_str=="matern32"):
+    elif dfn_str == "euclidean" and (wfn_str == "se" or wfn_str=="matern32" or wfn_str.startswith("compact")):
         noise_var = hyperparams[0]
         wfn_params = np.array((hyperparams[1],), copy=True, dtype=np.float)
         dfn_params = np.array((hyperparams[2:]), dtype=np.float)
@@ -256,7 +256,8 @@ class SparseGP(ParamModel):
                  sort_events=False,
                  build_tree=True,
                  sparse_invert=True,
-                 center_mean=False):
+                 center_mean=False,
+                 leaf_bin_size = 0):
 
         try:
             ParamModel.__init__(self, sta=sta)
@@ -265,7 +266,7 @@ class SparseGP(ParamModel):
 
         self.double_tree = None
         if fname is not None:
-            self.load_trained_model(fname, build_tree=build_tree)
+            self.load_trained_model(fname, build_tree=build_tree, leaf_bin_size=leaf_bin_size)
         else:
             if sort_events:
                 X, y = self.sort_events(X, y) # arrange events by
@@ -324,6 +325,7 @@ class SparseGP(ParamModel):
 
             if sparse_invert:
                 alpha, factor, L, Kinv = self.sparse_invert_kernel_matrix(self.K)
+                self.factor = factor
             else:
                 alpha, factor, L, Kinv = self.invert_kernel_matrix(K)
             self.Kinv = self.sparsify(Kinv)
@@ -346,7 +348,7 @@ class SparseGP(ParamModel):
             self.alpha_r = np.reshape(np.asarray(factor(r)), (-1,))
 
             if build_tree:
-                self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r)
+                self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r, leaf_bin_size=leaf_bin_size)
             #t6 = time.time()
 
             # precompute training set log likelihood, so we don't need
@@ -371,8 +373,13 @@ class SparseGP(ParamModel):
             print t8-t7
             """
 
-    def build_point_tree(self, HKinv, Kinv, alpha_r):
+    def build_point_tree(self, HKinv, Kinv, alpha_r, leaf_bin_size):
         if self.n == 0: return
+
+        fullness = len(self.Kinv.nonzero()[0]) / float(self.Kinv.shape[0]**2)
+        print "Kinv is %.1f%% full." % (fullness * 100)
+        if fullness > .15:
+            raise Exception("not building tree, Kinv is too full!" )
 
         self.predict_tree.set_v(0, alpha_r.astype(np.float))
 
@@ -388,6 +395,7 @@ class SparseGP(ParamModel):
         vals = np.reshape(np.asarray(Kinv[nzr, nzc]), (-1,))
         self.double_tree = MatrixTree(self.X, nzr, nzc, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
         self.double_tree.set_m_sparse(nzr, nzc, vals)
+        self.double_tree.collapse_leaf_bins(leaf_bin_size)
 
     def predict(self, cond, parametric_only=False, eps=1e-8):
         if not self.double_tree: return self.predict_naive(cond, parametric_only)
@@ -447,28 +455,27 @@ class SparseGP(ParamModel):
             spK = spK + self.noise_var * scipy.sparse.eye(spK.shape[0])
         return spK
 
-
     def get_query_K_sparse(self, X1):
         # avoid recomputing the kernel if we're evaluating at the same
         # point multiple times. This is effectively a size-1 cache.
         try:
-            self.query_hsh
+            self.querysp_hsh
         except AttributeError:
-            self.query_hsh = None
+            self.querysp_hsh = None
 
         hsh = hashlib.sha1(X1.view(np.uint8)).hexdigest()
-        if hsh != self.query_hsh:
-            self.query_K = self.sparse_kernel(X1)
-            self.query_hsh = hsh
+        if hsh != self.querysp_hsh:
+            self.querysp_K = self.sparse_kernel(X1)
+            self.querysp_hsh = hsh
 
             if self.basisfns:
                 H = self.get_data_features(X1)
-                self.query_R = H - np.asmatrix(self.HKinv) * self.query_K
+                self.querysp_R = H - np.asmatrix(self.HKinv) * self.querysp_K
 
 #            print "cache fail: model %d called with " % (len(self.alpha)), X1
 #        else:
 #            print "cache hit!"
-        return self.query_K
+        return self.querysp_K
 
     def get_query_K(self, X1):
         # avoid recomputing the kernel if we're evaluating at the same
@@ -507,7 +514,44 @@ class SparseGP(ParamModel):
             gp_cov = np.zeros((m,m))
 
         if len(self.basisfns) > 0:
-            R = self.query_R
+            R = self.querysp_R
+            tmp = np.dot(self.invc, R)
+            mean_cov = np.dot(tmp.T, tmp)
+            gp_cov += mean_cov
+
+        gp_cov += pad * np.eye(gp_cov.shape[0])
+
+        return gp_cov
+
+    def covariance_spkernel_solve(self, cond, include_obs=False, parametric_only=False, pad=1e-8):
+        X1 = self.standardize_input_array(cond)
+        m = X1.shape[0]
+
+        Kstar = self.get_query_K_sparse(X1)
+        if not parametric_only:
+            gp_cov = self.kernel(X1,X1, identical=include_obs)
+            if self.n > 0:
+
+                f = self.factor(Kstar)
+                qf = (Kstar.T * f).todense()
+
+                """
+                # alternate form using solve_L
+                P = factor.P()
+                kp = kstar[P]
+                flp = factor.solve_L(kp)
+                newdata = flp.data / factor.D()[flp.nonzero()[0]]
+                flp2 = flp.copy()
+                flp.data = newdata
+                qf = (flp2.T * flp).todense()
+                """
+
+                gp_cov -= qf
+        else:
+            gp_cov = np.zeros((m,m))
+
+        if len(self.basisfns) > 0:
+            R = self.querysp_R
             tmp = np.dot(self.invc, R)
             mean_cov = np.dot(tmp.T, tmp)
             gp_cov += mean_cov
@@ -690,6 +734,7 @@ class SparseGP(ParamModel):
         d['alpha_r'] =self.alpha_r,
         d['hyperparams'] = self.hyperparams
         d['Kinv'] =self.Kinv,
+        d['K'] =self.K,
         d['sparse_threshold'] =self.sparse_threshold,
         d['ll'] =self.ll,
         d['alpha_r'] = self.alpha_r
@@ -723,6 +768,7 @@ class SparseGP(ParamModel):
         self.wfn_str  = npzfile['wfn_str'].item()
         self.noise_var, self.dfn_params, self.wfn_params = extract_hyperparams(dfn_str=self.dfn_str, wfn_str=self.wfn_str, hyperparams=self.hyperparams)
         self.Kinv = npzfile['Kinv'][0]
+        self.K = npzfile['K'][0]
         self.sparse_threshold = npzfile['sparse_threshold'][0]
         self.ll = npzfile['ll'][0]
         self.basisfns = npzfile['basisfns']
@@ -736,7 +782,7 @@ class SparseGP(ParamModel):
             self.HKinv = None
         self.alpha_r = npzfile['alpha_r']
 
-    def load_trained_model(self, filename, build_tree=True, cache_dense=False):
+    def load_trained_model(self, filename, build_tree=True, cache_dense=False, leaf_bin_size=0):
         npzfile = np.load(filename)
         self.unpack_npz(npzfile)
         if len(str(npzfile['base_str'])) > 0:
@@ -746,7 +792,8 @@ class SparseGP(ParamModel):
         self.n = self.X.shape[0]
         self.predict_tree = VectorTree(self.X[0:2,:], 1, self.dfn_str, self.dfn_params, self.wfn_str, self.wfn_params)
         if build_tree:
-            self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r)
+            self.factor = scikits.sparse.cholmod.cholesky(self.K)
+            self.build_point_tree(HKinv = self.HKinv, Kinv=self.Kinv, alpha_r = self.alpha_r, leaf_bin_size=leaf_bin_size)
         if cache_dense and self.n > 0:
             self.Kinv_dense = self.Kinv.todense()
 

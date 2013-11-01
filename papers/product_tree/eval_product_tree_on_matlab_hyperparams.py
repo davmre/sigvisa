@@ -12,9 +12,15 @@ from sigvisa.models.distributions import Gaussian
 from sigvisa.learn.train_param_common import subsample_data
 from sigvisa.infer.optimize.optim_utils import minimize, construct_optim_params
 
+def sort_events(X, y):
+    combined = np.hstack([X, np.reshape(y, (-1, 1))])
+    combined_sorted = np.array(sorted(combined, key = lambda x: x[0]), dtype=float)
+    X_sorted = np.array(combined_sorted[:, :-1], copy=True, dtype=float)
+    y_sorted = combined_sorted[:, -1].flatten()
+    return X_sorted, y_sorted
 
-def load_matlab_csmodel(basename, X_train, y_train):
-    csficbase = basename + '_csfic'
+def load_matlab_csficmodel(csficbase, X_train, y_train):
+
 
     dfn_str = "euclidean"
     wfn_str_fic = "se"
@@ -23,6 +29,7 @@ def load_matlab_csmodel(basename, X_train, y_train):
 
     dfn_params_cs = np.loadtxt(os.path.join(csficbase, 'dfn_params_cs.txt'), delimiter=',', ndmin=1)
     dfn_params_fic = np.loadtxt(os.path.join(csficbase, 'dfn_params_fic.txt'), delimiter=',', ndmin=1)
+    dfn_params_fic *= np.sqrt(2.0)
     wfn_params_cs = np.loadtxt(os.path.join(csficbase, 'wfn_params_cs.txt'), delimiter=',', ndmin=1)
     wfn_params_fic = np.loadtxt(os.path.join(csficbase, 'wfn_params_fic.txt'), delimiter=',', ndmin=1)
     noise_var_csfic = np.loadtxt(os.path.join(csficbase, 'noise_var.txt'), delimiter=',')
@@ -33,7 +40,7 @@ def load_matlab_csmodel(basename, X_train, y_train):
         p = np.random.permutation(X_train.shape[0])
         Xu = np.array(X_train[p[:90], :], copy=True)
 
-    gp_csfic = SparseGP_CSFIC(X=X_train, y=y_train,
+    gp_csfic = SparseGP_CSFIC(X=X_sorted, y=y_sorted,
                               dfn_str=dfn_str, dfn_params_fic=dfn_params_fic, dfn_params_cs=dfn_params_cs,
                               wfn_str_fic = wfn_str_fic, wfn_params_fic=wfn_params_fic,
                               wfn_str_cs = wfn_str_cs, wfn_params_cs=wfn_params_cs,
@@ -43,13 +50,12 @@ def load_matlab_csmodel(basename, X_train, y_train):
 
 def load_matlab_semodel(basename, X_train, y_train):
 
-    csficbase = basename + '_se'
-
     dfn_str = "euclidean"
     wfn_str = "se"
 
     sebase = basename + '_se'
     dfn_params_se = np.loadtxt(os.path.join(sebase, 'dfn_params.txt'), delimiter=',', ndmin=1)
+    dfn_params_se *= np.sqrt(2.0)
     wfn_params_se = np.loadtxt(os.path.join(sebase, 'wfn_params.txt'), delimiter=',', ndmin=1)
     noise_var_se = np.loadtxt(os.path.join(sebase, 'noise_var.txt'), delimiter=',')
 
@@ -58,11 +64,12 @@ def load_matlab_semodel(basename, X_train, y_train):
     gp_se = SparseGP(X=X_train, y=y_train,
                      dfn_str=dfn_str,
                      wfn_str = wfn_str, hyperparams=hyperparams,
-                     build_tree=True, sort_events=True, center_mean=False)
+                     build_tree=True, sort_events=True, center_mean=False, sparse_invert=False)
+    print "trained SE model"
     return gp_se
 
 
-def main():
+def main(n_max=15000):
 
     rundir = sys.argv[1]
     task_name = sys.argv[2]
@@ -72,37 +79,57 @@ def main():
     X_train = np.loadtxt(basename + '_X_train.txt', delimiter=',')
     y_train = np.loadtxt(basename + '_y_train.txt',  delimiter=',')
 
+    n_X = X_train.shape[0]
+    if n_X > n_max:
+        X_train = np.array(X_train[:n_max,:], copy=True)
+        y_train = np.array(y_train[:n_max], copy=True)
+        print "using restricted subset of %d training points" % (n_max)
+    actual_n = min(n_X, n_max)
+
+
     X_test = np.loadtxt(basename + '_X_test.txt',  delimiter=',')
     y_test = np.loadtxt(basename + '_y_test.txt',  delimiter=',')
 
-    csmodel_dir = basename + "_py_csfic"
-    csgp = os.path.join(csmodel_dir, 'trained.gp')
-    mkdir_p(csmodel_dir)
-    if os.path.exists(csgp):
-        gp_csfic = SparseGP_CSFIC(fname=csgp, build_tree=True)
-    else:
-        gp_csfic = load_matlab_csmodel(basename, X_train, y_train)
-        gp_csfic.save_trained_model(csgp)
+    for nu in (None, -1, 20, 90, 200):
+    #for nu in (90,):
+        csficbase = basename + '_csfic_%d' % nu if nu is not None else basename + '_csfic'
+        csficmodel_dir = basename + "_py_csfic_%d" % nu if nu is not None else basename + "_py_csfic"
+        print csficmodel_dir
+        if not os.path.exists(csficbase):
+            continue
+        csgp = os.path.join(csficmodel_dir, 'trained_%d.gp' % actual_n)
 
-    #test_predict(csmodel_dir, sgp=gp_csfic, testX=X_test, testy=y_test)
-    eval_gp(bdir=csmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=0)
-    eval_gp(bdir=csmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=1)
-    eval_gp(bdir=csmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=2)
+        mkdir_p(csficmodel_dir)
+        if os.path.exists(csgp):
+            gp_csfic = SparseGP_CSFIC(fname=csgp, build_tree=True, leaf_bin_size=0)
+        else:
+            gp_csfic = load_matlab_csficmodel(csficbase, X_train, y_train)
+            gp_csfic.save_trained_model(csgp)
 
-    return
+        print "testing predictions"
+        test_predict(csficmodel_dir, sgp=gp_csfic, testX=X_test, testy=y_test)
+
+        print "testing cutoff rule 0"
+        eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=0)
+        print "testing cutoff rule 1"
+        eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=1)
+        print "testing cutoff rule 2"
+        eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=2)
+
+
 
     """
     semodel_dir = basename + "_py_se"
     segp = os.path.join(semodel_dir, 'trained.gp')
     mkdir_p(semodel_dir)
     if os.path.exists(segp):
-        gp_se = SparseGP(fname=segp, build_tree=True)
+        gp_se = SparseGP(fname=segp, build_tree=True, leaf_bin_size=0, sparse_invert=False)
     else:
         gp_se = load_matlab_semodel(basename, X_train, y_train)
         gp_se.save_trained_model(segp)
 
     test_predict(semodel_dir, sgp=gp_se, testX=X_test, testy=y_test)
-    eval_gp(bdir=semodel_dir, testX=X_test, test_n=500, gp=gp_se)
+    eval_gp(bdir=semodel_dir, testX=X_test, test_n=200, gp=gp_se)
     """
 
 if __name__ == "__main__":
