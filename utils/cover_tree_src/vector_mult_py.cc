@@ -222,6 +222,11 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     this->w = w_compact_q0;
   } else if (wfn_str.compare("compact2") == 0) {
     this->w = w_compact_q2;
+    if (distfn_str.compare("euclidean") == 0) {
+      this->ddfn = euclidean_compact2_deriv_wrt_i;
+    } else if (distfn_str.compare("lld") == 0) {
+      this->ddfn = dist3d_compact2_deriv_wrt_i;
+    }
   } else {
     printf("error: unrecognized weight function %s\n", wfn_str.c_str());
     exit(1);

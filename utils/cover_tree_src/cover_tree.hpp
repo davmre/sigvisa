@@ -60,7 +60,9 @@ double w_compact_q2_upper(double d, const double * extra);
 double w_compact_q2_lower(double d, const double * extra);
 
 double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *variance, const double *scales, const double *EXTRA_IGNORED);
+double dist3d_compact2_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *extra, const double *scales, const double *dims);
 double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims);
+double euclidean_compact2_deriv_wrt_i(int i, const double * p1, const double * p2, const double *extra, const double *scales, const double *dims);
 typedef double (*wfn)(double, const double *);
 
 double dist_6d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *extra);
