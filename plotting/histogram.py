@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from sigvisa.plotting.plot import bounds_without_outliers
 import scipy.stats
 
-def plot_density(data, axes, title=None, draw_stats=True):
+def plot_density(data, axes, title=None, draw_stats=True, true_value=None):
 
     if np.std(data) > 0.0:
         density = scipy.stats.kde.gaussian_kde(data)
@@ -27,12 +27,17 @@ def plot_density(data, axes, title=None, draw_stats=True):
         p75 = data[n * 3 / 4]
         p95 = data[n * 19 / 20]
         iqr = p75 - p25
-        htext = "mean: %.4f\nstd:  %.4f\n\nmin:  %.4f\n5%%:   %.4f\n25%%:  %.4f\n50%%:  %.4f\n75%%:  %.4f\n95%%:  %.4f\nmax:  %.4f" % (
-            mean, std, np.min(data), p5, p25, median, p75, p95, np.max(data))
+
+        htext = "mean: %.4f\nstd:  %.4f\n" % (mean, std)
+
+        if true_value is not None:
+            htext += "true: %.4f\n" % true_value
+
+        htext += "\nmin:  %.4f\n5%%:   %.4f\n25%%:  %.4f\n50%%:  %.4f\n75%%:  %.4f\n95%%:  %.4f\nmax:  %.4f" % (np.min(data), p5, p25, median, p75, p95, np.max(data))
         axes.text(0, 1, htext, horizontalalignment='left', verticalalignment='top', transform=axes.transAxes)
 
 
-def plot_histogram(data, axes=None, draw_stats=True, n_bins=None,  **kwargs):
+def plot_histogram(data, axes=None, draw_stats=True, true_value=None, n_bins=None,  **kwargs):
     data = sorted(data)
     n = len(data)
     mean = np.mean(data)
@@ -55,8 +60,12 @@ def plot_histogram(data, axes=None, draw_stats=True, n_bins=None,  **kwargs):
     axes.hist(x=data, bins=n_bins, **kwargs)
 
     if draw_stats:
-        htext = "mean: %.4f\nstd:  %.4f\n\nmin:  %.4f\n5%%:   %.4f\n25%%:  %.4f\n50%%:  %.4f\n75%%:  %.4f\n95%%:  %.4f\nmax:  %.4f" % (
-            mean, std, np.min(data), p5, p25, median, p75, p95, np.max(data))
+        htext = "mean: %.4f\nstd:  %.4f\n" % (mean, std)
+
+        if true_value is not None:
+            htext += "true: %.4f\n" % true_value
+
+        htext += "\nmin:  %.4f\n5%%:   %.4f\n25%%:  %.4f\n50%%:  %.4f\n75%%:  %.4f\n95%%:  %.4f\nmax:  %.4f" % (np.min(data), p5, p25, median, p75, p95, np.max(data))
         axes.text(0, 1, htext, horizontalalignment='left', verticalalignment='top', transform=axes.transAxes)
 
     return htext

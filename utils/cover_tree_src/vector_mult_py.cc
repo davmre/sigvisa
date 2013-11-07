@@ -211,20 +211,35 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     } else if (distfn_str.compare("lldlld") == 0){
       this->ddfn = dist6d_se_deriv_wrt_i;
     }
-
   } else if (wfn_str.compare("matern32") == 0) {
     this->w = w_matern32;
+  } else if (wfn_str.compare("compact0") == 0) {
+    this->w = w_compact_q0;
+  } else if (wfn_str.compare("compact2") == 0) {
+    this->w = w_compact_q2;
   } else {
     printf("error: unrecognized weight function %s\n", wfn_str.c_str());
     exit(1);
   }
 
   this->wp = NULL;
-  if (weight_params.size() > 0) {
-    this->wp = new double[weight_params.size()];
-    for (unsigned i = 0; i < weight_params.size(); ++i) {
-      this->wp[i] = weight_params(i);
-    }
+  int n_wp = 0;
+  n_wp += weight_params.size();
+  if (wfn_str.compare(0, 7, "compact") == 0) {
+    n_wp += 1;
+  }
+  if (n_wp > 0) {
+    this->wp = new double[n_wp];
+  }
+  for (unsigned i = 0; i < weight_params.size(); ++i) {
+    this->wp[i] = weight_params(i);
+  }
+  if (wfn_str.compare(0, 7, "compact") == 0) {
+    int D = pts.size2();
+    int q = atoi(wfn_str.c_str()+7);
+    double j = floor(D/2) + q+ 1.0;
+    printf("compact weight, D=%d, q=%d, j=%f\n", D, q, j);
+    this->wp[n_wp-1] = j;
   }
 
   if (this->n > 0) {
@@ -339,7 +354,6 @@ pyublas::numpy_vector<double> VectorTree::sparse_kernel_deriv_wrt_i(const pyubla
 }
 
 
-
 VectorTree::~VectorTree() {
   if (this->dist_params != NULL) {
     delete this->dist_params;
@@ -373,6 +387,7 @@ BOOST_PYTHON_MODULE(cover_tree) {
     .def("get_m", &MatrixTree::get_m)
     .def("quadratic_form", &MatrixTree::quadratic_form)
     .def("print_hierarchy", &MatrixTree::print_hierarchy)
+    .def("test_bounds", &MatrixTree::test_bounds)
     .def_readonly("fcalls", &MatrixTree::fcalls)
     .def_readonly("dfn_evals", &MatrixTree::dfn_evals);
 

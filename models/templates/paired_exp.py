@@ -27,6 +27,8 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                          "coda_height": Gaussian(-.5, 1),
                          "coda_decay": Negate(Gamma(4.0, 160.0)),}
 
+        self.hack_force_mean = None
+
     @staticmethod
     def params():
         return ("peak_offset", "coda_height", "coda_decay")
@@ -138,8 +140,11 @@ if (l > 0) {
 
     def unassociated_model(self, param, nm=None):
         if nm is not None and param=="coda_height":
-            mu = np.log(nm.c * 10)
-            std = 1.0
+            mu = np.log(nm.c * .3)
+            if self.hack_force_mean is not None:
+                mu = self.hack_force_mean
+            std = 0.5
+
             return Gaussian(mu, std)
         else:
             return self.uamodels[param]

@@ -16,8 +16,22 @@ from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move
 from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, improve_atime_move, swap_association_move
-from sigvisa.plotting.plot import plot_with_fit
+from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
+
+
+global_stds = {'coda_height': .5,
+            'coda_decay': .1,
+            'wiggle_amp': .1,
+            'wiggle_phase': .1,
+            'peak_offset': 0.5,
+            'arrival_time': 7.0,
+            'evloc': 0.20,
+            'evloc_big': 0.8,
+            'evtime': 2.0,
+            'evmb': 0.8,
+            'evdepth': 8.0}
+
 
 def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step):
 
@@ -147,7 +161,7 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpste
         print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
         for (sta, waves) in sg.station_waves.items():
             for wn in waves:
-                plot_with_fit(os.path.join(run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
+                plot_with_fit_shapes(os.path.join(run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
 
 
 ############################################################################
@@ -176,18 +190,7 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                               'peak_offset': improve_offset_move,
                               'arrival_time': improve_atime_move} if enable_template_moves else {}
 
-    stds = {'coda_height': .5,
-            'coda_decay': .1,
-            'wiggle_amp': .1,
-            'wiggle_phase': .1,
-            'peak_offset': 0.5,
-            'arrival_time': 7.0,
-            'evloc': 0.20,
-            'evloc_big': 0.8,
-            'evtime': 2.0,
-            'evmb': 0.8,
-            'evdepth': 8.0}
-
+    stds = global_stds
     tmpl_openworld_move_probability = .10
     ev_openworld_move_probability = .05
 

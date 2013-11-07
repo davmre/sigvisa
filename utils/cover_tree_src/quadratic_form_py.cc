@@ -138,7 +138,12 @@
 			const pairpoint &query_pt,
 			double eps_rel,
 			double eps_abs,
+			int cutoff_rule, // 0 = Shen
+			                 // 1 = UAI/MSTND
+			                 // 2 = provable_abs
 			double &weight_sofar,
+			int &terms_sofar,
+			double &abserr_sofar,
 			double &ws,
 			int max_terms,
 			int &fcalls,
@@ -159,7 +164,6 @@
 				     // explicitly at the root before
 				     // this function is called.
    fcalls += 1;
-   bool cutoff = false;
    if (n.num_children == 0) {
      // if we're at a leaf, just do the multiplication
 
@@ -176,63 +180,112 @@
 	 * w_point(second_half_d_query_cached(query_pt, n.p, MAXDOUBLE, dist_params, dist_extra), wp_point);
      }
      ws += weight * n.unweighted_sums[v_select];
-     //weight_sofar += weight;
+
+     switch (cutoff_rule) {
+     case 0:
+       weight_sofar += weight;
+       break;
+     case 1:
+       break;
+     case 2:
+       terms_sofar += 1;
+       break;
+     }
      //printf("at leaf: ws = %lf*%lf = %lf\n", weight, n.unweighted_sums[v_select], ws);
      //printf("idx (%d, %d) pt1 (%.4f, %.4f) pt2 (%.4f, %.4f) Kinv=%.4f Kinv_abs=%.4f weight=%.4f ws=%.4f wSoFar=%.4f dist %.4f\n", n.p.idx1, n.p.idx2, n.p.pt1[0], n.p.pt1[1], n.p.pt2[0], n.p.pt2[1], n.unweighted_sums[v_select], n.unweighted_sums_abs[v_select], weight, ws, weight_sofar, d);
-     cutoff = true;
-   } else {
-     bool query_in_bounds = (d <= n.max_dist);
-     if (!query_in_bounds) {
-       double min_weight = w_lower(d + n.max_dist, wp_pair);
-       double max_weight = w_upper(max(0.0, d - n.max_dist), wp_pair);
-       //double weight_cutoff_threshold = 2 * 1e-4 * (weight_sofar + n.num_leaves * min_weight);
-       //cutoff = n.num_leaves * (max_weight - min_weight) <= weight_cutoff_threshold;
+     return;
+   }
 
-       double threshold = (eps_rel * fabs(ws + n.unweighted_sums[v_select] * min_weight) + eps_abs);
+   bool query_in_bounds = (d <= n.max_dist);
+   bool cutoff = false;
+   if (!query_in_bounds) {
+     double min_weight = w_lower(d + n.max_dist, wp_pair);
+     double max_weight = w_upper(max(0.0, d - n.max_dist), wp_pair);
+     //
+     double threshold, frac_remaining_terms, abserr_n;
+     switch (cutoff_rule) {
+     case 0:
+       threshold = 2 * eps_rel * (weight_sofar + n.num_leaves * min_weight);
+       cutoff = n.num_leaves * (max_weight - min_weight) <= threshold;
+       if (cutoff) {
+	 ws += .5 * (max_weight + min_weight) * n.unweighted_sums[v_select];
+	 weight_sofar += min_weight * n.num_leaves;
+       }
+       break;
+     case 1:
+       threshold = (eps_rel * fabs(ws + n.unweighted_sums[v_select] * min_weight) + eps_abs);
        cutoff = max_weight * n.unweighted_sums_abs[v_select] < threshold;
        if (cutoff) {
-	 // if we're cutting off, just compute an estimate of the sum
-	 // in this region
 	 ws += .5 * (max_weight + min_weight) * n.unweighted_sums[v_select];
-	 //weight_sofar += min_weight * n.num_leaves;
-	 //printf("cutting off: ws = %lf*%lf = %lf\n", .5 * (max_weight + min_weight), n.unweighted_sums[v_select], ws);
-	 //printf("idx (%d, %d) pt1 (%.4f, %.4f) pt2 (%.4f, %.4f) Kinv=%.4f Kinv_abs=%.4f weight=%.4f ws=%.4f wSoFar=%.4f dist %.4f   (approx %d children min %.4f max %.4f max_contrib %f prod_thresh %f)\n", n.p.idx1, n.p.idx2, n.p.pt1[0], n.p.pt1[1], n.p.pt2[0], n.p.pt2[1], n.unweighted_sums[v_select], n.unweighted_sums_abs[v_select], .5 * (max_weight + min_weight), ws, weight_sofar, d, n.num_leaves, min_weight, max_weight,  max_weight * n.unweighted_sums_abs[v_select], threshold);
        }
+       break;
+     case 2:
+       frac_remaining_terms = n.num_leaves / (double)(max_terms - terms_sofar);
+       threshold = frac_remaining_terms * (eps_abs - abserr_sofar);
+       abserr_n = (max_weight - min_weight) * n.unweighted_sums_abs[v_select]/2.0;
+       cutoff = abserr_n < threshold;
+       if (cutoff) {
+	 ws += .5 * (max_weight + min_weight) * n.unweighted_sums[v_select];
+	 //printf("cutting off: %d leaves (representing %.1f%% of %d-%d remaining), error bound %.8f, error budget %.4f - %.4f = %.4f, so we would have been allowed %.6f\n", n.num_leaves, frac_remaining_terms*100, max_terms, terms_sofar, abserr_n, eps_abs, abserr_sofar, eps_abs - abserr_sofar, threshold);
+	 terms_sofar += n.num_leaves;
+	 abserr_sofar += abserr_n;
+
+       }
+
+       break;
      }
-     if (!cutoff) {
-       // if not cutting off, we expand the sum recursively at the
-       // children of this node, from nearest to furthest.
-       //printf("NO CUTOFF AT idx (%d, %d) pt1 (%.4f, %.4f) pt2 (%.4f, %.4f) Kinv=%.4f Kinv_abs=%.4f dist %.4f (approx %d children min %.4f max %.4f cutoff %f thresh %f), recursing to ", n.p.idx1, n.p.idx2, n.p.pt1[0], n.p.pt1[1], n.p.pt2[0], n.p.pt2[1], n.unweighted_sums[v_select], n.unweighted_sums_abs[v_select], d, n.num_leaves, min_weight, max_weight, max_weight * n.unweighted_sums_abs[v_select], threshold);
+       // if we're cutting off, just compute an estimate of the sum
+       // in this region
+       //printf("cutting off: ws = %lf*%lf = %lf\n", .5 * (max_weight + min_weight), n.unweighted_sums[v_select], ws);
+       //printf("idx (%d, %d) pt1 (%.4f, %.4f) pt2 (%.4f, %.4f) Kinv=%.4f Kinv_abs=%.4f weight=%.4f ws=%.4f wSoFar=%.4f dist %.4f   (approx %d children min %.4f max %.4f max_contrib %f prod_thresh %f)\n", n.p.idx1, n.p.idx2, n.p.pt1[0], n.p.pt1[1], n.p.pt2[0], n.p.pt2[1], n.unweighted_sums[v_select], n.unweighted_sums_abs[v_select], .5 * (max_weight + min_weight), ws, weight_sofar, d, n.num_leaves, min_weight, max_weight,  max_weight * n.unweighted_sums_abs[v_select], threshold);
 
-       int small_perm[10];
-       int * permutation = (int *)&small_perm;
-       if(n.num_children > 10) {
-	 permutation = (int *)malloc(n.num_children * sizeof(int));
-       }
+   }
+   if (!cutoff) {
+     // if not cutting off, we expand the sum recursively at the
+     // children of this node, from nearest to furthest.
+     //printf("NO CUTOFF AT idx (%d, %d) pt1 (%.4f, %.4f) pt2 (%.4f, %.4f) Kinv=%.4f Kinv_abs=%.4f dist %.4f (approx %d children min %.4f max %.4f cutoff %f thresh %f), recursing to ", n.p.idx1, n.p.idx2, n.p.pt1[0], n.p.pt1[1], n.p.pt2[0], n.p.pt2[1], n.unweighted_sums[v_select], n.unweighted_sums_abs[v_select], d, n.num_leaves, min_weight, max_weight, max_weight * n.unweighted_sums_abs[v_select], threshold);
 
+     int small_perm[10];
+     int * permutation = (int *)&small_perm;
+     if(n.num_children > 10) {
+       permutation = (int *)malloc(n.num_children * sizeof(int));
+     }
+
+     for(int i=0; i < n.num_children; ++i) {
+       n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXDOUBLE, dist_params, dist_extra);
+       permutation[i] = i;
+       //printf("%.4f ", n.children[i].distance_to_query);
+     }
+
+     halfsort(permutation, n.num_children, n.children);
+
+     if (cutoff_rule == 2) {
+       // look at FURTHEST NODES first, so we can cut off lots of ndoes quickly, and then relax our error budget to be able to approximate when we get near the query point.
        for(int i=0; i < n.num_children; ++i) {
-	 n.children[i].distance_to_query = dist(query_pt, n.children[i].p, MAXDOUBLE, dist_params, dist_extra);
-	 permutation[i] = i;
-	 //printf("%.4f ", n.children[i].distance_to_query);
-       }
-
-       halfsort(permutation, n.num_children, n.children);
-
-
-       for(int i=0; i < n.num_children; ++i) {
+	 //for(int i=n.num_children-1; i>= 0; --i) {
 	 weighted_sum_node(n.children[permutation[i]], v_select,
-			   query_pt, eps_rel, eps_abs, weight_sofar,
+			   query_pt, eps_rel, eps_abs, cutoff_rule,
+			   weight_sofar, terms_sofar, abserr_sofar,
 			   ws, max_terms, fcalls,
 			   w_upper, w_lower, w_point, wp_pair, wp_point,
 			   dist, dist_params, dist_extra);
        }
-
-       if (permutation != (int *)&small_perm) {
-	 free(permutation);
+     } else {
+       for(int i=0; i < n.num_children; ++i) {
+	 weighted_sum_node(n.children[permutation[i]], v_select,
+			   query_pt, eps_rel, eps_abs, cutoff_rule,
+			   weight_sofar, terms_sofar, abserr_sofar,
+			   ws, max_terms, fcalls,
+			   w_upper, w_lower, w_point, wp_pair, wp_point,
+			   dist, dist_params, dist_extra);
        }
-
      }
+     if (permutation != (int *)&small_perm) {
+       free(permutation);
+     }
+
    }
+
  }
 
 
@@ -304,7 +357,7 @@
    }
  }
 
- double MatrixTree::quadratic_form(const pyublas::numpy_matrix<double> &query_pt1, const pyublas::numpy_matrix<double> &query_pt2, double eps_rel, double eps_abs) {
+double MatrixTree::quadratic_form(const pyublas::numpy_matrix<double> &query_pt1, const pyublas::numpy_matrix<double> &query_pt2, double eps_rel, double eps_abs, int cutoff_rule) {
    pairpoint qp = {&query_pt1(0,0), &query_pt2(0,0), 0, 0};
    bool symmetric = (qp.pt1 == qp.pt2);
 
@@ -323,6 +376,8 @@
    // assume there will be at least one point within three or so lengthscales,
    // so we can cut off any branch with really neligible weight.
    double weight_sofar = 0;
+   int terms_sofar = 0;
+   double abserr_sofar = 0;
    double ws = 0;
 
    int fcalls = 0;
@@ -332,9 +387,10 @@
    }
 
    if (symmetric) {
-     int max_terms = this->n/2;
+     int max_terms = this->root_diag.num_leaves + this->root_offdiag.num_leaves;
     weighted_sum_node(this->root_diag, 0,
-		      qp, eps_rel, eps_abs, weight_sofar,
+		      qp, eps_rel, eps_abs, cutoff_rule,
+		      weight_sofar, terms_sofar, abserr_sofar,
 		      ws, max_terms,
 		      fcalls, this->w_upper,
 			   this->w_lower, this->w_point,
@@ -346,7 +402,8 @@
       this->wp_pair[0] *= 2;
       this->wp_point[0] *= sqrt(2.0);
       weighted_sum_node(this->root_offdiag, 0,
-			qp, eps_rel, eps_abs, weight_sofar,
+			qp, eps_rel, eps_abs, cutoff_rule,
+			weight_sofar, terms_sofar, abserr_sofar,
 			ws, max_terms,
 			fcalls, this->w_upper,
 			this->w_lower, this->w_point,
@@ -357,37 +414,40 @@
       this->wp_point[0] /= sqrt(2.0);
     }
    } else{
-     int max_terms = this->n;
+     int max_terms = this->nzero;
      if (this->use_offdiag) {
      weighted_sum_node(this->root_offdiag, 0,
-			    qp, eps_rel, eps_abs, weight_sofar,
+		       qp, eps_rel, eps_abs, cutoff_rule,
+		       weight_sofar, terms_sofar, abserr_sofar,
 		       ws, max_terms,
-			    fcalls, this->w_upper,
-			    this->w_lower, this->w_point,
-			    this->wp_pair, this->wp_point,
-			    this->factored_query_dist,
-			    this->dist_params, this->dfn_extra);
+		       fcalls, this->w_upper,
+		       this->w_lower, this->w_point,
+		       this->wp_pair, this->wp_point,
+		       this->factored_query_dist,
+		       this->dist_params, this->dfn_extra);
      }
 
      weighted_sum_node(this->root_diag, 0,
-			     qp, eps_rel, eps_abs, weight_sofar,
-			     ws, max_terms,
-			     fcalls, this->w_upper,
-			     this->w_lower, this->w_point,
-			     this->wp_pair, this->wp_point,
-			     this->factored_query_dist,
-			     this->dist_params, this->dfn_extra);
+		       qp, eps_rel, eps_abs, cutoff_rule,
+		       weight_sofar, terms_sofar, abserr_sofar,
+		       ws, max_terms,
+		       fcalls, this->w_upper,
+		       this->w_lower, this->w_point,
+		       this->wp_pair, this->wp_point,
+		       this->factored_query_dist,
+		       this->dist_params, this->dfn_extra);
 
      if (this->use_offdiag) {
      pairpoint qp2 = {&query_pt2(0,0), &query_pt1(0,0), 0, 0};
      weighted_sum_node(this->root_offdiag, 0,
-			     qp2, eps_rel, eps_abs, weight_sofar,
-			     ws, max_terms,
-			     fcalls, this->w_upper,
-			     this->w_lower, this->w_point,
-			     this->wp_pair, this->wp_point,
-			     this->factored_query_dist,
-			     this->dist_params, this->dfn_extra);
+		       qp2, eps_rel, eps_abs, cutoff_rule,
+		       weight_sofar, terms_sofar, abserr_sofar,
+		       ws, max_terms,
+		       fcalls, this->w_upper,
+		       this->w_lower, this->w_point,
+		       this->wp_pair, this->wp_point,
+		       this->factored_query_dist,
+		       this->dist_params, this->dfn_extra);
      }
    }
 
@@ -442,6 +502,7 @@
    return pm;
  }
 
+
  MatrixTree::MatrixTree (const pyublas::numpy_matrix<double> &pts,
 			 const pyublas::numpy_strided_vector<int> &nonzero_rows,
 			 const pyublas::numpy_strided_vector<int> &nonzero_cols,
@@ -449,7 +510,6 @@
 			 const pyublas::numpy_vector<double> &dist_params,
 			 const string wfn_str,
 			 const pyublas::numpy_vector<double> &weight_params) {
-
    unsigned int nzero = nonzero_rows.size();
    vector< pairpoint > pairs_offdiag;
    vector< pairpoint > pairs_diag;
@@ -469,6 +529,7 @@
     }
   }
   this->n = n;
+  this->nzero = nzero;
 
   pair_dfn_extra * p = new pair_dfn_extra;
   p->dfn_extra = NULL;
@@ -508,9 +569,16 @@
    */
   this->wp_point = NULL;
   this->wp_pair = NULL;
-  if (weight_params.size() > 0) {
-    this->wp_point = new double[weight_params.size()];
-    this->wp_pair = new double[weight_params.size()];
+
+  int n_wp = 0;
+  n_wp += weight_params.size();
+  if (wfn_str.compare(0, 7, "compact") == 0) {
+    n_wp += 1;
+  }
+  if (n_wp > 0) {
+    this->wp_point = new double[n_wp];
+    this->wp_pair = new double[n_wp];
+
     this->wp_pair[0] = weight_params(0)*weight_params(0);
     this->wp_point[0] = weight_params(0);
     for (unsigned i = 1; i < weight_params.size(); ++i) {
@@ -518,9 +586,19 @@
       this->wp_point[i] = weight_params[i];
       this->wp_pair[i] = weight_params[i];
     }
+
+    if (wfn_str.compare(0, 7, "compact") == 0) {
+      int D = pts.size2();
+      int q = atoi(wfn_str.c_str()+7);
+      double j = floor(D/2) + q+ 1.0;
+      printf("compact weight, D=%d, q=%d, j=%f\n", D, q, j);
+      this->wp_point[n_wp-1] = j;
+      this->wp_pair[n_wp-1] = j;
+    }
   }
+
   if (wfn_str.compare("se") == 0) {
-    this->w_point = w_e;
+    this->w_point = w_se;
     this->w_upper = w_se;
     this->w_lower = w_se;
 
@@ -534,6 +612,22 @@
     this->w_point = w_matern32;
     this->w_upper = w_matern32_upper;
     this->w_lower = w_matern32_lower;
+
+    p->dfn = p->dfn_orig;
+    this->factored_build_dist = factored_build_distance_l1;
+    this->factored_query_dist = factored_query_distance_l1;
+  } else  if (wfn_str.compare("compact0") == 0) {
+    this->w_point = w_compact_q0;
+    this->w_upper = w_compact_q0_upper;
+    this->w_lower = w_compact_q0_lower;
+
+    p->dfn = p->dfn_orig;
+    this->factored_build_dist = factored_build_distance_l1;
+    this->factored_query_dist = factored_query_distance_l1;
+  } else  if (wfn_str.compare("compact2") == 0) {
+    this->w_point = w_compact_q2;
+    this->w_upper = w_compact_q2_upper;
+    this->w_lower = w_compact_q2_lower;
 
     p->dfn = p->dfn_orig;
     this->factored_build_dist = factored_build_distance_l1;
@@ -582,6 +676,45 @@ void MatrixTree::set_dist_params(const pyublas::numpy_vector<double> &dist_param
   this->dist_params[dist_params.size()] = (double) this->n;
 }
 
+void MatrixTree::test_bounds(double max_d, int n_d) {
+
+  int n = 0;
+  double lgap_sum = 0;
+  double ugap_sum = 0;
+  double gap_percent = 0;
+  double k_percent = 0;
+  for (double d1 = 0; d1 <= max_d; d1 += max_d/n_d) {
+    for (double d2 = 0; d2 <= max_d; d2 += max_d/n_d) {
+	  double delta = d1 + d2;
+
+	  double true_kernel = this->w_point(d1, this->wp_point) * this->w_point(d2, this->wp_point);
+	  double lbound = this->w_lower(delta, this->wp_pair);
+	  double ubound = this->w_upper(delta, this->wp_pair);
+
+	  double lgap = true_kernel - lbound;
+	  double ugap = ubound - true_kernel;
+
+	  lgap_sum += lgap;
+	  ugap_sum += ugap;
+	  if (ubound > 0) {
+	    gap_percent += (ubound-lbound)/ubound;
+	    k_percent += true_kernel/ubound;
+	  } else {
+	    k_percent += 1.0;
+	  }
+	  n += 1;
+
+	  if ((lgap < -1e-8) || ugap < -1e-8) {
+	    printf("bound error! d1 %f d2 %f delta %f k %f lbound %f ubound %f lgap %f ugap %f\n", d1, d2, delta, true_kernel, lbound, ubound, lgap, ugap);
+	  }
+	  if (ugap > 10000) {
+	    printf("massive gap! d1 %f d2 %f delta %f k %f lbound %f ubound %f lgap %f ugap %f\n", d1, d2, delta, true_kernel, lbound, ubound, lgap, ugap);
+	  }
+    }
+  }
+  printf("finished bounds test for %d distance pairs. average lgap %f, ugap %f, avg gap is %f of ubound, avg k is %f of ubound\n", n, lgap_sum/n, ugap_sum/n, gap_percent/n, k_percent/n);
+
+}
 
 MatrixTree::~MatrixTree() {
   if (this->dist_params != NULL) {

@@ -52,6 +52,13 @@ double w_e(double d, const double * variance);
 double w_matern32(double d, const double * variance);
 double w_matern32_upper(double d, const double * variance);
 double w_matern32_lower(double d, const double * variance);
+double w_compact_q0(double d, const double * extra);
+double w_compact_q0_upper(double d, const double * extra);
+double w_compact_q0_lower(double d, const double * extra);
+double w_compact_q2(double d, const double * extra);
+double w_compact_q2_upper(double d, const double * extra);
+double w_compact_q2_lower(double d, const double * extra);
+
 double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *variance, const double *scales, const double *EXTRA_IGNORED);
 double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims);
 typedef double (*wfn)(double, const double *);
@@ -255,6 +262,10 @@ void dist_split(v_array<ds_node <T> >& point_set,
 		const double* dist_params,
 		void * dist_extra)
 {
+  /*
+
+   */
+
   unsigned int new_index = 0;
   double fmax = dist_of_scale(max_scale);
   for(int i = 0; i < point_set.index; i++)
@@ -291,16 +302,19 @@ node<T> batch_insert(const ds_node<T>& p,
   else {
     double max_dist = max_set(point_set); //O(|point_set|)
     int next_scale = min (max_scale - 1, get_scale(max_dist));
-    /*if (next_scale == -2147483648) {
+
+    /*
+    if ((next_scale == -2147483648) || (top_scale - next_scale > 100) ) {
       printf("whoawhoawhoa\n");
       printf("max_set %f\n", max_dist);
       printf("next scale %d %d %d\n", max_scale-1, get_scale(max_dist), next_scale);
-      printf("p %f %f %f %f\n", p.p.pt1[0], p.p.pt1[1], p.p.pt2[0], p.p.pt2[1]);
-      printf("ps %f %f %f %f\n", point_set[0].p.pt1[0], point_set[0].p.pt1[1], point_set[0].p.pt2[0], point_set[0].p.pt2[1]);
+      //printf("p %f %f %f %f\n", p.p.pt1[0], p.p.pt1[1], p.p.pt2[0], p.p.pt2[1]);
+      //printf("p %f %f\n", p.p.p[0], p.p.p[1]);
+      //printf("ps %f %f %f %f\n", point_set[0].p.pt1[0], point_set[0].p.pt1[1], point_set[0].p.pt2[0], point_set[0].p.pt2[1]);
       printf("distance %f\n", distance(point_set[0].p, p.p, MAXDOUBLE, dist_params, dist_extra));
-    }*/
+      }*/
 
-    if (top_scale - next_scale == 100) // We have points with distance 0.
+    if ((next_scale == -2147483648) || (top_scale - next_scale >= 100)) // We have points with distance 0.
       {
 	v_array< node<T> > children;
 	push(children,new_leaf(p));

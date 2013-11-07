@@ -75,10 +75,25 @@ def unmarshal_fn(dumped_code):
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
-def extract_hyperparams(dfn_str, wfn_str, hyperparams):
+
+def extract_hyperparams(dfn_str, wfn_str, hyperparams, train_std=None):
     if dfn_str == "lld" and (wfn_str == "se" or wfn_str=="matern32"):
-        (noise_var, signal_var, ll_scale, d_scale) = hyperparams
-        noise_var = noise_var
+        if len(hyperparams) == 4:
+            (noise_var, signal_var, ll_scale, d_scale) = hyperparams
+        elif len(hyperparams) == 3:
+            (noise_var, signal_var, ll_scale) = hyperparams
+            d_scale = 5.0
+        elif len(hyperparams) == 2:
+            (noise_ratio, ll_scale) = hyperparams
+            d_scale = 5.0
+            noise_var = noise_ratio * train_std**2
+            signal_var = (1-noise_ratio) * train_std**2
+        elif len(hyperparams) == 1:
+            ll_scale = hyperparams[0]
+            d_scale = 5.0
+            noise_var = train_std**2 / 2.0
+            signal_var = train_std**2 / 2.0
+
         dfn_params = np.array((ll_scale, d_scale), dtype=np.float)
         wfn_params = np.array((signal_var,), copy=True, dtype=np.float)
     elif dfn_str == "euclidean" and (wfn_str == "se" or wfn_str=="matern32"):
@@ -230,7 +245,7 @@ class SparseGP(ParamModel):
     def __init__(self, X=None, y=None,
                  fname=None, basisfns=(),
                  hyperparams=None,
-               param_mean=None, param_cov=None,
+                 param_mean=None, param_cov=None,
                  compute_ll=False,
                  compute_grad=False,
                  sparse_threshold=1e-10,
@@ -240,7 +255,8 @@ class SparseGP(ParamModel):
                  wfn_str = "se",
                  sort_events=False,
                  build_tree=True,
-                 sparse_invert=True):
+                 sparse_invert=True,
+                 center_mean=False):
 
         try:
             ParamModel.__init__(self, sta=sta)
@@ -258,9 +274,11 @@ class SparseGP(ParamModel):
                                               # block structure in the
                                               # kernel matrix
 
+
             self.dfn_str, self.wfn_str = dfn_str, wfn_str
-            self.hyperparams = np.array(hyperparams)
-            self.noise_var, self.dfn_params, self.wfn_params = extract_hyperparams(dfn_str=self.dfn_str, wfn_str=self.wfn_str, hyperparams=hyperparams)
+            self.compressed_hyperparams = np.array(hyperparams)
+            self.noise_var, self.dfn_params, self.wfn_params = extract_hyperparams(dfn_str=self.dfn_str, wfn_str=self.wfn_str, hyperparams=np.array(hyperparams), train_std = np.std(y))
+            self.hyperparams = np.concatenate([[self.noise_var,], self.wfn_params, self.dfn_params])
             self.sparse_threshold = sparse_threshold
             self.basisfns = basisfns
             self.timings = dict()
@@ -268,12 +286,17 @@ class SparseGP(ParamModel):
             if X is not None:
                 self.X = np.matrix(X, dtype=float)
                 self.y = np.array(y, dtype=float)
+                if center_mean:
+                    self.ymean = np.mean(y)
+                    self.y -= self.ymean
+                else:
+                    self.ymean = 0.0
                 self.n = X.shape[0]
             else:
                 self.X = np.reshape(np.array(()), (0,0))
                 self.y = np.reshape(np.array(()), (0,))
                 self.n = 0
-
+                self.ymean = 0.0
                 self.K = np.reshape(np.array(()), (0,0))
                 self.Kinv = np.reshape(np.array(()), (0,0))
                 self.alpha_r = self.y
@@ -383,6 +406,7 @@ class SparseGP(ParamModel):
         if len(gp_pred) == 1:
             gp_pred = gp_pred[0]
 
+        gp_pred += self.ymean
         return gp_pred
 
     def predict_naive(self, cond, parametric_only=False, eps=1e-8):
@@ -402,6 +426,7 @@ class SparseGP(ParamModel):
         if len(gp_pred) == 1:
             gp_pred = gp_pred[0]
 
+        gp_pred += self.ymean
         return gp_pred
 
 
@@ -525,7 +550,7 @@ class SparseGP(ParamModel):
 
         return gp_cov
 
-    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4):
+    def covariance_double_tree(self, cond, include_obs=False, parametric_only=False, pad=1e-8, eps=1e-8, eps_abs=1e-4, cutoff_rule=1):
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
         d = len(self.basisfns)
@@ -533,7 +558,7 @@ class SparseGP(ParamModel):
         if not parametric_only:
             gp_cov = self.kernel(X1, X1, identical=include_obs)
             if self.n > 0:
-                qf = self.double_tree.quadratic_form(X1, X1, eps, eps_abs)
+                qf = self.double_tree.quadratic_form(X1, X1, eps, eps_abs, cutoff_rule=cutoff_rule)
                 gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
@@ -633,12 +658,13 @@ class SparseGP(ParamModel):
         else:
             n = len(y)
 
-        K = self.covariance(X1, include_obs=include_obs)
+        K = self.covariance_spkernel(X1, include_obs=include_obs)
         y = y-self.predict(X1)
 
         if n==1:
             var = K[0,0]
             ll1 = - .5 * ((y)**2 / var + np.log(2*np.pi*var) )
+            return ll1
 
         L = scipy.linalg.cholesky(K, lower=True)
         ld2 = np.log(np.diag(L)).sum() # this computes .5 * log(det(K))
@@ -660,6 +686,7 @@ class SparseGP(ParamModel):
             d['basisfns'] = np.empty(0)
         d['X']  = self.X,
         d['y'] =self.y,
+        d['ymean'] = self.ymean,
         d['alpha_r'] =self.alpha_r,
         d['hyperparams'] = self.hyperparams
         d['Kinv'] =self.Kinv,
@@ -686,7 +713,12 @@ class SparseGP(ParamModel):
     def unpack_npz(self, npzfile):
         self.X = npzfile['X'][0]
         self.y = npzfile['y'][0]
+        if 'ymean' in npzfile:
+            self.ymean = npzfile['ymean']
+        else:
+            self.ymean = 0.0
         self.hyperparams = npzfile['hyperparams']
+        self.compressed_hyperparams = self.hyperparams
         self.dfn_str  = npzfile['dfn_str'].item()
         self.wfn_str  = npzfile['wfn_str'].item()
         self.noise_var, self.dfn_params, self.wfn_params = extract_hyperparams(dfn_str=self.dfn_str, wfn_str=self.wfn_str, hyperparams=self.hyperparams)
@@ -776,7 +808,7 @@ class SparseGP(ParamModel):
         Gradient of the training set log likelihood with respect to the kernel hyperparams.
         """
 
-        nparams = len(self.hyperparams)
+        nparams = 1 + len(self.wfn_params) + len(self.dfn_params)
         grad = np.zeros((nparams,))
 
         if self.basisfns:
@@ -812,6 +844,10 @@ class SparseGP(ParamModel):
 
         def get_dKdi_empirical(X, i, eps=1e-8):
             # for debugging
+
+            if (i == 0):
+                dKdi = np.eye(self.n)
+                return dKdi
 
             new_hparams = self.hyperparams.copy()
             new_hparams[i] -= eps
@@ -854,7 +890,35 @@ class SparseGP(ParamModel):
             grad[i] = dlldi
             #print "  %d: %f %f" % (i, tB-tA, tC-tB)
 
+
+        cgrad = self.compress_hyperparam_grad(grad)
+        print cgrad
+        return cgrad
+
+    def compress_hyperparam_grad(self, grad):
+        # if we were passed a reduced hyperparam representation (e.g. omitting depth or noise),
+        # then we pass back the gradient in the same reduced representation
+        if self.dfn_str == "lld" and (self.wfn_str == "se" or self.wfn_str=="matern32"):
+            if len(self.compressed_hyperparams) == 3:
+                print "returning grad", grad[:3]
+                return grad[:3]
+            elif len(self.compressed_hyperparams) == 2:
+                (noise_ratio, ll_scale) = self.compressed_hyperparams
+
+                signal_var = self.wfn_params[0]
+                C = (signal_var + self.noise_var)
+                d_noise_ratio = C * (grad[0] - grad[1])
+                #d_noise_ratio1 = grad[1] * -sq / self.noise_var
+                #d_noise_ratio0 = grad[0] * sq / signal_var
+
+                grad = np.array((d_noise_ratio, grad[2]))
+                return grad
+            elif len(self.compressed_hyperparams) == 1:
+                print 'returning grad', grad[2]
+                return grad[2:3]
+
         return grad
+
 
     def log_likelihood(self):
         return self.ll

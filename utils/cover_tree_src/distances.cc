@@ -211,3 +211,95 @@ double w_matern32_upper(double d, const double *variance) {
   double sqrt3 = 1.73205080757;
   return variance[0] * (1 + sqrt3*d + .75*d*d) * exp(-sqrt3 * d);
 }
+
+double w_compact_q0(double r, const double * extra) {
+  double d = 1.0 - r;
+  if (d <= 0.0) {
+    return 0.0;
+  }
+
+  // eqn 4.21 from rasmussen & williams
+  double variance = extra[0];
+  int j = (int)extra[1];
+
+  return variance * pow(d, j);
+}
+
+double w_compact_q0_lower(double r, const double * extra) {
+  double d = 1.0 - r;
+  if (d <= 0.0) {
+    return 0.0;
+  }
+
+  double variance = extra[0];
+  int j = (int)extra[1];
+
+
+  return variance * pow(d, j);
+}
+
+double w_compact_q0_upper(double r, const double * extra) {
+  double d = 1.0 - r + .25 * r * r; // this is an upper bound for r < 2.0
+  if (r >= 2.0) {
+    return 0.0;
+  }
+
+  double variance = extra[0];
+  int j = (int)extra[1];
+
+  return variance * pow(d, j);
+}
+
+
+double w_compact_q2(double r, const double * extra) {
+  double d = 1.0 - r;
+  if (d <= 0.0) {
+    return 0.0;
+  }
+
+  // eqn 4.21 from rasmussen & williams
+  double variance = extra[0];
+  int j = (int)extra[1];
+
+  double poly = ((j*j + 4*j + 3)*r*r + (3*j + 6)*r + 3)/3.0;
+  return variance * pow(d, j+2)*poly;
+}
+
+double w_compact_q2_lower(double r, const double * extra) {
+  double d = 1.0 - r;
+  if (d <= 0.0) {
+    return 0.0;
+  }
+
+  double variance = extra[0];
+  int j = (int)extra[1];
+
+  double poly1 = (3*j*j + 12*j + 9) * r * r / 2.0;
+  double poly2 = (9*j + 18) * r;
+  double poly = (poly1 + poly2 + 9.0)/9.0;
+  return variance * pow(d, j+2) * poly;
+}
+
+double w_compact_q2_upper(double r, const double * extra) {
+  double d = 1.0 - r + .25 * r * r; // this is an upper bound for r < 2.0
+  if (r >= 2.0) {
+    return 0.0;
+  }
+
+  double variance = extra[0];
+  int j = (int)extra[1];
+
+  double rsq4 = r * r / 4.0;
+  double jquad = (j*j + 4*j + 3);
+  double jlinear = 3*j + 6;
+
+  double poly1 = jquad * rsq4;
+  double poly1sq = poly1 * poly1;
+  double poly2 = jquad * jlinear * rsq4 * r;
+  double poly3 = poly1 * 12.0;
+  double poly4 = jlinear * jlinear * rsq4;
+  double poly5 = jlinear * r * 3.0;
+  double poly = (poly1sq + poly2 + poly3 + poly4 + poly5 + 9.0) / 9.0;
+
+  return variance * pow(d, j+2) * poly;
+}

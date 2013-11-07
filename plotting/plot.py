@@ -1,6 +1,7 @@
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+import matplotlib.cm as cm
 
 import scipy.stats
 
@@ -11,6 +12,8 @@ import sigvisa.database.db
 from sigvisa import Sigvisa
 from sigvisa.utils.geog import dist_deg, azimuth
 from sigvisa.source.event import get_event
+
+shape_colors = dict()
 
 def savefig(fname, fig, **kwargs):
     canvas = FigureCanvasAgg(fig)
@@ -137,6 +140,82 @@ def plot_with_fit(fname, wn, title="",
         subplot_waveform(highlight_tmpl, axes, color="orange",
                          linewidth=2, alpha = 1,
                          plot_dets=False, **kwargs)
+
+    wn.set_value(wave.data)
+    wn._mutable = mutable
+    wn._update_mutable_cache()
+
+    if fname is None:
+        return fig
+    else:
+        savefig(fname, fig, bbox_inches="tight", dpi=300)
+
+def plot_with_fit_shapes(fname, wn, title="",
+                         ymin=None, ymax=None,
+                         unass_lw = 1,
+                         ev_lw=2,
+                         model_lw = 1,
+                         tmpl_lw = None,
+                         highlight_eid=None,
+                         fig=None,
+                         **kwargs):
+
+    if fig is None:
+        fig = Figure(figsize=(8, 5), dpi=144)
+    fig.patch.set_facecolor('white')
+    axes = fig.add_subplot(111)
+    axes.set_title(title)
+    axes.set_xlabel("Time (s)", fontsize=8)
+
+    if ymin is not None and ymax is not None:
+        axes.set_ylim(ymin, ymax)
+
+    import copy
+    mutable = copy.copy(wn._mutable)
+    wave = wn.get_wave()
+    wn.unfix_value()
+    wn.parent_predict(include_wiggles=True)
+    pred = wn.get_wave()
+
+    unass_tmpls = []
+    ev_tmpls = []
+    highlight_tmpl = None
+    wn.parent_predict(include_wiggles=False)
+    tmpl = wn.get_wave()
+
+    for arrival in wn.arrivals():
+        wn.parent_predict(include_wiggles=False, arrivals=[arrival,])
+        eid = arrival[0]
+        if eid < 0:
+            if eid not in shape_colors:
+                shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5)
+            unass_tmpls.append((wn.get_wave(), shape_colors[eid]))
+        elif arrival[0] != highlight_eid:
+            if eid not in shape_colors:
+                shape_colors[eid] = cm.get_cmap('jet')(np.random.rand()*.5+.5)
+            ev_tmpls.append((wn.get_wave(), shape_colors[eid]))
+        else:
+            highlight_tmpl = wn.get_wave()
+
+    subplot_waveform(wave, axes, color='black', linewidth=1.5, **kwargs)
+    if model_lw is not None:
+        subplot_waveform(pred, axes, color="purple",
+                              linewidth=4, alpha = 1, linestyle='-',
+                              plot_dets=False, **kwargs)
+
+    if unass_lw is not None:
+        for (unass_tmpl, color) in unass_tmpls:
+            subplot_waveform(unass_tmpl, axes, color=color,
+                             linewidth=unass_lw, alpha = 0.5,
+                             plot_dets=False, fill_y2=wn.nm.c,
+                             **kwargs)
+    if ev_lw is not None:
+        evcolors = cm.get_cmap('jet')(np.linspace(0.5,1.0, len(ev_tmpls)))
+        for (ev_tmpl,color) in ev_tmpls:
+            subplot_waveform(ev_tmpl, axes, color=color,
+                             linewidth=ev_lw, alpha = 0.8,
+                             plot_dets=False, fill_y2=wn.nm.c,
+                             **kwargs)
 
     wn.set_value(wave.data)
     wn._mutable = mutable
