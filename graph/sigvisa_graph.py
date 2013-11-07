@@ -510,7 +510,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         if not nosort:
             self._topo_sorted_list = nodes.values() + self._topo_sorted_list
-            sg._gc_topo_sorted_nodes()
+            self._gc_topo_sorted_nodes()
         return nodes
 
     def load_node_from_modelid(self, modelid, label, **kwargs):

@@ -121,8 +121,8 @@ if (l > 0) {
         bounds = { k: -np.inf for k in self.params() }
 
         bounds['coda_height'] = -4
-        bounds['peak_offset'] = 0.5
-        bounds['coda_decay'] = -.2
+        bounds['peak_offset'] = 0.2
+        bounds['coda_decay'] = -2
 
         return bounds
 

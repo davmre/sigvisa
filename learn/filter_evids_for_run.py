@@ -80,7 +80,7 @@ def main():
             evids = read_evids_detected_at_station(s.dbconn, sta, st, et, phases=required_phase_list,
                                                    min_mb=options.min_mb, max_mb=options.max_mb,
                                                    min_snr=options.min_snr, max_snr=options.max_snr,
-                                                   only_phases=only_phase_list)
+                                                   only_phases=only_phase_list, time_filter_direct=True)
 
             for evid in evids:
                 if s.is_array_station(sta) and not options.array_refsta_only:
