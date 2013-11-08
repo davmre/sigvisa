@@ -247,8 +247,8 @@ class SparseGP_CSFIC(ParamModel):
 
         fullness = len(self.Kinv.nonzero()[0]) / float(self.Kinv.shape[0]**2)
         print "Kinv is %.1f%% full (%d nonzero elements)." % (fullness * 100, len(self.Kinv.nonzero()[0]))
-        if fullness > .15:
-            raise Exception("not building tree, Kinv is too full!" )
+        #if fullness > .15:
+        #    raise Exception("not building tree, Kinv is too full!" )
 
 
         self.predict_tree.set_v(0, alpha_r.astype(np.float))
@@ -334,7 +334,7 @@ class SparseGP_CSFIC(ParamModel):
         return spK
 
 
-    def get_query_K_sparse(self, X1):
+    def get_query_K_sparse(self, X1, no_R=False):
         # avoid recomputing the kernel if we're evaluating at the same
         # point multiple times. This is effectively a size-1 cache.
         try:
@@ -347,7 +347,7 @@ class SparseGP_CSFIC(ParamModel):
             self.querysp_K = self.sparse_kernel(X1)
             self.querysp_hsh = hsh
 
-            if self.basisfns:
+            if self.basisfns and not no_R:
                 H = self.get_data_features(X1)
                 self.querysp_R = H - np.asmatrix(self.HKinv) * self.querysp_K
 
@@ -356,7 +356,7 @@ class SparseGP_CSFIC(ParamModel):
 #            print "cache hit!"
         return self.querysp_K
 
-    def get_query_K(self, X1):
+    def get_query_K(self, X1, no_R=False):
         # avoid recomputing the kernel if we're evaluating at the same
         # point multiple times. This is effectively a size-1 cache.
         try:
@@ -369,7 +369,7 @@ class SparseGP_CSFIC(ParamModel):
             self.query_K = self.kernel(self.X, X1)
             self.query_hsh = hsh
 
-            if self.basisfns:
+            if self.basisfns and not no_R:
                 H = self.get_data_features(X1)
                 self.query_R = H - np.asmatrix(self.HKinv) * self.query_K
 
@@ -388,12 +388,8 @@ class SparseGP_CSFIC(ParamModel):
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
 
-        Kstar = self.get_query_K_sparse(X1)
-
-        #Kstar2 = self.get_query_K(X1)
-        #if np.sum(np.abs(Kstar.todense() - Kstar2)) > .00001:
-        #    import pdb; pdb.set_trace()
-
+        t1 = time.time()
+        Kstar = self.get_query_K_sparse(X1, no_R=True)
         if not parametric_only:
             gp_cov = self.kernel(X1,X1, identical=include_obs)
             if self.n > 0:
@@ -402,12 +398,20 @@ class SparseGP_CSFIC(ParamModel):
                 gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
+        t2 = time.time()
+        self.qf_time = t2-t1
 
         if len(self.basisfns) > 0:
-            R = self.querysp_R
+            t1 = time.time()
+            H = self.get_data_features(X1)
+            R = H - np.asmatrix(self.HKinv) * self.querysp_K
+
+            #R = self.querysp_R
             tmp = np.dot(self.invc, R)
             mean_cov = np.dot(tmp.T, tmp)
             gp_cov += mean_cov
+            t2 = time.time()
+            self.nonqf_time = t2-t1
 
         gp_cov += pad * np.eye(gp_cov.shape[0])
         gp_cov += self.covariance_diag_correction(X1)
@@ -466,7 +470,8 @@ class SparseGP_CSFIC(ParamModel):
         X1 = self.standardize_input_array(cond)
         m = X1.shape[0]
 
-        Kstar = self.get_query_K(X1)
+        t1 = time.time()
+        Kstar = self.get_query_K(X1, no_R=True)
         if not parametric_only:
             gp_cov = self.kernel(X1,X1, identical=include_obs)
             if self.n > 0:
@@ -477,12 +482,20 @@ class SparseGP_CSFIC(ParamModel):
                 gp_cov -= qf
         else:
             gp_cov = np.zeros((m,m))
+        t2 = time.time()
+        self.qf_time = t2-t1
 
         if len(self.basisfns) > 0:
-            R = self.query_R
+            t1 = time.time()
+            H = self.get_data_features(X1)
+            R = H - np.asmatrix(self.HKinv) * self.query_K
+
+            #R = self.query_R
             tmp = np.dot(self.invc, R)
             mean_cov = np.dot(tmp.T, tmp)
             gp_cov += mean_cov
+            t2 = time.time()
+            self.nonqf_time = t2-t1
 
         gp_cov += pad * np.eye(gp_cov.shape[0])
         gp_cov += self.covariance_diag_correction(X1)
@@ -497,6 +510,7 @@ class SparseGP_CSFIC(ParamModel):
 
         if not parametric_only:
             gp_cov = self.kernel(X1, X1, identical=include_obs)
+            t1 = time.time()
             if self.n > 0:
                 qf = np.zeros(gp_cov.shape)
                 for i in range(m):
@@ -505,11 +519,14 @@ class SparseGP_CSFIC(ParamModel):
                 if qf_only:
                     return qf
                 gp_cov -= qf
+            t2 = time.time()
+            self.qf_time = t2-t1
 
         else:
             gp_cov = np.zeros((m,m))
 
         if len(self.basisfns) > 0:
+            t1 = time.time()
             H = self.kernel(self.Xu, X1, predict_tree=self.predict_tree_fic)
             #H = np.array([[f(x) for x in X1] for f in self.basisfns], dtype=np.float64)
             HKinvKstar = np.zeros((d, m))
@@ -521,6 +538,8 @@ class SparseGP_CSFIC(ParamModel):
             v = np.dot(self.invc, R)
             mc = np.dot(v.T, v)
             gp_cov += mc
+            t2 = time.time()
+            self.nonqf_time = t2-t1
 
 
         gp_cov += pad * np.eye(m)

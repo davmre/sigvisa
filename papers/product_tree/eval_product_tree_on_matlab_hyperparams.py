@@ -40,12 +40,12 @@ def load_matlab_csficmodel(csficbase, X_train, y_train):
         p = np.random.permutation(X_train.shape[0])
         Xu = np.array(X_train[p[:90], :], copy=True)
 
-    gp_csfic = SparseGP_CSFIC(X=X_sorted, y=y_sorted,
+    gp_csfic = SparseGP_CSFIC(X=X_train, y=y_train,
                               dfn_str=dfn_str, dfn_params_fic=dfn_params_fic, dfn_params_cs=dfn_params_cs,
                               wfn_str_fic = wfn_str_fic, wfn_params_fic=wfn_params_fic,
                               wfn_str_cs = wfn_str_cs, wfn_params_cs=wfn_params_cs,
                               build_tree=True, sort_events=True, center_mean=False,
-                              noise_var=noise_var_csfic, Xu=Xu)
+                              noise_var=noise_var_csfic, Xu=Xu, leaf_bin_size=15)
     return gp_csfic
 
 def load_matlab_semodel(basename, X_train, y_train):
@@ -69,10 +69,12 @@ def load_matlab_semodel(basename, X_train, y_train):
     return gp_se
 
 
-def main(n_max=15000):
+def main(n_max=18000):
 
     rundir = sys.argv[1]
     task_name = sys.argv[2]
+
+
 
     basedir = os.path.join(os.getenv('SIGVISA_HOME'), 'papers', 'product_tree', 'run', rundir)
     basename = os.path.join(basedir, task_name)
@@ -90,31 +92,40 @@ def main(n_max=15000):
     X_test = np.loadtxt(basename + '_X_test.txt',  delimiter=',')
     y_test = np.loadtxt(basename + '_y_test.txt',  delimiter=',')
 
-    for nu in (None, -1, 20, 90, 200):
+    """
     #for nu in (90,):
-        csficbase = basename + '_csfic_%d' % nu if nu is not None else basename + '_csfic'
-        csficmodel_dir = basename + "_py_csfic_%d" % nu if nu is not None else basename + "_py_csfic"
-        print csficmodel_dir
-        if not os.path.exists(csficbase):
-            continue
-        csgp = os.path.join(csficmodel_dir, 'trained_%d.gp' % actual_n)
+    nu = 90
+    csficbase = basename + '_csfic_%d' % nu if nu is not None else basename + '_csfic'
+    csficmodel_dir = basename + "_py_csfic_%d" % nu if nu is not None else basename + "_py_csfic"
+    print csficmodel_dir
+    #if not os.path.exists(csficbase):
+    #    continue
+    csgp = os.path.join(csficmodel_dir, 'trained_%d.gp' % actual_n)
 
-        mkdir_p(csficmodel_dir)
-        if os.path.exists(csgp):
-            gp_csfic = SparseGP_CSFIC(fname=csgp, build_tree=True, leaf_bin_size=0)
-        else:
-            gp_csfic = load_matlab_csficmodel(csficbase, X_train, y_train)
-            gp_csfic.save_trained_model(csgp)
+    mkdir_p(csficmodel_dir)
+    if os.path.exists(csgp):
+        gp_csfic = SparseGP_CSFIC(fname=csgp, build_tree=True, leaf_bin_size=15)
+    else:
+        gp_csfic = load_matlab_csficmodel(csficbase, X_train, y_train)
+        gp_csfic.save_trained_model(csgp)
 
-        print "testing predictions"
-        test_predict(csficmodel_dir, sgp=gp_csfic, testX=X_test, testy=y_test)
+    #print "testing predictions"
+    #test_predict(csficmodel_dir, sgp=gp_csfic, testX=X_test, testy=y_test)
 
-        print "testing cutoff rule 0"
-        eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=0)
-        print "testing cutoff rule 1"
-        eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=1)
-        print "testing cutoff rule 2"
-        eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=2)
+    #print "testing cutoff rule 0"
+    #eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=0)
+    #print "testing cutoff rule 1"
+    #eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=1)
+    #print "testing cutoff rule 2"
+    #eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic, cutoff_rule=2)
+
+    print "testing leaf bins 15"
+    gp_csfic10 = SparseGP_CSFIC(fname=csgp, build_tree=True, leaf_bin_size=10)
+    eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic10, cutoff_rule=2, flag="_bin15")
+
+    #print "testing leaf bins 100"
+    #gp_csfic50 = SparseGP_CSFIC(fname=csgp, build_tree=True, leaf_bin_size=50)
+    #eval_gp(bdir=csficmodel_dir, testX=X_test, test_n=200, gp=gp_csfic50, cutoff_rule=2, flag="_bin50")
 
 
 
@@ -130,7 +141,7 @@ def main(n_max=15000):
 
     test_predict(semodel_dir, sgp=gp_se, testX=X_test, testy=y_test)
     eval_gp(bdir=semodel_dir, testX=X_test, test_n=200, gp=gp_se)
-    """
+
 
 if __name__ == "__main__":
 

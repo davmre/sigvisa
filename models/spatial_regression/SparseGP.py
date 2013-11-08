@@ -77,7 +77,7 @@ X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
 
 def extract_hyperparams(dfn_str, wfn_str, hyperparams, train_std=None):
-    if dfn_str == "lld" and (wfn_str == "se" or wfn_str=="matern32"):
+    if dfn_str == "lld" and (wfn_str == "se" or wfn_str=="matern32" or wfn_str.startswith("compact")):
         if len(hyperparams) == 4:
             (noise_var, signal_var, ll_scale, d_scale) = hyperparams
         elif len(hyperparams) == 3:
@@ -378,8 +378,8 @@ class SparseGP(ParamModel):
 
         fullness = len(self.Kinv.nonzero()[0]) / float(self.Kinv.shape[0]**2)
         print "Kinv is %.1f%% full." % (fullness * 100)
-        if fullness > .15:
-            raise Exception("not building tree, Kinv is too full!" )
+        #if fullness > .15:
+        #    raise Exception("not building tree, Kinv is too full!" )
 
         self.predict_tree.set_v(0, alpha_r.astype(np.float))
 
