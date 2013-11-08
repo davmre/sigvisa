@@ -60,7 +60,9 @@ double w_compact_q2_upper(double d, const double * extra);
 double w_compact_q2_lower(double d, const double * extra);
 
 double dist3d_se_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *variance, const double *scales, const double *EXTRA_IGNORED);
+double dist3d_compact2_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *extra, const double *scales, const double *dims);
 double euclidean_se_deriv_wrt_i(int i, const double * p1, const double * p2, const double *variance, const double *scales, const double *dims);
+double euclidean_compact2_deriv_wrt_i(int i, const double * p1, const double * p2, const double *extra, const double *scales, const double *dims);
 typedef double (*wfn)(double, const double *);
 
 double dist_6d_km(const point p1, const point p2, double BOUND_IGNORED, const double *scales, void *extra);
@@ -90,9 +92,16 @@ class node {
   double unweighted_sum;
   double unweighted_sum_abs;
 
+
+  T *extra_p;
+  unsigned int n_extra_p;
+  double **extra_p_vals; // a list of n_arms elements, each containing
+			 // values for each of the n_extra_p points
+
   node<T>* debug_parent;
 
   node();
+  //~node();
   void alloc_arms(unsigned int narms);
   void free_tree();
 };
@@ -108,7 +117,28 @@ node<T>::node() {
   this->unweighted_sums = &(this->unweighted_sum);
   this->unweighted_sums_abs = &(this->unweighted_sum_abs);
   this->narms = 1;
+  this->n_extra_p = 0;
 }
+
+/*
+template<class T>
+node<T>::~node() {
+
+
+  this->free_tree_recursive();
+  if (this->narms > 1) {
+    delete this->unweighted_sums;
+    delete this->unweighted_sums_abs;
+  }
+
+  if(this->n_extra_p > 0) {
+    delete this->extra_p;
+    for (unsigned int a=0; a < this->narms; ++a) {
+      delete this->extra_p_vals[a];
+    }
+    free( this->extra_p_vals); // mallocced in collect_leaves
+    }
+}*/
 
 void epsilon_nearest_neighbor(const node<point> &top_node, const node<point> &query,
 			      v_array<v_array<point> > &results, double epsilon,
@@ -142,6 +172,7 @@ void node<T>::alloc_arms(unsigned int narms) {
     this->children[i].alloc_arms(narms);
   }
 }
+
 
 template<class T>
 void node<T>::free_tree() {

@@ -36,6 +36,10 @@ double weighted_sum_node(node<point> &n, int v_select,
 				    // this function is called.
   fcalls += 1;
   bool cutoff = false;
+
+  // if (fabs(n.p.p[1]) < .0000001) {
+    //}
+
   if (n.num_children == 0) {
     // if we're at a leaf, just do the multiplication
 
@@ -121,6 +125,7 @@ double VectorTree::weighted_sum(int v_select, const pyublas::numpy_matrix<double
   if (this->n == 0) {
     return 0;
   }
+
 
   this->root.distance_to_query = this->dfn(qp, this->root.p, MAXDOUBLE, this->dist_params, this->dfn_extra);
   double ws = weighted_sum_node(this->root, v_select,
@@ -217,6 +222,11 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     this->w = w_compact_q0;
   } else if (wfn_str.compare("compact2") == 0) {
     this->w = w_compact_q2;
+    if (distfn_str.compare("euclidean") == 0) {
+      this->ddfn = euclidean_compact2_deriv_wrt_i;
+    } else if (distfn_str.compare("lld") == 0) {
+      this->ddfn = dist3d_compact2_deriv_wrt_i;
+    }
   } else {
     printf("error: unrecognized weight function %s\n", wfn_str.c_str());
     exit(1);
@@ -238,7 +248,7 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     int D = pts.size2();
     int q = atoi(wfn_str.c_str()+7);
     double j = floor(D/2) + q+ 1.0;
-    printf("compact weight, D=%d, q=%d, j=%f\n", D, q, j);
+    //printf("compact weight, D=%d, q=%d, j=%f\n", D, q, j);
     this->wp[n_wp-1] = j;
   }
 
@@ -248,6 +258,7 @@ VectorTree::VectorTree (const pyublas::numpy_matrix<double> &pts,
     set_leaves(this->root, a);
     this->root.alloc_arms(narms);
   }
+
 }
 
 void VectorTree::set_dist_params(const pyublas::numpy_vector<double> &dist_params) {
@@ -296,6 +307,13 @@ pyublas::numpy_matrix<double> VectorTree::sparse_training_kernel_matrix(const py
     np1.scale = 100;
 
     epsilon_nearest_neighbor(this->root,np1,res,max_distance, this->dfn, this->dist_params, this->dfn_extra);
+
+    /*
+    if( (p1.p[0] < -116.8) && (p1.p[0] > -116.9) && (p1.p[1] < - 74.4) && (p1.p[1] > -74.6) ) {
+      printf("nn got %d results for %f, %f\n", res[0].index, p1.p[0], p1.p[1]);
+      printf("dfn params %f %f\n", this->dist_params[0], this->dist_params[1]);
+      printf("root is %p and has %d children\n", &this->root, this->root.num_children);
+      }*/
 
     for(int jj = 1; jj < res[0].index; ++jj) {
       point p2 = res[0][jj];
@@ -356,7 +374,7 @@ pyublas::numpy_vector<double> VectorTree::sparse_kernel_deriv_wrt_i(const pyubla
 
 VectorTree::~VectorTree() {
   if (this->dist_params != NULL) {
-    delete this->dist_params;
+    delete[] this->dist_params;
     this->dist_params = NULL;
   }
   if (this->dfn_extra != NULL) {
@@ -364,7 +382,7 @@ VectorTree::~VectorTree() {
     this->dfn_extra = NULL;
   }
   if (this->wp != NULL) {
-    delete this->wp;
+    delete[] this->wp;
     this->wp = NULL;
   }
 }
@@ -382,6 +400,7 @@ BOOST_PYTHON_MODULE(cover_tree) {
     .def_readonly("fcalls", &VectorTree::fcalls);
 
   bp::class_<MatrixTree>("MatrixTree", bp::init< pyublas::numpy_matrix< double > const &, pyublas::numpy_vector< int > const &, pyublas::numpy_vector< int > const &, string const &, pyublas::numpy_vector< double > const &, string const &, pyublas::numpy_vector< double > const &>())
+    .def("collapse_leaf_bins", &MatrixTree::collapse_leaf_bins)
     .def("set_m", &MatrixTree::set_m)
     .def("set_m_sparse", &MatrixTree::set_m_sparse)
     .def("get_m", &MatrixTree::get_m)

@@ -17,14 +17,21 @@ def test_predict(sdir, sgp=None, testX=None, testy=None):
     testX = np.load(os.path.join(sdir, "testX.npy")) if testX is None else testX
     testy = np.load(os.path.join(sdir, "testy.npy")) if testy is None else testy
     pred_y = sgp.predict_naive(testX)
+    predtree_y = sgp.predict(testX)
     r = pred_y - testy
 
-    test_lps = np.array([sgp.log_p(x=y, cond=np.reshape(x, (1, -1))) for (x,y) in zip(testX, testy)])
+    if np.max(np.abs(pred_y - predtree_y)) > .1:
+        X1 = testX[0:1,:]
+        Kstar = sgp.kernel(sgp.X, X1)
+        gp_pred = np.dot(Kstar.T, sgp.alpha_r)
+        import pdb; pdb.set_trace()
+
+    test_lps = np.array([sgp.log_p(x=y, cond=np.reshape(x, (1, -1)), covar='naive') for (x,y) in zip(testX, testy)])
 
     meanTest = np.mean(testy)
     varTest = np.var(testy)
     stdTest = np.std(testy)
-    baseline_model = Gaussian(mean=0.0, std=stdTest)
+    baseline_model = Gaussian(mean=meanTest, std=stdTest)
     baseline_lps = np.array([baseline_model.log_p(x=y) for y in testy])
 
     mse = np.mean(r **2)
@@ -33,6 +40,9 @@ def test_predict(sdir, sgp=None, testX=None, testy=None):
     median_ad = np.median(np.abs(r))
 
     msll = np.mean(test_lps - baseline_lps)
+
+    if msll < 2.0:
+        import pdb; pdb.set_trace()
 
     with open(os.path.join(sdir, "accuracy.txt"), "w") as f:
         f.write("msll %f\n" % msll)

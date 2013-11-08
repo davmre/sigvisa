@@ -164,7 +164,7 @@
 				     // explicitly at the root before
 				     // this function is called.
    fcalls += 1;
-   if (n.num_children == 0) {
+   if (n.num_children == 0 && n.n_extra_p == 0) {
      // if we're at a leaf, just do the multiplication
 
      double weight;
@@ -193,6 +193,33 @@
      }
      //printf("at leaf: ws = %lf*%lf = %lf\n", weight, n.unweighted_sums[v_select], ws);
      //printf("idx (%d, %d) pt1 (%.4f, %.4f) pt2 (%.4f, %.4f) Kinv=%.4f Kinv_abs=%.4f weight=%.4f ws=%.4f wSoFar=%.4f dist %.4f\n", n.p.idx1, n.p.idx2, n.p.pt1[0], n.p.pt1[1], n.p.pt2[0], n.p.pt2[1], n.unweighted_sums[v_select], n.unweighted_sums_abs[v_select], weight, ws, weight_sofar, d);
+
+     return;
+   }
+   if (n.n_extra_p > 0) {
+     double * epvals = n.extra_p_vals[v_select];
+     // printf("computing exact sum of %d additional pts\n", n.n_extra_p);
+
+     double exact_sum = 0;
+     for (unsigned int i=0; i < n.n_extra_p; ++i) {
+       double weight = w_point(first_half_d_query_cached(query_pt, n.extra_p[i], MAXDOUBLE, dist_params, dist_extra), wp_point)
+	 * w_point(second_half_d_query_cached(query_pt, n.extra_p[i], MAXDOUBLE, dist_params, dist_extra), wp_point);
+       ws += weight * epvals[i];
+       exact_sum += weight * epvals[i];
+
+       switch (cutoff_rule) {
+       case 0:
+	 weight_sofar += weight;
+	 break;
+       case 1:
+	 break;
+       case 2:
+	 terms_sofar += 1;
+	 break;
+       }
+
+     }
+
      return;
    }
 
@@ -357,6 +384,76 @@
    }
  }
 
+
+void collect_leaves(node<pairpoint> & n) {
+
+  // if we're at a leaf, just fill in extra_p with the point/values at this node
+  if (n.num_children == 0) {
+    n.n_extra_p = 1;
+    n.extra_p = new pairpoint[n.n_extra_p];
+
+    n.extra_p[0] = n.p;
+
+    n.extra_p_vals = (double **)malloc(n.narms * sizeof(double *));
+    for (unsigned int a=0; a < n.narms; ++a) {
+      n.extra_p_vals[a] = new double[n.n_extra_p];
+      n.extra_p_vals[a][0] = n.unweighted_sums[a];
+    }
+
+  } else {
+    n.n_extra_p = n.num_leaves;
+    n.extra_p = new pairpoint[n.n_extra_p];
+    n.extra_p_vals = (double **)malloc(n.narms * sizeof(double *));
+    for (unsigned int a=0; a < n.narms; ++a) {
+      n.extra_p_vals[a] = new double[n.n_extra_p];
+    }
+
+    // otherwise, recurse, then collect from immediate children
+    int leaves_collected = 0;
+    for (unsigned int i=0; i < n.num_children; ++i) {
+      collect_leaves(n.children[i]);
+      for (unsigned int j=0; j < n.children[i].n_extra_p; ++j) {
+	n.extra_p[leaves_collected] = n.children[i].extra_p[j];
+	for (unsigned int a = 0; a < n.narms; ++a) {
+	  n.extra_p_vals[a][leaves_collected] = n.children[i].extra_p_vals[a][j];
+	}
+	leaves_collected++;
+      }
+    }
+  }
+
+
+  double unweighted_sum = 0;
+  for (unsigned int i=0; i < n.n_extra_p;i++) {
+    if (n.extra_p_vals[0][i] > 100) {
+      printf("WTF\n");
+    }
+    unweighted_sum += n.extra_p_vals[0][i];
+
+  }
+  if (fabs(unweighted_sum - n.unweighted_sums[0]) > .0000001) {
+    printf("CLERICAL ERROR %f %f\n", unweighted_sum, n.unweighted_sums[0]);
+    exit(1);
+  }
+}
+
+
+void cutoff_leaves(node<pairpoint> &root, unsigned int leaf_bin_size ) {
+
+  if ((root.num_leaves == root.num_children) || (root.num_leaves <= leaf_bin_size)) {
+    collect_leaves(root);
+    //root.free_tree_recursive();
+    root.num_children = 0;
+    root.children = NULL; // warning: GIANT MEMORY LEAK
+  } else {
+    for (unsigned int i=0; i < root.num_children; ++i) {
+      cutoff_leaves(root.children[i], leaf_bin_size);
+    }
+  }
+
+}
+
+
 double MatrixTree::quadratic_form(const pyublas::numpy_matrix<double> &query_pt1, const pyublas::numpy_matrix<double> &query_pt2, double eps_rel, double eps_abs, int cutoff_rule) {
    pairpoint qp = {&query_pt1(0,0), &query_pt2(0,0), 0, 0};
    bool symmetric = (qp.pt1 == qp.pt2);
@@ -492,6 +589,13 @@ double MatrixTree::quadratic_form(const pyublas::numpy_matrix<double> &query_pt1
    }
  }
 
+void MatrixTree::collapse_leaf_bins(unsigned int leaf_bin_size) {
+  cutoff_leaves(this->root_diag, leaf_bin_size);
+  if (this->use_offdiag) {
+    cutoff_leaves(this->root_offdiag, leaf_bin_size);
+  }
+}
+
  pyublas::numpy_matrix<double> MatrixTree::get_m() {
    vector<double> v(this->n * this->n);
    pyublas::numpy_matrix<double> pm(this->n, this->n);
@@ -591,7 +695,7 @@ double MatrixTree::quadratic_form(const pyublas::numpy_matrix<double> &query_pt1
       int D = pts.size2();
       int q = atoi(wfn_str.c_str()+7);
       double j = floor(D/2) + q+ 1.0;
-      printf("compact weight, D=%d, q=%d, j=%f\n", D, q, j);
+      //printf("compact weight, D=%d, q=%d, j=%f\n", D, q, j);
       this->wp_point[n_wp-1] = j;
       this->wp_pair[n_wp-1] = j;
     }
@@ -718,15 +822,15 @@ void MatrixTree::test_bounds(double max_d, int n_d) {
 
 MatrixTree::~MatrixTree() {
   if (this->dist_params != NULL) {
-    delete this->dist_params;
+    delete[] this->dist_params;
     this->dist_params = NULL;
   }
   if (this->wp_pair != NULL) {
-    delete this->wp_pair;
+    delete[] this->wp_pair;
     this->wp_pair = NULL;
   }
   if (this->wp_point != NULL) {
-    delete this->wp_point;
+    delete[] this->wp_point;
     this->wp_point = NULL;
   }
   if (this->dfn_extra->dfn_extra != NULL) {

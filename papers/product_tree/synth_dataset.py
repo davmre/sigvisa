@@ -38,12 +38,12 @@ def genX(dim, npts):
     return pts
 
 
-def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, test_n=None, cutoff_rule=1):
+def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, test_n=None, cutoff_rule=1, flag=""):
     import scipy.stats
 
     gp = SparseGP(fname=os.path.join(bdir, 'trained.gp')) if gp is None else gp
     testX = np.load(os.path.join(bdir, "testX.npy")) if testX is None else testX
-    resultfile = os.path.join(bdir, 'results_cutoff%d.txt' % cutoff_rule) if resultfile is None else resultfile
+    resultfile = os.path.join(bdir, 'results_cutoff%d%s.txt' % (cutoff_rule,flag)) if resultfile is None else resultfile
     errorfile = os.path.join(bdir, "error.npz") if errorfile is None else errorfile
 
 
@@ -62,9 +62,16 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
 
     sparse_covar = np.zeros(test_n)
     sparse_covar_times = np.zeros(test_n)
+    sparse_covar_qftimes = np.zeros(test_n)
+    sparse_covar_nonqftimes = np.zeros(test_n)
 
     sparse_covar_spkernel = np.zeros(test_n)
     sparse_covar_spkernel_times = np.zeros(test_n)
+    sparse_covar_spkernel_qftimes = np.zeros(test_n)
+    sparse_covar_spkernel_nonqftimes = np.zeros(test_n)
+
+    sparse_covar_spkernel_solve = np.zeros(test_n)
+    sparse_covar_spkernel_solve_times = np.zeros(test_n)
 
     for i in range(test_n):
         t0 = time.time()
@@ -86,6 +93,9 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
         sparse_covar[i] = gp.covariance(testX[i:i+1,:])
         t5 = time.time()
         sparse_covar_times[i] = t5-t4
+        sparse_covar_qftimes[i] = gp.qf_time
+        sparse_covar_nonqftimes[i] = gp.nonqf_time
+
 
 
     for i in range(test_n):
@@ -93,6 +103,14 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
         sparse_covar_spkernel[i] = gp.covariance_spkernel(testX[i:i+1,:])
         t51 = time.time()
         sparse_covar_spkernel_times[i] = t51-t41
+        sparse_covar_spkernel_qftimes[i] = gp.qf_time
+        sparse_covar_spkernel_nonqftimes[i] = gp.nonqf_time
+
+    for i in range(test_n):
+        t41 = time.time()
+        sparse_covar_spkernel_solve[i] = gp.covariance_spkernel_solve(testX[i:i+1,:])
+        t51 = time.time()
+        sparse_covar_spkernel_solve_times[i] = t51-t41
 
 
     has_dense = True
@@ -138,6 +156,8 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
     tree_covar_terms = np.zeros((len(eps_rels), len(eps_abses), test_n), dtype=int)
     tree_covar_distevals = np.zeros((len(eps_rels), len(eps_abses), test_n), dtype=int)
     tree_covar_times = np.zeros((len(eps_rels), len(eps_abses), test_n))
+    tree_covar_qftimes = np.zeros((len(eps_rels), len(eps_abses), test_n))
+    tree_covar_nonqftimes = np.zeros((len(eps_rels), len(eps_abses), test_n))
     for (e_i, epsm) in enumerate(eps_rels):
         for (e_j, eps_abs) in enumerate(eps_abses):
             for i in range(test_n):
@@ -147,10 +167,12 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
                 tree_covar_terms[e_i, e_j, i] = gp.double_tree.fcalls
                 tree_covar_distevals[e_i, e_j, i] = gp.double_tree.dfn_evals
                 tree_covar_times[e_i, e_j, i] = t7-t6
+                tree_covar_qftimes[e_i, e_j, i] = gp.qf_time
+                tree_covar_nonqftimes[e_i, e_j, i] = gp.nonqf_time
                 #print
                 #print
 
-            if np.mean(np.abs((tree_covar[e_i, e_j, :] - sparse_covar_spkernel)/sparse_covar_spkernel)) < 0.001:
+            if np.mean(np.abs((tree_covar[e_i, e_j, :] - sparse_covar)/sparse_covar)) < 0.001:
                 mean_time = np.mean(tree_covar_times)
                 if mean_time < best_mean_time:
                     best_mean_time = mean_time
@@ -158,11 +180,13 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
                     best_ej = e_j
 
             f.write("tree covar%d_%d times: %s\n" % (epsm, eps_abs, strstats(tree_covar_times[e_i, e_j, :])))
+            f.write("tree covar%d_%d qftimes: %s\n" % (epsm, eps_abs, strstats(tree_covar_qftimes[e_i, e_j, :])))
+            f.write("tree covar%d_%d nqftimes: %s\n" % (epsm, eps_abs, strstats(tree_covar_nonqftimes[e_i, e_j, :])))
             f.write("tree covar%d_%d terms: %s\n" % (epsm, eps_abs, strstats(tree_covar_terms[e_i, e_j, :])))
             f.write("tree covar%d_%d dfnevals: %s\n" % (epsm, eps_abs, strstats(tree_covar_distevals[e_i, e_j, :])))
-            f.write("tree covar%d_%d rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar_spkernel)/(1-sparse_covar_spkernel)))))
-            f.write("tree covar%d_%d var-rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar_spkernel)/sparse_covar_spkernel))))
-            f.write("tree covar%d_%d abs errors: %s \n" %  (epsm, eps_abs, strstats(np.abs(tree_covar[e_i, e_j, :] - sparse_covar_spkernel))))
+            f.write("tree covar%d_%d rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar)/(1-sparse_covar)))))
+            f.write("tree covar%d_%d var-rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar)/sparse_covar))))
+            f.write("tree covar%d_%d abs errors: %s \n" %  (epsm, eps_abs, strstats(np.abs(tree_covar[e_i, e_j, :] - sparse_covar))))
             f.write("\n")
             f.flush()
 
@@ -176,10 +200,17 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
     if has_dense:
         f.write("dense covar times: %s\n" % strstats(dense_covar_times))
     f.write("sparse covar times: %s\n" % strstats(sparse_covar_times))
-    f.write("sparse covar spkernel times: %s\n" % strstats(sparse_covar_spkernel_times))
+    f.write("sparse covar qftimes: %s\n" % strstats(sparse_covar_qftimes))
+    f.write("sparse covar nqftimes: %s\n" % strstats(sparse_covar_nonqftimes))
     f.write("\n")
-
-
+    f.write("sparse covar spkernel times: %s\n" % strstats(sparse_covar_spkernel_times))
+    f.write("sparse covar spkernel qftimes: %s\n" % strstats(sparse_covar_spkernel_qftimes))
+    f.write("sparse covar spkernel nqftimes: %s\n" % strstats(sparse_covar_spkernel_nonqftimes))
+    f.write("sparse covar spkernel error: %f\n" % np.mean(np.abs(sparse_covar_spkernel_solve - sparse_covar)))
+    f.write("\n")
+    f.write("sparse covar spkernel_solve times: %s\n" % strstats(sparse_covar_spkernel_solve_times))
+    f.write("sparse covar spkernel_solve error: %f\n" % np.mean(np.abs(sparse_covar_spkernel_solve - sparse_covar)))
+    f.write("\n")
 
     f.write("actual vars: %s\n" % strstats(sparse_covar))
     f.write("actual qfs: %s\n" % strstats(1-sparse_covar))
@@ -194,11 +225,13 @@ def eval_gp(bdir=None, gp=None, testX=None, resultfile=None, errorfile=None, tes
         epsm = eps_rels[e_i]
         eps_abs = eps_abses[e_j]
         f.write("best tree: covar%d_%d times: %s\n" % (epsm, eps_abs, strstats(tree_covar_times[e_i, e_j, :])))
+        f.write("best tree: covar%d_%d qftimes: %s\n" % (epsm, eps_abs, strstats(tree_covar_qftimes[e_i, e_j, :])))
+        f.write("best tree: covar%d_%d nqftimes: %s\n" % (epsm, eps_abs, strstats(tree_covar_nonqftimes[e_i, e_j, :])))
         f.write("best tree: covar%d_%d terms: %s\n" % (epsm, eps_abs, strstats(tree_covar_terms[e_i, e_j, :])))
         f.write("best tree: covar%d_%d dfnevals: %s\n" % (epsm, eps_abs, strstats(tree_covar_distevals[e_i, e_j, :])))
-        f.write("best tree: covar%d_%d rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar_spkernel)/(1-sparse_covar_spkernel)))))
-        f.write("best tree: covar%d_%d var-rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar_spkernel)/sparse_covar_spkernel))))
-        f.write("best tree: covar%d_%d abs errors: %s \n" %  (epsm, eps_abs, strstats(np.abs(tree_covar[e_i, e_j, :] - sparse_covar_spkernel))))
+        f.write("best tree: covar%d_%d rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar)/(1-sparse_covar)))))
+        f.write("best tree: covar%d_%d var-rel errors: %s \n" %  (epsm, eps_abs, strstats(np.abs((tree_covar[e_i, e_j, :] - sparse_covar)/sparse_covar))))
+        f.write("best tree: covar%d_%d abs errors: %s \n" %  (epsm, eps_abs, strstats(np.abs(tree_covar[e_i, e_j, :] - sparse_covar))))
         f.write("\n")
 
     f.close()

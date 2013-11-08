@@ -139,7 +139,7 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None, k=500, **kwargs):
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None, k=500, bounds=None, **kwargs):
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
@@ -169,7 +169,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
         print "learning hyperparams on", len(sy), "examples"
         llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors, dfn_str=kernel_str, **kwargs)
 
-        bounds = [(1e-20,None),] * len(params)
+        bounds = [(1e-20,None),] * len(params) if bounds is None else bounds
         if array:
             params, ll = grad_ascend(llgrad, precision=0.01, step=0.001, initial_guess=[100, 100, 1, 1, 1, 1])
         else:

@@ -186,6 +186,84 @@ double dist6d_se_deriv_wrt_i(int i, const double * p1, const double * p2, const 
   }
 }
 
+double dist3d_compact2_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *extra, const double *scales, const double *dims) {
+  double distkm = dist_km(p1, p2) / scales[0];
+  double dist_d = (p2[2] - p1[2]) / scales[1];
+  //printf("dist3d returning sqrt(%f^2 + %f^2) = %f\n", distkm, dist_d, sqrt(pow(distkm, 2) + pow(dist_d, 2)));
+  double sqd =  distkm*distkm + dist_d * dist_d;
+
+  double r = sqrt(sqd);
+  double d = 1.0 - r;
+  if (d <= 0.0) {
+    return 0.0;
+  }
+
+  double variance = extra[0];
+  int j = (int)extra[1];
+  double poly = ((j*j + 4*j + 3)*r*r + (3*j + 6)*r + 3)/3.0;
+
+
+
+  if (i==0) { // deriv wrt variance
+    return pow(d, j+2)*poly;
+  } else {
+    if (r == 0) {
+      return 0;
+    }
+
+    double dpoly_dr = ((2*j*j + 8*j + 6.)*r + 3*j + 6.) / 3.0;
+    double dk_dr = variance * (pow(d, j+2)*dpoly_dr - (j+2)*pow(d, j+1) * poly);
+
+    if (i == 1) {
+      double dr_dscalesi = - distkm*distkm / (scales[0] * r);
+      return dk_dr * dr_dscalesi;
+    } else if (i == 2) {
+      double dr_dscalesi = - dist_d * dist_d / (scales[1] * r);
+      return dk_dr * dr_dscalesi;
+    } else {
+      printf("taking derivative wrt unrecognized parameter %d!\n", i);
+      exit(-1);
+      return 0;
+    }
+  }
+}
+
+
+double euclidean_compact2_deriv_wrt_i(int i, const double * p1, const double * p2,  const double *extra, const double *scales, const double *dims) {
+
+  double sqd = 0;
+  double diff = 0;
+  for (int j=0; j < *(int *)dims; ++j) {
+    diff = (p1[j] - p2[j]) / scales[j];
+    sqd += (diff * diff);
+  }
+
+  double r = sqrt(sqd);
+  double d = 1.0 - r;
+  if (d <= 0.0) {
+    return 0.0;
+  }
+
+  // eqn 4.21 from rasmussen & williams
+  double variance = extra[0];
+  int j = (int)extra[1];
+  double poly = ((j*j + 4*j + 3)*r*r + (3*j + 6)*r + 3)/3.0;
+
+  if (i==0) { // deriv wrt variance
+    return pow(d, j+2)*poly;
+  } else {
+    double dpoly_dr = ((2*j*j + 8*j + 6.)*r + 3*j + 6.) / 3.0;
+    double dk_dr = variance * (pow(d, j+2)*dpoly_dr - (j+2)*pow(d, j+1) * poly);
+
+    double diff = (p1[i-1] - p2[i-1]) / scales[i-1];
+
+    if (r == 0) {
+      return 0;
+    }
+    double dr_dscalesi = - diff * diff / (scales[i-1] * r);
+    return dk_dr * dr_dscalesi;
+  }
+}
 
 
 
