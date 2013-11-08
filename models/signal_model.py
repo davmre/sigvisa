@@ -225,13 +225,13 @@ class ObservedSignalNode(Node):
         for k in parent_keys_removed:
             try:
                 tmpl, eid, phase, p = self._keymap[k]
+                del self._keymap[k]
                 if tmpl:
                     del self._tmpl_params[(eid, phase)]
                 else:
                     del self._wiggle_params[(eid, phase)]
-                del self._keymap[k]
             except KeyError:
-                continue
+                pass
 
         for (key, node) in parent_keys_changed:
             try:

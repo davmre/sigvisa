@@ -231,6 +231,9 @@ class DirectedGraphModel(DAG):
         for key in node.keys():
             del self.nodes_by_key[key]
 
+        self.toplevel_nodes.discard(node)
+        self.leaf_nodes.discard(node)
+
         for child in node.children:
             child.removeParent(node)
             if len(child.parents) == 0:

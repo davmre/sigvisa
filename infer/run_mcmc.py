@@ -118,7 +118,7 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpste
     lp = sg.current_log_p()
     log_handles['lp'].write('%f\n' % lp)
 
-    if (step % 100 == dump_interval-1):
+    if (step % dump_interval == dump_interval-1):
         sg.debug_dump(dump_path = os.path.join(run_dir, 'step_%06d' % step), pickle_only=True)
         for f in log_handles.values():
             if type(f) == file:
@@ -182,10 +182,11 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                             'evdepth': ('depth', ('depth',))} if enable_event_moves else {}
     event_moves_special = {}
     sta_moves = {'tmpl_birth': birth_move,
-                 'tmpl_death': death_move,
-                 'tmpl_split': split_move,
-                 'tmpl_merge': merge_move,
-                 'swap_association': swap_association_move} if enable_template_openworld else {}
+                 'tmpl_death': death_move} if enable_template_openworld else {}
+                 #                 'tmpl_split': split_move,
+                 #                 'tmpl_merge': merge_move,
+                 #                 'swap_association': swap_association_move
+
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move,
                               'arrival_time': improve_atime_move} if enable_template_moves else {}
