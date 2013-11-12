@@ -199,8 +199,10 @@ def main():
     parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
     parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
                       help="don't explode array stations into their individual elements (False)")
-    parser.add_option("--subsample", dest="subsample", default=500, type=float,
+    parser.add_option("--subsample", dest="subsample", default=500, type="float",
                       help="use a subset of the data to learn GP hyperparameters more quickly (500)")
+    parser.add_option("--bounds", dest="bounds", default=None, type="str",
+                      help="comma-separated list of hyperparam bounds low1,high1,low2,high2,... (None)")
     parser.add_option("--fake_points", dest="fake_points", default=False, action="store_true",
                       help="add some fake points at long and short distances to help condition the polynomials (False)")
 
@@ -232,6 +234,15 @@ def main():
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
     allsites = explode_sites(options)
+
+
+    if options.bounds is None:
+        bounds = None
+    else:
+        b = np.array([float(x) for x in options.bounds.split(',')])
+        low_bounds = b[0::2]
+        high_bounds = b[1::2]
+        bounds = zip(low_bounds, high_bounds)
 
     for site in allsites:
         try:
@@ -281,11 +292,11 @@ def main():
 
                 distfn = model_type[3:]
                 st = time.time()
-                try:
-                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample)
-                except Exception as e:
-                    print e
-                    continue
+                #try:
+                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds)
+                #except Exception as e:
+                #    print e
+                #    continue
 
                 et = time.time()
 

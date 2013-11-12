@@ -25,6 +25,7 @@ class Gamma(Distribution):
     def deriv_log_p(self, x):
         alpha = self.alpha
         beta = self.beta
+        if x == 0.0: return 1000.0
         return (alpha-1)/x - beta
 
     def predict(self, **kwargs):
@@ -45,6 +46,7 @@ class InvGamma(Distribution):
     def log_p(self, x):
         alpha = self.alpha
         beta = self.beta
+        if x == 0.0: return np.log(1e-300)
         lp = alpha*np.log(beta) - scipy.special.gammaln(alpha) - (alpha+1)*np.log(x) - beta/x
         if np.isnan(lp):
             lp = np.float("-inf")
@@ -54,6 +56,7 @@ class InvGamma(Distribution):
     def deriv_log_p(self, x):
         alpha = self.alpha
         beta = self.beta
+        if x == 0.0: return 1000.0
         return beta/(x**2) - (alpha+1)/x
 
 class LogNormal(Distribution):
@@ -64,6 +67,7 @@ class LogNormal(Distribution):
     def log_p(self, x):
         mu = self.mu
         sigma = self.sigma
+        if x == 0.0: return np.log(1e-300)
         lp = -1 * np.log(x) - .5 * np.log(2*np.pi) - np.log(sigma) - .5 * (np.log(x) - mu)**2 / sigma**2
         if np.isnan(lp):
             lp = np.float("-inf")
@@ -72,6 +76,7 @@ class LogNormal(Distribution):
     def deriv_log_p(self, x):
         mu = self.mu
         sigma = self.sigma
+        if x == 0.0: return 1000.0
         return (-1 -(np.log(x) - mu)/(sigma**2)) / x
 
 

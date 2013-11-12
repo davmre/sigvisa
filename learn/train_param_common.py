@@ -39,7 +39,7 @@ def model_params(model, model_type):
             r = repr(d)
         return r
     if model_type.startswith('gp'):
-        return repr(model.hyperparams)
+        return str([model.noise_var, model.cov_main, model.cov_fic])
     elif model_type.startswith('param'):
         d = dict()
         d['mean'] = model.mean
@@ -172,8 +172,8 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         print "learning hyperparams on", len(sy), "examples"
         nllgrad, x0, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
-        bounds = [(1e-20,None),] * len(params)
-        params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
+        bounds = [(1e-20,None),] * len(x0) if bounds is None else bounds
+        params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
         noise_var, cov_mean, cov_fic = covs_from_vector(params)
 

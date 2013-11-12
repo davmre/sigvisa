@@ -49,25 +49,25 @@ start_params_lld = {"coda_decay": default_decay_params,
 
 
 default_decay_params_lldlld = (.022, InvGamma(beta=.0004, alpha=1),
-        GPCov([.0187,], [ 9.0, 1.0], dfn_str="lld",
+                               GPCov([.0187,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
               wfn_priors=[InvGamma(beta=.0004, alpha=1),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
                            LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 default_other_params_lldlld = (2.0, InvGamma(beta=5.0, alpha=.1),
-        GPCov([3.4,], [ 9.0, 1.0], dfn_str="lld",
+                               GPCov([3.4,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
               wfn_priors=[InvGamma(beta=5.0, alpha=.5),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
                            LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 default_amp_params_lldlld = (.1, InvGamma(beta=.1, alpha=1),
-        GPCov([.1,], [ 9.0, 1.0], dfn_str="lld",
+                             GPCov([.1,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
               wfn_priors=[InvGamma(beta=.1, alpha=1.0),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
                            LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 default_phase_params_lldlld = (1.0, InvGamma(beta=1.0, alpha=1),
-        GPCov([1.0,], [ 9.0, 1.0], dfn_str="lld",
+                               GPCov([1.0,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
               wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
                            LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
@@ -168,17 +168,18 @@ def prior_sample(X, hyperparams, dfn_str, wfn_str, sparse_threshold=1e-20, retur
 
 class SparseGP(ParamModel, GP):
 
-    def __init__(*args, **kwargs):
+    def __init__(self, *args, **kwargs):
         if 'sta' in kwargs:
             ParamModel.__init__(self, sta=kwargs['sta'])
-        GP.__init__(*args, **kwargs)
+            del kwargs['sta']
+        GP.__init__(self, *args, **kwargs)
 
     def pack_npz(self):
-        d = super(GP, self).pack_npz()
-        d['base_str'] = super(GP, self).__repr_base_params__()
+        d = super(SparseGP, self).pack_npz()
+        d['base_str'] = ParamModel.__repr_base_params__(self)
         return d
 
     def unpack_npz(self, npzfile):
-        super(GP, self).unpack_npz(npzfile)
+        super(SparseGP, self).unpack_npz(npzfile)
         if len(str(npzfile['base_str'])) > 0:
-            super(GP, self).__unrepr_base_params__(str(npzfile['base_str']))
+            ParamModel.__unrepr_base_params__(self, str(npzfile['base_str']))
