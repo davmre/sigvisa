@@ -7,7 +7,7 @@ Performs gradient ascend.
 
 
 
-from sigvisa.models.spatial_regression.SparseGP import SparseGP, sparsegp_nll_ngrad
+from sigvisa.models.spatial_regression.SparseGP import SparseGP
 import numpy as np
 import sys
 from math import exp
@@ -59,14 +59,6 @@ def grad_ascend(func, precision=0.01, step=0.001, initial_guess = [5, 5, 5, 5, 5
         #print "step = ", step
         print "ll = ", ll
         print "grad = ", grad
-        print 
+        print
         #wait = raw_input("press enter to continue")
     return x_new, ll
-        
-def ll(hyperparams):
-    return sparsegp_ll_grad(X=X, y=y, hyperparams=hyperparams, dfn_str = 'lldlld', wfn_str = 'se', build_tree=False, sparse_invert = True)
-
-
-
-#gp = SparseGP(X=X, y=y, hyperparams= (0.0001, 1, 3, 3, 3, 3), compute_ll=True, compute_grad=True, dfn_str = "lldlld", wfn_str = "se", build_tree=False, sparse_invert=False)
-

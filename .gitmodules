@@ -1,0 +1,3 @@
+[submodule "sparsegp"]
+	path = sparsegp
+	url = https://github.com/davmre/sparsegp.git

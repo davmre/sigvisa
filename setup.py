@@ -1,4 +1,4 @@
-# Copyright (c) 2012, Bayesian Logic, Inc.
+3# Copyright (c) 2012, Bayesian Logic, Inc.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
