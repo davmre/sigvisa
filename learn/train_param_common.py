@@ -12,7 +12,9 @@ import numpy as np
 import scipy.linalg
 import hashlib
 
-from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params, sparsegp_nll_ngrad, gp_priors
+from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
+from sigvisa.sparsegp.gp import GP, optimize_gp_hyperparams
+
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
@@ -139,7 +141,11 @@ def subsample_data(X, y, k=250):
         sy = y
     return sX, sy
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None, k=500, **kwargs):
+def build_starting_hparams(kernel_str, target):
+    noise_var, noise_prior, cov_main = start_params[kernel_str][target]
+    return noise_var, noise_prior, cov_main, None
+
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prior=None, cov_main=None, cov_fic=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None, k=500, bounds=None, **kwargs):
 
     if basisfn_str:
         basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
@@ -155,11 +161,8 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
     except (ValueError, AttributeError):
         pass
 
-    if params is None:
-        params = start_params[kernel_str][target]
-
-    if priors is None:
-        priors = gp_priors[kernel_str][target]
+    if cov_main is None:
+        noise_var, noise_prior, cov_main, cov_fic = build_starting_hparams(kernel_str, target)
 
     if optimize:
         if k is not None:
@@ -167,15 +170,17 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
         else:
             sX, sy = X, y
         print "learning hyperparams on", len(sy), "examples"
-        llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors, dfn_str=kernel_str, **kwargs)
+        nllgrad, x0, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
         bounds = [(1e-20,None),] * len(params)
         params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
+        noise_var, cov_mean, cov_fic = covs_from_vector(params)
 
     if len(y) > 10000:
         X, y = subsample_data(X=X, y=y, k=10000)
-    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=params, sta=sta, compute_ll=True, build_tree=build_tree, dfn_str=kernel_str, **kwargs)
+
+    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
     return gp
 
 

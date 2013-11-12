@@ -180,7 +180,11 @@ def minimize(f, x0, optim_params, fprime=None, bounds=None):
         f_only = f1
 
     x0 = np.asfarray(x0)
-    new_params = lambda  :  np.exp(np.log(x0) + np.random.randn(len(x0)) * 1.5)
+
+    if not normalize:
+        new_params = lambda  :  np.sign(x0) * np.exp(np.log(np.abs(x0)) + np.random.randn(len(x0)) * 1.5)
+    else:
+        new_params = lambda  :  np.random.rand(len(x0)) * 2 - 1
     starting_points = [x0,] + [new_params() for i in range(random_inits)]
 
     print starting_points
@@ -265,6 +269,7 @@ def _minimize(f1, f_only, fp1, approx_grad, x0, optim_params, bounds=None):
 
 
 def scale_normalize(x, low_bounds, high_bounds):
+    x = np.asarray(x)
     half_width = (high_bounds - low_bounds) / 2
     bounded = np.isfinite(half_width)
     if not bounded.any(): return x
@@ -276,6 +281,7 @@ def scale_normalize(x, low_bounds, high_bounds):
     return newx
 
 def scale_unnormalize(x, low_bounds, high_bounds):
+    x = np.asarray(x)
     half_width = (high_bounds - low_bounds) / 2
     bounded = np.isfinite(half_width)
     if not bounded.any(): return x

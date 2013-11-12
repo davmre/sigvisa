@@ -210,12 +210,13 @@ def main():
     run_dir = os.path.join(BASE_DIR,
                            'mcmcrun_seed%d_dist%.1f_perturb%.2f%s_%srate%.4f%s' % (options.seed, options.max_distance, options.perturb_amt, openworld_str, "sample" if options.sample_uatemplates else "", options.uatemplate_rate, 'single' if options.sample_single else 'multiple'))
     np.random.seed(1)
-    run_open_world_MH(sg, skip=100, steps=options.steps,
+    run_open_world_MH(sg, skip=5000, steps=options.steps,
                       run_dir = run_dir,
                       enable_template_openworld=options.openworld,
                       enable_template_moves=True,
-                      enable_event_moves=True,
-                      enable_event_openworld=options.openworld,
+                      enable_event_moves=False,
+                      enable_event_openworld=False,
+#                      enable_event_openworld=options.openworld,
                       dumpsteps=False)
 
 if __name__ == "__main__":

@@ -92,7 +92,7 @@ def print_mcmc_acceptances(sg, step, n_accepted, n_attempted):
     print "step %d: lp %.2f, accepted " % (step, lp),
     for key in sorted(n_accepted.keys()):
         print "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key]),
-    print
+    print ", uatemplates: ", len(sg.uatemplates)
 
 def setup_mcmc_logging(run_dir=None):
     if run_dir is None:
@@ -118,7 +118,7 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpste
     lp = sg.current_log_p()
     log_handles['lp'].write('%f\n' % lp)
 
-    if (step % 100 == dump_interval-1):
+    if (step % dump_interval == dump_interval-1):
         sg.debug_dump(dump_path = os.path.join(run_dir, 'step_%06d' % step), pickle_only=True)
         for f in log_handles.values():
             if type(f) == file:
@@ -186,6 +186,7 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                  'tmpl_split': split_move,
                  'tmpl_merge': merge_move,
                  'swap_association': swap_association_move} if enable_template_openworld else {}
+
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move,
                               'arrival_time': improve_atime_move} if enable_template_moves else {}
@@ -202,6 +203,9 @@ def run_open_world_MH(sg, skip=40, steps=10000,
 
     log_handles = setup_mcmc_logging(run_dir=run_dir)
     run_dir = log_handles['dir']
+
+    from guppy import hpy
+    hp = hpy()
 
     for step in range(steps):
 
@@ -279,6 +283,13 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                      n_accepted=n_accepted, move_times=move_times,
                      move_prob=ev_openworld_move_probability,
                      sg=sg, log_to_run_dir=run_dir)
+
+
+        if step == 10:
+            hp.setrelheap()
+        if step == 1010:
+            myh = hp.heap()
+            import pdb; pdb.set_trace()
 
 
         log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps, dump_interval=skip)

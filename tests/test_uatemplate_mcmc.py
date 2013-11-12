@@ -99,6 +99,7 @@ class TestUAMCMC(unittest.TestCase):
         self.assertAlmostEqual(merge_log_qforward, split_log_qbackward)
 
     def test_birthdeath(self):
+        np.random.seed(1)
         lp1 = self.sg.current_log_p()
         birth_accepted, birth_lp_new, birth_lp_old, birth_log_qforward, birth_log_qbackward, logu = birth_move(self.sg, self.wn, return_probs=True)
         lp2 = self.sg.current_log_p()
