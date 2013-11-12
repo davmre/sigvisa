@@ -73,3 +73,11 @@ test_linear_model
 demos/*/*.html
 *.dot
 *.sg
+*cmds
+*cmd
+*_cmd*
+tests/mcmc/event_localization
+tests/mcmc/one_station_templates
+Untitled*ipynb
+db_cache
+demos/template_mcmc_dtra_080213/
