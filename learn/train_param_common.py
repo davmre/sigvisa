@@ -50,7 +50,7 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, array=False ):
+def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, **kwargs):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
         kernel_str = s[1]
@@ -59,13 +59,13 @@ def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_
                          basisfn_str=basisfn_str,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
-                         optim_params=optim_params)
+                         optim_params=optim_params, **kwargs)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
         model = learn_gp(X=X, y=y, sta=sta,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
-                         optim_params=optim_params)
+                         optim_params=optim_params, **kwargs)
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y)
     elif model_type == "linear_distance":
@@ -170,10 +170,7 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, params=None, priors=None, 
         llgrad = lambda p : sparsegp_nll_ngrad(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, hyperparams=p, sta=sta, build_tree=False, priors=priors, dfn_str=kernel_str, **kwargs)
 
         bounds = [(1e-20,None),] * len(params)
-        if array:
-            params, ll = grad_ascend(llgrad, precision=0.01, step=0.001, initial_guess=[100, 100, 1, 1, 1, 1])
-        else:
-            params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
+        params, ll = optim_utils.minimize(f=llgrad, x0=params, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
 
     if len(y) > 10000:
