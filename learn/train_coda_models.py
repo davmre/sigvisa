@@ -122,9 +122,11 @@ def get_shape_training_data(runid, site, chan, band, phases, target, require_hum
 
 def chan_for_site(site, options):
     s = Sigvisa()
-    sta = s.get_default_sta(site)
     if options.chan=="vertical":
-        chan = s.default_vertical_channel[sta]
+        if s.earthmodel.site_info(site, 0.0)[3] == 1:
+            chan = s.array_default_channel(site)
+        else:
+            chan = s.default_vertical_channel[sta]
     else:
         chan = options.chan
     chan = s.canonical_channel_name[chan]
