@@ -31,7 +31,8 @@
 	<td><strong>min amp</strong></td>
 	<td><strong>human-approved fits?</strong></td>
 	<td><strong>model type</strong></td>
-	<td><strong>trainset</strong></td>
+	<!--<td><strong>trainset</strong></td>-->
+	<td><strong>hyperparams</strong></td>
 	<td><strong>n_events</strong></td>
 	<td><strong>ll</strong></td>
 	<td><strong>visualizations</strong></td>
@@ -52,7 +53,8 @@
                 <td>{{ model.min_amp }}</td>
                 <td>{{ model.require_human_approved }}</td>
                 <td>{{ model.model_type }}</td>
-                <td>{{ model.training_set_fname|slice:"-14:" }}</td>
+                <!--<td>{{ model.training_set_fname|slice:"-14:" }}</td>-->
+		<td>{{ model.hyperparams }}</td>
                 <td>{{ model.n_evids }}</td>
                 <td>{{ model.training_ll|floatformat:1 }}</td>
                 <td>

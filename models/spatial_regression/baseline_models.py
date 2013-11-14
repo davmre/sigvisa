@@ -44,6 +44,7 @@ class ParamModel(Distribution):
         self.site_lat = d['site_lat']
         self.site_elev = d['site_elev']
 
+    """
     def save_trained_model(self, fname):
         raise Exception("not implemented")
 
@@ -61,6 +62,7 @@ class ParamModel(Distribution):
 
     def log_p(self, x, cond):
         raise Exception("not implemented")
+    """
 
     def event_dict_to_array(self, ev_dict):
         for (k,v) in ev_dict.items():

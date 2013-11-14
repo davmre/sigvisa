@@ -39,7 +39,7 @@ def model_params(model, model_type):
             r = repr(d)
         return r
     if model_type.startswith('gp'):
-        return repr(model.hyperparams)
+        return str([model.noise_var, model.cov_main, model.cov_fic])
     elif model_type.startswith('param'):
         d = dict()
         d['mean'] = model.mean
@@ -52,7 +52,7 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, array=False ):
+def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, **kwargs):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
         kernel_str = s[1]
@@ -61,13 +61,13 @@ def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_
                          basisfn_str=basisfn_str,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
-                         optim_params=optim_params)
+                         optim_params=optim_params, **kwargs)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
         model = learn_gp(X=X, y=y, sta=sta,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
-                         optim_params=optim_params)
+                         optim_params=optim_params, **kwargs)
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y)
     elif model_type == "linear_distance":
@@ -172,13 +172,10 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         print "learning hyperparams on", len(sy), "examples"
         nllgrad, x0, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
-        bounds = [(1e-20,None),] * len(params) if bounds is None else bounds
-        if array:
-            params, ll = grad_ascend(nllgrad, precision=0.01, step=0.001, initial_guess=[100, 100, 1, 1, 1, 1])
-        else:
-            params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
+        bounds = [(1e-20,None),] * len(x0) if bounds is None else bounds
+        params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
-        noise_var, cov_mean, cov_fic = covs_from_vector(params)
+        noise_var, cov_main, cov_fic = covs_from_vector(params)
 
     if len(y) > 10000:
         X, y = subsample_data(X=X, y=y, k=10000)

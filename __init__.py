@@ -6,6 +6,7 @@ import sigvisa.database.sites as db_sites
 from sigvisa.load_c_components import load_sigvisa, load_earth
 import sigvisa.sigvisa_c
 
+from collections import defaultdict
 import threading
 #from sigvisa.lockfile_pool import get_lock_from_pool
 
@@ -178,6 +179,11 @@ class Sigvisa(threading.local):
         else:
             sta = site
         return sta
+
+    def array_default_channel(self, site):
+        elems = self.get_array_elements(site)
+        chans = [self.default_vertical_channel[elem] for elem in elems]
+        return max(set(chans), key=chans.count)
 
     def sites_to_stas(self, sites, refsta_only=False):
         stas = []

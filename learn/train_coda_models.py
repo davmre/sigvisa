@@ -122,9 +122,11 @@ def get_shape_training_data(runid, site, chan, band, phases, target, require_hum
 
 def chan_for_site(site, options):
     s = Sigvisa()
-    sta = s.get_default_sta(site)
     if options.chan=="vertical":
-        chan = s.default_vertical_channel[sta]
+        if s.earthmodel.site_info(site, 0.0)[3] == 1:
+            chan = s.array_default_channel(site)
+        else:
+            chan = s.default_vertical_channel[sta]
     else:
         chan = options.chan
     chan = s.canonical_channel_name[chan]
@@ -150,13 +152,19 @@ def explode_sites(options):
 def load_site_data(elems, wiggles, target, param_num, wg=None, **kwargs):
     X, y, evids = None, None, None
     for array_elem in elems:
-        if wiggles:
-            X_part, y_part, evids_part = get_wiggle_training_data(wg=wg, site=array_elem,target_num=param_num, **kwargs)
-        else:
-            X_part, y_part, evids_part = get_shape_training_data(site=array_elem, target=target, **kwargs)
+        try:
+            if wiggles:
+                X_part, y_part, evids_part = get_wiggle_training_data(wg=wg, site=array_elem,target_num=param_num, **kwargs)
+            else:
+                X_part, y_part, evids_part = get_shape_training_data(site=array_elem, target=target, **kwargs)
+        except NoDataException as e:
+            print e
+            continue
         X = np.append(X, X_part, axis = 0) if X is not None else X_part
         y = np.append(y, y_part) if y is not None else y_part
         evids = np.append(evids, evids_part) if evids is not None else evids_part
+    if X is None:
+        raise NoDataException("no data for target '%s' at any element of %s" % (target, elems))
     return X, y, evids
 
 def main():
@@ -190,9 +198,13 @@ def main():
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
     parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
                       help="train models even if a model of the same type already appears in the DB")
-    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
+    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
     parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
                       help="don't explode array stations into their individual elements (False)")
+    parser.add_option("--subsample", dest="subsample", default=500, type="float",
+                      help="use a subset of the data to learn GP hyperparameters more quickly (500)")
+    parser.add_option("--bounds", dest="bounds", default=None, type="str",
+                      help="comma-separated list of hyperparam bounds low1,high1,low2,high2,... (None)")
     parser.add_option("--fake_points", dest="fake_points", default=False, action="store_true",
                       help="add some fake points at long and short distances to help condition the polynomials (False)")
 
@@ -224,6 +236,15 @@ def main():
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
     allsites = explode_sites(options)
+
+
+    if options.bounds is None:
+        bounds = None
+    else:
+        b = np.array([float(x) for x in options.bounds.split(',')])
+        low_bounds = b[0::2]
+        high_bounds = b[1::2]
+        bounds = zip(low_bounds, high_bounds)
 
     for site in allsites:
         try:
@@ -273,10 +294,11 @@ def main():
 
                 distfn = model_type[3:]
                 st = time.time()
-                try:
-                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False)
-                except:
-                    continue
+                #try:
+                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds)
+                #except Exception as e:
+                #    print e
+                #    continue
 
                 et = time.time()
 
