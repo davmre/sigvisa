@@ -175,7 +175,8 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         bounds = [(1e-20,None),] * len(x0) if bounds is None else bounds
         params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
-        noise_var, cov_mean, cov_fic = covs_from_vector(params)
+        noise_var, cov_main, cov_fic = covs_from_vector(params)
+        import pdb; pdb.set_trace()
 
     if len(y) > 10000:
         X, y = subsample_data(X=X, y=y, k=10000)
