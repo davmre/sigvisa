@@ -19,7 +19,6 @@ from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, deat
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
-
 global_stds = {'coda_height': .5,
             'coda_decay': .1,
             'wiggle_amp': .1,
@@ -31,7 +30,6 @@ global_stds = {'coda_height': .5,
             'evtime': 2.0,
             'evmb': 0.8,
             'evdepth': 8.0}
-
 
 def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step):
 
@@ -92,7 +90,8 @@ def print_mcmc_acceptances(sg, step, n_accepted, n_attempted):
     print "step %d: lp %.2f, accepted " % (step, lp),
     for key in sorted(n_accepted.keys()):
         print "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key]),
-    print ", uatemplates: ", len(sg.uatemplates)
+    print ", uatemplates: ", len(sg.uatemplates),
+    print ", events: ", len(sg.evnodes)
 
 def setup_mcmc_logging(run_dir=None):
     if run_dir is None:
@@ -204,9 +203,6 @@ def run_open_world_MH(sg, skip=40, steps=10000,
     log_handles = setup_mcmc_logging(run_dir=run_dir)
     run_dir = log_handles['dir']
 
-    from guppy import hpy
-    hp = hpy()
-
     for step in range(steps):
 
         # moves to adjust existing events
@@ -283,13 +279,6 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                      n_accepted=n_accepted, move_times=move_times,
                      move_prob=ev_openworld_move_probability,
                      sg=sg, log_to_run_dir=run_dir)
-
-
-        if step == 10:
-            hp.setrelheap()
-        if step == 1010:
-            myh = hp.heap()
-            import pdb; pdb.set_trace()
 
 
         log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps, dump_interval=skip)

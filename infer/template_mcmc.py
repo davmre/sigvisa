@@ -830,7 +830,6 @@ def swap_params(t1nodes, t2nodes):
             atime1, atime2 = v1, v2
     return atime1, atime2
 
-# empirically, this seems to never be accepted. not sure why.
 def swap_association_move(sg, wave_node):
 
     # sample from all pairs of adjacent templates in which not both are uatemplates

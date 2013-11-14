@@ -214,9 +214,8 @@ def main():
                       run_dir = run_dir,
                       enable_template_openworld=options.openworld,
                       enable_template_moves=True,
-                      enable_event_moves=False,
-                      enable_event_openworld=False,
-#                      enable_event_openworld=options.openworld,
+                      enable_event_moves=True,
+                      enable_event_openworld=options.openworld,
                       dumpsteps=False)
 
 if __name__ == "__main__":
