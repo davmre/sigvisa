@@ -152,10 +152,16 @@ class ObservedSignalNode(Node):
         PyArrayObject* logenv_arr = convert_to_numpy(PyList_GetItem(logenvs,i), "logenv");
         conversion_numpy_check_type(logenv_arr,PyArray_DOUBLE, "logenv");
         double * logenv = (double *)logenv_arr->data;
+        Py_XDECREF(logenv_arr); // convert_to_numpy does an incref for us, so we need
+                                // to decref; we do it here to make sure it doesn't get
+                                // forgotten later. this is safe because there's already
+                                // a reference held by the calling python code, so the
+                                // logenv_arr will never go out of scope while we're running.
 
         PyArrayObject* wiggle_arr = convert_to_numpy(PyList_GetItem(wiggles,i), "wiggle");
         conversion_numpy_check_type(wiggle_arr,PyArray_DOUBLE, "wiggle");
         double * wiggle =  (double *) wiggle_arr->data;
+        Py_XDECREF(wiggle_arr);
 
         int len_logenv = logenv_arr->dimensions[0];
         int len_wiggle = wiggle_arr->dimensions[0];
@@ -179,8 +185,6 @@ class ObservedSignalNode(Node):
                signal(j + start_idx) += exp(logenv[j]);
             }
         }
-       Py_XDECREF(logenv_arr);
-        Py_XDECREF(wiggle_arr);
     }
 
 """
