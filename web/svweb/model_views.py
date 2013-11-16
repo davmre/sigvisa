@@ -309,7 +309,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         axes.set_xlabel("distance (km)", fontsize=8)
         axes.set_ylabel(param, fontsize=8)
 
-        default_bounds = {'coda_decay': [-0.05, 0], 'amp_transfer': [-7, 10], 'peak_offset': [0, 25]}
+        default_bounds = {'coda_decay': [-8, 1], 'amp_transfer': [-7, 10], 'peak_offset': [-3, 5]}
         if param in default_bounds:
             axes.set_ylim(default_bounds[param])
 

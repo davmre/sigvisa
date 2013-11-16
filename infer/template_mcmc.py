@@ -158,7 +158,7 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
     other_arrs = wave_node.arrivals() - set(arr)
 
     current_atime = arrival_node.get_value(key=arrival_key)
-    peak_offset = offset_node.get_value(key=offset_key)
+    peak_offset = np.exp(offset_node.get_value(key=offset_key))
 
     cdf = get_current_conditional_cdf(wave_node, arrival_set=other_arrs)
     proposed_peak_time, proposal_lp =  sample_peak_time_from_signal(cdf, wave_node.st,
@@ -224,7 +224,7 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
     relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
     relevant_nodes += [offset_node.parents[offset_node.default_parent_key()],] if offset_node.deterministic() else [offset_node,]
 
-    current_offset = offset_node.get_value(key=offset_key)
+    current_offset = np.exp(offset_node.get_value(key=offset_key))
     atime = arrival_node.get_value(key=arrival_key)
     proposed_offset = gaussian_propose(sg, keys=(offset_key,),
                                        node_list=(offset_node,),
@@ -237,8 +237,8 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
                                                                           atime, new_atime)
     relevant_nodes += rn_tmp
     node_list.append(offset_node)
-    newvalues.append(proposed_offset)
-    oldvalues.append(current_offset)
+    newvalues.append(np.log(proposed_offset))
+    oldvalues.append(np.log(current_offset))
     keys.append(offset_key)
 
     accepted = MH_accept(sg=sg, keys=keys,
@@ -588,7 +588,7 @@ def propose_wiggles_from_signal(eid, phase, wave_node, wg, nodes, amp_std=0.02, 
     if wg.basis_type() == "dummy":
         return 0.0
 
-    features = get_wiggles_from_signal(eid, phase, wave_node, wg, peak_offset=node_get_value(nodes, 'peak_offset'))
+    features = get_wiggles_from_signal(eid, phase, wave_node, wg, peak_offset=np.exp(node_get_value(nodes, 'peak_offset')))
     assert(wg.basis_type() == "fourier")
     dim = wg.dimension()
 
@@ -620,7 +620,7 @@ def wiggle_proposal_lprob_from_signal(eid, phase, wave_node, wg, wnodes=None, wv
     assert(wg.basis_type() == "fourier")
     dim = wg.dimension()
 
-    peak_offset = wvals['peak_offset'] if wvals is not None else node_get_value(wnodes, 'peak_offset')
+    peak_offset = np.exp(wvals['peak_offset'] if wvals is not None else node_get_value(wnodes, 'peak_offset'))
 
     signal_features = get_wiggles_from_signal(eid, phase, wave_node, wg, peak_offset=peak_offset)
     residuals = signal_features - features
@@ -658,7 +658,7 @@ def birth_move(sg, wave_node, dummy=False, return_probs=False, **kwargs):
     tmpl = sg.create_unassociated_template(wave_node, peak_time, nosort=True, **kwargs)
     sg._topo_sorted_list = tmpl.values() + sg._topo_sorted_list
     sg._gc_topo_sorted_nodes()
-    tmpl["arrival_time"].set_value(peak_time - tmpl["peak_offset"].get_value())
+    tmpl["arrival_time"].set_value(peak_time - np.exp(tmpl["peak_offset"].get_value()))
     tmpl["coda_height"].set_value(proposed_logamp)
 
     eid = -tmpl["arrival_time"].tmid
@@ -725,7 +725,7 @@ def death_move(sg, wave_node, dummy=False, return_probs=False):
     orig_topo_sorted = copy.copy(sg._topo_sorted_list)
     log_qforward = 0
 
-    current_peak = tnodes['arrival_time'][1].get_value() + tnodes['peak_offset'][1].get_value()
+    current_peak = tnodes['arrival_time'][1].get_value() + np.exp(tnodes['peak_offset'][1].get_value())
     eid = -tnodes["arrival_time"][1].tmid
     wg = sg.wiggle_generator(phase="UA", srate=wave_node.srate)
     allnodes = dict([(p, (k,n)) for (p, (k,n)) in tnodes.items() + wnodes.items()])

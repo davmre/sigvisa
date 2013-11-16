@@ -23,9 +23,9 @@ class PairedExpTemplateGenerator(TemplateGenerator):
     def __init__(self, *args, **kwargs):
         super(PairedExpTemplateGenerator, self).__init__(*args, **kwargs)
 
-        self.uamodels = {"peak_offset": Gamma(2.0, 0.4),
+        self.uamodels = {"peak_offset": Gaussian(.3, 1.1),
                          "coda_height": Gaussian(-.5, 1),
-                         "coda_decay": Negate(Gamma(4.0, 160.0)),}
+                         "coda_decay": Gaussian(-2.5, 1.5),}
 
         self.hack_force_mean = None
 
@@ -36,9 +36,9 @@ class PairedExpTemplateGenerator(TemplateGenerator):
     @staticmethod
     def default_param_vals():
         d = dict()
-        d['peak_offset'] = 1.0
+        d['peak_offset'] = 0.0
         d['coda_height'] = 1.0
-        d['coda_decay'] = -0.03
+        d['coda_decay'] = np.log(0.03)
         return d
 
     @staticmethod
@@ -74,7 +74,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0):
         arr_time, peak_offset, coda_height, coda_decay = \
-            vals['arrival_time'], vals['peak_offset'], vals['coda_height'], vals['coda_decay']
+            vals['arrival_time'], np.exp(vals['peak_offset']), vals['coda_height'], np.exp(-vals['coda_decay'])
 
         if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
             return np.empty((0,))
@@ -123,8 +123,8 @@ if (l > 0) {
         bounds = { k: -np.inf for k in self.params() }
 
         bounds['coda_height'] = -4
-        bounds['peak_offset'] = 0.2
-        bounds['coda_decay'] = -2
+        bounds['peak_offset'] = -2
+        bounds['coda_decay'] = -8
 
         return bounds
 
@@ -133,8 +133,8 @@ if (l > 0) {
         bounds = { k: np.inf for k in self.params() }
 
         bounds['coda_height'] = 10
-        bounds['peak_offset'] = 25
-        bounds['coda_decay'] = -.0001
+        bounds['peak_offset'] = 4
+        bounds['coda_decay'] = 1
 
         return bounds
 
