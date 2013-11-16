@@ -70,6 +70,14 @@ def plot_histogram(data, axes=None, draw_stats=True, true_value=None, n_bins=Non
 
     return htext
 
+def plot_gaussian_fit(data, axes):
+    mean = np.mean(data)
+    std = np.std(data)
+    xs = np.linspace(np.min(data), np.max(data), 100)
+    ys = 1.0/(std * np.sqrt(2*np.pi)) * np.exp(-.5 * ((xs-mean)/std)**2)
+    if not normalize:
+        ys *= len(data)
+    axes.plot(xs, ys)
 # d = x = 10 + 20*np.random.randn(10000)
 # plot_histogram(d)
 # plt.savefig('h.png')

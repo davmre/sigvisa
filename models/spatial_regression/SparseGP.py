@@ -17,28 +17,23 @@ from sigvisa.models.distributions import InvGamma, LogNormal
 
 
 
-default_decay_params = (.022, InvGamma(beta=.0004, alpha=1),
-        GPCov([.0187,], [ 9.0, 1.0], dfn_str="lld",
-              wfn_priors=[InvGamma(beta=.0004, alpha=1),],
-              dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
-
 default_other_params = (2.0, InvGamma(beta=5.0, alpha=.1),
-        GPCov([3.4,], [ 9.0, 1.0], dfn_str="lld",
+        GPCov([3.4,], [ 20.0, 40.0], dfn_str="lld",
               wfn_priors=[InvGamma(beta=5.0, alpha=.5),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 default_amp_params = (.1, InvGamma(beta=.1, alpha=1),
-        GPCov([.1,], [ 9.0, 1.0], dfn_str="lld",
+        GPCov([.1,], [ 20.0, 40.0], dfn_str="lld",
               wfn_priors=[InvGamma(beta=.1, alpha=1.0),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 default_phase_params = (1.0, InvGamma(beta=1.0, alpha=1),
-        GPCov([1.0,], [ 9.0, 1.0], dfn_str="lld",
+        GPCov([1.0,], [ 20.0, 40.0], dfn_str="lld",
               wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 
-start_params_lld = {"coda_decay": default_decay_params,
+start_params_lld = {"coda_decay": default_other_params,
                     "amp_transfer": default_other_params,
                     "peak_offset": default_other_params,
                     "tt_residual": default_other_params,
@@ -48,32 +43,26 @@ start_params_lld = {"coda_decay": default_decay_params,
 
 
 
-default_decay_params_lldlld = (.022, InvGamma(beta=.0004, alpha=1),
-                               GPCov([.0187,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
-              wfn_priors=[InvGamma(beta=.0004, alpha=1),],
-              dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
-                           LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
-
 default_other_params_lldlld = (2.0, InvGamma(beta=5.0, alpha=.1),
-                               GPCov([3.4,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
+                               GPCov([3.4,], [ 20.0, 40.0, 20.0, 40.0], dfn_str="lldlld",
               wfn_priors=[InvGamma(beta=5.0, alpha=.5),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
                            LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 default_amp_params_lldlld = (.1, InvGamma(beta=.1, alpha=1),
-                             GPCov([.1,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
+                             GPCov([.1,], [ 20.0, 40.0, 20.0, 40.0], dfn_str="lldlld",
               wfn_priors=[InvGamma(beta=.1, alpha=1.0),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
                            LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 default_phase_params_lldlld = (1.0, InvGamma(beta=1.0, alpha=1),
-                               GPCov([1.0,], [ 9.0, 1.0, 9.0, 1.0], dfn_str="lldlld",
+                               GPCov([1.0,], [ 20.0, 40.0, 20.0, 40.0], dfn_str="lldlld",
               wfn_priors=[InvGamma(beta=1.0, alpha=1.0),],
               dfn_priors =[LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5),
                            LogNormal(mu=2, sigma=.5), LogNormal(mu=2, sigma=.5)]))
 
 
-start_params_lldlld = {"coda_decay": default_decay_params_lldlld,
+start_params_lldlld = {"coda_decay": default_other_params_lldlld,
                     "amp_transfer": default_other_params_lldlld,
                     "peak_offset": default_other_params_lldlld,
                     "tt_residual": default_other_params_lldlld,

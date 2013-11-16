@@ -26,8 +26,8 @@ class TestSignalLikelihood(unittest.TestCase):
 
         st = self.seg['stime']
 
-        p_params = {'arrival_time': st + 10.0, 'peak_offset': 15.0, 'coda_height': 10.0, 'coda_decay': -.01}
-        s_params = {'arrival_time': st + 50.0, 'peak_offset': 15.0, 'coda_height': 15.0, 'coda_decay': -.04}
+        p_params = {'arrival_time': st + 10.0, 'peak_offset': np.log(15.0), 'coda_height': 10.0, 'coda_decay': np.log(.01)}
+        s_params = {'arrival_time': st + 50.0, 'peak_offset': np.log(15.0), 'coda_height': 15.0, 'coda_decay': np.log(.04)}
         sg.set_template(eid=self.event.eid, sta=self.wave['sta'],
                         phase='P', band='freq_2.0_3.0', chan='BHZ',
                         values=p_params)
