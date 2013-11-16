@@ -881,7 +881,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         return ev
 
-    def prior_sample_events(self, min_mb=3.5, stime=None, etime=None, n_events=None):
+    def prior_sample_events(self, min_mb=3.5, force_mb=None, stime=None, etime=None, n_events=None):
         # assume a fresh graph, i.e. no events already exist
 
         if n_events is None:
@@ -892,6 +892,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         for i in range(n_events):
             ev = self.prior_sample_event(min_mb, stime, etime)
+            if force_mb is not None:
+                ev.mb = force_mb
             self.add_event(ev, sample_templates=True)
             evs.append(ev)
         return evs

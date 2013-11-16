@@ -76,6 +76,7 @@ demos/*/*.html
 *cmds
 *cmd
 *_cmd*
+experiments/event_localization
 tests/mcmc/event_localization
 tests/mcmc/one_station_templates
 Untitled*ipynb

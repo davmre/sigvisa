@@ -4,6 +4,7 @@ import os
 import traceback
 import pickle
 import copy
+import hashlib
 
 from sigvisa import Sigvisa
 from optparse import OptionParser
@@ -16,9 +17,12 @@ from sigvisa.signals.common import Waveform
 from sigvisa.utils.fileutils import clear_directory, mkdir_p
 from sigvisa.utils.geog import dist_km
 
-BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "tests", "mcmc", "event_localization")
+BASE_DIR = os.path.join(os.getenv("SIGVISA_HOME"), "experiments", "event_localization")
 
-def sample_event(wave_dir, runid, seed=None, wiggles = False, sites=10, phases='auto', tmtype='dummy', uatemplate_rate=None, sample_uatemplates=False, sample_single=False):
+def hash(x, n=8):
+    return hashlib.md5(repr(x)).hexdigest()[:n]
+
+def sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb):
     mkdir_p(wave_dir)
 
     if wiggles:
@@ -57,14 +61,9 @@ def sample_event(wave_dir, runid, seed=None, wiggles = False, sites=10, phases='
         np.random.seed(seed)
         s.sigmodel.srand(seed)
 
-    if sample_single:
-        ev = sg.prior_sample_event(min_mb=4.5, stime=1239915400.0, etime=1239916400.0)
-        sg.add_event(ev)
-        evs = [ev,]
-    else:
-        evs = sg.prior_sample_events(min_mb=4.5, stime=1239915400.0, etime=1239916400.0)
 
-        print "sampled", len(evs), "evs"
+    evs = sg.prior_sample_events(stime=1239915400.0, etime=1239916400.0, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
+    print "sampled", len(evs), "evs"
 
     if sample_uatemplates:
         sg.uatemplate_rate = uatemplate_rate
@@ -146,22 +145,22 @@ def load_graph(sg, wave_dir, max_distance=None):
     print "loaded %d of %d stations" % (i, j)
     return evs
 
-def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single):
+def wave_dirname(**kwargs):
+    return os.path.join(BASE_DIR, "sampled_" + '_'.join([':'.join((str(k),str(v))) for (k,v) in kwargs.items() if v ]))
+
+def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_distance, uatemplate_rate, sample_uatemplates, sample_single, n_events, min_mb, force_mb, wiggles=False, sites=None):
+
     sg = SigvisaGraph(template_model_type=tmtype, template_shape="paired_exp",
                       wiggle_model_type="dummy", wiggle_family='dummy',
                       nm_type = "ar", phases=phases, runid=runid)
 
     sg.uatemplate_rate = uatemplate_rate
 
-    wave_dir = os.path.join(BASE_DIR, 'sampled_seed%d' % seed)
-    if sample_uatemplates:
-        wave_dir += "_rate%.4f" % uatemplate_rate
-    if sample_single:
-        wave_dir += "_single"
+    wave_dir = wave_dirname(seed=seed, runid=runid, wiggles=wiggles, sites=sites, phases=phases, tmtype=hash(tmtype), uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, n_events=n_events, min_mb=min_mb, force_mb=force_mb)
     try:
         evs = load_graph(sg, wave_dir, max_distance=max_distance)
     except (IOError, OSError) as e:
-        sample_event(wave_dir=wave_dir, runid=runid, seed=seed, tmtype=tmtype, phases=phases, uatemplate_rate=uatemplate_rate, sample_uatemplates=sample_uatemplates, sample_single=sample_single)
+        sample_event(wave_dir, runid, seed, wiggles, sites, phases, tmtype, uatemplate_rate, sample_uatemplates, n_events, min_mb, force_mb)
         evs = load_graph(sg, wave_dir, max_distance=max_distance)
 
     if init_events:
@@ -169,7 +168,7 @@ def setup_graph(seed, perturb_amt, tmtype, runid, phases, init_events, max_dista
             perturb_ev(ev, perturb_amt)
             evnodes = sg.add_event(ev)
 
-    return sg, evs
+    return sg, evs, wave_dir
 
 def main():
 
@@ -183,8 +182,11 @@ def main():
     parser.add_option("--perturb_amt", dest="perturb_amt", default=0.0, type="float")
     parser.add_option("--openworld", dest="openworld", default=False, action="store_true")
     parser.add_option("--init_openworld", dest="init_openworld", default=False, action="store_true")
-    parser.add_option("--sample_uatemplates", dest="sample_uatemplates", default=False, action="store_true")
+    parser.add_option("--sample_uatemplates", dest="sample_uatemplates", default=False, action="store_true", help="include unassociated templates in the synthetic world (default is to only sample templates from events)")
     parser.add_option("--uatemplate_rate", dest="uatemplate_rate", default=0.001, type="float")
+    parser.add_option("--n_events", dest="n_events", default=None, type="int", help="force the specified number of events (default is to sample from the prior)")
+    parser.add_option("--min_mb", dest="min_mb", default=4.5, type="float", help="sample event magnitudes from an exponential(10) distribution with the given origin. (4.5)")
+    parser.add_option("--force_mb", dest="force_mb", default=None, type="float", help="force event magnitude to the given value.")
     parser.add_option("--phases", dest="phases", default='P', type="str")
     parser.add_option("--steps", dest="steps", default=20000, type="int",
                       help="MCMC steps to take (20000)")
@@ -199,18 +201,23 @@ def main():
     phases = options.phases.split(',')
 
     init_events = options.init_openworld or (not options.openworld)
-    sg, evs = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, sample_single=options.sample_single)
+    sg, evs, wave_dir = setup_graph(options.seed, options.perturb_amt, tmtype, options.runid, options.phases, init_events, max_distance = options.max_distance, uatemplate_rate=options.uatemplate_rate, sample_uatemplates=options.sample_uatemplates, sample_single=options.sample_single, n_events=options.n_events, min_mb=options.min_mb, force_mb=options.force_mb)
 
     print "got %d evs" % len(evs)
     for ev in evs:
         print ev
     print "now running inference"
 
+    hash_options = hash(str(options))
     openworld_str = '_open' if options.openworld else ''
     run_dir = os.path.join(BASE_DIR,
-                           'mcmcrun_seed%d_dist%.1f_perturb%.2f%s_%srate%.4f%s' % (options.seed, options.max_distance, options.perturb_amt, openworld_str, "sample" if options.sample_uatemplates else "", options.uatemplate_rate, 'single' if options.sample_single else 'multiple'))
+                           'mcmcrun_seed%d_%s' % (options.seed, hash_options))
+    mkdir_p(run_dir)
+    with open(os.path.join(run_dir, 'gold'), 'w') as f:
+        f.write(wave_dir + '\n')
+
     np.random.seed(1)
-    run_open_world_MH(sg, skip=5000, steps=options.steps,
+    run_open_world_MH(sg, skip=500, steps=options.steps,
                       run_dir = run_dir,
                       enable_template_openworld=options.openworld,
                       enable_template_moves=True,
