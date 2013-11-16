@@ -126,6 +126,7 @@ def chan_for_site(site, options):
         if s.earthmodel.site_info(site, 0.0)[3] == 1:
             chan = s.array_default_channel(site)
         else:
+            sta=site
             chan = s.default_vertical_channel[sta]
     else:
         chan = options.chan
@@ -200,7 +201,7 @@ def main():
                       help="train models even if a model of the same type already appears in the DB")
     parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
     parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
-                      help="don't explode array stations into their individual elements (False)")
+                      help="model array station jointly; don't explode array into individual elements (False)")
     parser.add_option("--subsample", dest="subsample", default=500, type="float",
                       help="use a subset of the data to learn GP hyperparameters more quickly (500)")
     parser.add_option("--bounds", dest="bounds", default=None, type="str",
@@ -278,7 +279,7 @@ def main():
                 except:
                     elems = [site,]
                 try:
-                    X, y, evids = load_site_data(elems, wiggles, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = not options.array_joint, HACK_FAKE_POINTS=options.fake_points)
+                    X, y, evids = load_site_data(elems, wiggles, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint, HACK_FAKE_POINTS=options.fake_points)
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
@@ -294,11 +295,12 @@ def main():
 
                 distfn = model_type[3:]
                 st = time.time()
-                #try:
-                model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds)
-                #except Exception as e:
-                #    print e
-                #    continue
+                try:
+                    print "training mode for target", target
+                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds)
+                except Exception as e:
+                    print e
+                    continue
 
                 et = time.time()
 
