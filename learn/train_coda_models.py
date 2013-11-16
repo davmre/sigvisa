@@ -63,10 +63,10 @@ def get_shape_training_data(runid, site, chan, band, phases, target, require_hum
         sta_pos = np.empty((0, 3))
         for i in range(len(sta_data)):
             sta_pos = np.append(sta_pos, np.array([list(s.earthmodel.site_info(sta_data[i], fit_data[i][FIT_ATIME]))[:3]]), axis = 0)
-        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
+        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH, FIT_MB]]
         X = np.concatenate((sta_pos, X), axis = 1)
     else:
-        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
+        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH, FIT_MB]]
 
     try:
         evids = fit_data[:, FIT_EVID]
