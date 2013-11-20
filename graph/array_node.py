@@ -26,7 +26,7 @@ def lldlld_X(ev, sta):
 
 class ArrayNode(Node):
 
-    def __init__(self, sorted_keys, **kwargs):
+    def __init__(self, sorted_keys, st=0.0, **kwargs):
 
         super(ArrayNode, self).__init__(keys=sorted_keys, **kwargs)
 
@@ -34,6 +34,7 @@ class ArrayNode(Node):
         self.s = Sigvisa()
         self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
         self.X = np.zeros((len(self.sorted_keys),8))
+        self.st = st
         pv = super(ArrayNode, self)._parent_values()
         self._update_X(keys = sorted_keys, parent_values=pv)
 
@@ -44,9 +45,8 @@ class ArrayNode(Node):
             evlon = parent_values["%d;lon" % eid]
             evlat = parent_values["%d;lat" % eid]
             evdepth = parent_values["%d;depth" % eid]
-            evtime = parent_values["%d;time" % eid]
             self.X[i, 3:6] = (evlon, evlat, evdepth)
-            self.X[i, 0:3] = self.s.earthmodel.site_info(sta, evtime)[0:3]
+            self.X[i, 0:3] = self.s.earthmodel.site_info(sta, self.st)[0:3]
             stalon, stalat = self.X[i, 0:2]
             self.X[i, 6] = geog.dist_km((evlon, evlat), (stalon, stalat))
             self.X[i, 7] = geog.azimuth((stalon, stalat), (evlon, evlat))
@@ -143,4 +143,3 @@ class ArrayNode(Node):
         if "s" not in state:
             state["s"] = Sigvisa()
         self.__dict__.update(state)
-
