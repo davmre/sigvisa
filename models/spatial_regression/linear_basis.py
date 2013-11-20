@@ -15,7 +15,7 @@ from sigvisa.models.spatial_regression.features import featurizer_from_string, r
 
 class LinearBasisModel(ParamModel):
 
-    def __init__(self, fname=None, sta=None, X=None, y=None, basis="poly1", param_var=1.0, noise_std=1, compute_ll=False, H=None):
+    def __init__(self, fname=None, sta=None, X=None, y=None, basis="poly1", param_mean=None, param_cov=None, param_var=1.0, noise_std=1, featurizer_recovery=None, compute_ll=False, H=None):
         super(LinearBasisModel, self).__init__(sta=sta)
 
         if fname is not None:
@@ -25,11 +25,14 @@ class LinearBasisModel(ParamModel):
         X = self.standardize_input_array(X)
         n = X.shape[0]
 
-        H, self.featurizer, self.featurizer_recovery = featurizer_from_string(X, basis)
+        if featurizer_recovery is None:
+            H, self.featurizer, self.featurizer_recovery = featurizer_from_string(X, basis)
+        else:
+            self.featurizer, self.featurizer_recovery = recover_featurizer(basis, 0, featurizer_recovery)
         self.basis = basis
         d = H.shape[1]
-        b = np.zeros((d,))
-        B = np.eye(d) * param_var
+        b = np.zeros((d,)) if param_mean is None else param_mean
+        B = np.eye(d) * param_var if param_cov is None else param_cov
 
         self.noise_var = float(noise_std**2)
 
