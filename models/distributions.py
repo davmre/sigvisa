@@ -117,6 +117,28 @@ class Gaussian(Distribution):
     def sample(self, **kwargs):
         return self.mean + np.random.randn() * self.std
 
+class Laplacian(Distribution):
+    def __init__(self, center, scale):
+        self.center = center
+        self.scale = scale
+
+    def log_p(self, x,  **kwargs):
+        center = self.center
+        scale = self.scale
+        lp = -np.log(2*scale) - np.abs(x-center)/scale
+        if np.isnan(lp):
+            lp = np.float("-inf")
+        return lp
+
+    def predict(self, **kwargs):
+        return self.center
+
+    def sample(self, **kwargs):
+        u = np.random.rand()
+        return self.center - self.scale * np.sign(u) * np.log(1-2*u)
+
+
+
 class Exponential(Distribution):
     def __init__(self, rate, min_value=0.0):
         self.rate = float(rate)

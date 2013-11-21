@@ -74,6 +74,8 @@ def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_
                          bounds=bounds, **kwargs)
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y)
+    elif model_type == "constant_laplacian":
+        model = learn_constant_laplacian(sta=sta, X=X, y=y)
     elif model_type == "linear_distance":
         model = learn_linear(sta=sta, X=X, y=y)
     elif model_type.startswith('param_'):
@@ -201,6 +203,9 @@ def learn_linear(X, y, sta, optim_params=None):
 def learn_constant_gaussian(X, y, sta, optim_params=None):
     return baseline_models.ConstGaussianModel(X=X, y=y, sta=sta)
 
+def learn_constant_laplacian(X, y, sta, optim_params=None):
+    return baseline_models.ConstLaplacianModel(X=X, y=y, sta=sta)
+
 def load_modelid(modelid, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -217,6 +222,8 @@ def load_model(fname, model_type, gpmodel_build_trees=True):
         model = LinearBasisModel(fname=fname)
     elif model_type == "constant_gaussian":
         model = baseline_models.ConstGaussianModel(fname=fname)
+    elif model_type == "constant_laplacian":
+        model = baseline_models.ConstLaplacianModel(fname=fname)
     elif model_type == "linear_distance":
         model = baseline_models.LinearModel(fname=fname)
     else:

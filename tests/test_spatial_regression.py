@@ -5,7 +5,7 @@ from sigvisa.learn.train_param_common import learn_model, load_model
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
-from sigvisa.models.spatial_regression.baseline_models import LinearBasisModel, poly_basisfns
+from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
 
 class TestModels(unittest.TestCase):
 
@@ -31,7 +31,7 @@ class TestModels(unittest.TestCase):
         self.testX1 = np.array([[120, 30, 0, 1025, 32], ], dtype=float)
         self.testX2 = np.array([[119, 31, 0, 1000, 33], ], dtype=float)
 
-    def test_constant(self):
+    def test_gaussian(self):
         model = learn_model(self.X, self.y, model_type="constant_gaussian", sta="AAK")
         pred1 = model.predict(self.testX1)
         pred2 = model.predict(self.testX2)
@@ -50,16 +50,23 @@ class TestModels(unittest.TestCase):
 
         s = nmodel.sample(self.X)
 
-    def test_linear_distance(self):
-        model = learn_model(self.X, self.y, model_type="linear_distance", sta="AAK")
+        eps = 1e-6
+        llA = nmodel.log_p(x=-.01-eps)
+        llB = nmodel.log_p(x=-.01+eps)
+        d_hat = (llB-llA)/(2*eps)
+        d = nmodel.deriv_log_p(-.01)
+        self.assertAlmostEqual(d_hat, d)
+
+    def test_laplacian(self):
+        model = learn_model(self.X, self.y, model_type="constant_laplacian", sta="AAK")
         pred1 = model.predict(self.testX1)
         pred2 = model.predict(self.testX2)
-        self.assertAlmostEqual(pred1, -0.01375)
-        self.assertAlmostEqual(pred2, -0.0175)
+        self.assertAlmostEqual(pred1, np.median(self.y))
+        self.assertAlmostEqual(pred1, pred2)
 
-        fname = "test_linear_model"
+        fname = "test_constant_model"
         model.save_trained_model(fname)
-        nmodel = load_model(fname, "linear_distance")
+        nmodel = load_model(fname, "constant_laplacian")
         pred3 = nmodel.predict(self.testX1)
         self.assertAlmostEqual(pred1, pred3)
 
@@ -67,48 +74,14 @@ class TestModels(unittest.TestCase):
         ll1 = nmodel.log_p(cond=self.X, x=self.y)
         self.assertAlmostEqual(ll, ll1)
 
+        eps = 1e-4
+        llA = nmodel.log_p(x=.1)
+        llB = nmodel.log_p(x=.1+eps)
+        d_hat = (llB-llA)/eps
+        d = nmodel.deriv_log_p(.1)
+        self.assertAlmostEqual(d_hat, d)
+
         s = nmodel.sample(self.X)
-
-
-    def test_poly_regression(self):
-        N = 10
-        bfn = poly_basisfns(3)
-        X = np.reshape(np.linspace(-5, 5, N), (-1, 1))
-        H = np.array([[f(x) for f in bfn] for x in X])
-        coeffs = np.array([50, 1, 3, -3])
-        sigma_n = 1
-        np.random.seed(0)
-        y = np.dot(H, coeffs) + np.random.randn(N) * sigma_n
-
-        b = np.zeros((4,))
-        B = np.eye(4) * 100000
-        B[0,0] = (1000000)**2
-
-        model = LinearBasisModel(X=X, y=y, basisfns=bfn, param_mean=b, param_covar=B, noise_std=sigma_n, H=H, compute_ll=True, sta="AAK")
-
-        tol = np.array((1, .4, .05, .05))
-        self.assertTrue( (np.abs(model.mean - coeffs) < tol ).all())
-
-        # test that the variances are reasonable: we should be most
-        # certain about the high-order terms and least certain about
-        # the low-order terms.
-        v = np.diag(np.dot(model.sqrt_covar.T, model.sqrt_covar))
-        self.assertGreater(v[0], v[1])
-        self.assertGreater(v[1], v[2])
-        self.assertGreater(v[2], v[3])
-
-        # test that loading and saving work
-        p = model.predict(X)
-        c = model.covariance(X, include_obs=True)
-
-        model.save_trained_model('model.npz')
-        m = LinearBasisModel(fname='model.npz')
-        p1 = m.predict(X)
-        c1 = m.covariance(X, include_obs=True)
-
-        self.assertTrue( (np.abs(p-p1) < .001).all() )
-        self.assertTrue( (np.abs(c-c1) < .001).flatten().all() )
-
 
 if __name__ == '__main__':
     unittest.main()
