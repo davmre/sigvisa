@@ -45,6 +45,18 @@ def sin_transform(X, n):
         features[:, 2*i+3] = np.cos(X * (2*np.pi*(i+1))/15000.0)
     return features
 
+def multilinear_featurizer(X, dims, means, scales):
+    features = np.zeros((X.shape[0], len(dims)+1))
+    features[:,0] = 1
+    features[:, 1:] = (X[:, dims] - means)/scales
+    return features
+
+def build_multilinear(X, dims):
+    Z = X[:,dims]
+    means = np.mean(Z, axis=0)
+    scales = np.std(Z, axis=0)
+    return lambda X: multilinear_featurizer(X, dims, means, scales), means, scales
+
 def build_ortho_poly_featurizer(X, extract_dim, degree):
     Z, norm2, alpha = ortho_poly_fit(X[:,extract_dim], degree = degree)
     return Z, lambda X : ortho_poly_predict(X[:,extract_dim], alpha, norm2, degree=degree), norm2, alpha
@@ -56,20 +68,36 @@ def featurizer_from_string(X, desc, extract_dim=0):
     if desc.startswith("poly"):
         degree = int(desc[4:])
         Z, f, norm2, alpha = build_ortho_poly_featurizer(X, extract_dim, degree)
-        return Z, f, {'norm2': norm2, 'alpha': alpha}
+        return Z, f, {'norm2': norm2, 'alpha': alpha, 'extract_dim': [extract_dim,]}
     elif desc.startswith("sin"):
         degree = int(desc[3:])
         featurizer = build_sin_featurizer(extract_dim, degree)
         Z = featurizer(X)
-        return Z, featurizer, {}
+        return Z, featurizer, {'extract_dim': [extract_dim,]}
+    elif desc.startswith("mlinear"):
+        featurizer, means,scales = build_multilinear(X, extract_dim)
+        Z = featurizer(X)
+        return Z, featurizer, {'means': means, 'scales': scales, 'extract_dim': extract_dim}
+    else:
+        raise ValueError("unrecognized feature type %s" % desc)
 
-def recover_featurizer(desc, extract_dim, recovery_info):
+def recover_featurizer(desc, recovery_info):
     if desc.startswith("poly"):
         degree = int(desc[4:])
         norm2 = recovery_info['norm2']
         alpha = recovery_info['alpha']
-        return lambda X : ortho_poly_predict(X[:,extract_dim], alpha, norm2, degree=degree), {'norm2': norm2, 'alpha': alpha}
+        extract_dim = recovery_info['extract_dim'][0]
+        return lambda X : ortho_poly_predict(X[:,extract_dim], alpha, norm2, degree=degree), {'norm2': norm2, 'alpha': alpha, 'extract_dim': [extract_dim,]}
     elif desc.startswith("sin"):
         degree = int(desc[3:])
+        extract_dim = recovery_info['extract_dim'][0]
         featurizer = build_sin_featurizer(extract_dim, degree)
-        return featurizer, {}
+        return featurizer, {'extract_dim': [extract_dim,]}
+    elif desc.startswith("mlinear"):
+        means = recovery_info['means']
+        scales = recovery_info['scales']
+        dims = recovery_info['extract_dim']
+        featurizer = lambda X: multilinear_featurizer(X, dims, means, scales)
+        return featurizer, {'means': means, 'scales': scales, 'extract_dim': dims}
+    else:
+        raise ValueError("unrecognized feature type %s" % desc)
