@@ -97,21 +97,6 @@ there's a separate issue, which is how to learn the obs model. for now I'll just
 """
 
 
-def update_global_params(global_mean, global_posterior, station_mean, station_covar, obs_covar):
-
-    # we're not updating global params from an observation of station params. instead we have a distribution on the station params.
-
-    # we have global + eps = station
-    # <station, h> + eps2 = datapoints
-
-    # now we have p(station | datapoints) which we are saying is Gaussian (technically it's also given the other global params, but hopefully we can ignore this in the interest of message passing)
-    # and we want p(global | datapoints)
-    # =int_station p(global | station)p(station|datapoints)
-    # =int_station p(station|global)p(global)p(station|datapoints)
-    # which should also be Gaussian.
-
-    #
-
     """
     g = global params
     s = station params
@@ -146,10 +131,18 @@ def update_global_params(global_mean, global_posterior, station_mean, station_co
 
     sigma_g <= sigma + A * sigma_s * A^T
              = sigma + sigma * sigma_e^-1 * sigma_s * sigma_e^-1 * sigma
-             = sigma * (I + sigma_e^-1 * sigma_s * sigma_e^-1)
+             = sigma * (I + sigma_e^-1 * sigma_s * sigma_e^-1 * sigma)
 
 
     where sigma = (p_e + p_g)^-1: if we had a specific value of s to update with, we'd get a new precision for the global params by summing our current precision, with the precision on our observed value of s.
+
+
+now imagine we have
+sigma = (sigma_g^-1 - sigma_e^-1)^-1
+A = - sigma * sigma_e^-1
+b = sigma * sigma_g^-1 * mu_g
+
+int_s N(g; As + b, sigma) N(s; mu_s, sigma_s)
 
 
     TODO: implement the equations above, hope for numerical stability
@@ -157,56 +150,135 @@ def update_global_params(global_mean, global_posterior, station_mean, station_co
     """
 
 
+def message_from_model(model, mean_prior, cov_prior, station_slack):
+
+    """
+
+    Given a model containing p(s|d) (trained under some prior p(s)), compute the message
+
+    m_{s->g} (g) = int_ds p(s|g) * m_{d->s} (s)
+
+    where p(s|g) = N(s; g, station_slack)
+
+    and m_{d->s} (s) = p(d|s) = p(s|d)/p(s)
+                              = p(s|d) / N(s; mean_prior, cov_prior)
+                              = N(c, C)
+                                with c and C defined as computed below.
+
+    Most of the work is in computing the message m_{d->s}. The only additional effect of passing
+    that message through the node s, yielding m_{s->g}(g), is the addition of the station_slack
+    term to the covariance matrix.
+
+    Note that the message we return, taken as a function of g, is proportional to p(d|g).
+
+    """
+
+    mu_s = model.mean
+    try:
+        sigma_s = np.dot(model.sqrt_covar.T, model.sqrt_covar)
+    except:
+        sigma_s = model.c
+
+    sigma_s_inv = np.linalg.inv(sigma_s)
+    cov_prior_inv = np.linalg.inv(cov_prior)
+
+    C = np.linalg.inv(sigma_s_inv - cov_prior_inv)
+    c = np.dot(C, np.dot(sigma_s_inv, mu_s) - np.dot(cov_prior_inv, mean_prior))
+    return c, C + station_slack
+
+def receive_message(mu_g, cov_g, mu_message, cov_message):
+
+    """
+    Given current global param distribution N(mu_g, cov_g),
+    update to the new distribution N(mu_g, cov_g)N(mu_message, cov_message).
+
+    Note we can simulate the effect of "removing" a message by passing in a
+    negated version of cov_message.
+    """
+
+    inv_cov_g = np.linalg.inv(cov_g)
+    inv_cov_message = np.linalg.inv(cov_message)
+
+    C = np.linalg.inv(inv_cov_g + inv_cov_message)
+    c = np.dot(C, np.dot(inv_cov_g, mu_g) + np.dot(inv_cov_message, mu_message))
+    return c,C
+
+def receive_data_message(mu_g, cov_g, H, y, station_slack, noise_var, negate=False):
+    """
+    Given current global param distribution N(mu_g, cov_g), update to the new
+    distribution after observing data (H,y) at a station, where H is the feature matrix
+    and we assume a linear model with i.i.d. Gaussian noise of variance noise_var.
+
+    This function is not actually used in practice, since it is limited to i.i.d. noise
+    and can't handle Gaussian processes*. But it's a useful sanity check for the other
+    methods above; we should get identical results from
+
+    mu2_g, cov2_g = receive_data_message(mu_g, cov_g, H, y, station_slack, noise_var)
+    where H = features(X) with respect to some basis
+
+    as from
+
+    lbm = LinearBasisModel(X=X, y=y, basis=basis, sta=None, param_mean = mu_g, param_cov = (cov_g + station_slack))
+    m, c = message_from_model(lbm, mu_g, (cov_g + station_slack), station_slack)
+    mu2_g, cov2_g = receive_message(mu_g, cov_g, m,c).
 
 
+    * note this could actually handle GPs if we replaced eye*noise_var with
+      the actual GP kernel matrix K_y...
+    """
 
-def do_em(options, site_elements, target, chan, band, phase, min_amp):
-    model_type = "gplocal+lld+%s" % options.basisfn_str
+    invA = np.linalg.inv(cov_g)
+    B = np.eye(len(y))*noise_var + np.dot(H, np.dot(station_slack, H.T))
+    if negate:
+        B = -B
+    invB = np.linalg.inv(B)
 
-    # choose a global param prior
-    # compute the corresponding prior on station params (integrating out the global params)
-    global_mean = ??
-    global_covar = ??
+    C = np.linalg.inv(invA + np.dot(H.T, np.dot(invB, H)))
+    c = np.dot(C, np.dot(invA, mu_g) + np.dot(H.T, np.dot(invB, y)))
+    return c, C
 
-    basisfns, _, _ = basisfns_from_str(options.basisfn_str)
-    k = len(basisfns)
 
-    # prior distribution on global parameters
-    global_mean = np.zeros((k,))
-    global_covar = np.eye(k) * 10000
+def retrain_model(modelid, prior_mean, prior_cov, bounds=None):
 
-    obs_covar = np.eye(k) * 100
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
 
-    for (site, elems) in site_elements.items():
-        chan = chan_for_site(site, options)
+    sql_query = "select model_fname, model_type, param, site, optim_method from sigvisa_param_model where modelid=%d" % modelid
+    cursor.execute(sql_query)
+    model_fname, model_type, target, site, optim_params = cursor.fetchone()
 
-        try:
-            X, y, evids = load_site_data(elems, wiggles=False, target=target, param_num=None, runid=options.runid, chan=chan, band=band, phases=[phase, ], require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
-        except NoDataException:
-            print "no data for %s %s %s, skipping..." % (site, target, phase)
-            continue
+    xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy'
+    d = np.load(xy_fname)
+    X, y = d['X'], d['y']
 
-        model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, unique=True)
-        evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
-        np.savetxt(evid_fname, evids, fmt='%d')
+    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds, param_mean=prior_mean, param_cov=prior_cov)
 
-        b = np.array(global_mean, copy=True)
-        B = global_covar + obs_covar
-        st = time.time()
-        model = learn_gp(X=X, y=y, sta=site,
-                         kernel_str='lld',
-                         target=target, build_tree=False,
-                         optim_params=optim_params, basisfns=basisfns, b=b, B=B)
-        et = time.time()
+    hyperparams = model_params(model, model_type)
+    model.save_trained_model(model_fname)
+    sql_query = "update sigvisa_param_model set shrinkage='%s', hyperparams='%s', training_ll=%f, timestamp=%f where modelid=%d" % (str(prior_mean) + str(prior_cov), hyperparams, model.log_likelihood(), time.time(), modelid)
+    cursor.execute(sql_query)
 
-        if np.isnan(model.log_likelihood()):
-            print "error training model for %s %s %s, likelihood is nan! skipping.." % (site, target, phase)
-            continue
+    cursor.close()
 
-        model.save_trained_model(model_fname)
-        template_options = {'template_shape': options.template_shape, }
-        modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, **template_options)
-        print "inserted as", modelid, "ll", model.log_likelihood()
+def retrain_models(modelids, global_var=1.0, station_slack_var=1.0):
+
+    mu_g = np.zeros((n,))
+    sigma_g = np.eye(n) * global_var
+    station_slack = np.eye(n) * station_slack_var
+
+    messages = dict()
+    for modelid in modelids:
+        model = load_model(modelid=modelid)
+        m,c = message_from_model(model)
+        messages[modelid] = (m,c)
+        mu_g, cov_g = receive_message(mu_g, cov_g, m,c)
+
+    for modelid in modelids:
+        m,c = messages[modelid]
+        mu_partial, cov_partial = receive_message(mu_g, cov_g, m,c)
+
+        retrain_model(modelid, mu_partial, cov_partial)
+
 
 
 def main():
@@ -223,49 +295,23 @@ def main():
                       help="phase for which to train models)")
     parser.add_option("-t", "--targets", dest="targets", default="coda_decay,amp_transfer,peak_offset", type="str",
                       help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
-    parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
     parser.add_option(
-        "--basisfns", dest="basisfn_str", default="dist5", type="str", help="set of basis functions to use (dist5)")
-    parser.add_option("--require_human_approved", dest="require_human_approved", default=False, action="store_true",
-                      help="only train on human-approved good fits")
-    parser.add_option(
-        "--max_acost", dest="max_acost", default=np.float('inf'), type=float, help="maximum fitting cost of fits in training set (inf)")
-    parser.add_option("--min_amp", dest="min_amp", default=-3, type=float,
-                      help="only consider fits above the given amplitude (does not apply to amp_transfer fits)")
-    parser.add_option("--min_amp_for_at", dest="min_amp_for_at", default=-5, type=float,
-                      help="only consider fits above the given amplitude (for amp_transfer fits)")
-    #parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': False, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
+        "-m", "--model_type", dest="model_type", default="gp_lld_dist5", type="str", help="type of model to train (gp_lld_dist5)")
 
 
     (options, args) = parser.parse_args()
 
-    sql_query = "select sta from sigvisa_coda_fit where runid=%d" % options.runid
-    cursor.execute(sql_query)
-    stas = set(np.array(cursor.fetchall()).flatten())
-
-    site_elements = defaultdict(set)
-
-    for sta in stas:
-        _, _, _, isarr, _, _, ref_site_id = s.earthmodel.site_info(sta, 0.0)
-        ref_site_name = s.siteid_minus1_to_name[ref_site_id-1]
-        site_elements[ref_site_name].add(sta)
 
     runid = options.runid
     run_name, run_iter = read_fitting_run(runid)
 
+    targets = options.targets.split(',')
+    for target in targets:
+        sql_query = "select modelid from sigvisa_param_model where target='%s' and model_type='%s' and band='%s' and chan='%s' and phase='%s'" % (target_cond, options.model_type, options.band. options.chan, options.phase)
+        cursor.execute(sql_query)
+        modelids = np.array(cursor.fetchall())
+        retrain_models(modelids)
 
-
-    while not STOPPING_CONDITION:
-
-        for (param_num, target) in enumerate(targets):
-            if target == "amp_transfer":
-                min_amp = options.min_amp_for_at
-            else:
-                min_amp = options.min_amp
-
-
-
-            # compute NEW global priors
 
 if __name__ == "__main__":
 

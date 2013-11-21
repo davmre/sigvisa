@@ -291,7 +291,9 @@ def main():
                 else:
                     model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=options.basisid, unique=True)
                 evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
+                Xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy'
                 np.savetxt(evid_fname, evids, fmt='%d')
+                np.savez(Xy_fname, X=X, y=y)
 
                 distfn = model_type[3:]
                 st = time.time()
