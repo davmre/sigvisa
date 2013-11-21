@@ -28,11 +28,10 @@ class LinearBasisModel(ParamModel):
         if featurizer_recovery is None:
            H, self.featurizer, self.featurizer_recovery = featurizer_from_string(X, basis, extract_dim=extract_dim)
         else:
-           self.featurizer, self.featurizer_recovery = recover_featurizer(basis, extract_dim, featurizer_recovery)
+           self.featurizer, self.featurizer_recovery = recover_featurizer(basis, featurizer_recovery)
            H = self.featurizer(X)
 
         self.basis = basis
-        self.extract_dim=extract_dim
 
         d = H.shape[1]
         b = np.zeros((d,)) if param_mean is None else param_mean
@@ -86,7 +85,6 @@ class LinearBasisModel(ParamModel):
                      noise_var=self.noise_var,
                      ll=self.ll,
                      base_str = base_str,
-                     extract_dim=[self.extract_dim,],
                      desc = self.basis,
                      **(self.featurizer_recovery)
             )
@@ -98,8 +96,7 @@ class LinearBasisModel(ParamModel):
         self.noise_var = npzfile['noise_var']
         self.ll = npzfile['ll']
         self.basis = str(npzfile['desc'])
-        self.extract_dim = npzfile['extract_dim']
-        self.featurizer, self.featurizer_recovery = recover_featurizer(self.basis, self.extract_dim, npzfile)
+        self.featurizer, self.featurizer_recovery = recover_featurizer(self.basis, npzfile)
         super(LinearBasisModel, self).__unrepr_base_params__(str(npzfile['base_str']))
         del npzfile.f
         npzfile.close()
