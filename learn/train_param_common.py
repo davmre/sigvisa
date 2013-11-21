@@ -16,6 +16,8 @@ from sigvisa.models.spatial_regression.SparseGP import SparseGP, start_params
 from sigvisa.sparsegp.gp import GP, optimize_gp_hyperparams
 
 import sigvisa.models.spatial_regression.baseline_models as baseline_models
+from sigvisa.models.spatial_regression.linear_basis import LinearBasisModel
+from sigvisa.models.spatial_regression.features import ortho_poly_fit
 import sigvisa.infer.optimize.optim_utils as optim_utils
 
 
@@ -24,8 +26,8 @@ from sigvisa.learn.grad_ascend import *
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
-def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp, elapsed, template_shape=None, wiggle_basisid=None, optim_method=None, hyperparams=None):
-    return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams)
+def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp, elapsed, template_shape=None, wiggle_basisid=None, optim_method=None, hyperparams=None, shrinkage=None):
+    return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams, shrinkage) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams, :shrinkage)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams, shrinkage=shrinkage)
 
 def model_params(model, model_type):
     if model_type.startswith('gplocal'):
@@ -52,7 +54,7 @@ def model_params(model, model_type):
     else:
         return None
 
-def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, **kwargs):
+def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_tree=True, k=500, bounds=None, **kwargs):
     if model_type.startswith("gplocal"):
         s = model_type.split('+')
         kernel_str = s[1]
@@ -61,20 +63,22 @@ def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_
                          basisfn_str=basisfn_str,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
-                         optim_params=optim_params, **kwargs)
+                         optim_params=optim_params, k=k,
+                         bounds=bounds, **kwargs)
     elif model_type.startswith("gp_"):
         kernel_str = model_type[3:]
         model = learn_gp(X=X, y=y, sta=sta,
                          kernel_str=kernel_str,
                          target=target, build_tree=gp_build_tree,
-                         optim_params=optim_params, **kwargs)
+                         optim_params=optim_params, k=k,
+                         bounds=bounds, **kwargs)
     elif model_type == "constant_gaussian":
         model = learn_constant_gaussian(sta=sta, X=X, y=y)
     elif model_type == "linear_distance":
         model = learn_linear(sta=sta, X=X, y=y)
-    elif model_type.startswith('param_dist'):
+    elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
-        model = learn_parametric(X=X, y=y, sta=sta, basisfn_str=basisfn_str)
+        model = learn_parametric(X=X, y=y, sta=sta, basisfn_str=basisfn_str, **kwargs)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model
@@ -97,35 +101,41 @@ def basisfns_from_str(basisfn_str, param_var=1000):
 
     return basisfns, b, B
 
-def learn_parametric(sta, X, y, basisfn_str, param_var=10000, optimize_marginal_ll=False):
-    basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
-    k = len(basisfns)
+def learn_parametric(sta, X, y, basisfn_str, param_var=10000, optimize_marginal_ll=False, **kwargs):
 
-    H = np.array([[f(x) for f in basisfns] for x in X], dtype=float)
-
+    # make sure we use the same set of orthogonal polynomials for
+    # each station model, so we can compare their parameters.
+    if basisfn_str.startswith("poly"):
+        degree = int(basisfn_str[4:])
+        fakeX = np.reshape(np.linspace(0, 10000, 100), (-1, 1))
+        Z, norm2, alpha = ortho_poly_fit(fakeX, degree)
+        featurizer_recovery = {'norm2': norm2, 'alpha': alpha}
+    else:
+        featurizer_recovery = None
 
     def nllgrad(std):
         try:
-            lbm = baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=True)
+            lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=True, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
         except scipy.linalg.LinAlgError:
             print " warning: lin alg error for std %f" % std
             return (np.inf, np.array((-1.0,)))
         return (-lbm.ll, -lbm.ll_deriv)
 
+    std = 1.0
     if optimize_marginal_ll:
         x0 = 10
         result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
                                          tol=.0001, method='L-BFGS-B', bounds=((1e-3, None),))
-        opt_std = result['x']
-        print "got opt std", opt_std
-    else:
-        std = 10
-        lbm = baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=std, H=H, compute_ll=False, sta=sta)
-        p = lbm.predict(X)
-        r = y-p
-        opt_std = np.std(r)
+        std = result['x']
+        print "got opt std", std
+    #else:
+    #    std = 1.0
+    #    lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=False, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
+    #    p = lbm.predict(X)
+    #    r = y-p
+    #    opt_std = np.std(r)
 
-    return baseline_models.LinearBasisModel(X=X, y=y, basisfns=basisfns, param_mean=b, param_covar=B, noise_std=opt_std, H=H, compute_ll=True, sta=sta)
+    return LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=True, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
 
 
 def subsample_data(X, y, k=250):
@@ -204,7 +214,7 @@ def load_model(fname, model_type, gpmodel_build_trees=True):
     if model_type.startswith("gp"):
         model = SparseGP(fname=fname, build_tree=gpmodel_build_trees)
     elif model_type.startswith("param"):
-        model = baseline_models.LinearBasisModel(fname=fname)
+        model = LinearBasisModel(fname=fname)
     elif model_type == "constant_gaussian":
         model = baseline_models.ConstGaussianModel(fname=fname)
     elif model_type == "linear_distance":

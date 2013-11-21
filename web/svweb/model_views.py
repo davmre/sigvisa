@@ -82,10 +82,21 @@ def plot_linear_model_distance(request, model_record, axes):
     pred = np.array([model.predict(np.array(((0, 0, 0, d, 0),))) for d in distances]).flatten()
     axes.plot(distances, pred, 'k-')
 
-    std = np.array([model.std((0, 0, 0, d, 0)) for d in distances])
-    var_x = np.concatenate((distances, distances[::-1]))
-    var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
-    axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
+    try:
+        Xs = np.zeros((len(distances), 5))
+        print distances.shape
+        print Xs[:,3].shape
+        Xs[:,3] = distances
+        for i in range(30):
+            ys = model.sample(Xs)
+            axes.plot(distances, ys, alpha=0.2)
+    except Exception as e:
+        print e
+
+    #std = np.array([model.std((0, 0, 0, d, 0)) for d in distances])
+    #var_x = np.concatenate((distances, distances[::-1]))
+    #var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
+    #axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
 
 
 def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
@@ -280,7 +291,7 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
             else:
                 plot_gaussian(request, model, axes=axes)
         elif plot_type == "distance":
-            if model.model_type == "linear_distance":
+            if model.model_type.startswith("param_"):
                 plot_linear_model_distance(request, model_record=model, axes=axes)
             else:
                 nplots = int(request.GET.get('nplots', 1))

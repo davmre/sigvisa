@@ -10,28 +10,14 @@ from functools32 import lru_cache
 
 from sigvisa import Sigvisa
 
-from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists
+from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, read_fitting_run
 
-from sigvisa.source.event import get_event
-from sigvisa.learn.train_param_common import load_modelid
-import sigvisa.utils.geog as geog
-from sigvisa.models import DummyModel
-from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential
-from sigvisa.models.ev_prior import setup_event
-from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
-from sigvisa.graph.nodes import Node
-from sigvisa.graph.dag import DirectedGraphModel
-from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value, parse_key
-from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
-from sigvisa.graph.array_node import ArrayNode
-from sigvisa.models.templates.load_by_name import load_template_generator
+from optparse import OptionParser
+
+from sigvisa.learn.train_param_common import load_modelid, learn_model
+from sigvisa.learn.train_coda_models import model_params
 from sigvisa.database.signal_data import execute_and_return_id
-from sigvisa.models.wiggles.wiggle import extract_phase_wiggle
-from sigvisa.models.wiggles import load_wiggle_generator, load_wiggle_generator_by_family
-from sigvisa.plotting.plot import plot_with_fit
-from sigvisa.signals.common import Waveform
 
-from sigvisa.utils.fileutils import clear_directory, mkdir_p
 
 class ModelNotFoundError(Exception):
     pass
@@ -97,7 +83,7 @@ there's a separate issue, which is how to learn the obs model. for now I'll just
 """
 
 
-    """
+"""
     g = global params
     s = station params
     d = data
@@ -238,7 +224,7 @@ def receive_data_message(mu_g, cov_g, H, y, station_slack, noise_var, negate=Fal
     return c, C
 
 
-def retrain_model(modelid, prior_mean, prior_cov, bounds=None):
+def retrain_model(modelid, prior_mean, prior_cov, **kwargs):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -247,39 +233,98 @@ def retrain_model(modelid, prior_mean, prior_cov, bounds=None):
     cursor.execute(sql_query)
     model_fname, model_type, target, site, optim_params = cursor.fetchone()
 
-    xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy'
+    print "retraining model", modelid, "at site", site
+
+    xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy.npz'
     d = np.load(xy_fname)
     X, y = d['X'], d['y']
 
-    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds, param_mean=prior_mean, param_cov=prior_cov)
+    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, param_mean=prior_mean, param_cov=prior_cov, **kwargs)
 
     hyperparams = model_params(model, model_type)
     model.save_trained_model(model_fname)
-    sql_query = "update sigvisa_param_model set shrinkage='%s', hyperparams='%s', training_ll=%f, timestamp=%f where modelid=%d" % (str(prior_mean) + str(prior_cov), hyperparams, model.log_likelihood(), time.time(), modelid)
-    cursor.execute(sql_query)
+
+    shrinkage = {'mean': prior_mean, 'cov': prior_cov}
+
+    cursor.execute("""update sigvisa_param_model set shrinkage=%s, hyperparams=%s, training_ll=%s, timestamp=%s where modelid=%s""", (repr(shrinkage), hyperparams, model.log_likelihood(), time.time(), modelid))
 
     cursor.close()
+    s.dbconn.commit()
 
-def retrain_models(modelids, global_var=1.0, station_slack_var=1.0):
+def get_shrinkage(modelid, n):
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+    sql_query = "select shrinkage from sigvisa_param_model where modelid=%d" % modelid
+    cursor.execute(sql_query)
+    shrinkage = cursor.fetchone()[0]
+    shrinkage = eval(shrinkage, {'array': np.array})
+    return shrinkage['mean'], shrinkage['cov']
+
+def retrain_models_fromdata(modelids, global_var=1.0, station_slack_var=1.0):
+    # for testing only.
+    # this method totally ignores the whole model infrastructure and computes global
+    # params directly from the data (assuming iid noise, i.e. no GP).
+    # on parametric-only models, it *should* give the same results as
+    # the standard retrain_models method.
+
+    demo_model = load_modelid(modelid = modelids[0])
+    n = len(demo_model.mean)
 
     mu_g = np.zeros((n,))
-    sigma_g = np.eye(n) * global_var
+    cov_g = np.eye(n) * global_var
     station_slack = np.eye(n) * station_slack_var
 
     messages = dict()
     for modelid in modelids:
-        model = load_model(modelid=modelid)
-        m,c = message_from_model(model)
+        model = load_modelid(modelid=modelid)
+        s = Sigvisa()
+        cursor = s.dbconn.cursor()
+
+        sql_query = "select model_fname, model_type, param, site, optim_method from sigvisa_param_model where modelid=%d" % modelid
+        cursor.execute(sql_query)
+        model_fname, model_type, target, site, optim_params = cursor.fetchone()
+        xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy.npz'
+        d = np.load(xy_fname)
+        X, y = d['X'], d['y']
+
+        H = model.featurizer(X)
+        messages[modelid] = (H, y)
+
+        mu_g, cov_g = receive_data_message(mu_g, cov_g, H, y, station_slack, model.noise_var, negate=False)
+        print "updated from", modelid, ", global mean is now", mu_g
+
+    for modelid in modelids:
+        H,y = messages[modelid]
+        mu_partial, cov_partial = receive_data_message(mu_g, cov_g, H, y, station_slack, 1.0, negate=True)
+
+        retrain_model(modelid, mu_partial, cov_partial + station_slack)
+
+
+def retrain_models(modelids, global_var=1.0, station_slack_var=1.0):
+
+    demo_model = load_modelid(modelid = modelids[0])
+    n = len(demo_model.mean)
+
+    mu_g = np.zeros((n,))
+    cov_g = np.eye(n) * global_var
+    station_slack = np.eye(n) * station_slack_var
+
+    messages = dict()
+    for modelid in modelids:
+        model = load_modelid(modelid=modelid)
+        prior_mean, prior_cov = get_shrinkage(modelid,n)
+        print "shrunk mean", prior_mean
+        m,c = message_from_model(model, prior_mean, prior_cov,station_slack)
         messages[modelid] = (m,c)
         mu_g, cov_g = receive_message(mu_g, cov_g, m,c)
+        print "updated from", modelid, ", global mean is now", mu_g
+
+    import pdb; pdb.set_trace()
 
     for modelid in modelids:
         m,c = messages[modelid]
-        mu_partial, cov_partial = receive_message(mu_g, cov_g, m,c)
-
-        retrain_model(modelid, mu_partial, cov_partial)
-
-
+        mu_partial, cov_partial = receive_message(mu_g, cov_g, m,-c)
+        retrain_model(modelid, mu_partial, cov_partial + station_slack)
 
 def main():
     parser = OptionParser()
@@ -297,21 +342,32 @@ def main():
                       help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
     parser.add_option(
         "-m", "--model_type", dest="model_type", default="gp_lld_dist5", type="str", help="type of model to train (gp_lld_dist5)")
+    parser.add_option("--param_var", dest="param_var", default=1.0, type="float",
+                      help="variance for the Gaussian prior on global model params (1.0)")
+    parser.add_option("--slack_var", dest="slack_var", default=1.0, type="float",
+                      help="additional variance allowed on top of global model params in the per-station params (1.0)")
 
 
     (options, args) = parser.parse_args()
 
 
-    runid = options.runid
-    run_name, run_iter = read_fitting_run(runid)
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+
+    runid = int(options.runid)
 
     targets = options.targets.split(',')
+    if options.chan == "vertical":
+        chan_cond = ""
+    else:
+        chan_cond = "and chan='%s'" % options.chan
     for target in targets:
-        sql_query = "select modelid from sigvisa_param_model where target='%s' and model_type='%s' and band='%s' and chan='%s' and phase='%s'" % (target_cond, options.model_type, options.band. options.chan, options.phase)
+        sql_query = "select modelid from sigvisa_param_model where param='%s' and model_type='%s' and band='%s' %s and phase='%s' and fitting_runid=%d" % (target, options.model_type, options.band, chan_cond, options.phase, runid)
         cursor.execute(sql_query)
-        modelids = np.array(cursor.fetchall())
-        retrain_models(modelids)
+        modelids = np.array(cursor.fetchall()).flatten()
+        retrain_models(modelids, global_var=options.param_var, station_slack_var=options.slack_var)
 
+    cursor.close()
 
 if __name__ == "__main__":
 

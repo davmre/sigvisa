@@ -15,7 +15,7 @@ from sigvisa.models.spatial_regression.features import featurizer_from_string, r
 
 class LinearBasisModel(ParamModel):
 
-    def __init__(self, fname=None, sta=None, X=None, y=None, basis="poly1", param_var=1.0, noise_std=1, featurizer_recovery=None, compute_ll=False, H=None):
+    def __init__(self, fname=None, sta=None, X=None, y=None, basis="poly1", param_mean=None, param_cov=None, param_var=1.0, noise_std=1, featurizer_recovery=None, compute_ll=False, H=None, extract_dim=0):
         super(LinearBasisModel, self).__init__(sta=sta)
 
         if fname is not None:
@@ -26,13 +26,17 @@ class LinearBasisModel(ParamModel):
         n = X.shape[0]
 
         if featurizer_recovery is None:
-            H, self.featurizer, self.featurizer_recovery = featurizer_from_string(X, basis)
+           H, self.featurizer, self.featurizer_recovery = featurizer_from_string(X, basis, extract_dim=extract_dim)
         else:
-            self.featurizer, self.featurizer_recovery = recover_featurizer(basis, 0, featurizer_recovery)
+           self.featurizer, self.featurizer_recovery = recover_featurizer(basis, extract_dim, featurizer_recovery)
+           H = self.featurizer(X)
+
         self.basis = basis
+        self.extract_dim=extract_dim
+
         d = H.shape[1]
-        b = np.zeros((d,))
-        B = np.eye(d) * param_var
+        b = np.zeros((d,)) if param_mean is None else param_mean
+        B = np.eye(d) * param_var if param_cov is None else param_cov
 
         self.noise_var = float(noise_std**2)
 
@@ -82,6 +86,7 @@ class LinearBasisModel(ParamModel):
                      noise_var=self.noise_var,
                      ll=self.ll,
                      base_str = base_str,
+                     extract_dim=[self.extract_dim,],
                      desc = self.basis,
                      **(self.featurizer_recovery)
             )
@@ -93,7 +98,8 @@ class LinearBasisModel(ParamModel):
         self.noise_var = npzfile['noise_var']
         self.ll = npzfile['ll']
         self.basis = str(npzfile['desc'])
-        self.featurizer, self.featurizer_recovery = recover_featurizer(self.basis, 0, npzfile)
+        self.extract_dim = npzfile['extract_dim']
+        self.featurizer, self.featurizer_recovery = recover_featurizer(self.basis, self.extract_dim, npzfile)
         super(LinearBasisModel, self).__unrepr_base_params__(str(npzfile['base_str']))
         del npzfile.f
         npzfile.close()

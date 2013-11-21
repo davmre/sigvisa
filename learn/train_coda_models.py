@@ -135,19 +135,12 @@ def chan_for_site(site, options):
 
 def explode_sites(options):
     sites = options.sites.split(',')
-    s = Sigvisa()
-    allsites = []
-    if options.array_joint:
-        allsites = sites
 
-    else: # explode array sites into their individual elements
-        for site in sites:
-            try:
-                elems = s.get_array_elements(site)
-                allsites.extend(elems)
-            except:
-                allsites.append(site)
-    return allsites
+    if not options.array_joint:
+        s = Sigvisa()
+        sites = [s.get_default_sta(site) for site in sites]
+    return sites
+
 
 
 def load_site_data(elems, wiggles, target, param_num, wg=None, **kwargs):
@@ -206,6 +199,10 @@ def main():
                       help="use a subset of the data to learn GP hyperparameters more quickly (500)")
     parser.add_option("--bounds", dest="bounds", default=None, type="str",
                       help="comma-separated list of hyperparam bounds low1,high1,low2,high2,... (None)")
+    parser.add_option("--param_var", dest="param_var", default=1.0, type="float",
+                      help="variance for the Gaussian prior on global model params (1.0)")
+    parser.add_option("--slack_var", dest="slack_var", default=1.0, type="float",
+                      help="additional variance allowed on top of global model params in the per-station params (1.0)")
     parser.add_option("--fake_points", dest="fake_points", default=False, action="store_true",
                       help="add some fake points at long and short distances to help condition the polynomials (False)")
 
@@ -237,7 +234,6 @@ def main():
 
     runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
     allsites = explode_sites(options)
-
 
     if options.bounds is None:
         bounds = None
@@ -274,10 +270,11 @@ def main():
                     print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dups[0][0])
                     continue
 
-                try:
+                if options.array_joint:
                     elems = s.get_array_elements(site)
-                except:
+                else:
                     elems = [site,]
+
                 try:
                     X, y, evids = load_site_data(elems, wiggles, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint, HACK_FAKE_POINTS=options.fake_points)
                 except NoDataException:
@@ -291,7 +288,7 @@ def main():
                 else:
                     model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=options.basisid, unique=True)
                 evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
-                Xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy'
+                Xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy.npz'
                 np.savetxt(evid_fname, evids, fmt='%d')
                 np.savez(Xy_fname, X=X, y=y)
 
@@ -299,8 +296,9 @@ def main():
                 st = time.time()
                 try:
                     print "training mode for target", target
-                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds)
+                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds, param_var=options.param_var+options.slack_var)
                 except Exception as e:
+                    raise
                     print e
                     continue
 
@@ -314,7 +312,11 @@ def main():
                 wiggle_options = {'wiggle_basisid': basisid,}
                 template_options = {'template_shape': options.template_shape, }
                 insert_options = wiggle_options if wiggles else template_options
-                modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, **insert_options)
+
+                n = len(model.mean) # WILL BREAK NON-LBMs!
+                shrinkage = {'mean': np.zeros((n,)),
+                             'cov': np.eye(n) * (options.param_var+options.slack_var),}
+                modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, shrinkage=repr(shrinkage), **insert_options)
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
 if __name__ == "__main__":

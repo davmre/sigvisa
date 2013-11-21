@@ -521,7 +521,7 @@ class SigvisaGraph(DirectedGraphModel):
 
     def load_array_node_from_modelid(self, modelid, label, **kwargs):
         model = load_modelid(modelid, gpmodel_build_trees=self.gpmodel_build_trees)
-        node = ArrayNode(model=model, label=label, **kwargs)
+        node = ArrayNode(model=model, label=label, st=self.start_time, **kwargs)
         node.modelid = modelid
         return node
 

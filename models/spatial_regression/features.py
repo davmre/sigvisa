@@ -3,6 +3,7 @@ import numpy as np
 
 def ortho_poly_fit(x, degree = 1):
     n = degree + 1
+    x = x.flatten()
     if(degree >= len(np.unique(x))):
             stop("'degree' must be less than number of unique points")
     xbar = np.mean(x)
@@ -16,11 +17,11 @@ def ortho_poly_fit(x, degree = 1):
     norm2 = np.sum(raw**2, axis=0)
     alpha = (np.sum((raw**2)*np.reshape(x,(-1,1)), axis=0)/norm2 + xbar)[:degree]
     Z = raw / np.sqrt(norm2)
-    Z = raw
     Z[:,0] = 1
     return Z, norm2, alpha
 
 def ortho_poly_predict(x, alpha, norm2, degree=1):
+    x = x.flatten()
     n = degree + 1
     Z = np.empty((len(x), n))
     Z[:,0] = 1

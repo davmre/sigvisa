@@ -155,13 +155,16 @@ def prior_sample(X, hyperparams, dfn_str, wfn_str, sparse_threshold=1e-20, retur
     else:
         return y
 
-class SparseGP(ParamModel, GP):
+class SparseGP(GP, ParamModel):
 
     def __init__(self, *args, **kwargs):
         if 'sta' in kwargs:
             ParamModel.__init__(self, sta=kwargs['sta'])
             del kwargs['sta']
         GP.__init__(self, *args, **kwargs)
+
+    def standardize_input_array(self, c, **kwargs):
+        return ParamModel.standardize_input_array(self, c, **kwargs)
 
     def pack_npz(self):
         d = super(SparseGP, self).pack_npz()
