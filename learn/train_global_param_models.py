@@ -7,13 +7,18 @@ import re
 import pickle
 from collections import defaultdict
 from functools32 import lru_cache
-
-from sigvisa import Sigvisa
-
-from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, read_fitting_run
-
 from optparse import OptionParser
 
+
+import scipy.optimize
+
+
+
+from sigvisa import Sigvisa
+from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, read_fitting_run
+
+
+from sigvisa.models.distributions import InvGamma, Gaussian
 from sigvisa.learn.train_param_common import load_modelid, learn_model
 from sigvisa.learn.train_coda_models import model_params
 from sigvisa.database.signal_data import execute_and_return_id
@@ -223,8 +228,19 @@ def receive_data_message(mu_g, cov_g, H, y, station_slack, noise_var, negate=Fal
     c = np.dot(C, np.dot(invA, mu_g) + np.dot(H.T, np.dot(invB, y)))
     return c, C
 
+def fit_invgamma(data):
+    def nll(x):
+        a,b = x
+        invg = InvGamma(a,b)
+        return -np.sum([invg.log_p(v) for v in data])
+    r = scipy.optimize.fmin(nll, x0=[1.0, .5], disp=True)
+    ig = InvGamma(*r)
+    return ig
 
-def retrain_model(modelid, prior_mean, prior_cov, **kwargs):
+def fit_gaussian(data):
+    return Gaussian(mean=np.mean(data), std=np.std(data))
+
+def retrain_model(modelid, shrinkage, **kwargs):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
@@ -239,12 +255,10 @@ def retrain_model(modelid, prior_mean, prior_cov, **kwargs):
     d = np.load(xy_fname)
     X, y = d['X'], d['y']
 
-    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, param_mean=prior_mean, param_cov=prior_cov, **kwargs)
+    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, **kwargs)
 
     hyperparams = model_params(model, model_type)
     model.save_trained_model(model_fname)
-
-    shrinkage = {'mean': prior_mean, 'cov': prior_cov}
 
     cursor.execute("""update sigvisa_param_model set shrinkage=%s, hyperparams=%s, training_ll=%s, timestamp=%s where modelid=%s""", (repr(shrinkage), hyperparams, model.log_likelihood(), time.time(), modelid))
 
@@ -260,71 +274,69 @@ def get_shrinkage(modelid, n):
     shrinkage = eval(shrinkage, {'array': np.array})
     return shrinkage['mean'], shrinkage['cov']
 
-def retrain_models_fromdata(modelids, global_var=1.0, station_slack_var=1.0):
-    # for testing only.
-    # this method totally ignores the whole model infrastructure and computes global
-    # params directly from the data (assuming iid noise, i.e. no GP).
-    # on parametric-only models, it *should* give the same results as
-    # the standard retrain_models method.
 
-    demo_model = load_modelid(modelid = modelids[0])
-    n = len(demo_model.mean)
+def accumulate_hyperparams(hparams, model, model_type):
+    if model_type.startswith('param'):
+        hparams.append(model.noise_var)
+    elif model_type== 'constant_gaussian':
+        hparams.append((model.mean, model.std**2))
+    elif model_type== 'constant_laplacian':
+        hparams.append((model.center, model.scale**2))
+    else:
+        raise Exception("don't know how to accumulate hyperparms for model type %s!" % model_type)
 
-    mu_g = np.zeros((n,))
-    cov_g = np.eye(n) * global_var
-    station_slack = np.eye(n) * station_slack_var
+def fit_hyperparams(hparams, model_type):
+    hparams = np.array(hparams)
+    if model_type.startswith('param'):
+        noise_prior = fit_invgamma(hparams)
+        return {'noise_prior': noise_prior}
+    elif model_type.startswith('constant'):
+        noise_prior = fit_invgamma(hparams[:,1])
+        loc_prior = fit_gaussian(hparams[:,0])
+        return {'noise_prior': noise_prior,
+                'loc_prior': loc_prior}
 
-    messages = dict()
-    for modelid in modelids:
-        model = load_modelid(modelid=modelid)
-        s = Sigvisa()
-        cursor = s.dbconn.cursor()
+def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
 
-        sql_query = "select model_fname, model_type, param, site, optim_method from sigvisa_param_model where modelid=%d" % modelid
-        cursor.execute(sql_query)
-        model_fname, model_type, target, site, optim_params = cursor.fetchone()
-        xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy.npz'
-        d = np.load(xy_fname)
-        X, y = d['X'], d['y']
-
-        H = model.featurizer(X)
-        messages[modelid] = (H, y)
-
-        mu_g, cov_g = receive_data_message(mu_g, cov_g, H, y, station_slack, model.noise_var, negate=False)
-        print "updated from", modelid, ", global mean is now", mu_g
-
-    for modelid in modelids:
-        H,y = messages[modelid]
-        mu_partial, cov_partial = receive_data_message(mu_g, cov_g, H, y, station_slack, 1.0, negate=True)
-
-        retrain_model(modelid, mu_partial, cov_partial + station_slack)
-
-
-def retrain_models(modelids, global_var=1.0, station_slack_var=1.0):
-
-    demo_model = load_modelid(modelid = modelids[0])
-    n = len(demo_model.mean)
-
-    mu_g = np.zeros((n,))
-    cov_g = np.eye(n) * global_var
-    station_slack = np.eye(n) * station_slack_var
+    if model_type.startswith("param"):
+        demo_model = load_modelid(modelid = modelids[0])
+        n = len(demo_model.mean)
+        mu_g = np.zeros((n,))
+        cov_g = np.eye(n) * global_var
+        station_slack = np.eye(n) * station_slack_var
 
     messages = dict()
+    hparams = []
     for modelid in modelids:
         model = load_modelid(modelid=modelid)
-        prior_mean, prior_cov = get_shrinkage(modelid,n)
-        print "shrunk mean", prior_mean
-        m,c = message_from_model(model, prior_mean, prior_cov,station_slack)
-        messages[modelid] = (m,c)
-        mu_g, cov_g = receive_message(mu_g, cov_g, m,c)
-        print "updated from", modelid, ", global mean is now", mu_g
 
-    import pdb; pdb.set_trace()
+        if model_type.startswith("param"):
+            prior_mean, prior_cov = get_shrinkage(modelid,n)
+            print "shrunk mean", prior_mean
+            m,c = message_from_model(model, prior_mean, prior_cov,station_slack)
+            messages[modelid] = (m,c)
+            mu_g, cov_g = receive_message(mu_g, cov_g, m,c)
+            print "updated from", modelid, ", global mean is now", mu_g
+
+        accumulate_hyperparams(hparams, model, model_type)
+
+    hparam_priors = fit_hyperparams(hparams, model_type)
 
     for modelid in modelids:
-        m,c = messages[modelid]
-        mu_partial, cov_partial = receive_message(mu_g, cov_g, m,-c)
-        retrain_model(modelid, mu_partial, cov_partial + station_slack)
+        if model_type.startswith("param"):
+            m,c = messages[modelid]
+            mu_partial, cov_partial = receive_message(mu_g, cov_g, m,-c)
+
+            model_params = {'param_mean': mu_partial,
+                            'param_cov': cov_partial+station_slack}
+            shrinkage = {'mean': mu_partial,
+                         'cov': cov_partial+station_slack}
+        else:
+            model_params = {}
+            shrinkage = {}
+
+        all_params = dict(model_params.items() + hparam_priors.items())
+        retrain_model(modelid, shrinkage=shrinkage, **all_params)
 
 def main():
     parser = OptionParser()
@@ -365,7 +377,7 @@ def main():
         sql_query = "select modelid from sigvisa_param_model where param='%s' and model_type='%s' and band='%s' %s and phase='%s' and fitting_runid=%d" % (target, options.model_type, options.band, chan_cond, options.phase, runid)
         cursor.execute(sql_query)
         modelids = np.array(cursor.fetchall()).flatten()
-        retrain_models(modelids, global_var=options.param_var, station_slack_var=options.slack_var)
+        retrain_models(modelids, options.model_type, global_var=options.param_var, station_slack_var=options.slack_var)
 
     cursor.close()
 

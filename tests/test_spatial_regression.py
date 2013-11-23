@@ -17,10 +17,11 @@ class TestModels(unittest.TestCase):
             [110, 30, 20, 3000, 34],
         ], dtype=float)
         self.y = np.array([
-            -0.02,
-            -0.01,
-            -0.015,
-            -0.005,
+            1.0,
+            -2.0,
+            5.0,
+            20.0,
+            -3.0,
         ])
         self.evids = np.array([
             1,
@@ -35,7 +36,7 @@ class TestModels(unittest.TestCase):
         model = learn_model(self.X, self.y, model_type="constant_gaussian", sta="AAK")
         pred1 = model.predict(self.testX1)
         pred2 = model.predict(self.testX2)
-        self.assertAlmostEqual(pred1, np.mean(self.y))
+        self.assertAlmostEqual(pred1, np.mean(self.y), 3)
         self.assertAlmostEqual(pred1, pred2)
 
         fname = "test_constant_model"

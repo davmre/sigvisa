@@ -74,8 +74,7 @@ class ParamModel(Distribution):
                 depth = v
 
         distance = geog.dist_km((lon, lat), (self.site_lon, self.site_lat))
-        azimuth = geog.azimuth((self.site_lon, self.site_lat), (lon, lat))
-        a = np.array(((lon, lat, depth, distance, azimuth),), dtype=float)
+        a = np.array(((lon, lat, depth, distance, event.mb),), dtype=float)
         return a
 
     def event_to_array(self, event):
@@ -83,8 +82,7 @@ class ParamModel(Distribution):
             a = self.ev_cache[event]
         else:
             distance = geog.dist_km((event.lon, event.lat), (self.site_lon, self.site_lat))
-            azimuth = geog.azimuth((self.site_lon, self.site_lat), (event.lon, event.lat))
-            a = np.array(((event.lon, event.lat, event.depth, distance, azimuth),), dtype=float)
+            a = np.array(((event.lon, event.lat, event.depth, distance, event.mb),), dtype=float)
             self.ev_cache[event] = a
         return a
 
@@ -106,19 +104,19 @@ class ParamModel(Distribution):
 
 class ConstGaussianModel(ParamModel):
 
-    def __init__(self, X=None, y=None, sta=None, fname=None):
+    def __init__(self, X=None, y=None, sta=None, fname=None, mean=None, std=None):
         super(ConstGaussianModel, self).__init__(sta=sta)
 
         if fname is not None:
             self.load_trained_model(fname)
             return
 
-        self.mean = np.mean(y)
-        self.std = np.std(y)
-
-        self.ll = np.sum([scipy.stats.norm.logpdf(z,  loc= self.mean, scale= self.std) for z in y])
+        self.mean = np.mean(y) if mean is None else mean
+        self.std = np.std(y) if std is None else std
 
         self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
+        self.ll = np.sum(self.l1 - .5 * ((y - self.mean)/self.std)**2)
+
 
     def save_trained_model(self, fname):
         with open(fname, 'w') as f:
@@ -154,9 +152,6 @@ class ConstGaussianModel(ParamModel):
         x = x if isinstance(x, collections.Iterable) else (x,)
 
 
-        # HERE FOR BACKWARDS COMPATIBILITY WITH OLD PICKLED OBJECTS: REMOVE EVENTUALLY
-        self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
-
 
         r1 = np.sum([self.l1 -.5 * ( (z - self.mean) / self.std )**2 for z in x])
         # r2 = np.sum([scipy.stats.norm.logpdf(z, loc=self.mean, scale=self.std) for z in x])
@@ -178,17 +173,18 @@ class ConstGaussianModel(ParamModel):
 
 class ConstLaplacianModel(ParamModel):
 
-    def __init__(self, X=None, y=None, sta=None, fname=None):
+    def __init__(self, X=None, y=None, sta=None, fname=None, center=None, scale=None):
         super(ConstLaplacianModel, self).__init__(sta=sta)
 
         if fname is not None:
             self.load_trained_model(fname)
             return
 
-        self.center = np.median(y)
-        self.scale = np.mean(np.abs(y-self.center))
+        self.center = np.median(y) if center is None else center
+        self.scale = np.mean(np.abs(y-self.center)) if scale is None else scale
 
-        self.ll = np.sum([scipy.stats.laplace.logpdf(z,  loc=self.center, scale= self.scale) for z in y])
+        self.ll = np.sum(-np.log(2*self.scale) - np.abs(y-self.center)/self.scale)
+
 
     def save_trained_model(self, fname):
         with open(fname, 'w') as f:

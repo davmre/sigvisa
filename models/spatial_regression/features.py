@@ -99,5 +99,6 @@ def recover_featurizer(desc, recovery_info):
         dims = recovery_info['extract_dim']
         featurizer = lambda X: multilinear_featurizer(X, dims, means, scales)
         return featurizer, {'means': means, 'scales': scales, 'extract_dim': dims}
+
     else:
         raise ValueError("unrecognized feature type %s" % desc)

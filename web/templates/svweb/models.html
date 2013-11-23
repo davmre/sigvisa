@@ -60,16 +60,16 @@
                 <td>
 		{% if model.model_type|slice:":8" == "constant" %}
 		<a href="{% url model_density modelid=model.modelid %}">density</a>
-		{% endif %}
-		{% if model.model_type|slice:":6" = "linear" %}
-		<a href="{% url model_distance_plot modelid=model.modelid %}">distance plot</a>
-		{% endif %}
-		{% if model.model_type|slice:":2" == "gp" %}
+		{% elif model.model_type|slice:":2" == "gp" %}
 		<a href="{% url model_distance_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=10">distance plot</a>
 		<a href="{% url model_heatmap modelid=model.modelid %}">heatmap</a>
 		<a href="{% url model_heatmap_std modelid=model.modelid %}">heatmap_std</a>
-		{% endif %}
-		{% if model.model_type|slice:":5" == "param" %}
+		{% elif model.model_type|slice:":15" == "param_linear_mb" %}
+		<a href="{% url model_mb_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">mb plot</a>
+		{% elif model.model_type|slice:":19" == "param_linear_distmb" %}
+		<a href="{% url model_mb_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">mb plot</a>
+		<a href="{% url model_distance_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">distance plot</a>
+		{% elif model.model_type|slice:":5" == "param" %}
 		<a href="{% url model_distance_plot modelid=model.modelid %}?azi=180;azi_window=180;depth=0;nplots=1">distance plot</a>
 		<a href="{% url model_heatmap modelid=model.modelid %}">heatmap</a>
 		{% endif %}

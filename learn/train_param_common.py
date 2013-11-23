@@ -32,7 +32,9 @@ def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_ty
 def model_params(model, model_type):
     if model_type.startswith('gplocal'):
         d = dict()
-        d['kernel'] =model.hyperparams
+        d['cov_mean'] =model.cov_mean
+        d['cov_fic'] =model.cov_fic
+        d['noise_var'] =model.noise_var
         d['mean'] = model.beta_bar
         d['covar'] = np.dot(model.invc.T, model.invc)
         r = repr(d)
@@ -46,6 +48,7 @@ def model_params(model, model_type):
         d = dict()
         d['mean'] = model.mean
         d['covar'] = np.dot(model.sqrt_covar.T, model.sqrt_covar)
+        d['noise_var'] = model.noise_var
         r = repr(d)
         if len(r) > 4000:
             del d['covar']
@@ -73,11 +76,9 @@ def learn_model(X, y, model_type, sta, target=None, optim_params=None, gp_build_
                          optim_params=optim_params, k=k,
                          bounds=bounds, **kwargs)
     elif model_type == "constant_gaussian":
-        model = learn_constant_gaussian(sta=sta, X=X, y=y)
+        model = learn_constant_gaussian(sta=sta, X=X, y=y, **kwargs)
     elif model_type == "constant_laplacian":
-        model = learn_constant_laplacian(sta=sta, X=X, y=y)
-    elif model_type == "linear_distance":
-        model = learn_linear(sta=sta, X=X, y=y)
+        model = learn_constant_laplacian(sta=sta, X=X, y=y, **kwargs)
     elif model_type.startswith('param_'):
         basisfn_str = model_type[6:]
         model = learn_parametric(X=X, y=y, sta=sta, basisfn_str=basisfn_str, **kwargs)
@@ -103,7 +104,7 @@ def basisfns_from_str(basisfn_str, param_var=1000):
 
     return basisfns, b, B
 
-def learn_parametric(sta, X, y, basisfn_str, param_var=10000, optimize_marginal_ll=False, **kwargs):
+def learn_parametric(sta, X, y, basisfn_str, param_var=10000, noise_prior=None, optimize_marginal_ll=True, **kwargs):
 
     # make sure we use the same set of orthogonal polynomials for
     # each station model, so we can compare their parameters.
@@ -111,31 +112,49 @@ def learn_parametric(sta, X, y, basisfn_str, param_var=10000, optimize_marginal_
         degree = int(basisfn_str[4:])
         fakeX = np.reshape(np.linspace(0, 10000, 100), (-1, 1))
         Z, norm2, alpha = ortho_poly_fit(fakeX, degree)
-        featurizer_recovery = {'norm2': norm2, 'alpha': alpha}
+        featurizer_recovery = {'norm2': norm2, 'alpha': alpha, 'extract_dim': 3}
+        extract_dim=None
+    elif basisfn_str == "linear_mb":
+        basisfn_str = "mlinear"
+        featurizer_recovery = {'means': np.array((3.9,)), 'scales': np.array((.5,)), 'extract_dim': (4,)}
+        extract_dim=None
+    elif basisfn_str == "linear_distmb":
+        basisfn_str = "mlinear"
+        featurizer_recovery = {'means': np.array((3500,3.9,)), 'scales': np.array((1000,.5,)), 'extract_dim': (3,4)}
+        extract_dim=None
     else:
         featurizer_recovery = None
+        extract_dim=3
 
-    def nllgrad(std):
+    def nllgrad(var):
+        std = np.sqrt(var)
         try:
-            lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=True, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
+            lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=True, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, **kwargs)
         except scipy.linalg.LinAlgError:
             print " warning: lin alg error for std %f" % std
             return (np.inf, np.array((-1.0,)))
-        return (-lbm.ll, -lbm.ll_deriv)
+        ll = lbm.ll
+        ll_deriv = lbm.ll_deriv
+        if noise_prior is not None:
+            ll += noise_prior.log_p(var)
+            ll_deriv += noise_prior.deriv_log_p(var)
+        return (-ll, -ll_deriv)
 
-    std = 1.0
     if optimize_marginal_ll:
         x0 = 10
         result = scipy.optimize.minimize(fun=nllgrad, x0=x0, jac=True,
                                          tol=.0001, method='L-BFGS-B', bounds=((1e-3, None),))
-        std = result['x']
+        var = result['x']
+        std = np.sqrt(var)
         print "got opt std", std
-    #else:
-    #    std = 1.0
-    #    lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=False, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
-    #    p = lbm.predict(X)
-    #    r = y-p
-    #    opt_std = np.std(r)
+    else:
+        std = 1.0
+        lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=False, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
+        p = lbm.predict(X)
+        r = y-p
+        std = np.std(r)
+        if std == 0:
+            std = 1.0
 
     return LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=True, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
 
@@ -200,11 +219,61 @@ def learn_linear(X, y, sta, optim_params=None):
     return baseline_models.LinearModel(X=X, y=y, sta=sta)
 
 
-def learn_constant_gaussian(X, y, sta, optim_params=None):
-    return baseline_models.ConstGaussianModel(X=X, y=y, sta=sta)
+def learn_constant_gaussian(X, y, sta, optimize_marginal_ll=True, optim_params=None, noise_prior=None, loc_prior=None):
 
-def learn_constant_laplacian(X, y, sta, optim_params=None):
-    return baseline_models.ConstLaplacianModel(X=X, y=y, sta=sta)
+    # technically, as long as the loc prior is Gaussian and noise (variance) prior is InvGamma,
+    # we have conjugate priors and should be able to find the posterior in closed form.
+    # but doing the optimization is easy, and I'm lazy.
+    def nll(x):
+        mean, var = x
+        if var <= 0:
+            return np.float('inf')
+
+        g = baseline_models.ConstGaussianModel(X=X, y=y, mean=mean, std=np.sqrt(var))
+        ll = g.ll
+
+        if noise_prior is not None:
+            ll += noise_prior.log_p(var)
+        if loc_prior is not None:
+            ll += loc_prior.log_p(mean)
+        return -ll
+    if optimize_marginal_ll:
+        x0 = [0, 1]
+        result = scipy.optimize.fmin(nll, x0=x0)
+        mean, var = result
+        std = np.sqrt(var)
+        print "got optimal gaussian", mean,std
+    else:
+        mean=None
+        std = None
+
+    return baseline_models.ConstGaussianModel(X=X, y=y, sta=sta, mean=mean, std=std)
+
+def learn_constant_laplacian(X, y, sta, optimize_marginal_ll=True, optim_params=None, noise_prior=None, loc_prior=None):
+
+    def nll(x):
+        center, scale_sq = x
+        if scale_sq <= 0:
+            return np.float('inf')
+        g = baseline_models.ConstLaplacianModel(X=X, y=y, center=center, scale=np.sqrt(scale_sq))
+        ll = g.ll
+        if noise_prior is not None:
+            ll += noise_prior.log_p(scale_sq)
+        if loc_prior is not None:
+            ll += loc_prior.log_p(center)
+        return -ll
+
+    if optimize_marginal_ll:
+        x0 = [0, 1]
+        result = scipy.optimize.fmin(nll, x0=x0)
+        center, scale_sq = result
+        scale = np.sqrt(scale_sq)
+        print "got optimal laplacian", center, scale
+    else:
+        center=None
+        scale = None
+
+    return baseline_models.ConstLaplacianModel(X=X, y=y, sta=sta, center=center, scale=scale)
 
 def load_modelid(modelid, **kwargs):
     s = Sigvisa()
@@ -224,8 +293,6 @@ def load_model(fname, model_type, gpmodel_build_trees=True):
         model = baseline_models.ConstGaussianModel(fname=fname)
     elif model_type == "constant_laplacian":
         model = baseline_models.ConstLaplacianModel(fname=fname)
-    elif model_type == "linear_distance":
-        model = baseline_models.LinearModel(fname=fname)
     else:
         raise Exception("invalid model type %s" % (model_type))
     return model

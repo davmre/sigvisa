@@ -72,6 +72,21 @@ def plot_empirical_distance(request, xy_by_phase, axes):
     r = xmax - xmin
     axes.set_xlim([xmin - r / 20.0, xmax + r / 20.0])
 
+def plot_empirical_mb(request, xy_by_phase, axes):
+
+    colors = ['r', 'g', 'b', 'y']
+
+    xmin = np.float('-inf')
+    xmax = np.float('inf')
+    for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
+        X, y = xy_by_phase[phase]
+        alpha = float(request.GET.get('alpha', min(1, 4 / np.log(len(y)))))
+        axes.scatter(X[:, 4], y, alpha=alpha, c=colors[i], s=10, marker='.', edgecolors="none")
+        xmin = max(xmin, np.min(X[:, 4]))
+        xmax = min(xmax, np.max(X[:, 4]))
+    r = xmax - xmin
+    axes.set_xlim([xmin - r / 20.0, xmax + r / 20.0])
+
 
 def plot_linear_model_distance(request, model_record, axes):
 
@@ -79,25 +94,37 @@ def plot_linear_model_distance(request, model_record, axes):
     model = load_model(full_fname, model_record.model_type)
 
     distances = np.linspace(0, 20000, 200)
-    pred = np.array([model.predict(np.array(((0, 0, 0, d, 0),))) for d in distances]).flatten()
+    pred = np.array([model.predict(np.array(((0, 0, 0, d, 3.5),))) for d in distances]).flatten()
     axes.plot(distances, pred, 'k-')
 
     try:
         Xs = np.zeros((len(distances), 5))
-        print distances.shape
-        print Xs[:,3].shape
         Xs[:,3] = distances
+        Xs[:,4] = 3.5
         for i in range(30):
             ys = model.sample(Xs)
             axes.plot(distances, ys, alpha=0.2)
     except Exception as e:
         print e
 
-    #std = np.array([model.std((0, 0, 0, d, 0)) for d in distances])
-    #var_x = np.concatenate((distances, distances[::-1]))
-    #var_y = np.concatenate((pred + 2 * std, (pred - 2 * std)[::-1]))
-    #axes.fill(var_x, var_y, edgecolor='w', facecolor='#d3d3d3', alpha=0.1)
+def plot_linear_model_mb(request, model_record, axes):
 
+    full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
+    model = load_model(full_fname, model_record.model_type)
+
+    mbs = np.linspace(2, 8, 200)
+    pred = np.array([model.predict(np.array(((0, 0, 0, 3500, m),))) for m in mbs]).flatten()
+    axes.plot(mbs, pred, 'k-')
+
+    try:
+        Xs = np.zeros((len(mbs), 5))
+        Xs[:,4] = mbs
+        Xs[:,3] = 3500
+        for i in range(30):
+            ys = model.sample(Xs)
+            axes.plot(mbs, ys, alpha=0.2)
+    except Exception as e:
+        print e
 
 def plot_gp_model_distance(request, model_record, axes, azi=0, depth=0):
 
@@ -201,6 +228,16 @@ def plot_gaussian(request, model_record, axes):
     pdf = scipy.stats.norm.pdf(x, loc=model.mean, scale=model.std)
     axes.plot(x, pdf, 'k-')
 
+def plot_laplacian(request, model_record, axes):
+
+    full_fname = os.path.join(os.getenv("SIGVISA_HOME"), model_record.model_fname)
+    model = load_model(full_fname, model_record.model_type)
+    xmin = model.center - 4 * model.scale
+    xmax = model.center + 4 * model.scale
+    x = np.linspace(xmin, xmax, 200)
+    pdf = scipy.stats.laplace.pdf(x, loc=model.center, scale=model.scale)
+    axes.plot(x, pdf, 'k-')
+
 def plot_adhoc_gaussian(request, xy_by_phase, axes):
 
     for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
@@ -289,7 +326,17 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
             if log_transform:
                 plot_adhoc_gaussian(request, xy_by_phase, axes=axes)
             else:
-                plot_gaussian(request, model, axes=axes)
+                if model.model_type == "constant_gaussian":
+                    plot_gaussian(request, model, axes=axes)
+                elif model.model_type == "constant_laplacian":
+                    plot_laplacian(request, model, axes=axes)
+                else:
+                    raise Exception("don't know how to plot a histogram for %s" % model.model_type)
+        elif plot_type == "mb":
+            if model.model_type.startswith("param_"):
+                plot_linear_model_mb(request, model_record=model, axes=axes)
+            else:
+                raise Exception("don't know how to plot mb for model %s" % model.model_type)
         elif plot_type == "distance":
             if model.model_type.startswith("param_"):
                 plot_linear_model_distance(request, model_record=model, axes=axes)
@@ -311,6 +358,8 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
             plot_empirical_histogram(request=request, xy_by_phase=xy_by_phase, axes=axes)
         elif plot_type == "distance":
             plot_empirical_distance(request=request, xy_by_phase=xy_by_phase, axes=axes)
+        elif plot_type == "mb":
+            plot_empirical_mb(request=request, xy_by_phase=xy_by_phase, axes=axes)
         elif plot_type == "heatmap" and modelid is None:
             plot_data_heatmap(request=request, sta=sta, param=param, xy_by_phase=xy_by_phase, axes=axes)
 
@@ -353,6 +402,9 @@ def model_density(request, modelid):
 @cache_page(60 * 60 * 24 * 365)
 def model_distance_plot(request, modelid):
     return plot_fit_param(request, modelid=modelid, plot_type="distance")
+
+def model_mb_plot(request, modelid):
+    return plot_fit_param(request, modelid=modelid, plot_type="mb")
 
 @cache_page(60 * 60 * 24 * 365)
 def model_heatmap(request, modelid):

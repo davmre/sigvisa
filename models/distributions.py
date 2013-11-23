@@ -43,9 +43,14 @@ class InvGamma(Distribution):
         self.alpha = alpha
         self.beta = beta
 
+    def predict(self):
+        return self.beta / (self.alpha+1) # return the mode, since the mean isn't always defined
+
     def log_p(self, x):
         alpha = self.alpha
         beta = self.beta
+        if alpha <= 0 or beta <= 0:
+            return np.float("-inf")
         if x == 0.0: return np.log(1e-300)
         lp = alpha*np.log(beta) - scipy.special.gammaln(alpha) - (alpha+1)*np.log(x) - beta/x
         if np.isnan(lp):

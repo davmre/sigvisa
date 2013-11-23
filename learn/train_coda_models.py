@@ -38,7 +38,7 @@ def get_wiggle_training_data(runid, wg, target_num, array=False, **kwargs):
         X = wiggle_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH]]
         X = np.concatenate((sta_pos, X), axis = 1)
     else:
-        X = wiggle_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH]]
+        X = wiggle_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_MB]]
 
     evids = wiggle_data[:, FIT_EVID]
 
@@ -63,10 +63,10 @@ def get_shape_training_data(runid, site, chan, band, phases, target, require_hum
         sta_pos = np.empty((0, 3))
         for i in range(len(sta_data)):
             sta_pos = np.append(sta_pos, np.array([list(s.earthmodel.site_info(sta_data[i], fit_data[i][FIT_ATIME]))[:3]]), axis = 0)
-        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH, FIT_MB]]
+        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_MB]]
         X = np.concatenate((sta_pos, X), axis = 1)
     else:
-        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_AZIMUTH, FIT_MB]]
+        X = fit_data[:, [FIT_LON, FIT_LAT, FIT_DEPTH, FIT_DISTANCE, FIT_MB]]
 
     try:
         evids = fit_data[:, FIT_EVID]
@@ -313,9 +313,12 @@ def main():
                 template_options = {'template_shape': options.template_shape, }
                 insert_options = wiggle_options if wiggles else template_options
 
-                n = len(model.mean) # WILL BREAK NON-LBMs!
-                shrinkage = {'mean': np.zeros((n,)),
-                             'cov': np.eye(n) * (options.param_var+options.slack_var),}
+                shrinkage = {}
+                if model_type.startswith("param"):
+                    n = len(model.mean) # WILL BREAK NON-LBMs!
+                    shrinkage = {'mean': np.zeros((n,)),
+                                 'cov': np.eye(n) * (options.param_var+options.slack_var),}
+
                 modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, shrinkage=repr(shrinkage), **insert_options)
                 print "inserted as", modelid, "ll", model.log_likelihood()
 
