@@ -67,9 +67,9 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                 graph.add_node(nodes[sta], template=True)
             return nodes
         else:
-            return graph.setup_site_param_node(param=param, site=site, phase=phase, parent=evnodes['loc'],
+            return graph.setup_site_param_node(param=param, site=site, phase=phase,
+                                               parents=[evnodes['loc'], evnodes['mb']],
                                                chan=chan, band=band, template=True, children=children, **kwargs)
-
 
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0):

@@ -65,6 +65,8 @@ class ParamModel(Distribution):
     """
 
     def event_dict_to_array(self, ev_dict):
+        # this method is designed to accept parent_values dicts from a Sigvisa graph, which may
+        # have keys of the form "eid;lon" where eid is an unknwon integer.
         for (k,v) in ev_dict.items():
             if 'lon' in k:
                 lon = v
@@ -72,9 +74,11 @@ class ParamModel(Distribution):
                 lat = v
             elif 'depth' in k:
                 depth = v
+            elif 'mb' in k:
+                mb = v
 
         distance = geog.dist_km((lon, lat), (self.site_lon, self.site_lat))
-        a = np.array(((lon, lat, depth, distance, event.mb),), dtype=float)
+        a = np.array(((lon, lat, depth, distance, mb),), dtype=float)
         return a
 
     def event_to_array(self, event):

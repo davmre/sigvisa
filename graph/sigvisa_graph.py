@@ -10,7 +10,7 @@ from functools32 import lru_cache
 
 from sigvisa import Sigvisa
 
-from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists
+from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, RunNotFoundException
 
 from sigvisa.source.event import get_event
 from sigvisa.learn.train_param_common import load_modelid
@@ -57,6 +57,7 @@ def get_param_model_id(runid, sta, phase, model_type, param,
         raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond))
     finally:
         cursor.close()
+
     return modelid
 
 
@@ -93,8 +94,9 @@ class SigvisaGraph(DirectedGraphModel):
                  wiggle_model_type="dummy", wiggle_family="fourier_0.8",
                  wiggle_len_s = 30.0, wiggle_basisids=None,
                  dummy_fallback=False,
-                 nm_type="ar", run_name=None, iteration=None,
-                 runid = None, phases="auto", base_srate=40.0,
+                 nm_type="ar",
+                 run_name=None, iteration=None, runid = None,
+                 phases="auto", base_srate=40.0,
                  assume_envelopes=True,
                  arrays_joint=False, gpmodel_build_trees=False):
         """
@@ -136,7 +138,10 @@ class SigvisaGraph(DirectedGraphModel):
         self.runid = runid
         if run_name is not None and iteration is not None:
             cursor = Sigvisa().dbconn.cursor()
-            self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = True)
+            try:
+                self.runid = get_fitting_runid(cursor, run_name, iteration, create_if_new = False)
+            except RunNotFoundException:
+                self.runid=None
             cursor.close()
 
         self.template_nodes = []
@@ -531,7 +536,7 @@ class SigvisaGraph(DirectedGraphModel):
         else:
             return self.setup_site_param_node_indep(**kwargs)
 
-    def setup_site_param_node_joint(self, param, site, phase, parent, model_type,
+    def setup_site_param_node_joint(self, param, site, phase, parents, model_type,
                               chan=None, band=None, basisid=None,
                               modelid=None,
                               children=(), low_bound=None,
@@ -550,24 +555,24 @@ class SigvisaGraph(DirectedGraphModel):
                 else:
                     raise
         label = create_key(param=param, sta="%s_arr" % site,
-                           phase=phase, eid=parent.eid,
+                           phase=phase, eid=parents[0].eid,
                            chan=chan, band=band)
         if model_type=="dummy":
-            return self.setup_site_param_indep(param=param, site=site, phase=phase, parent=parent, chan=chan, band=band, basisid=basisid, model_type="dummy", children=children, low_bound=low_bound, high_bound=high_bound, initial_value=initial_value, **kwargs)
+            return self.setup_site_param_indep(param=param, site=site, phase=phase, parents=parents, chan=chan, band=band, basisid=basisid, model_type="dummy", children=children, low_bound=low_bound, high_bound=high_bound, initial_value=initial_value, **kwargs)
         else:
             sorted_elements = sorted(self.site_elements[site])
-            sk = [create_key(param=param, eid=parent.eid, sta=sta, phase=phase, chan=chan, band=band) for sta in sorted_elements]
+            sk = [create_key(param=param, eid=parents[0].eid, sta=sta, phase=phase, chan=chan, band=band) for sta in sorted_elements]
             if initial_value is None:
                 initial_value = 0.0
             if type(initial_value) != dict:
                 initial_value = dict([(k, initial_value) for k in sk])
-            node = self.load_array_node_from_modelid(modelid=modelid, parents=[parent,], children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, sorted_keys=sk, label=label)
+            node = self.load_array_node_from_modelid(modelid=modelid, parents=parents, children=children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, sorted_keys=sk, label=label)
             self.add_node(node, **kwargs)
             return node
 
 
 
-    def setup_site_param_node_indep(self, param, site, phase, parent, model_type,
+    def setup_site_param_node_indep(self, param, site, phase, parents, model_type,
                               chan=None, band=None, basisid=None,
                               modelid=None,
                               children=(), low_bound=None,
@@ -591,7 +596,7 @@ class SigvisaGraph(DirectedGraphModel):
                     else:
                         raise
             label = create_key(param=param, sta=sta,
-                               phase=phase, eid=parent.eid,
+                               phase=phase, eid=parents[0].eid,
                                chan=chan, band=band)
             my_children = [wn for wn in children if wn.sta==sta]
             if model_type=="dummy":
@@ -601,9 +606,9 @@ class SigvisaGraph(DirectedGraphModel):
                     model = Gaussian(mean=0.0, std=0.25)
                 else:
                     model = DummyModel(default_value=initial_value)
-                node = Node(label=label, model=model, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
             else:
-                node = self.load_node_from_modelid(modelid, label, parents=[parent,], children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = self.load_node_from_modelid(modelid, label, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
 
             nodes[sta] = node
             self.add_node(node, **kwargs)
@@ -706,7 +711,7 @@ class SigvisaGraph(DirectedGraphModel):
                     model_type = self._tm_type(param, site, wiggle_param=True)
                     nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
                                                                             model_type=model_type,
-                                                                            phase=phase, parent=evnodes['loc'],
+                                                                            phase=phase, parents=[evnodes['loc'],],
                                                                             band=band, chan=chan, basisid=wg.basisid,
                                                                             children=child_wave_nodes, wiggle=True)
 
@@ -1003,10 +1008,11 @@ class SigvisaGraph(DirectedGraphModel):
 
     def save_template_params(self, tmpl_optim_param_str,
                              wiggle_optim_param_str,
-                             hz, elapsed):
+                             hz, elapsed,
+                             runid):
         s = Sigvisa()
         cursor = s.dbconn.cursor()
-        runid = self.runid
+
         fitids = []
 
         wiggle_dir = os.path.join(os.getenv("SIGVISA_HOME"), "wiggle_data")

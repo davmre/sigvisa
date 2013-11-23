@@ -194,7 +194,7 @@ def main():
             cmd_str = "python -m learn.fit_shape_params -e %d -s %s %s %s %s  --run_name=%s --run_iteration=%d %s %s %s" % (
                 int(evid), sta, "--fit_wiggles" if options.fit_wiggles else "",
                 "--template_shape=%s" % options.template_shape if options.template_shape else "",
-                "--template_model=%s" % options.template_model if options.template_model else "",
+                "--template_model=\"%s\"" % options.template_model if options.template_model else "",
                 run_name, iteration, init_str,
                 "--optim_params=\"%s\" " % options.optim_params if options.optim_params is not None else "",
                 extra_option_string)
