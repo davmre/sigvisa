@@ -4,7 +4,7 @@ import os
 import shutil
 import errno
 import re
-import pickle
+import cPickle as pickle
 from collections import defaultdict
 from functools32 import lru_cache
 
@@ -42,6 +42,9 @@ MAX_TRAVEL_TIME = 2000.0
 @lru_cache(maxsize=1024)
 def get_param_model_id(runid, sta, phase, model_type, param,
                        template_shape, basisid=None, chan=None, band=None):
+    if runid is None:
+        raise ModelNotFoundError("no runid specified, so not loading parameter model.")
+
     # get a DB modelid for a previously-trained parameter model
     s = Sigvisa()
     cursor = s.dbconn.cursor()

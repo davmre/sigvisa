@@ -24,7 +24,6 @@ class DAG(object):
     def __ts_visit(self, node):
         m = node.get_mark()
         if m == 2:
-            import pdb; pdb.set_trace()
             raise CyclicGraphError("graph contains a cycle!")
         elif m == 0:
             node.set_mark(2) # visit node "temporarily"

@@ -3,9 +3,9 @@ import numpy as np
 import os
 from sigvisa import Sigvisa
 
-from sigvisa.database.dataset import read_timerange
+from sigvisa.database.dataset import read_timerange, read_events, EV_MB_COL, EV_EVID_COL
 from sigvisa.database.signal_data import read_fitting_run_iterations
-from sigvisa.graph.sigvisa_graph import SigvisaGraph
+from sigvisa.graph.sigvisa_graph import SigvisaGraph, get_param_model_id, ModelNotFoundError
 from sigvisa.source.event import get_event
 from sigvisa.signals.io import load_event_station_chan, load_segments
 
@@ -88,11 +88,9 @@ def register_svgraph_cmdline(parser):
     parser.add_option(
         "--template_shape", dest="template_shape", default="paired_exp", type="str", help="template model type (paired_exp)")
     parser.add_option(
-        "-m", "--model", dest="model", default=None, type="str", help="")
-    parser.add_option(
         "--phases", dest="phases", default="auto", help="comma-separated list of phases to include in predicted templates (auto)")
     parser.add_option(
-        "--template_model_types", dest="tm_types", default="tt_residual:constant_gaussian,peak_offset:constant_gaussian,amp_transfer:constant_gaussian,coda_decay:constant_gaussian",
+        "--template_model_types", dest="tm_types", default="param",
         help="comma-separated list of param:model_type mappings (peak_offset:constant_gaussian,coda_height:constant_gaussian,coda_decay:constant_gaussian)")
     parser.add_option("--wiggle_model_type", dest="wm_type", default="dummy", help = "")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="dummy", help = "")
@@ -106,8 +104,8 @@ def register_svgraph_cmdline(parser):
 
 def register_svgraph_signal_cmdline(parser):
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
-    parser.add_option("--chans", dest="chans", default="BHZ,SHZ", type="str",
-                      help="comma-separated list of channel names to use for inference (BHZ)")
+    parser.add_option("--chans", dest="chans", default="auto", type="str",
+                      help="comma-separated list of channel names to use for inference (auto)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
                       help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
     parser.add_option("--array_refsta_only", dest="refsta_only", default=True, action="store_false",
@@ -116,18 +114,20 @@ def register_svgraph_signal_cmdline(parser):
                       help="load signals beginning at this UNIX time (None)")
     parser.add_option("--end_time", dest="end_time", default=None, type="float",
                       help="load signals end at this UNIX time (None)")
-    parser.add_option("--dataset", dest="dataset", default="training", type="str",
+    parser.add_option("--dataset", dest="dataset", default="test", type="str",
                       help="if start_time and end_time not specified, load signals from the time period of the specified dataset (training)")
     parser.add_option("--hour", dest="hour", default=0, type="float",
-                      help="use a particular hour of the given dataset (0)")
+                      help="start at a particular hour of the given dataset (0)")
+    parser.add_option("--len_hours", dest="len_hours", default=1, type="float",
+                      help="load this many hours from the given dateset")
     parser.add_option("--initialize_leb", dest="initialize_leb", default="no", type="str",
                       help="use LEB events to set the intial state. options are 'no', 'yes', 'perturb' to initialize with locations randomly perturbed by ~5 degrees, or 'count' to initialize with a set of completely random events, having the same count as the LEB events ")
 
 def register_svgraph_event_based_signal_cmdline(parser):
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
     parser.add_option("--hz", dest="hz", default=5, type=float, help="downsample signals to a given sampling rate, in hz (5)")
-    parser.add_option("--chans", dest="chans", default="BHZ,SHZ", type="str",
-                      help="comma-separated list of channel names to use for inference (BHZ)")
+    parser.add_option("--chans", dest="chans", default="auto", type="str",
+                      help="comma-separated list of channel names to use for inference (auto)")
     parser.add_option("--bands", dest="bands", default="freq_2.0_3.0", type="str",
                       help="comma-separated list of band names to use for inference (freq_2.0_3.0)")
     parser.add_option("--array_refsta_only", dest="refsta_only", default=True, action="store_false",
@@ -145,13 +145,18 @@ def setup_svgraph_from_cmdline(options, args):
     else:
         runid = options.runid
 
+
+    tm_type_str = options.tm_types
+    if tm_type_str == "param":
+        tm_type_str = "tt_residual:constant_laplacian,peak_offset:param_linear_mb,amp_transfer:param_sin1,coda_decay:param_linear_distmb"
+
     tm_types = {}
-    if ',' in options.tm_types:
-        for p in options.tm_types.split(','):
+    if ',' in tm_type_str:
+        for p in tm_type_str.split(','):
             (param, model_type) = p.strip().split(':')
             tm_types[param] = model_type
     else:
-        tm_types = options.tm_types
+        tm_types = tm_type_str
 
     if options.phases in ("auto", "leb"):
         phases = options.phases
@@ -184,7 +189,7 @@ def load_signals_from_cmdline(sg, options, args):
         print "loading signals from dataset %s" % options.dataset
         (stime, etime) = read_timerange(cursor, options.dataset, hours=None, skip=0)
         stime += options.hour * 3600
-        etime = stime + 3600
+        etime = stime + options.len_hours*3600.0
 
     print "loading signals from stime %.1f through etime %.1f" % (stime, etime)
 
@@ -206,10 +211,33 @@ def load_signals_from_cmdline(sg, options, args):
         for band in bands:
             filtered_seg = seg.with_filter(band)
             for chan in filtered_seg.get_chans():
+
+                try:
+                    modelid = get_param_model_id(sg.runid, seg['sta'], 'P', sg._tm_type('amp_transfer', site=seg['sta'], wiggle_param=False), 'amp_transfer', 'paired_exp', chan=chan, band=band)
+                except ModelNotFoundError as e:
+                    print "couldn't find amp_transfer model for %s,%s,%s, so not adding to graph." % (seg['sta'], chan, band), e
+                    continue
+
                 wave = filtered_seg[chan]
                 sg.add_wave(wave)
 
 
+    if options.initialize_leb != "no":
+        st = sg.event_start_time
+        et = sg.end_time
+        events, orid2num = read_events(cursor, st, et, 'leb')
+        events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
+
+        if options.initialize_leb=="yes":
+            for evarr in events:
+                ev = get_event(evid=evarr[EV_EVID_COL])
+                sg.add_event(ev)
+        elif options.initialize_leb=="perturb":
+            raise NotImplementedError("not implemented!")
+        elif options.initialize_leb=="count":
+            sg.prior_sample_events(stime=st, etime=et, n_events=len(events))
+        else:
+            raise Exception("unrecognized argument initialize_leb=%s" % options.initialize_leb)
 
 
     cursor.close()

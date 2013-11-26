@@ -125,28 +125,31 @@ def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpste
 
 
     for (eid, evnodes) in sg.evnodes.items():
-        if eid not in log_handles:
-            log_handles[eid] = open(os.path.join(run_dir, 'ev_%05d.txt' % eid), 'a')
+
+        handle = open(os.path.join(run_dir, 'ev_%05d.txt' % eid), 'a')
         evlon = evnodes['loc'].get_local_value('lon')
         evlat = evnodes['loc'].get_local_value('lat')
         evdepth = evnodes['loc'].get_local_value('depth')
         evtime = evnodes['time'].get_local_value('time')
         evmb = evnodes['mb'].get_local_value('mb')
         evsource = evnodes['natural_source'].get_local_value('natural_source')
-        log_handles[eid].write('%06d\t%3.4f\t%3.4f\t%4.4f\t%10.2f\t%2.3f\t%d\n' % (step, evlon, evlat, evdepth, evtime, evmb, evsource))
+        handle.write('%06d\t%3.4f\t%3.4f\t%4.4f\t%10.2f\t%2.3f\t%d\n' % (step, evlon, evlat, evdepth, evtime, evmb, evsource))
+        """
         for (sta,wns) in sg.station_waves.items():
             for wn in wns:
                 for phase in sg.phases:
                     lbl = "%d_%s_%s" % (eid, wn.label, phase)
-                    if lbl not in log_handles:
-                        mkdir_p(os.path.join(run_dir, 'ev_%05d' % eid))
-                        log_handles[lbl] = open(os.path.join(run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
+                    mkdir_p(os.path.join(run_dir, 'ev_%05d' % eid))
+                    lbl_handle = open(os.path.join(run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
                     tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
-                    log_handles[lbl].write('%06d %f %f %f %f\n' % (step,
-                                                                   tmvals['arrival_time'],
-                                                                   tmvals['peak_offset'],
-                                                                   tmvals['coda_height'],
-                                                                   tmvals['coda_decay']))
+                    lbl_handle.write('%06d %f %f %f %f\n' % (step,
+                                                             tmvals['arrival_time'],
+                                                             tmvals['peak_offset'],
+                                                             tmvals['coda_height'],
+                                                             tmvals['coda_decay']))
+                    lbl_handle.close()
+        """
+        handle.close()
 
     for move_name in move_times.keys():
         if move_name not in log_handles:
@@ -184,7 +187,7 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                  'tmpl_death': death_move,
                  'tmpl_split': split_move,
                  'tmpl_merge': merge_move,
-                 'swap_association': swap_association_move} if enable_template_openworld else {}
+                 'swap_association': swap_association_move} if enable_template_openworld else {'swap_association': swap_association_move}
 
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move,
@@ -301,6 +304,10 @@ def main():
                       help="MCMC steps to take (1000)")
     parser.add_option("--skip", dest="skip", default=500, type="int",
                       help="how often to print/save MCMC state, in steps (500)")
+    parser.add_option("--no_template_openworld", dest="no_template_openworld", default=False, action="store_true",
+                      help="disable template birth/death/merge/split moves")
+    parser.add_option("--no_event_openworld", dest="no_event_openworld", default=False, action="store_true",
+                      help="disable event birth/death moves")
     parser.add_option("--startfrom", dest="startfrom", default=None, type="str",
                       help="file name of pickled graph from previous run. starts a new run, initialized with the state from that graph. (None)")
     parser.add_option("--run_dir", dest="run_dir", default=None, type="str",
@@ -328,8 +335,14 @@ def main():
 
     set_hough_options({'bin_width_deg': 1.0, 'time_tick_s': 10, 'smoothbins': True})
 
+
+    sys.setrecursionlimit(20000)
     np.random.seed(0)
-    run_open_world_MH(sg, skip=options.skip, steps=options.steps)
+    run_open_world_MH(sg, skip=options.skip, steps=options.steps,
+                      enable_event_openworld= not options.no_event_openworld,
+                      enable_event_moves=True,
+                      enable_template_openworld= not options.no_template_openworld,
+                      enable_template_moves=True)
 
 if __name__ == "__main__":
     try:

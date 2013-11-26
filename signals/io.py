@@ -87,7 +87,7 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
         chans = Sigvisa().chans
 
     # standardize channel names to avoid duplicates
-    chans = [Sigvisa().canonical_channel_name[c] for c in chans]
+    chans = [Sigvisa().canonical_channel_name[c] if c != 'auto' else 'auto' for c in chans]
 
     for sta in stations:
 
@@ -99,7 +99,7 @@ def load_segments(cursor, stations, start_time, end_time, chans=None):
             try:
                 wave = fetch_waveform(sta, chan, start_time, end_time, cursor=cursor)
                 print " ... successfully loaded."
-            except (MissingWaveform, IOError) as e:
+            except (MissingWaveform, IOError, KeyError) as e:
                 print " ... not found, skipping. (%s)" % e
                 continue
             waves.append(wave)
