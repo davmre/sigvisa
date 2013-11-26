@@ -15,6 +15,7 @@ from optparse import OptionParser
 
 from sigvisa.models.ttime import tt_predict
 from sigvisa.learn.train_param_common import insert_model, learn_model, load_model, get_model_fname, model_params
+from sigvisa.learn.train_global_param_models import retrain_models
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.models.wiggles import load_wiggle_generator
 
@@ -176,7 +177,7 @@ def main():
         "-n", "--band", dest="band", default="freq_2.0_3.0", type="str", help="name of band to examine (freq_2.0_3.0)")
     parser.add_option("-p", "--phases", dest="phases", default=",".join(s.phases), type="str",
                       help="comma-separated list of phases for which to train models)")
-    parser.add_option("-t", "--targets", dest="targets", default="coda_decay,amp_transfer,peak_offset", type="str",
+    parser.add_option("-t", "--targets", dest="targets", default=None, type="str",
                       help="comma-separated list of target parameter names (coda_decay,amp_transfer,peak_offset)")
     parser.add_option("-b", "--basisid", dest="basisid", default=None, type="int", help="basisid (from the sigvisa_wiggle_basis DB table) for which to train wiggle param models")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str", help="")
@@ -205,6 +206,12 @@ def main():
                       help="additional variance allowed on top of global model params in the per-station params (1.0)")
     parser.add_option("--fake_points", dest="fake_points", default=False, action="store_true",
                       help="add some fake points at long and short distances to help condition the polynomials (False)")
+    parser.add_option("--iterate", dest="iterate", default=0, type="int",
+                      help="perform additional retraining iterations to shrink towards a global model (0)")
+    parser.add_option("--preset", dest="preset", default=None, type="str",
+                      help="use preset models types to build models for all targets in one command. options are 'param' to build parametric models (amp_transfer: param_sin1, tt_residual: constant_laplacian, coda_decay: param_linear_distmb, peak_offset: param_linear_mb) or 'gp' to build nonparametric GP models")
+
+
 
     (options, args) = parser.parse_args()
 
@@ -215,7 +222,8 @@ def main():
     if options.basisid is None:
         wiggles = False
         basisid = None
-        targets = options.targets.split(',')
+        wg = None
+        targets = options.targets.split(',') if options.targets is not None else None
     else:
         wiggles = True
         basisid = options.basisid
@@ -232,8 +240,9 @@ def main():
     else:
         run_iter = int(options.run_iter)
 
-    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
     allsites = explode_sites(options)
+
+    cursor.close()
 
     if options.bounds is None:
         bounds = None
@@ -243,17 +252,48 @@ def main():
         high_bounds = b[1::2]
         bounds = zip(low_bounds, high_bounds)
 
+    sitechans = {}
     for site in allsites:
         try:
-            chan = chan_for_site(site, options)
-        except KeyError:
+            sitechans[site] = chan_for_site(site, options)
+        except KeyError as e:
+            print "skipping site %s:" % site, e
+            continue
+
+    model_types = dict([(t, options.model_type) for t in targets]) if targets is not None else None
+    iterations = options.iterate
+    param_var = options.param_var
+    slack_var = options.slack_var
+    if options.preset == "param":
+        targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_offset'] if targets is None else targets
+        model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb'}
+        iterations = 5
+
+    modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.fake_points, options.template_shape, wiggles, wg, basisid, options.subsample, param_var + slack_var)
+
+    for target in targets:
+        model_type = model_types[target]
+        for i in range(iterations):
+            print "training models for iteration %d..." % (i,)
+            retrain_models(modelids[target], model_type, global_var=param_var, station_slack_var=slack_var)
+
+def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, fake_points, template_shape, wiggles, wg, basisid, subsample, prior_var):
+    s = Sigvisa()
+    cursor = s.dbconn.cursor()
+    runid = get_fitting_runid(cursor, run_name, run_iter, create_if_new=False)
+    modelids = defaultdict(list)
+    for site in allsites:
+        try:
+            chan = sitechans[site]
+        except KeyError as e:
             continue
 
         for (param_num, target) in enumerate(targets):
             if target == "amp_transfer":
-                min_amp = options.min_amp_for_at
+                min_amp = min_amp_for_at
             else:
-                min_amp = options.min_amp
+                min_amp = min_amp
+            model_type = model_types[target]
 
             for phase in phases:
                 if wiggles:
@@ -266,27 +306,27 @@ def main():
                     model_type, site, chan, band, phase, runid, target, basisid_cond)
                 cursor.execute(sql_query)
                 dups = cursor.fetchall()
-                if len(dups) > 0 and not options.enable_dupes:
+                if len(dups) > 0 and not enable_dupes:
                     print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dups[0][0])
+                    for dup in dups:
+                        modelids[target].append(dup[0])
                     continue
 
-                if options.array_joint:
+                if array_joint:
                     elems = s.get_array_elements(site)
                 else:
                     elems = [site,]
 
                 try:
-                    X, y, evids = load_site_data(elems, wiggles, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint, HACK_FAKE_POINTS=options.fake_points)
+                    X, y, evids = load_site_data(elems, wiggles, target=target, param_num=param_num, runid=runid, chan=chan, band=band, phases=[phase, ], require_human_approved=require_human_approved, max_acost=max_acost, min_amp=min_amp, array = array_joint, HACK_FAKE_POINTS=fake_points)
                 except NoDataException:
                     print "no data for %s %s %s, skipping..." % (site, target, phase)
                     continue
-                #except:
-                #    X, y, evids = get_shape_training_data(run_name=run_name, run_iter=run_iter, site=site, chan=chan, band=band, phases=[phase, ], target=target, require_human_approved=options.require_human_approved, max_acost=options.max_acost, min_amp=min_amp, array = options.array_joint)
 
                 if wiggles:
-                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=options.template_shape, unique=True)
+                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=template_shape, unique=True)
                 else:
-                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=options.basisid, unique=True)
+                    model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=basisid, unique=True)
                 evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
                 Xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy.npz'
                 np.savetxt(evid_fname, evids, fmt='%d')
@@ -296,7 +336,7 @@ def main():
                 st = time.time()
                 try:
                     print "training mode for target", target
-                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=options.subsample, bounds=bounds, param_var=options.param_var+options.slack_var)
+                    model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, k=subsample, bounds=bounds, param_var=prior_var)
                 except Exception as e:
                     raise
                     print e
@@ -310,17 +350,21 @@ def main():
 
                 model.save_trained_model(model_fname)
                 wiggle_options = {'wiggle_basisid': basisid,}
-                template_options = {'template_shape': options.template_shape, }
+                template_options = {'template_shape': template_shape, }
                 insert_options = wiggle_options if wiggles else template_options
 
                 shrinkage = {}
                 if model_type.startswith("param"):
                     n = len(model.mean) # WILL BREAK NON-LBMs!
                     shrinkage = {'mean': np.zeros((n,)),
-                                 'cov': np.eye(n) * (options.param_var+options.slack_var),}
+                                 'cov': np.eye(n) * (prior_var),}
 
-                modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=options.require_human_approved, max_acost=options.max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, shrinkage=repr(shrinkage), **insert_options)
+                modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=require_human_approved, max_acost=max_acost, n_evids=len(evids), min_amp=min_amp, elapsed=(et-st), hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, shrinkage=repr(shrinkage), **insert_options)
                 print "inserted as", modelid, "ll", model.log_likelihood()
+                modelids[target].append(modelid)
+
+    cursor.close()
+    return modelids
 
 if __name__ == "__main__":
 

@@ -19,8 +19,7 @@ from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensur
 
 
 from sigvisa.models.distributions import InvGamma, Gaussian
-from sigvisa.learn.train_param_common import load_modelid, learn_model
-from sigvisa.learn.train_coda_models import model_params
+from sigvisa.learn.train_param_common import load_modelid, learn_model, model_params
 from sigvisa.database.signal_data import execute_and_return_id
 
 
@@ -299,7 +298,7 @@ def fit_hyperparams(hparams, model_type):
 def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
 
     if model_type.startswith("param"):
-        demo_model = load_modelid(modelid = modelids[0])
+        demo_model = load_modelid(modelid = modelids[0], memoize=False)
         n = len(demo_model.mean)
         mu_g = np.zeros((n,))
         cov_g = np.eye(n) * global_var
@@ -308,7 +307,7 @@ def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
     messages = dict()
     hparams = []
     for modelid in modelids:
-        model = load_modelid(modelid=modelid)
+        model = load_modelid(modelid=modelid, memoize=False)
 
         if model_type.startswith("param"):
             prior_mean, prior_cov = get_shrinkage(modelid,n)
@@ -368,16 +367,23 @@ def main():
 
     runid = int(options.runid)
 
-    targets = options.targets.split(',')
     if options.chan == "vertical":
         chan_cond = ""
     else:
         chan_cond = "and chan='%s'" % options.chan
+
+    targets = options.targets.split(',')
+
+    param_var = options.param_var
+    slack_var = options.slack_var
+
     for target in targets:
         sql_query = "select modelid from sigvisa_param_model where param='%s' and model_type='%s' and band='%s' %s and phase='%s' and fitting_runid=%d" % (target, options.model_type, options.band, chan_cond, options.phase, runid)
         cursor.execute(sql_query)
+        import pdb; pdb.set_trace()
         modelids = np.array(cursor.fetchall()).flatten()
-        retrain_models(modelids, options.model_type, global_var=options.param_var, station_slack_var=options.slack_var)
+
+        retrain_models(modelids, options.model_type, global_var=param_var, station_slack_var=slack_var)
 
     cursor.close()
 

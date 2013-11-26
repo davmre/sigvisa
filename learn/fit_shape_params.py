@@ -25,11 +25,12 @@ from sigvisa.graph.sigvisa_graph import SigvisaGraph
 
 def setup_graph(event, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, nm_type="ar"):
+                init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False):
     sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, nm_type = nm_type,
-                      run_name=init_run_name, iteration=init_iteration)
+                      run_name=init_run_name, iteration=init_iteration,
+                      absorb_n_phases=absorb_n_phases)
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     wave = load_event_station_chan(event.evid, sta, chan, cursor=cursor).filter("%s;env" % band)
@@ -110,17 +111,24 @@ def main():
     parser.add_option("--fit_wiggles", dest="fit_wiggles", default=False, action="store_true", help="")
     parser.add_option("--wiggle_family", dest="wiggle_family", default="fourier_0.8", type="str", help="")
     parser.add_option("--wiggle_model", dest="wiggle_model", default="dummy", type="str", help="")
+    parser.add_option("--phases", dest="phases", default="leb", type="str", help="")
     parser.add_option("--band", dest="band", default="freq_2.0_3.0", type="str", help="")
     parser.add_option("--chan", dest="chan", default="auto", type="str", help="")
     parser.add_option("--hz", dest="hz", default=5.0, type="float", help="sampling rate at which to fit the template")
     parser.add_option("--nm_type", dest="nm_type", default="ar", type="str",
                       help="type of noise model to use (ar)")
+    parser.add_option("--absorb_n_phases", dest="absorb_n_phases", default=False, action="store_true", help="")
 
 
     (options, args) = parser.parse_args()
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
+
+    if options.phases == "leb":
+        phases = "leb"
+    else:
+        phases = options.phases.split(',')
 
     if '{' in options.template_model:
         # example: "{'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb'}"
@@ -138,9 +146,11 @@ def main():
 
     sigvisa_graph = setup_graph(event=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
-                                wm_family=options.wiggle_family, wm_type=options.wiggle_model, phases="leb",
+                                wm_family=options.wiggle_family, wm_type=options.wiggle_model,
+                                phases=phases,
                                 fit_hz=options.hz, nm_type=options.nm_type,
-                                init_run_name = options.run_name, init_iteration = options.run_iteration-1)
+                                init_run_name = options.run_name, init_iteration = options.run_iteration-1,
+                                absorb_n_phases=options.absorb_n_phases)
 
     fitid = e_step(sigvisa_graph,  fit_hz = options.hz,
                    tmpl_optim_params=construct_optim_params(options.tmpl_optim_params),

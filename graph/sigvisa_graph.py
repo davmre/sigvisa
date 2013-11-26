@@ -98,7 +98,8 @@ class SigvisaGraph(DirectedGraphModel):
                  run_name=None, iteration=None, runid = None,
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True,
-                 arrays_joint=False, gpmodel_build_trees=False):
+                 arrays_joint=False, gpmodel_build_trees=False,
+                 absorb_n_phases=False):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -110,6 +111,7 @@ class SigvisaGraph(DirectedGraphModel):
         super(SigvisaGraph, self).__init__()
 
         self.gpmodel_build_trees = gpmodel_build_trees
+        self.absorb_n_phases = absorb_n_phases
 
         self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -421,6 +423,11 @@ class SigvisaGraph(DirectedGraphModel):
 
         for (site, element_list) in self.site_elements.iteritems():
             for phase in predict_phases(ev=ev, sta=site, phases=self.phases):
+                if self.absorb_n_phases:
+                    if phase == "Pn":
+                        phase = "P"
+                    elif phase == "Sn":
+                        phase = "S"
                 tg = self.template_generator(phase)
                 wg = self.wiggle_generator(phase, self.base_srate)
                 self.add_event_site_phase(tg, wg, site, phase, evnodes, sample_templates=sample_templates)

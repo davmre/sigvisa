@@ -120,6 +120,8 @@ def register_svgraph_signal_cmdline(parser):
                       help="if start_time and end_time not specified, load signals from the time period of the specified dataset (training)")
     parser.add_option("--hour", dest="hour", default=0, type="float",
                       help="use a particular hour of the given dataset (0)")
+    parser.add_option("--initialize_leb", dest="initialize_leb", default="no", type="str",
+                      help="use LEB events to set the intial state. options are 'no', 'yes', 'perturb' to initialize with locations randomly perturbed by ~5 degrees, or 'count' to initialize with a set of completely random events, having the same count as the LEB events ")
 
 def register_svgraph_event_based_signal_cmdline(parser):
     parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID to locate")
@@ -206,6 +208,9 @@ def load_signals_from_cmdline(sg, options, args):
             for chan in filtered_seg.get_chans():
                 wave = filtered_seg[chan]
                 sg.add_wave(wave)
+
+
+
 
     cursor.close()
 
