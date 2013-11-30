@@ -101,23 +101,33 @@ class LinearBasisModel(ParamModel):
         del npzfile.f
         npzfile.close()
 
-    def predict(self, cond, **kwargs):
-        X1 = self.standardize_input_array(cond, **kwargs)
-        X2 = self.featurizer(X1)
+    def predict(self, cond, features=None, **kwargs):
+
+        if features is None:
+            X1 = self.standardize_input_array(cond, **kwargs)
+            X2 = self.featurizer(X1)
+        else:
+            X2 = features
+
         return np.dot(X2, self.mean)
 
     def log_likelihood(self):
         return self.ll
 
-    def covariance(self, cond, return_sqrt=False, include_obs=False, **kwargs):
-        X1 = self.standardize_input_array(cond, **kwargs)
-        X2 = self.featurizer(X1)
+    def covariance(self, cond, return_sqrt=False, include_obs=False, features=None, **kwargs):
+
+        if features is None:
+            X1 = self.standardize_input_array(cond, **kwargs)
+            X2 = self.featurizer(X1)
+        else:
+            X2 = features
+
         tmp = np.dot(self.sqrt_covar, X2.T)
 
         if return_sqrt and not include_obs:
             return tmp.T
         else:
-            covar = np.dot(tmp.T, tmp) + (self.noise_var if include_obs else 1e-8) * np.eye(X1.shape[0])
+            covar = np.dot(tmp.T, tmp) + (self.noise_var if include_obs else 1e-8) * np.eye(X2.shape[0])
             if return_sqrt:
                 return scipy.linalg.cholesky(covar, lower=True)
             else:
@@ -128,15 +138,18 @@ class LinearBasisModel(ParamModel):
 
     def log_p(self, x, cond, **kwargs):
         cond = self.standardize_input_array(cond, **kwargs)
-        mean = self.predict(cond, **kwargs)
+        X2 = self.featurizer(cond)
+
+        mean = self.predict(cond, features=X2, **kwargs)
         n = len(mean)
-        covar = self.covariance(cond, include_obs=True)
+        covar = self.covariance(cond, features=X2, include_obs=True)
 
         r = x - mean
 
         if n==1:
             var = covar[0,0]
-            ll1 = - .5 * ((r)**2 / var + np.log(2*np.pi*var) )
+            ll = - .5 * ((r[0])**2 / var + np.log(2*np.pi*var) )
+            return ll
 
         chol = scipy.linalg.cholesky(covar, lower=True)
         ld2 = np.log(np.diag(chol)).sum()
@@ -144,6 +157,8 @@ class LinearBasisModel(ParamModel):
         tmp = np.dot(csi, r)
         d = np.dot(tmp.T, tmp)
         ll =  -.5 * ( d + n * np.log(2*np.pi)) - ld2
+
+
 
         return ll
 
@@ -155,3 +170,12 @@ class LinearBasisModel(ParamModel):
         samples = np.random.randn(covar_sqrt.shape[1], 1)
         samples = mean + np.dot(covar_sqrt, samples).flatten()
         return samples
+
+    def param_mean(self):
+        return self.mean
+
+    def param_covariance(self, chol=False):
+        if chol:
+            return self.sqrt_covar
+        else:
+            return np.dot(self.sqrt_covar.T, self.sqrt_covar)
