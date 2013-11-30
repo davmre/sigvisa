@@ -84,6 +84,8 @@ class LogNormal(Distribution):
         if x == 0.0: return 1000.0
         return (-1 -(np.log(x) - mu)/(sigma**2)) / x
 
+    def predict(self):
+        return np.exp(self.mu)
 
 class Uniform(Distribution):
     def __init__(self, lbound, rbound):
