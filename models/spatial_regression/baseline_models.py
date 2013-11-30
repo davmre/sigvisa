@@ -35,6 +35,8 @@ class ParamModel(Distribution):
         if sta is not None:
             self.site_lon, self.site_lat, self.site_elev, _, _, _, _ = Sigvisa().earthmodel.site_info(sta, 0)
 
+        self.s = Sigvisa()
+
     def __repr_base_params__(self):
         return repr({'site_lon': self.site_lon, 'site_lat': self.site_lat, 'site_elev': self.site_elev})
 
@@ -65,9 +67,14 @@ class ParamModel(Distribution):
     """
 
     def event_dict_to_array(self, ev_dict):
+        dictkey = frozenset(ev_dict.items())
+        if dictkey in self.s.global_dict_cache:
+            return self.s.global_dict_cache[dictkey]
+
+
         # this method is designed to accept parent_values dicts from a Sigvisa graph, which may
         # have keys of the form "eid;lon" where eid is an unknwon integer.
-        for (k,v) in ev_dict.items():
+        for (k,v) in dictkey:
             if 'lon' in k:
                 lon = v
             elif 'lat' in k:
@@ -79,6 +86,7 @@ class ParamModel(Distribution):
 
         distance = geog.dist_km((lon, lat), (self.site_lon, self.site_lat))
         a = np.array(((lon, lat, depth, distance, mb),), dtype=float)
+        self.s.global_dict_cache[dictkey] = a
         return a
 
     def event_to_array(self, event):

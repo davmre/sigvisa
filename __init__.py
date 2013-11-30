@@ -122,6 +122,8 @@ class Sigvisa(threading.local):
 
         self.events = dict()
 
+        self.global_dict_cache = dict() # cache a mapping of event dictionaries to arrays, used by ParamModels
+
     def __del__(self):
         self.dbconn.close()
         #self.lock.release()

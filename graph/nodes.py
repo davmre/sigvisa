@@ -244,6 +244,8 @@ class Node(object):
         self.parent_keys_changed = set()
         for node in self.parent_nodes_added:
             self._pv_cache.update(node.get_dict())
+            if hasattr(node, 'key_prefix'):
+                self._pv_cache['prefix'] = node.key_prefix
         del self.parent_nodes_added
         self.parent_nodes_added = set()
 
