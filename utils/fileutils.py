@@ -21,6 +21,16 @@ def clear_directory(path):
 
         mkdir_p(path)
 
+def remove_directory(path):
+        try:
+            shutil.rmtree(path)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                pass
+            else:
+                raise
+
+
 def next_unused_int_in_dir(path):
     max_int = 0
     for fname in os.listdir(path):
