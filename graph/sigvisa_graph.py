@@ -416,7 +416,6 @@ class SigvisaGraph(DirectedGraphModel):
         ev.eid = eid
         evnodes = setup_event(ev, fixed=fixed)
         self.evnodes[eid] = evnodes
-        assert( evnodes['loc']._mutable[evnodes['loc'].key_prefix + 'depth'])
 
         # use a set here to ensure we don't add the 'loc' node
         # multiple times, since it has multiple keys
