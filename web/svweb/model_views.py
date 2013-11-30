@@ -176,9 +176,9 @@ def plot_gp_heatmap(request, model_record, X, y, axes, stddev=False):
     ev_locs = X[:, 0:2]
     if stddev:
         print "plotting with stddev"
-        f = lambda lon, lat : np.sqrt(model.variance( cond={'lon': lon, 'lat': lat, 'depth': 0 } ))
+        f = lambda lon, lat : np.sqrt(model.variance( cond={'lon': lon, 'lat': lat, 'depth': 0, 'mb': 4.0 } ))
     else:
-        f = lambda lon, lat : model.predict( cond={'lon': lon, 'lat': lat, 'depth': 0 } )
+        f = lambda lon, lat : model.predict( cond={'lon': lon, 'lat': lat, 'depth': 0, 'mb': 4.0 } )
     heatmap_fname = full_fname + ('.std' if stddev else '')  + ".heatmap"
     hm = EventHeatmap(f=f, autobounds=ev_locs, n=25, fname = heatmap_fname)
     hm.add_stations((model_record.site,))
