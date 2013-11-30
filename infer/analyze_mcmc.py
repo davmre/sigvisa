@@ -16,6 +16,7 @@ from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.histogram import plot_density
 from sigvisa.plotting.plot import basic_plot_to_file, subplot_waveform, savefig
 import sigvisa.utils.geog as geog
+from sigvisa.utils.fileutils import mkdir_p
 
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
@@ -30,14 +31,15 @@ def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=Tr
     hm.init_bmap(axes=ax)
     hm.plot_earth(y_fontsize=16, x_fontsize=16)
 
-    baseline_alpha = 1.0 / np.log(n+1)
     alpha_fade_time = 500
     if frame is not None:
+        baseline_alpha = 0.01
         alpha = np.ones((frame,)) * baseline_alpha
         t = min(frame,alpha_fade_time)
         alpha[-t:] = np.linspace(baseline_alpha, 0.2, alpha_fade_time)[-t:]
+        lonlats = lonlats[:frame, :]
     else:
-        alpha = baseline_alpha
+        alpha = 1.0 / np.log(n+1)
 
     #hm.plot_locations(X, marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=0.2)
     scplot = hm.plot_locations(lonlats, marker=".", ms=8, mfc="red", mew=0, mec="none", alpha=alpha)
@@ -93,46 +95,57 @@ def load_trace(logfile, burnin):
     return trace, min_step, max_step
 
 
-def analyze_event(run_dir, eid, burnin, true_evs=None):
+def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=False, frameskip=50):
     ev_trace_file = os.path.join(run_dir, 'ev_%05d.txt' % eid)
     ev_img_file = os.path.join(run_dir, 'ev_%05d.png' % eid)
     ev_txt = os.path.join(run_dir, 'ev_%05d_results.txt' % eid)
     ev_dir = os.path.join(run_dir, 'ev_%05d' % eid)
+    mkdir_p(ev_dir)
+
+    true_ev = None
 
     trace, min_step, max_step = load_trace(ev_trace_file, burnin=burnin)
     if len(trace) == 0:
         return
     print "loaded"
 
-    # save big event image
-    f = Figure((11,8))
-    gs = gridspec.GridSpec(2, 4)
-    lonlat_ax = f.add_subplot(gs[0:2, 0:2])
-    true_ev, txt = ev_lonlat_density(trace, lonlat_ax, true_evs=true_evs)
-    print "plotted density"
-    with open(ev_txt, 'w') as fi:
-        fi.write(txt + '\n')
+    if bigimage:
+        # save big event image
+        f = Figure((11,8))
+        gs = gridspec.GridSpec(2, 4)
+        lonlat_ax = f.add_subplot(gs[0:2, 0:2])
+        true_ev, txt = ev_lonlat_density(trace, lonlat_ax, true_evs=true_evs)
+        print "plotted density"
+        with open(ev_txt, 'w') as fi:
+            fi.write(txt + '\n')
 
-    # also plot: depth, time, mb histograms
-    depth_ax = f.add_subplot(gs[0, 2])
-    plot_density(trace[:, EVTRACE_DEPTH], depth_ax, "depth", true_value = true_ev.depth if true_ev is not None else None)
-    time_ax = f.add_subplot(gs[1, 2])
-    plot_density(trace[:, EVTRACE_TIME], time_ax , "time", true_value = true_ev.time if true_ev is not None else None)
-    mb_ax = f.add_subplot(gs[0, 3])
-    plot_density(trace[:, EVTRACE_MB], mb_ax, "mb", true_value = true_ev.mb if true_ev is not None else None)
-    print "plotted others"
-    f.suptitle('eid %d (%d samples)' % (eid,trace.shape[0]))
-    f.tight_layout()
-    canvas = FigureCanvasAgg(f)
-    canvas.draw()
-    f.savefig(ev_img_file, bbox_inches="tight", dpi=300)
+        # also plot: depth, time, mb histograms
+        depth_ax = f.add_subplot(gs[0, 2])
+        plot_density(trace[:, EVTRACE_DEPTH], depth_ax, "depth", true_value = true_ev.depth if true_ev is not None else None)
+        time_ax = f.add_subplot(gs[1, 2])
+        plot_density(trace[:, EVTRACE_TIME], time_ax , "time", true_value = true_ev.time if true_ev is not None else None)
+        mb_ax = f.add_subplot(gs[0, 3])
+        plot_density(trace[:, EVTRACE_MB], mb_ax, "mb", true_value = true_ev.mb if true_ev is not None else None)
+        print "plotted others"
+        f.suptitle('eid %d (%d samples)' % (eid,trace.shape[0]))
+        f.tight_layout()
+        canvas = FigureCanvasAgg(f)
+        canvas.draw()
+        f.savefig(ev_img_file, bbox_inches="tight", dpi=300)
 
 
     # also save individual images
-    f = Figure((8,8))
-    ax = f.add_subplot(1,1,1)
-    true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False)
-    savefig(os.path.join(ev_dir, 'posterior_loc.png'), f, bbox_inches="tight", dpi=300)
+    frame_dir = os.path.join(ev_dir, 'frames')
+    mkdir_p(frame_dir)
+    for (i,frame) in enumerate(np.arange(frameskip, max_step-min_step, frameskip)):
+        frame_fname = os.path.join(frame_dir, '%06d.png' % i)
+        if os.path.exists(frame_fname): continue
+        f = Figure((8,8))
+        ax = f.add_subplot(1,1,1)
+        true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, frame=frame)
+        savefig(frame_fname, f, bbox_inches="tight", dpi=75)
+    video_cmd = "ffmpeg -qscale 15 -f image2 -r 5 -i %s/%%06d.png %s/chain.mp4" % (frame_dir, ev_dir)
+    os.system(video_cmd)
 
     if true_ev is not None:
         f = Figure((8,8))
@@ -222,6 +235,7 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin):
 
 def plot_ev_template_posteriors(run_dir, sg, eid, burnin):
     ev_dir = os.path.join(run_dir, 'ev_%05d' % eid)
+    mkdir_p(ev_dir)
     r = re.compile('tmpl_%d_' % eid + r'(.+)_([A-Za-z])+')
     for fname in os.listdir(ev_dir):
         print fname
@@ -314,7 +328,7 @@ def analyze_run(run_dir, burnin, true_evs):
             eids.append(eid)
     print eids
     for eid in eids:
-        plot_ev_template_posteriors(run_dir, sg, eid, burnin)
+        #plot_ev_template_posteriors(run_dir, sg, eid, burnin)
         analyze_event(run_dir, eid, burnin, true_evs)
     #combine_steps(run_dir)
 
