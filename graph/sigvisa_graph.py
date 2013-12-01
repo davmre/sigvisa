@@ -52,10 +52,11 @@ def get_param_model_id(runid, sta, phase, model_type, param,
     band_cond = "and band='%s'" % band if band else ""
     basisid_cond = "and wiggle_basisid=%d" % (basisid) if basisid is not None else ""
 
-    sql_query = "select modelid from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond)
+    sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond)
     try:
         cursor.execute(sql_query)
-        modelid = cursor.fetchone()[0]
+        results = cursor.fetchall()
+        modelid = sorted(results, key = lambda x : -x[1])[0][0] # use the model with the most shrinkage iterations
     except:
         raise ModelNotFoundError("no model found matching model_type = '%s' and site='%s' %s %s and phase='%s' and fitting_runid=%d and template_shape='%s' and param='%s' %s" % (model_type, sta, chan_cond, band_cond, phase, runid, template_shape, param, basisid_cond))
     finally:
