@@ -121,6 +121,7 @@ create table sigvisa_param_model (
  elapsed double precision not null,
  hyperparams varchar(4000),
  shrinkage varchar(4000),
+ shrinkage_iter int not null,
  optim_method varchar(1024),
  primary key (modelid),
  foreign key (fitting_runid) REFERENCES sigvisa_coda_fitting_run(runid),

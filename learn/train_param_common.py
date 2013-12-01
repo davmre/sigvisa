@@ -32,7 +32,7 @@ def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_ty
 def model_params(model, model_type):
     if model_type.startswith('gplocal'):
         d = dict()
-        d['cov_mean'] =model.cov_mean
+        d['cov_main'] =model.cov_main
         d['cov_fic'] =model.cov_fic
         d['noise_var'] =model.noise_var
         d['mean'] = model.beta_bar
@@ -104,8 +104,7 @@ def basisfns_from_str(basisfn_str, param_var=1000):
 
     return basisfns, b, B
 
-def learn_parametric(sta, X, y, basisfn_str, param_var=10000, noise_prior=None, optimize_marginal_ll=True, **kwargs):
-
+def pre_featurizer(basisfn_str):
     # make sure we use the same set of orthogonal polynomials for
     # each station model, so we can compare their parameters.
     if basisfn_str.startswith("poly"):
@@ -125,11 +124,16 @@ def learn_parametric(sta, X, y, basisfn_str, param_var=10000, noise_prior=None, 
     else:
         featurizer_recovery = None
         extract_dim=3
+    return basisfn_str, featurizer_recovery, extract_dim
+
+def learn_parametric(sta, X, y, basisfn_str, noise_prior=None, optimize_marginal_ll=True, **kwargs):
+
+    basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
 
     def nllgrad(var):
         std = np.sqrt(var)
         try:
-            lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=True, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, **kwargs)
+            lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, noise_std=std, compute_ll=True, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, **kwargs)
         except scipy.linalg.LinAlgError:
             print " warning: lin alg error for std %f" % std
             return (np.inf, np.array((-1.0,)))
@@ -149,14 +153,14 @@ def learn_parametric(sta, X, y, basisfn_str, param_var=10000, noise_prior=None, 
         print "got opt std", std
     else:
         std = 1.0
-        lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=False, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
+        lbm = LinearBasisModel(X=X, y=y, basis=basisfn_str, noise_std=std, compute_ll=False, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
         p = lbm.predict(X)
         r = y-p
         std = np.std(r)
         if std == 0:
             std = 1.0
 
-    return LinearBasisModel(X=X, y=y, basis=basisfn_str, param_var=param_var, noise_std=std, compute_ll=True, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
+    return LinearBasisModel(X=X, y=y, basis=basisfn_str, noise_std=std, compute_ll=True, sta=sta, extract_dim=3, featurizer_recovery=featurizer_recovery, **kwargs)
 
 
 def subsample_data(X, y, k=250):
@@ -176,14 +180,7 @@ def build_starting_hparams(kernel_str, target):
     noise_var, noise_prior, cov_main = start_params[kernel_str][target]
     return noise_var, noise_prior, cov_main, None
 
-def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prior=None, cov_main=None, cov_fic=None, target=None, optimize=True, optim_params=None, param_var=100000, build_tree=True, array=False, basisfns=None, b=None, B=None, k=500, bounds=None, **kwargs):
-
-    if basisfn_str:
-        basisfns, b, B = basisfns_from_str(basisfn_str, param_var=param_var)
-    elif basisfns is None:
-        basisfns = ()
-        b = np.array(())
-        B = np.array(((),))
+def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prior=None, cov_main=None, cov_fic=None, target=None, optimize=True, optim_params=None, build_tree=True, array=False, k=500, bounds=None, max_n=10000, **kwargs):
 
     try:
         st = target.split('_')
@@ -191,6 +188,18 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         target = st[0]
     except (ValueError, AttributeError):
         pass
+
+    distance_idx = None
+    if kernel_str == "lld":
+        distance_idx = 3
+    elif kernel_str == "lldlld":
+        distance_idx = 6
+    if "distmb" in basisfn_str:
+        extract_dim = (distance_idx, distance_idx+1)
+    else:
+        extract_dim = distance_idx
+
+    basisfn_str, featurizer_recovery, extract_dim = pre_featurizer(basisfn_str)
 
     if cov_main is None:
         noise_var, noise_prior, cov_main, cov_fic = build_starting_hparams(kernel_str, target)
@@ -201,17 +210,17 @@ def learn_gp(sta, X, y, kernel_str, basisfn_str=None, noise_var=None, noise_prio
         else:
             sX, sy = X, y
         print "learning hyperparams on", len(sy), "examples"
-        nllgrad, x0, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basisfns=basisfns, param_mean=b, param_cov=B, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
+        nllgrad, x0, build_gp, covs_from_vector = optimize_gp_hyperparams(X=sX, y=sy, basis=basisfn_str, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, build_tree=False, noise_var=noise_var, noise_prior=noise_prior, cov_main=cov_main, cov_fic=cov_fic, **kwargs)
 
-        bounds = [(1e-20,None),] * len(x0) if bounds is None else bounds
+        bounds = [(1e-2,50.0,),(1e-2, 50.0)] + [(1e-2,1000.0),] * (len(x0) -2) if bounds is None else bounds
         params, ll = optim_utils.minimize(f=nllgrad, x0=x0, optim_params=optim_params, fprime="grad_included", bounds=bounds)
         print "got params", params, "giving ll", ll
         noise_var, cov_main, cov_fic = covs_from_vector(params)
 
-    if len(y) > 10000:
-        X, y = subsample_data(X=X, y=y, k=10000)
+    if len(y) > max_n:
+        X, y = subsample_data(X=X, y=y, k=max_n)
 
-    gp = SparseGP(X=X, y=y, basisfns=basisfns, param_mean=b, param_cov=B, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
+    gp = SparseGP(X=X, y=y, basis=basisfn_str, extract_dim=extract_dim, featurizer_recovery=featurizer_recovery, noise_var=noise_var, cov_main=cov_main, cov_fic=cov_fic, sta=sta, compute_ll=True, build_tree=build_tree,  **kwargs)
     return gp
 
 

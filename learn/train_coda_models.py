@@ -268,6 +268,10 @@ def main():
         targets = ['amp_transfer', 'tt_residual', 'coda_decay', 'peak_offset'] if targets is None else targets
         model_types = {'amp_transfer': 'param_sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'param_linear_distmb', 'peak_offset': 'param_linear_mb'}
         iterations = 5
+    if options.preset == "gplocal":
+        targets = ['tt_residual', 'coda_decay', 'peak_offset', 'amp_transfer'] if targets is None else targets
+        model_types = {'amp_transfer': 'gplocal+lld+sin1', 'tt_residual': 'constant_laplacian', 'coda_decay': 'gplocal+lld+linear_distmb', 'peak_offset': 'gplocal+lld+linear_mb'}
+        iterations = 5
 
     modelids = do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, options.min_amp_for_at, options.min_amp, options.enable_dupes, options.array_joint, options.require_human_approved, options.max_acost, options.fake_points, options.template_shape, wiggles, wg, basisid, options.subsample, param_var + slack_var)
 
@@ -354,8 +358,8 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                 insert_options = wiggle_options if wiggles else template_options
 
                 shrinkage = {}
-                if model_type.startswith("param"):
-                    n = len(model.mean) # WILL BREAK NON-LBMs!
+                if model_type.startswith("param") or model_type.startswith('gplocal'):
+                    n = len(model.param_mean())
                     shrinkage = {'mean': np.zeros((n,)),
                                  'cov': np.eye(n) * (prior_var),}
 

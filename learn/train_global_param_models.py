@@ -13,12 +13,13 @@ from optparse import OptionParser
 import scipy.optimize
 
 
+from sigvisa.sparsegp.gp import GPCov
 
 from sigvisa import Sigvisa
 from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensure_dir_exists, read_fitting_run
+from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
-
-from sigvisa.models.distributions import InvGamma, Gaussian
+from sigvisa.models.distributions import InvGamma, Gaussian, LogNormal
 from sigvisa.learn.train_param_common import load_modelid, learn_model, model_params
 from sigvisa.database.signal_data import execute_and_return_id
 
@@ -163,11 +164,8 @@ def message_from_model(model, mean_prior, cov_prior, station_slack):
 
     """
 
-    mu_s = model.mean
-    try:
-        sigma_s = np.dot(model.sqrt_covar.T, model.sqrt_covar)
-    except:
-        sigma_s = model.c
+    mu_s = model.param_mean()
+    sigma_s = model.param_covariance()
 
     sigma_s_inv = np.linalg.inv(sigma_s)
     cov_prior_inv = np.linalg.inv(cov_prior)
@@ -239,14 +237,20 @@ def fit_invgamma(data):
 def fit_gaussian(data):
     return Gaussian(mean=np.mean(data), std=np.std(data))
 
+def fit_lognormal(data):
+    return LogNormal(mu=np.mean(np.log(data)), sigma=np.std(np.log(data)))
+
+
 def retrain_model(modelid, shrinkage, **kwargs):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
-    sql_query = "select model_fname, model_type, param, site, optim_method from sigvisa_param_model where modelid=%d" % modelid
+    sql_query = "select model_fname, model_type, param, site, optim_method, shrinkage_iter from sigvisa_param_model where modelid=%d" % modelid
     cursor.execute(sql_query)
-    model_fname, model_type, target, site, optim_params = cursor.fetchone()
+    model_fname, model_type, target, site, optim_params, shrinkage_iter = cursor.fetchone()
+    if optim_params is not None:
+        optim_params = construct_optim_params(optim_params[1:-1])
 
     print "retraining model", modelid, "at site", site
 
@@ -259,7 +263,7 @@ def retrain_model(modelid, shrinkage, **kwargs):
     hyperparams = model_params(model, model_type)
     model.save_trained_model(model_fname)
 
-    cursor.execute("""update sigvisa_param_model set shrinkage=%s, hyperparams=%s, training_ll=%s, timestamp=%s where modelid=%s""", (repr(shrinkage), hyperparams, model.log_likelihood(), time.time(), modelid))
+    cursor.execute("""update sigvisa_param_model set shrinkage=%s, hyperparams=%s, training_ll=%s, timestamp=%s, shrinkage_iter=%d where modelid=%s""", (repr(shrinkage), hyperparams, model.log_likelihood(), time.time(), shrinkage_iter+1, modelid))
 
     cursor.close()
     s.dbconn.commit()
@@ -271,6 +275,7 @@ def get_shrinkage(modelid, n):
     cursor.execute(sql_query)
     shrinkage = cursor.fetchone()[0]
     shrinkage = eval(shrinkage, {'array': np.array})
+
     return shrinkage['mean'], shrinkage['cov']
 
 
@@ -281,10 +286,16 @@ def accumulate_hyperparams(hparams, model, model_type):
         hparams.append((model.mean, model.std**2))
     elif model_type== 'constant_laplacian':
         hparams.append((model.center, model.scale**2))
+    elif model_type.startswith('gplocal'):
+        noise_hparams = [model.noise_var,]
+        main_hparams = list(model.cov_main.flatten(include_xu=False)) if model.cov_main is not None else []
+        fic_hparams = list(model.cov_fic.flatten(include_xu=False)) if model.cov_fic is not None else []
+        all_hparams = noise_hparams + main_hparams + fic_hparams
+        hparams.append(all_hparams)
     else:
-        raise Exception("don't know how to accumulate hyperparms for model type %s!" % model_type)
+        raise Exception("don't know how to accumulate hyperparams for model type %s!" % model_type)
 
-def fit_hyperparams(hparams, model_type):
+def fit_hyperparams(hparams, model_type, model):
     hparams = np.array(hparams)
     if model_type.startswith('param'):
         noise_prior = fit_invgamma(hparams)
@@ -294,12 +305,27 @@ def fit_hyperparams(hparams, model_type):
         loc_prior = fit_gaussian(hparams[:,0])
         return {'noise_prior': noise_prior,
                 'loc_prior': loc_prior}
+    else:
+        noise_prior = fit_invgamma(hparams[:,0])
+        wfn_prior = fit_invgamma(hparams[:,1])
+
+        dfn_priors = [fit_lognormal(hparams[:,i]) for i in range(2, hparams.shape[1])]
+        cov_main = GPCov(wfn_str=model.cov_main.wfn_str, dfn_str=model.cov_main.dfn_str,
+                         wfn_params = [wfn_prior.predict(),],
+                         dfn_params = [p.predict() for p in dfn_priors],
+                         wfn_priors = [wfn_prior,],
+                         dfn_priors = dfn_priors)
+        return {'noise_prior': noise_prior,
+                'noise_var': noise_prior.predict(),
+                'cov_main': cov_main}
 
 def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
 
-    if model_type.startswith("param"):
-        demo_model = load_modelid(modelid = modelids[0], memoize=False)
-        n = len(demo_model.mean)
+    demo_model = None
+    if model_type.startswith("param") or model_type.startswith('gplocal'):
+        demo_model = load_modelid(modelid = modelids[0], memoize=False, gpmodel_build_trees=False)
+        n = len(demo_model.param_mean())
+
         mu_g = np.zeros((n,))
         cov_g = np.eye(n) * global_var
         station_slack = np.eye(n) * station_slack_var
@@ -307,9 +333,9 @@ def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
     messages = dict()
     hparams = []
     for modelid in modelids:
-        model = load_modelid(modelid=modelid, memoize=False)
+        model = load_modelid(modelid=modelid, memoize=False, gpmodel_build_trees=False)
 
-        if model_type.startswith("param"):
+        if model_type.startswith("param") or model_type.startswith('gplocal'):
             prior_mean, prior_cov = get_shrinkage(modelid,n)
             print "shrunk mean", prior_mean
             m,c = message_from_model(model, prior_mean, prior_cov,station_slack)
@@ -319,10 +345,10 @@ def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
 
         accumulate_hyperparams(hparams, model, model_type)
 
-    hparam_priors = fit_hyperparams(hparams, model_type)
+    hparam_priors = fit_hyperparams(hparams, model_type, demo_model)
 
     for modelid in modelids:
-        if model_type.startswith("param"):
+        if model_type.startswith("param") or model_type.startswith('gplocal'):
             m,c = messages[modelid]
             mu_partial, cov_partial = receive_message(mu_g, cov_g, m,-c)
 
