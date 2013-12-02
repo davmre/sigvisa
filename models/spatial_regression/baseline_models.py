@@ -67,14 +67,14 @@ class ParamModel(Distribution):
     """
 
     def event_dict_to_array(self, ev_dict):
-        dictkey = frozenset(ev_dict.items())
+        dictkey = frozenset(ev_dict.items() +[self.site_lon,self.site_lat])
         if dictkey in self.s.global_dict_cache:
             return self.s.global_dict_cache[dictkey]
 
 
         # this method is designed to accept parent_values dicts from a Sigvisa graph, which may
         # have keys of the form "eid;lon" where eid is an unknwon integer.
-        for (k,v) in dictkey:
+        for (k,v) in ev_dict.items():
             if 'lon' in k:
                 lon = v
             elif 'lat' in k:
@@ -142,7 +142,6 @@ class ConstGaussianModel(ParamModel):
             self.mean = p_dict['mean']
             self.std = p_dict['std']
             self.ll = p_dict['ll']
-            self.l1 = -.5 * np.log( 2 * np.pi * self.std * self.std )
             super(ConstGaussianModel, self).__unrepr_base_params__(l[1])
 
     def predict(self, cond):
