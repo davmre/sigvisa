@@ -37,7 +37,7 @@ def plot_density(data, axes, title=None, draw_stats=True, true_value=None):
         axes.text(0, 1, htext, horizontalalignment='left', verticalalignment='top', transform=axes.transAxes)
 
 
-def plot_histogram(data, axes=None, draw_stats=True, true_value=None, n_bins=None,  **kwargs):
+def plot_histogram(data, axes=None, title=None, draw_stats=True, n_bins=None, true_value=None, trueval_label=None, **kwargs):
     data = sorted(data)
     n = len(data)
     mean = np.mean(data)
@@ -53,9 +53,17 @@ def plot_histogram(data, axes=None, draw_stats=True, true_value=None, n_bins=Non
         fig = plt.Figure()
         axes = fig.add_subplot(111)
 
+    if title is not None:
+        axes.set_title(title)
+
+
     if n_bins is None:
         # freedman / diaconis rule
-        bin_size = 2 * iqr / float(n) ** (1.0 / 3.0)
+        if iqr > 0:
+            bin_size = 2 * iqr / float(n) ** (1.0 / 3.0)
+        else:
+            bin_size = 2 * std / float(n) ** (1.0 / 3.0)
+
         n_bins = int(np.ceil((np.max(data) - np.min(data)) / bin_size))
     axes.hist(x=data, bins=n_bins, **kwargs)
 
@@ -67,6 +75,15 @@ def plot_histogram(data, axes=None, draw_stats=True, true_value=None, n_bins=Non
 
         htext += "\nmin:  %.4f\n5%%:   %.4f\n25%%:  %.4f\n50%%:  %.4f\n75%%:  %.4f\n95%%:  %.4f\nmax:  %.4f" % (np.min(data), p5, p25, median, p75, p95, np.max(data))
         axes.text(0, 1, htext, horizontalalignment='left', verticalalignment='top', transform=axes.transAxes)
+    else:
+        htext=None
+
+    if true_value is not None:
+        ymin, ymax = axes.get_ylim()
+        axes.bar(left=[true_value,], height=ymax-ymin,
+                 width= bin_size/2.0, bottom=ymin, edgecolor="red", color="red", linewidth=1, alpha=.5)
+        if trueval_label is not None:
+            axes.text(true_value + bin_size, ymax - (ymax-ymin)*.1, trueval_label, color="red", fontsize=10)
 
     return htext
 

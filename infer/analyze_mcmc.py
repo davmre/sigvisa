@@ -13,14 +13,14 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib.gridspec as gridspec
 
 from sigvisa.plotting.event_heatmap import EventHeatmap
-from sigvisa.plotting.histogram import plot_density
+from sigvisa.plotting.histogram import plot_density, plot_histogram
 from sigvisa.plotting.plot import basic_plot_to_file, subplot_waveform, savefig
 import sigvisa.utils.geog as geog
 from sigvisa.utils.fileutils import mkdir_p
 
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
-def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=True):
+def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=True, ms=8):
 
     lonlats = trace[:, 0:2]
     n = lonlats.shape[0]
@@ -33,7 +33,7 @@ def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=Tr
 
     alpha_fade_time = 500
     if frame is not None:
-        baseline_alpha = 0.01
+        baseline_alpha = 0.05
         alpha = np.ones((frame,)) * baseline_alpha
         t = min(frame,alpha_fade_time)
         alpha[-t:] = np.linspace(baseline_alpha, 0.2, alpha_fade_time)[-t:]
@@ -42,7 +42,7 @@ def ev_lonlat_density(trace, ax, true_evs=None, frame=None, bounds=None, text=Tr
         alpha = 1.0 / np.log(n+1)
 
     #hm.plot_locations(X, marker=".", ms=6, mfc="red", mec="none", mew=0, alpha=0.2)
-    scplot = hm.plot_locations(lonlats, marker=".", ms=8, mfc="red", mew=0, mec="none", alpha=alpha)
+    scplot = hm.plot_locations(lonlats, marker=".", ms=ms, mfc="red", mew=0, mec="none", alpha=alpha)
 
     mean_lon = np.mean(trace[:, 0])
     mean_lat = np.mean(trace[:, 1])
@@ -95,7 +95,7 @@ def load_trace(logfile, burnin):
     return trace, min_step, max_step
 
 
-def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=False, frameskip=50):
+def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=True, frameskip=50000):
     ev_trace_file = os.path.join(run_dir, 'ev_%05d.txt' % eid)
     ev_img_file = os.path.join(run_dir, 'ev_%05d.png' % eid)
     ev_txt = os.path.join(run_dir, 'ev_%05d_results.txt' % eid)
@@ -133,7 +133,7 @@ def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=False, frameskip
         canvas.draw()
         f.savefig(ev_img_file, bbox_inches="tight", dpi=300)
 
-
+    """
     # also save individual images
     frame_dir = os.path.join(ev_dir, 'frames')
     mkdir_p(frame_dir)
@@ -144,35 +144,37 @@ def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=False, frameskip
         ax = f.add_subplot(1,1,1)
         true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, frame=frame)
         savefig(frame_fname, f, bbox_inches="tight", dpi=75)
-    video_cmd = "ffmpeg -qscale 15 -f image2 -r 5 -i %s/%%06d.png %s/chain.mp4" % (frame_dir, ev_dir)
+    video_cmd = "ffmpeg -qscale 5 -f image2 -r 5 -i %s/%%06d.png %s/chain.mp4" % (frame_dir, ev_dir)
     os.system(video_cmd)
+
 
     if true_ev is not None:
         f = Figure((8,8))
         ax = f.add_subplot(1,1,1)
         bounds = {'center': (true_ev.lon, true_ev.lat), 'width_deg': 5.0, 'height_deg': 5.0}
-        true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, bounds=bounds)
+        true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, bounds=bounds, ms=4)
         savefig(os.path.join(ev_dir, 'posterior_loc_big.png'), f, bbox_inches="tight", dpi=300)
 
         f = Figure((8,8))
         ax = f.add_subplot(1,1,1)
         bounds = {'center': (true_ev.lon, true_ev.lat), 'width_deg': 30.0, 'height_deg': 30.0}
-        true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, bounds=bounds)
+        true_ev, txt = ev_lonlat_density(trace, ax, true_evs=true_evs, text=False, bounds=bounds, ms=2)
         savefig(os.path.join(ev_dir, 'posterior_loc_reallybig.png'), f, bbox_inches="tight", dpi=300)
+    """
 
     f = Figure((8,8))
     ax = f.add_subplot(1,1,1)
-    plot_density(trace[:, EVTRACE_MB], ax, "mb", draw_stats=False)
+    plot_histogram(trace[:, EVTRACE_MB], ax, "mb", draw_stats=False, true_value=true_ev.mb, trueval_label="LEB")
     savefig(os.path.join(ev_dir, 'posterior_mb.png'), f, bbox_inches="tight", dpi=300)
 
     f = Figure((8,8))
     ax = f.add_subplot(1,1,1)
-    plot_density(trace[:, EVTRACE_TIME], ax, "time", draw_stats=False)
+    plot_histogram(trace[:, EVTRACE_TIME], ax, "time", draw_stats=False, true_value=true_ev.time, trueval_label="LEB")
     savefig(os.path.join(ev_dir, 'posterior_time.png'), f, bbox_inches="tight", dpi=300)
 
     f = Figure((8,8))
     ax = f.add_subplot(1,1,1)
-    plot_density(trace[:, EVTRACE_DEPTH], ax, "depth", draw_stats=False)
+    plot_histogram(trace[:, EVTRACE_DEPTH], ax, "depth", draw_stats=False, true_value=true_ev.depth, trueval_label="LEB")
     savefig(os.path.join(ev_dir, 'posterior_depth.png'), f, bbox_inches="tight", dpi=300)
 
 
@@ -221,7 +223,7 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin):
         v = {'arrival_time': row[0], 'peak_offset': row[1], 'coda_height': row[2], 'coda_decay': row[3]}
         sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, v)
         tmpl_stime = v['arrival_time']
-        tmpl_etime = min(tmpl_stime + v['peak_offset'] + (np.log(0.02 * wn.nm.c) - v['coda_height'])/v['coda_decay'], plot_etime)
+        tmpl_etime = min(tmpl_stime + v['peak_offset'] - (np.log(0.02 * wn.nm.c) - v['coda_height'])/np.exp(v['coda_decay']), plot_etime)
 
         wn.parent_predict()
         subplot_waveform(wn.get_wave(), ax, stime=tmpl_stime, etime=tmpl_etime, plot_dets=False, color='green', linewidth=0.5, alpha=alpha, fill_y2=wn.nm.c)
@@ -243,7 +245,11 @@ def plot_ev_template_posteriors(run_dir, sg, eid, burnin):
         if m is not None:
             wn_lbl = m.group(1)
             phase = m.group(2)
-            plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin=burnin)
+            try:
+                plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin=burnin)
+            except ValueError as e:
+                print e
+                continue
         else:
             print fname, "match failed"
 
@@ -316,8 +322,13 @@ def analyze_run(run_dir, burnin, true_evs):
 
     #summarize_times(run_dir)
 
-    with open(os.path.join(run_dir, 'step_000099/pickle.sg'), 'rb') as f:
-        sg = pickle.load(f)
+    for i in range(1000):
+        try:
+            with open(os.path.join(run_dir, 'step_%06d/pickle.sg' % i), 'rb') as f:
+                sg = pickle.load(f)
+            break
+        except IOError:
+            continue
 
     eids = []
     ev_re = re.compile(r'ev_(\d+).txt')
