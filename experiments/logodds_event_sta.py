@@ -52,12 +52,15 @@ def setup_graphs(ev, sta, chan, band,
     return sg, sg_noise, evnode_lp
 
 
-def random_event():
+def random_event(seed):
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
     stime, etime = read_timerange(cursor, "test", hours=None, skip=0)
     cursor.close()
+
+    np.random.seed(seed)
+    s.sigmodel.srand(seed)
 
     event_time_dist = Uniform(stime, etime)
     event_mag_dist = Exponential(rate=10.0, min_value=3.5)
@@ -102,7 +105,7 @@ def main():
     parser.add_option("-r", "--run_name", dest="run_name", default=None, type="str", help="run name")
     parser.add_option("-i", "--run_iteration", dest="run_iteration", default=None, type="int",
                       help="run iteration (default is to use the next iteration)")
-    parser.add_option("-e", "--evid", dest="evid", default=None, type="int", help="event ID")
+    parser.add_option("-e", "--evid", dest="evid", default=None, type="str", help="event ID")
     parser.add_option("--orid", dest="orid", default=None, type="int", help="origin ID")
     parser.add_option("--template_shape", dest="template_shape", default="paired_exp", type="str",
                       help="template model type to fit parameters under (paired_exp)")
@@ -139,11 +142,12 @@ def main():
     if options.run_name is None or options.run_iteration is None:
         raise ValueError("must specify run name and iteration!")
 
-    if options.evid is not None:
-        ev = get_event(evid=options.evid)
-
+    if options.evid.startswith('fake'):
+        seed = int(options.evid[4:])
+        ev = random_event(seed)
+        print "got random ev", ev
     else:
-        ev = random_event()
+            ev = get_event(evid=int(options.evid))
 
     sg, sg_noise, evnode_lp = setup_graphs(ev=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
@@ -153,8 +157,7 @@ def main():
                                 init_run_name = options.run_name, init_iteration = options.run_iteration-1,
                                 absorb_n_phases=options.absorb_n_phases)
 
-    runid = str(int(np.random.rand() * 10000000))
-    run_dir = 'experiments/logodds/' + runid
+    run_dir = 'experiments/logodds/' + options.sta + "_" + options.evid
     lp = ev_lp(sg, evnode_lp, run_dir=run_dir)
 
     noise_lp = sg_noise.current_log_p() - sg_noise.nevents_log_p()
@@ -163,7 +166,7 @@ def main():
     print "noise lp", noise_lp
 
     results_dir = 'experiments/logodds/results/%s/' % options.sta
-    if options.evid is not None:
+    if options.evid is not None and (not options.evid.startswith('fake')):
         results_dir += "events/"
         mkdir_p(results_dir)
         with open(results_dir + str(options.evid), 'w') as f:
@@ -171,7 +174,7 @@ def main():
     else:
         results_dir += "calibration/"
         mkdir_p(results_dir)
-        with open(results_dir + runid, 'w') as f:
+        with open(results_dir + str(options.evid), 'w') as f:
             f.write("%f %f %f\n" % (lp, noise_lp, lp - noise_lp))
 
 
