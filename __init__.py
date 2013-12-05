@@ -30,7 +30,6 @@ class Sigvisa(threading.local):
                              "SHZ": ["SHZ", "sz", "szl"],
                              "SHE": ["SHE", "se"],
                              "SHN": ["SHN", "sn"],
-                             "HHN": ["HHN",], "HHZ": ["HHZ",], "HHE": ["HHE",],
                              "MHZ": ["MHZ", 'mz'], "MHE": ["MHE", "me"], "MHN": ["MHN", "mn"],
                              "EHZ": ["EHZ", 'ez'], "EHE": ["EHE", "ee"], "EHN": ["EHN", "en"],
                              "LHZ": ["LHZ", 'lz'], "LHE": ["LHE", "le"], "LHN": ["LHN", "ln"],
@@ -76,7 +75,7 @@ class Sigvisa(threading.local):
             for equiv in self.__equivalent_channels[chan]:
                 self.canonical_channel_name[equiv] = chan
 
-        vertical_canonical_channels = ('BHZ', 'SHZ', 'MHZ', 'HHZ', 'EHZ', 'LHZ')
+        vertical_canonical_channels = ('BHZ', 'SHZ', 'MHZ', 'EHZ', 'LHZ')
 
         sites = db_sites.read_sites(cursor)
         sitenames, allsites = db_sites.read_all_sites(cursor)
