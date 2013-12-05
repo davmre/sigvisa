@@ -45,6 +45,7 @@ class ModelsFilterSet(FilterSet):
         'band',
         'phase',
         'model_type',
+        'shrinkage_iter',
     ]
 
 
@@ -236,7 +237,7 @@ def plot_laplacian(request, model_record, axes):
     xmax = model.center + 4 * model.scale
     x = np.linspace(xmin, xmax, 200)
     pdf = scipy.stats.laplace.pdf(x, loc=model.center, scale=model.scale)
-    axes.plot(x, pdf, 'k-')
+    axes.plot(x, pdf, 'r-', linewidth=3)
 
 def plot_adhoc_gaussian(request, xy_by_phase, axes):
 
@@ -372,6 +373,10 @@ def plot_fit_param(request, modelid=None, runid=None, plot_type="histogram"):
         default_bounds = {'coda_decay': [-8, 1], 'amp_transfer': [-7, 10], 'peak_offset': [-3, 5]}
         if param in default_bounds:
             axes.set_ylim(default_bounds[param])
+    elif plot_type == "mb":
+        axes.set_xlabel("mb", fontsize=8)
+        axes.set_ylabel(param, fontsize=8)
+
 
     process_plot_args(request, axes)
 
@@ -388,11 +393,12 @@ def plot_empirical_histogram(request, xy_by_phase, axes):
 
 
     n_bins = int(request.GET.get("bins", -1))
+    draw_stats = str(request.GET.get("draw_stats", 't')).startswith('t')
     if n_bins ==-1: n_bins = None
 
     for (i, phase) in enumerate(sorted(xy_by_phase.keys())):
         y = xy_by_phase[phase][1]
-        histogram.plot_histogram(y, axes=axes, n_bins=n_bins, normed=True)
+        histogram.plot_histogram(y, axes=axes, n_bins=n_bins, normed=True, draw_stats=draw_stats)
 
 
 @cache_page(60 * 60 * 24 * 365)

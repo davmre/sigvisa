@@ -305,10 +305,12 @@ class SigvisaParamModel(models.Model):
     model_fname = models.CharField(max_length=255)
     training_set_fname = models.CharField(max_length=255)
     n_evids = models.IntegerField()
+    shrinkage_iter = models.IntegerField()
     training_ll = models.FloatField()
     timestamp = UnixTimestampField()
     elapsed = models.FloatField()
     hyperparams = models.CharField(max_length=1024)
+    shrinkage = models.CharField(max_length=1024)
     optim_method = models.CharField(max_length=1024)
 
     class Meta:

@@ -29,11 +29,12 @@
 	<td><strong>phase</strong></td>
 	<td><strong>max acost</strong></td>
 	<td><strong>min amp</strong></td>
-	<td><strong>human-approved fits?</strong></td>
+	<!--<td><strong>human-approved fits?</strong></td>-->
 	<td><strong>model type</strong></td>
 	<!--<td><strong>trainset</strong></td>-->
 	<td><strong>hyperparams</strong></td>
 	<td><strong>n_events</strong></td>
+	<td><strong>s iter</strong></td>
 	<td><strong>ll</strong></td>
 	<td><strong>visualizations</strong></td>
       </tr>
@@ -41,7 +42,7 @@
             <tr>
                 <td>{{ model.modelid }}</td>
 		<td>{{ model.timestamp }}</td>
-		<td>{{ model.elapsed }}</td>
+		<td>{{ model.elapsed|floatformat:1 }}</td>
                 <td><a href="{% url fit_list runid=model.fitting_runid.runid %}?chan={{model.chan}};band={{model.band}};sta={{model.site}}">{{ model.fitting_runid.run_name }} iter {{ model.fitting_runid.iter }}</a></td>
                 <td>{{ model.template_shape }}</td>
                 <td>{{ model.param }}</td>
@@ -51,11 +52,12 @@
                 <td>{{ model.phase }}</td>
                 <td>{{ model.max_acost }}</td>
                 <td>{{ model.min_amp }}</td>
-                <td>{{ model.require_human_approved }}</td>
+                <!--<td>{{ model.require_human_approved }}</td>-->
                 <td>{{ model.model_type }}</td>
                 <!--<td>{{ model.training_set_fname|slice:"-14:" }}</td>-->
 		<td>{{ model.hyperparams }}</td>
                 <td>{{ model.n_evids }}</td>
+                <td>{{ model.shrinkage_iter }}</td>
                 <td>{{ model.training_ll|floatformat:1 }}</td>
                 <td>
 		{% if model.model_type|slice:":8" == "constant" %}

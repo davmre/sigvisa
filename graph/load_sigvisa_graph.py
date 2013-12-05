@@ -223,24 +223,29 @@ def load_signals_from_cmdline(sg, options, args):
 
 
     if options.initialize_leb != "no":
-        st = sg.event_start_time
-        et = sg.end_time
+        st = sg.start_time
+        et = sg.end_time - 400
         events, orid2num = read_events(cursor, st, et, 'leb')
         events = [evarr for evarr in events if evarr[EV_MB_COL] > 2]
 
         if options.initialize_leb=="yes":
+            evs = []
             for evarr in events:
                 ev = get_event(evid=evarr[EV_EVID_COL])
                 sg.add_event(ev)
+                evs.append(ev)
         elif options.initialize_leb=="perturb":
             raise NotImplementedError("not implemented!")
         elif options.initialize_leb=="count":
-            sg.prior_sample_events(stime=st, etime=et, n_events=len(events))
+            evs = sg.prior_sample_events(stime=st, etime=et, n_events=len(events))
         else:
             raise Exception("unrecognized argument initialize_leb=%s" % options.initialize_leb)
-
+    else:
+        evs = None
 
     cursor.close()
+
+    return evs
 
 def load_event_based_signals_from_cmdline(sg, options, args):
 

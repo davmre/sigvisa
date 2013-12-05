@@ -193,7 +193,7 @@ def main():
                       help="only consider fits above the given amplitude (for amp_transfer fits)")
     parser.add_option("--enable_dupes", dest="enable_dupes", default=False, action="store_true",
                       help="train models even if a model of the same type already appears in the DB")
-    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 3", type="str", help="fitting param string")
+    parser.add_option("--optim_params", dest="optim_params", default="'method': 'bfgs_fastcoord', 'normalize': True, 'disp': True, 'bfgs_factr': 1e10, 'random_inits': 1", type="str", help="fitting param string")
     parser.add_option("--array_joint", dest="array_joint", default=False, action="store_true",
                       help="model array station jointly; don't explode array into individual elements (False)")
     parser.add_option("--subsample", dest="subsample", default=500, type="float",
@@ -279,7 +279,7 @@ def main():
         model_type = model_types[target]
         for i in range(iterations):
             print "training models for iteration %d..." % (i,)
-            retrain_models(modelids[target], model_type, global_var=param_var, station_slack_var=slack_var)
+            modelids[target] = retrain_models(modelids[target], model_type, global_var=param_var, station_slack_var=slack_var)
 
 def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, model_types, optim_params, bounds, min_amp_for_at, min_amp, enable_dupes, array_joint, require_human_approved, max_acost, fake_points, template_shape, wiggles, wg, basisid, subsample, prior_var):
     s = Sigvisa()
@@ -306,14 +306,15 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     basisid_cond = ''
 
                 # check for duplicate model
-                sql_query = "select modelid from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' %s" % (
+                sql_query = "select modelid, shrinkage_iter from sigvisa_param_model where model_type='%s' and site='%s' and chan='%s' and band='%s' and phase='%s' and fitting_runid=%d and param='%s' %s" % (
                     model_type, site, chan, band, phase, runid, target, basisid_cond)
                 cursor.execute(sql_query)
                 dups = cursor.fetchall()
                 if len(dups) > 0 and not enable_dupes:
-                    print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, dups[0][0])
-                    for dup in dups:
-                        modelids[target].append(dup[0])
+                    modelid = sorted(dups, key = lambda x : -x[1])[0][0]
+                    modelids[target].append(modelid)
+                    print "model already trained for %s, %s, %s (modelid %d), skipping..." % (site, target, phase, modelid)
+
                     continue
 
                 if array_joint:
@@ -331,8 +332,8 @@ def do_training(run_name, run_iter, allsites, sitechans, band, targets, phases, 
                     model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, model_name=template_shape, unique=True)
                 else:
                     model_fname = get_model_fname(run_name, run_iter, site, chan, band, phase, target, model_type, evids, basisid=basisid, unique=True)
-                evid_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.evids'
-                Xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy.npz'
+                evid_fname = os.path.splitext(os.path.splitext(os.path.splitext(model_fname)[0])[0])[0] + '.evids'
+                Xy_fname = os.path.splitext(os.path.splitext(os.path.splitext(model_fname)[0])[0])[0] + '.Xy.npz'
                 np.savetxt(evid_fname, evids, fmt='%d')
                 np.savez(Xy_fname, X=X, y=y)
 

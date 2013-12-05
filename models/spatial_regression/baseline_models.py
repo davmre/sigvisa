@@ -67,9 +67,9 @@ class ParamModel(Distribution):
     """
 
     def event_dict_to_array(self, ev_dict):
-        dictkey = frozenset(ev_dict.items() +[self.site_lon,self.site_lat])
-        if dictkey in self.s.global_dict_cache:
-            return self.s.global_dict_cache[dictkey]
+        #dictkey = frozenset(ev_dict.items() +[self.site_lon,self.site_lat])
+        #if dictkey in self.s.global_dict_cache:
+        #    return self.s.global_dict_cache[dictkey]
 
 
         # this method is designed to accept parent_values dicts from a Sigvisa graph, which may
@@ -86,7 +86,7 @@ class ParamModel(Distribution):
 
         distance = geog.dist_km((lon, lat), (self.site_lon, self.site_lat))
         a = np.array(((lon, lat, depth, distance, mb),), dtype=float)
-        self.s.global_dict_cache[dictkey] = a
+        #self.s.global_dict_cache[dictkey] = a
         return a
 
     def event_to_array(self, event):

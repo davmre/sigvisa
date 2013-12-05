@@ -20,7 +20,7 @@ from sigvisa.database.signal_data import get_fitting_runid, insert_wiggle, ensur
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 
 from sigvisa.models.distributions import InvGamma, Gaussian, LogNormal
-from sigvisa.learn.train_param_common import load_modelid, learn_model, model_params
+from sigvisa.learn.train_param_common import load_modelid, learn_model, model_params, insert_model
 from sigvisa.database.signal_data import execute_and_return_id
 
 
@@ -246,27 +246,34 @@ def retrain_model(modelid, shrinkage, **kwargs):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
 
-    sql_query = "select model_fname, model_type, param, site, optim_method, shrinkage_iter from sigvisa_param_model where modelid=%d" % modelid
+    sql_query = "select fitting_runid, chan, band, phase, training_set_fname, require_human_approved, max_acost, n_evids, min_amp, template_shape, wiggle_basisid, model_fname, model_type, param, site, optim_method, shrinkage_iter,elapsed from sigvisa_param_model where modelid=%d" % modelid
     cursor.execute(sql_query)
-    model_fname, model_type, target, site, optim_params, shrinkage_iter = cursor.fetchone()
+    runid, chan, band, phase, evid_fname, require_human_approved, max_acost, n_evids, min_amp, template_shape, wiggle_basisid, model_fname, model_type, target, site, optim_params, shrinkage_iter, elapsed = cursor.fetchone()
     if optim_params is not None:
         optim_params = construct_optim_params(optim_params[1:-1])
 
     print "retraining model", modelid, "at site", site
+    model_fname = os.path.splitext(model_fname)[0] + "." + str(shrinkage_iter+1)
 
-    xy_fname = os.path.splitext(os.path.splitext(model_fname)[0])[0] + '.Xy.npz'
+    xy_fname = os.path.splitext(os.path.splitext(os.path.splitext(model_fname)[0])[0])[0] + '.Xy.npz'
     d = np.load(xy_fname)
     X, y = d['X'], d['y']
 
+    st = time.time()
     model = learn_model(X, y, model_type, target=target, sta=site, optim_params=optim_params, gp_build_tree=False, **kwargs)
 
     hyperparams = model_params(model, model_type)
     model.save_trained_model(model_fname)
+    et = time.time()
 
-    cursor.execute("""update sigvisa_param_model set shrinkage=%s, hyperparams=%s, training_ll=%s, timestamp=%s, shrinkage_iter=%d where modelid=%s""", (repr(shrinkage), hyperparams, model.log_likelihood(), time.time(), shrinkage_iter+1, modelid))
+    #cursor.execute("""update sigvisa_param_model set shrinkage=%s, hyperparams=%s, training_ll=%s, timestamp=%s, shrinkage_iter=%d where modelid=%s""", (repr(shrinkage), hyperparams, model.log_likelihood(), time.time(), shrinkage_iter+1, modelid))
+
+    modelid = insert_model(s.dbconn, fitting_runid=runid, param=target, site=site, chan=chan, band=band, phase=phase, model_type=model_type, model_fname=model_fname, training_set_fname=evid_fname, training_ll=model.log_likelihood(), require_human_approved=(require_human_approved=='t'), max_acost=max_acost, n_evids=n_evids, min_amp=min_amp, elapsed=(et-st) + elapsed, hyperparams = model_params(model, model_type), optim_method = repr(optim_params) if model_type.startswith('gp') else None, shrinkage=repr(shrinkage), template_shape=template_shape, wiggle_basisid=wiggle_basisid, shrinkage_iter=shrinkage_iter+1)
+
 
     cursor.close()
     s.dbconn.commit()
+    return modelid
 
 def get_shrinkage(modelid, n):
     s = Sigvisa()
@@ -347,6 +354,7 @@ def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
 
     hparam_priors = fit_hyperparams(hparams, model_type, demo_model)
 
+    new_modelids = []
     for modelid in modelids:
         if model_type.startswith("param") or model_type.startswith('gplocal'):
             m,c = messages[modelid]
@@ -361,7 +369,9 @@ def retrain_models(modelids, model_type, global_var=1.0, station_slack_var=1.0):
             shrinkage = {}
 
         all_params = dict(model_params.items() + hparam_priors.items())
-        retrain_model(modelid, shrinkage=shrinkage, **all_params)
+        modelid = retrain_model(modelid, shrinkage=shrinkage, **all_params)
+        new_modelids.append(modelid)
+    return new_modelids
 
 def main():
     parser = OptionParser()
@@ -383,6 +393,8 @@ def main():
                       help="variance for the Gaussian prior on global model params (1.0)")
     parser.add_option("--slack_var", dest="slack_var", default=1.0, type="float",
                       help="additional variance allowed on top of global model params in the per-station params (1.0)")
+    parser.add_option("--source_shrinkage", dest="source_shrinkage", default=0, type="int",
+                      help="refine models that have already been trained with the specified number of shrinkage iterations (0)")
 
 
     (options, args) = parser.parse_args()
@@ -404,7 +416,7 @@ def main():
     slack_var = options.slack_var
 
     for target in targets:
-        sql_query = "select modelid from sigvisa_param_model where param='%s' and model_type='%s' and band='%s' %s and phase='%s' and fitting_runid=%d" % (target, options.model_type, options.band, chan_cond, options.phase, runid)
+        sql_query = "select modelid from sigvisa_param_model where param='%s' and model_type='%s' and band='%s' %s and phase='%s' and fitting_runid=%d and shrinkage_iter=%d" % (target, options.model_type, options.band, chan_cond, options.phase, runid, options.source_shrinkage)
         cursor.execute(sql_query)
         import pdb; pdb.set_trace()
         modelids = np.array(cursor.fetchall()).flatten()

@@ -201,7 +201,7 @@ def sql_param_condition(chan=None, band=None, site=None, runids=None, phases=Non
     evid_cond = "and (" + " or ".join(["lebo.evid = %d" % evid for evid in evids]) + ")" if evids is not None else ""
     evid_cond = "and (" + " or ".join(
         ["lebo.evid != %d" % evid for evid in exclude_evids]) + ")" if exclude_evids is not None else ""
-    approval_cond = "and human_approved==2" if require_human_approved else ""
+    approval_cond = "and human_approved=2" if require_human_approved else ""
     cost_cond = "and fit.acost<%f" % max_acost if np.isfinite(max_acost) else ""
 
     cond = "fp.fitid = fit.fitid and fp.coda_height > %f %s %s %s %s %s %s and fit.azi between %f and %f and fit.evid=lebo.evid and lebo.mb between %f and %f and fit.dist between %f and %f %s %s" % (min_amp, chan_cond, band_cond, site_cond, run_cond, phase_cond, evid_cond, min_azi, max_azi, min_mb, max_mb, min_dist, max_dist, approval_cond, cost_cond)

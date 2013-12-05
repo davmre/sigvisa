@@ -26,8 +26,8 @@ from sigvisa.learn.grad_ascend import *
 
 X_LON, X_LAT, X_DEPTH, X_DIST, X_AZI = range(5)
 
-def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp, elapsed, template_shape=None, wiggle_basisid=None, optim_method=None, hyperparams=None, shrinkage=None):
-    return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams, shrinkage) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams, :shrinkage)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams, shrinkage=shrinkage)
+def insert_model(dbconn, fitting_runid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, training_ll, require_human_approved, max_acost, n_evids, min_amp, elapsed, template_shape=None, wiggle_basisid=None, optim_method=None, hyperparams=None, shrinkage=None, shrinkage_iter=0):
+    return execute_and_return_id(dbconn, "insert into sigvisa_param_model (fitting_runid, template_shape, wiggle_basisid, param, site, chan, band, phase, model_type, model_fname, training_set_fname, n_evids, training_ll, timestamp, require_human_approved, max_acost, min_amp, elapsed, optim_method, hyperparams, shrinkage, shrinkage_iter) values (:fr,:ts,:wbid,:param,:site,:chan,:band,:phase,:mt,:mf,:tf, :ne, :tll,:timestamp, :require_human_approved, :max_acost, :min_amp, :elapsed, :optim_method, :hyperparams, :shrinkage, :shrinkage_iter)", "modelid", fr=fitting_runid, ts=template_shape, wbid=wiggle_basisid, param=param, site=site, chan=chan, band=band, phase=phase, mt=model_type, mf=model_fname, tf=training_set_fname, tll=training_ll, timestamp=time.time(), require_human_approved='t' if require_human_approved else 'f', max_acost=max_acost if np.isfinite(max_acost) else 99999999999999, ne=n_evids, min_amp=min_amp, elapsed=elapsed, optim_method=optim_method, hyperparams=hyperparams, shrinkage=shrinkage, shrinkage_iter=shrinkage_iter)
 
 def model_params(model, model_type):
     if model_type.startswith('gplocal'):
@@ -317,7 +317,7 @@ def analyze_model_fname(fname):
     d = dict()
 
     fname, d['filename'] = os.path.split(fname)
-    d['evidhash'], d['model_type'] = d['filename'].split('.')[-2:]
+    d['evidhash'], d['model_type'], d['shrinkage_iter'] = d['filename'].split('.')[-3:]
     fname, d['band'] = os.path.split(fname)
     fname, d['chan'] = os.path.split(fname)
     fname, d['phase'] = os.path.split(fname)
@@ -334,7 +334,7 @@ def analyze_model_fname(fname):
     return d
 
 
-def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, basisid=None, model_name="paired_exp", prefix=os.path.join("parameters", "runs"), unique=False):
+def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_type, evids, basisid=None, shrinkage_iter=0, model_name="paired_exp", prefix=os.path.join("parameters", "runs"), unique=False):
     if basisid is None:
         path_components = [prefix, run_name, "iter_%02d" % run_iter, model_name, target, sta, phase, chan, band]
     else:
@@ -348,7 +348,7 @@ def get_model_fname(run_name, run_iter, sta, chan, band, phase, target, model_ty
 
     if unique:
         uniq_hash = hashlib.sha1(repr(time.time())).hexdigest()[0:8]
-        fname = ".".join([evidhash, uniq_hash, model_type])
+        fname = ".".join([evidhash, uniq_hash, model_type, str(shrinkage_iter)])
     else:
-        fname = ".".join([evidhash, model_type])
+        fname = ".".join([evidhash, model_type, str(shrinkage_iter)])
     return os.path.join(path, fname)
