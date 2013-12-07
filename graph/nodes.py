@@ -6,7 +6,9 @@ from sigvisa.models import DummyModel
 
 class Node(object):
 
-    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None):
+    def __init__(self, model=None, label="", initial_value = None, fixed=False, keys=None, children=(), parents = (), low_bound=None, high_bound=None, hack_param_constraint=False):
+
+        self.hack_param_constraint = hack_param_constraint
 
         self.model = model
         self._fixed = fixed
@@ -258,7 +260,18 @@ class Node(object):
             parent_values = self._parent_values()
         v = self.get_dict()
         v = v[self.single_key] if self.single_key else self._transform_values_for_model(v)
-        return self.model.log_p(x = v, cond=parent_values, key_prefix=self.key_prefix)
+        lp = self.model.log_p(x = v, cond=parent_values, key_prefix=self.key_prefix)
+
+        if self.hack_param_constraint:
+            if 'tt_residual' in self.label and np.abs(v) > 10:
+                lp = -99999999
+            if 'peak_offset' in self.label and np.exp(v) > 15:
+                lp = -99999999
+
+
+        if not np.isfinite(lp):
+            raise Exception('invalid log prob %f at node %s' % (lp, self.label))
+        return lp
 
     def _transform_values_for_model(self, vals):
         return vals

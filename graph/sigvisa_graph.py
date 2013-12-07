@@ -103,7 +103,7 @@ class SigvisaGraph(DirectedGraphModel):
                  phases="auto", base_srate=40.0,
                  assume_envelopes=True,
                  arrays_joint=False, gpmodel_build_trees=False,
-                 absorb_n_phases=False):
+                 absorb_n_phases=False, hack_param_constraint=False):
         """
 
         phases: controls which phases are modeled for each event/sta pair
@@ -116,6 +116,7 @@ class SigvisaGraph(DirectedGraphModel):
 
         self.gpmodel_build_trees = gpmodel_build_trees
         self.absorb_n_phases = absorb_n_phases
+        self.hack_param_constraint = hack_param_constraint
 
         self.template_model_type = template_model_type
         self.template_shape = template_shape
@@ -153,7 +154,7 @@ class SigvisaGraph(DirectedGraphModel):
         self.template_nodes = []
         self.wiggle_nodes = []
 
-        self.station_waves = dict() # (sta)
+        self.station_waves = dict() # (sta) -> list of ObservedSignalNodes
         self.site_elements = dict() # site (str) -> set of elements (strs)
         self.site_bands = dict()
         self.site_chans = dict()
@@ -376,6 +377,8 @@ class SigvisaGraph(DirectedGraphModel):
         lp = super(SigvisaGraph, self).current_log_p(**kwargs)
         lp += self.ntemplates_log_p()
         lp += self.nevents_log_p()
+        if np.isnan(lp):
+            raise Exception('current_log_p is nan')
         return lp
 
     def add_node(self, node, template=False, wiggle=False):
@@ -616,9 +619,9 @@ class SigvisaGraph(DirectedGraphModel):
                     model = Gaussian(mean=0.0, std=0.25)
                 else:
                     model = DummyModel(default_value=initial_value)
-                node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = Node(label=label, model=model, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
             else:
-                node = self.load_node_from_modelid(modelid, label, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound)
+                node = self.load_node_from_modelid(modelid, label, parents=parents, children=my_children, initial_value=initial_value, low_bound=low_bound, high_bound=high_bound, hack_param_constraint=self.hack_param_constraint)
 
             nodes[sta] = node
             self.add_node(node, **kwargs)
