@@ -88,7 +88,7 @@ def run_move(move_name, fn, step, n_accepted, n_attempted, move_times, move_prob
 
 ############################################################################
 
-def run_open_world_MH(sg, skip=40, steps=10000,
+def run_open_world_MH(sg, steps=10000,
                       enable_event_openworld=True,
                       enable_event_moves=True,
                       enable_template_openworld=True,
@@ -313,8 +313,8 @@ def main():
     sys.setrecursionlimit(20000)
     np.random.seed(0)
 
-    logger = MCMCLogger(run_dir=run_dir, write_template_vals=True)
-    run_open_world_MH(sg, skip=options.skip, steps=options.steps,
+    logger = MCMCLogger(run_dir=run_dir, write_template_vals=True, dump_interval=options.skip)
+    run_open_world_MH(sg, steps=options.steps,
                       enable_event_openworld= not options.no_event_openworld,
                       enable_event_moves=True,
                       enable_template_openworld= not options.no_template_openworld,
