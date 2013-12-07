@@ -11,6 +11,7 @@ from sigvisa.database.dataset import *
 from sigvisa.database.signal_data import *
 from sigvisa.database import db
 from sigvisa.utils.fileutils import clear_directory, remove_directory, mkdir_p
+from sigvisa.infer.mcmc_logger import MCMCLogger
 
 from optparse import OptionParser
 
@@ -81,7 +82,8 @@ def ev_lp(sg, evnode_lp, run_dir):
     clear_directory(run_dir)
 
     sg.parent_predict_all()
-    run_open_world_MH(sg, enable_event_openworld=False, enable_event_moves=False, enable_template_openworld=False, enable_template_moves=True, run_dir=run_dir, steps=2000, skip=20000)
+    logger = MCMCLogger(run_dir=run_dir)
+    run_open_world_MH(sg, enable_event_openworld=False, enable_event_moves=False, enable_template_openworld=False, enable_template_moves=True, logger=logger, steps=2000, skip=20000)
 
     lps = np.loadtxt(os.path.join(run_dir, 'lp.txt'))[500:]
     lps = lps - evnode_lp # p(signal, params | event) = p(signal, params, event) / p(event)

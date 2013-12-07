@@ -15,6 +15,7 @@ from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move
+from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, improve_atime_move, swap_association_move
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
@@ -83,90 +84,6 @@ def run_move(move_name, fn, step, n_accepted, n_attempted, move_times, move_prob
     t1 = time.time()
     move_times[move_name].append((step, t1-t0))
 
-#################################################################
-def print_mcmc_acceptances(sg, step, n_accepted, n_attempted):
-    lp = sg.current_log_p()
-
-    print "step %d: lp %.2f, accepted " % (step, lp),
-    for key in sorted(n_accepted.keys()):
-        print "%s: %.3f%%, " % (key, float(n_accepted[key])/n_attempted[key]),
-    print ", uatemplates: ", len(sg.uatemplates),
-    print ", events: ", len(sg.evnodes)
-
-def setup_mcmc_logging(run_dir=None):
-    if run_dir is None:
-        base_path = os.path.join("logs", "mcmc")
-        mkdir_p(base_path)
-        run_dir = os.path.join(base_path, "%05d" % next_unused_int_in_dir(base_path))
-    mkdir_p(run_dir)
-
-    log_handles = dict()
-    log_handles['dir'] = run_dir
-    return log_handles
-
-def cleanup_mcmc(log_handles):
-    for v in log_handles.values():
-        if type(v) == file:
-            v.close()
-
-def log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps=False, write_template_vals=False, dump_interval=500, template_move_step=True):
-    run_dir = log_handles['dir']
-
-    if template_move_step: # current_log_p is expensive, so don't run it if we've only moved events
-        if 'lp' not in log_handles:
-            log_handles['lp'] = open(os.path.join(run_dir, 'lp.txt'), 'a')
-        lp = sg.current_log_p()
-        log_handles['lp'].write('%f\n' % lp)
-
-    if (step % dump_interval == dump_interval-1):
-        sg.debug_dump(dump_path = os.path.join(run_dir, 'step_%06d' % step), pickle_only=True)
-        for f in log_handles.values():
-            if type(f) == file:
-                f.flush()
-
-
-    for (eid, evnodes) in sg.evnodes.items():
-
-        handle = open(os.path.join(run_dir, 'ev_%05d.txt' % eid), 'a')
-        evlon = evnodes['loc'].get_local_value('lon')
-        evlat = evnodes['loc'].get_local_value('lat')
-        evdepth = evnodes['loc'].get_local_value('depth')
-        evtime = evnodes['time'].get_local_value('time')
-        evmb = evnodes['mb'].get_local_value('mb')
-        evsource = evnodes['natural_source'].get_local_value('natural_source')
-        handle.write('%06d\t%3.4f\t%3.4f\t%4.4f\t%10.2f\t%2.3f\t%d\n' % (step, evlon, evlat, evdepth, evtime, evmb, evsource))
-
-        if write_template_vals and template_move_step:
-            for (sta,wns) in sg.station_waves.items():
-                for wn in wns:
-                    for phase in sg.phases:
-                        lbl = "%d_%s_%s" % (eid, wn.label, phase)
-                        mkdir_p(os.path.join(run_dir, 'ev_%05d' % eid))
-                        lbl_handle = open(os.path.join(run_dir, 'ev_%05d' % eid, "tmpl_%s" % lbl), 'a')
-                        tmvals = sg.get_template_vals(eid, sta, phase, wn.band, wn.chan)
-                        lbl_handle.write('%06d %f %f %f %f\n' % (step,
-                                                                 tmvals['arrival_time'],
-                                                                 tmvals['peak_offset'],
-                                                                 tmvals['coda_height'],
-                                                                 tmvals['coda_decay']))
-                        lbl_handle.close()
-
-        handle.close()
-
-    if template_move_step:
-        for move_name in move_times.keys():
-            if move_name not in log_handles:
-                log_handles[move_name] = open(os.path.join(run_dir, 'move_%s_times.txt' % move_name), 'a')
-            for (step, t) in move_times[move_name]:
-                log_handles[move_name].write('%d %f\n' % (step, t));
-            del move_times[move_name]
-
-        if dumpsteps:
-            # dump images for each station at each step
-            print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
-            for (sta, waves) in sg.station_waves.items():
-                for wn in waves:
-                    plot_with_fit_shapes(os.path.join(run_dir, "%s_step%06d.png" % (wn.label, step)), wn)
 
 
 ############################################################################
@@ -176,10 +93,7 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                       enable_event_moves=True,
                       enable_template_openworld=True,
                       enable_template_moves=True,
-                      template_move_freq=1,
-                      run_dir=None,
-                      dumpsteps=False,
-                      write_template_vals=False,
+                      logger=None,
                       disable_moves=[],
                       start_step=0):
     global_moves = {'event_birth': ev_birth_move,
@@ -219,8 +133,10 @@ def run_open_world_MH(sg, skip=40, steps=10000,
 
     params_over_time = dict()
 
-    log_handles = setup_mcmc_logging(run_dir=run_dir)
-    run_dir = log_handles['dir']
+    if logger is None:
+        logger = MCMCLogger()
+    run_dir = logger.run_dir
+
 
     for step in range(start_step, steps):
 
@@ -240,8 +156,6 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                          sg=sg, eid=eid)
 
         for (site, elements) in sg.site_elements.items():
-            if (step % template_move_freq) != 0:
-                break
 
             for sta in elements:
                 assert(len(sg.station_waves[sta]) == 1)
@@ -303,12 +217,10 @@ def run_open_world_MH(sg, skip=40, steps=10000,
                      sg=sg, log_to_run_dir=run_dir)
 
 
-        log_mcmc(sg, step, n_accepted, n_attempted, move_times, log_handles, dumpsteps, dump_interval=skip, write_template_vals=write_template_vals, template_move_step = (step % template_move_freq == 0))
-        if step > 0 and ((step % 20 == 0) or (step < 5)):
-            print_mcmc_acceptances(sg, step, n_accepted, n_attempted)
+        logger.log(sg, step, n_accepted, n_attempted, move_times)
 
 
-    cleanup_mcmc(log_handles)
+
 
 
 def get_last_savepoint(run_dir):
@@ -335,8 +247,6 @@ def main():
                       help="MCMC steps to take (1000)")
     parser.add_option("--skip", dest="skip", default=500, type="int",
                       help="how often to print/save MCMC state, in steps (500)")
-    parser.add_option("--template_move_freq", dest="template_move_freq", default=1, type="int",
-                      help="how many event moves to attempt between template moves (1)")
     parser.add_option("--no_template_openworld", dest="no_template_openworld", default=False, action="store_true",
                       help="disable template birth/death/merge/split moves")
     parser.add_option("--no_event_openworld", dest="no_event_openworld", default=False, action="store_true",
@@ -402,15 +312,15 @@ def main():
 
     sys.setrecursionlimit(20000)
     np.random.seed(0)
+
+    logger = MCMCLogger(run_dir=run_dir, write_template_vals=True)
     run_open_world_MH(sg, skip=options.skip, steps=options.steps,
                       enable_event_openworld= not options.no_event_openworld,
                       enable_event_moves=True,
                       enable_template_openworld= not options.no_template_openworld,
                       enable_template_moves=True,
-                      template_move_freq=options.template_move_freq,
-                      run_dir=run_dir,
                       disable_moves=disable_moves,
-                      write_template_vals=True,
+                      logger=logger,
                       start_step = start_step)
 
 if __name__ == "__main__":
