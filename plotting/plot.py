@@ -352,9 +352,11 @@ def subplot_waveform(wave, axes, logscale=False, stime=None, etime=None, plot_de
         timevals = np.arange(stime, stime + npts / srate, 1.0 / srate)[0:npts]
     else:
         sidx = max(0, int((stime - wave['stime']) * srate))
-        eidx = max(0, int((etime - wave['stime']) * srate))
+        eidx = max(0, min(int((etime - wave['stime']) * srate), wave['npts']))
         npts = eidx-sidx
-        timevals = np.arange(stime, etime, 1.0 / srate)[0:npts]
+        effective_stime = float(sidx) / srate + wave['stime']
+        effective_etime = effective_stime + float(npts) / srate
+        timevals = np.arange(effective_stime, effective_etime, 1.0 / srate)[0:npts]
         wave_data=wave_data[sidx:eidx]
 
     axes.set_ylabel(wave['chan'])
