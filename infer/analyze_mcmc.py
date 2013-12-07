@@ -178,11 +178,14 @@ def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=True, frameskip=
     savefig(os.path.join(ev_dir, 'posterior_depth.png'), f, bbox_inches="tight", dpi=300)
 
 
-def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin):
+def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alpha=None, ax=None):
 
     lbl = 'tmpl_%d_%s_%s' % (eid, wn_lbl, phase)
     tmpl_trace_file = os.path.join(ev_dir, '%s' % lbl)
-    tmpl_img_file = os.path.join(ev_dir, '%s.png' % lbl)
+    if ax is None:
+        tmpl_img_file = os.path.join(ev_dir, '%s.png' % lbl)
+    else:
+        tmpl_img_file = None
 
     wn = sg.all_nodes[wn_lbl]
     tmnodes = sg.get_template_nodes(eid, wn.sta, phase, wn.band, wn.chan)
@@ -197,43 +200,47 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin):
 
     atimes = trace[:, 0]
     min_atime = np.min(atimes)
-    plot_stime = min_atime - 10.0
+    plot_stime = min_atime - 30.0
 
     max_atime = np.max(atimes)
     plot_etime = max_atime + 100.0
 
-    f = Figure((10, 5))
-    ax = f.add_subplot(1,1,1)
+    if ax is None:
+        f = Figure((10, 5))
+        ax = f.add_subplot(1,1,1)
 
     subplot_waveform(real_wave, ax, stime=plot_stime, etime=plot_etime, plot_dets=False, color='black', linewidth=0.5)
 
     print plot_stime, plot_etime, wn.st, wn.et
 
     n = trace.shape[0]
-    max_idxs = 2000
+    max_idxs = 100
     if n > max_idxs:
         idxs = np.array(np.linspace(0, n-1, max_idxs), dtype=int)
         n = max_idxs
     else:
         idxs = np.arange(n)
 
-    alpha = 0.4/np.sqrt(n+5)
+    alpha = 0.4/np.sqrt(n+5) if alpha is None else alpha
 
     for row in trace[idxs,:]:
         v = {'arrival_time': row[0], 'peak_offset': row[1], 'coda_height': row[2], 'coda_decay': row[3]}
         sg.set_template(eid, wn.sta, phase, wn.band, wn.chan, v)
         tmpl_stime = v['arrival_time']
-        tmpl_etime = min(tmpl_stime + v['peak_offset'] - (np.log(0.02 * wn.nm.c) - v['coda_height'])/np.exp(v['coda_decay']), plot_etime)
+        tmpl_len = max(10.0, np.exp(v['peak_offset']) - (np.log(0.02 * wn.nm.c) - v['coda_height'])/np.exp(v['coda_decay']))
+        tmpl_etime = min(tmpl_stime + tmpl_len, plot_etime)
 
         wn.parent_predict()
         subplot_waveform(wn.get_wave(), ax, stime=tmpl_stime, etime=tmpl_etime, plot_dets=False, color='green', linewidth=0.5, alpha=alpha, fill_y2=wn.nm.c)
 
-    canvas = FigureCanvasAgg(f)
-    canvas.draw()
-    f.savefig(tmpl_img_file, bbox_inches="tight", dpi=300)
+    if tmpl_img_file is not None:
+        canvas = FigureCanvasAgg(f)
+        canvas.draw()
+        f.savefig(tmpl_img_file, bbox_inches="tight", dpi=300)
 
     wn.set_value(real_wave.data)
     wn.fix_value()
+
 
 def plot_ev_template_posteriors(run_dir, sg, eid, burnin):
     ev_dir = os.path.join(run_dir, 'ev_%05d' % eid)
