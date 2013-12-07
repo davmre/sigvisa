@@ -21,7 +21,6 @@ class DummyFeatureGenerator(WiggleGenerator):
         self.x = np.linspace(0, self.len_s, self.npts)
 
         self.logscale = logscale
-        print "created with envelope", envelope
         self.envelope = envelope
 
         self.family_name = family_name
