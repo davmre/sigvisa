@@ -224,21 +224,21 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
     relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
     relevant_nodes += [offset_node.parents[offset_node.default_parent_key()],] if offset_node.deterministic() else [offset_node,]
 
-    current_offset = np.exp(offset_node.get_value(key=offset_key))
+    current_offset = offset_node.get_value(key=offset_key)
     atime = arrival_node.get_value(key=arrival_key)
     proposed_offset = gaussian_propose(sg, keys=(offset_key,),
                                        node_list=(offset_node,),
                                        values=(current_offset,),
                                        std=std, **kwargs)[0]
-    new_atime = atime + (current_offset - proposed_offset)
+    new_atime = atime + (current_offset - np.exp(proposed_offset))
 
     rn_tmp, node_list, keys, oldvalues, newvalues = update_wiggle_submove(sg, wave_node, tmnodes,
                                                                           arrival_key, arrival_node,
                                                                           atime, new_atime)
     relevant_nodes += rn_tmp
     node_list.append(offset_node)
-    newvalues.append(np.log(proposed_offset))
-    oldvalues.append(np.log(current_offset))
+    newvalues.append(proposed_offset)
+    oldvalues.append(current_offset)
     keys.append(offset_key)
 
     accepted = MH_accept(sg=sg, keys=keys,
