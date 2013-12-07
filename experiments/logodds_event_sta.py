@@ -29,12 +29,13 @@ def fetch_ev_P_signal(ev, sta, chan):
 
 def setup_graphs(ev, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
-                init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False):
+                 init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False,
+                 hack_param_constraint=False):
     sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, nm_type = nm_type,
                       run_name=init_run_name, iteration=init_iteration,
-                      absorb_n_phases=absorb_n_phases)
+                      absorb_n_phases=absorb_n_phases, hack_param_constraint=hack_param_constraint)
     sg_noise = SigvisaGraph(nm_type = nm_type,
                             absorb_n_phases=absorb_n_phases)
 
@@ -75,15 +76,15 @@ def random_event(seed):
 
     return ev
 
-def ev_lp(sg, evnode_lp, run_dir):
+def ev_lp(sg, evnode_lp, logger, remove_rundir=True):
 
     s = Sigvisa()
 
+    run_dir = logger.run_dir
     clear_directory(run_dir)
 
     sg.parent_predict_all()
-    logger = MCMCLogger(run_dir=run_dir)
-    run_open_world_MH(sg, enable_event_openworld=False, enable_event_moves=False, enable_template_openworld=False, enable_template_moves=True, logger=logger, steps=2000, skip=20000)
+    run_open_world_MH(sg, enable_event_openworld=False, enable_event_moves=False, enable_template_openworld=False, enable_template_moves=True, logger=logger, steps=2000)
 
     lps = np.loadtxt(os.path.join(run_dir, 'lp.txt'))[500:]
     lps = lps - evnode_lp # p(signal, params | event) = p(signal, params, event) / p(event)
@@ -95,7 +96,8 @@ def ev_lp(sg, evnode_lp, run_dir):
     mean_p = np.mean(ps)
     log_mean_p = np.exp(mean_p) + max_lp
 
-    remove_directory(run_dir)
+    if remove_rundir:
+        remove_directory(run_dir)
 
     return log_mean_p
 
@@ -151,16 +153,20 @@ def main():
     else:
             ev = get_event(evid=int(options.evid))
 
+    if ev.mb < 0:
+        raise Exception('evid %d has invalid magnitude %f' % (ev.evid, ev.mb))
+
     sg, sg_noise, evnode_lp = setup_graphs(ev=ev, sta=options.sta, chan=options.chan, band=options.band,
                                 tm_shape=options.template_shape, tm_type=template_model,
                                 wm_family=options.wiggle_family, wm_type=options.wiggle_model,
                                 phases=phases,
                                 fit_hz=options.hz, nm_type=options.nm_type,
-                                init_run_name = options.run_name, init_iteration = options.run_iteration-1,
+                                init_run_name = options.run_name, init_iteration = options.run_iteration,
                                 absorb_n_phases=options.absorb_n_phases)
 
     run_dir = 'experiments/logodds/' + options.sta + "_" + options.evid
-    lp = ev_lp(sg, evnode_lp, run_dir=run_dir)
+    logger =  MCMCLogger(run_dir=run_dir, dump_interval=20000)
+    lp = ev_lp(sg, evnode_lp, logger=logger)
 
     noise_lp = sg_noise.current_log_p() - sg_noise.nevents_log_p()
 
