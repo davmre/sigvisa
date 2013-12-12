@@ -14,8 +14,8 @@ def write_calibration_commands(stations, n):
 def write_event_commands(stations):
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-    cursor.execute("select evid from leb_origin where time between (select start_time from dataset where label='test') and (select end_time from dataset where label='test')")
-    evids = np.array(cursor.fetchall()).flatten()
+    cursor.execute("select evid from leb_origin where time between (select start_time from dataset where label='test') and (select end_time from dataset where label='test') and mb > 0")
+    evids = [5393637,] + list(np.array(cursor.fetchall()).flatten()) # add 2009 dprk event
 
     f = open('experiments/event_cmds.sh', 'w')
 
@@ -30,5 +30,10 @@ def write_event_commands(stations):
 with open('stations.txt', 'r') as f:
     stations = f.read()[:-1].split(',')
 
-write_calibration_commands(stations, 50)
-#write_event_commands(stations)
+
+poor_uptime_stations = ['SIV', 'PMSA', 'NNA ', 'ATAH', 'RCBR', 'JMIC', 'BBTS', 'SNAA', 'SUR ', 'LSZ ', 'JTS ', 'MBAR', 'OPO ', 'ATD ', 'RES ', 'HNR ', 'ASF ', 'MDT ', 'FRB ', 'SJG ', 'SFJD', 'TSUM', 'QSPA', 'GNI', 'LBTB', 'SADO', 'MLR ', 'LVC ', 'USHA', 'PFO' ]
+stations = [sta for sta in stations if sta not in poor_uptime_stations]
+
+
+write_calibration_commands(stations, 200)
+write_event_commands(stations)

@@ -14,9 +14,10 @@ import matplotlib.gridspec as gridspec
 
 from sigvisa.plotting.event_heatmap import EventHeatmap
 from sigvisa.plotting.histogram import plot_density, plot_histogram
-from sigvisa.plotting.plot import basic_plot_to_file, subplot_waveform, savefig
+from sigvisa.plotting.plot import basic_plot_to_file, subplot_waveform, savefig, plot_pred_atimes, plot_det_times
 import sigvisa.utils.geog as geog
 from sigvisa.utils.fileutils import mkdir_p
+from sigvisa.models.ttime import tt_predict
 
 EVTRACE_LON, EVTRACE_LAT, EVTRACE_DEPTH, EVTRACE_TIME, EVTRACE_MB, EVTRACE_SOURCE = range(6)
 
@@ -178,7 +179,7 @@ def analyze_event(run_dir, eid, burnin, true_evs=None, bigimage=True, frameskip=
     savefig(os.path.join(ev_dir, 'posterior_depth.png'), f, bbox_inches="tight", dpi=300)
 
 
-def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alpha=None, ax=None):
+def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alpha=None, tmpl_color='green', ax=None, plot_predictions=True, plot_dets=False):
 
     lbl = 'tmpl_%d_%s_%s' % (eid, wn_lbl, phase)
     tmpl_trace_file = os.path.join(ev_dir, '%s' % lbl)
@@ -211,6 +212,17 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alph
 
     subplot_waveform(real_wave, ax, stime=plot_stime, etime=plot_etime, plot_dets=False, color='black', linewidth=0.5)
 
+    if plot_predictions:
+        predictions = []
+        for (eid, phase) in wn.arrivals():
+            event = sg.get_event(eid)
+            predictions.append([phase, event.time+tt_predict(event, wn.sta, phase)])
+        print predictions
+        plot_pred_atimes(dict(predictions), real_wave, axes=ax, stime=plot_stime, etime=plot_etime, color="purple")
+    if plot_dets:
+        print real_wave, real_wave['arrivals']
+        plot_det_times(real_wave, axes=ax, stime=plot_stime, etime=plot_etime, color="red", all_arrivals=True)
+
     print plot_stime, plot_etime, wn.st, wn.et
 
     n = trace.shape[0]
@@ -231,7 +243,7 @@ def plot_arrival_template_posterior(ev_dir, sg, eid, wn_lbl, phase, burnin, alph
         tmpl_etime = min(tmpl_stime + tmpl_len, plot_etime)
 
         wn.parent_predict()
-        subplot_waveform(wn.get_wave(), ax, stime=tmpl_stime, etime=tmpl_etime, plot_dets=False, color='green', linewidth=0.5, alpha=alpha, fill_y2=wn.nm.c)
+        subplot_waveform(wn.get_wave(), ax, stime=tmpl_stime, etime=tmpl_etime, plot_dets=False, color=tmpl_color, linewidth=0.5, alpha=alpha, fill_y2=wn.nm.c)
 
     if tmpl_img_file is not None:
         canvas = FigureCanvasAgg(f)

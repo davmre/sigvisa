@@ -37,7 +37,7 @@ def plot_density(data, axes, title=None, draw_stats=True, true_value=None):
         axes.text(0, 1, htext, horizontalalignment='left', verticalalignment='top', transform=axes.transAxes)
 
 
-def plot_histogram(data, axes=None, title=None, draw_stats=True, n_bins=None, true_value=None, trueval_label=None, **kwargs):
+def plot_histogram(data, axes=None, title=None, draw_stats=True, n_bins=None, bin_size=None, bins=None, true_value=None, trueval_label=None, return_full=False,  **kwargs):
     data = sorted(data)
     n = len(data)
     mean = np.mean(data)
@@ -58,14 +58,16 @@ def plot_histogram(data, axes=None, title=None, draw_stats=True, n_bins=None, tr
 
 
     if n_bins is None:
-        # freedman / diaconis rule
-        if iqr > 0:
-            bin_size = 2 * iqr / float(n) ** (1.0 / 3.0)
-        else:
-            bin_size = 2 * std / float(n) ** (1.0 / 3.0)
+        if bin_size is None:
+            # freedman / diaconis rule
+            if iqr > 0:
+                bin_size = 2 * iqr / float(n) ** (1.0 / 3.0)
+            else:
+                bin_size = 2 * std / float(n) ** (1.0 / 3.0)
 
         n_bins = int(np.ceil((np.max(data) - np.min(data)) / bin_size))
-    axes.hist(x=data, bins=n_bins, **kwargs)
+    n, bins, patches = axes.hist(x=data, bins=n_bins, **kwargs)
+
 
     if draw_stats:
         htext = "mean: %.4f\nstd:  %.4f\n" % (mean, std)
@@ -85,7 +87,10 @@ def plot_histogram(data, axes=None, title=None, draw_stats=True, n_bins=None, tr
         if trueval_label is not None:
             axes.text(true_value + bin_size, ymax - (ymax-ymin)*.1, trueval_label, color="red", fontsize=10)
 
-    return htext
+    if return_full:
+        return htext, bins, patches
+    else:
+        return htext
 
 def plot_gaussian_fit(data, axes):
     mean = np.mean(data)

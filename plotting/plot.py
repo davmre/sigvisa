@@ -226,7 +226,7 @@ def plot_with_fit_shapes(fname, wn, title="",
     else:
         savefig(fname, fig, bbox_inches="tight", dpi=300)
 
-def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None):
+def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None, color="red", all_arrivals=False):
     if wave is None:
         return
 
@@ -236,7 +236,9 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None):
     try:
         arrivals = wave['event_arrivals']
     except:
-        arrivals = wave['arrivals']
+        arrivals = wave['arrivals_idcx']
+    if all_arrivals:
+        arrivals = wave['arrivals_idcx']
 
     if arrivals.shape[0] == 0:
         return
@@ -257,14 +259,14 @@ def plot_det_times(wave, axes=None, logscale=False, stime=None, etime=None):
         if logscale:
             (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
         axes.bar(left=all_det_times, height=[maxwave - minwave for _ in all_det_times],
-                 width=.25, bottom=minwave, edgecolor="red", color="red", linewidth=1, alpha=.5)
+                 width=.25, bottom=minwave, edgecolor=color, color=color, linewidth=1, alpha=.5)
         if all_det_labels is not None:
             for (t, lbl) in zip(all_det_times, all_det_labels):
-                axes.text(t + 3, maxwave - (maxwave - minwave) * 0.1, lbl, color="red", fontsize=10)
+                axes.text(t + .5, maxwave - (maxwave - minwave) * 0.1, lbl, color=color, fontsize=10)
 
 # does not save for you - you need to call savefig() yourself!
 
-def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None):
+def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, etime=None, color="green", **kwargs):
     if predictions is None or wave is None:
         return
 
@@ -272,7 +274,12 @@ def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, e
         axes = plt.subplot(1, 1, 1)
 
     if etime is not None:
-        predictions = [p for p in predictions if stime <= p[1] <= etime]
+        old_predictions = predictions
+        predictions = dict([p for p in predictions.items() if stime <= p[1] <= etime])
+
+    if len(predictions) < 1:
+        print "warning: atimes %s not within plot window (%f, %f)!" % (old_predictions, stime, stime)
+        return
 
     pred_labels, pred_times = zip(*predictions.items())
 
@@ -281,9 +288,9 @@ def plot_pred_atimes(predictions, wave, axes=None, logscale=False, stime=None, e
         (maxwave, minwave) = (np.log(maxwave), np.log(minwave))
 
     axes.bar(left=pred_times, height=[maxwave - minwave for _ in pred_times],
-             width=.25, bottom=minwave, edgecolor="green", color="green", linewidth=1, alpha=.5)
+             width=.25, bottom=minwave, edgecolor=color, color=color, linewidth=1, alpha=.5, **kwargs)
     for (lbl, t) in predictions.items():
-        axes.text(t + 3, maxwave - (maxwave - minwave) * 0.1, lbl, color="green", fontsize=10)
+        axes.text(t + .5, maxwave - (maxwave - minwave) * 0.1, lbl, color=color, fontsize=10)
 
 # does not save for you - you need to call savefig() yourself!
 

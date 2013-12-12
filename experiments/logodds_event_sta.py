@@ -23,14 +23,14 @@ from sigvisa.infer.run_mcmc import run_open_world_MH
 from sigvisa.models.distributions import Uniform, Exponential
 from sigvisa.models.ttime import tt_predict
 
-def fetch_ev_P_signal(ev, sta, chan):
+def fetch_ev_P_signal(ev, sta, chan, follow_time=100):
     atime = tt_predict(ev, sta, phase='P') + ev.time
-    return fetch_waveform(sta, chan, atime - 10, atime + 100)
+    return fetch_waveform(sta, chan, atime - 10, atime + follow_time)
 
 def setup_graphs(ev, sta, chan, band,
                 tm_shape, tm_type, wm_family, wm_type, phases,
                  init_run_name, init_iteration, fit_hz=5, nm_type="ar", absorb_n_phases=False,
-                 hack_param_constraint=False):
+                 hack_param_constraint=False, follow_time=100):
     sg = SigvisaGraph(template_model_type=tm_type, template_shape=tm_shape,
                       wiggle_model_type=wm_type, wiggle_family=wm_family,
                       phases=phases, nm_type = nm_type,
@@ -41,7 +41,7 @@ def setup_graphs(ev, sta, chan, band,
 
     s = Sigvisa()
     cursor = s.dbconn.cursor()
-    wave = fetch_ev_P_signal(ev, sta, chan).filter("%s;env" % band)
+    wave = fetch_ev_P_signal(ev, sta, chan, follow_time=follow_time).filter("%s;env" % band)
     cursor.close()
     if fit_hz != wave['srate']:
         wave = wave.filter('hz_%.2f' % fit_hz)
@@ -162,7 +162,8 @@ def main():
                                 phases=phases,
                                 fit_hz=options.hz, nm_type=options.nm_type,
                                 init_run_name = options.run_name, init_iteration = options.run_iteration,
-                                absorb_n_phases=options.absorb_n_phases)
+                                           absorb_n_phases=options.absorb_n_phases,
+                                           hack_param_constraint=True, follow_time=20)
 
     run_dir = 'experiments/logodds/' + options.sta + "_" + options.evid
     logger =  MCMCLogger(run_dir=run_dir, dump_interval=20000)

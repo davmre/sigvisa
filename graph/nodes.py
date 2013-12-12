@@ -265,9 +265,10 @@ class Node(object):
         if self.hack_param_constraint:
             if 'tt_residual' in self.label and np.abs(v) > 10:
                 lp = -99999999
-            if 'peak_offset' in self.label and np.exp(v) > 15:
+            elif 'peak_offset' in self.label and np.exp(v) > 15:
                 lp = -99999999
-
+            elif 'coda_decay' in self.label and np.exp(v) < .008:
+                lp = -9999999
 
         if not np.isfinite(lp):
             raise Exception('invalid log prob %f at node %s' % (lp, self.label))

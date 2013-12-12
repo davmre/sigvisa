@@ -17,7 +17,7 @@ from sigvisa.learn.train_param_common import load_modelid
 import sigvisa.utils.geog as geog
 from sigvisa.models import DummyModel
 from sigvisa.models.distributions import Uniform, Poisson, Gaussian, Exponential
-from sigvisa.models.ev_prior import setup_event
+from sigvisa.models.ev_prior import setup_event, event_from_evnodes
 from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
@@ -394,6 +394,9 @@ class SigvisaGraph(DirectedGraphModel):
         if node in self.wiggle_nodes:
             self.wiggle_nodes.remove(node)
         super(SigvisaGraph, self).remove_node(node)
+
+    def get_event(self, eid):
+        return event_from_evnodes(self.evnodes[eid])
 
     def remove_event(self, eid):
 
@@ -888,7 +891,7 @@ class SigvisaGraph(DirectedGraphModel):
         etime = self.end_time if etime is None else etime
 
         event_time_dist = Uniform(stime, etime)
-        event_mag_dist = Exponential(rate=10.0, min_value=min_mb)
+        event_mag_dist = Exponential(rate=np.log(10.0), min_value=min_mb)
 
         origin_time = event_time_dist.sample()
         lon, lat, depth = s.sigmodel.event_location_prior_sample()
