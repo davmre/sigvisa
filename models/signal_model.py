@@ -59,7 +59,7 @@ class ObservedSignalNode(Node):
 
     def __init__(self, model_waveform, graph, nm_type="ar", nmid=None, observed=True, **kwargs):
 
-        key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['band'], band=model_waveform['band'])
+        key = create_key(param="signal_%.2f_%.2f" % (model_waveform['stime'], model_waveform['etime'] ), sta=model_waveform['sta'], chan=model_waveform['chan'], band=model_waveform['band'])
 
         super(ObservedSignalNode, self).__init__(model=None, initial_value=model_waveform.data, keys=[key,], fixed=observed, **kwargs)
 
@@ -81,9 +81,6 @@ class ObservedSignalNode(Node):
         self.set_noise_model(nm_type=nm_type, nmid=nmid)
 
 
-        self._tmpl_params = dict()
-        self._wiggle_params = dict()
-        self._keymap = dict()
         self._arrivals = set()
         self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
 
@@ -195,6 +192,35 @@ class ObservedSignalNode(Node):
 
         return signal
 
+
+    """
+
+    keep the following members in sync:
+    - self._arrivals: set of (eid, phase) pairs
+    - self._keymap: map from parent key to (boolean is_tmpl_param, eid, phase, param_name) tuple
+    - self._tmpl_params: map from (eid, phase) to a dict of template params for that arrival
+    - self._wiggle_params: map from (eid, phase) to a dict of repeatable wiggle params
+
+    """
+
+    def _parent_values(self):
+        parent_keys_removed = self.parent_keys_removed
+        parent_keys_changed = self.parent_keys_changed
+        parent_nodes_added = self.parent_nodes_added
+        pv = super(ObservedSignalNode, self)._parent_values()
+
+        new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
+        removed_arrivals = get_removed_arrivals(parent_keys_removed, self.r)
+        self._arrivals.update(new_arrivals)
+        self._arrivals.difference_update(removed_arrivals)
+
+        del parent_keys_removed
+        del parent_keys_changed
+        del parent_nodes_added
+        return pv
+
+
+    """
     def _parent_values(self):
         parent_keys_removed = self.parent_keys_removed
         parent_keys_changed = self.parent_keys_changed
@@ -251,6 +277,7 @@ class ObservedSignalNode(Node):
         del parent_keys_changed
         del parent_nodes_added
         return pv
+    """
 
     def arrivals(self):
         self._parent_values()
@@ -318,16 +345,3 @@ signal_diff(i) =value(i) - pred_signal(i);
 
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):
          return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values, **kwargs)
-
-    def get_wiggle_for_arrival(self, eid, phase, parent_values=None):
-        parent_values = parent_values if parent_values else self._parent_values()
-        wg = self.graph.wiggle_generator(phase, self.srate)
-        if len(self._wiggle_params[(eid, phase)]) == wg.dimension():
-            return wg.signal_from_features(features = self._wiggle_params[(eid, phase)])
-        else:
-            return np.ones((wg.npts,))
-
-    def get_template_params_for_arrival(self, eid, phase, parent_values=None):
-        parent_values = parent_values if parent_values else self._parent_values()
-        tg = self.graph.template_generator(phase)
-        return self._tmpl_params[(eid, phase)], tg
