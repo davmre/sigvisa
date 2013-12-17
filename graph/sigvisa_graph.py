@@ -552,6 +552,32 @@ class SigvisaGraph(DirectedGraphModel):
         else:
             return self.setup_site_param_node_indep(**kwargs)
 
+    def setup_site_arrival_nodes(self, eid, phase, site, chan, band, param_nodes):
+        child_wave_nodes = set()
+        if self.arrays_joint:
+            # param_nodes is a list of sta:node dictionaries
+            nodes = {}
+            for sta in self.site_elements[site]:
+
+                for wave_node in self.station_waves[sta]:
+                    child_wave_nodes.add(wave_node)
+
+                parents = [d[sta] for d in param_nodes]
+                node = LatentArrivalNode(eid, phase, sta, chan, band, parents=parents, 
+                                         children=child_wave_nodes)
+                nodes[sta] = node
+        else:
+            sta = site
+
+            for wave_node in self.station_waves[sta]:
+                child_wave_nodes.add(wave_node)
+
+            # param_nodes is just a list of nodes
+            node = LatentArrivalNode(eid, phase, sta, chan, band, 
+                                     parents=param_nodes,
+                                     children=child_wave_nodes)
+            return node
+
     def setup_site_param_node_joint(self, param, site, phase, parents, model_type,
                               chan=None, band=None, basisid=None,
                               modelid=None,
@@ -707,6 +733,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
+                arrival_nodes = [arrival_time_node,]
+                
                 for param in tg.params():
 
                     if param == "coda_height":
@@ -719,17 +747,20 @@ class SigvisaGraph(DirectedGraphModel):
                                                                       evnodes=evnodes,
                                                                       atime_node=arrival_time_node,
                                                                       amp_transfer_node=amp_transfer_node,
-                                                                      children=child_wave_nodes,
                                                                       low_bound = tg.low_bounds()[param],
                                                                       high_bound = tg.high_bounds()[param],
                                                                       initial_value = tg.default_param_vals()[param])
+                   arrival_nodes.append(nodes[(band, chan, param)])
                 for param in wg.params():
                     model_type = self._tm_type(param, site, wiggle_param=True)
                     nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
                                                                             model_type=model_type,
                                                                             phase=phase, parents=[evnodes['loc'],],
                                                                             band=band, chan=chan, basisid=wg.basisid,
-                                                                            children=child_wave_nodes, wiggle=True)
+                                                                             wiggle=True)
+                    arrival_nodes.append(nodes[(band, chan, param)])
+
+                nodes[(band, chan, 'latent_arrival')] = self.setup_site_arrival_nodes(self, eid, phase, sta, chan, band, parents=arrival_nodes)
 
         for ni in [tt_residual_node, amp_transfer_node] + nodes.values():
             for n in extract_sta_node_list(ni):

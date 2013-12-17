@@ -102,7 +102,7 @@ class ObservedSignalNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
-    def assem_signal(self, include_wiggles=True, arrivals=None):
+    def assem_signal(self, arrivals=None):
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
@@ -113,59 +113,38 @@ class ObservedSignalNode(Node):
         arrivals = list(arrivals)
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
-        logenvs = [None] * n
-        wiggles = [None] * n
+        arrivals = [None] * n
         empty_array = np.reshape(np.array((), dtype=float), (0,))
 
         for (i, (eid, phase)) in enumerate(arrivals):
-            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
-            start = (v['arrival_time'] - self.st) * self.srate
+            arrivals[i], arrival_time = self.get_signal_for_arrival(eid=eid, phase=phase)
+            start = (arrival_time - self.st) * self.srate
             start_idx = int(np.floor(start))
             sidxs[i] = start_idx
-            if start_idx >= self.npts:
-                logenvs[i] = empty_array
-                wiggles[i] = empty_array
-                continue
-
-            offset = float(start - start_idx)
-            logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
-            logenvs[i] = logenv
-
-            if include_wiggles:
-                wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase)
-                wiggles[i] = wiggle
-            else:
-                wiggles[i] = empty_array
 
         npts = self.npts
         n = len(arrivals)
-        envelope = int(self.env or (not include_wiggles))
         signal = self.pred_signal
         code = """
       for(int i=0; i < npts; ++i) signal(i) = 0;
     for (int i = 0; i < n; ++i) {
         int start_idx = sidxs(i);
+        if (start_idx >= npts) {
+           continue;
+        }
 
-        PyArrayObject* logenv_arr = convert_to_numpy(PyList_GetItem(logenvs,i), "logenv");
-        conversion_numpy_check_type(logenv_arr,PyArray_DOUBLE, "logenv");
-        double * logenv = (double *)logenv_arr->data;
-        Py_XDECREF(logenv_arr); // convert_to_numpy does an incref for us, so we need
+        PyArrayObject* arrival_arr = convert_to_numpy(PyList_GetItem(arrivals,i), "arrivals");
+        conversion_numpy_check_type(arrival_arr,PyArray_DOUBLE, "arrivals");
+        double * arrival = (double *)arrival_arr->data;
+        Py_XDECREF(arrival_arr); // convert_to_numpy does an incref for us, so we need
                                 // to decref; we do it here to make sure it doesn't get
                                 // forgotten later. this is safe because there's already
                                 // a reference held by the calling python code, so the
-                                // logenv_arr will never go out of scope while we're running.
+                                // arrival_arr will never go out of scope while we're running.
 
-        PyArrayObject* wiggle_arr = convert_to_numpy(PyList_GetItem(wiggles,i), "wiggle");
-        conversion_numpy_check_type(wiggle_arr,PyArray_DOUBLE, "wiggle");
-        double * wiggle =  (double *) wiggle_arr->data;
-        Py_XDECREF(wiggle_arr);
+        int len_arrival = arrival_arr->dimensions[0];
 
-        int len_logenv = logenv_arr->dimensions[0];
-        int len_wiggle = wiggle_arr->dimensions[0];
-
-        int wiggle_len = std::min(len_wiggle, len_logenv);
-
-        int end_idx = start_idx + len_logenv;
+        int end_idx = start_idx + len_arrival;
         if (end_idx <= 0) {
             continue;
         }
@@ -174,18 +153,13 @@ class ObservedSignalNode(Node):
 
         int j = early;
         int total_wiggle_len = std::min(wiggle_len - early, len_logenv - overshoot - early);
-        for(j=early; j < early + total_wiggle_len; ++j) {
-            signal(j+start_idx) += exp(logenv[j]) * wiggle[j];
-        }
-        if (envelope) {
-            for(; j < len_logenv - overshoot; ++j) {
-               signal(j + start_idx) += exp(logenv[j]);
-            }
+        for(j=early; j < len_logenv - overshoot; ++j) {
+            signal(j+start_idx) += signal[j];
         }
     }
 
 """
-        weave.inline(code,['n', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal', 'envelope'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['n', 'npts', 'sidxs', 'arrivals', 'signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)

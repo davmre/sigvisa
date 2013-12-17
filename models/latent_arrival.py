@@ -25,7 +25,7 @@ class LatentArrivalNode(Node):
 
         key = create_key(param="latent_arrival", sta=self.sta, chan=self.chan, band=self.band, eid=self.eid, phase=self.phase)
 
-        super(ObservedSignalNode, self).__init__(keys=[key,], parents=parents, **kwargs)
+        super(ObservedSignalNode, self).__init__(keys=[key,], **kwargs)
 
         # figure out what the keys ought to be for the template and
         # repeatable-wiggle parameters at this arrival.
@@ -55,9 +55,13 @@ class LatentArrivalNode(Node):
         em = ErrorModel(mean=1.0, std=0.3)
         self.arwm = ARModel(params=(.2, .7), em = em, sf=self.srate)
 
+        self.parent_predict()
+
     def parent_predict(self):
         env = np.exp(self.get_template_logenv())
         wiggle = self.get_wiggle_for_arrival()
+
+        # TODO: what if wiggle is longer than env? (also applies below)
         env[:len(wiggle)] *= wiggle
         self.set_value(env)
 
