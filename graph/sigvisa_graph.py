@@ -22,6 +22,7 @@ from sigvisa.models.ttime import tt_predict, tt_log_p, ArrivalTimeNode
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.dag import DirectedGraphModel
 from sigvisa.graph.graph_utils import extract_sta_node, predict_phases, create_key, get_parent_value, parse_key
+from sigvisa.models.latent_arrival import LatentArrivalNode
 from sigvisa.models.signal_model import ObservedSignalNode, update_arrivals
 from sigvisa.graph.array_node import ArrayNode
 from sigvisa.models.templates.load_by_name import load_template_generator
@@ -680,10 +681,16 @@ class SigvisaGraph(DirectedGraphModel):
 
         eid = evnodes['mb'].eid
 
+        child_latent_lookup = defaultdict(dict)
         child_wave_nodes = set()
+        child_latent_nodes = set()
         for sta in self.site_elements[site]:
             for wave_node in self.station_waves[sta]:
+                latent_arrival = LatentArrivalNode(self, eid, phase, sta, wave_node.chan, wave_node.band, wave_node.srate, children=(wave_node,))
+                self.add_node(latent_arrival)
+                child_latent_lookup[wave_node.band][wave_node.chan] = latent_arrival
                 child_wave_nodes.add(wave_node)
+                child_latent_nodes.add(latent_arrival)
 
         tt_model_type = self._tm_type(param="tt_residual", site=site, wiggle_param=False)
         tt_residual_node = tg.create_param_node(self, site, phase,
@@ -693,8 +700,8 @@ class SigvisaGraph(DirectedGraphModel):
                                                 low_bound = -15,
                                                 high_bound = 15)
         arrival_time_node = self.setup_tt(site, phase, evnodes=evnodes,
-                                tt_residual_node=tt_residual_node,
-                                children=child_wave_nodes)
+                                          tt_residual_node=tt_residual_node,
+                                          children= (child_wave_nodes | child_latent_nodes))
         ampt_model_type = self._tm_type(param="amp_transfer", site=site, wiggle_param=False)
         amp_transfer_node = tg.create_param_node(self, site, phase,
                                                  band=None, chan=None, param="amp_transfer",
@@ -707,6 +714,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
+                child_set = (child_latent_lookup[band][chan],)
+
                 for param in tg.params():
 
                     if param == "coda_height":
@@ -719,7 +728,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                                       evnodes=evnodes,
                                                                       atime_node=arrival_time_node,
                                                                       amp_transfer_node=amp_transfer_node,
-                                                                      children=child_wave_nodes,
+                                                                      children=child_set,
                                                                       low_bound = tg.low_bounds()[param],
                                                                       high_bound = tg.high_bounds()[param],
                                                                       initial_value = tg.default_param_vals()[param])
@@ -729,7 +738,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                                             model_type=model_type,
                                                                             phase=phase, parents=[evnodes['loc'],],
                                                                             band=band, chan=chan, basisid=wg.basisid,
-                                                                            children=child_wave_nodes, wiggle=True)
+                                                                            children=child_set, wiggle=True)
 
         for ni in [tt_residual_node, amp_transfer_node] + nodes.values():
             for n in extract_sta_node_list(ni):
@@ -756,12 +765,12 @@ class SigvisaGraph(DirectedGraphModel):
                     n.parent_predict()
                 self.extended_evnodes[eid].append(n)
 
-    def add_wave(self, wave):
+    def add_wave(self, wave, fixed=True):
         """
         Add a wave node to the graph. Assume that all waves are added before all events.
         """
 
-        wave_node = ObservedSignalNode(model_waveform=wave, nm_type=self.nm_type, observed=True, label=self._get_wave_label(wave=wave), graph=self)
+        wave_node = ObservedSignalNode(model_waveform=wave, nm_type=self.nm_type, observed=fixed, label=self._get_wave_label(wave=wave), graph=self)
 
         s = Sigvisa()
         sta = wave['sta']

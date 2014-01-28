@@ -305,7 +305,10 @@ class Node(object):
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        self._set_values_from_model(self.model.predict(cond=parent_values))
+        try:
+            self._set_values_from_model(self.model.predict(cond=parent_values))
+        except NotImplementedError:
+            raise NotImplementedError("abstract model at node %s doesn't implement parent_predict!" % self.label)
 
     def get_children(self):
         return self.children

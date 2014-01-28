@@ -73,7 +73,6 @@ class ObservedSignalNode(Node):
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
         self.valid_len = model_waveform['valid_len']
-        self.env = 'env' in self.filter_str
 
         self.signal_diff = np.empty((self.npts,))
         self.pred_signal = np.empty((self.npts,))
@@ -83,6 +82,9 @@ class ObservedSignalNode(Node):
 
         self._arrivals = set()
         self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
+
+        self._latent_arrivals = dict()
+        self._arrival_times = dict()
 
         self.graph = graph
 
@@ -104,6 +106,8 @@ class ObservedSignalNode(Node):
 
     def assem_signal(self, include_wiggles=True, arrivals=None):
 
+        self._parent_values()
+
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
         # wiggle extraction)
@@ -113,79 +117,54 @@ class ObservedSignalNode(Node):
         arrivals = list(arrivals)
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
-        logenvs = [None] * n
-        wiggles = [None] * n
+        latent_envs = [None] * n
         empty_array = np.reshape(np.array((), dtype=float), (0,))
 
         for (i, (eid, phase)) in enumerate(arrivals):
-            v, tg = self.get_template_params_for_arrival(eid=eid, phase=phase)
-            start = (v['arrival_time'] - self.st) * self.srate
+            atime = self._arrival_times[(eid, phase)]
+            start = (atime - self.st) * self.srate
             start_idx = int(np.floor(start))
             sidxs[i] = start_idx
             if start_idx >= self.npts:
                 logenvs[i] = empty_array
-                wiggles[i] = empty_array
                 continue
 
             offset = float(start - start_idx)
-            logenv = tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
-            logenvs[i] = logenv
-
-            if include_wiggles:
-                wiggle = self.get_wiggle_for_arrival(eid=eid, phase=phase)
-                wiggles[i] = wiggle
-            else:
-                wiggles[i] = empty_array
+            latent_env = self.get_latent_arrival(eid, phase)
+            latent_envs[i] = latent_env
 
         npts = self.npts
         n = len(arrivals)
-        envelope = int(self.env or (not include_wiggles))
         signal = self.pred_signal
         code = """
       for(int i=0; i < npts; ++i) signal(i) = 0;
     for (int i = 0; i < n; ++i) {
         int start_idx = sidxs(i);
 
-        PyArrayObject* logenv_arr = convert_to_numpy(PyList_GetItem(logenvs,i), "logenv");
-        conversion_numpy_check_type(logenv_arr,PyArray_DOUBLE, "logenv");
-        double * logenv = (double *)logenv_arr->data;
-        Py_XDECREF(logenv_arr); // convert_to_numpy does an incref for us, so we need
+        PyArrayObject* latent_env_arr = convert_to_numpy(PyList_GetItem(latent_envs,i), "latent_env");
+        conversion_numpy_check_type(latent_env_arr,PyArray_DOUBLE, "latent_env");
+        double * latent_env = (double *)latent_env_arr->data;
+        Py_XDECREF(latent_env_arr); // convert_to_numpy does an incref for us, so we need
                                 // to decref; we do it here to make sure it doesn't get
                                 // forgotten later. this is safe because there's already
                                 // a reference held by the calling python code, so the
-                                // logenv_arr will never go out of scope while we're running.
+                                // latent_env_arr will never go out of scope while we're running.
 
-        PyArrayObject* wiggle_arr = convert_to_numpy(PyList_GetItem(wiggles,i), "wiggle");
-        conversion_numpy_check_type(wiggle_arr,PyArray_DOUBLE, "wiggle");
-        double * wiggle =  (double *) wiggle_arr->data;
-        Py_XDECREF(wiggle_arr);
-
-        int len_logenv = logenv_arr->dimensions[0];
-        int len_wiggle = wiggle_arr->dimensions[0];
-
-        int wiggle_len = std::min(len_wiggle, len_logenv);
-
-        int end_idx = start_idx + len_logenv;
+        int len_latent_env = latent_env_arr->dimensions[0];
+        int end_idx = start_idx + len_latent_env;
         if (end_idx <= 0) {
             continue;
         }
         int early = std::max(0, - start_idx);
         int overshoot = std::max(0, end_idx - npts);
-
         int j = early;
-        int total_wiggle_len = std::min(wiggle_len - early, len_logenv - overshoot - early);
-        for(j=early; j < early + total_wiggle_len; ++j) {
-            signal(j+start_idx) += exp(logenv[j]) * wiggle[j];
-        }
-        if (envelope) {
-            for(; j < len_logenv - overshoot; ++j) {
-               signal(j + start_idx) += exp(logenv[j]);
-            }
+        for(j=early; j < len_latent_env - overshoot; ++j) {
+               signal(j + start_idx) += latent_env[j];
         }
     }
 
 """
-        weave.inline(code,['n', 'npts', 'sidxs', 'logenvs', 'wiggles', 'signal', 'envelope'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['n', 'npts', 'sidxs', 'latent_envs', 'signal',],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
@@ -207,12 +186,31 @@ class ObservedSignalNode(Node):
         parent_keys_removed = self.parent_keys_removed
         parent_keys_changed = self.parent_keys_changed
         parent_nodes_added = self.parent_nodes_added
+
         pv = super(ObservedSignalNode, self)._parent_values()
 
-        new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
-        removed_arrivals = get_removed_arrivals(parent_keys_removed, self.r)
-        self._arrivals.update(new_arrivals)
-        self._arrivals.difference_update(removed_arrivals)
+        if parent_nodes_added:
+            new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
+            self._arrivals.update(new_arrivals)
+            for node in parent_nodes_added:
+                if 'latent_arrival' in node.label:
+                    self._latent_arrivals[(node.eid, node.phase)] = node
+                if 'arrival_time' in node.label:
+                    for key in node.keys():
+                        parent_keys_changed.update(((key, node),))
+
+
+        if parent_keys_removed:
+            removed_arrivals = get_removed_arrivals(parent_keys_removed, self.r)
+            self._arrivals.difference_update(removed_arrivals)
+
+        for (k, n) in parent_keys_changed:
+            # we assume every parent change is an arrival time,
+            # without checking. this should work because all parents
+            # are either arrival times or latent arrival signals, but
+            # the latent arrival nodes will never set
+            # parent_keys_changed.
+            self._arrival_times[(n.eid, n.phase)] = n.get_value(key=k)
 
         del parent_keys_removed
         del parent_keys_changed
@@ -282,6 +280,10 @@ class ObservedSignalNode(Node):
     def arrivals(self):
         self._parent_values()
         return self._arrivals
+
+    def get_latent_arrival(self, eid, phase):
+        return self._latent_arrivals[(eid, phase)].get_value()
+
 
     def parent_predict(self, parent_values=None, **kwargs):
         #parent_values = parent_values if parent_values else self._parent_values()
