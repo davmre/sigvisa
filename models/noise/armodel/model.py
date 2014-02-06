@@ -247,6 +247,50 @@ class ARModel(NoiseModel):
                           compiler='gcc')
         return ll
 
+    def fastAR_grad(self, d, c, std):
+        # return the gradient of the log-prob with respect to the signal at each timestep
+
+        n = len(d)
+        d = d - c
+        p = np.array(self.params)
+        n_p = len(p)
+        var = std**2
+
+        residuals = np.zeros(d.shape)
+        grad = np.zeros(d.shape)
+
+        code = """
+        double d_prob = 0;
+        for (int t=0; t < n; ++t) {
+
+           double expected = 0;
+           for (int i=0; i < n_p; ++i) {
+               if (t > i ) {
+                  double ne = p(i) * d(t-i-1);
+                  expected += ne;
+               }
+           }
+           residuals(t) = d(t) - expected;
+        // printf("c %d err = %.10f x = %.10f ll = %.10f d_prob=%.10f\\n", t, err, x, ll, d_prob);
+        }
+
+        for (int t=0; t < n; ++t) {
+            grad(t) -= residuals(t);
+            for (int i=0; i < n_p; ++i) {
+            // unlike above, i is counting *forward* from t here
+                if (t+i+1 >= n) break;
+                grad(t) += residuals(t+i+1) * p(i);
+            }
+            grad(t) /= var;
+        }
+        """
+        weave.inline(code,
+                          ['n', 'n_p', 'd', 'var', 'p', 'grad', 'residuals'],
+                          type_converters=converters.blitz,
+                          compiler='gcc')
+        return grad
+
+
     def slow_AR(self, d, c, return_debug=False):
         d_prob = 0
         skipped = 0
@@ -392,6 +436,15 @@ class ARModel(NoiseModel):
 
         return prob
 
+    # likelihood in log scale
+    def log_p_grad(self, x, zero_mean=False, **kwargs):
+        if zero_mean:
+            c = 0
+        else:
+            c = self.c
+        return self.fastAR_grad(x, c, self.em.std, **kwargs)
+
+
 
     def location(self):
         return self.c
@@ -487,6 +540,8 @@ class ErrorModel:
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
+
+        self.entropy = .5*np.log(2*np.pi*np.e*std*std)
 
     def sample(self):
         return np.random.normal(loc=self.mean, scale=self.std)

@@ -171,26 +171,7 @@ class DirectedGraphModel(DAG):
         grad = np.zeros((len(values),))
         i = 0
         for node in node_list:
-            keys = node.mutable_keys()
-            for (ni, key) in enumerate(keys):
-                deriv = node.deriv_log_p(key=key, eps=eps[i + ni], lp0=initial_lp[node.label])
-
-                # sum the derivatives of all child nodes wrt to this value, including
-                # any deterministic nodes along the way
-                child_list = node.get_stochastic_children()
-                for (child, intermediate_nodes) in child_list:
-                    current_key = key
-                    d = 1.0
-                    for inode in intermediate_nodes:
-                        d *= inode.deriv_value_wrt_parent(parent_key = current_key)
-                        current_key = inode.label
-                    d *= child.deriv_log_p(parent_key = current_key,
-                                           eps=eps[i + ni],
-                                           lp0=initial_lp[child.label])
-                    deriv += d
-
-                grad[i + ni] = deriv
-            i += len(keys)
+            i += node.update_mutable_grad(grad, i, eps, initial_lp)
         self.set_all(values=v, node_list=node_list)
         return grad * c
 

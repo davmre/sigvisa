@@ -85,6 +85,7 @@ class ObservedSignalNode(Node):
 
         self._latent_arrivals = dict()
         self._arrival_times = dict()
+        self._keymap = dict()
 
         self.graph = graph
 
@@ -104,8 +105,17 @@ class ObservedSignalNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
-    def assem_signal(self, include_wiggles=True, arrivals=None):
+    def arrival_start_idx(self, eid, phase, skip_pv_call=False):
+        if not skip_pv_call:
+            self._parent_values()
 
+        atime = self._arrival_times[(eid, phase)]
+        start = (atime - self.st) * self.srate
+        start_idx = int(np.floor(start))
+        return start_idx
+
+
+    def assem_signal(self, include_wiggles=True, arrivals=None):
         self._parent_values()
 
         # we allow specifying the list of parents in order to generate
@@ -121,16 +131,13 @@ class ObservedSignalNode(Node):
         empty_array = np.reshape(np.array((), dtype=float), (0,))
 
         for (i, (eid, phase)) in enumerate(arrivals):
-            atime = self._arrival_times[(eid, phase)]
-            start = (atime - self.st) * self.srate
-            start_idx = int(np.floor(start))
-            sidxs[i] = start_idx
-            if start_idx >= self.npts:
+            sidxs[i] = self.arrival_start_idx(eid, phase, skip_pv_call=True)
+            if sidxs[i] >= self.npts:
                 logenvs[i] = empty_array
                 continue
 
-            offset = float(start - start_idx)
             latent_env = self.get_latent_arrival(eid, phase)
+
             latent_envs[i] = latent_env
 
         npts = self.npts
@@ -197,6 +204,7 @@ class ObservedSignalNode(Node):
                     self._latent_arrivals[(node.eid, node.phase)] = node
                 if 'arrival_time' in node.label:
                     for key in node.keys():
+                        self._keymap[key] = (node.eid, node.phase)
                         parent_keys_changed.update(((key, node),))
 
 
@@ -316,6 +324,8 @@ signal_diff(i) =value(i) - pred_signal(i);
 """
         weave.inline(code,['npts', 'signal_diff', 'value', 'pred_signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
+
+
         lp = self.nm.log_p(signal_diff, mask=mask)
 #        import hashlib
 #        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
@@ -328,21 +338,14 @@ signal_diff(i) =value(i) - pred_signal(i);
         parent_values = self._parent_values()
         lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
         parent_values[parent_key] += eps
-        try:
-            is_tmpl, eid, phase, p = self._keymap[parent_key]
-        except KeyError:
-            # if this key doesn't affect signals at this node
-            return 0.0
-        if is_tmpl:
-            self._tmpl_params[(eid, phase)][p] += eps
+        if 'arrival_time' in parent_key:
+            eid, phase = self._keymap[parent_key]
         else:
-            self._wiggle_params[(eid, phase)][p] += eps
+            raise NotImplementedError("I don't know how to compute a derivative at ObservedSignalNode with respect to key %s." % parent_key)
+        self._arrival_times[(eid, phase)] += eps
         deriv = ( self.log_p(parent_values=parent_values) - lp0 ) / eps
         parent_values[parent_key] -= eps
-        if is_tmpl:
-            self._tmpl_params[(eid, phase)][p] -= eps
-        else:
-            self._wiggle_params[(eid, phase)][p] -= eps
+        self._arrival_times[(eid, phase)] -= eps
         return deriv
 
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):
