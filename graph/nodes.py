@@ -169,6 +169,7 @@ class Node(object):
         return self._dict[key]
 
     def set_value(self, value, key=None):
+        print 'setting value', value, 'for node', self.label
         key = key if key else self.single_key
         if self._mutable[key]:
             self._dict[key] = value
@@ -206,7 +207,13 @@ class Node(object):
         # with respect to whatever the model actually returns.
 
         if self.single_key:
-            self.set_value(value=value)
+            try:
+                # if the model returns a single-element numpy array,
+                # just take the value from that array
+                self.set_value(value=value[0])
+                assert (len(value) == 1)
+            except TypeError:
+                self.set_value(value=value)
         else:
             self.set_dict(value)
 
@@ -291,6 +298,40 @@ class Node(object):
         else:
             return self.model.deriv_log_p(x = v, cond=parent_values, idx=key, cond_key=parent_key, cond_idx=parent_idx, key_prefix=self.key_prefix, **kwargs)
 
+
+    # computes the gradient of the joint log_p with respect to the mutable values at this node.
+    # this involves computing, for each key at this node, first the derivative of this node's logp, then the
+    # derivatives of each stochastic child node's logp, and summing those all up.
+
+    # for efficiency, we frame this computation as an update to a
+    # preallocated array, where this node's variables start at index
+    # i.
+
+    # this is called by sigvisa.graph.dag.log_p_grad, and used to be
+    # part of that method, but was factored out to allow nodes to
+    # re-implement their own optimized gradient computations
+    def update_mutable_grad(self, grad, i, eps, initial_lp):
+        keys = self.mutable_keys()
+        for (ni, key) in enumerate(keys):
+            deriv = self.deriv_log_p(key=key, eps=eps[i + ni], lp0=initial_lp[self.label])
+
+            # sum the derivatives of all child nodes wrt to this value, including
+            # any deterministic nodes along the way
+            child_list = self.get_stochastic_children()
+            for (child, intermediate_nodes) in child_list:
+                current_key = key
+                d = 1.0
+                for inode in intermediate_nodes:
+                    d *= inode.deriv_value_wrt_parent(parent_key = current_key)
+                    current_key = inode.label
+                    d *= self.deriv_log_p(parent_key = current_key,
+                                          eps=eps[i + ni],
+                                          lp0=initial_lp[child.label])
+                    deriv += d
+
+            grad[i + ni] = deriv
+        return len(keys)
+
     def parent_sample(self, parent_values=None):
         # sample a new value at this node conditioned on its parents
         if self._fixed: return
@@ -305,7 +346,10 @@ class Node(object):
         if self._fixed: return
         if parent_values is None:
             parent_values = self._parent_values()
-        self._set_values_from_model(self.model.predict(cond=parent_values))
+        try:
+            self._set_values_from_model(self.model.predict(cond=parent_values))
+        except NotImplementedError:
+            raise NotImplementedError("abstract model at node %s doesn't implement parent_predict!" % self.label)
 
     def get_children(self):
         return self.children

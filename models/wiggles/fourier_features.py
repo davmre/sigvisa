@@ -16,7 +16,7 @@ class FourierFeatureGenerator(WiggleGenerator):
     # first n/2 entries: amplitudes, real-valued
     # second n/2 entries: phases, normalized between 0 and 1 (i.e. in radians / (2*pi)).
 
-    def __init__(self, npts, srate, envelope, logscale=False, basisid=None, family_name=None, max_freq=None, **kwargs):
+    def __init__(self, npts, srate, envelope, basisid=None, family_name=None, max_freq=None, **kwargs):
 
         self.srate = srate
         self.npts = npts
@@ -35,7 +35,7 @@ class FourierFeatureGenerator(WiggleGenerator):
         self.len_s = float(npts-1) / srate
         self.x = np.linspace(0, self.len_s, self.npts)
 
-        self.logscale = logscale
+
         #print "created with envelope", envelope
         self.envelope = envelope
 
@@ -69,12 +69,6 @@ class FourierFeatureGenerator(WiggleGenerator):
             freq = self.fundamental * (i+1)
             s += amp * np.cos(2 * np.pi * self.x * freq + phase)
 
-        if self.envelope:
-            if self.logscale:
-                s = np.exp(s)
-            else:
-                s += 1
-
         return s
 
     def signal_from_features(self, features):
@@ -102,21 +96,12 @@ for (int i=0; i < n2; ++i) {
 
         signal = np.fft.irfft(padded_coeffs)
 
-        if self.envelope:
-            if self.logscale:
-                signal = np.exp(signal)
-            else:
-                signal += 1
-
         return signal
 
 
 
     def features_from_signal(self, signal, return_array=False):
         assert(len(signal) == self.npts)
-
-        if self.logscale:
-            signal = np.log(signal)
 
         coeffs = 2 * np.fft.rfft(signal) / self.npts
         coeffs = coeffs[1:self.nparams/2+1]
@@ -130,11 +115,6 @@ for (int i=0; i < n2; ++i) {
 
     def features_from_signal_naive(self, signal):
         assert(len(signal) == self.npts)
-
-        if self.logscale:
-            signal = np.log(signal)
-        else:
-            signal = signal - 1 # we want zero-mean for the Fourier projection
 
         amps = []
         phases = []
@@ -188,7 +168,7 @@ for (int i=0; i < n2; ++i) {
 
     def save_to_db(self, dbconn):
         assert(self.basisid is None)
-        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, max_freq, envelope) values (%f, '%s', '%s', '%s', %d, %d, %f, '%s')" % (self.srate, 't' if self.logscale else 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.max_freq, 't' if self.envelope else 'f')
+        sql_query = "insert into sigvisa_wiggle_basis (srate, logscale, family_name, basis_type, npts, dimension, max_freq, envelope) values (%f, '%s', '%s', '%s', %d, %d, %f, '%s')" % (self.srate, 'f', self.family_name, self.basis_type(), self.npts, self.dimension(), self.max_freq, 't' if self.envelope else 'f')
         self.basisid = execute_and_return_id(dbconn, sql_query, "basisid")
         return self.basisid
 

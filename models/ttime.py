@@ -11,6 +11,7 @@ class ArrivalTimeNode(DeterministicNode):
         s = Sigvisa()
         self.sta = sta
         self.phase = phase
+        self.eid = eid
 
         self.sta = sta
         self.ref_siteid = s.ref_siteid[sta]

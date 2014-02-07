@@ -73,7 +73,6 @@ class ObservedSignalNode(Node):
         self.et = model_waveform['etime']
         self.npts = model_waveform['npts']
         self.valid_len = model_waveform['valid_len']
-        self.env = 'env' in self.filter_str
 
         self.signal_diff = np.empty((self.npts,))
         self.pred_signal = np.empty((self.npts,))
@@ -83,6 +82,10 @@ class ObservedSignalNode(Node):
 
         self._arrivals = set()
         self.r = re.compile("([-\d]+);(.+);(.+);(.+);(.+);(.+)")
+
+        self._latent_arrivals = dict()
+        self._arrival_times = dict()
+        self._keymap = dict()
 
         self.graph = graph
 
@@ -102,7 +105,18 @@ class ObservedSignalNode(Node):
             self.nm = NoiseModel.load_by_nmid(Sigvisa().dbconn, self.nmid)
             self.nm_type = self.nm.noise_model_type()
 
-    def assem_signal(self, arrivals=None):
+    def arrival_start_idx(self, eid, phase, skip_pv_call=False):
+        if not skip_pv_call:
+            self._parent_values()
+
+        atime = self._arrival_times[(eid, phase)]
+        start = (atime - self.st) * self.srate
+        start_idx = int(np.floor(start))
+        return start_idx
+
+
+    def assem_signal(self, include_wiggles=True, arrivals=None):
+        self._parent_values()
 
         # we allow specifying the list of parents in order to generate
         # signals with a subset of arriving phases (used e.g. in
@@ -113,14 +127,18 @@ class ObservedSignalNode(Node):
         arrivals = list(arrivals)
         n = len(arrivals)
         sidxs = np.empty((n,), dtype=int)
-        arrivals = [None] * n
+        latent_envs = [None] * n
         empty_array = np.reshape(np.array((), dtype=float), (0,))
 
         for (i, (eid, phase)) in enumerate(arrivals):
-            arrivals[i], arrival_time = self.get_signal_for_arrival(eid=eid, phase=phase)
-            start = (arrival_time - self.st) * self.srate
-            start_idx = int(np.floor(start))
-            sidxs[i] = start_idx
+            sidxs[i] = self.arrival_start_idx(eid, phase, skip_pv_call=True)
+            if sidxs[i] >= self.npts:
+                logenvs[i] = empty_array
+                continue
+
+            latent_env = self.get_latent_arrival(eid, phase)
+
+            latent_envs[i] = latent_env
 
         npts = self.npts
         n = len(arrivals)
@@ -133,33 +151,31 @@ class ObservedSignalNode(Node):
            continue;
         }
 
-        PyArrayObject* arrival_arr = convert_to_numpy(PyList_GetItem(arrivals,i), "arrivals");
-        conversion_numpy_check_type(arrival_arr,PyArray_DOUBLE, "arrivals");
-        double * arrival = (double *)arrival_arr->data;
-        Py_XDECREF(arrival_arr); // convert_to_numpy does an incref for us, so we need
+        PyArrayObject* latent_env_arr = convert_to_numpy(PyList_GetItem(latent_envs,i), "latent_env");
+        conversion_numpy_check_type(latent_env_arr,PyArray_DOUBLE, "latent_env");
+        double * latent_env = (double *)latent_env_arr->data;
+        Py_XDECREF(latent_env_arr); // convert_to_numpy does an incref for us, so we need
                                 // to decref; we do it here to make sure it doesn't get
                                 // forgotten later. this is safe because there's already
                                 // a reference held by the calling python code, so the
-                                // arrival_arr will never go out of scope while we're running.
+                                // latent_env_arr will never go out of scope while we're running.
 
-        int len_arrival = arrival_arr->dimensions[0];
-
-        int end_idx = start_idx + len_arrival;
+        int len_latent_env = latent_env_arr->dimensions[0];
+        int end_idx = start_idx + len_latent_env;
         if (end_idx <= 0) {
             continue;
         }
         int early = std::max(0, - start_idx);
         int overshoot = std::max(0, end_idx - npts);
-
         int j = early;
-        int total_wiggle_len = std::min(wiggle_len - early, len_logenv - overshoot - early);
-        for(j=early; j < len_logenv - overshoot; ++j) {
-            signal(j+start_idx) += signal[j];
+        for(j=early; j < len_latent_env - overshoot; ++j) {
+               signal(j + start_idx) += latent_env[j];
         }
     }
 
 """
-        weave.inline(code,['n', 'npts', 'sidxs', 'arrivals', 'signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+
+        weave.inline(code,['n', 'npts', 'sidxs', 'latent_envs', 'signal',],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
@@ -181,12 +197,32 @@ class ObservedSignalNode(Node):
         parent_keys_removed = self.parent_keys_removed
         parent_keys_changed = self.parent_keys_changed
         parent_nodes_added = self.parent_nodes_added
+
         pv = super(ObservedSignalNode, self)._parent_values()
 
-        new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
-        removed_arrivals = get_removed_arrivals(parent_keys_removed, self.r)
-        self._arrivals.update(new_arrivals)
-        self._arrivals.difference_update(removed_arrivals)
+        if parent_nodes_added:
+            new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
+            self._arrivals.update(new_arrivals)
+            for node in parent_nodes_added:
+                if 'latent_arrival' in node.label:
+                    self._latent_arrivals[(node.eid, node.phase)] = node
+                if 'arrival_time' in node.label:
+                    for key in node.keys():
+                        self._keymap[key] = (node.eid, node.phase)
+                        parent_keys_changed.update(((key, node),))
+
+
+        if parent_keys_removed:
+            removed_arrivals = get_removed_arrivals(parent_keys_removed, self.r)
+            self._arrivals.difference_update(removed_arrivals)
+
+        for (k, n) in parent_keys_changed:
+            # we assume every parent change is an arrival time,
+            # without checking. this should work because all parents
+            # are either arrival times or latent arrival signals, but
+            # the latent arrival nodes will never set
+            # parent_keys_changed.
+            self._arrival_times[(n.eid, n.phase)] = n.get_value(key=k)
 
         del parent_keys_removed
         del parent_keys_changed
@@ -257,6 +293,10 @@ class ObservedSignalNode(Node):
         self._parent_values()
         return self._arrivals
 
+    def get_latent_arrival(self, eid, phase):
+        return self._latent_arrivals[(eid, phase)].get_value()
+
+
     def parent_predict(self, parent_values=None, **kwargs):
         #parent_values = parent_values if parent_values else self._parent_values()
         signal = self.assem_signal(**kwargs)
@@ -288,6 +328,8 @@ signal_diff(i) =value(i) - pred_signal(i);
 """
         weave.inline(code,['npts', 'signal_diff', 'value', 'pred_signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
+
+
         lp = self.nm.log_p(signal_diff, mask=mask)
 #        import hashlib
 #        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
@@ -300,21 +342,14 @@ signal_diff(i) =value(i) - pred_signal(i);
         parent_values = self._parent_values()
         lp0 = lp0 if lp0 else self.log_p(parent_values=parent_values)
         parent_values[parent_key] += eps
-        try:
-            is_tmpl, eid, phase, p = self._keymap[parent_key]
-        except KeyError:
-            # if this key doesn't affect signals at this node
-            return 0.0
-        if is_tmpl:
-            self._tmpl_params[(eid, phase)][p] += eps
+        if 'arrival_time' in parent_key:
+            eid, phase = self._keymap[parent_key]
         else:
-            self._wiggle_params[(eid, phase)][p] += eps
+            raise NotImplementedError("I don't know how to compute a derivative at ObservedSignalNode with respect to key %s." % parent_key)
+        self._arrival_times[(eid, phase)] += eps
         deriv = ( self.log_p(parent_values=parent_values) - lp0 ) / eps
         parent_values[parent_key] -= eps
-        if is_tmpl:
-            self._tmpl_params[(eid, phase)][p] -= eps
-        else:
-            self._wiggle_params[(eid, phase)][p] -= eps
+        self._arrival_times[(eid, phase)] -= eps
         return deriv
 
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):

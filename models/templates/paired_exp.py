@@ -72,14 +72,16 @@ class PairedExpTemplateGenerator(TemplateGenerator):
                                                chan=chan, band=band, template=True, children=children, **kwargs)
 
     @staticmethod
-    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0):
+    def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, fixedlen=None):
         arr_time, peak_offset, coda_height, coda_decay = \
             vals['arrival_time'], np.exp(vals['peak_offset']), vals['coda_height'], -np.exp(vals['coda_decay'])
 
         if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
             return np.empty((0,))
 
-        if coda_decay > -0.001:
+        if fixedlen:
+            l = int(fixedlen)
+        elif coda_decay > -0.001:
             l = int(1200 * srate)
         else:
                 # minimum length is 2, so that even very small arrivals
