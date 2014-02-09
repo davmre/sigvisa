@@ -85,7 +85,7 @@ class LatentArrivalNode(Node):
         env *= wiggle
         return env
 
-    def _empirical_wiggle(self, return_template_prediction=False):
+    def _empirical_wiggle(self, return_components=False):
         env = self.get_value()
         tmpl_shape_env = np.exp(self.get_template_logenv())
 
@@ -118,8 +118,8 @@ class LatentArrivalNode(Node):
         except ValueError:
             import pdb; pdb.set_trace()
 
-        if return_template_prediction:
-            return (empirical_wiggle, tmpl_shape_env)
+        if return_components:
+            return (empirical_wiggle, tmpl_shape_env, wiggle_repeatable)
         else:
             return empirical_wiggle
 
@@ -163,7 +163,6 @@ class LatentArrivalNode(Node):
         extract_end_offset = extract_end_idx - latent_start_idx
 
         self._dict[self.single_key][extract_start_offset:extract_end_offset] = observed_signal[extract_start_idx:extract_end_idx] - predicted_without_me[extract_start_idx:extract_end_idx]
-
 
     def _parent_values(self):
         parent_keys_changed = self.parent_keys_changed
@@ -298,7 +297,7 @@ class LatentArrivalNode(Node):
         return np.ones(v.shape) * float('inf')
 
     def update_mutable_grad(self, grad, i, eps=None, initial_lp=None):
-        (empirical_wiggle, predicted_shape) = self._empirical_wiggle(return_template_prediction=True)
+        (empirical_wiggle, predicted_shape, repeatable_wiggle) = self._empirical_wiggle(return_components=True)
 
         mygrad = self.arwm.log_p_grad(empirical_wiggle) / predicted_shape
 

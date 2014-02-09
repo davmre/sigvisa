@@ -247,12 +247,13 @@ class ARModel(NoiseModel):
                           compiler='gcc')
         return ll
 
+
     def fastAR_grad(self, d, c, std):
         # return the gradient of the log-prob with respect to the signal at each timestep
 
         n = len(d)
         d = d - c
-        p = np.array(self.params)
+        p = np.asarray(self.params)
         n_p = len(p)
         var = std**2
 
@@ -289,6 +290,28 @@ class ARModel(NoiseModel):
                           type_converters=converters.blitz,
                           compiler='gcc')
         return grad
+
+
+    def filtered_predictions(self, d, start_idx, destination):
+        n = len(destination)
+
+        p = np.asarray(self.params)
+        n_p = len(p)
+
+        code = """
+    for (int t=0; t < n; ++t) {
+        destination(t) = 0;
+        for (int i=0; i < n_p; ++i) {
+            if (t + start_idx > i ) {
+               double ne = p(i) * d(t-i-1 + start_idx);
+               destination(t) += ne;
+            }
+        }
+         """
+        weave.inline(code,
+                     ['n', 'n_p', 'd', 'p', 'destination'],
+                     type_converters=converters.blitz,
+                     compiler='gcc')
 
 
     def slow_AR(self, d, c, return_debug=False):
