@@ -293,10 +293,12 @@ class ARModel(NoiseModel):
 
 
     def filtered_predictions(self, d, start_idx, destination):
+        # assumes zero-mean data d
         n = len(destination)
 
         p = np.asarray(self.params)
         n_p = len(p)
+        start_idx = int(start_idx)
 
         code = """
     for (int t=0; t < n; ++t) {
@@ -307,9 +309,10 @@ class ARModel(NoiseModel):
                destination(t) += ne;
             }
         }
+    }
          """
         weave.inline(code,
-                     ['n', 'n_p', 'd', 'p', 'destination'],
+                     ['n', 'n_p', 'd', 'p', 'destination', 'start_idx'],
                      type_converters=converters.blitz,
                      compiler='gcc')
 

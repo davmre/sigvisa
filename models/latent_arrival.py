@@ -60,8 +60,6 @@ class LatentArrivalNode(Node):
         em = ErrorModel(mean=0.0, std=0.1)
         self.arwm = ARModel(params=(.2, .7), c=1.0, em = em, sf=self.srate)
 
-        self.parent_predict()
-
     def parent_predict(self):
         self.set_value(self._predict_value())
 
@@ -84,6 +82,7 @@ class LatentArrivalNode(Node):
 
         env *= wiggle
         return env
+
 
     def _empirical_wiggle(self, return_components=False):
         env = self.get_value()
@@ -111,6 +110,7 @@ class LatentArrivalNode(Node):
         except FloatingPointError:
             import pdb; pdb.set_trace()
         empirical_wiggle[0] = empirical_wiggle[1]
+        tmpl_shape_env[0] = 0
 
         wiggle_repeatable = self.get_wiggle()
         try:
@@ -333,3 +333,14 @@ class LatentArrivalNode(Node):
         ni = len(mygrad)
         grad[i:i+ni] += mygrad
         return ni
+
+    def set_nonrepeatable_wiggle(self, x, shape_env=None, repeatable_wiggle=None):
+        N = len(x)
+
+        shape_env = shape_env if (shape_env is not None) else np.exp(self.get_template_logenv())
+        repeatable_wiggle = repeatable_wiggle if (repeatable_wiggle is not None) else self.get_wiggle()
+
+        x[:len(repeatable_wiggle)] += repeatable_wiggle[:N]
+        x[:len(shape_env)] *= shape_env[:N]
+
+        self._dict[self.single_key][:N] = x[:len(self._dict[self.single_key])]

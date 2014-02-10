@@ -783,7 +783,6 @@ class SigvisaGraph(DirectedGraphModel):
                                                                       low_bound = tg.low_bounds()[param],
                                                                       high_bound = tg.high_bounds()[param],
                                                                       initial_value = tg.default_param_vals()[param])
-                    arrival_nodes.append(nodes[(band, chan, param)])
                 for param in wg.params():
                     model_type = self._tm_type(param, site, wiggle_param=True)
                     nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
