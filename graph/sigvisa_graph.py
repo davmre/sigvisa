@@ -583,7 +583,7 @@ class SigvisaGraph(DirectedGraphModel):
                     child_wave_nodes.add(wave_node)
 
                 parents = [d[sta] for d in param_nodes]
-                node = LatentArrivalNode(eid, phase, sta, chan, band, parents=parents, 
+                node = LatentArrivalNode(eid, phase, sta, chan, band, parents=parents,
                                          children=child_wave_nodes)
                 nodes[sta] = node
         else:
@@ -593,7 +593,7 @@ class SigvisaGraph(DirectedGraphModel):
                 child_wave_nodes.add(wave_node)
 
             # param_nodes is just a list of nodes
-            node = LatentArrivalNode(eid, phase, sta, chan, band, 
+            node = LatentArrivalNode(eid, phase, sta, chan, band,
                                      parents=param_nodes,
                                      children=child_wave_nodes)
             return node
@@ -726,6 +726,8 @@ class SigvisaGraph(DirectedGraphModel):
 
         eid = evnodes['mb'].eid
 
+        # create the latent arrival nodes, which will also serve as
+        # the children of the other shape parameter nodes we create.
         child_latent_lookup = defaultdict(dict)
         child_wave_nodes = set()
         child_latent_nodes = set()
@@ -737,6 +739,8 @@ class SigvisaGraph(DirectedGraphModel):
                 child_wave_nodes.add(wave_node)
                 child_latent_nodes.add(latent_arrival)
 
+        # create nodes common to all bands and channels: travel
+        # time/arrival time, and amp_transfer.
         tt_model_type = self._tm_type(param="tt_residual", site=site, wiggle_param=False)
         tt_residual_node = tg.create_param_node(self, site, phase,
                                                 band=None, chan=None, param="tt_residual",
@@ -757,6 +761,7 @@ class SigvisaGraph(DirectedGraphModel):
         nodes = dict()
         nodes["arrival_time"] = arrival_time_node
 
+        # create all other shape param nodes, specific to each band and channel
         for band in self.site_bands[site]:
             for chan in self.site_chans[site]:
                 child_set = (child_latent_lookup[band][chan],)
@@ -778,7 +783,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                                       low_bound = tg.low_bounds()[param],
                                                                       high_bound = tg.high_bounds()[param],
                                                                       initial_value = tg.default_param_vals()[param])
-                   arrival_nodes.append(nodes[(band, chan, param)])
+                    arrival_nodes.append(nodes[(band, chan, param)])
                 for param in wg.params():
                     model_type = self._tm_type(param, site, wiggle_param=True)
                     nodes[(band, chan, param)] = self.setup_site_param_node(param=param, site=site,
@@ -787,6 +792,7 @@ class SigvisaGraph(DirectedGraphModel):
                                                                             band=band, chan=chan, basisid=wg.basisid,
                                                                             children=child_set, wiggle=True)
 
+        # initialize all shape nodes by parent sampling or predicting
         for ni in [tt_residual_node, amp_transfer_node] + nodes.values():
             for n in extract_sta_node_list(ni):
                 if 'latent_arrival' in n.label:
@@ -814,7 +820,7 @@ class SigvisaGraph(DirectedGraphModel):
 
 
         # initialize latent arrival nodes from their child signal (do
-        # this last so we have a reasonable arrival time for the
+        # this last so we have an arrival time for the
         # latent arrival node)
         for ni in [tt_residual_node, amp_transfer_node] + nodes.values():
             for n in extract_sta_node_list(ni):
