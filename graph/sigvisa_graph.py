@@ -204,7 +204,7 @@ class SigvisaGraph(DirectedGraphModel):
     def get_template_nodes(self, eid, sta, phase, band, chan):
         tg = self.template_generator(phase)
         nodes = dict()
-        for param in tg.params() + ('arrival_time',):
+        for param in tg.params() + ('arrival_time','latent_arrival'):
             k, node = get_parent_value(eid=eid, sta=sta, phase=phase, param_name=param, chan=chan, band=band, parent_values=self.nodes_by_key, return_key=True)
             nodes[param]=(k, node)
 

@@ -34,17 +34,24 @@ global_stds = {'coda_height': .7,
 
 def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, move_times, step):
 
+    latent_key, latent = tmnodes['latent_arrival']
+
     for param in tg.params():
         k, n = tmnodes[param]
 
         # here we re-implement get_relevant_nodes from sigvisa.graph.dag, with a few shortcuts
-        relevant_nodes = [wn,]
+        relevant_nodes = [latent,]
         if n.deterministic():
             parent = n.parents[n.default_parent_key()]
             relevant_nodes.append(parent)
             # technically we should also add the children of parent, but for template moves this will never matter
         else:
             relevant_nodes.append(n)
+
+        if param == 'arrival_time':
+            relevant_nodes.append(wn)
+
+        print "RN", relevant_nodes
 
         try:
             run_move(move_name=param, fn=gaussian_MH_move,
@@ -68,7 +75,7 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, mo
         run_move(move_name=move, fn=gaussian_MH_move, step=step,
                  n_accepted=n_accepted, n_attempted=n_attempted,
                  move_times=move_times,
-                 sg=sg, keys=(k,), node_list=(n,), relevant_nodes=(n, wn),
+                 sg=sg, keys=(k,), node_list=(n,), relevant_nodes=(n, latent),
                  std=stds[move], phase_wraparound=phase_wraparound)
 
 def run_move(move_name, fn, step, n_accepted, n_attempted, move_times, move_prob=None, **kwargs):
@@ -192,7 +199,7 @@ def run_open_world_MH(sg, steps=10000,
                         do_template_moves(sg, wn, tmnodes, tg, wg, stds,
                                           n_attempted, n_accepted, move_times, step)
 
-                # also wiggle every event arrival at this station
+                # also adjust every event arrival at this station
                 for (eid,evnodes) in sg.evnodes.iteritems():
                     for phase in sg.phases:
                         tg = sg.template_generator(phase)

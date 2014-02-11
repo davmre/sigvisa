@@ -37,7 +37,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, step=1):
     (x, shape, repeatable) = latent._empirical_wiggle(return_components=True)
 
     padded_repeatable = np.zeros(x.shape)
-    padded_repeatable[:len(repeatable)] = repeatable
+    padded_repeatable[:len(repeatable)] = repeatable[:len(x)]
     # this should use the np.pad function, but not available in numpy 1.6
 
     start_idx = start_idx if start_idx else 0
