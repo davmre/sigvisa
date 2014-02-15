@@ -18,7 +18,7 @@ from sigvisa.signals.common import Waveform
 from sigvisa.signals.io import load_segments
 from sigvisa.infer.optimize.optim_utils import construct_optim_params
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.template_mcmc import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move
+from sigvisa.infer.arrival_time_moves import preprocess_signal_for_sampling, improve_offset_move, indep_peak_move
 from sigvisa.graph.graph_utils import create_key
 from sigvisa.plotting.plot import savefig, plot_with_fit
 from matplotlib.figure import Figure

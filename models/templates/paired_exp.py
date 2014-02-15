@@ -74,7 +74,7 @@ class PairedExpTemplateGenerator(TemplateGenerator):
     @staticmethod
     def abstract_logenv_raw(vals, min_logenv=-7.0, idx_offset=0.0, srate=40.0, fixedlen=None):
         arr_time, peak_offset, coda_height, coda_decay = \
-            vals['arrival_time'], np.exp(vals['peak_offset']), vals['coda_height'], -np.exp(vals['coda_decay'])
+            float(vals['arrival_time']), float(np.exp(vals['peak_offset'])), float(vals['coda_height']), float(-np.exp(vals['coda_decay']))
 
         if np.isnan(peak_offset) or np.isnan(coda_height) or np.isnan(coda_decay) or coda_decay > 0:
             return np.empty((0,))
@@ -113,7 +113,7 @@ for (int i=0; i < l-intro_len; ++i) {
   d(i + intro_len) = (i + initial_decay) / srate * coda_decay + coda_height;
 }
 if (l > 0) {
-  d(0) = -999;
+  d(0) = min_logenv;
 }
 """
         weave.inline(code,['l', 'd', 'peak_offset', 'coda_height', 'coda_decay', 'min_logenv', 'idx_offset', 'srate'],type_converters = converters.blitz,verbose=2,compiler='gcc')

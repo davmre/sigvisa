@@ -169,7 +169,6 @@ class Node(object):
         return self._dict[key]
 
     def set_value(self, value, key=None):
-        print 'setting value', value, 'for node', self.label
         key = key if key else self.single_key
         if self._mutable[key]:
             self._dict[key] = value

@@ -16,7 +16,8 @@ from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian
 from sigvisa.infer.event_birthdeath import ev_birth_move, ev_death_move, set_hough_options
 from sigvisa.infer.event_mcmc import ev_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
-from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, indep_peak_move, improve_offset_move, improve_atime_move, swap_association_move
+from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, swap_association_move
+from sigvisa.infer.arrival_time_moves import indep_peak_move, improve_offset_move, improve_atime_move
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -50,8 +51,6 @@ def do_template_moves(sg, wn, tmnodes, tg, wg, stds, n_attempted, n_accepted, mo
 
         if param == 'arrival_time':
             relevant_nodes.append(wn)
-
-        print "RN", relevant_nodes
 
         try:
             run_move(move_name=param, fn=gaussian_MH_move,

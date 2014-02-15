@@ -15,7 +15,7 @@ from sigvisa.models.noise.noise_util import get_noise_model
 from sigvisa.models.noise.noise_model import NoiseModel
 from sigvisa.graph.nodes import Node
 from sigvisa.graph.graph_utils import get_parent_value, create_key
-
+from sigvisa.plotting.plot import subplot_waveform
 
 import scipy.weave as weave
 from scipy.weave import converters
@@ -115,7 +115,7 @@ class ObservedSignalNode(Node):
         return start_idx
 
 
-    def assem_signal(self, include_wiggles=True, arrivals=None):
+    def assem_signal(self, include_wiggles=True, arrivals=None, start_idx=None, end_idx=None):
         self._parent_values()
 
         # we allow specifying the list of parents in order to generate
@@ -123,6 +123,9 @@ class ObservedSignalNode(Node):
         # wiggle extraction)
         if arrivals is None:
             arrivals = self.arrivals()
+
+        start_idx = int(start_idx) if start_idx is not None else 0
+        end_idx = int(end_idx) if end_idx is not None else self.npts
 
         arrivals = list(arrivals)
         n = len(arrivals)
@@ -137,17 +140,15 @@ class ObservedSignalNode(Node):
                 continue
 
             latent_env = self.get_latent_arrival(eid, phase)
-
             latent_envs[i] = latent_env
 
-        npts = self.npts
         n = len(arrivals)
         signal = self.pred_signal
         code = """
-      for(int i=0; i < npts; ++i) signal(i) = 0;
+      for(int i=start_idx; i < end_idx; ++i) signal(i) = 0;
     for (int i = 0; i < n; ++i) {
-        int start_idx = sidxs(i);
-        if (start_idx >= npts) {
+        int arr_start_idx = sidxs(i);
+        if (arr_start_idx >= end_idx) {
            continue;
         }
 
@@ -161,38 +162,36 @@ class ObservedSignalNode(Node):
                                 // latent_env_arr will never go out of scope while we're running.
 
         int len_latent_env = latent_env_arr->dimensions[0];
-        int end_idx = start_idx + len_latent_env;
-        if (end_idx <= 0) {
+        int arr_end_idx = arr_start_idx + len_latent_env;
+        if (arr_end_idx <= start_idx) {
             continue;
         }
-        int early = std::max(0, - start_idx);
-        int overshoot = std::max(0, end_idx - npts);
+
+        int early = std::max(0, start_idx - arr_start_idx);
+        int overshoot = std::max(0, arr_end_idx - end_idx);
         int j = early;
         for(j=early; j < len_latent_env - overshoot; ++j) {
-               signal(j + start_idx) += latent_env[j];
+               signal(j + arr_start_idx) += latent_env[j];
         }
     }
 
 """
-
-        weave.inline(code,['n', 'npts', 'sidxs', 'latent_envs', 'signal',],type_converters = converters.blitz,verbose=2,compiler='gcc')
+        weave.inline(code,['n', 'sidxs', 'latent_envs', 'signal','start_idx','end_idx'],type_converters = converters.blitz,verbose=2,compiler='gcc')
 
         if not np.isfinite(signal).all():
             raise ValueError("invalid (non-finite) signal generated for %s!" % self.mw)
 
-        return signal
+        return signal[start_idx:end_idx]
 
 
     """
 
     keep the following members in sync:
     - self._arrivals: set of (eid, phase) pairs
-    - self._keymap: map from parent key to (boolean is_tmpl_param, eid, phase, param_name) tuple
-    - self._tmpl_params: map from (eid, phase) to a dict of template params for that arrival
-    - self._wiggle_params: map from (eid, phase) to a dict of repeatable wiggle params
+    - self._arrival_times: map from (eid, phase) to arrival times as floats
+    - self._latent_arrivals: map from (eid, phase) to nodes representing the latent signal
 
     """
-
     def _parent_values(self):
         parent_keys_removed = self.parent_keys_removed
         parent_keys_changed = self.parent_keys_changed
@@ -230,72 +229,12 @@ class ObservedSignalNode(Node):
         return pv
 
 
-    """
-    def _parent_values(self):
-        parent_keys_removed = self.parent_keys_removed
-        parent_keys_changed = self.parent_keys_changed
-        parent_nodes_added = self.parent_nodes_added
-        pv = super(ObservedSignalNode, self)._parent_values()
-
-        new_arrivals = get_new_arrivals(parent_nodes_added, self.r)
-        removed_arrivals = get_removed_arrivals(parent_keys_removed, self.r)
-        self._arrivals.update(new_arrivals)
-        self._arrivals.difference_update(removed_arrivals)
-
-        # cache the list of tmpl/wiggle param keys for the new arrivals
-        for (eid, phase) in new_arrivals:
-            tg = self.graph.template_generator(phase=phase)
-            self._tmpl_params[(eid,phase)] = dict()
-            for p in tg.params() + ('arrival_time',):
-                k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
-                self._tmpl_params[(eid,phase)][p] = float(v)
-                self._keymap[k] = (True, eid, phase, p)
-
-            wg = self.graph.wiggle_generator(phase=phase, srate=self.srate)
-            self._wiggle_params[(eid, phase)] = np.empty((wg.dimension(),))
-            for (i, p) in enumerate(wg.params()):
-                try:
-                    k, v = self.get_parent_value(eid, phase, p, pv, return_key=True)
-                    self._wiggle_params[(eid,phase)][i] = float(v)
-                    self._keymap[k] = (False, eid, phase, i)
-                except KeyError:
-                    #print "WARNING: no wiggles for arrival (%d, %s) at (%s, %s, %s)" % (eid, phase, self.sta, self.band, self.chan)
-                    k = None
-
-        for k in parent_keys_removed:
-            try:
-                tmpl, eid, phase, p = self._keymap[k]
-                del self._keymap[k]
-                if tmpl:
-                    del self._tmpl_params[(eid, phase)]
-                else:
-                    del self._wiggle_params[(eid, phase)]
-            except KeyError:
-                pass
-
-        for (key, node) in parent_keys_changed:
-            try:
-                tmpl, eid, phase, p = self._keymap[key]
-                if tmpl:
-                    self._tmpl_params[(eid,phase)][p] = float(pv[key])
-                else:
-                    self._wiggle_params[(eid,phase)][p] = float(pv[key])
-            except KeyError:
-                continue
-
-        del parent_keys_removed
-        del parent_keys_changed
-        del parent_nodes_added
-        return pv
-    """
-
     def arrivals(self):
         self._parent_values()
         return self._arrivals
 
     def get_latent_arrival(self, eid, phase):
         return self._latent_arrivals[(eid, phase)].get_value()
-
 
     def parent_predict(self, parent_values=None, **kwargs):
         #parent_values = parent_values if parent_values else self._parent_values()
@@ -313,6 +252,17 @@ class ObservedSignalNode(Node):
             child.parent_keys_changed.add((self.single_key), self)
 
     def log_p(self, parent_values=None, **kwargs):
+        noise, mask = self._station_noise(parent_values=parent_values,return_mask=True, **kwargs)
+        lp = self.nm.log_p(noise, mask=mask)
+#        import hashlib
+#        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
+#        np.savetxt(fname, diff)
+#        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
+
+        return lp
+
+    # compute the station noise by subtracting the latent arrival signals from the observed signal
+    def _station_noise(self, parent_values=None, return_mask=False, **kwargs):
         parent_values = parent_values if parent_values else self._parent_values()
         v = self.get_value()
         value = v.data
@@ -327,16 +277,10 @@ signal_diff(i) =value(i) - pred_signal(i);
 }
 """
         weave.inline(code,['npts', 'signal_diff', 'value', 'pred_signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
-
-
-
-        lp = self.nm.log_p(signal_diff, mask=mask)
-#        import hashlib
-#        fname = hashlib.sha1(str(lp) + str(self.nmid)).hexdigest()
-#        np.savetxt(fname, diff)
-#        print "wave logp %f, nmid %d, saving diff to %s" % (lp, self.nmid, fname)
-
-        return lp
+        if return_mask:
+            return self.signal_diff, mask
+        else:
+            return self.signal_diff
 
     def deriv_log_p(self, parent_key=None, lp0=None, eps=1e-4):
         parent_values = self._parent_values()
@@ -354,3 +298,16 @@ signal_diff(i) =value(i) - pred_signal(i);
 
     def get_parent_value(self, eid, phase, param_name, parent_values, **kwargs):
          return get_parent_value(eid=eid, phase=phase, sta=self.sta, chan=self.chan, band=self.band, param_name=param_name, parent_values=parent_values, **kwargs)
+
+
+    def debugging_plot(self, ax, plot_mode="noise"):
+        if plot_mode == "noise":
+            noise = self._station_noise()
+            noise_wave = Waveform(data=noise, stime=self.st, sta=self.sta, srate=self.srate, chan=self.chan, filter_str='')
+            subplot_waveform(noise_wave, ax, plot_dets=False, c='black')
+
+        if plot_mode == "full":
+            subplot_waveform(self.get_wave(), ax, plot_dets=False, c='black')
+
+            pred_wave = Waveform(data=self.assem_signal(), stime=self.st, sta=self.sta, srate=self.srate, chan=self.chan)
+            subplot_waveform(pred_wave, ax, plot_dets=False, c='red')

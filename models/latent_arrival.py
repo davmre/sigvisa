@@ -52,6 +52,10 @@ class LatentArrivalNode(Node):
         self._tmpl_params = dict()
         self._wiggle_params = dict()
 
+        self._tmpl_shape_cache = np.array(())
+        self._repeatable_wiggle_cache = np.array(())
+        self._empirical_wiggle_cache = np.array(())
+
         #parent_tmpls_tmp = [(k, graph.nodes_by_key[k]) for k in self._tmpl_keys.values()]
         #parent_wiggles_tmp = [(k, graph.nodes_by_key[k]) for k in self._wiggle_keys.values()]
         #self.parent_keys_changed.update(parent_tmpls_tmp, parent_wiggles_tmp)
@@ -62,33 +66,40 @@ class LatentArrivalNode(Node):
 
     def parent_predict(self):
         self.set_value(self._predict_value())
+        self._parent_values(force_update_wiggle=True)
 
     def _predict_value(self):
-        env = np.exp(self.get_template_logenv())
-        wiggle_repeatable = self.get_wiggle()
+        self._parent_values()
+        env = self._tmpl_shape_cache
+        wiggle_repeatable = self._repeatable_wiggle_cache
         wiggle = self.arwm.predict(n=len(env))
         wiggle[:len(wiggle_repeatable)] += wiggle_repeatable[:len(env)]
-        env *= wiggle
-        return env
+        wiggle *= env
+        return wiggle
 
     def parent_sample(self):
         self.set_value(self._sample_value())
+        self._parent_values(force_update_wiggle=True)
 
     def _sample_value(self):
-        env = np.exp(self.get_template_logenv())
-        wiggle_repeatable = self.get_wiggle()
+        self._parent_values()
+        env = self._tmpl_shape_cache
+        wiggle_repeatable = self._repeatable_wiggle_cache
         wiggle = self.arwm.sample(n=len(env))
         wiggle[:len(wiggle_repeatable)] += wiggle_repeatable[:len(env)]
+        wiggle *= env
+        return wiggle
 
-        env *= wiggle
-        return env
 
-
-    def _empirical_wiggle(self, return_components=False):
-        env = self.get_value()
-        tmpl_shape_env = np.exp(self.get_template_logenv())
-
-        resolveable_latent_wiggle_len = min(len(env), len(tmpl_shape_env), MAX_LATENT_SIGNAL_LEN)
+    def compute_empirical_wiggle(self, env, tmpl_shape_env=None, repeatable_wiggle=None, start_idx=None):
+        """
+        Given:
+           env: latent signal envelope, or a substring of the envelope
+           tmpl_shape_env: the predicted template shape (default is to use the current cached value)
+           repeatable_wiggle: the repeatable wiggle component (default is to use the current cached value)
+           start_idx: index (wrt to the arrival time of this node's signal) at which to start extracting the wiggle.
+                      We assume that env begins at this index.
+        """
         # if we're predicting a signal that bottoms out much
         # earlier than our current signal, we won't be able to get
         # any useful information about the wiggles after the
@@ -99,29 +110,29 @@ class LatentArrivalNode(Node):
         # current signal we're representing, we still don't know
         # anything about the latent wiggles past the point where the
         # current signal ends.
-        env = env[:resolveable_latent_wiggle_len]
-        tmpl_shape_env = tmpl_shape_env[:resolveable_latent_wiggle_len]
-        assert(len(env) == len(tmpl_shape_env))
 
-        # avoid 0/0 issues for the first envelope value
-        tmpl_shape_env[0] = 1
-        try:
-            empirical_wiggle = env / tmpl_shape_env
-        except FloatingPointError:
-            import pdb; pdb.set_trace()
-        empirical_wiggle[0] = empirical_wiggle[1]
-        tmpl_shape_env[0] = 0
+        if tmpl_shape_env is None or repeatable_wiggle is None:
+            self._parent_values()
+        if tmpl_shape_env is None:
+            tmpl_shape_env = self._tmpl_shape_cache
+        if repeatable_wiggle is None:
+            repeatable_wiggle = self._repeatable_wiggle_cache
 
-        wiggle_repeatable = self.get_wiggle()
-        try:
-            empirical_wiggle[:len(wiggle_repeatable)] -= wiggle_repeatable[:resolveable_latent_wiggle_len]
-        except ValueError:
-            import pdb; pdb.set_trace()
+        start_idx = 0 if start_idx is None else start_idx
+        resolveable_latent_wiggle_len = min(len(env), len(tmpl_shape_env)-start_idx, MAX_LATENT_SIGNAL_LEN)
+        end_idx = start_idx + resolveable_latent_wiggle_len
 
-        if return_components:
-            return (empirical_wiggle, tmpl_shape_env, wiggle_repeatable)
-        else:
-            return empirical_wiggle
+
+        empirical_wiggle = env[:resolveable_latent_wiggle_len] / tmpl_shape_env[start_idx:end_idx]
+        #if np.isnan(empirical_wiggle).any():
+        #    import pdb; pdb.set_trace()
+        empirical_wiggle[:len(repeatable_wiggle) - start_idx] -= repeatable_wiggle[start_idx:end_idx]
+
+        return empirical_wiggle
+
+    def get_signal_components(self):
+        self._parent_values()
+        return self._empirical_wiggle_cache, self._tmpl_shape_cache, self._repeatable_wiggle_cache
 
     def log_p(self):
         # compute the log probability of the current latent signal
@@ -131,7 +142,8 @@ class LatentArrivalNode(Node):
         # a slightly tricky issue is that the current shape parameters
         # might suggest a signal length different from the current
         # latent value.
-        empirical_wiggle = self._empirical_wiggle()
+        self._parent_values()
+        empirical_wiggle = self._empirical_wiggle_cache
         resolveable_latent_wiggle_len = len(empirical_wiggle)
 
         observed_wiggle_logp = self.arwm.log_p(empirical_wiggle)
@@ -140,11 +152,8 @@ class LatentArrivalNode(Node):
         return observed_wiggle_logp + latent_wiggle_expected_logp
 
     def set_from_child_signal(self, start_idx=0):
-        current = self.get_value()
-        if current is None:
-            self.parent_predict()
-            current = self.get_value()
-        latent_len = len(current)
+        self._parent_values()
+        latent_len = len(self.get_value())
 
         child_wn = list(self.children)[0]
         latent_start_idx = child_wn.arrival_start_idx(self.eid, self.phase)
@@ -163,8 +172,9 @@ class LatentArrivalNode(Node):
         extract_end_offset = extract_end_idx - latent_start_idx
 
         self._dict[self.single_key][extract_start_offset:extract_end_offset] = observed_signal[extract_start_idx:extract_end_idx] - predicted_without_me[extract_start_idx:extract_end_idx]
+        self._parent_values(force_update_wiggle=True)
 
-    def _parent_values(self):
+    def _parent_values(self, force_update_wiggle=False):
         parent_keys_changed = self.parent_keys_changed
         for node in self.parent_nodes_added:
             for key in node.keys():
@@ -172,29 +182,46 @@ class LatentArrivalNode(Node):
 
         pv = super(LatentArrivalNode, self)._parent_values()
 
+        tmpl_changed = False
+        wiggle_changed = False
         for (key, node) in parent_keys_changed:
             try:
                 tmpl, p = self._keymap[key]
                 if tmpl:
                     self._tmpl_params[p] = float(pv[key])
+                    tmpl_changed = True
                 else:
                     self._wiggle_params[p] = float(pv[key])
+                    wiggle_changed = True
             except KeyError:
                 continue
+
+        if tmpl_changed:
+            self._tmpl_shape_cache = np.exp(self._recompute_cached_logenv())
+        if wiggle_changed or len(self._repeatable_wiggle_cache) == 0:
+            self._repeatable_wiggle_cache = self._recompute_cached_wiggle()
+        if tmpl_changed or wiggle_changed or force_update_wiggle:
+            v = self.get_value()
+            if v is None:
+                v = self._predict_value()
+                self._dict[self.single_key] = v
+            self._empirical_wiggle_cache = self.compute_empirical_wiggle(v, self._tmpl_shape_cache, self._repeatable_wiggle_cache)
+
 
         del parent_keys_changed
         return pv
 
-    def get_wiggle(self, parent_values=None):
-        parent_values = parent_values if parent_values else self._parent_values()
+    def _recompute_cached_wiggle(self, parent_values=None):
+        # assumes self._wiggle_params is up to date
         wg = self.graph.wiggle_generator(self.phase, self.srate)
         if len(self._wiggle_params) == wg.dimension():
             return wg.signal_from_features(features = self._wiggle_params)
         else:
             return np.ones((wg.npts,))
 
-    def get_template_logenv(self):
-        v  = self.get_template_params()
+    def _recompute_cached_logenv(self):
+        # assumes self._tmpl_params is up to date
+        v  = self._tmpl_params
         offset = (v['arrival_time'] - int(np.floor(v['arrival_time']))) * self.srate
         offset = offset - int(np.floor(offset))
         logenv = self.tg.abstract_logenv_raw(v, idx_offset=offset, srate=self.srate)
@@ -229,11 +256,18 @@ class LatentArrivalNode(Node):
 
 
     def debugging_plot(self, ax, plot_mode="full"):
+        self._parent_values()
+
+        if plot_mode == "wiggle":
+            wiggle = self._empirical_wiggle_cache
+            wiggle_wave = Waveform(data=wiggle, stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='')
+            subplot_waveform(wiggle_wave, ax, plot_dets=False, c='black')
+            return
 
         subplot_waveform(self.get_wave(), ax, plot_dets=False, c='black')
 
         if plot_mode == "shape":
-            shape_wave = Waveform(data=self.get_template_logenv(), stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='env;' + self.band)
+            shape_wave = Waveform(data=self._tmpl_shape_cache, stime=self._tmpl_params['arrival_time'], sta=self.sta, srate=self.srate, chan=self.chan, filter_str='env;' + self.band)
             subplot_waveform(shape_wave, ax, plot_dets=False, c='green')
 
         if plot_mode == "predict" or plot_mode=="full":
@@ -255,6 +289,8 @@ class LatentArrivalNode(Node):
             # recompute deterministic values for our children, because
             # the only children in practice will be
             # ObservedSignalNodes which don't expect these things.
+
+        self._parent_values(force_update_wiggle=True)
 
     def set_dict(self, value, override_fixed=False):
         assert(set(value.iterkeys()) == set(self._mutable.iterkeys()))
@@ -281,10 +317,11 @@ class LatentArrivalNode(Node):
 
     def set_index(self, val, i):
         self._dict[self.single_key][i] = val
+        self._parent_values(force_update_wiggle=True)
 
     def _debug_grad(self):
-        empirical_wiggle = self._empirical_wiggle()
-        grad = np.zeros((len(empirical_wiggle),))
+        self._parent_values()
+        grad = np.zeros((len(self._empirical_wiggle_cache),))
         self.update_mutable_grad(grad, 0)
         return grad
 
@@ -297,7 +334,10 @@ class LatentArrivalNode(Node):
         return np.ones(v.shape) * float('inf')
 
     def update_mutable_grad(self, grad, i, eps=None, initial_lp=None):
-        (empirical_wiggle, predicted_shape, repeatable_wiggle) = self._empirical_wiggle(return_components=True)
+        self._parent_values()
+        empirical_wiggle = self._empirical_wiggle_cache
+        predicted_shape = self._tmpl_shape_cache
+        repeatable_wiggle = self._repeatable_wiggle_cache
 
         mygrad = self.arwm.log_p_grad(empirical_wiggle) / predicted_shape
 
@@ -334,13 +374,19 @@ class LatentArrivalNode(Node):
         grad[i:i+ni] += mygrad
         return ni
 
-    def set_nonrepeatable_wiggle(self, x, shape_env=None, repeatable_wiggle=None):
+    def set_nonrepeatable_wiggle(self, x, shape_env=None, repeatable_wiggle=None, start_idx=None):
+        self._parent_values()
+
+        if start_idx is None:
+            start_idx = 1
+
         N = len(x)
 
-        shape_env = shape_env if (shape_env is not None) else np.exp(self.get_template_logenv())
-        repeatable_wiggle = repeatable_wiggle if (repeatable_wiggle is not None) else self.get_wiggle()
+        shape_env = self._tmpl_shape_cache[start_idx:start_idx+N]
+        repeatable_wiggle = self._repeatable_wiggle_cache[start_idx:start_idx+N]
 
-        x[:len(repeatable_wiggle)] += repeatable_wiggle[:N]
-        x[:len(shape_env)] *= shape_env[:N]
+        x[:len(repeatable_wiggle)] += repeatable_wiggle
+        x[:len(shape_env)] *= shape_env
 
-        self._dict[self.single_key][:N] = x[:len(self._dict[self.single_key])]
+        self._dict[self.single_key][start_idx:start_idx+N] = x[:len(self._dict[self.single_key])-start_idx]
+        self._parent_values(force_update_wiggle=True)

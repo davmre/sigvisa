@@ -10,7 +10,8 @@ from sigvisa import Sigvisa
 from sigvisa.graph.array_node import lldlld_X
 from sigvisa.graph.sigvisa_graph import get_param_model_id
 from sigvisa.infer.propose import generate_hough_array, propose_event_from_hough, event_prob_from_hough, visualize_hough_array
-from sigvisa.infer.template_mcmc import get_signal_based_amplitude_distribution, propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal
+from sigvisa.infer.template_mcmc import propose_wiggles_from_signal, wiggle_proposal_lprob_from_signal
+from sigvisa.infer.arrival_time_moves import get_signal_based_amplitude_distribution
 from sigvisa.learn.train_param_common import load_modelid
 from sigvisa.models.ev_prior import event_from_evnodes
 from sigvisa.models.ttime import tt_residual
