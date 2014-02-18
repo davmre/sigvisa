@@ -53,9 +53,9 @@ Under this notation we can write
 
 \begin{align*}
 p(W(k-p_W : k+p_W)) & \propto \exp\left( \sum_{j=0}^p \left(\phi^*_j W(k) - z_j \right)^2  / \sigma^2 \right)\\
-&= \exp\left( \| W(k) \v{\phi^*} - \v{z} \| / \sigma^2 \right)\\
+&= \exp\left( \| W(k) \v{\phi^*} - \v{z} \|^2 / \sigma^2 \right)\\
 \end{align*}
-We can view this as a Gaussian distribution on $W(k) \v{\phi^*}$ with mean $\v{z}$ and covariance $\sigma^2 \mathcal{I}$. By the standard formula for linear transformations of a Gaussian, we can transform by $\v{\phi^*}^T / \|\v{\phi^*}\|^2$ to yield a Gaussian $\N\left(W(k); \mu, \|\v{\phi^*}\|^2/\sigma^2\right)$  where $\mu = \v{\phi^*}^T\v{z} /  \|\v{\phi^*}\|^2$. This gives the smoothing distribution on $W(k)$.
+We can view this as a Gaussian distribution on $W(k) \v{\phi^*}$ with mean $\v{z}$ and covariance $\sigma^2 \mathcal{I}$. By the standard formula for linear transformations of a Gaussian, we can transform by $\v{\phi^*}^T / \|\v{\phi^*}\|^2$ to yield a Gaussian $\N\left(W(k); \mu, \sigma^2 / \|\v{\phi^*}\|^2\right)$  where $\mu = \v{\phi^*}^T\v{z} /  \|\v{\phi^*}\|^2$. This gives the smoothing distribution on $W(k)$.
 
 We can calculate this efficiently by first computing the filtered means $f_t = \sum_{i=1}^p \phi_i W(t-i)$, then computing each $z$ value as $z_j = W(k+j) - (f_{k+j} - \phi_{j} f_k)$, i.e. we remove the $k$ term from the filtered prediction at each timestep.
 
@@ -81,6 +81,11 @@ It is easy to see that if we had {\em multiple} missing values in the dependence
 
 We now return to the smoothing calculation as described above. Recall that we factored the joint distribution on $W(k), \ldots, W(k+p)$, conditioned on $W(k-p), \ldots, W(k-1)$, into the product of filtering distributions for each of $W(k), \ldots, W(k+p)$. Thus a missing observation will have two effects: first, we will not have a factor for the filtering distribution of that variable, and second, that variable will be missing from the filtering condition for all other relevant variables.
 
-I don't want to figure out the notation to write this all out, but the implementation is: we compute the filtering distribution as described above, then also just ignore any component of $z$ corresponding to a missing observation.
+I don't want to figure out the notation to write this all out, but the implementation is: we compute the filtering distribution as described above, then also just ignore any component of $z$ corresponding to a missing observation. A slight change is that we now have different filtering variances for different variables. Let $\sigma^2_j$ denote the filtering variance for $W(k+j)$, so that $\v{\sigma^2}$ is a $p+1$-dimensional vector. Then
+\begin{align*}
+p(W(k-p_W : k+p_W)) & \propto \exp\left( \sum_{j=0}^p \left(\phi^*_j W(k) - z_j \right)^2  / \sigma_j^2 \right)\\
+&= \exp\left( ( W(k) \v{\phi^*} - \v{z})^T \text{diag}(\sigma^2)^{-1}  ( W(k) \v{\phi^*} - \v{z}) \right)
+\end{align*}
+and applying the linear transformation $\v{\phi^*}^T / \|\v{\phi^*}\|^2$ now yields the Gaussian $\N\left(W(k); \mu,   \xi   \right)$  where $\mu = \v{\phi^*}^T\v{z} /  \|\v{\phi^*}\|^2$ and $\xi = \v{\phi^*}^T  \text{diag}(\sigma^2) \v{\phi^*} / \| \v{\phi^*}\|^4$.
 
 \end{document}
