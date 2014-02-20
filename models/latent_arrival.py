@@ -278,7 +278,8 @@ class LatentArrivalNode(Node):
             subplot_waveform(env_wave, ax, plot_dets=False, c='purple')
 
 
-####################################################
+
+    ####################################################
 # hack: redefining parent methods for efficiency
 
     def set_value(self, value, key=None):
@@ -378,7 +379,7 @@ class LatentArrivalNode(Node):
         self._parent_values()
 
         if start_idx is None:
-            start_idx = 1
+            start_idx = 0
 
         N = len(x)
 
