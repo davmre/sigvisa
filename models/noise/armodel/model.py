@@ -545,7 +545,7 @@ class ErrorModel:
         self.mean = mean
         self.std = std
 
-        self.entropy = .5*np.log(2*np.pi*np.e*std*std)
+        self.entropy = -.5*np.log(2*np.pi*np.e*std*std)
 
     def sample(self):
         return np.random.normal(loc=self.mean, scale=self.std)

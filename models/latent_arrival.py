@@ -61,8 +61,8 @@ class LatentArrivalNode(Node):
         #self.parent_keys_changed.update(parent_tmpls_tmp, parent_wiggles_tmp)
 
         # TEMPORARY HACK until I actually figure out how to train the AR wiggle models
-        em = ErrorModel(mean=0.0, std=0.1)
-        self.arwm = ARModel(params=(.2, .7), c=1.0, em = em, sf=self.srate)
+        em = ErrorModel(mean=0.0, std=0.03)
+        self.arwm = ARModel(params=(.2,), c=1.0, em = em, sf=self.srate)
 
     def parent_predict(self):
         self.set_value(self._predict_value())
@@ -91,7 +91,7 @@ class LatentArrivalNode(Node):
         return wiggle
 
 
-    def compute_empirical_wiggle(self, env, tmpl_shape_env=None, repeatable_wiggle=None, start_idx=None):
+    def compute_empirical_wiggle(self, env, tmpl_shape_env=None, repeatable_wiggle=None):
         """
         Given:
            env: latent signal envelope, or a substring of the envelope
@@ -118,15 +118,10 @@ class LatentArrivalNode(Node):
         if repeatable_wiggle is None:
             repeatable_wiggle = self._repeatable_wiggle_cache
 
-        start_idx = 0 if start_idx is None else start_idx
-        resolveable_latent_wiggle_len = min(len(env), len(tmpl_shape_env)-start_idx, MAX_LATENT_SIGNAL_LEN)
-        end_idx = start_idx + resolveable_latent_wiggle_len
+        resolveable_latent_wiggle_len = min(len(env), len(tmpl_shape_env), MAX_LATENT_SIGNAL_LEN)
 
-
-        empirical_wiggle = env[:resolveable_latent_wiggle_len] / tmpl_shape_env[start_idx:end_idx]
-        #if np.isnan(empirical_wiggle).any():
-        #    import pdb; pdb.set_trace()
-        empirical_wiggle[:len(repeatable_wiggle) - start_idx] -= repeatable_wiggle[start_idx:end_idx]
+        empirical_wiggle = env[:resolveable_latent_wiggle_len] / tmpl_shape_env[:resolveable_latent_wiggle_len]
+        empirical_wiggle[:len(repeatable_wiggle)] -= repeatable_wiggle[:resolveable_latent_wiggle_len]
 
         return empirical_wiggle
 
@@ -147,8 +142,9 @@ class LatentArrivalNode(Node):
         resolveable_latent_wiggle_len = len(empirical_wiggle)
 
         observed_wiggle_logp = self.arwm.log_p(empirical_wiggle)
-        latent_wiggle_expected_logp = self.arwm.em.entropy * (MAX_LATENT_SIGNAL_LEN - resolveable_latent_wiggle_len)
-        #print "computing logp over resolveable len %d. observed logp %f, altent %f, total %f" % (resolveable_latent_wiggle_len, observed_wiggle_logp, latent_wiggle_expected_logp, observed_wiggle_logp + latent_wiggle_expected_logp)
+        entropy = self.arwm.em.entropy + 0.01 # HACK to discourage long latent signals
+        latent_wiggle_expected_logp =  entropy * (MAX_LATENT_SIGNAL_LEN - resolveable_latent_wiggle_len)
+        print "computing logp over resolveable len %d. observed logp %f, latent %f, total %f" % (resolveable_latent_wiggle_len, observed_wiggle_logp, latent_wiggle_expected_logp, observed_wiggle_logp + latent_wiggle_expected_logp)
         return observed_wiggle_logp + latent_wiggle_expected_logp
 
     def set_from_child_signal(self, start_idx=0):
@@ -375,7 +371,8 @@ class LatentArrivalNode(Node):
         grad[i:i+ni] += mygrad
         return ni
 
-    def set_nonrepeatable_wiggle(self, x, shape_env=None, repeatable_wiggle=None, start_idx=None):
+
+    def set_nonrepeatable_wiggle(self, x, shape_env=None, repeatable_wiggle=None, start_idx=None, set_signal_length=False):
         self._parent_values()
 
         if start_idx is None:
@@ -389,5 +386,9 @@ class LatentArrivalNode(Node):
         x[:len(repeatable_wiggle)] += repeatable_wiggle
         x[:len(shape_env)] *= shape_env
 
-        self._dict[self.single_key][start_idx:start_idx+N] = x[:len(self._dict[self.single_key])-start_idx]
+        if start_idx==0 and set_signal_length:
+            # replace the entire signal with our new signal
+            self._dict[self.single_key] = x[:MAX_LATENT_SIGNAL_LEN]
+        else:
+            self._dict[self.single_key][start_idx:start_idx+N] = x[:len(self._dict[self.single_key])-start_idx]
         self._parent_values(force_update_wiggle=True)

@@ -39,10 +39,13 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=Fal
     model_x = latent.arwm
     model_y = child_wn.nm
 
-    (x, shape, repeatable) = latent.get_signal_components()
+    (empirical_wiggle, shape, repeatable) = latent.get_signal_components()
+
+    # either ew is longer than shape, or shorter
+    # if it's shorter
 
     gibbs_start_idx = start_idx if start_idx else 0
-    gibbs_end_idx = end_idx if end_idx else len(x)
+    gibbs_end_idx = end_idx if end_idx else len(shape)
 
     # load extra signal so that we have the necessary data for AR
     # filtering and smoothing
@@ -50,18 +53,20 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=Fal
     padded_x_end_idx = gibbs_end_idx + model_x.p
     #padded_x_len = padded_x_end_idx - padded_x_start_idx
     clipped_x_start_idx = max(padded_x_start_idx, 0)
-    clipped_x_end_idx = min(padded_x_end_idx, len(x))
+    clipped_x_end_idx = min(padded_x_end_idx, len(shape))
 
     i_start = gibbs_start_idx - clipped_x_start_idx
     i_end = gibbs_end_idx - clipped_x_start_idx
 
 
-    x = x[clipped_x_start_idx:clipped_x_end_idx]
+    x = np.ones(shape.shape)
+    end_copy_idx = min(clipped_x_end_idx, len(empirical_wiggle))
+    x[clipped_x_start_idx:end_copy_idx] = empirical_wiggle[clipped_x_start_idx:end_copy_idx]
     shape = shape[clipped_x_start_idx:clipped_x_end_idx]
     repeatable = repeatable[clipped_x_start_idx:clipped_x_end_idx]
 
     # make sure we don't modify the cached latent wiggle
-    x = np.array(x, copy=True)
+
     x_mask = np.zeros(x.shape, dtype=bool)
     if mask_unsampled:
         x_mask[i_start:i_end] = True
@@ -214,11 +219,34 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
            i = idx
 
         filtered_masked_predictions(x, x_mask, x_params, x_model.em.std**2, i, i +1 + len(x_params), x_filtered_means, x_filtered_vars)
+        if not np.all(np.isfinite(x_filtered_means)):
+            print "NAN in x_filtered_means", i
+            print x_params, x_model.em.std
+            print x_filtered_means[i-10:i+10]
+            print x[i-10:i+10]
+            print x_mask[i-10:i+10]
+            print x_filtered_vars[i-10:i+10]
+            print y_filtered_means[i+yx_offset-10:i+yx_offset+10]
+
+            raise Exception('nanananana')
+
+
+
         smoothed_mean_xi, smoothed_prec_xi = smoothed_mean_python(x, x_mask, x_filtered_means, x_filtered_vars, 0, x_params, i)
-        if obs_mask[i+yx_offset]:
+        if i+yx_offset >= len(obs_mask) or obs_mask[i+yx_offset]:
             combined_posterior_mean, combined_posterior_precision = smoothed_mean_xi, smoothed_prec_xi
         else:
             filtered_masked_predictions(y, y_mask, y_params, y_model.em.std**2, i+yx_offset, i + yx_offset + 1 + len(y_params),  y_filtered_means, y_filtered_vars)
+            if not np.all(np.isfinite(y_filtered_means)):
+                print "NAN in y_filtered_means", i+yx_offset
+                print y_params, y_model.em.std
+                print y_filtered_means[i+yx_offset-10:i+yx_offset+10]
+                print x[i+yx_offset-10:i+yx_offset+10]
+                print y_mask[i+yx_offset-10:i+yx_offset+10]
+                print y_fi+yx_offsetltered_vars[i+yx_offset-10:i+10]
+                print x_filtered_means[i-10:i+10]
+
+
             # to get the correction from i to y-coords
             smoothed_mean_yi, smoothed_prec_yi = smoothed_mean_python(y, y_mask, y_filtered_means, y_filtered_vars, 0, y_params, i+yx_offset)
 
@@ -233,8 +261,8 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
             new_xi = target_wiggle[i-i_start]
             r = (new_xi - combined_posterior_mean) * np.sqrt(combined_posterior_precision)
 
-
-        # print "i %d r %.3f xi %.3f mean %.3f prec %.3f xm %.3f xprec %.3f ym %.3f yprec %.3f fym %.3f fyp %.3f nxi %.3f" % (i, r, x[i], combined_posterior_mean, combined_posterior_precision, smoothed_mean_xi, smoothed_prec_xi, smoothed_mean_yi, smoothed_prec_yi, y_filtered_means[i+yx_offset], 1.0/y_filtered_vars[i+yx_offset], new_xi)
+        #if np.abs(0.87542302 - x_params[1]) < .0001:
+            #print "i %d r %.3f xi %.3f mean %.3f prec %.3f xm %.3f xprec %.3f ym %.3f yprec %.3f fym %.3f fyp %.3f nxi %.3f" % (i, r, x[i], combined_posterior_mean, combined_posterior_precision, smoothed_mean_xi, smoothed_prec_xi, smoothed_mean_yi, smoothed_prec_yi, y_filtered_means[i+yx_offset], 1.0/y_filtered_vars[i+yx_offset], new_xi)
 
         sample_lp -= (r*r)/2.0
 
@@ -248,7 +276,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
         xi_diff = new_xi - x[i]
         x[i] = new_xi
 
-        if not obs_mask[i+yx_offset]:
+        if i+yx_offset < len(obs_mask) and not obs_mask[i+yx_offset]:
             y_mask[i+yx_offset] = False
 
             # we want y = obs - rw*shape - x*shape - y_model.c
@@ -262,8 +290,10 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
     final_x = np.copy(x)
 
     if not have_target:
-        latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=clipped_x_start_idx)
-
+        if start_idx is None and end_idx is None:
+            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=0, set_signal_length=True)
+        else:
+            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=clipped_x_start_idx)
     return sample_lp
 
 # given:
@@ -307,13 +337,14 @@ def smoothed_mean_python(d, m, pred, pred_var, pred_start, p, i):
     if accum_param_sqnorm == 0:
         import pdb; pdb.set_trace()
 
+
     smoothed_mean = ( accum_mean ) / accum_param_sqnorm
     smoothed_prec = (accum_param_sqnorm  / accum_var) * accum_param_sqnorm
 
     return smoothed_mean, smoothed_prec
 
 
-def gibbs_sweep_masked(latent, start_idx=None, end_idx=None, reverse=False, mask_unsampled=False, target_signal = None):
+def gibbs_sweep(latent, start_idx=None, end_idx=None, reverse=False, mask_unsampled=False, target_signal = None):
 
     x, x_mask, y, y_mask, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, mask_unsampled=mask_unsampled, target_signal=target_signal)
 
@@ -390,7 +421,7 @@ def gibbs_sweep_masked(latent, start_idx=None, end_idx=None, reverse=False, mask
      smoothed_mean(x, x_mask, x_filtered_means, x_filtered_vars, 0, x_params, i, &smoothed_mean_xi, &smoothed_prec_xi);
 
      double combined_posterior_precision, combined_posterior_mean;
-     if (obs_mask(i+yx_offset)) {
+     if (i+yx_offset < y_len || obs_mask(i+yx_offset)) {
          // if we have no observation at this timestep, then the station
          // noise y provides no constraint on the latent wiggle x.
          combined_posterior_mean = smoothed_mean_xi;
@@ -423,7 +454,7 @@ def gibbs_sweep_masked(latent, start_idx=None, end_idx=None, reverse=False, mask
 
        // our predicted signal at time i has increased by xi_diff * shape[i], so the station noise will decrease.
 
-       if (!obs_mask(i+yx_offset)) {
+       if (i+yx_offset < x_len && !obs_mask(i+yx_offset)) {
            y_mask(i+yx_offset) = false;
            double new_yi = observed_nonrepeatable(i) - shape(i)*new_xi;
            y(i+yx_offset) = new_yi;
@@ -451,7 +482,10 @@ def gibbs_sweep_masked(latent, start_idx=None, end_idx=None, reverse=False, mask
     x += x_mean
 
     if not have_target:
-        latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=clipped_x_start_idx)
+        if start_idx is None and end_idx is None:
+            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=0, set_signal_length=True)
+        else:
+            latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=clipped_x_start_idx)
 
     return sample_lp
 
