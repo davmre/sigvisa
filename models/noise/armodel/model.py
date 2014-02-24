@@ -68,10 +68,12 @@ class ARModel(NoiseModel):
         K = np.zeros((n_p, n_p))
         u = np.zeros((n_p,))
 
+        var = std**2
+
         code = """
         int t_since_mask = 0;
-        double s = std;
-        double t1 = log(s) + 0.5 * log(2 * 3.141592653589793);
+        double v = var;
+        double t1 = 0.5 * log(2 * 3.141592653589793 * v);
 
         int converged_to_stationary = 0;
 
@@ -96,16 +98,16 @@ class ARModel(NoiseModel):
                   t_since_mask = 0;
                }
 
-               double old_s = K(0,0);
+               double old_v = K(0,0);
                updateK(K, tmp, p, n_p);
-               K(0,0) += std;
+               K(0,0) += var;
                update_u(u, p, n_p);
 
-               if (old_s > std && (fabs(old_s - K(0,0)) < 0.00000000000001)) {
+               if (old_v > var && (fabs(old_v - K(0,0)) < 0.00000000000001)) {
                   converged_to_stationary = 1;
                }
 
-//               printf ("c t = %d std = %f old_s %f diff %f converged=%d\\n", t, K(0,0), old_s, fabs(old_s - K(0,0)), converged_to_stationary);
+//               printf ("c t = %d var = %f old_v %f diff %f converged=%d\\n", t, K(0,0), old_v, fabs(old_v - K(0,0)), converged_to_stationary);
 
                continue;
           }
@@ -117,14 +119,14 @@ class ARModel(NoiseModel):
 
                 t_since_mask++;
                 updateK(K, tmp, p, n_p);
-                K(0,0) += std;
+                K(0,0) += var;
                 update_u(u, p, n_p);
 
 
                 expected = u(0);
-                s = K(0,0);
-//                printf ("c t = %d std = %f\\n", t, K(0,0));
-                t1 = log(s) + 0.5 * log(2 * 3.141592653589793);
+                v = K(0,0);
+//                printf ("c t = %d var = %f\\n", t, K(0,0));
+                t1 = 0.5 * log(2 * 3.141592653589793 * v);
             } else {
                 for (int i=0; i < n_p; ++i) {
                     if (t > i && !m(t-i-1)) {
@@ -135,8 +137,7 @@ class ARModel(NoiseModel):
             }
 
             double err = d(t) - expected;
-            double x = err/s;
-            double ll = t1 + 0.5 * x*x;
+            double ll = t1 + 0.5 * err*err/v;
             d_prob -= ll;
 
         // printf("cm %d err = %.10f x = %.10f ll = %.10f d_prob=%.10f\\n", t, err, x, ll, d_prob);
@@ -148,8 +149,8 @@ class ARModel(NoiseModel):
                     K(i, 0) = 0;
                 }
             } else if (t_since_mask == n_p + 1) {
-                s = std;
-                t1 = log(s) + 0.5 * log(2 * 3.141592653589793);
+                v= var;
+                t1 = 0.5 * log(2 * 3.141592653589793 * v);
                 t_since_mask += 1;
             }
         }
@@ -158,7 +159,21 @@ class ARModel(NoiseModel):
         """
 
         support = """
+
+
         void updateK(blitz::Array<double, 2> &K, blitz::Array<double, 2> &tmp, blitz::Array<double, 1> p, int n_p) {
+
+               // here we propagate the covariance matrix K through
+               // the transition operator A, yielding a new covariance
+               // of AKA^T.
+
+               // the transition matrix A consists of the AR params on
+               // the first row (the current timestep is a linear
+               // combination of the variables from previous timesteps),
+               // and of a shifted identity matrix on all other rows (all
+               // previous timesteps just move one step back in time, and
+               // the one at the end falls off). The special structure of
+               // this matrix lets us do the update in O(n^2) time.
 
                // tmp = K * A.T
                for (int i=0; i < n_p; ++i){  // row of K
@@ -206,7 +221,7 @@ class ARModel(NoiseModel):
 """
 
         ll = weave.inline(code,
-                          ['n', 'n_p', 'm', 'd', 'std', 'p', 'tmp', 'K', 'u'],
+                          ['n', 'n_p', 'm', 'd', 'var', 'p', 'tmp', 'K', 'u'],
                           type_converters=converters.blitz,
                           support_code=support,
                           compiler='gcc')
@@ -318,9 +333,9 @@ class ARModel(NoiseModel):
         # update on missing data is
         # K = A*K*A^T + U
 
-        orig_std = self.em.std
-        std = orig_std
-        t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+        orig_var = self.em.std**2
+        var = orig_var
+        t1 = 0.5 * np.log(2 * np.pi * var)
 
         t_since_mask = np.float('inf')
 
@@ -351,7 +366,7 @@ class ARModel(NoiseModel):
 
                 # for each masked timestep, do a Kalman update
                 K = np.dot(A, np.dot(K, A.T))
-                K[0, 0] += orig_std
+                K[0, 0] += orig_var
                 u = np.dot(A, u)
                 continue
 
@@ -362,11 +377,11 @@ class ARModel(NoiseModel):
                 t_since_mask += 1
                 u = np.dot(A, u)
                 K = np.dot(A, np.dot(K, A.T))
-                K[0, 0] += orig_std
+                K[0, 0] += orig_var
 
                 expected = u[0]
-                std = K[0, 0]
-                t1 = np.log(std) + 0.5 * np.log(2 * np.pi)
+                var = K[0, 0]
+                t1 = 0.5 * np.log(2 * np.pi * var)
             # otherwise, compute expectation in the normal way (variance is constant)
             else:
                 expected = 0
@@ -376,7 +391,7 @@ class ARModel(NoiseModel):
 
             actual = d[t]
             error = actual - expected
-            t2 = 0.5 * np.square((error - self.em.mean) / std)
+            t2 = 0.5 * np.square((error - self.em.mean))/var
             ell = -t2 - t1
 
             if return_debug:
@@ -385,7 +400,7 @@ class ARModel(NoiseModel):
                 errors.append(error)
             d_prob += ell
 
-            # print "py t %d error %f s %f t2 %f ell %f d_prob %f" % (t, error, std, t2, ell, d_prob)
+            # print "py t %d error %f s %f t2 %f ell %f d_prob %f" % (t, error, var, t2, ell, d_prob)
 
             # if we have recently left a masked region, continue
             # Kalman updating by adding an observation of the timestep
@@ -398,9 +413,9 @@ class ARModel(NoiseModel):
             elif t_since_mask == n_p + 1:
                 K = None
                 u = None
-                std = orig_std
+                var = orig_var
                 t_since_mask += 1
-                t1 = np.log(orig_std) + 0.5 * np.log(2 * np.pi)
+                t1 = 0.5 * np.log(2 * np.pi * var)
 
         if return_debug:
             return d_prob, lls, expecteds, errors
