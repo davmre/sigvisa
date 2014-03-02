@@ -77,6 +77,27 @@ This is essentially the usual filtering distribution on $W(k)$, but with $W(\ell
 
 It is easy to see that if we had {\em multiple} missing values in the dependence set for $W(k)$, we could apply this formula recursively: first calculate the filtering distribution for the second missing value given the first, then for the third given the second and first, and so on: in each case we substitute the filtered mean for each missing variable in the mean calculation, and add the filtered variance of each missing variable, weighted by its squared coefficient, to the variance.
 
+{\bf But wait!} This is wrong because if we depend on multiple missing values, they will in general also depend on each other. A good way to think of this is that each filtered timestep $W(k)$ is a Gaussian random variable formed by the linear combination $\phi^T \Pi(k) + \N(0, \sigma^2)$, where each of its dependencies in $\Pi(k)$ is {\em also} such a Gaussian variable. As a sum of correlated variables, $\phi^T \Pi(k)$ has variance
+\begin{align*}
+Var\left(\sum_i^p \phi_i W(k-i) \right) &= \sum_{i,j} \phi_i \phi_j Cov(W(k-i), W(k-j))  \\
+&= \sum_i \phi_i^2 Var(W(k-i)) + \sum_{i \ne j} \phi_i \phi_j Cov(W(k-i), W(k-j)) \\
+&= \sum_i \phi_i^2 Var(W(k-i)) + 2\sum_{i > j} \phi_i \phi_j Cov(W(k-i), W(k-j))
+\end{align*}
+
+Now how do we find these covariances? In general if we have $Z = X+Y$ where $X$ and $Y$ are uncorrelated Gaussian rvs, then $var(Z) = var(X) + var(Y)$ and $cov(Z, X) = E[X(X+Y)] = E[X^2 + XY] = E[X^2] = Var(X)$.
+What if $X$ and $Y$ are correlated with some covariance $\xi$? Then $cov(Z, X) = Var(X) + \xi$.
+
+In the autoregressive case, say we know the variance and covariances up to $W(k)$. Now we want $W(k+1)$.
+
+
+Assume WLOG that $i > j$, then we have
+\begin{align*}
+Cov(W(k-i), W(k-j)) &= E\left[ W(k-i) W(k-j) \right]\\
+&= E\left[\left(\sum_{i'}\phi_{i'} W(k-i-i')\right) \left(\sum_{j'} \phi_{j'}W(k-j-j')\right)  \right]\\
+&= E\left[\sum_{i',j'}\phi_{i'} \phi_{j'} W(k-i-i') W(k-j-j')  \right]
+\end{align*}
+
+
 \subsection{Smoothing}
 
 We now return to the smoothing calculation as described above. Recall that we factored the joint distribution on $W(k), \ldots, W(k+p)$, conditioned on $W(k-p), \ldots, W(k-1)$, into the product of filtering distributions for each of $W(k), \ldots, W(k+p)$. Thus a missing observation will have two effects: first, we will not have a factor for the filtering distribution of that variable, and second, that variable will be missing from the filtering condition for all other relevant variables.

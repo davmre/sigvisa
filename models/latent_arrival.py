@@ -90,8 +90,7 @@ class LatentArrivalNode(Node):
         wiggle *= env
         return wiggle
 
-
-    def compute_empirical_wiggle(self, env, tmpl_shape_env=None, repeatable_wiggle=None):
+    def compute_empirical_wiggle(self, env, tmpl_shape_env=None, repeatable_wiggle=None, start_idx=0):
         """
         Given:
            env: latent signal envelope, or a substring of the envelope
@@ -118,12 +117,14 @@ class LatentArrivalNode(Node):
         if repeatable_wiggle is None:
             repeatable_wiggle = self._repeatable_wiggle_cache
 
-        resolveable_latent_wiggle_len = min(len(env), len(tmpl_shape_env), MAX_LATENT_SIGNAL_LEN)
+        resolveable_latent_wiggle_len = min(len(env), len(tmpl_shape_env)-start_idx, MAX_LATENT_SIGNAL_LEN)
+        end_idx = start_idx + resolveable_latent_wiggle_len
 
-        empirical_wiggle = env[:resolveable_latent_wiggle_len] / tmpl_shape_env[:resolveable_latent_wiggle_len]
-        empirical_wiggle[:len(repeatable_wiggle)] -= repeatable_wiggle[:resolveable_latent_wiggle_len]
+        empirical_wiggle = env[:resolveable_latent_wiggle_len] / tmpl_shape_env[start_idx:end_idx]
+        empirical_wiggle[:len(repeatable_wiggle) - start_idx] -= repeatable_wiggle[start_idx:end_idx]
 
         return empirical_wiggle
+
 
     def get_signal_components(self):
         self._parent_values()
@@ -144,7 +145,7 @@ class LatentArrivalNode(Node):
         observed_wiggle_logp = self.arwm.log_p(empirical_wiggle)
         entropy = self.arwm.em.entropy + 0.01 # HACK to discourage long latent signals
         latent_wiggle_expected_logp =  entropy * (MAX_LATENT_SIGNAL_LEN - resolveable_latent_wiggle_len)
-        print "computing logp over resolveable len %d. observed logp %f, latent %f, total %f" % (resolveable_latent_wiggle_len, observed_wiggle_logp, latent_wiggle_expected_logp, observed_wiggle_logp + latent_wiggle_expected_logp)
+        #print "computing logp over resolveable len %d. observed logp %f, latent %f, total %f" % (resolveable_latent_wiggle_len, observed_wiggle_logp, latent_wiggle_expected_logp, observed_wiggle_logp + latent_wiggle_expected_logp)
         return observed_wiggle_logp + latent_wiggle_expected_logp
 
     def set_from_child_signal(self, start_idx=0):

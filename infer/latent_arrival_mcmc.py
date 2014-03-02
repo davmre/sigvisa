@@ -58,10 +58,12 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=Fal
     i_start = gibbs_start_idx - clipped_x_start_idx
     i_end = gibbs_end_idx - clipped_x_start_idx
 
+    if i_end > clipped_x_end_idx:
+        raise Exception("trying to resample latent wiggle %s from idx %d to %d, but latent shape stops at idx %d" % (latent.label, gibbs_start_idx, gibbs_end_idx, clipped_x_end_idx))
 
-    x = np.ones(shape.shape)
+    x = np.ones((clipped_x_end_idx - clipped_x_start_idx,))
     end_copy_idx = min(clipped_x_end_idx, len(empirical_wiggle))
-    x[clipped_x_start_idx:end_copy_idx] = empirical_wiggle[clipped_x_start_idx:end_copy_idx]
+    x[:end_copy_idx-clipped_x_start_idx] = empirical_wiggle[clipped_x_start_idx:end_copy_idx]
     shape = shape[clipped_x_start_idx:clipped_x_end_idx]
     repeatable = repeatable[clipped_x_start_idx:clipped_x_end_idx]
 
@@ -136,7 +138,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=Fal
 
     return x, x_mask, y, y_mask, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, model_x, model_y, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end
 
-def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, target_signal=None, mask_unsampled=False):
+def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, target_signal=None, mask_unsampled=False, debug=False):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
     x, x_mask, y, y_mask, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, mask_unsampled=mask_unsampled, target_signal=target_signal)
@@ -208,7 +210,6 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
         filtered_masked_predictions(x, x_mask, x_params, x_model.em.std**2, i_start, len(x), x_filtered_means, x_filtered_vars)
         filtered_masked_predictions(y, y_mask, y_params, y_model.em.std**2, i_start+yx_offset, len(y), y_filtered_means, y_filtered_vars)
 
-
     # loop over to resample each index in succession
     sample_lp = .5 * np.log(2*np.pi) * (i_end - i_start) # precompute the constant components of the gaussian densities
     # the index i is relative to padded_x_start_idx
@@ -236,6 +237,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
         if i+yx_offset >= len(obs_mask) or obs_mask[i+yx_offset]:
             combined_posterior_mean, combined_posterior_precision = smoothed_mean_xi, smoothed_prec_xi
         else:
+            yf = y_filtered_means[i+yx_offset]
             filtered_masked_predictions(y, y_mask, y_params, y_model.em.std**2, i+yx_offset, i + yx_offset + 1 + len(y_params),  y_filtered_means, y_filtered_vars)
             if not np.all(np.isfinite(y_filtered_means)):
                 print "NAN in y_filtered_means", i+yx_offset
@@ -261,8 +263,8 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
             new_xi = target_wiggle[i-i_start]
             r = (new_xi - combined_posterior_mean) * np.sqrt(combined_posterior_precision)
 
-        #if np.abs(0.87542302 - x_params[1]) < .0001:
-            #print "i %d r %.3f xi %.3f mean %.3f prec %.3f xm %.3f xprec %.3f ym %.3f yprec %.3f fym %.3f fyp %.3f nxi %.3f" % (i, r, x[i], combined_posterior_mean, combined_posterior_precision, smoothed_mean_xi, smoothed_prec_xi, smoothed_mean_yi, smoothed_prec_yi, y_filtered_means[i+yx_offset], 1.0/y_filtered_vars[i+yx_offset], new_xi)
+        if debug:
+            print "i %d r %.3f xi %.3f mean %.3f prec %.3f xm %.3f xprec %.3f ym %.3f yprec %.3f fym %.3f fyp %.3f nxi %.3f" % (i, r, x[i], combined_posterior_mean, combined_posterior_precision, smoothed_mean_xi, smoothed_prec_xi, smoothed_mean_yi, smoothed_prec_yi, y_filtered_means[i+yx_offset], 1.0/y_filtered_vars[i+yx_offset], new_xi)
 
         sample_lp -= (r*r)/2.0
 
@@ -623,5 +625,96 @@ void filter_AR_masked(blitz::Array<double, 1> d, blitz::Array<bool, 1> m, blitz:
             }
         }
     }
+}
+
+
+
+void filter_AR_matrix(blitz::Array<double, 1> d, blitz::Array<bool, 1> m, blitz::Array<double, 1> p, double v, int start_idx, int end_idx, blitz::Array<double, 1> mean_destination, blitz::Array<double, 3> var_destination) {
+
+        int t_since_mask = 0;
+        double v = var;
+        double t1 = 0.5 * log(2 * 3.141592653589793 * v);
+
+        int converged_to_stationary = 0;
+
+        double d_prob = 0;
+
+        for (int t=start_idx; t < end_idx; ++t) {
+            if (m(t)) {
+               if (converged_to_stationary) continue;
+
+               if (t_since_mask > n_p+1) {
+                  // initialize kalman filtering when we encounter a masked zone
+
+                  for (int i=0; i < n_p; ++i) {
+                      for (int j=0; j < n_p; ++j) {
+                           K(i,j) = 0;
+                      }
+                      u(i) = 0;
+                  }
+                  int len_history = t > n_p ? n_p : t;
+                  for (int i=0; i < len_history; ++i) {
+                      u(i) = d(t-1-i);
+                  }
+                  t_since_mask = 0;
+               }
+
+               double old_v = K(0,0);
+               updateK(K, tmp, p, n_p);
+               K(0,0) += var;
+               update_u(u, p, n_p);
+
+               if (old_v > var && (fabs(old_v - K(0,0)) < 0.00000000000001)) {
+                  converged_to_stationary = 1;
+               }
+
+//               printf ("c t = %d var = %f old_v %f diff %f converged=%d\\n", t, K(0,0), old_v, fabs(old_v - K(0,0)), converged_to_stationary);
+
+               continue;
+          }
+
+
+            double expected = 0;
+            if (t_since_mask <= n_p) {
+                converged_to_stationary = 0;
+
+                t_since_mask++;
+                updateK(K, tmp, p, n_p);
+                K(0,0) += var;
+                update_u(u, p, n_p);
+
+
+                expected = u(0);
+                v = K(0,0);
+//                printf ("c t = %d var = %f\\n", t, K(0,0));
+                t1 = 0.5 * log(2 * 3.141592653589793 * v);
+            } else {
+                for (int i=0; i < n_p; ++i) {
+                    if (t > i && !m(t-i-1)) {
+                       double ne = p(i) * d(t-i-1);
+                       expected += ne;
+                    }
+                }
+            }
+
+            double err = d(t) - expected;
+            double ll = t1 + 0.5 * err*err/v;
+            d_prob -= ll;
+
+        // printf("cm %d err = %.10f x = %.10f ll = %.10f d_prob=%.10f\\n", t, err, x, ll, d_prob);
+
+            if (t_since_mask <= n_p) {
+                u(0) = d(t);
+                for(int i=0; i < n_p; ++i) {
+                    K(0, i) = 0;
+                    K(i, 0) = 0;
+                }
+            } else if (t_since_mask == n_p + 1) {
+                v= var;
+                t1 = 0.5 * log(2 * 3.141592653589793 * v);
+                t_since_mask += 1;
+            }
+        }
+
 }
 """
