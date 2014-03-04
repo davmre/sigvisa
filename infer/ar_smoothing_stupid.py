@@ -1,6 +1,60 @@
 
 import numpy as np
 
+def filter_AR_stationary(x,mask,model):
+    """
+    Compute filtering distribution for a partially-observed AR process
+    """
+
+    n = len(x)
+    params = model.params
+    sigma2 = model.em.std**2
+    n_p = len(params)
+
+    filtered_means = np.zeros((n, n_p))
+    filtered_covs = np.zeros((n, n_p, n_p))
+    #filtered_inv_covs = np.zeros((n, n_p, n_p))
+
+    tmp_mean = np.zeros((n_p,))
+    tmp_cov = np.zeros((n_p, n_p))
+
+    tmp = np.zeros((n_p, n_p))
+
+    filtered_covs[0, :, :] = np.eye(n_p)
+
+    stationary_cov = False
+    stationary_mean = False
+
+    for t in range(0, n-1):
+
+        if mask[t]:
+            filtered_means[t+1,:] = filtered_means[t,:]
+            filtered_covs[t+1,:,:] = filtered_covs[t,:,:]
+
+            if not stationary_mean:
+                update_u(filtered_means[t+1,:], params)
+                if np.abs(filtered_means[t+1,0] - filtered_means[t,0]) < 0.00000001:
+                    stationary_mean = True
+
+            if not stationary_cov:
+                updateK(filtered_covs[t+1, :, :], params, tmp)
+                filtered_covs[t+1, 0, 0] += sigma2
+                if np.abs(filtered_covs[t+1,0,0] - filtered_covs[t,0,0]) < 0.00000000000001:
+                    stationary_cov = True
+        else:
+            # temporarily put the k|k values into the k+1|k slots
+            stationary_mean = False
+            stationary_cov = False
+            update_obs(filtered_means[t,:], filtered_covs[t, :, :], filtered_means[t+1,:], filtered_covs[t+1, :, :], x[t])
+
+            update_u(filtered_means[t+1,:], params)
+            updateK(filtered_covs[t+1, :, :], params, tmp)
+
+            filtered_covs[t+1, 0, 0] += sigma2
+
+
+    return filtered_means, filtered_covs
+
 def filter_AR_stupid(x, mask, model):
     """
     Compute filtering distribution for a partially-observed AR process
@@ -87,6 +141,24 @@ def updateK(K, params, tmp):
         for j in range(1, n_p):
             K[j,i] = tmp[j-1,i]
 
+def updateKtrans(K, params, tmp):
+    # given covariance K, compute
+    # A^TKA
+
+    n_p = len(params)
+    # tmp = K * A
+    for i in range(n_p):
+        for j in range(0, n_p):
+            tmp[i,j] = params[j] * K[i,0]
+        for j in range(0, n_p-1):
+            tmp[i,j] += K[i, j+1]
+
+    # K = A.T * tmp
+    for j in range(0, n_p):
+        for i in range(n_p):
+            K[i,j] = tmp[0,j] * params[i]
+        for i in range(n_p-1):
+            K[i,j] += tmp[i+1,j]
 
 
 def smooth_AR_stupid(x, mask, model, filtered_means, filtered_covs, i_end):
@@ -140,11 +212,10 @@ def smooth_AR_stupid(x, mask, model, filtered_means, filtered_covs, i_end):
 
 def update_Lambda_hat(Lambda_hat, Lambda_squiggle, params):
     # given Lambda_squiggle[k], compute Lambda_hat[k-1]
+    Lambda_hat[:,:] =  Lambda_squiggle
+    updateKtrans(Lambda_hat, params, Lambda_squiggle)
 
-    #Lambda_hat[:,:] = Lambda_squiggle.T[:,:]
-    #updateK(Lambda_hat, params, Lambda_squiggle)
-    #Lambda_hat[:,:] = Lambda_hat.T[:,:]
-
+def update_Lambda_hat_stupid(Lambda_hat, Lambda_squiggle, params):
     A = np.zeros((len(params), len(params)))
     A[0,:] = params
     A[1:, 0:-1] = np.eye(len(params)-1)
@@ -218,7 +289,18 @@ def smooth_mean(filtered_mean, filtered_cov, lambda_squiggle):
     filtered_mean -= np.dot(filtered_cov, lambda_squiggle)
 
 def smooth_cov_functional(filtered_cov, Lambda_squiggle):
-    return filtered_cov - np.dot(filtered_cov,np.dot(Lambda_squiggle, filtered_cov))
+    a = filtered_cov - np.dot(filtered_cov,np.dot(Lambda_squiggle, filtered_cov))
+
+    """
+    print "smooth cov. given filtered cov"
+    print filtered_cov
+    print " and squiggle"
+    print Lambda_squiggle
+    print " got smoothed cov"
+    print a
+
+    """
+    return a
 
 def smooth_mean_functional(filtered_mean, filtered_cov, lambda_squiggle):
     return filtered_mean - np.dot(filtered_cov, lambda_squiggle)

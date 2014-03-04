@@ -12,6 +12,11 @@ import re
 from sigvisa import Sigvisa
 from sigvisa.models.latent_arrival import LatentArrivalNode
 
+import scipy.weave as weave
+from scipy.weave import converters
+
+
+
 from sigvisa.infer.ar_smoothing_stupid import *
 
     # when we do a gibbs sweep, we'll be updating everything online. so once we change an x_i, that will change the filtered predictions and residuals for the p steps past that. one approach is still to precompute all the predictions and residuals, then just update them by adding/subtracting the appropriate weight whenever we make a change. this way we do p floating point operations whenever we change a value, as opposed to doing p^2 operations every time we need to compute updated predictions and residuals for a new index (since we have to compute predictions p steps in the future, and each of those depends on its p predecessors).
@@ -31,7 +36,7 @@ from sigvisa.infer.ar_smoothing_stupid import *
     # we do this for a full forward sweep over y, then a backward sweep.
 
 
-def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=False, target_signal=None):
+def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
     child_wn = list(latent.children)[0]
@@ -54,7 +59,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=Fal
     clipped_x_start_idx = max(padded_x_start_idx, 0)
     clipped_x_end_idx = min(padded_x_end_idx, len(shape))
 
-    i_start = gibbs_start_idx - clipped_x_start_idx
+    i_start = gibbs_start_idx - clipped_x_start_idx + 1
     i_end = gibbs_end_idx - clipped_x_start_idx
 
     if i_end > clipped_x_end_idx:
@@ -63,6 +68,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=Fal
     x = np.ones((clipped_x_end_idx - clipped_x_start_idx,))
     end_copy_idx = min(clipped_x_end_idx, len(empirical_wiggle))
     x[:end_copy_idx-clipped_x_start_idx] = empirical_wiggle[clipped_x_start_idx:end_copy_idx]
+    x[0] = 1.0
     shape = shape[clipped_x_start_idx:clipped_x_end_idx]
     repeatable = repeatable[clipped_x_start_idx:clipped_x_end_idx]
 
@@ -120,10 +126,10 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, mask_unsampled=Fal
 
     return x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, model_x, model_y, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end
 
-def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, target_signal=None, mask_unsampled=False, debug=False):
+def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None, debug=False, stationary=False):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
-    x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, mask_unsampled=mask_unsampled, target_signal=target_signal)
+    x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, target_signal=target_signal)
 
     # alignments:
     #
@@ -164,8 +170,15 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
     y_mask = np.copy(obs_mask)
     y_mask[i_start+yx_offset:i_end+yx_offset] = True
 
-    x_filtered_means, x_filtered_covs = filter_AR_stupid(x, x_mask, x_model)
-    y_filtered_means, y_filtered_covs = filter_AR_stupid(y, y_mask, y_model)
+    seed = np.random.randint(0, sys.maxint)
+
+    if stationary:
+        x_filtered_means, x_filtered_covs = filter_AR_stationary(x, x_mask, x_model)
+        y_filtered_means, y_filtered_covs = filter_AR_stationary(y, y_mask, y_model)
+    else:
+        x_filtered_means, x_filtered_covs = filter_AR_stupid(x, x_mask, x_model)
+        y_filtered_means, y_filtered_covs = filter_AR_stupid(y, y_mask, y_model)
+
 
     x_lambda_hat, x_lambda_squiggle, x_Lambda_hat, x_Lambda_squiggle = smooth_AR_stupid(x, x_mask, x_model, x_filtered_means, x_filtered_covs, i_end)
     y_lambda_hat, y_lambda_squiggle, y_Lambda_hat, y_Lambda_squiggle = smooth_AR_stupid(x, y_mask, y_model, y_filtered_means, y_filtered_covs, i_end+yx_offset)
@@ -195,7 +208,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
 
 
         if not have_target:
-            r  = np.random.randn()
+            r  = c_randn(i)
             new_xi = r / np.sqrt(combined_posterior_precision) + combined_posterior_mean
         else:
             new_xi = target_wiggle[i-i_start]
@@ -227,7 +240,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
             y_Lambda_squiggle[:,:] = y_Lambda_hat
 
         if debug:
-            print "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f" % (i, x_filtered_means[i,0], x_filtered_covs[i,0,0], y_filtered_means[i+yx_offset, 0], y_filtered_covs[i+yx_offset,0,0], smoothed_mean_x[0], smoothed_cov_x[0,0], smoothed_mean_y[0], smoothed_cov_y[0,0], combined_posterior_mean, 1.0/combined_posterior_precision)
+            print "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f sampled_x %f sampled_y %f" % (i, x_filtered_means[i,0], x_filtered_covs[i,0,0], y_filtered_means[i+yx_offset, 0], y_filtered_covs[i+yx_offset,0,0], smoothed_mean_x[0], smoothed_cov_x[0,0], smoothed_mean_y[0], smoothed_cov_y[0,0], combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi)
         if np.isnan(combined_posterior_mean) or smoothed_cov_x[0,0] < 0 or smoothed_cov_y[0,0] < 0 or 1.0/combined_posterior_precision < 0:
             raise Exception('something fucked up')
 
@@ -236,6 +249,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
         update_lambda_hat(x_lambda_hat, x_lambda_squiggle, x_params)
         update_Lambda_hat(y_Lambda_hat, y_Lambda_squiggle, y_params)
         update_lambda_hat(y_lambda_hat, y_lambda_squiggle, y_params)
+
 
     x += x_model.c
 
@@ -247,3 +261,33 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, reverse=False, targ
         else:
             latent.set_nonrepeatable_wiggle(x, shape_env=shape, repeatable_wiggle=repeatable, start_idx=clipped_x_start_idx)
     return sample_lp
+
+
+def c_randn(seed):
+    code = "srand(seed); return_val = randn();"
+
+    support = """
+#include <stdio.h>
+#include <time.h>
+#include <cmath>
+#include <stdlib.h>
+
+double randn()
+{
+        float x1, x2, w, y1;
+        do
+        {
+                x1 = 2.0 * (double)rand()/RAND_MAX - 1.0;
+                x2 = 2.0 * (double)rand()/RAND_MAX - 1.0;
+                w = x1 * x1 + x2 * x2;
+        } while ( w >= 1.0 );
+
+        w = sqrt( (-2.0 * log( w ) ) / w );
+        y1 = x1 * w;
+        return y1;
+}
+"""
+
+    return weave.inline(code, ['seed'],
+                        type_converters=converters.blitz,
+                        support_code=support, compiler='gcc')

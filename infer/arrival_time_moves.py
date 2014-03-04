@@ -9,7 +9,7 @@ import time
 
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.latent_arrival_mcmc_stupid import gibbs_sweep_python
+from sigvisa.infer.latent_arrival_mcmc_c import gibbs_sweep_c
 from sigvisa.graph.graph_utils import create_key,parse_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
@@ -156,7 +156,7 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
 ######################################################################
 
 
-
+"""
 def shift_and_propose_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposal, relevant_nodes):
     lp_old = sg.joint_logprob_keys(relevant_nodes)
     old_latent = np.copy(n_latent.get_value())
@@ -164,44 +164,61 @@ def shift_and_propose_latent_signal(sg, n_latent, n_atime, old_atime, atime_prop
     old_wiggle, old_shape, old_repeatable = n_latent.get_signal_components()
     atime_shift_s = atime_proposal - old_atime
     atime_shift_idx = int(np.abs(atime_shift_s * n_latent.srate))
-    shifted_wiggle = np.ones(old_wiggle.shape)
+
+    resample_padding_idx = min(int(3 * n_latent.srate), n - atime_shift_idx)
+
+    shifted_latent = np.zeros(old_latent.shape)
     if atime_shift_s > 0:
         # new atime is later than old atime
 
         # first compute the reverse probability of resampling the old wiggle
 
         # TODO: do we have to set the backshifted wiggle at all?
-        backshifted_wiggle = np.ones(old_wiggle.shape)
-        backshifted_wiggle[atime_shift_idx:] = old_wiggle[atime_shift_idx:]
-        n_latent.set_nonrepeatable_wiggle(backshifted_wiggle)
-        reverse_lp = gibbs_sweep_python(n_latent, start_idx=0, end_idx=atime_shift_idx, reverse=True, target_signal=old_latent[:atime_shift_idx], mask_unsampled=True)
+        backshifted_latent = np.ones(old_latent.shape)
+        backshifted_latent[atime_shift_idx:] = old_latent[atime_shift_idx:]
+        n_latent.set_value(backshifted_latent)
+        reverse_lp = gibbs_sweep_python(n_latent, start_idx=0, end_idx=atime_shift_idx+resample_padding_idx, reverse=True, target_signal=old_latent[:atime_shift_idx], mask_unsampled=True)
 
 
         n_atime.set_value(atime_proposal)
-        shifted_wiggle[:-atime_shift_idx] = old_wiggle[atime_shift_idx:]
-        n_latent.set_nonrepeatable_wiggle(shifted_wiggle)
-        resample_lp = gibbs_sweep_python(n_latent, start_idx=n-atime_shift_idx, end_idx=n, reverse=False, mask_unsampled=True)
+        shifted_latent[:-atime_shift_idx] = old_latent[atime_shift_idx:]
+        n_latent.set_value(shifted_latent)
+        resample_lp = gibbs_sweep_python(n_latent, start_idx=n-atime_shift_idx-resample_padding_idx, end_idx=n, reverse=False, mask_unsampled=True)
         lp_new = sg.joint_logprob_keys(relevant_nodes)
 
     else:
         # new atime is earlier than old atime
 
-        backshifted_wiggle = np.ones(old_wiggle.shape)
-        backshifted_wiggle[:-atime_shift_idx] = old_wiggle[:-atime_shift_idx]
-        n_latent.set_nonrepeatable_wiggle(backshifted_wiggle)
-        print len(old_latent[-atime_shift_idx:])
-        print atime_shift_idx
-        reverse_lp = gibbs_sweep_python(n_latent, start_idx=n-atime_shift_idx, end_idx=n, reverse=False, target_signal=old_latent[-atime_shift_idx:], mask_unsampled=True)
+        backshifted_latent = np.zeros(old_wiggle.shape)
+        backshifted_latent[:-atime_shift_idx] = old_wiggle[:-atime_shift_idx]
+        n_latent.set_value(backshifted_latent)
+        reverse_lp = gibbs_sweep_python(n_latent, start_idx=n-atime_shift_idx-resample_padding_idx, end_idx=n, reverse=False, target_signal=old_latent[-atime_shift_idx-resample_padding_idx:], mask_unsampled=True)
 
         n_atime.set_value(atime_proposal)
-        shifted_wiggle[atime_shift_idx:] = old_wiggle[:-atime_shift_idx]
-        n_latent.set_nonrepeatable_wiggle(shifted_wiggle)
+        shifted_latent[atime_shift_idx:] = old_latent[:-atime_shift_idx]
+        n_latent.set_value(shifted_latent)
 
-        if atime_proposal < 1243213492:
-            resample_lp = gibbs_sweep_python(n_latent, start_idx=0, end_idx=atime_shift_idx, reverse=True, mask_unsampled=True, debug=True)
-        else:
-            resample_lp = gibbs_sweep_python(n_latent, start_idx=0, end_idx=atime_shift_idx, reverse=True, mask_unsampled=True)
+        resample_lp = gibbs_sweep_python(n_latent, start_idx=0, end_idx=atime_shift_idx+resample_padding_idx, reverse=True, mask_unsampled=True)
         lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    return old_latent, resample_lp, reverse_lp, lp_old, lp_new
+"""
+def repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposal, relevant_nodes):
+
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
+    old_latent = np.copy(n_latent.get_value())
+    n = len(old_latent)
+
+    atime_shift_s = atime_proposal - old_atime
+    atime_shift_idx = int(np.abs(atime_shift_s * n_latent.srate))
+
+
+    # first compute the reverse probability of resampling the old wiggle
+    reverse_lp = gibbs_sweep_c(n_latent, target_signal=old_latent)
+
+    n_atime.set_value(atime_proposal)
+    resample_lp = gibbs_sweep_c(n_latent)
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
 
     return old_latent, resample_lp, reverse_lp, lp_old, lp_new
 
@@ -303,7 +320,7 @@ def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
     #                                                                      k_atime, n_atime,
     #                                                                      old_atime, atime_proposal)
     #relevant_nodes += rn_tmp
-    old_latent, resample_lp, reverse_lp, lp_old, lp_new = shift_and_propose_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposal, relevant_nodes)
+    old_latent, resample_lp, reverse_lp, lp_old, lp_new = repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposal, relevant_nodes)
 
     # do MH acceptance
     u = np.random.rand()
@@ -312,8 +329,6 @@ def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
         return True
     else:
         print "atime move FAIL:", atime_proposal, old_atime, lp_new, lp_old, reverse_lp, resample_lp, (lp_new + reverse_lp) - (lp_old + resample_lp)
-        if atime_proposal < 1243213492:
-            raise Exception('failed proposal')
         keys = [k_atime, k_latent]
         node_list = [n_atime, n_latent]
         oldvalues = [old_atime, old_latent]
