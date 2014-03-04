@@ -61,8 +61,8 @@ class LatentArrivalNode(Node):
         #self.parent_keys_changed.update(parent_tmpls_tmp, parent_wiggles_tmp)
 
         # TEMPORARY HACK until I actually figure out how to train the AR wiggle models
-        em = ErrorModel(mean=0.0, std=0.03)
-        self.arwm = ARModel(params=(.2,), c=1.0, em = em, sf=self.srate)
+        em = ErrorModel(mean=0.0, std=0.001)
+        self.arwm = ARModel(params=(.7,.2,), c=1.0, em = em, sf=self.srate)
 
     def parent_predict(self):
         self.set_value(self._predict_value())
@@ -194,7 +194,23 @@ class LatentArrivalNode(Node):
                 continue
 
         if tmpl_changed:
+
             self._tmpl_shape_cache = np.exp(self._recompute_cached_logenv())
+
+
+            ew = self._empirical_wiggle_cache
+
+            # keep the node value at the same length as the predicted shape
+            v = self.get_value()
+            v_len = len(v) if v is not None else 0
+            new_tmpl_len = len(self._tmpl_shape_cache)
+            if v_len > new_tmpl_len:
+                self._dict[self.single_key] = v[:new_tmpl_len]
+            elif v_len < new_tmpl_len:
+                new_v = np.zeros((new_tmpl_len,))
+                new_v[:v_len] = v
+                new_v[v_len:] = self._tmpl_shape_cache[v_len:]
+                self._dict[self.single_key] = new_v
         if wiggle_changed or len(self._repeatable_wiggle_cache) == 0:
             self._repeatable_wiggle_cache = self._recompute_cached_wiggle()
         if tmpl_changed or wiggle_changed or force_update_wiggle:

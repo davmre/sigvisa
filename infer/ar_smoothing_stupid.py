@@ -191,16 +191,7 @@ def smooth_AR_stupid(x, mask, model, filtered_means, filtered_covs, i_end):
         #m1 = filtered_means[t,0]
         #v1 = filtered_covs[t,0,0]
         smooth_mean(filtered_means[t,:], filtered_covs[t,:,:], lambda_squiggle)
-
-        print "***********\nsmoothing cov %d" % t
-        print filtered_covs[t,:,:]
-        print Lambda_squiggle
-
-
         smooth_cov(filtered_covs[t,:,:], Lambda_squiggle)
-
-        print filtered_covs[t,:,:]
-        print "************"
 
         #print '%d: filtered mean %f, observed %f, smoothed mean %f' % (t, m1, x[t], filtered_means[t,0])
         #print '%d: filtered cov %f, smoothed cov %f' % (t, v1, filtered_covs[t,0,0])

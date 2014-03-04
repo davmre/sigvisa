@@ -125,7 +125,7 @@ def prepare_gibbs_sweep(latent, start_idx=None, end_idx=None, target_signal=None
 
     return x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, model_x, model_y, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end
 
-def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debug=False, stationary=False):
+def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debug=False):
     # see 'sigvisa scratch' from feb 5, 2014 for a derivation of some of this.
 
     x, y, obs_mask, shape, repeatable, observed_nonrepeatable, latent_offset, x_model, y_model, have_target, target_wiggle, clipped_x_start_idx, yx_offset, i_start, i_end = prepare_gibbs_sweep(latent, start_idx=start_idx, end_idx=end_idx, target_signal=target_signal)
@@ -176,7 +176,9 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     x_mask[i_end:] = False
 
     y_mask = np.copy(obs_mask)
-    y_mask[i_start+yx_offset:i_end+yx_offset] = True
+    y_mask_start = max(i_start+yx_offset, 0)
+    y_mask_end = max(i_end+yx_offset, 0)
+    y_mask[y_mask_start:y_mask_end] = True
 
     x_n = len(x)
     x_filtered_means = np.zeros((x_n, x_np))
@@ -211,7 +213,7 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
     filter_AR(y, y_mask, y_params, y_var, y_filtered_means, y_filtered_covs, smoothed_cov_y);
 
     smooth_AR(x, x_mask, x_params, x_filtered_means, x_filtered_covs, i_end, x_lambda_hat, x_Lambda_hat, x_lambda_squiggle, x_Lambda_squiggle, smoothed_cov_x);
-    smooth_AR(x, y_mask, y_params, y_filtered_means, y_filtered_covs, i_end+yx_offset, y_lambda_hat, y_Lambda_hat, y_lambda_squiggle, y_Lambda_squiggle, smoothed_cov_y);
+    smooth_AR(y, y_mask, y_params, y_filtered_means, y_filtered_covs, i_end+yx_offset, y_lambda_hat, y_Lambda_hat, y_lambda_squiggle, y_Lambda_squiggle, smoothed_cov_y);
 
     double sample_lp = 0.9189385332 * (i_end-i_start);
     double combined_posterior_mean, combined_posterior_precision;
@@ -224,8 +226,8 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
         smooth_cov(x_filtered_covs, i, x_Lambda_hat, x_Lambda_squiggle, smoothed_cov_x);
 
 
-
-        if (i+yx_offset < len_obs_mask && !obs_mask(i+yx_offset)) {
+        bool observed_y = i+yx_offset < len_obs_mask && i+yx_offset >= 0 && !obs_mask(i+yx_offset);
+        if (observed_y) {
 
             smooth_mean(y_filtered_means, y_filtered_covs, i+yx_offset, y_lambda_hat, smoothed_mean_y);
             smooth_cov(y_filtered_covs, i+yx_offset, y_Lambda_hat, y_Lambda_squiggle, smoothed_cov_y);
@@ -254,7 +256,7 @@ def gibbs_sweep_c(latent, start_idx=None, end_idx=None, target_signal=None, debu
         update_Lambda_squiggle(x_Lambda_hat, x_Lambda_squiggle, x_filtered_covs, i);
         update_lambda_squiggle(x_lambda_hat, x_lambda_squiggle, x_filtered_covs, i, new_xi - x_filtered_means(i,0));
         double new_yi = -999;
-        if (i+yx_offset < len_obs_mask && !obs_mask(i+yx_offset) ) {
+        if (observed_y) {
             new_yi = observed_nonrepeatable(i) - shape(i)*new_xi;
             y(i+yx_offset) = new_yi;
 

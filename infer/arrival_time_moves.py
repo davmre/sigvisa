@@ -9,8 +9,9 @@ import time
 
 from sigvisa import Sigvisa
 from sigvisa.infer.mcmc_basic import get_node_scales, gaussian_propose, gaussian_MH_move, MH_accept
-from sigvisa.infer.latent_arrival_mcmc_c import gibbs_sweep_c
+from sigvisa.infer.autoregressive_mcmc import gibbs_sweep
 from sigvisa.graph.graph_utils import create_key,parse_key
+from sigvisa.models.signal_model import extract_arrival_from_key
 from sigvisa.graph.dag import get_relevant_nodes
 from sigvisa.plotting.plot import savefig, plot_with_fit, plot_waveform
 
@@ -58,7 +59,11 @@ envelope at each point.
 
 def preprocess_signal_for_sampling(wave_env):
 
-    d = wave_env**2
+    d = wave_env**4
+
+    np.savetxt("wave_env.txt", wave_env)
+    np.savetxt("d.txt", d)
+
     """
     # sample locations where the envelope is increasing, relative to how fast it's increasing
     grad = np.gradient(wave_env)
@@ -96,17 +101,23 @@ def peak_log_p(cdf, stime, srate, peak_time):
 
 def get_signal_diff_positive_part(wave_node, arrival_set):
     value = wave_node.get_value().data
+    mask = wave_node.get_value().mask
+
     pred_signal = wave_node.assem_signal(arrivals=arrival_set, include_wiggles=False)
 
     npts = wave_node.npts
     signal_diff_pos = wave_node.signal_diff
     code = """
 for(int i=0; i < npts; ++i) {
-double v = fabs(value(i)) - fabs(pred_signal(i));
-signal_diff_pos(i) = v > 0 ? v : 0;
+  if (mask(i)) {
+      signal_diff_pos(i) = 0;
+  }  else {
+    double v = fabs(value(i)) - fabs(pred_signal(i));
+    signal_diff_pos(i) = v > 0 ? v : 0;
+  }
 }
 """
-    weave.inline(code,['npts', 'signal_diff_pos', 'value', 'pred_signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
+    weave.inline(code,['npts', 'signal_diff_pos', 'value', 'mask', 'pred_signal'],type_converters = converters.blitz,verbose=2,compiler='gcc')
     return signal_diff_pos
 
 def get_current_conditional_cdf(wave_node, arrival_set):
@@ -127,7 +138,9 @@ def sample_peak_time_from_signal(cdf, stime, srate, return_lp=False):
 def indep_peak_move(sg, wave_node, tmnodes, std=None):
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
-    relevant_nodes = [wave_node,]
+    k_latent, n_latent = tmnodes['latent_arrival']
+
+    relevant_nodes = [wave_node,n_latent]
     relevant_nodes += [arrival_node.parents[arrival_node.default_parent_key()],] if arrival_node.deterministic() else [arrival_node,]
 
     arr = extract_arrival_from_key(arrival_key, wave_node.r)
@@ -143,17 +156,69 @@ def indep_peak_move(sg, wave_node, tmnodes, std=None):
     backward_propose_lp = peak_log_p(cdf, wave_node.st,
                                      wave_node.srate,
                                      peak_time = current_atime + peak_offset)
-
     proposed_arrival_time = proposed_peak_time - peak_offset
-    return MH_accept(sg, keys=(arrival_key,),
-                     oldvalues = (current_atime,),
-                     newvalues = (proposed_arrival_time,),
-                     log_qforward = proposal_lp,
-                     log_qbackward = backward_propose_lp,
-                     node_list = (arrival_node,),
-                     relevant_nodes = relevant_nodes)
+
+    print "current peak", current_atime+peak_offset, "proposed peak", proposed_peak_time, "atime", proposed_arrival_time
+
+    old_latent, resample_lp, reverse_lp, lp_old, lp_new = repropose_full_latent_signal(sg, n_latent, arrival_node, current_atime, proposed_arrival_time, relevant_nodes)
+
+    reverse_lp += backward_propose_lp
+    resample_lp += proposal_lp
+
+    # do MH acceptance
+    u = np.random.rand()
+    if (lp_new + reverse_lp) - (lp_old + resample_lp) > np.log(u):
+        return True
+    else:
+        keys = [arrival_key, k_latent]
+        node_list = [arrival_node, n_latent]
+        oldvalues = [current_atime, old_latent]
+        for (key, val, n) in zip(keys, oldvalues, node_list):
+            n.set_value(key=key, value=val)
+        return False
+
 
 ######################################################################
+
+def resample_initial_latent(sg, n_latent, n_atime, n_offset, peak_time, exp_old_offset, offset_proposal, relevant_nodes):
+
+    # we need to know the peak time, and the old/new peak offsets
+
+
+    lp_old = sg.joint_logprob_keys(relevant_nodes)
+    old_latent = np.copy(n_latent.get_value())
+
+    resample_padding = 2 * n_latent.srate
+    old_onset_npts = int(exp_old_offset * n_latent.srate)
+
+    # first we compute the resample probability of the current *onset period*
+    reverse_lp = gibbs_sweep(n_latent, start_idx=0, end_idx =old_onset_npts+resample_padding, target_signal=old_latent[:old_onset_npts+resample_padding])
+
+    # now we shift the signal by the amount of the change in
+    # offsets. this will get us a new latent signal that matches the
+    # existing signal exactly, except for the onset period
+
+    exp_proposal = np.exp(offset_proposal)
+
+    delta_offset_s = exp_proposal - exp_old_offset
+    delta_offset_npts = int(delta_offset_s * n_latent.srate)
+
+    decay_npts = int(len(old_latent) - old_onset_npts)
+    shifted_npts = len(old_latent) + delta_offset_npts
+
+    shifted_latent = np.zeros((shifted_npts,))
+    shifted_latent[-decay_npts:] = old_latent[-decay_npts:]
+    n_latent.set_value(shifted_latent)
+
+    n_atime.set_value(peak_time - exp_proposal)
+    n_offset.set_value(offset_proposal)
+
+    # then we resample the onset period.
+    resample_lp = gibbs_sweep(n_latent, start_idx=0, end_idx=int(shifted_npts-decay_npts)+resample_padding)
+
+    lp_new = sg.joint_logprob_keys(relevant_nodes)
+
+    return old_latent, resample_lp, reverse_lp, lp_old, lp_new
 
 
 """
@@ -203,6 +268,7 @@ def shift_and_propose_latent_signal(sg, n_latent, n_atime, old_atime, atime_prop
 
     return old_latent, resample_lp, reverse_lp, lp_old, lp_new
 """
+
 def repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposal, relevant_nodes):
 
     lp_old = sg.joint_logprob_keys(relevant_nodes)
@@ -214,10 +280,10 @@ def repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposa
 
 
     # first compute the reverse probability of resampling the old wiggle
-    reverse_lp = gibbs_sweep_c(n_latent, target_signal=old_latent)
+    reverse_lp = gibbs_sweep(n_latent, target_signal=old_latent)
 
     n_atime.set_value(atime_proposal)
-    resample_lp = gibbs_sweep_c(n_latent)
+    resample_lp = gibbs_sweep(n_latent)
     lp_new = sg.joint_logprob_keys(relevant_nodes)
 
     return old_latent, resample_lp, reverse_lp, lp_old, lp_new
@@ -226,7 +292,8 @@ def repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposa
 
 #################################################################
 
-
+# maybe bring this back when we re-introduce repeatable wiggles
+"""
 def update_wiggle_submove(sg, wave_node, tmnodes, atime_key,
                           atime_node, old_atime, new_atime):
     # this function factors out the common bit of improve_offset_move
@@ -259,13 +326,14 @@ def update_wiggle_submove(sg, wave_node, tmnodes, atime_key,
     newvalues = [new_atime,] + wiggle_vals_new[d2:]
 
     return relevant_nodes, node_list, keys, oldvalues, newvalues
+"""
+
 
 def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
     """
     Update the peak_offset while leaving the peak time constant, i.e.,
     adjust the arrival time to compensate for the change in offset.
     """
-
 
     arrival_key, arrival_node = tmnodes['arrival_time']
     offset_key, offset_node = tmnodes['peak_offset']
@@ -276,12 +344,14 @@ def improve_offset_move(sg, wave_node, tmnodes, std=0.5, **kwargs):
     print "WARNING: BROKEN relevant_nodes in improve_offset_move"
 
     current_offset = offset_node.get_value(key=offset_key)
+    exp_offset = np.exp(current_offset)
     atime = arrival_node.get_value(key=arrival_key)
     proposed_offset = gaussian_propose(sg, keys=(offset_key,),
                                        node_list=(offset_node,),
                                        values=(current_offset,),
                                        std=std, **kwargs)[0]
-    new_atime = atime + (current_offset - np.exp(proposed_offset))
+    exp_proposed = np.exp(proposed_offset)
+    new_atime = atime + (exp_offset - exp_proposed)
 
     rn_tmp, node_list, keys, oldvalues, newvalues = update_wiggle_submove(sg, wave_node, tmnodes,
                                                                           arrival_key, arrival_node,
@@ -316,50 +386,17 @@ def improve_atime_move(sg, wave_node, tmnodes, std=1.0, **kwargs):
                                             values=(values), std=std,
                                             **kwargs))
 
-    #rn_tmp, node_list, keys, oldvalues, newvalues = update_wiggle_submove(sg, wave_node, tmnodes,
-    #                                                                      k_atime, n_atime,
-    #                                                                      old_atime, atime_proposal)
-    #relevant_nodes += rn_tmp
+
     old_latent, resample_lp, reverse_lp, lp_old, lp_new = repropose_full_latent_signal(sg, n_latent, n_atime, old_atime, atime_proposal, relevant_nodes)
 
     # do MH acceptance
     u = np.random.rand()
     if (lp_new + reverse_lp) - (lp_old + resample_lp) > np.log(u):
-        print "atime move SUCCESS:", atime_proposal, old_atime, lp_new, lp_old, reverse_lp, resample_lp, (lp_new + reverse_lp) - (lp_old + resample_lp)
         return True
     else:
-        print "atime move FAIL:", atime_proposal, old_atime, lp_new, lp_old, reverse_lp, resample_lp, (lp_new + reverse_lp) - (lp_old + resample_lp)
         keys = [k_atime, k_latent]
         node_list = [n_atime, n_latent]
         oldvalues = [old_atime, old_latent]
         for (key, val, n) in zip(keys, oldvalues, node_list):
             n.set_value(key=key, value=val)
         return False
-
-
-
-#just for debugging
-"""
-def do_atime_move(sg, wave_node, tmnodes, atime_offset):
-    k_atime, n_atime = tmnodes['arrival_time']
-    eid, phase, sta, chan, band, param = parse_key(k_atime)
-
-    # propose a new arrival time
-    relevant_nodes = [wave_node,]
-    parent = n_atime.parents[n_atime.default_parent_key()]
-    relevant_nodes.append(parent)
-    old_atime = n_atime.get_value(k_atime)
-    values = (old_atime,)
-    atime_proposal = old_atime + atime_offset
-
-    # adjust wiggles for that new time
-    wg = sg.wiggle_generator(phase, wave_node.srate)
-    wnodes = [(p, tmnodes[p]) for p in wg.params()]
-    wiggle_vals = [n.get_value(k) for (p, (k,n)) in wnodes]
-    wiggle_vals_new = np.array(wiggle_vals, copy=True)
-    wg.timeshift_param_array(wiggle_vals_new, atime_offset)
-
-    for (i, (p, (k, n))) in enumerate(wnodes):
-        n.set_value(key=k, value=wiggle_vals_new[i])
-    n_atime.set_value(key=k_atime, value=atime_proposal)
-"""

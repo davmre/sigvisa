@@ -168,7 +168,10 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
     x_mask[i_end:] = False
 
     y_mask = np.copy(obs_mask)
-    y_mask[i_start+yx_offset:i_end+yx_offset] = True
+
+    y_mask_start = max(i_start+yx_offset, 0)
+    y_mask_end = max(i_end+yx_offset, 0)
+    y_mask[y_mask_start:y_mask_end] = True
 
     seed = np.random.randint(0, sys.maxint)
 
@@ -181,7 +184,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
 
 
     x_lambda_hat, x_lambda_squiggle, x_Lambda_hat, x_Lambda_squiggle = smooth_AR_stupid(x, x_mask, x_model, x_filtered_means, x_filtered_covs, i_end)
-    y_lambda_hat, y_lambda_squiggle, y_Lambda_hat, y_Lambda_squiggle = smooth_AR_stupid(x, y_mask, y_model, y_filtered_means, y_filtered_covs, i_end+yx_offset)
+    y_lambda_hat, y_lambda_squiggle, y_Lambda_hat, y_Lambda_squiggle = smooth_AR_stupid(y, y_mask, y_model, y_filtered_means, y_filtered_covs, i_end+yx_offset)
 
     x_np = len(x_params)
     y_np = len(y_params)
@@ -195,7 +198,9 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
         smoothed_mean_x = smooth_mean_functional(x_filtered_means[i,:], x_filtered_covs[i,:,:], x_lambda_hat)
         smoothed_cov_x = smooth_cov_functional(x_filtered_covs[i,:,:], x_Lambda_hat)
 
-        if i+yx_offset < len(obs_mask) and not obs_mask[i+yx_offset]:
+        observed_y = i+yx_offset < len(obs_mask) and i+yx_offset >= 0 and not obs_mask[i+yx_offset]
+
+        if observed_y:
 
             smoothed_mean_y = smooth_mean_functional(y_filtered_means[i+yx_offset,:], y_filtered_covs[i+yx_offset,:,:], y_lambda_hat)
             smoothed_cov_y = smooth_cov_functional(y_filtered_covs[i+yx_offset,:,:], y_Lambda_hat)
@@ -227,7 +232,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
         update_Lambda_squiggle(x_Lambda_hat, x_Lambda_squiggle, x_filtered_covs[i,:,:])
         update_lambda_squiggle(x_lambda_hat, x_lambda_squiggle, x_filtered_covs[i,:,:], new_xi - x_filtered_means[i,0])
 
-        if i+yx_offset < len(obs_mask) and not obs_mask[i+yx_offset]:
+        if observed_y:
             # we want y = obs - rw*shape - x*shape - y_model.c
             # and we have obs_nonrepeatable = (obs - y_model.c) - shape*(repeatable wiggle + model_x.c)
             new_yi = observed_nonrepeatable[i] - shape[i]*new_xi;
@@ -241,7 +246,7 @@ def gibbs_sweep_python(latent, start_idx=None, end_idx=None, target_signal=None,
 
         if debug:
             print "time %d filtered_mean_x %f filtered_cov_x %f filtered_mean_y %f filtered_cov_y %f mean_x %f cov_x %f mean_y %f cov_y %f mean_combined %f cov_combined %f sampled_x %f sampled_y %f" % (i, x_filtered_means[i,0], x_filtered_covs[i,0,0], y_filtered_means[i+yx_offset, 0], y_filtered_covs[i+yx_offset,0,0], smoothed_mean_x[0], smoothed_cov_x[0,0], smoothed_mean_y[0], smoothed_cov_y[0,0], combined_posterior_mean, 1.0/combined_posterior_precision, new_xi, new_yi)
-        if np.isnan(combined_posterior_mean) or smoothed_cov_x[0,0] < 0 or smoothed_cov_y[0,0] < 0 or 1.0/combined_posterior_precision < 0:
+        if np.isnan(combined_posterior_mean) or smoothed_cov_x[0,0] < 0 or smoothed_cov_y[0,0] < 0 or 1.0/combined_posterior_precision < 0 or np.abs(new_xi) > 1e80 or np.abs(new_yi) > 1e80:
             raise Exception('something fucked up')
 
 

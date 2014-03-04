@@ -18,6 +18,7 @@ from sigvisa.infer.event_mcmc import ev_move
 from sigvisa.infer.mcmc_logger import MCMCLogger
 from sigvisa.infer.template_mcmc import split_move, merge_move, birth_move, death_move, swap_association_move
 from sigvisa.infer.arrival_time_moves import indep_peak_move, improve_offset_move, improve_atime_move
+from sigvisa.infer.autoregressive_mcmc import wiggle_param_step, latent_arrival_block_gibbs
 from sigvisa.plotting.plot import plot_with_fit, plot_with_fit_shapes
 from sigvisa.utils.fileutils import clear_directory, mkdir_p, next_unused_int_in_dir
 
@@ -101,6 +102,8 @@ def run_open_world_MH(sg, steps=10000,
                       enable_template_moves=True,
                       logger=None,
                       disable_moves=[],
+                      enable_moves = [],
+                      extra_moves=[],
                       start_step=0):
     global_moves = {'event_birth': ev_birth_move,
                     'event_death': ev_death_move} if enable_event_openworld else {}
@@ -118,7 +121,10 @@ def run_open_world_MH(sg, steps=10000,
 
     template_moves_special = {'indep_peak': indep_peak_move,
                               'peak_offset': improve_offset_move,
-                              'arrival_time': improve_atime_move} if enable_template_moves else {}
+                              'arrival_time': improve_atime_move,
+                              'latent_arrival': latent_arrival_block_gibbs} if enable_template_moves else {}
+
+    optional_moves = {'ar_wiggle': (template_moves_special, wiggle_param_step)}
 
     # allow the caller to disable specific moves by name
     for move in disable_moves:
@@ -127,6 +133,11 @@ def run_open_world_MH(sg, steps=10000,
                 del move_type[move]
             except KeyError:
                 continue
+
+    # also, some optional moves are not enabled by default
+    for move in enable_moves:
+        move_set, fn = optional_moves[move]
+        move_set[move] = fn
 
 
     stds = global_stds
